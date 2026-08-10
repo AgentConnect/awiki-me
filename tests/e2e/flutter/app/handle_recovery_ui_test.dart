@@ -599,6 +599,16 @@ void main() {
           expectedDeviceId: reauthorizedDevice.protocolDeviceId,
           expectedDeviceCount: 2,
         );
+        if (registrationRejoinRequired) {
+          await _transferManagementToRejoinedPeer(
+            bootstrap: bootstrap,
+            peerBootstrap: peerBootstrap,
+            recoveredContainer: recoveredContainer,
+            presence: presence,
+            expectedDid: reset.currentDid,
+            peerDeviceId: reauthorizedDevice.protocolDeviceId,
+          );
+        }
         if (recoveredContainer.read(sessionProvider).session?.did !=
                 reset.currentDid ||
             recoveredContainer.read(appRuntimeProvider).activatedDid !=
@@ -687,6 +697,7 @@ void main() {
             'registration_returned_opaque_recovery_join_continuation',
             'registration_continuation_rejoined_recovery_did',
             'two_app_registry_session_converged',
+            'standard_root_transfer_made_rejoined_peer_management_ready',
             'app_to_external_direct_exact_one',
             'external_to_app_and_sibling_direct_exact_one',
           ],
@@ -2217,6 +2228,125 @@ Future<void> _requirePeerCurrentIdentityAndRegistry(
       current.length != 1) {
     fail('The rejoined peer App Registry did not converge to the new DID.');
   }
+}
+
+Future<void> _transferManagementToRejoinedPeer({
+  required AppBootstrap bootstrap,
+  required AppBootstrap peerBootstrap,
+  required ProviderContainer recoveredContainer,
+  required E2eUserPresencePort presence,
+  required String expectedDid,
+  required String peerDeviceId,
+}) async {
+  if (bootstrap.rootKeyTransferPort == null ||
+      peerBootstrap.messageSyncService == null) {
+    fail('The App pair did not compose standard root transfer and sync.');
+  }
+  final registry = await bootstrap.deviceManagementCorePort!
+      .identityDeviceRegistry(expectedDid);
+  final senders = registry.devices
+      .where(
+        (device) =>
+            device.isCurrent &&
+            device.role == DeviceRole.admin &&
+            device.managementReady &&
+            device.status == DeviceStatus.active,
+      )
+      .toList(growable: false);
+  final recipients = registry.devices
+      .where(
+        (device) =>
+            device.protocolDeviceId == peerDeviceId &&
+            !device.isCurrent &&
+            device.role == DeviceRole.member &&
+            !device.managementReady &&
+            device.status == DeviceStatus.active,
+      )
+      .toList(growable: false);
+  if (senders.length != 1 || recipients.length != 1) {
+    fail('Root transfer did not begin from the exact admin/member Registry.');
+  }
+  final service = recoveredContainer.read(rootKeyTransferServiceProvider);
+  final callsBefore = presence.calls;
+  final preparation = await service.prepare(
+    expectedDid: expectedDid,
+    recipient: recipients.single,
+  );
+  if (presence.calls != callsBefore ||
+      preparation.recipient.did != expectedDid ||
+      preparation.recipient.deviceId != peerDeviceId) {
+    fail('Root transfer preparation escaped its exact recipient boundary.');
+  }
+  final receipt = await service.confirmAndSend(
+    expectedDid: expectedDid,
+    sender: senders.single,
+    preparation: preparation,
+    presenceReason: 'Confirm management transfer to recovered App peer',
+    contextStillValid: () => true,
+  );
+  if (presence.calls != callsBefore + 1 ||
+      presence.completions != callsBefore + 1 ||
+      !presence.lastResult ||
+      receipt.did != expectedDid ||
+      receipt.senderDeviceId != senders.single.protocolDeviceId ||
+      receipt.recipientDeviceId != peerDeviceId ||
+      receipt.messageId.trim().isEmpty) {
+    fail('The App did not accept one exact standard root transfer.');
+  }
+
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(deadline)) {
+    await peerBootstrap.messageSyncService!.syncNow(
+      reason: 'handle-recovery-registration-root-transfer',
+      limit: 100,
+    );
+    final peerRegistry = await peerBootstrap.deviceManagementCorePort!
+        .identityDeviceRegistry(expectedDid);
+    final adminRegistry = await bootstrap.deviceManagementCorePort!
+        .identityDeviceRegistry(expectedDid);
+    final peerReady = peerRegistry.devices.where(
+      (device) =>
+          device.protocolDeviceId == peerDeviceId &&
+          device.isCurrent &&
+          device.role == DeviceRole.admin &&
+          device.managementReady &&
+          device.status == DeviceStatus.active,
+    );
+    final senderReady = adminRegistry.devices.where(
+      (device) =>
+          device.protocolDeviceId == senders.single.protocolDeviceId &&
+          device.isCurrent &&
+          device.role == DeviceRole.admin &&
+          device.managementReady &&
+          device.status == DeviceStatus.active,
+    );
+    final projectedPeer = adminRegistry.devices.where(
+      (device) =>
+          device.protocolDeviceId == peerDeviceId &&
+          !device.isCurrent &&
+          device.role == DeviceRole.admin &&
+          device.managementReady &&
+          device.status == DeviceStatus.active,
+    );
+    if (peerRegistry.did == expectedDid &&
+        adminRegistry.did == expectedDid &&
+        peerRegistry.devices.length == 2 &&
+        adminRegistry.devices.length == 2 &&
+        peerReady.length == 1 &&
+        senderReady.length == 1 &&
+        projectedPeer.length == 1) {
+      final peerHistory = await peerBootstrap.messagingService!.loadHistory(
+        AppThreadRef.direct(expectedDid),
+        limit: 20,
+      );
+      if (peerHistory.any((message) => message.remoteId == receipt.messageId)) {
+        fail('Root transfer entered the ordinary App message projection.');
+      }
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+  }
+  fail('The rejoined App peer did not become management-ready after P5.');
 }
 
 Future<void> _verifyBidirectionalDirectExactOne({

@@ -75,7 +75,7 @@ dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-a
 dart run tests/e2e/runner.dart --case multi-device-app-pair --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-app-pair-functional --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-remote-recovery --config <local-awiki-info-config.yaml>
-dart run tests/e2e/runner.dart --case multi-device-app-pair-recovery-registration-rejoin --config <explicit-awiki-info-config.yaml>
+dart run tests/e2e/runner.dart --case multi-device-app-pair-recovery-registration-rejoin-management-transfer --config <explicit-awiki-info-config.yaml>
 ```
 
 `multi-device` 当前只证明生产 provider 树可挂载本地 Join surface 且高风险 gate 默认关闭，不代表远端 Join/SAS/Root/Recovery
@@ -105,7 +105,7 @@ sibling 和独立 CLI peer，验证 Direct、own-sync、App offline 后同 root 
 `UserPresencePort`，不证明真实系统认证。远端 rollout/账号前置条件未就绪
 时不得声称通过。其他真实
 backend/CLI peer/Personal Agent 使用对应 focused/full E2E，并按宿主平台选择本地 config。
-精确 case `multi-device-app-pair-recovery-registration-rejoin`
+精确 case `multi-device-app-pair-recovery-registration-rejoin-management-transfer`
 接受显式 Linux/Xvfb 或 macOS `awiki.info` 配置。它保留两套 fresh App/Core root，在旧 member 被
 Recovery 围栏后从统一 onboarding 重新提交 existing Handle；Dart 只消费 Core opaque
 continuation 投影，正式 `UserPresencePort` 确认后由 Core 发起 Recovery-aware Join。审批后

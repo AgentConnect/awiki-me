@@ -97,7 +97,7 @@
         "HANDLE-RECOVERY-V1-E2E-003"
       ]
     },
-    "multi-device-app-pair-recovery-registration-rejoin": {
+    "multi-device-app-pair-recovery-registration-rejoin-management-transfer": {
       "tier": "remote_product_ui_security",
       "requiredFor": [
         "optional_nightly",
@@ -117,6 +117,7 @@
         "dedicated_test_identity",
         "handle_recovery_operation",
         "device_join_session",
+        "root_key_transfer",
         "direct_message",
         "isolated_app_state"
       ],
