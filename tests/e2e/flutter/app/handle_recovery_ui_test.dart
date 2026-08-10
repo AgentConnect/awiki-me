@@ -53,6 +53,8 @@ import '../../remote_multi_device_join_contract.dart';
 const String _caseId = 'HANDLE-RECOVERY-V1-E2E-001';
 const String _crashCutCaseId = 'HANDLE-RECOVERY-V1-E2E-002';
 const String _rejoinCaseId = 'HANDLE-RECOVERY-V1-E2E-003';
+const String _registrationRejoinCaseId =
+    'HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001';
 const String _e2ePhase = String.fromEnvironment(
   'AWIKI_HANDLE_RECOVERY_E2E_PHASE',
 );
@@ -77,7 +79,11 @@ void main() {
       final account = _DedicatedAccount.fromConfig(config);
       final presence = E2eUserPresencePort();
       final peerPresence = E2eUserPresencePort();
-      final rejoinRequired = _invocationExpects(_rejoinCaseId);
+      final registrationRejoinRequired = _invocationExpects(
+        _registrationRejoinCaseId,
+      );
+      final rejoinRequired =
+          _invocationExpects(_rejoinCaseId) || registrationRejoinRequired;
       final httpClient = http.Client();
       AppBootstrap? bootstrap;
       AppBootstrap? peerBootstrap;
@@ -148,6 +154,7 @@ void main() {
           account: account,
           adminBootstrap: bootstrap,
           peerBootstrap: peerBootstrap,
+          adminPresence: presence,
           peerPresence: peerPresence,
           handle: bareHandle,
           expectedDid: oldDid,
@@ -518,18 +525,33 @@ void main() {
           peerBootstrap,
           targetDid: reset.currentDid,
         );
-        final rejoin = await _startAppPeerJoin(
-          tester: tester,
-          client: httpClient,
-          config: config,
-          account: account,
-          adminBootstrap: bootstrap,
-          peerBootstrap: peerBootstrap,
-          peerPresence: peerPresence,
-          handle: bareHandle,
-          joinHandle: fullHandle,
-          expectedDid: reset.currentDid,
-        );
+        final rejoin = registrationRejoinRequired
+            ? await _startAppPeerRegistrationJoin(
+                tester: tester,
+                config: config,
+                account: account,
+                adminBootstrap: bootstrap,
+                peerBootstrap: peerBootstrap,
+                adminPresence: presence,
+                peerPresence: peerPresence,
+                handle: bareHandle,
+                fullHandle: fullHandle,
+                expectedDid: reset.currentDid,
+                registrationRetryAt: latestOtpRetryAt,
+              )
+            : await _startAppPeerJoin(
+                tester: tester,
+                client: httpClient,
+                config: config,
+                account: account,
+                adminBootstrap: bootstrap,
+                peerBootstrap: peerBootstrap,
+                adminPresence: presence,
+                peerPresence: peerPresence,
+                handle: bareHandle,
+                joinHandle: fullHandle,
+                expectedDid: reset.currentDid,
+              );
         final reauthorized = await _completeAppPeerJoin(
           tester: tester,
           adminBootstrap: bootstrap,
@@ -543,7 +565,7 @@ void main() {
             reauthorizedDevice.role != DeviceRole.member ||
             reauthorizedDevice.managementReady ||
             !reauthorizedDevice.isCurrent) {
-          fail('The old App peer did not complete an ordinary member re-Join.');
+          fail('The old App peer did not complete a member re-Join.');
         }
         await _activateAppPeerJoin(
           tester: tester,
@@ -572,6 +594,16 @@ void main() {
           expectedDeviceId: reauthorizedDevice.protocolDeviceId,
           expectedDeviceCount: 2,
         );
+        if (registrationRejoinRequired) {
+          await _transferManagementToRejoinedPeer(
+            bootstrap: bootstrap,
+            peerBootstrap: peerBootstrap,
+            recoveredContainer: recoveredContainer,
+            presence: presence,
+            expectedDid: reset.currentDid,
+            peerDeviceId: reauthorizedDevice.protocolDeviceId,
+          );
+        }
         if (recoveredContainer.read(sessionProvider).session?.did !=
                 reset.currentDid ||
             recoveredContainer.read(appRuntimeProvider).activatedDid !=
@@ -619,22 +651,24 @@ void main() {
         );
       }
 
-      await E2eCaseAttestationWriter.markPassed(
-        _caseId,
-        startedAt: startedAt,
-        phases: const <String>[
-          'existing_ready_admin_created',
-          'fresh_machine_has_no_local_identity',
-          'existing_handle_choice_opened_recovery',
-          'verified_context_reused_without_duplicate_inputs',
-          'operation_bound_otp_prepared_through_ui',
-          'irreversible_risks_confirmed_through_ui',
-          'recovery_completed_through_ui_resume',
-          'new_local_owner_handle_and_replacement_did_verified',
-          'old_did_absent_from_fresh_local_projection',
-        ],
-      );
-      if (rejoinRequired) {
+      if (_invocationExpects(_caseId)) {
+        await E2eCaseAttestationWriter.markPassed(
+          _caseId,
+          startedAt: startedAt,
+          phases: const <String>[
+            'existing_ready_admin_created',
+            'fresh_machine_has_no_local_identity',
+            'existing_handle_choice_opened_recovery',
+            'verified_context_reused_without_duplicate_inputs',
+            'operation_bound_otp_prepared_through_ui',
+            'irreversible_risks_confirmed_through_ui',
+            'recovery_completed_through_ui_resume',
+            'new_local_owner_handle_and_replacement_did_verified',
+            'old_did_absent_from_fresh_local_projection',
+          ],
+        );
+      }
+      if (_invocationExpects(_rejoinCaseId)) {
         await E2eCaseAttestationWriter.markPassed(
           _rejoinCaseId,
           startedAt: startedAt,
@@ -648,12 +682,34 @@ void main() {
           ],
         );
       }
+      if (registrationRejoinRequired) {
+        await E2eCaseAttestationWriter.markPassed(
+          _registrationRejoinCaseId,
+          startedAt: startedAt,
+          phases: const <String>[
+            'old_app_peer_joined_before_recovery',
+            'old_principal_remote_action_fenced',
+            'registration_returned_opaque_recovery_join_continuation',
+            'registration_continuation_rejoined_recovery_did',
+            'two_app_registry_session_converged',
+            'standard_root_transfer_made_rejoined_peer_management_ready',
+            'app_to_external_direct_exact_one',
+            'external_to_app_and_sibling_direct_exact_one',
+          ],
+        );
+      }
     },
     skip:
         _e2ePhase.isNotEmpty ||
         !_RemoteRecoveryRunConfig.exists() ||
-        (!_invocationExpects(_caseId) && !_invocationExpects(_rejoinCaseId)),
-    timeout: const Timeout(Duration(minutes: 20)),
+        (!_invocationExpects(_caseId) &&
+            !_invocationExpects(_rejoinCaseId) &&
+            !_invocationExpects(_registrationRejoinCaseId)),
+    timeout: Timeout(
+      Duration(
+        minutes: _invocationExpects(_registrationRejoinCaseId) ? 25 : 20,
+      ),
+    ),
   );
 
   testWidgets(
@@ -1324,6 +1380,223 @@ Future<({String otp, DateTime retryAt})> _requestAndResolveRegistrationOtp({
   fail('The registration OTP request exhausted its retry budget.');
 }
 
+Future<
+  ({
+    DeviceJoinProgress progress,
+    ProviderContainer container,
+    DateTime otpRetryAt,
+  })
+>
+_startAppPeerRegistrationJoin({
+  required WidgetTester tester,
+  required _RemoteRecoveryRunConfig config,
+  required _DedicatedAccount account,
+  required AppBootstrap adminBootstrap,
+  required AppBootstrap peerBootstrap,
+  required E2eUserPresencePort adminPresence,
+  required E2eUserPresencePort peerPresence,
+  required String handle,
+  required String fullHandle,
+  required String expectedDid,
+  required DateTime registrationRetryAt,
+}) async {
+  final localIdentities = await peerBootstrap.appSessionService!
+      .listLocalIdentities();
+  if (localIdentities.length != 1 ||
+      localIdentities.single.did == expectedDid) {
+    fail(
+      'The registration re-Join did not begin from one fenced old identity.',
+    );
+  }
+  final callsBefore = peerPresence.calls;
+  await tester.pumpWidget(
+    Row(
+      textDirection: TextDirection.ltr,
+      children: <Widget>[
+        Expanded(
+          child: KeyedSubtree(
+            key: _recoveryAdminAppKey,
+            child: AwikiMeApp(
+              bootstrap: adminBootstrap,
+              providerOverrides: <Override>[
+                userPresencePortProvider.overrideWithValue(adminPresence),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: KeyedSubtree(
+            key: _recoveryPeerAppKey,
+            child: AwikiMeApp(
+              bootstrap: peerBootstrap,
+              providerOverrides: <Override>[
+                userPresencePortProvider.overrideWithValue(peerPresence),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+  final peerRoot = find.byKey(_recoveryPeerAppKey);
+  final peerShell = find.descendant(
+    of: peerRoot,
+    matching: find.byType(AppShell),
+  );
+  await _pumpUntil(
+    tester,
+    () => peerShell.evaluate().length == 1,
+    timeout: const Duration(seconds: 45),
+    failure: 'The fenced peer App did not restore before registration re-Join.',
+  );
+  unawaited(
+    Navigator.of(tester.element(peerShell)).push<void>(
+      CupertinoPageRoute<void>(builder: (_) => const OnboardingPage()),
+    ),
+  );
+  final onboardingPage = find.descendant(
+    of: peerRoot,
+    matching: find.byType(OnboardingPage),
+  );
+  await _pumpUntil(
+    tester,
+    () => onboardingPage.evaluate().length == 1,
+    timeout: const Duration(seconds: 45),
+    failure: 'The fenced peer App did not open registration onboarding.',
+  );
+  final container = ProviderScope.containerOf(tester.element(onboardingPage));
+  await _pumpUntil(
+    tester,
+    () => container.read(onboardingProvider).supportsPhoneOtpRegistration,
+    timeout: const Duration(seconds: 45),
+    failure: 'Registration onboarding did not expose phone verification.',
+  );
+  final phoneField = find.descendant(
+    of: peerRoot,
+    matching: find.bySemanticsIdentifier('e2e-phone-input'),
+  );
+  final handleField = find.descendant(
+    of: peerRoot,
+    matching: find.bySemanticsIdentifier('e2e-handle-input'),
+  );
+  final otpField = find.descendant(
+    of: peerRoot,
+    matching: find.bySemanticsIdentifier('e2e-otp-input'),
+  );
+  if (phoneField.evaluate().length != 1 ||
+      handleField.evaluate().length != 1 ||
+      otpField.evaluate().length != 1) {
+    fail('Registration re-Join did not expose one exact onboarding form.');
+  }
+  await tester.enterText(phoneField, account.phone);
+  await tester.enterText(handleField, handle);
+  await _waitForRegistrationRetryBoundary(registrationRetryAt);
+  await _pumpUntil(
+    tester,
+    () =>
+        !container.read(onboardingProvider).isBusy &&
+        container.read(smsOtpCooldownProvider).canSend,
+    timeout: const Duration(seconds: 90),
+    failure: 'Registration re-Join OTP action did not become available.',
+  );
+  await _tapOne(
+    tester,
+    find.descendant(
+      of: peerRoot,
+      matching: find.bySemanticsIdentifier('e2e-send-otp-button'),
+    ),
+    failure: 'Registration re-Join OTP action was unavailable.',
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      _failOnDangerousUiFeedback(container, 'Registration re-Join OTP request');
+      final state = container.read(onboardingProvider);
+      return !state.isBusy &&
+          state.otpTargetFullHandle == fullHandle &&
+          state.otpTargetPhone != null;
+    },
+    timeout: const Duration(seconds: 90),
+    failure: 'Registration re-Join did not bind OTP to the recovered Handle.',
+  );
+  final otp = await _resolveOtp(
+    account: account,
+    purpose: _registrationPurpose,
+    handle: handle,
+    didDomain: config.didDomain,
+  );
+  await tester.enterText(otpField, otp);
+  await _tapOne(
+    tester,
+    find.descendant(
+      of: peerRoot,
+      matching: find.byKey(const Key('onboarding-mac-phone-submit-action')),
+    ),
+    failure: 'Registration re-Join submit action was unavailable.',
+  );
+  final joinAction = find.byKey(const Key('existing-handle-join-action'));
+  await _pumpUntil(
+    tester,
+    () {
+      _failOnDangerousUiFeedback(
+        container,
+        'Registration re-Join verification',
+      );
+      final state = container.read(onboardingProvider);
+      return joinAction.evaluate().length == 1 &&
+          state.existingHandleContinuationId != null &&
+          state.existingHandleJoinMode ==
+              ExistingHandleJoinMode.handleRecoveryRebind &&
+          state.existingHandleJoinRequiresUserPresence;
+    },
+    timeout: const Duration(minutes: 2),
+    failure:
+        'Registration did not return one opaque Recovery rebind continuation.',
+  );
+  await _tapOne(
+    tester,
+    joinAction,
+    failure: 'The registration continuation Join choice was unavailable.',
+  );
+  final peerJoinPage = find.descendant(
+    of: peerRoot,
+    matching: find.byType(DeviceJoinPage),
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      if (peerJoinPage.evaluate().length != 1) return false;
+      final state = container.read(devicesProvider);
+      if (state.error != null) {
+        fail('The peer App rejected its registration continuation.');
+      }
+      final progress = state.activeJoin;
+      return !state.isActionPending &&
+          progress?.did == expectedDid &&
+          progress?.side == DeviceJoinSide.newDevice &&
+          progress?.phase == DeviceJoinPhase.pending &&
+          progress?.remoteState == DeviceJoinRemoteState.pending &&
+          progress?.sas == null &&
+          progress?.cause == DeviceJoinCause.handleRecovery;
+    },
+    timeout: const Duration(minutes: 2),
+    failure: 'The registration continuation did not create Recovery re-Join.',
+  );
+  if (peerPresence.calls != callsBefore + 1 ||
+      peerPresence.completions != callsBefore + 1 ||
+      !peerPresence.lastResult ||
+      container.read(onboardingProvider).existingHandleContinuationId != null) {
+    fail('Registration re-Join crossed an invalid user-presence boundary.');
+  }
+  return (
+    progress: container.read(devicesProvider).activeJoin!,
+    container: container,
+    otpRetryAt:
+        container.read(smsOtpCooldownProvider).retryAt ??
+        DateTime.now().toUtc(),
+  );
+}
+
 Future<void> _waitForRegistrationRetryBoundary(DateTime retryAt) async {
   final remaining = retryAt.toUtc().difference(DateTime.now().toUtc());
   if (remaining <= Duration.zero) return;
@@ -1429,6 +1702,7 @@ _startAppPeerJoin({
   required _DedicatedAccount account,
   required AppBootstrap adminBootstrap,
   required AppBootstrap peerBootstrap,
+  required E2eUserPresencePort adminPresence,
   required E2eUserPresencePort peerPresence,
   required String handle,
   String? joinHandle,
@@ -1455,7 +1729,12 @@ _startAppPeerJoin({
         Expanded(
           child: KeyedSubtree(
             key: _recoveryAdminAppKey,
-            child: AwikiMeApp(bootstrap: adminBootstrap),
+            child: AwikiMeApp(
+              bootstrap: adminBootstrap,
+              providerOverrides: <Override>[
+                userPresencePortProvider.overrideWithValue(adminPresence),
+              ],
+            ),
           ),
         ),
         Expanded(
@@ -1931,6 +2210,125 @@ Future<void> _requirePeerCurrentIdentityAndRegistry(
       current.length != 1) {
     fail('The rejoined peer App Registry did not converge to the new DID.');
   }
+}
+
+Future<void> _transferManagementToRejoinedPeer({
+  required AppBootstrap bootstrap,
+  required AppBootstrap peerBootstrap,
+  required ProviderContainer recoveredContainer,
+  required E2eUserPresencePort presence,
+  required String expectedDid,
+  required String peerDeviceId,
+}) async {
+  if (bootstrap.rootKeyTransferPort == null ||
+      peerBootstrap.messageSyncService == null) {
+    fail('The App pair did not compose standard root transfer and sync.');
+  }
+  final registry = await bootstrap.deviceManagementCorePort!
+      .identityDeviceRegistry(expectedDid);
+  final senders = registry.devices
+      .where(
+        (device) =>
+            device.isCurrent &&
+            device.role == DeviceRole.admin &&
+            device.managementReady &&
+            device.status == DeviceStatus.active,
+      )
+      .toList(growable: false);
+  final recipients = registry.devices
+      .where(
+        (device) =>
+            device.protocolDeviceId == peerDeviceId &&
+            !device.isCurrent &&
+            device.role == DeviceRole.member &&
+            !device.managementReady &&
+            device.status == DeviceStatus.active,
+      )
+      .toList(growable: false);
+  if (senders.length != 1 || recipients.length != 1) {
+    fail('Root transfer did not begin from the exact admin/member Registry.');
+  }
+  final service = recoveredContainer.read(rootKeyTransferServiceProvider);
+  final callsBefore = presence.calls;
+  final preparation = await service.prepare(
+    expectedDid: expectedDid,
+    recipient: recipients.single,
+  );
+  if (presence.calls != callsBefore ||
+      preparation.recipient.did != expectedDid ||
+      preparation.recipient.deviceId != peerDeviceId) {
+    fail('Root transfer preparation escaped its exact recipient boundary.');
+  }
+  final receipt = await service.confirmAndSend(
+    expectedDid: expectedDid,
+    sender: senders.single,
+    preparation: preparation,
+    presenceReason: 'Confirm management transfer to recovered App peer',
+    contextStillValid: () => true,
+  );
+  if (presence.calls != callsBefore + 1 ||
+      presence.completions != callsBefore + 1 ||
+      !presence.lastResult ||
+      receipt.did != expectedDid ||
+      receipt.senderDeviceId != senders.single.protocolDeviceId ||
+      receipt.recipientDeviceId != peerDeviceId ||
+      receipt.messageId.trim().isEmpty) {
+    fail('The App did not accept one exact standard root transfer.');
+  }
+
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(deadline)) {
+    await peerBootstrap.messageSyncService!.syncNow(
+      reason: 'handle-recovery-registration-root-transfer',
+      limit: 100,
+    );
+    final peerRegistry = await peerBootstrap.deviceManagementCorePort!
+        .identityDeviceRegistry(expectedDid);
+    final adminRegistry = await bootstrap.deviceManagementCorePort!
+        .identityDeviceRegistry(expectedDid);
+    final peerReady = peerRegistry.devices.where(
+      (device) =>
+          device.protocolDeviceId == peerDeviceId &&
+          device.isCurrent &&
+          device.role == DeviceRole.admin &&
+          device.managementReady &&
+          device.status == DeviceStatus.active,
+    );
+    final senderReady = adminRegistry.devices.where(
+      (device) =>
+          device.protocolDeviceId == senders.single.protocolDeviceId &&
+          device.isCurrent &&
+          device.role == DeviceRole.admin &&
+          device.managementReady &&
+          device.status == DeviceStatus.active,
+    );
+    final projectedPeer = adminRegistry.devices.where(
+      (device) =>
+          device.protocolDeviceId == peerDeviceId &&
+          !device.isCurrent &&
+          device.role == DeviceRole.admin &&
+          device.managementReady &&
+          device.status == DeviceStatus.active,
+    );
+    if (peerRegistry.did == expectedDid &&
+        adminRegistry.did == expectedDid &&
+        peerRegistry.devices.length == 2 &&
+        adminRegistry.devices.length == 2 &&
+        peerReady.length == 1 &&
+        senderReady.length == 1 &&
+        projectedPeer.length == 1) {
+      final peerHistory = await peerBootstrap.messagingService!.loadHistory(
+        AppThreadRef.direct(expectedDid),
+        limit: 20,
+      );
+      if (peerHistory.any((message) => message.remoteId == receipt.messageId)) {
+        fail('Root transfer entered the ordinary App message projection.');
+      }
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+  }
+  fail('The rejoined App peer did not become management-ready after P5.');
 }
 
 Future<void> _verifyBidirectionalDirectExactOne({

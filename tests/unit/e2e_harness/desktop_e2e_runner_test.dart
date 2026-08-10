@@ -261,6 +261,42 @@ void main() {
       );
     });
 
+    test('parses recovery registration App-pair case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi-device-app-pair-recovery-registration-rejoin-management-transfer',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi_device_app_pair_recovery_registration_rejoin_management_transfer',
+        '--dry-run',
+      ]);
+
+      expect(
+        hyphen.e2eCase,
+        DesktopE2eCase.multiDeviceAppPairRecoveryRegistration,
+      );
+      expect(
+        underscore.e2eCase,
+        DesktopE2eCase.multiDeviceAppPairRecoveryRegistration,
+      );
+      expect(hyphen.e2eCase.requiresCliPeer, isFalse);
+      expect(
+        hyphen.e2eCase.scenario,
+        'multi-device-app-pair-recovery-registration-rejoin-management-transfer',
+      );
+      expect(hyphen.e2eCase.caseIds, <String>[
+        'HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001',
+      ]);
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 25));
+      expect(
+        hyphen.e2eCase.testFile,
+        'integration_test/handle_recovery_ui_test.dart',
+      );
+      expect(hyphen.e2eCase.runConfigPath, contains('remote-recovery'));
+    });
+
     test('parses isolated App-pair member Join case aliases', () {
       final hyphen = DesktopE2eOptions.parse(const <String>[
         '--case',

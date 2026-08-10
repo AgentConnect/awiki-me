@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-08.handle-recovery-phase1-platform-message-core",
+  "sourceRevision": "2026-08-10.handle-recovery-registration-rejoin",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -95,6 +95,34 @@
         "HANDLE-RECOVERY-V1-E2E-001",
         "HANDLE-RECOVERY-V1-E2E-002",
         "HANDLE-RECOVERY-V1-E2E-003"
+      ]
+    },
+    "multi-device-app-pair-recovery-registration-rejoin-management-transfer": {
+      "tier": "remote_product_ui_security",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 22,
+      "timeoutMinutes": 25,
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "handle_recovery_operation",
+        "device_join_session",
+        "root_key_transfer",
+        "direct_message",
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001"
       ]
     },
     "multi-device-app-pair": {

@@ -177,6 +177,15 @@ purposes are rejected. Its E2E-only user-presence decision does not attest
 production LocalAuthentication. See
 [../../../docs/handle-recovery-ui.md](../../../docs/handle-recovery-ui.md).
 
+`--case multi-device-app-pair-recovery-registration-rejoin-management-transfer`
+selects one macOS-only `awiki.info` case from the same real App-pair Recovery
+implementation. The fenced old member re-enters through registration, while
+the App sees only Core's opaque continuation and one user-presence requirement.
+After exact Join approval, standard Root/P5 makes that peer management-ready;
+the case then proves P5 is hidden from ordinary history and verifies fresh
+Direct exact-once in both directions. It does not run the crash-cut or ordinary
+re-Join cases and requires an explicit reviewed config file.
+
 Root transfer, exact-device revoke, and MLS are not executable from the Step 2
 runner. `ROOT-TRANSFER-E2E-002` and `MLS-MULTI-DEVICE-E2E-001` remain planned.
 `ROOT-TRANSFER-E2E-001` is active in its dedicated suite, while

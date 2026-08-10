@@ -53,6 +53,21 @@ OTP/Grant 和 SAS 将同一旧 App 加入新 DID。最终两套 App 的 Registry
 消息还必须在 rejoined sibling 上形成 exact own-sync。该业务 case 在 Linux/macOS 使用相同
 case ID、动作和 oracle，不包含双发起端、连续第二次 Recovery、revoke 或 MLS 完整矩阵。
 
+独立的 `HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001` 复用上述两套 fresh App root，但旧
+member 不直接申请普通 Join OTP。它在旧 principal 被围栏后重新打开统一 onboarding，提交
+existing Handle registration，并选择 Core 返回的 opaque continuation。App 只持有
+`preparation_id/mode/requires_user_presence`，不接触 account verification token、Recovery
+transition 或 owner 选择；一次 user presence 后由 Core 在同一进程消费 preparation 并建立
+Recovery-aware Join。审批和激活后执行标准 Root/P5，要求 rejoined peer 成为
+management-ready admin，且 P5 不进入普通消息历史，随后双向 Direct 各精确一次。该 case 只在
+显式 macOS `awiki.info` 配置下运行：
+
+```bash
+dart run tests/e2e/runner.dart \
+  --case multi-device-app-pair-recovery-registration-rejoin-management-transfer \
+  --config <explicit-macos-awiki-info-config.yaml>
+```
+
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
 AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=recovery \

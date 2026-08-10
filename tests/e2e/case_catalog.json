@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-31.published-legacy-upgrade-compatibility+handle-recovery-v1-ui-e2e",
+  "sourceRevision": "2026-08-10.handle-recovery-registration-rejoin",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
@@ -4146,6 +4146,71 @@
             "HANDLE-RECOVERY-V1-E2E-003:two_app_registry_session_converged",
             "HANDLE-RECOVERY-V1-E2E-003:app_to_external_direct_exact_one",
             "HANDLE-RECOVERY-V1-E2E-003:external_to_app_and_sibling_direct_exact_one"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001",
+      "feature": "A fenced old App peer re-Joins the recovered identity through opaque registration continuation and becomes management-ready",
+      "layer": "remote_product_ui_security",
+      "preconditions": "An explicit macOS awiki.info configuration, protected fixed OTP account, and two fresh isolated App roots are available; the Apps are one ready admin and one member on the old DID before visible Handle Recovery.",
+      "action": "Complete visible Handle Recovery, prove the old peer is fenced, submit the recovered Handle through the peer App registration UI, select the Core-owned opaque Join continuation, approve the exact member Join, send standard Root/P5 to that device, and verify bidirectional Direct delivery.",
+      "exactOracles": [
+        "Registration produces one opaque Recovery-rebind continuation, requests one user-presence decision, and creates one pending joined-device-marked Join for the Recovery DID without exposing grant or transition material to Dart.",
+        "Both App Registry and session views converge after approval, then standard Root/P5 makes the rejoined current peer an active management-ready admin while the recovered sender remains a ready admin.",
+        "The old principal stays fenced, Root/P5 is absent from ordinary message history, and both post-transfer Direct directions project exactly once with correct ownership."
+      ],
+      "negativeChecks": [
+        "A direct Join-OTP bypass, App-selected owner, exposed preparation secret, missing user presence, old-DID convergence, copied state root, root-transfer envelope in ordinary history, duplicate Direct message, non-macOS execution, implicit or non-awiki.info config, or any skipped business step prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_peer_joined_before_recovery",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_principal_remote_action_fenced",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_returned_opaque_recovery_join_continuation",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_continuation_rejoined_recovery_did",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:two_app_registry_session_converged",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:standard_root_transfer_made_rejoined_peer_management_ready",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:app_to_external_direct_exact_one",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:external_to_app_and_sibling_direct_exact_one"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_peer_joined_before_recovery",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_principal_remote_action_fenced"
+          ],
+          [
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_returned_opaque_recovery_join_continuation",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_continuation_rejoined_recovery_did",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:two_app_registry_session_converged",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:standard_root_transfer_made_rejoined_peer_management_ready"
+          ],
+          [
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:app_to_external_direct_exact_one",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:external_to_app_and_sibling_direct_exact_one"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_peer_joined_before_recovery",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_principal_remote_action_fenced",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_returned_opaque_recovery_join_continuation",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_continuation_rejoined_recovery_did",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:two_app_registry_session_converged",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:standard_root_transfer_made_rejoined_peer_management_ready",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:app_to_external_direct_exact_one",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:external_to_app_and_sibling_direct_exact_one"
           ]
         ]
       }
