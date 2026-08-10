@@ -75,6 +75,19 @@ final result: passed
 
 ---
 
+## Skill Agent 可读名称入口（2026-08-10）
+
+- “连接 Skill Agent”弹窗先展示最多 40 字符的“Agent 名称”输入框，再生成一次性安装指令；默认值为 `Skill Agent`，用户可在 Token 签发前修改。
+- Agent Handle 继续由服务端随机生成并只承担稳定路由标识，不允许把展示名称写入 Handle 或用名称参与认证。
+- Token scope 绑定用户选择的名称；领取后 User Service 同时写入 Agent 公开 Profile 与 Controller 的 Agent inventory，避免内部 `agent_skill_*` 存储名出现在会话标题。
+- App 在签发前要求 server-info 广告 `display_name_binding=token_scope_v1`；旧服务端会显示升级提示且不会再消耗一次性 Token。
+- 一次性指令生成后，“复制安装指令”固定在可滚动指令区下方，不随长指令滚出视口；“重新生成安装指令”继续作为次级操作。
+- 重新生成若命中 5 条活跃 Token 上限或签发频率限制，App 显示精确原因并保留仍有效的当前指令及复制入口，不把可用 Token 变成不可恢复的占位。
+- 同一注册事务还创建 Agent→Controller 的默认关注；安装指令明确披露这项副作用。
+- Widget 与 App smoke 覆盖名称输入、Token request 绑定、复制最新指令和默认关注披露。真实后端、macOS/Android/iOS 视觉与设备 E2E 保持 **UNVERIFIED**。
+
+---
+
 ## macOS 智能体标题栏刷新与加号菜单复验（2026-08-06）
 
 ### 比较真值与实现证据

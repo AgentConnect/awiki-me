@@ -421,7 +421,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatView), findsOneWidget);
-    expect(find.text('安全协作中'), findsOneWidget);
+    expect(find.text('安全协作中'), findsNothing);
     expect(find.text('会话信息'), findsNothing);
     expect(find.text('身份卡'), findsNothing);
     expect(find.text('群聊信息'), findsNothing);

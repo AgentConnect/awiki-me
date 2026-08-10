@@ -154,15 +154,6 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
           _skillOnboardingErrorText(context, next.error!),
         );
       }
-      if (next.instruction != null &&
-          previous?.instruction != next.instruction &&
-          !_skillDialogOpen) {
-        _skillDialogOpen = true;
-        _showSkillOnboardingDialog(context, ref).whenComplete(() {
-          _skillDialogOpen = false;
-          _skillOnboardingController.clear();
-        });
-      }
     });
 
     final state = ref.watch(agentsProvider);
@@ -184,7 +175,16 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       selectedAgentDid: selectedAgentDidForList,
       onCreateDaemon: () =>
           ref.read(agentsProvider.notifier).createDaemonInstallCommand(),
-      onCreateSkill: () => _skillOnboardingController.generate(),
+      onCreateSkill: () {
+        if (_skillDialogOpen) {
+          return;
+        }
+        _skillDialogOpen = true;
+        _showSkillOnboardingDialog(context, ref).whenComplete(() {
+          _skillDialogOpen = false;
+          _skillOnboardingController.clear();
+        });
+      },
       isCreatingSkill: skillState.isLoading,
       onRefreshDaemon: (agent) {
         ref.read(agentsProvider.notifier).refreshDaemonStatus(agent.agentDid);
