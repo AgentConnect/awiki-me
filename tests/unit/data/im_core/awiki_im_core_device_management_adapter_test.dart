@@ -402,6 +402,33 @@ void main() {
     },
   );
 
+  test('maps an inactive Registry caller to a stable App error', () async {
+    final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
+      coreInstance: _unusedCore,
+      userServiceUrl: 'https://awiki.info',
+      targetHandleDomain: 'awiki.info',
+      identityDeviceRegistry: ({required selector}) async {
+        throw const core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'localized server diagnostic',
+          statusCode: 200,
+          serviceCode: 'device.inactive',
+        );
+      },
+    );
+
+    await expectLater(
+      adapter.identityDeviceRegistry(_did),
+      throwsA(
+        isA<DeviceManagementTransportException>().having(
+          (error) => error.code,
+          'code',
+          'device_authorization_inactive',
+        ),
+      ),
+    );
+  });
+
   test('maps verified Join request notice without raw proof material', () {
     final request = deviceJoinRequestFromCore(
       const core.DeviceJoinRequestNotice(

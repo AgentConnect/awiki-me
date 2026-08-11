@@ -68,6 +68,7 @@ bool isAuthenticationErrorText(String raw) {
       normalized.contains('empty token') ||
       normalized.contains('token expired') ||
       normalized.contains('session expired') ||
+      normalized.contains('device_authorization_inactive') ||
       normalized.contains('unauthenticated') ||
       normalized.contains('current user did is required') ||
       normalized.contains('current user did is not bound') ||

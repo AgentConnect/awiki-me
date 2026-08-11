@@ -122,6 +122,34 @@ void main() {
     },
   );
 
+  test(
+    'fenced authorized Join is not restored as a completed device',
+    () async {
+      final core = _FakeDeviceCore()
+        ..localIdentityDeviceMatches = true
+        ..registryError = StateError('device_authorization_inactive');
+      final progress = DeviceJoinProgress(
+        joinSessionId: 'join-fenced',
+        did: 'did:wba:awiki.info:user:alice:e1_test',
+        protocolDeviceId: 'dev-new',
+        side: DeviceJoinSide.newDevice,
+        phase: DeviceJoinPhase.authorized,
+        remoteState: DeviceJoinRemoteState.consumed,
+        expiresAt: DateTime.utc(2030),
+      );
+
+      expect(
+        await _service(
+          core: core,
+          now: () => DateTime.utc(2029),
+        ).canResumeAuthorizedNewDeviceJoin(progress),
+        isFalse,
+      );
+      expect(core.localIdentityDeviceMatchCalls, 1);
+      expect(core.registryCalls, 1);
+    },
+  );
+
   test('non-terminal Join never probes a completed identity binding', () async {
     final core = _FakeDeviceCore()..localIdentityDeviceMatches = true;
     final progress = DeviceJoinProgress(

@@ -39,6 +39,52 @@ const _session = SessionIdentity(
 );
 
 void main() {
+  test('new Join supersedes a stale authorized-session restore', () async {
+    final registryStarted = Completer<void>();
+    final blockedRegistry = Completer<DeviceRegistrySnapshot>();
+    final authorized = testJoinProgress(
+      side: DeviceJoinSide.newDevice,
+      phase: DeviceJoinPhase.authorized,
+      remoteState: DeviceJoinRemoteState.consumed,
+      sas: null,
+    );
+    final core = FakeDeviceManagementCore()
+      ..localSessions = <DeviceJoinProgress>[authorized]
+      ..localIdentityDeviceBindings.add((
+        did: authorized.did,
+        protocolDeviceId: authorized.protocolDeviceId,
+      ))
+      ..registryLoader = (_) {
+        registryStarted.complete();
+        return blockedRegistry.future;
+      };
+    final container = _deviceContainer(core);
+    addTearDown(() {
+      if (!blockedRegistry.isCompleted) {
+        blockedRegistry.completeError(StateError('test_disposed'));
+      }
+      container.dispose();
+    });
+    final controller = container.read(devicesProvider.notifier);
+
+    final restore = controller.loadNewDevice();
+    await registryStarted.future;
+    final started = await controller.beginNewDeviceJoin(
+      handle: 'alice.awiki.info',
+      phone: '+8613800138000',
+      otp: '123456',
+    );
+    blockedRegistry.completeError(StateError('device_authorization_inactive'));
+    await restore;
+
+    final state = container.read(devicesProvider);
+    expect(started, isTrue);
+    expect(state.isLoading, isFalse);
+    expect(state.error, isNull);
+    expect(state.activeJoin?.phase, DeviceJoinPhase.pending);
+    expect(core.beginCalls, 1);
+  });
+
   test('stale Join inbox result cannot populate the next identity', () async {
     final blocked = Completer<List<DeviceJoinRequestNotice>>();
     final refreshStarted = Completer<void>();

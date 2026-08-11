@@ -29,6 +29,18 @@ typedef AwikiImCoreRevokeDevice =
       required bool userPresenceConfirmed,
     });
 
+typedef AwikiImCoreIdentityDeviceRegistry =
+    Future<core.DeviceJoinRegistrySnapshot> Function({
+      required core.IdentitySelector selector,
+    });
+
+const _inactiveDeviceRegistryServiceCodes = <String>{
+  'client.session_unauthorized',
+  'anp.device_not_eligible',
+  'anp.device_state_changed',
+  'device.inactive',
+};
+
 /// AWiki-internal account verification plus the secret-free IM Core Join API.
 ///
 /// The account-verification token exists only as a method-local value. It is
@@ -45,6 +57,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     AwikiImCoreBeginDeviceJoin? beginDeviceJoin,
     AwikiJoinTargetResolver? resolveJoinTarget,
     AwikiImCoreRevokeDevice? revokeDevice,
+    AwikiImCoreIdentityDeviceRegistry? identityDeviceRegistry,
   }) : this.withCoreInstance(
          coreInstance: runtime.coreInstance,
          userServiceUrl: userServiceUrl,
@@ -55,6 +68,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
          beginDeviceJoin: beginDeviceJoin,
          resolveJoinTarget: resolveJoinTarget,
          revokeDevice: revokeDevice,
+         identityDeviceRegistry: identityDeviceRegistry,
        );
 
   AwikiImCoreDeviceManagementAdapter.withCoreInstance({
@@ -67,6 +81,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     AwikiImCoreBeginDeviceJoin? beginDeviceJoin,
     AwikiJoinTargetResolver? resolveJoinTarget,
     AwikiImCoreRevokeDevice? revokeDevice,
+    AwikiImCoreIdentityDeviceRegistry? identityDeviceRegistry,
   }) : _coreInstance = coreInstance,
        _userServiceClient =
            userServiceClient ??
@@ -105,6 +120,12 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
                targetDeviceId: targetDeviceId,
                userPresenceConfirmed: userPresenceConfirmed,
              );
+           }),
+       _identityDeviceRegistry =
+           identityDeviceRegistry ??
+           (({required selector}) async {
+             final instance = await coreInstance();
+             return instance.identityDeviceRegistry(selector);
            }) {
     _resolveJoinTarget =
         resolveJoinTarget ??
@@ -128,6 +149,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
   late final AwikiJoinTargetResolver _resolveJoinTarget;
   final AwikiImCoreBeginDeviceJoin _beginDeviceJoin;
   final AwikiImCoreRevokeDevice _revokeDevice;
+  final AwikiImCoreIdentityDeviceRegistry _identityDeviceRegistry;
 
   @override
   Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
@@ -259,10 +281,19 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
 
   @override
   Future<DeviceRegistrySnapshot> identityDeviceRegistry(String selector) async {
-    final instance = await _coreInstance();
-    final result = await instance.identityDeviceRegistry(
-      _identitySelector(selector),
-    );
+    late final core.DeviceJoinRegistrySnapshot result;
+    try {
+      result = await _identityDeviceRegistry(
+        selector: _identitySelector(selector),
+      );
+    } on core.AwikiImCoreException catch (error) {
+      if (_inactiveDeviceRegistryServiceCodes.contains(error.serviceCode)) {
+        throw const DeviceManagementTransportException(
+          'device_authorization_inactive',
+        );
+      }
+      rethrow;
+    }
     return deviceRegistryFromCore(result);
   }
 

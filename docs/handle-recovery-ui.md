@@ -37,6 +37,9 @@ capability 同时开启。
   授权；Core 返回终止性 `authRevoked` 后，App 先隔离旧会话和投影、回到统一登录页，再展示
   一次“账号登录状态已失效”的确认提示。该提示使用中性文案，因为同一终止状态也可能来自
   单设备撤销或会话失效。
+- 旧设备重新打开 Join 页时，若旧授权 Join 的 Registry 读取返回 `device.inactive` 等稳定
+  设备失效码，App 将该本地会话视为不可恢复并继续展示 fresh Join；用户提交的新 Join 会
+  取代仍在执行的旧会话恢复，迟到的旧读取结果不得覆盖新 Join 状态。
 - 当前 V1 不使用历史的 `awiki.device.recovery.begin.v1` /
   `awiki.device.recovery.finalize.v1`、旧管理设备通知或冷静期取消流程。
 

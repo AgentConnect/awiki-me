@@ -1480,7 +1480,7 @@ class _AppPairRunConfig implements _CliEndpointConfig {
     }
     final decoded = jsonDecode(File(appPairConfigPath).readAsStringSync());
     if (decoded is! Map ||
-        decoded['schemaVersion'] != 1 ||
+        decoded['schemaVersion'] != 2 ||
         decoded['enabled'] != true) {
       throw StateError('The App-pair run config is invalid.');
     }

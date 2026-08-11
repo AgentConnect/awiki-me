@@ -376,13 +376,11 @@ void appPairJoinerMain() {
         config.localConfigPath,
       );
       final coordinator = config.coordinator;
-      final httpClient = http.Client();
       AppBootstrap? bootstrap;
       await tester.binding.setSurfaceSize(const Size(1320, 820));
       _requireIndependentEmptyPaths(<String>[config.joinerStateRoot]);
       _requireAppPairModeMatchesInvocation(config);
       addTearDown(() async {
-        httpClient.close();
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
         await bootstrap?.dispose();
@@ -409,21 +407,61 @@ void appPairJoinerMain() {
         appStateRoot: config.joinerStateRoot,
       );
       await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-      await _openNewDeviceJoin(tester);
-      final joinOtp = await _requestAndResolveOtp(
-        client: httpClient,
-        config: config,
-        account: account,
-        purpose: _joinPurpose,
-        handle: handle,
+      await _pumpUntil(
+        tester,
+        () => find.byType(OnboardingPage).evaluate().length == 1,
+        failure: 'The joining App did not open unified onboarding.',
       );
-      await _enterText(tester, 'multi-device-join-handle', handle);
-      await _enterText(tester, 'multi-device-join-phone', account.phone);
-      await _enterText(tester, 'multi-device-join-otp', joinOtp);
+      await _pumpUntil(
+        tester,
+        () => find.bySemanticsIdentifier('e2e-otp-input').evaluate().isNotEmpty,
+        timeout: const Duration(seconds: 45),
+        failure: 'The joining App onboarding form was unavailable.',
+      );
+      await _enterText(tester, 'e2e-phone-input', account.phone);
+      await _enterText(tester, 'e2e-handle-input', handle);
+      await Future<void>.delayed(const Duration(seconds: 61));
       await _tapOne(
         tester,
-        find.bySemanticsIdentifier('multi-device-start-join'),
-        failure: 'The joining App start action was unavailable.',
+        find.bySemanticsIdentifier('e2e-send-otp-button'),
+        failure: 'The joining App onboarding OTP action was unavailable.',
+      );
+      await _pumpUntil(
+        tester,
+        () => find.bySemanticsIdentifier('e2e-otp-sent').evaluate().isNotEmpty,
+        timeout: const Duration(seconds: 45),
+        failure: 'The joining App onboarding OTP request did not complete.',
+      );
+      await _enterText(tester, 'e2e-otp-input', account.fixedOtp);
+      final macSubmit = find.byKey(
+        const Key('onboarding-mac-phone-submit-action'),
+      );
+      await _tapOne(
+        tester,
+        macSubmit.evaluate().isNotEmpty
+            ? macSubmit
+            : find.byKey(const Key('onboarding-phone-submit-action')),
+        failure: 'The joining App onboarding submit action was unavailable.',
+      );
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const Key('existing-handle-join-action'))
+            .evaluate()
+            .isNotEmpty,
+        timeout: const Duration(seconds: 45),
+        failure: 'The joining App did not expose the existing Handle choice.',
+      );
+      await _tapOne(
+        tester,
+        find.byKey(const Key('existing-handle-join-action')),
+        failure: 'The joining App existing Handle Join action was unavailable.',
+      );
+      await _pumpUntil(
+        tester,
+        () => find.byType(DeviceJoinPage).evaluate().length == 1,
+        timeout: const Duration(seconds: 45),
+        failure: 'The joining App continuation did not open Device Join.',
       );
       final container = ProviderScope.containerOf(
         tester.element(find.byType(DeviceJoinPage)),
@@ -574,8 +612,8 @@ Future<void> _deleteJoinedCredentialAndOpenFreshJoin({
     () => find.byType(SettingsPage).evaluate().length == 1,
     failure: 'The joined App settings surface did not open.',
   );
-  final deleteCredential = find.byKey(
-    const Key('settings-delete-credential-row'),
+  final deleteCredential = find.text(
+    tester.element(find.byType(SettingsPage)).l10n.settingsDeleteCredential,
   );
   await tester.ensureVisible(deleteCredential);
   await _tapOne(

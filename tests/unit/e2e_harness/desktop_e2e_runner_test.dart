@@ -9,6 +9,15 @@ import '../../e2e/performance_contract.dart';
 
 void main() {
   group('App-pair runtime isolation', () {
+    test('App-pair reader accepts the schema written by the runner', () {
+      final source = File(
+        'tests/e2e/flutter/app/multi_device_join_ui_test.dart',
+      ).readAsStringSync();
+
+      expect(source, contains("decoded['schemaVersion'] != 2"));
+      expect(source, isNot(contains("decoded['schemaVersion'] != 1")));
+    });
+
     test('uses a stable build cache outside per-run state roots', () {
       final root = Directory('/workspace/awiki-me');
 

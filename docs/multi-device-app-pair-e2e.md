@@ -99,6 +99,9 @@ The ignored local YAML contains the authorized test phone and six-digit fixed
 code. The real purpose-bound SMS request must still succeed; HTTP 429 uses the
 service's bounded `Retry-After` contract. The runner redacts both values and
 does not copy the code into generated run configuration or evidence.
+The Joining App follows the production unified onboarding path: it verifies
+the existing Handle, chooses “Join device”, and consumes the opaque
+continuation; the suite does not depend on a standalone onboarding Join entry.
 
 The operator must complete the real macOS user-presence prompt in the admin
 App. `--prepare-only` validates prerequisites but intentionally does not build
