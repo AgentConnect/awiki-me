@@ -26,6 +26,7 @@ import '../../../l10n/app_message.dart';
 import '../../agents/agents_provider.dart';
 import '../../conversation_list/conversation_peer_classifier.dart';
 import '../../profile/peer_display_profile_provider.dart';
+import '../../shared/formatters/display_formatters.dart';
 import '../../shared/formatters/localized_ui_formatters.dart';
 import '../../conversation_list/conversation_provider.dart';
 import '../../devices/devices_provider.dart';
