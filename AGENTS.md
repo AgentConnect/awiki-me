@@ -63,6 +63,18 @@ correct active test domain:
   rules. Root `integration_test/*.dart` files must stay thin Flutter tooling
   shims that import implementations from `tests/e2e/flutter/`.
 
+When running AWiki Me E2E, select the desktop strategy from the current host
+instead of treating macOS as a universal prerequisite. On macOS, use the macOS
+runner/config (`platform: macos`). On Linux, use the Linux desktop simulation
+supported by the E2E runner (`platform: linux`), which runs Flutter under Xvfb
+and therefore requires `xvfb-run`. The full App + CLI peer flow is valid on
+both hosts; by default run `dart run tests/e2e/runner.dart --case full` with a
+local config for the detected platform. Require macOS only for a case that is
+explicitly macOS-only (for example, macOS signing, LocalAuthentication, or the
+`multi-device-app-pair` and `multi-device-app-pair-functional` suites), and
+never claim that Linux simulates or attests those macOS-specific
+operating-system behaviors.
+
 Every new feature or behavior change must add or update the corresponding test
 coverage in the same change. Prefer focused unit/provider/widget tests first;
 add or update integration smoke when App bootstrap, routing, platform bindings,
