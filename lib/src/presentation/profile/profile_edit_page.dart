@@ -277,6 +277,7 @@ class _AvatarEditRow extends StatelessWidget {
                   child: AvatarBadge(
                     seed: profile.displayName,
                     avatarUri: profile.avatarUri,
+                    userId: profile.did,
                     size: 88,
                   ),
                 ),

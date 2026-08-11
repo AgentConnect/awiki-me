@@ -72,6 +72,7 @@ class IdentityProfileHeader extends StatelessWidget {
     this.handle,
     this.supportingText,
     this.avatarUri,
+    this.avatarUserId,
     this.avatarSize,
     this.badges = const <Widget>[],
     this.titleTrailing,
@@ -87,6 +88,7 @@ class IdentityProfileHeader extends StatelessWidget {
   final String? handle;
   final String? supportingText;
   final String? avatarUri;
+  final String? avatarUserId;
   final double? avatarSize;
   final List<Widget> badges;
   final Widget? titleTrailing;
@@ -116,6 +118,7 @@ class IdentityProfileHeader extends StatelessWidget {
               seed: avatarSeed,
               size: resolvedAvatarSize,
               avatarUri: avatarUri,
+              userId: avatarUserId,
             ),
             SizedBox(width: responsive.displayScaled(16)),
             Expanded(

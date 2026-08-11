@@ -202,6 +202,7 @@ class _ProfileSidebar extends ConsumerWidget {
                         seed: DidDisplayFormatter.profileHandleLabel(profile),
                         size: 48,
                         avatarUri: profile.avatarUri,
+                        userId: profile.did,
                       ),
                       SizedBox(height: responsive.spacing(12)),
                       Text(

@@ -1017,13 +1017,11 @@ void main() {
       ),
     );
 
-    expect(find.text('李智诚'), findsOneWidget);
-    expect(
-      find.byKey(
-        const Key('group-member-title:did:wba:awiki.ai:user:lzc:e1_member'),
-      ),
-      findsOneWidget,
+    final memberTitle = find.byKey(
+      const Key('group-member-title:did:wba:awiki.ai:user:lzc:e1_member'),
     );
+    expect(memberTitle, findsOneWidget);
+    expect(tester.widget<Text>(memberTitle).data, '李智诚');
     expect(find.text('lzc'), findsNothing);
     expect(find.text('@lzc'), findsOneWidget);
     expect(
