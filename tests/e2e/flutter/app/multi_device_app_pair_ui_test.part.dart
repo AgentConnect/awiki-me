@@ -3208,6 +3208,13 @@ Future<void> _waitForAppPairDaemonDrivers({
       if (drivers is List &&
           drivers.map((value) => value.toString()).contains('codex') &&
           drivers.map((value) => value.toString()).contains('claude-code')) {
+        expect(
+          container.read(agentsProvider).statusQueryErrors,
+          isNot(contains(daemonDid)),
+          reason:
+              'A committed or authoritative daemon status must clear the '
+              'older refresh wait state on the active App device.',
+        );
         return;
       }
     }

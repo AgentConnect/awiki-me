@@ -952,6 +952,7 @@ void main() {
         <String, Object?>{
           'schema': AgentControlPayloads.statusSchema,
           'status_scope': 'daemon',
+          'command_id': control.lastRefreshedDaemonCommandId,
           'daemon_agent_did': 'did:agent:daemon',
           'daemon': <String, Object?>{
             'agent_did': 'did:agent:daemon',
@@ -2730,6 +2731,124 @@ void main() {
       expect(
         state.statusQueryErrors['did:agent:daemon'],
         AgentUiMessageCodes.statusSyncWaiting,
+      );
+    },
+  );
+
+  test('newer account status snapshot clears an older waiting error', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: 'Daemon',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'offline'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    final controller = container.read(agentsProvider.notifier);
+    await controller.load();
+    await controller.refreshDaemonStatus('did:agent:daemon');
+    await controller.handleStatusQueryTimeoutForTest('did:agent:daemon');
+    expect(
+      container.read(agentsProvider).statusQueryErrors['did:agent:daemon'],
+      AgentUiMessageCodes.statusSyncWaiting,
+    );
+
+    await controller.applyAccountStateSnapshots(
+      inventory: _accountAgentInventorySnapshot(includeRuntime: false),
+      status: _accountAgentStatusSnapshot(refreshedAt: DateTime.now().toUtc()),
+      isSessionCurrent: () => true,
+    );
+
+    final state = container.read(agentsProvider);
+    expect(state.statusQueryErrors, isEmpty);
+    expect(state.pendingStatusQueryAtByDaemon, isEmpty);
+    expect(state.agents.single.latest.status, 'ready');
+  });
+
+  test(
+    'older account status snapshot cannot clear a newer waiting error',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: 'Daemon',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'offline'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+      await controller.load();
+      final beforeQuery = DateTime.now().toUtc();
+      await Future<void>.delayed(const Duration(milliseconds: 2));
+      await controller.refreshDaemonStatus('did:agent:daemon');
+      await controller.handleStatusQueryTimeoutForTest('did:agent:daemon');
+
+      await controller.applyAccountStateSnapshots(
+        inventory: _accountAgentInventorySnapshot(includeRuntime: false),
+        status: _accountAgentStatusSnapshot(refreshedAt: beforeQuery),
+        isSessionCurrent: () => true,
+      );
+
+      expect(
+        container.read(agentsProvider).statusQueryErrors['did:agent:daemon'],
+        AgentUiMessageCodes.statusSyncWaiting,
+      );
+    },
+  );
+
+  test(
+    'completed control stream is rebuilt and replays committed status',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: 'Daemon',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'offline'),
+          ),
+        ];
+      final events = _RestartingAgentControlStatusStore();
+      final container = _container(control, statusStore: events);
+      addTearDown(container.dispose);
+      addTearDown(events.close);
+      await container.read(agentsProvider.notifier).load();
+      expect(events.watchCount, 1);
+      events.latestPayload = const <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'event_id': 'evt-ready-after-restart',
+        'status_scope': 'snapshot',
+        'daemon_agent_did': 'did:agent:daemon',
+        'daemon': <String, Object?>{
+          'agent_did': 'did:agent:daemon',
+          'status': 'ready',
+        },
+      };
+
+      await events.closeCurrent();
+      await Future<void>.delayed(
+        agentControlSubscriptionRetryBaseDelay +
+            const Duration(milliseconds: 100),
+      );
+      await pumpEventQueue();
+
+      expect(events.watchCount, greaterThanOrEqualTo(2));
+      expect(
+        container.read(agentsProvider).agents.single.latest.status,
+        'ready',
+      );
+      expect(
+        container.read(agentsProvider).seenControlEventIds,
+        contains('evt-ready-after-restart'),
       );
     },
   );
@@ -4535,6 +4654,25 @@ ProductAgentInventorySnapshot _accountAgentInventorySnapshot({
   );
 }
 
+ProductAgentStatusSnapshot _accountAgentStatusSnapshot({
+  required DateTime refreshedAt,
+}) {
+  return ProductAgentStatusSnapshot(
+    binding: const ProductAccountBinding(
+      ownerIdentityId: 'owner-1',
+      accountId: 'account-1',
+    ),
+    domainVersion: '9',
+    refreshedAt: refreshedAt,
+    statuses: const <ProductAgentStatusItem>[
+      ProductAgentStatusItem(
+        agentDid: 'did:agent:daemon',
+        payloadJson: '{"status":"ready"}',
+      ),
+    ],
+  );
+}
+
 class _BlockingDirectoryApplicationService
     implements DirectoryApplicationService {
   final Completer<void> resolveStarted = Completer<void>();
@@ -4954,6 +5092,64 @@ class _StreamingAgentControlStatusStore
     required String daemonAgentDid,
   }) async {
     return null;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findDaemonStatusPayload({
+    required String daemonAgentDid,
+    required String requestId,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findStatusPayload({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String requestId,
+    required String statusScope,
+  }) async {
+    return null;
+  }
+}
+
+class _RestartingAgentControlStatusStore
+    implements AgentControlStatusStore, AgentControlEventStore {
+  final List<StreamController<AgentControlEvent>> _streams =
+      <StreamController<AgentControlEvent>>[];
+
+  Map<String, Object?>? latestPayload;
+  int watchCount = 0;
+
+  Future<void> closeCurrent() async {
+    if (_streams.isNotEmpty && !_streams.last.isClosed) {
+      await _streams.last.close();
+    }
+  }
+
+  Future<void> close() async {
+    for (final stream in _streams) {
+      if (!stream.isClosed) {
+        await stream.close();
+      }
+    }
+  }
+
+  @override
+  Stream<AgentControlEvent> watchDaemonControlEvents({
+    required String daemonAgentDid,
+  }) {
+    watchCount += 1;
+    final stream = StreamController<AgentControlEvent>();
+    _streams.add(stream);
+    return stream.stream;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
+    required String daemonAgentDid,
+  }) async {
+    return latestPayload;
   }
 
   @override

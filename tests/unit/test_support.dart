@@ -2710,6 +2710,7 @@ class FakeAgentControlService implements AgentControlService {
         'https://awiki.info/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
   );
   String? lastRefreshedDaemonDid;
+  String? lastRefreshedDaemonCommandId;
   String? lastInstallControllerDid;
   String? lastInstallControllerHandle;
   String? lastInstallClientPlatform;
@@ -2860,6 +2861,7 @@ class FakeAgentControlService implements AgentControlService {
     String? commandId,
   }) async {
     lastRefreshedDaemonDid = daemonAgentDid;
+    lastRefreshedDaemonCommandId = commandId;
   }
 
   @override

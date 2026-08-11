@@ -142,6 +142,38 @@ void main() {
   });
 
   test(
+    'uses committed local history without waiting for remote history',
+    () async {
+      final messages = _RemoteHangingMessages(<ChatMessage>[
+        _message(
+          payload: <String, Object?>{
+            'schema': AgentControlPayloads.statusSchema,
+            'status_scope': 'runtime.command',
+            'request_id': 'cmd-local',
+            'daemon_agent_did': 'did:daemon',
+            'runtime_agent_did': 'did:runtime',
+            'state': 'done',
+          },
+        ),
+      ]);
+
+      final payload =
+          await AwikiImCoreAgentControlStatusStore(
+            messages: messages,
+            lookupTimeout: const Duration(milliseconds: 20),
+          ).findStatusPayload(
+            daemonAgentDid: 'did:daemon',
+            runtimeAgentDid: 'did:runtime',
+            requestId: 'cmd-local',
+            statusScope: 'runtime.command',
+          );
+
+      expect(payload?['state'], 'done');
+      expect(messages.remoteRequests, 0);
+    },
+  );
+
+  test(
     'watches only daemon status payloads committed by the Core patch stream',
     () async {
       final messages = _FakeMessages(const <ChatMessage>[]);
@@ -237,7 +269,10 @@ class _HistoryRequest {
 }
 
 class _FakeMessages
-    implements MessageCorePort, ControlThreadPatchMessageCorePort {
+    implements
+        MessageCorePort,
+        LocalHistoryMessageCorePort,
+        ControlThreadPatchMessageCorePort {
   _FakeMessages(this.history);
 
   final List<ChatMessage> history;
@@ -270,7 +305,7 @@ class _FakeMessages
   }
 
   @override
-  Future<List<ChatMessage>> loadHistory(
+  Future<List<ChatMessage>> loadLocalHistory(
     AppThreadRef thread, {
     int limit = 100,
     String? cursor,
@@ -285,6 +320,16 @@ class _FakeMessages
       ),
     );
     return history;
+  }
+
+  @override
+  Future<List<ChatMessage>> loadHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) {
+    throw StateError('remote history must not be used for status lookup');
   }
 
   @override
@@ -368,12 +413,29 @@ class _ThrowingMessages extends _FakeMessages {
   _ThrowingMessages() : super(const <ChatMessage>[]);
 
   @override
-  Future<List<ChatMessage>> loadHistory(
+  Future<List<ChatMessage>> loadLocalHistory(
     AppThreadRef thread, {
     int limit = 100,
     String? cursor,
     bool includeControlPayloads = false,
   }) async {
     throw StateError('history unavailable');
+  }
+}
+
+class _RemoteHangingMessages extends _FakeMessages {
+  _RemoteHangingMessages(super.history);
+
+  int remoteRequests = 0;
+
+  @override
+  Future<List<ChatMessage>> loadHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) {
+    remoteRequests += 1;
+    return Completer<List<ChatMessage>>().future;
   }
 }

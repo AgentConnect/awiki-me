@@ -241,6 +241,18 @@ Agent / Personal Agent control payload 是控制面事件，不是普通聊天�
 4. control payload 的结构化语义交给 Agent control projection、runtime status、Personal Agent cards 或后续 application service 处理。
 5. 不允许把 control payload raw JSON 作为普通聊天文案展示。
 
+Agent control status 的事实读取遵守 committed-local-first：Patch stream 是主通知路径，
+`loadLocalHistory(includeControlPayloads: true)` 是廉价补偿读取；这里不得调用会触发远端同步的
+history API，也不得靠放大 UI timeout 维持正确性。每个 Daemon subscription 使用完整的
+session generation、owner DID/identity、account、Protocol Device、identity generation 和
+device auth generation fence；stream error/close 后有界退避重建并回放本地最新 committed
+status，旧 session callback 不得写入新 session。
+
+User Service 的 Agent Status snapshot 是独立的账号域权威投影。它只有在包含目标 Daemon 且
+`refreshedAt` 不早于当前状态查询开始时间时，才可以清除该 Daemon 的 pending/waiting error；
+旧 snapshot 仍可参与普通展示合并，但不能擦除更新查询的错误。带匹配 request/command ID 的
+committed control reply 可以直接完成查询；无关或旧 control replay 不能完成新的查询。
+
 `realtimeUpdateFromCore` 对 control payload 的处理也遵守该边界：有可见 preview 才返回 conversation update；结构化 payload 放在 `RealtimeUpdate.agentControlPayload`，普通 `message` 为空。
 
 ### 8.1 Coding Agent 终态通知
