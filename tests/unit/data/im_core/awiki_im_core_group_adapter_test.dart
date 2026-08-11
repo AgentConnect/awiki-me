@@ -1,4 +1,5 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/application/ports/group_core_port.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_group_adapter.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -61,4 +62,41 @@ void main() {
     expect(request.identityMode, core.GroupIdentityMode.didOnly);
     expect(request.identityHandle, isNull);
   });
+
+  test(
+    'group adapter maps structured admission denial at the Core boundary',
+    () {
+      final mapped = mapCoreGroupMemberAdmissionError(
+        const core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'raw backend detail',
+          serviceCode: 'group.admission_not_allowed',
+          serviceDataJson:
+              '{"admission_reason":"agent_not_group_invitable",'
+              '"retryable":false}',
+        ),
+      );
+
+      expect(mapped, isNotNull);
+      expect(
+        mapped?.reason,
+        GroupMemberAdmissionDenialReason.agentNotGroupInvitable,
+      );
+    },
+  );
+
+  test(
+    'group adapter keeps unrelated Core failures outside admission mapping',
+    () {
+      final mapped = mapCoreGroupMemberAdmissionError(
+        const core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'unrelated',
+          serviceCode: 'group.not_found',
+        ),
+      );
+
+      expect(mapped, isNull);
+    },
+  );
 }

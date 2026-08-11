@@ -4,6 +4,14 @@ import '../../domain/entities/group_identity.dart';
 import '../../domain/entities/group_summary.dart';
 import '../models/group_collection_page.dart';
 
+enum GroupMemberAdmissionDenialReason { agentNotGroupInvitable, unspecified }
+
+class GroupMemberAdmissionException implements Exception {
+  const GroupMemberAdmissionException(this.reason);
+
+  final GroupMemberAdmissionDenialReason reason;
+}
+
 abstract interface class GroupCorePort {
   Future<GroupSummary> createGroup({
     required String name,

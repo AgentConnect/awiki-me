@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/group_collection_page.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
+import 'package:awiki_me/src/application/ports/group_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/skill_group_membership_capability.dart';
@@ -92,16 +92,8 @@ class _AdmissionDeniedGroupService extends FakeGroupApplicationService {
     required String memberRef,
     String role = 'member',
   }) {
-    throw const core.AwikiImCoreException(
-      code: 'service_error',
-      message: 'raw backend detail must not be shown',
-      serviceCode: 'group.admission_not_allowed',
-      serviceDataJson:
-          '{"admission_reason":"agent_not_group_invitable",'
-          '"agent_kind":"skill",'
-          '"policy_reason":"skill_group_membership_disabled",'
-          '"required_capability":"group_membership_v1",'
-          '"retryable":false}',
+    throw const GroupMemberAdmissionException(
+      GroupMemberAdmissionDenialReason.agentNotGroupInvitable,
     );
   }
 }
@@ -1522,7 +1514,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Racing Skill: Skill Agent 暂不支持加入群聊'), findsOneWidget);
-    expect(find.textContaining('raw backend detail'), findsNothing);
+    expect(find.textContaining('service_error'), findsNothing);
   });
 
   testWidgets('添加群成员候选复用会话的 Persona 昵称和头像投影', (tester) async {
