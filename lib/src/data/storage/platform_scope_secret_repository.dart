@@ -215,13 +215,8 @@ class FlutterSecureScopeSecretPlatformStore
   static Future<void> _sharedPending = Future<void>.value();
 
   static const AndroidOptions _androidOptions = AndroidOptions(
-    migrateWithBackup: true,
-    // Keep the v9 backend and namespace for one v10 release so the plugin can
-    // migrate existing device roots before these options are removed in v11.
-    // ignore: deprecated_member_use
     encryptedSharedPreferences: true,
     resetOnError: false,
-    // ignore: deprecated_member_use
     sharedPreferencesName: 'awiki_me_scope_secrets',
     preferencesKeyPrefix: 'awiki_scope_',
   );

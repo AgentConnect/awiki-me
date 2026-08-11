@@ -3,6 +3,7 @@ part of '../agents_page.dart';
 class _AgentListPane extends StatelessWidget {
   const _AgentListPane({
     required this.state,
+    required this.personalAgentVisible,
     required this.footer,
     required this.pendingAgentDids,
     required this.selectedAgentDid,
@@ -15,6 +16,7 @@ class _AgentListPane extends StatelessWidget {
   });
 
   final AgentsState state;
+  final bool personalAgentVisible;
   final Widget? footer;
   final Set<String> pendingAgentDids;
   final String? selectedAgentDid;
@@ -29,6 +31,11 @@ class _AgentListPane extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
+    final visibleAgents = state.agents
+        .where(
+          (agent) => personalAgentVisible || !isPersonalAgentRuntime(agent),
+        )
+        .toList(growable: false);
     return ColoredBox(
       key: const Key('agents-list-pane'),
       color: responsive.isCompact ? theme.background : theme.surface,
@@ -60,7 +67,7 @@ class _AgentListPane extends StatelessWidget {
                 children: <Widget>[
                   if (responsive.isCompact)
                     _AgentListSectionHeader(
-                      count: state.agents
+                      count: visibleAgents
                           .where((agent) => agent.isRuntime)
                           .length,
                     ),
@@ -71,13 +78,14 @@ class _AgentListPane extends StatelessWidget {
                     ),
                     SizedBox(height: responsive.spacing(10)),
                   ],
-                  if (state.agents.isEmpty)
+                  if (visibleAgents.isEmpty)
                     _AgentEmptyState(
                       isWaitingForDaemonInstall:
                           state.isWaitingForDaemonInstall,
                     ),
                   _AgentHierarchyList(
                     state: state,
+                    personalAgentVisible: personalAgentVisible,
                     pendingAgentDids: pendingAgentDids,
                     selectedAgentDid: selectedAgentDid,
                     onSelect: onSelect,
@@ -447,6 +455,7 @@ class _AgentEmptyState extends StatelessWidget {
 class _AgentHierarchyList extends StatelessWidget {
   const _AgentHierarchyList({
     required this.state,
+    required this.personalAgentVisible,
     required this.pendingAgentDids,
     required this.selectedAgentDid,
     required this.onSelect,
@@ -454,6 +463,7 @@ class _AgentHierarchyList extends StatelessWidget {
   });
 
   final AgentsState state;
+  final bool personalAgentVisible;
   final Set<String> pendingAgentDids;
   final String? selectedAgentDid;
   final ValueChanged<String> onSelect;
@@ -461,7 +471,10 @@ class _AgentHierarchyList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final groups = _AgentTreeGroup.fromState(state);
+    final groups = _AgentTreeGroup.fromState(
+      state,
+      personalAgentVisible: personalAgentVisible,
+    );
     return Column(
       children: <Widget>[
         for (final group in groups) ...<Widget>[
@@ -492,8 +505,15 @@ class _AgentTreeGroup {
   final Map<String, PendingRuntimeCreation> runtimeCreationOverlays;
   final List<PendingRuntimeCreation> pendingRuntimeCreations;
 
-  static List<_AgentTreeGroup> fromState(AgentsState state) {
-    final agents = state.agents;
+  static List<_AgentTreeGroup> fromState(
+    AgentsState state, {
+    required bool personalAgentVisible,
+  }) {
+    final agents = state.agents
+        .where(
+          (agent) => personalAgentVisible || !isPersonalAgentRuntime(agent),
+        )
+        .toList(growable: false);
     final daemons = agents.where((agent) => agent.isDaemon).toList();
     final groupedRuntimes = <String, List<AgentSummary>>{};
     final orphanRuntimes = <AgentSummary>[];

@@ -32,14 +32,11 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
     // Legacy fallback for values written by flutter_secure_storage before the
     // app added its own macOS Keychain bridge. New macOS writes go through
     // MacOsKeychainStorage so the Keychain ACL can trust the current executable.
-    mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+    mOptions: MacOsOptions(useDataProtectionKeyChain: false),
   );
 
   static const AndroidOptions _androidOptions = AndroidOptions(
     resetOnError: false,
-    migrateWithBackup: true,
-    // Keep the v9 namespace for one v10 release so the plugin can migrate it.
-    // ignore: deprecated_member_use
     sharedPreferencesName: 'FlutterSecureStorage',
     preferencesKeyPrefix:
         'VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIHNlY3VyZSBzdG9yYWdlCg',

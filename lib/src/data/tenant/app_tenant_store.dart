@@ -48,6 +48,44 @@ class AppTenantStore {
 
   static const int _maxTenantNameLength = 40;
 
+  Future<void> resetAllLocalDataForRecovery({
+    required Future<void> Function() resetSecureStorage,
+  }) async {
+    final roots = await _roots();
+    final pathContext = awikiPathContextFor(<String?>[
+      roots.$1,
+      roots.$2,
+      roots.$3,
+    ]);
+    final targets = <(String, String)>[];
+    final visited = <String>{};
+    for (final root in <String>[roots.$1, roots.$2, roots.$3]) {
+      final normalizedRoot = pathContext.normalize(pathContext.absolute(root));
+      final target = pathContext.normalize(
+        pathContext.join(normalizedRoot, 'awiki-me'),
+      );
+      if (!visited.add(target)) continue;
+      _assertRecoveryTarget(
+        pathContext: pathContext,
+        trustedRoot: normalizedRoot,
+        target: target,
+      );
+      await _assertRecoveryRootIsNotLink(normalizedRoot);
+      targets.add((normalizedRoot, target));
+    }
+    final lockPath = pathContext.join(
+      pathContext.normalize(pathContext.absolute(roots.$1)),
+      '.awiki-me-recovery.lock',
+    );
+    await StorageScopeProcessLock(lockPath).synchronized(() async {
+      await resetSecureStorage();
+      for (final (trustedRoot, target) in targets) {
+        await _assertRecoveryRootIsNotLink(trustedRoot);
+        await _deleteEntityWithoutFollowingLinks(target);
+      }
+    });
+  }
+
   Future<AppTenantRegistry> loadRegistry() async {
     final file = await _registryFile();
     if (!await file.exists()) {
@@ -355,6 +393,47 @@ class AppTenantStore {
       (await getApplicationCacheDirectory()).path,
       Directory.systemTemp.path,
     );
+  }
+}
+
+void _assertRecoveryTarget({
+  required p.Context pathContext,
+  required String trustedRoot,
+  required String target,
+}) {
+  if (pathContext.basename(target) != 'awiki-me' ||
+      !pathContext.equals(pathContext.dirname(target), trustedRoot)) {
+    throw const FormatException('local_recovery_path_invalid');
+  }
+}
+
+Future<void> _assertRecoveryRootIsNotLink(String trustedRoot) async {
+  final rootType = await FileSystemEntity.type(trustedRoot, followLinks: false);
+  if (rootType == FileSystemEntityType.link) {
+    throw const FileSystemException('local_recovery_root_symlink_forbidden');
+  }
+}
+
+Future<void> _deleteEntityWithoutFollowingLinks(String path) async {
+  final type = await FileSystemEntity.type(path, followLinks: false);
+  switch (type) {
+    case FileSystemEntityType.notFound:
+      return;
+    case FileSystemEntityType.link:
+      await Link(path).delete();
+      return;
+    case FileSystemEntityType.file:
+      await File(path).delete();
+      return;
+    case FileSystemEntityType.directory:
+      final directory = Directory(path);
+      await for (final child in directory.list(followLinks: false)) {
+        await _deleteEntityWithoutFollowingLinks(child.path);
+      }
+      await directory.delete();
+      return;
+    default:
+      throw const FileSystemException('local_recovery_entity_unsupported');
   }
 }
 

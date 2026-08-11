@@ -1884,6 +1884,256 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  for (final scenario in <({String label, TargetPlatform platform, Size size})>[
+    (
+      label: 'macOS',
+      platform: TargetPlatform.macOS,
+      size: const Size(1600, 960),
+    ),
+    (
+      label: 'Android',
+      platform: TargetPlatform.android,
+      size: const Size(390, 844),
+    ),
+  ]) {
+    testWidgets('${scenario.label} 群成员资料发消息切换到 canonical 私聊', (tester) async {
+      const session = SessionIdentity(
+        did: 'did:test:owner',
+        credentialName: 'owner.json',
+        displayName: 'Owner',
+        handle: 'owner.awiki.ai',
+      );
+      const groupId = 'did:test:group:profile-direct';
+      const groupConversationId = 'group:profile-direct';
+      const memberDid = 'did:wba:awiki.ai:user:alice:e1_member';
+      const memberHandle = 'alice.awiki.ai';
+      const directConversationId = 'dm:peer-scope:v1:alice';
+      const memberProfile = UserProfile(
+        did: memberDid,
+        displayName: 'Alice',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        fullHandle: memberHandle,
+      );
+      final groupConversation = ConversationSummary(
+        threadId: groupConversationId,
+        conversationId: groupConversationId,
+        displayName: '项目群',
+        lastMessagePreview: '来自 Alice 的消息',
+        lastMessageAt: DateTime(2026, 8, 11, 10),
+        unreadCount: 0,
+        isGroup: true,
+        groupId: groupId,
+      );
+      final memberMessage = ChatMessage(
+        localId: 'group-member-profile-message',
+        remoteId: 'group-member-profile-message',
+        conversationId: groupConversationId,
+        threadId: groupConversationId,
+        senderDid: memberDid,
+        senderPeerPersonaId: 'persona:alice',
+        senderName: 'Alice',
+        groupId: groupId,
+        content: '来自 Alice 的消息',
+        createdAt: groupConversation.lastMessageAt,
+        isMine: false,
+        sendState: MessageSendState.sent,
+      );
+      final gateway = FakeAwikiGateway()
+        ..conversations = <ConversationSummary>[groupConversation]
+        ..publicProfilesByQuery = const <String, UserProfile>{
+          memberDid: memberProfile,
+          memberHandle: memberProfile,
+        }
+        ..directoryConversationIdsByQuery = const <String, String>{
+          memberHandle: directConversationId,
+        };
+      final messagingService = FakeMessagingService(gateway)
+        ..conversationTimelineById[groupConversationId] = <ChatMessage>[
+          memberMessage,
+        ];
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      debugDefaultTargetPlatformOverride = scenario.platform;
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = scenario.size;
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AppShell(),
+          gateway: gateway,
+          session: session,
+          homepageMarkdownLoader: (_) async => null,
+          providerOverrides: <Override>[
+            conversationListProvider.overrideWith(
+              (ref) =>
+                  _StaticConversationListController(ref, gateway.conversations),
+            ),
+            messagingServiceProvider.overrideWithValue(messagingService),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(AppShell)),
+      );
+
+      await tester.tap(
+        find.byKey(const Key('conversation-row:$groupConversationId')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<ChatView>(find.byType(ChatView)).conversation.isGroup,
+        isTrue,
+      );
+
+      await tester.tap(
+        find.byKey(
+          const Key('chat-message-avatar:group-member-profile-message:peer'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(PeerProfilePage), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('peer-profile-send-message')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PeerProfilePage), findsNothing);
+      expect(
+        container.read(selectedConversationProvider),
+        directConversationId,
+      );
+      final opened = tester
+          .widget<ChatView>(find.byType(ChatView))
+          .conversation;
+      expect(opened.conversationId, directConversationId);
+      expect(opened.targetDid, memberDid);
+      expect(opened.isGroup, isFalse);
+      expect(
+        gateway.conversations
+            .where(
+              (conversation) =>
+                  conversation.conversationId == directConversationId,
+            )
+            .length,
+        1,
+      );
+      expect(tester.takeException(), isNull);
+      debugDefaultTargetPlatformOverride = null;
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+  }
+
+  testWidgets('Android 会话信息中的用户资料发消息退出多层页面并复用当前私聊', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:owner',
+      credentialName: 'owner.json',
+      displayName: 'Owner',
+      handle: 'owner.awiki.ai',
+    );
+    const peerDid = 'did:wba:awiki.ai:user:alice:e1_member';
+    const peerHandle = 'alice.awiki.ai';
+    const directConversationId = 'dm:peer-scope:v1:alice-existing';
+    const profile = UserProfile(
+      did: peerDid,
+      displayName: 'Alice',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+      fullHandle: peerHandle,
+    );
+    final conversation = ConversationSummary(
+      threadId: directConversationId,
+      conversationId: directConversationId,
+      displayName: 'Alice',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 8, 11, 11),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: peerDid,
+      targetPeer: peerHandle,
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        peerDid: profile,
+        peerHandle: profile,
+      }
+      ..directoryConversationIdsByQuery = const <String, String>{
+        peerHandle: directConversationId,
+      };
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        homepageMarkdownLoader: (_) async => null,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AppShell)),
+    );
+
+    await tester.tap(
+      find.byKey(const Key('conversation-row:$directConversationId')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-information-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chat-information-page')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chat-information-peer-row')));
+    await tester.pumpAndSettle();
+    expect(find.byType(PeerProfilePage), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('peer-profile-send-message')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PeerProfilePage), findsNothing);
+    expect(find.byKey(const Key('chat-information-page')), findsNothing);
+    expect(find.byType(ChatView), findsOneWidget);
+    expect(
+      tester
+          .widget<ChatView>(find.byType(ChatView))
+          .conversation
+          .conversationId,
+      directConversationId,
+    );
+    expect(container.read(selectedConversationProvider), directConversationId);
+    expect(
+      gateway.conversations
+          .where((item) => item.conversationId == directConversationId)
+          .length,
+      1,
+    );
+    expect(tester.takeException(), isNull);
+    debugDefaultTargetPlatformOverride = null;
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
   testWidgets('macOS 群聊头部添加成员弹窗不等待远端成员刷新', (tester) async {
     const groupId = 'did:test:group:instant-invite';
     final group = GroupSummary(

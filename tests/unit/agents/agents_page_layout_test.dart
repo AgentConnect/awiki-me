@@ -13,6 +13,7 @@ import 'package:awiki_me/src/application/ports/skill_onboarding_port.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/personal_agent_feature_visibility.dart';
 import 'package:awiki_me/src/presentation/agents/agent_status_indicator.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
@@ -1790,6 +1791,7 @@ void main() {
             agentControlServiceProvider.overrideWithValue(control),
             identityCorePortProvider.overrideWithValue(identities),
             agentImEnabledProvider.overrideWithValue(true),
+            personalAgentFeatureVisibleProvider.overrideWithValue(true),
           ],
         ),
       );
@@ -1809,7 +1811,7 @@ void main() {
   );
 
   testWidgets(
-    'personal agent management panel is hidden with existing runtime',
+    'personal agent surfaces are hidden while regular agents remain usable',
     (tester) async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -1844,6 +1846,16 @@ void main() {
             activeState: 'active',
             latest: AgentLatestStatus(status: 'ready'),
           ),
+          AgentSummary(
+            agentDid: 'did:agent:codex-worker',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'codex',
+            handle: 'codex-worker',
+            displayName: 'Codex Worker',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
         ];
 
       tester.view.physicalSize = const Size(1200, 900);
@@ -1871,14 +1883,15 @@ void main() {
         find.byKey(const Key('personal-agent-settings-panel')),
         findsNothing,
       );
-      expect(find.text('个人助理'), findsOneWidget);
+      expect(find.text('个人助理'), findsNothing);
       expect(
         find.byKey(const Key('personal-agent-settings-entry-card')),
-        findsOneWidget,
+        findsNothing,
       );
-      expect(find.text('已创建个人助理'), findsOneWidget);
+      expect(find.text('已创建个人助理'), findsNothing);
       expect(find.text('运行 Daemon 1'), findsWidgets);
-      expect(find.text('Hermes Personal Agent'), findsWidgets);
+      expect(find.text('Codex Worker'), findsWidgets);
+      expect(find.text('Hermes Personal Agent'), findsNothing);
       expect(find.text('启用个人助理'), findsNothing);
       expect(find.text('暂停处理消息'), findsNothing);
       expect(find.text('删除个人助理'), findsNothing);

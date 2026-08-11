@@ -14,7 +14,7 @@ class _AgentDetailPane extends StatelessWidget {
     required this.onUpgrade,
     required this.onCancelUpgrade,
     required this.onDelete,
-    required this.personalAgentEnabled,
+    required this.personalAgentVisible,
     required this.onOpenPersonalAgentSettings,
     required this.onBootstrapPersonalAgent,
     required this.onPausePersonalAgent,
@@ -35,7 +35,7 @@ class _AgentDetailPane extends StatelessWidget {
   final ValueChanged<AgentSummary> onUpgrade;
   final ValueChanged<AgentSummary> onCancelUpgrade;
   final ValueChanged<AgentSummary> onDelete;
-  final bool personalAgentEnabled;
+  final bool personalAgentVisible;
   final ValueChanged<AgentSummary> onOpenPersonalAgentSettings;
   final ValueChanged<AgentSummary> onBootstrapPersonalAgent;
   final ValueChanged<AgentSummary> onPausePersonalAgent;
@@ -252,13 +252,14 @@ class _AgentDetailPane extends StatelessWidget {
             onPressed: onInstallDaemon,
           ),
         ],
-        if (_shouldShowPersonalAgentSettingsPanel() &&
+        if (personalAgentVisible &&
+            _shouldShowPersonalAgentSettingsPanel() &&
             agent.isDaemon) ...<Widget>[
           SizedBox(height: responsive.spacing(14)),
           _PersonalAgentSettingsPanel(
             daemon: agent,
             personalAgent: state.personalAgentRuntimeFor(agent.agentDid),
-            enabled: personalAgentEnabled,
+            enabled: personalAgentVisible,
             isEnablePending: state.isActionPending(
               AgentActionKeys.bootstrapPersonalAgent(agent.agentDid),
             ),
@@ -277,7 +278,7 @@ class _AgentDetailPane extends StatelessWidget {
             onDelete: () => onDeletePersonalAgent(agent),
             onRevoke: () => onRevokePersonalAgentAuthorization(agent),
           ),
-        ] else if (personalAgentEnabled && agent.isDaemon) ...<Widget>[
+        ] else if (personalAgentVisible && agent.isDaemon) ...<Widget>[
           SizedBox(height: responsive.spacing(14)),
           _PersonalAgentSettingsEntryCard(
             daemon: agent,

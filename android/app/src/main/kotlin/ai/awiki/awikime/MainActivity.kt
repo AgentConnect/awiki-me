@@ -1,6 +1,7 @@
 package ai.awiki.awikime
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -14,6 +15,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.security.KeyStore
 import java.util.UUID
 
 class MainActivity : FlutterFragmentActivity() {
@@ -22,6 +24,8 @@ class MainActivity : FlutterFragmentActivity() {
         private const val ATTACHMENT_CHANNEL = "ai.awiki.awikime/attachment_picker"
         private const val ATTACHMENT_VIEWER_CHANNEL = "ai.awiki.awikime/attachment_viewer"
         private const val UPDATE_CHANNEL = "ai.awiki.awikime/app_update"
+        private const val LOCAL_DATA_RECOVERY_CHANNEL =
+            "ai.awiki.awikime/android_local_data_recovery"
         private const val REQUEST_SAVE_ZIP = 2001
         private const val REQUEST_PICK_ZIP = 2002
         private const val REQUEST_PICK_ATTACHMENT = 2003
@@ -106,6 +110,27 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            LOCAL_DATA_RECOVERY_CHANNEL,
+        ).setMethodCallHandler { call: MethodCall, result: MethodChannel.Result ->
+            when (call.method) {
+                "resetLocalSecureStorage" -> {
+                    try {
+                        resetLocalSecureStorage()
+                        result.success(null)
+                    } catch (error: Exception) {
+                        result.error(
+                            "local_data_recovery_failed",
+                            formatExceptionMessage(error),
+                            null,
+                        )
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -456,6 +481,40 @@ class MainActivity : FlutterFragmentActivity() {
         return extension
             ?.let { android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(it) }
             ?: "application/octet-stream"
+    }
+
+    private fun resetLocalSecureStorage() {
+        val preferenceNames = listOf(
+            "awiki_me_scope_secrets",
+            "FlutterSecureStorage",
+            "FlutterSecureKeyStorage",
+            "FlutterSecureStorageConfiguration",
+            "FlutterSecureStorageConfiguration:awiki_me_scope_secrets",
+            "FlutterSecureStorageConfiguration:FlutterSecureStorage",
+        )
+        for (name in preferenceNames) {
+            val cleared = getSharedPreferences(name, Context.MODE_PRIVATE)
+                .edit()
+                .clear()
+                .commit()
+            if (!cleared) {
+                throw IllegalStateException("Failed to clear secure preference namespace")
+            }
+        }
+
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply {
+            load(null)
+        }
+        val aliases = keyStore.aliases()
+        val appAliasPrefix = "$packageName.FlutterSecureStoragePluginKey"
+        while (aliases.hasMoreElements()) {
+            val alias = aliases.nextElement()
+            if (alias == "_androidx_security_master_key_" ||
+                alias.startsWith(appAliasPrefix)
+            ) {
+                keyStore.deleteEntry(alias)
+            }
+        }
     }
 
     private fun formatExceptionMessage(error: Throwable): String {

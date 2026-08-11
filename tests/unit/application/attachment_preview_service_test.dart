@@ -155,6 +155,165 @@ void main() {
   );
 
   test(
+    'previewPathFor downloads to deterministic disk staging and publishes it',
+    () async {
+      final root = await Directory.systemTemp.createTemp('awiki-preview-');
+      addTearDown(() async {
+        if (await root.exists()) await root.delete(recursive: true);
+      });
+      final service = AttachmentPreviewService(
+        cache: FileAttachmentCacheService(rootDirectory: () async => root),
+      );
+      addTearDown(service.dispose);
+      var legacyDownloadCalls = 0;
+      String? receivedTarget;
+
+      final path = await service.previewPathFor(
+        message: _message(filename: 'video.mp4', sizeBytes: 8),
+        download: () async {
+          legacyDownloadCalls += 1;
+          throw StateError('memory download must remain a fallback');
+        },
+        downloadToPath: (target) async {
+          receivedTarget = target;
+          await File(target).writeAsString('complete');
+          return AttachmentDownloadResult(
+            attachmentId: 'att-1',
+            filename: 'video.mp4',
+            mimeType: 'video/mp4',
+            sizeBytes: 8,
+            localPath: target,
+          );
+        },
+      );
+
+      expect(legacyDownloadCalls, 0);
+      expect(receivedTarget, isNotNull);
+      expect(path, isNot(receivedTarget));
+      expect(await File(path).readAsString(), 'complete');
+    },
+  );
+
+  test('preview handle publishes resumable disk progress', () async {
+    final root = await Directory.systemTemp.createTemp('awiki-preview-');
+    addTearDown(() async {
+      if (await root.exists()) await root.delete(recursive: true);
+    });
+    final service = AttachmentPreviewService(
+      cache: FileAttachmentCacheService(rootDirectory: () async => root),
+    );
+    addTearDown(service.dispose);
+    final gate = Completer<void>();
+    final message = _message(filename: 'video.mp4', sizeBytes: 100);
+    final handle = service.previewHandleFor(message);
+
+    final resolution = service.previewPathFor(
+      message: message,
+      download: () => throw StateError('memory fallback must not run'),
+      downloadToPath: (target) async {
+        await File(
+          '$target$attachmentResumablePartialSuffix',
+        ).writeAsBytes(List<int>.filled(40, 1));
+        await gate.future;
+        await File(target).writeAsBytes(List<int>.filled(100, 1));
+        return AttachmentDownloadResult(
+          attachmentId: 'att-1',
+          filename: 'video.mp4',
+          mimeType: 'video/mp4',
+          sizeBytes: 100,
+          localPath: target,
+        );
+      },
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+
+    expect(handle.snapshot.phase, AttachmentPreviewPhase.loading);
+    expect(handle.snapshot.receivedBytes, 40);
+    expect(handle.snapshot.totalBytes, 100);
+
+    gate.complete();
+    await resolution;
+    expect(handle.snapshot.phase, AttachmentPreviewPhase.ready);
+  });
+
+  test(
+    'cancel pauses disk download, preserves progress, and allows resume',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki-preview-cancel-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) await root.delete(recursive: true);
+      });
+      final transferCancelled = Completer<void>();
+      String? cancelledPath;
+      final service = AttachmentPreviewService(
+        cache: FileAttachmentCacheService(rootDirectory: () async => root),
+        cancelDownload: (localPath) async {
+          cancelledPath = localPath;
+          transferCancelled.complete();
+          return true;
+        },
+      );
+      addTearDown(service.dispose);
+      final message = _message(filename: 'video.mp4', sizeBytes: 100);
+      final handle = service.previewHandleFor(message);
+      var attempt = 0;
+
+      Future<AttachmentDownloadResult> downloadToPath(String target) async {
+        attempt += 1;
+        if (attempt == 1) {
+          await File(
+            '$target$attachmentResumablePartialSuffix',
+          ).writeAsBytes(List<int>.filled(40, 1));
+          await transferCancelled.future;
+          throw const AttachmentDownloadCancelledException();
+        }
+        await File(target).writeAsBytes(List<int>.filled(100, 2));
+        return AttachmentDownloadResult(
+          attachmentId: 'att-1',
+          filename: 'video.mp4',
+          mimeType: 'video/mp4',
+          sizeBytes: 100,
+          localPath: target,
+        );
+      }
+
+      final first = service.previewPathFor(
+        message: message,
+        download: () => throw StateError('memory fallback must not run'),
+        downloadToPath: downloadToPath,
+      );
+      final firstExpectation = expectLater(
+        first,
+        throwsA(isA<AttachmentDownloadCancelledException>()),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      expect(handle.snapshot.receivedBytes, 40);
+
+      expect(await service.cancelPreviewDownload(message), isTrue);
+      expect(cancelledPath, isNotNull);
+      expect(handle.snapshot.phase, AttachmentPreviewPhase.paused);
+      expect(handle.snapshot.receivedBytes, 40);
+      await firstExpectation;
+      expect(
+        await File('$cancelledPath$attachmentResumablePartialSuffix').length(),
+        40,
+      );
+
+      final resumed = await service.previewPathFor(
+        message: message,
+        download: () => throw StateError('memory fallback must not run'),
+        downloadToPath: downloadToPath,
+      );
+
+      expect(attempt, 2);
+      expect(handle.snapshot.phase, AttachmentPreviewPhase.ready);
+      expect(await File(resumed).length(), 100);
+    },
+  );
+
+  test(
     'previewPathFor reports unavailable when cache and download are empty',
     () async {
       final root = await Directory.systemTemp.createTemp('awiki-preview-');
@@ -1219,6 +1378,7 @@ ChatMessage _message({
   String attachmentId = 'att-1',
   String filename = 'report.txt',
   String mimeType = 'text/plain',
+  int? sizeBytes,
 }) {
   return ChatMessage(
     localId: localId,
@@ -1236,6 +1396,7 @@ ChatMessage _message({
       mimeType: mimeType,
       localPath: localPath,
       objectUri: objectUri,
+      sizeBytes: sizeBytes,
     ),
   );
 }
@@ -1285,6 +1446,36 @@ class _DelayFirstConditionalAttachmentCache implements AttachmentCacheService {
   final Completer<void> firstConditionalStarted = Completer<void>();
   final Completer<void> releaseFirstConditional = Completer<void>();
   int _conditionalCalls = 0;
+
+  @override
+  Future<String> prepareDownloadedFile({
+    required String messageId,
+    required String attachmentId,
+  }) {
+    return delegate.prepareDownloadedFile(
+      messageId: messageId,
+      attachmentId: attachmentId,
+    );
+  }
+
+  @override
+  Future<String?> commitDownloadedFileIfCurrent({
+    required String messageId,
+    required String attachmentId,
+    required String filename,
+    required String mimeType,
+    required String stagedPath,
+    required bool Function() isCurrent,
+  }) {
+    return delegate.commitDownloadedFileIfCurrent(
+      messageId: messageId,
+      attachmentId: attachmentId,
+      filename: filename,
+      mimeType: mimeType,
+      stagedPath: stagedPath,
+      isCurrent: isCurrent,
+    );
+  }
 
   @override
   Future<String?> cacheLocalSource({

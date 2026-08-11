@@ -7,6 +7,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
+import 'package:awiki_me/src/presentation/agents/personal_agent_feature_visibility.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/settings/language_selection_page.dart';
 import 'package:awiki_me/src/presentation/settings/display_settings_page.dart';
@@ -1191,6 +1192,7 @@ void main() {
           agentControlServiceProvider.overrideWithValue(control),
           identityCorePortProvider.overrideWithValue(identities),
           agentImEnabledProvider.overrideWithValue(true),
+          personalAgentFeatureVisibleProvider.overrideWithValue(true),
         ],
       ),
     );
@@ -1294,6 +1296,7 @@ void main() {
           agentControlServiceProvider.overrideWithValue(control),
           identityCorePortProvider.overrideWithValue(identities),
           agentImEnabledProvider.overrideWithValue(true),
+          personalAgentFeatureVisibleProvider.overrideWithValue(true),
         ],
       ),
     );
@@ -1387,6 +1390,7 @@ void main() {
           agentControlServiceProvider.overrideWithValue(control),
           identityCorePortProvider.overrideWithValue(identities),
           agentImEnabledProvider.overrideWithValue(true),
+          personalAgentFeatureVisibleProvider.overrideWithValue(true),
         ],
       ),
     );

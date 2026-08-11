@@ -6,6 +6,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/tenant_aware_awiki_me_app.dart';
 import 'package:awiki_me/src/application/desktop_startup_presentation_service.dart';
+import 'package:awiki_me/src/data/im_core/awiki_im_core_secret_storage.dart';
 import 'package:awiki_me/src/presentation/shared/desktop_startup_ready_boundary.dart';
 import 'package:awiki_me/src/presentation/shared/startup_splash.dart';
 import 'package:flutter/foundation.dart';
@@ -33,11 +34,12 @@ void main() {
       ),
     );
 
-    expect(find.text('AWikiMe failed to start.'), findsOneWidget);
+    expect(find.text('AWikiMe could not start'), findsOneWidget);
     expect(find.textContaining('native bridge mismatch'), findsNothing);
     expect(find.text('Diagnostic code: bootstrap_failed'), findsOneWidget);
     expect(find.text('Copy diagnostics'), findsOneWidget);
     expect(find.text('Exit'), findsOneWidget);
+    expect(find.byKey(const Key('startup-recovery-action')), findsNothing);
     expect(presentation.callCount, 1);
     expect(tester.takeException(), isNull);
   });
@@ -79,6 +81,79 @@ void main() {
 
     expect(retryCount, 1);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ordinary bootstrap errors never expose local reset', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      buildTenantBootstrapErrorApp(
+        StateError('ordinary failure'),
+        onRecover: () async {},
+      ),
+    );
+
+    expect(find.byKey(const Key('startup-recovery-action')), findsNothing);
+  });
+
+  testWidgets('vault failures require confirmation before local reset', (
+    tester,
+  ) async {
+    var recoveryCalls = 0;
+    await tester.pumpWidget(
+      buildTenantBootstrapErrorApp(
+        const AwikiVaultOpenException('vault_key_missing'),
+        onRecover: () async => recoveryCalls += 1,
+      ),
+    );
+
+    expect(find.byKey(const Key('startup-recovery-action')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('startup-recovery-action')));
+    await tester.pumpAndSettle();
+    expect(recoveryCalls, 0);
+
+    await tester.tap(find.byKey(const Key('startup-recovery-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(recoveryCalls, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('local reset failure stays recoverable and remains redacted', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      buildTenantBootstrapErrorApp(
+        const AwikiVaultOpenException('vault_key_bundle_corrupt'),
+        onRecover: () async => throw StateError('private filesystem path'),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('startup-recovery-action')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('startup-recovery-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Local data could not be reset'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('private filesystem path'), findsNothing);
+    expect(find.byKey(const Key('startup-recovery-action')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('only stable local vault diagnostics allow destructive recovery', () {
+    expect(tenantBootstrapAllowsLocalRecovery('vault_key_missing'), isTrue);
+    expect(
+      tenantBootstrapAllowsLocalRecovery('identity_vault_verification_failed'),
+      isTrue,
+    );
+    expect(
+      tenantBootstrapAllowsLocalRecovery('vault_key_access_denied'),
+      isFalse,
+    );
+    expect(tenantBootstrapAllowsLocalRecovery('bootstrap_failed'), isFalse);
   });
 
   testWidgets('upgrade progress is visible only during upgrade stages', (

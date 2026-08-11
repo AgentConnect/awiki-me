@@ -10,6 +10,7 @@ import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../application/ports/directory_core_port.dart';
+import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/relationship_summary.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../l10n/app_message.dart';
@@ -224,6 +225,8 @@ UserProfile identityProfileFromResolution(DirectoryPeerResolution resolution) {
   );
 }
 
+enum DirectConversationOpenResult { opened, notOpened }
+
 Future<void> openDirectConversationForProfile(
   BuildContext context,
   WidgetRef ref,
@@ -232,7 +235,26 @@ Future<void> openDirectConversationForProfile(
   SessionEpoch? expectedEpoch,
   bool pushWithinCurrentNavigator = false,
 }) async {
-  await openDirectConversationForDid(
+  await openDirectConversationForProfileWithResult(
+    context,
+    ref,
+    profile,
+    conversationId: conversationId,
+    expectedEpoch: expectedEpoch,
+    pushWithinCurrentNavigator: pushWithinCurrentNavigator,
+  );
+}
+
+Future<DirectConversationOpenResult> openDirectConversationForProfileWithResult(
+  BuildContext context,
+  WidgetRef ref,
+  UserProfile profile, {
+  String? conversationId,
+  SessionEpoch? expectedEpoch,
+  bool pushWithinCurrentNavigator = false,
+  bool dismissSourceRoutes = true,
+}) {
+  return openDirectConversationForDidWithResult(
     context,
     ref,
     peerDid: profile.did,
@@ -243,6 +265,7 @@ Future<void> openDirectConversationForProfile(
     conversationId: conversationId,
     expectedEpoch: expectedEpoch,
     pushWithinCurrentNavigator: pushWithinCurrentNavigator,
+    dismissSourceRoutes: dismissSourceRoutes,
   );
 }
 
@@ -275,15 +298,44 @@ Future<void> openDirectConversationForDid(
   bool popCurrentRouteOnTwoPane = false,
   bool pushWithinCurrentNavigator = false,
 }) async {
+  await openDirectConversationForDidWithResult(
+    context,
+    ref,
+    peerDid: peerDid,
+    peerName: peerName,
+    peerHandle: peerHandle,
+    avatarUri: avatarUri,
+    avatarSeed: avatarSeed,
+    conversationId: conversationId,
+    expectedEpoch: expectedEpoch,
+    popCurrentRouteOnTwoPane: popCurrentRouteOnTwoPane,
+    pushWithinCurrentNavigator: pushWithinCurrentNavigator,
+  );
+}
+
+Future<DirectConversationOpenResult> openDirectConversationForDidWithResult(
+  BuildContext context,
+  WidgetRef ref, {
+  required String peerDid,
+  required String peerName,
+  String? peerHandle,
+  String? avatarUri,
+  String? avatarSeed,
+  String? conversationId,
+  SessionEpoch? expectedEpoch,
+  bool popCurrentRouteOnTwoPane = false,
+  bool pushWithinCurrentNavigator = false,
+  bool dismissSourceRoutes = true,
+}) async {
   final operationEpoch = expectedEpoch ?? ref.read(sessionProvider).activeEpoch;
   if (operationEpoch == null) {
     ref
         .read(uiFeedbackProvider.notifier)
         .showError(AppMessage.sessionExpiredRelogin());
-    return;
+    return DirectConversationOpenResult.notOpened;
   }
   if (!_isSessionEpochCurrent(ref, operationEpoch)) {
-    return;
+    return DirectConversationOpenResult.notOpened;
   }
 
   final peer = peerDid.trim();
@@ -293,7 +345,7 @@ Future<void> openDirectConversationForDid(
         .showError(
           AppMessage.fromError(StateError('identity_invalid_contact')),
         );
-    return;
+    return DirectConversationOpenResult.notOpened;
   }
 
   late final _ResolvedDirectPeer resolvedPeer;
@@ -308,45 +360,57 @@ Future<void> openDirectConversationForDid(
   } catch (error) {
     if (isSessionEpochChangedError(error) ||
         !_isSessionEpochCurrent(ref, operationEpoch)) {
-      return;
+      return DirectConversationOpenResult.notOpened;
     }
     ref
         .read(uiFeedbackProvider.notifier)
         .showError(AppMessage.fromError(error));
-    return;
+    return DirectConversationOpenResult.notOpened;
   }
   if (!_isSessionEpochCurrent(ref, operationEpoch)) {
-    return;
+    return DirectConversationOpenResult.notOpened;
   }
   final canonicalConversationId = resolvedPeer.conversationId;
-  final conversation = await ref
-      .read(conversationListProvider.notifier)
-      .commitConversationId(
-        canonicalConversationId,
-        expectedEpoch: operationEpoch,
-      );
-  if (!_isSessionEpochCurrent(ref, operationEpoch)) {
-    return;
+  late final ConversationSummary conversation;
+  try {
+    conversation = await ref
+        .read(conversationListProvider.notifier)
+        .commitConversationId(
+          canonicalConversationId,
+          expectedEpoch: operationEpoch,
+        );
+    if (!_isSessionEpochCurrent(ref, operationEpoch)) {
+      return DirectConversationOpenResult.notOpened;
+    }
+    ref
+        .read(peerDisplayProfileProvider.notifier)
+        .updateFromRemote(
+          ownerDid: operationEpoch.ownerDid,
+          peerPersonaId: conversation.peerPersonaId,
+          profile: UserProfile(
+            did: resolvedPeer.did,
+            displayName: peerName,
+            bio: '',
+            tags: const <String>[],
+            profileMarkdown: '',
+            handle: resolvedPeer.handle,
+            fullHandle: resolvedPeer.handle,
+            avatarUri: avatarUri,
+          ),
+        );
+    await ref.read(chatThreadsProvider.notifier).openConversation(conversation);
+  } catch (error) {
+    if (isSessionEpochChangedError(error) ||
+        !_isSessionEpochCurrent(ref, operationEpoch)) {
+      return DirectConversationOpenResult.notOpened;
+    }
+    ref
+        .read(uiFeedbackProvider.notifier)
+        .showError(AppMessage.fromError(error));
+    return DirectConversationOpenResult.notOpened;
   }
-  ref
-      .read(peerDisplayProfileProvider.notifier)
-      .updateFromRemote(
-        ownerDid: operationEpoch.ownerDid,
-        peerPersonaId: conversation.peerPersonaId,
-        profile: UserProfile(
-          did: resolvedPeer.did,
-          displayName: peerName,
-          bio: '',
-          tags: const <String>[],
-          profileMarkdown: '',
-          handle: resolvedPeer.handle,
-          fullHandle: resolvedPeer.handle,
-          avatarUri: avatarUri,
-        ),
-      );
-  await ref.read(chatThreadsProvider.notifier).openConversation(conversation);
   if (!context.mounted || !_isSessionEpochCurrent(ref, operationEpoch)) {
-    return;
+    return DirectConversationOpenResult.notOpened;
   }
 
   if (pushWithinCurrentNavigator ||
@@ -355,7 +419,7 @@ Future<void> openDirectConversationForDid(
       context,
       (_) => ChatPage(conversation: conversation),
     );
-    return;
+    return DirectConversationOpenResult.opened;
   }
 
   ref
@@ -367,18 +431,21 @@ Future<void> openDirectConversationForDid(
         ShellDestination.messages,
         expanded: context.awikiResponsive.usesDesktopLayout,
       );
-  if (popCurrentRouteOnTwoPane &&
-      context.awikiResponsive.supportsTwoPane &&
-      context.mounted) {
-    await Navigator.of(context).maybePop();
+  if (dismissSourceRoutes) {
+    if (popCurrentRouteOnTwoPane &&
+        context.awikiResponsive.supportsTwoPane &&
+        context.mounted) {
+      await Navigator.of(context).maybePop();
+    }
+    if (!context.mounted) {
+      return DirectConversationOpenResult.opened;
+    }
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.popUntil((route) => route.isFirst);
+    }
   }
-  if (!context.mounted) {
-    return;
-  }
-  final navigator = Navigator.of(context);
-  if (navigator.canPop()) {
-    navigator.popUntil((route) => route.isFirst);
-  }
+  return DirectConversationOpenResult.opened;
 }
 
 Future<_ResolvedDirectPeer> _resolveDirectPeer(

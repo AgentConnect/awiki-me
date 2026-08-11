@@ -17,16 +17,63 @@ void main() {
       );
     });
 
-    test('limits R8 suppression to EMAS optional ping helper types', () {
+    test('keeps the EMAS reflection and SPI surface in release builds', () {
       final gradle = File('android/app/build.gradle').readAsStringSync();
       final rules = File('android/app/proguard-rules.pro').readAsStringSync();
+      final emasRules = File(
+        'android/app/proguard-emas.pro',
+      ).readAsStringSync();
 
-      expect(gradle, contains('proguardFiles "proguard-rules.pro"'));
+      expect(
+        gradle,
+        contains('proguardFiles "proguard-rules.pro", "proguard-emas.pro"'),
+      );
       expect(rules, contains('-dontwarn org.android.netutil.PingEntry'));
       expect(rules, contains('-dontwarn org.android.netutil.PingResponse'));
       expect(rules, contains('-dontwarn org.android.netutil.PingTask'));
       expect(rules, isNot(contains('-dontwarn org.android.netutil.**')));
       expect(rules, isNot(contains('-dontwarn anet.channel.**')));
+      for (final namespace in <String>[
+        'com.alibaba.**',
+        'com.aliyun.**',
+        'com.taobao.**',
+        'anet.channel.**',
+        'anetwork.channel.**',
+        'org.android.agoo.**',
+        'org.android.spdy.**',
+        'mtopsdk.**',
+      ]) {
+        expect(emasRules, contains('-keep class $namespace { *; }'));
+      }
+      expect(emasRules, contains('RuntimeVisibleAnnotations'));
+      expect(
+        emasRules,
+        contains('-dontwarn com.alibaba.mtl.appmonitor.AppMonitor'),
+      );
+      expect(
+        emasRules,
+        isNot(contains('-dontwarn com.alibaba.mtl.appmonitor.**')),
+      );
+      expect(emasRules, isNot(contains('-dontwarn anet.channel.**')));
+    });
+
+    test('disables Android backup for encrypted local state', () {
+      final manifest = File(
+        'android/app/src/main/AndroidManifest.xml',
+      ).readAsStringSync();
+      final pubspec = File('pubspec.yaml').readAsStringSync();
+      final scopeStore = File(
+        'lib/src/data/storage/platform_scope_secret_repository.dart',
+      ).readAsStringSync();
+
+      expect(manifest, contains('android:allowBackup="false"'));
+      expect(
+        pubspec,
+        contains(
+          RegExp(r'^  flutter_secure_storage: 9\.2\.4$', multiLine: true),
+        ),
+      );
+      expect(scopeStore, isNot(contains('migrateWithBackup')));
     });
 
     test(

@@ -1,6 +1,24 @@
 import 'dart:typed_data';
 
+const attachmentResumablePartialSuffix = '.awiki-part';
+
 abstract interface class AttachmentCacheService {
+  /// Returns a deterministic transient path used by Core for resumable writes.
+  Future<String> prepareDownloadedFile({
+    required String messageId,
+    required String attachmentId,
+  });
+
+  /// Publishes a Core-verified transient file into the visible cache.
+  Future<String?> commitDownloadedFileIfCurrent({
+    required String messageId,
+    required String attachmentId,
+    required String filename,
+    required String mimeType,
+    required String stagedPath,
+    required bool Function() isCurrent,
+  });
+
   Future<String?> cacheLocalSource({
     required String messageId,
     required String attachmentId,

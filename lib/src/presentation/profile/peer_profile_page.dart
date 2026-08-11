@@ -29,6 +29,11 @@ import 'peer_profile_provider.dart';
 
 enum _PeerProfileExpandedSection { profile, did, homepage }
 
+enum PeerProfilePageResult { directConversationOpened }
+
+typedef PeerProfileDirectConversationOpener =
+    Future<DirectConversationOpenResult> Function(UserProfile profile);
+
 class PeerProfilePage extends ConsumerStatefulWidget {
   const PeerProfilePage({
     super.key,
@@ -36,7 +41,7 @@ class PeerProfilePage extends ConsumerStatefulWidget {
     this.embedded = false,
     this.onBack,
     this.keepConversationInCurrentNavigator = false,
-    this.returnToPreviousOnSend = false,
+    this.onOpenDirectConversation,
     this.peerPersonaId,
     this.initialDisplayName,
     this.initialFullHandle,
@@ -47,7 +52,7 @@ class PeerProfilePage extends ConsumerStatefulWidget {
   final bool embedded;
   final VoidCallback? onBack;
   final bool keepConversationInCurrentNavigator;
-  final bool returnToPreviousOnSend;
+  final PeerProfileDirectConversationOpener? onOpenDirectConversation;
   final String? peerPersonaId;
   final String? initialDisplayName;
   final String? initialFullHandle;
@@ -123,20 +128,25 @@ class _PeerProfilePageState extends ConsumerState<PeerProfilePage> {
     }
 
     Future<void> sendMessage() async {
-      if (widget.returnToPreviousOnSend) {
-        Navigator.of(context).pop();
+      final opener = widget.onOpenDirectConversation;
+      final result = opener == null
+          ? await openDirectConversationForProfileWithResult(
+              context,
+              ref,
+              profile!,
+              pushWithinCurrentNavigator:
+                  widget.keepConversationInCurrentNavigator,
+            )
+          : await opener(profile!);
+      if (result != DirectConversationOpenResult.opened) {
         return;
       }
-      await openDirectConversationForProfile(
-        context,
-        ref,
-        profile!,
-        pushWithinCurrentNavigator: widget.keepConversationInCurrentNavigator,
-      );
       if (!widget.embedded &&
           !widget.keepConversationInCurrentNavigator &&
           context.mounted) {
-        Navigator.of(context).pop();
+        Navigator.of(
+          context,
+        ).pop(PeerProfilePageResult.directConversationOpened);
       }
     }
 

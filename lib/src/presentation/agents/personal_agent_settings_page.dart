@@ -18,6 +18,9 @@ class _PersonalAgentSettingsPageState
   void initState() {
     super.initState();
     _selectedDaemonDid = widget.initialDaemonDid;
+    if (!ref.read(personalAgentFeatureVisibleProvider)) {
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -28,6 +31,9 @@ class _PersonalAgentSettingsPageState
 
   @override
   Widget build(BuildContext context) {
+    if (!ref.watch(personalAgentFeatureVisibleProvider)) {
+      return const SizedBox.shrink();
+    }
     final l10n = context.l10n;
     final state = ref.watch(agentsProvider);
     final enabled = ref.watch(agentImEnabledProvider);

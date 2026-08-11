@@ -78,6 +78,10 @@ abstract interface class MessagingService {
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed);
 }
 
+abstract interface class AttachmentDownloadCancellationService {
+  Future<bool> cancelAttachmentDownload(String localPath);
+}
+
 abstract interface class LocalHistoryMessagingService {
   /// Legacy migration adapter. New reads should use
   /// [ConversationTimelineMessagingService.loadConversationTimeline].
@@ -129,6 +133,7 @@ abstract interface class MessageSyncDiagnosticsService {
 class ImCoreMessagingService
     implements
         MessagingService,
+        AttachmentDownloadCancellationService,
         LocalHistoryMessagingService,
         ThreadPatchMessagingService,
         ConversationTimelineMessagingService,
@@ -267,6 +272,16 @@ class ImCoreMessagingService
       attachmentId: attachmentId,
       localPath: localPath,
     );
+  }
+
+  @override
+  Future<bool> cancelAttachmentDownload(String localPath) {
+    final messages = _messages;
+    if (messages is! AttachmentDownloadCancellationCorePort) {
+      return Future<bool>.value(false);
+    }
+    return (messages as AttachmentDownloadCancellationCorePort)
+        .cancelAttachmentDownload(localPath);
   }
 
   @override

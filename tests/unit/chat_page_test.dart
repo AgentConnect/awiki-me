@@ -2,14 +2,17 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/attachment_picker_service.dart';
 import 'package:awiki_me/src/application/attachment_preview_service.dart';
 import 'package:awiki_me/src/application/attachment_image_dimensions.dart';
+import 'package:awiki_me/src/application/attachment_cache_service.dart';
 import 'package:awiki_me/src/application/attachment_open_service.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
+import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/l10n/app_message.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
@@ -28,6 +31,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/personal_agent_feature_visibility.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
@@ -262,6 +266,7 @@ class _DelayedAttachmentPreviewService extends AttachmentPreviewService {
   Future<String> previewPathFor({
     required ChatMessage message,
     required Future<AttachmentDownloadResult> Function() download,
+    Future<AttachmentDownloadResult> Function(String localPath)? downloadToPath,
   }) {
     previewCalls += 1;
     return path.future;
@@ -286,6 +291,45 @@ class _DelayedAttachmentMessagingService extends FakeMessagingService {
       started.complete();
     }
     return result.future;
+  }
+}
+
+class _CancellableAttachmentMessagingService extends FakeMessagingService
+    implements AttachmentDownloadCancellationService {
+  _CancellableAttachmentMessagingService(super.gateway);
+
+  final Completer<void> started = Completer<void>();
+  final Completer<void> cancelled = Completer<void>();
+  int cancelCalls = 0;
+  String? downloadPath;
+  String? cancelledPath;
+
+  @override
+  Future<AttachmentDownloadResult> downloadAttachment({
+    required AppThreadRef thread,
+    required String messageId,
+    String? attachmentId,
+    String? localPath,
+  }) async {
+    downloadPath = localPath;
+    if (localPath == null) {
+      throw StateError('cancellable test requires a disk destination');
+    }
+    if (!started.isCompleted) started.complete();
+    await File(localPath).parent.create(recursive: true);
+    await File(
+      '$localPath$attachmentResumablePartialSuffix',
+    ).writeAsBytes(List<int>.filled(40, 1));
+    await cancelled.future;
+    throw const AttachmentDownloadCancelledException();
+  }
+
+  @override
+  Future<bool> cancelAttachmentDownload(String localPath) async {
+    cancelCalls += 1;
+    cancelledPath = localPath;
+    if (!cancelled.isCompleted) cancelled.complete();
+    return true;
   }
 }
 
@@ -8782,10 +8826,108 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(picker.saveCalls, 0);
+    expect(messagingService.lastDownloadedAttachmentLocalPath, isNotNull);
+    expect(
+      messagingService.lastDownloadedAttachmentLocalPath,
+      contains('._awiki_cache_download'),
+    );
     expect(opener.openedPaths, hasLength(1));
     expect(opener.openedPaths.single, startsWith('/tmp/awiki-test-cache/'));
     expect(opener.openedPaths.single, contains('/native-open-attachment/'));
     expect(opener.openedPaths.single, contains('/att-native-open/'));
+  });
+
+  testWidgets('附件下载可暂停且用户取消不会显示失败提示', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final messagingService = _CancellableAttachmentMessagingService(gateway);
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:cancel-peer',
+      threadId: 'dm:attachment-download-cancel',
+      displayName: 'Tester',
+      lastMessagePreview: '[附件] video.mp4',
+      lastMessageAt: DateTime(2026, 8, 11, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:cancel-peer',
+    );
+    final message = _messageWithConversation(
+      ChatMessage(
+        localId: 'attachment-download-cancel',
+        remoteId: 'attachment-download-cancel',
+        threadId: conversation.conversationId,
+        senderDid: conversation.targetDid!,
+        receiverDid: session.did,
+        content: '',
+        createdAt: DateTime(2026, 8, 11, 12, 1),
+        isMine: false,
+        sendState: MessageSendState.sent,
+        originalType: 'application/anp-attachment-manifest+json',
+        attachment: const ChatAttachment(
+          attachmentId: 'att-download-cancel',
+          filename: 'video.mp4',
+          mimeType: 'video/mp4',
+          sizeBytes: 100,
+        ),
+      ),
+      conversation,
+    );
+    messagingService.conversationTimelineById[conversation.conversationId] =
+        <ChatMessage>[message];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pumpAndSettle();
+
+    final action = find.byKey(
+      const Key('chat-open-attachment:attachment-download-cancel'),
+    );
+    await tester.tap(action);
+    for (
+      var attempt = 0;
+      attempt < 10 && !messagingService.started.isCompleted;
+      attempt += 1
+    ) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(messagingService.started.isCompleted, isTrue);
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.byIcon(CupertinoIcons.xmark), findsOneWidget);
+
+    await tester.tap(action);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(messagingService.cancelCalls, 1);
+    expect(messagingService.cancelledPath, messagingService.downloadPath);
+    final snapshot = container
+        .read(attachmentPreviewServiceProvider)
+        .previewHandleFor(message)
+        .snapshot;
+    expect(snapshot.phase, AttachmentPreviewPhase.paused);
+    expect(find.text('下载已暂停'), findsOneWidget);
+    expect(find.textContaining('下载已中断'), findsNothing);
   });
 
   test('附件下载在身份切换后不会向调用方返回旧身份文件', () async {
@@ -9133,6 +9275,7 @@ void main() {
             );
             return controller;
           }),
+          personalAgentFeatureVisibleProvider.overrideWithValue(true),
           messagingServiceProvider.overrideWithValue(messagingService),
         ],
       ),

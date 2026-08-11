@@ -93,6 +93,48 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonPleaseWait => 'Please wait...';
 
   @override
+  String get startupFailureTitle => 'AWikiMe could not start';
+
+  @override
+  String startupFailureDiagnostic(String diagnosticCode) {
+    return 'Diagnostic code: $diagnosticCode';
+  }
+
+  @override
+  String get startupFailureCopyDiagnostics => 'Copy diagnostics';
+
+  @override
+  String get startupFailureExit => 'Exit';
+
+  @override
+  String get startupRecoveryAction => 'Reset this device and recover';
+
+  @override
+  String get startupRecoveryExplanation =>
+      'The local credentials on this device cannot be read. You can retry, or reset local AWiki data and then use Device Join or Handle Recovery.';
+
+  @override
+  String get startupRecoveryConfirmTitle => 'Reset AWiki on this device?';
+
+  @override
+  String get startupRecoveryConfirmMessage =>
+      'This removes all AWiki identities, tenants, messages, and settings stored locally on this device.';
+
+  @override
+  String get startupRecoveryConfirmHint =>
+      'Online identities are not deleted, and other devices are not affected. You will need Device Join or Handle Recovery to use an existing identity here again.';
+
+  @override
+  String get startupRecoveryConfirmAction => 'Reset this device';
+
+  @override
+  String get startupRecoveryInProgress => 'Resetting local data...';
+
+  @override
+  String get startupRecoveryFailed =>
+      'Local data could not be reset. You can retry or copy the diagnostic code for support.';
+
+  @override
   String get commonLoading => 'Loading...';
 
   @override
@@ -2415,6 +2457,18 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get agentTerminalNotificationTitle => 'Agent';
+
+  @override
+  String get agentTerminalCompleted => 'Agent task completed';
+
+  @override
+  String get agentTerminalActionRequired => 'Agent task needs confirmation';
+
+  @override
+  String get agentTerminalRuntimeFailed => 'Agent task failed';
+
+  @override
   String get agentErrorLoginRequired => 'Please log in first.';
 
   @override
@@ -3190,6 +3244,30 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get attachmentDownloadEmpty => 'Attachment download returned no file.';
+
+  @override
+  String get attachmentDownloading => 'Downloading';
+
+  @override
+  String attachmentDownloadingProgress(String progress) {
+    return 'Downloading · $progress';
+  }
+
+  @override
+  String get attachmentDownloadPaused => 'Download paused';
+
+  @override
+  String attachmentDownloadPausedProgress(String progress) {
+    return 'Download paused · $progress';
+  }
+
+  @override
+  String get attachmentDownloadCancelFailed =>
+      'Unable to pause the download. Please try again.';
+
+  @override
+  String get attachmentDownloadInterrupted =>
+      'The download was interrupted. Your progress has been kept; try again to resume.';
 
   @override
   String get chatImageActionsTitle => 'Image';

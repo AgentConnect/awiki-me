@@ -212,6 +212,12 @@ class AppMessage {
   factory AppMessage.attachmentOpenFailed() =>
       const AppMessage._('attachmentOpenFailed');
 
+  factory AppMessage.attachmentDownloadInterrupted() =>
+      const AppMessage._('attachmentDownloadInterrupted');
+
+  factory AppMessage.attachmentDownloadCancelFailed() =>
+      const AppMessage._('attachmentDownloadCancelFailed');
+
   factory AppMessage.documentSaveFailed() =>
       const AppMessage._('documentSaveFailed');
 
@@ -382,15 +388,15 @@ class AppMessage {
       case 'newMessageArrived':
         return l10n.newMessageArrived;
       case 'agentTerminalCompleted':
-        return '${l10n.personalAgentCompleted}: ${value ?? ''}';
+        return '${l10n.agentTerminalCompleted}: ${value ?? ''}';
       case 'agentTerminalBlocked':
         return '${l10n.groupRecoveryPhaseBlocked}: ${value ?? ''}. '
             '${l10n.commonNext}: ${detail ?? ''}';
       case 'agentTerminalActionRequired':
-        return '${l10n.personalAgentWaitingConfirmation}: ${value ?? ''}. '
+        return '${l10n.agentTerminalActionRequired}: ${value ?? ''}. '
             '${l10n.commonNext}: ${detail ?? ''}';
       case 'agentTerminalRuntimeFailed':
-        return l10n.personalAgentFailed;
+        return l10n.agentTerminalRuntimeFailed;
       case 'updateAlreadyLatest':
         return l10n.updateAlreadyLatest;
       case 'updateCheckFailed':
@@ -515,6 +521,10 @@ class AppMessage {
         return l10n.attachmentUnavailable;
       case 'attachmentOpenFailed':
         return l10n.attachmentOpenFailed;
+      case 'attachmentDownloadInterrupted':
+        return l10n.attachmentDownloadInterrupted;
+      case 'attachmentDownloadCancelFailed':
+        return l10n.attachmentDownloadCancelFailed;
       case 'screenshotPermissionRequired':
         return l10n.screenshotPermissionRequired;
       case 'raw':

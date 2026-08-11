@@ -1056,6 +1056,7 @@ class _MessageBubble extends StatelessWidget {
     this.macStyle = false,
     this.onRetry,
     this.onDownload,
+    this.onCancelDownload,
     this.onResolveImagePreview,
     this.onCopyImage,
     this.onSaveImage,
@@ -1071,6 +1072,7 @@ class _MessageBubble extends StatelessWidget {
   final bool macStyle;
   final Future<void> Function()? onRetry;
   final Future<void> Function()? onDownload;
+  final Future<void> Function()? onCancelDownload;
   final Future<String> Function()? onResolveImagePreview;
   final Future<void> Function(String path)? onCopyImage;
   final Future<void> Function(String path)? onSaveImage;
@@ -1201,6 +1203,7 @@ class _MessageBubble extends StatelessWidget {
             mentionPresentation: mentionPresentation,
             macStyle: true,
             onDownload: onDownload,
+            onCancelDownload: onCancelDownload,
             onResolveImagePreview: onResolveImagePreview,
             onCopyImage: onCopyImage,
             onSaveImage: onSaveImage,
@@ -1362,6 +1365,7 @@ class _MessageBubble extends StatelessWidget {
             mentionPresentation: mentionPresentation,
             macStyle: false,
             onDownload: onDownload,
+            onCancelDownload: onCancelDownload,
             onResolveImagePreview: onResolveImagePreview,
             onCopyImage: onCopyImage,
             onSaveImage: onSaveImage,
@@ -1632,6 +1636,7 @@ class _AttachmentContent extends ConsumerStatefulWidget {
     required this.mentionPresentation,
     required this.macStyle,
     required this.onDownload,
+    required this.onCancelDownload,
     required this.onResolveImagePreview,
     required this.onCopyImage,
     required this.onSaveImage,
@@ -1642,6 +1647,7 @@ class _AttachmentContent extends ConsumerStatefulWidget {
   final ChatMentionPresentationResolver mentionPresentation;
   final bool macStyle;
   final Future<void> Function()? onDownload;
+  final Future<void> Function()? onCancelDownload;
   final Future<String> Function()? onResolveImagePreview;
   final Future<void> Function(String path)? onCopyImage;
   final Future<void> Function(String path)? onSaveImage;
@@ -1653,6 +1659,7 @@ class _AttachmentContent extends ConsumerStatefulWidget {
 
 class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
   AttachmentPreviewHandle? _previewHandle;
+  AttachmentPreviewHandle? _transferHandle;
 
   @override
   void initState() {
@@ -1683,6 +1690,10 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
 
   void _preparePreview({bool retryFailed = false}) {
     final attachment = widget.message.attachment!;
+    final handle = ref
+        .read(attachmentPreviewServiceProvider)
+        .previewHandleFor(widget.message);
+    _transferHandle = handle;
     if (!_isInlineImageAttachment(attachment)) {
       _previewHandle = null;
       return;
@@ -1701,9 +1712,6 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
       return;
     }
 
-    final handle = ref
-        .read(attachmentPreviewServiceProvider)
-        .previewHandleFor(widget.message);
     _previewHandle = handle;
     final phase = handle.snapshot.phase;
     if ((phase == AttachmentPreviewPhase.idle ||
@@ -1796,7 +1804,8 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
     final handle = _previewHandle;
     if (handle == null) {
       final responsive = context.awikiResponsive;
-      return SizedBox(
+      final transfer = _transferHandle;
+      final card = SizedBox(
         width: widget.macStyle
             ? responsive.displayScaled(280)
             : responsive.displayScaled(240),
@@ -1804,9 +1813,34 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
           message: widget.message,
           macStyle: widget.macStyle,
           onDownload: widget.onDownload,
+          onCancelDownload: widget.onCancelDownload,
           isDownloading: widget.isDownloading,
           titleStyle: titleStyle,
           metaStyle: metaStyle,
+          transferSnapshot: transfer?.snapshot,
+        ),
+      );
+      if (transfer == null) {
+        return card;
+      }
+      return StreamBuilder<AttachmentPreviewSnapshot>(
+        key: ObjectKey(transfer),
+        stream: transfer.changes,
+        initialData: transfer.snapshot,
+        builder: (context, _) => SizedBox(
+          width: widget.macStyle
+              ? responsive.displayScaled(280)
+              : responsive.displayScaled(240),
+          child: _AttachmentFileCard(
+            message: widget.message,
+            macStyle: widget.macStyle,
+            onDownload: widget.onDownload,
+            onCancelDownload: widget.onCancelDownload,
+            isDownloading: widget.isDownloading,
+            titleStyle: titleStyle,
+            metaStyle: metaStyle,
+            transferSnapshot: transfer.snapshot,
+          ),
         ),
       );
     }
@@ -1841,12 +1875,28 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
             message: widget.message,
             macStyle: widget.macStyle,
             onDownload: widget.onDownload,
+            onCancelDownload: widget.onCancelDownload,
             isDownloading: widget.isDownloading,
             titleStyle: titleStyle,
             metaStyle: metaStyle,
+            transferSnapshot: snapshot,
+          );
+        } else if (snapshot.phase == AttachmentPreviewPhase.paused) {
+          content = _InlineImageFileFallback(
+            message: widget.message,
+            macStyle: widget.macStyle,
+            onDownload: widget.onDownload,
+            onCancelDownload: widget.onCancelDownload,
+            isDownloading: widget.isDownloading,
+            titleStyle: titleStyle,
+            metaStyle: metaStyle,
+            transferSnapshot: snapshot,
           );
         } else {
-          content = const _InlineImageLoading();
+          content = _InlineImageLoading(
+            onCancelDownload: widget.onCancelDownload,
+            macStyle: widget.macStyle,
+          );
         }
         return _InlineImageEnvelope(
           messageId: widget.message.localId,
@@ -2109,13 +2159,35 @@ class _InlineImageEnvelope extends StatelessWidget {
 }
 
 class _InlineImageLoading extends StatelessWidget {
-  const _InlineImageLoading();
+  const _InlineImageLoading({this.onCancelDownload, this.macStyle = false});
+
+  final Future<void> Function()? onCancelDownload;
+  final bool macStyle;
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox.expand(
-      key: Key('chat-inline-image-loading'),
-      child: Center(child: CupertinoActivityIndicator()),
+    final cancel = onCancelDownload;
+    return SizedBox.expand(
+      key: const Key('chat-inline-image-loading'),
+      child: Stack(
+        alignment: Alignment.center,
+        children: <Widget>[
+          const CupertinoActivityIndicator(),
+          if (cancel != null)
+            Positioned(
+              right: 8,
+              bottom: 8,
+              child: _AttachmentActionButton(
+                key: const Key('chat-cancel-inline-image-download'),
+                macStyle: macStyle,
+                isLoading: true,
+                onTap: cancel,
+                onCancel: cancel,
+                sizeOverride: 32,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -2125,17 +2197,21 @@ class _InlineImageFileFallback extends StatelessWidget {
     required this.message,
     required this.macStyle,
     required this.onDownload,
+    required this.onCancelDownload,
     required this.isDownloading,
     required this.titleStyle,
     required this.metaStyle,
+    required this.transferSnapshot,
   });
 
   final ChatMessage message;
   final bool macStyle;
   final Future<void> Function()? onDownload;
+  final Future<void> Function()? onCancelDownload;
   final bool isDownloading;
   final TextStyle titleStyle;
   final TextStyle metaStyle;
+  final AttachmentPreviewSnapshot? transferSnapshot;
 
   @override
   Widget build(BuildContext context) {
@@ -2163,9 +2239,11 @@ class _InlineImageFileFallback extends StatelessWidget {
                   message: message,
                   macStyle: macStyle,
                   onDownload: onDownload,
+                  onCancelDownload: onCancelDownload,
                   isDownloading: isDownloading,
                   titleStyle: titleStyle,
                   metaStyle: metaStyle,
+                  transferSnapshot: transferSnapshot,
                 ),
               ),
             ),
@@ -2195,6 +2273,7 @@ class _InlineImageFileFallback extends StatelessWidget {
                 macStyle: macStyle,
                 isLoading: isDownloading,
                 onTap: open,
+                onCancel: onCancelDownload,
                 sizeOverride: _minimumInlineImageInteractiveExtent,
               );
         return SizedBox.expand(
@@ -2497,17 +2576,21 @@ class _AttachmentFileCard extends StatelessWidget {
     required this.message,
     required this.macStyle,
     required this.onDownload,
+    required this.onCancelDownload,
     required this.isDownloading,
     required this.titleStyle,
     required this.metaStyle,
+    required this.transferSnapshot,
   });
 
   final ChatMessage message;
   final bool macStyle;
   final Future<void> Function()? onDownload;
+  final Future<void> Function()? onCancelDownload;
   final bool isDownloading;
   final TextStyle titleStyle;
   final TextStyle metaStyle;
+  final AttachmentPreviewSnapshot? transferSnapshot;
 
   @override
   Widget build(BuildContext context) {
@@ -2564,11 +2647,12 @@ class _AttachmentFileCard extends StatelessWidget {
                     : responsive.spacing(4),
               ),
               Text(
-                _formatAttachmentMeta(
-                  context.l10n,
-                  attachment.mimeType,
-                  attachment.sizeBytes,
-                ),
+                _attachmentTransferMeta(context, transferSnapshot) ??
+                    _formatAttachmentMeta(
+                      context.l10n,
+                      attachment.mimeType,
+                      attachment.sizeBytes,
+                    ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: metaStyle,
@@ -2585,8 +2669,11 @@ class _AttachmentFileCard extends StatelessWidget {
           _AttachmentActionButton(
             key: Key('chat-open-attachment:${message.localId}'),
             macStyle: macStyle,
-            isLoading: isDownloading,
+            isLoading:
+                isDownloading ||
+                transferSnapshot?.phase == AttachmentPreviewPhase.loading,
             onTap: onDownload!,
+            onCancel: onCancelDownload,
           ),
         ],
       ],
@@ -2980,12 +3067,14 @@ class _AttachmentActionButton extends StatelessWidget {
     required this.macStyle,
     required this.isLoading,
     required this.onTap,
+    this.onCancel,
     this.sizeOverride,
   });
 
   final bool macStyle;
   final bool isLoading;
   final Future<void> Function() onTap;
+  final Future<void> Function()? onCancel;
   final double? sizeOverride;
 
   @override
@@ -2995,11 +3084,20 @@ class _AttachmentActionButton extends StatelessWidget {
     final size =
         sizeOverride ??
         (macStyle ? responsive.displayScaled(32) : responsive.scaled(34));
+    final cancel = isLoading ? onCancel : null;
     return AppIconButton(
-      onPressed: isLoading ? null : () async => onTap(),
-      semanticLabel: context.l10n.chatViewAttachment,
-      tooltip: context.l10n.chatViewAttachment,
-      isLoading: isLoading,
+      onPressed: cancel != null
+          ? () async => cancel()
+          : isLoading
+          ? null
+          : () async => onTap(),
+      semanticLabel: cancel == null
+          ? context.l10n.chatViewAttachment
+          : context.l10n.commonCancel,
+      tooltip: cancel == null
+          ? context.l10n.chatViewAttachment
+          : context.l10n.commonCancel,
+      isLoading: isLoading && cancel == null,
       size: size,
       backgroundColor: macStyle ? CupertinoColors.white : theme.surface,
       borderColor: macStyle ? AwikiMePalette.hairline : theme.border,
@@ -3007,7 +3105,7 @@ class _AttachmentActionButton extends StatelessWidget {
         macStyle ? responsive.displayScaled(8) : 10,
       ),
       child: Icon(
-        CupertinoIcons.eye,
+        cancel == null ? CupertinoIcons.eye : CupertinoIcons.xmark,
         color: macStyle ? AwikiMePalette.brandAccent : theme.primary,
         size: macStyle ? responsive.displayScaled(17) : responsive.iconSm,
       ),
@@ -3029,6 +3127,34 @@ String _formatAttachmentMeta(
     parts.add(_formatFileSize(sizeBytes));
   }
   return parts.isEmpty ? l10n.chatAttachmentFileFallback : parts.join(' · ');
+}
+
+String? _attachmentTransferMeta(
+  BuildContext context,
+  AttachmentPreviewSnapshot? snapshot,
+) {
+  final phase = snapshot?.phase;
+  if (phase != AttachmentPreviewPhase.loading &&
+      phase != AttachmentPreviewPhase.paused) {
+    return null;
+  }
+  final received = snapshot?.receivedBytes;
+  final total = snapshot?.totalBytes;
+  if (received != null && total != null && total > 0) {
+    final percent = (received * 100 / total).clamp(0, 100).floor();
+    return phase == AttachmentPreviewPhase.paused
+        ? context.l10n.attachmentDownloadPausedProgress('$percent%')
+        : context.l10n.attachmentDownloadingProgress('$percent%');
+  }
+  if (received != null && received > 0) {
+    final progress = _formatFileSize(received);
+    return phase == AttachmentPreviewPhase.paused
+        ? context.l10n.attachmentDownloadPausedProgress(progress)
+        : context.l10n.attachmentDownloadingProgress(progress);
+  }
+  return phase == AttachmentPreviewPhase.paused
+      ? context.l10n.attachmentDownloadPaused
+      : context.l10n.attachmentDownloading;
 }
 
 String _formatFileSize(int bytes) {

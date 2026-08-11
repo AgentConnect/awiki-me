@@ -336,6 +336,14 @@ final attachmentPreviewServiceProvider = Provider<AttachmentPreviewService>((
   final service = AttachmentPreviewService(
     cache: ref.watch(attachmentCacheServiceProvider),
     imageDimensionProbe: const FlutterAttachmentImageDimensionProbe(),
+    cancelDownload: (localPath) {
+      final messaging = ref.read(messagingServiceProvider);
+      if (messaging is! AttachmentDownloadCancellationService) {
+        return Future<bool>.value(false);
+      }
+      return (messaging as AttachmentDownloadCancellationService)
+          .cancelAttachmentDownload(localPath);
+    },
   );
   ref.onDispose(service.dispose);
   return service;

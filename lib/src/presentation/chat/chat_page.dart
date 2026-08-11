@@ -56,6 +56,7 @@ import '../agents/agent_rename_dialog.dart';
 import '../agents/agent_runtime_display.dart';
 import '../agents/agent_visual_status.dart';
 import '../agents/agents_provider.dart';
+import '../agents/personal_agent_feature_visibility.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../app_shell/providers/navigation_provider.dart';
 import '../app_shell/providers/session_provider.dart';
@@ -80,6 +81,7 @@ import '../shared/avatar_badge.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/formatters/localized_ui_formatters.dart';
+import '../shared/identity_flow.dart';
 import '../shared/identity_profile_surface.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
@@ -997,7 +999,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final activePendingTurns = thread.agentPendingTurns
         .where((turn) => turn.isActive)
         .toList(growable: false);
-    final personalAgentItems = _personalAgentTimelineItems(thread);
+    final personalAgentItems = _personalAgentTimelineItems(
+      thread,
+      visible: ref.watch(personalAgentFeatureVisibleProvider),
+    );
     final messageIdsWithAgentProcessing = <String>{
       for (final message in messages)
         if (thread.pendingAgentTurnsForMessage(message).isNotEmpty)
@@ -1302,6 +1307,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                                 message,
                                               )
                                             : null,
+                                        onCancelDownload:
+                                            message.attachment != null &&
+                                                message.sendState ==
+                                                    MessageSendState.sent
+                                            ? () => _cancelAttachmentDownload(
+                                                message,
+                                              )
+                                            : null,
                                         onResolveImagePreview:
                                             message.attachment != null &&
                                                 message.sendState ==
@@ -1499,6 +1512,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             ? nickname!.trim()
             : DidDisplayFormatter.conversationTitle(conversation, context.l10n),
         displayThreadId: _displayThreadId,
+        onOpenDirectConversation: _openDirectConversationFromPeerProfile,
       ),
       rootNavigator: context.awikiResponsive.isCompact,
     );
@@ -1520,7 +1534,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         runtimeAgent != null ||
         conversationTargetDidLooksLikeAgent(target.targetDid);
     if (target.targetDid.isNotEmpty && !isAgent) {
-      await AppNavigator.push<void>(
+      await AppNavigator.push<PeerProfilePageResult>(
         context,
         (_) => PeerProfilePage(
           did: target.targetDid,
@@ -1528,7 +1542,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
           initialDisplayName: target.displayName,
           initialFullHandle: target.fullHandle,
           initialAvatarUri: target.avatarUri,
-          returnToPreviousOnSend: true,
+          onOpenDirectConversation: _openDirectConversationFromPeerProfile,
         ),
         rootNavigator: context.awikiResponsive.isCompact,
       );
@@ -1545,6 +1559,17 @@ class _ChatViewState extends ConsumerState<ChatView> {
     await AppNavigator.showDialog<void>(
       context,
       (dialogContext) => _PeerInfoDialog(target: target),
+    );
+  }
+
+  Future<DirectConversationOpenResult> _openDirectConversationFromPeerProfile(
+    UserProfile profile,
+  ) {
+    return openDirectConversationForProfileWithResult(
+      context,
+      ref,
+      profile,
+      dismissSourceRoutes: false,
     );
   }
 
@@ -1994,11 +2019,22 @@ class _ChatViewState extends ConsumerState<ChatView> {
                   conversation: conversation,
                   message: message,
                 ),
+            downloadToPath: (localPath) => ref
+                .read(chatThreadsProvider.notifier)
+                .downloadAttachment(
+                  conversation: conversation,
+                  message: message,
+                  localPath: localPath,
+                ),
           );
       if (!mounted || ref.read(sessionProvider).activeEpoch != sessionEpoch) {
         return;
       }
       await ref.read(attachmentOpenServiceProvider).open(previewPath);
+    } on AttachmentDownloadCancelledException {
+      return;
+    } on AttachmentPreviewResolutionInvalidatedException {
+      return;
     } catch (error, stackTrace) {
       if (!mounted || ref.read(sessionProvider).activeEpoch != sessionEpoch) {
         return;
@@ -2018,6 +2054,27 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
   }
 
+  Future<void> _cancelAttachmentDownload(ChatMessage message) async {
+    try {
+      final cancelled = await ref
+          .read(attachmentPreviewServiceProvider)
+          .cancelPreviewDownload(message);
+      if (!cancelled && mounted) {
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.attachmentDownloadCancelFailed());
+      }
+    } catch (error, stackTrace) {
+      if (!mounted) return;
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(
+            AppMessage.attachmentDownloadCancelFailed(),
+            detail: _attachmentOpenErrorDetail(error, stackTrace),
+          );
+    }
+  }
+
   Future<String> _resolveAttachmentPreview(
     ConversationSummary conversation,
     ChatMessage message,
@@ -2029,6 +2086,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
           download: () => ref
               .read(chatThreadsProvider.notifier)
               .downloadAttachment(conversation: conversation, message: message),
+          downloadToPath: (localPath) => ref
+              .read(chatThreadsProvider.notifier)
+              .downloadAttachment(
+                conversation: conversation,
+                message: message,
+                localPath: localPath,
+              ),
         );
   }
 
@@ -2127,6 +2191,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   AppMessage _attachmentOpenErrorMessage(Object error) {
     final raw = error.toString().toLowerCase();
+    if (raw.contains('attachment_transfer_')) {
+      return AppMessage.attachmentDownloadInterrupted();
+    }
     if (error is AttachmentUnavailableException ||
         raw.contains('attachment object is not committed') ||
         raw.contains('attachment object has expired') ||
@@ -2550,7 +2617,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final pendingAdded =
         _activePendingTurnCount(next) > _activePendingTurnCount(previous);
     final recoveryAdded =
-        next.personalAgentTimelineCount > previous.personalAgentTimelineCount;
+        _visiblePersonalAgentTimelineCount(next) >
+        _visiblePersonalAgentTimelineCount(previous);
     final shouldFollowBottom =
         _scrollAnchorPhase != _ChatScrollAnchorPhase.readingAnchor;
     if (messageAdded) {
@@ -2579,7 +2647,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final contentGrew =
         next.messages.length > previous.messages.length ||
         next.agentPendingTurns.length > previous.agentPendingTurns.length ||
-        next.personalAgentTimelineCount > previous.personalAgentTimelineCount;
+        _visiblePersonalAgentTimelineCount(next) >
+            _visiblePersonalAgentTimelineCount(previous);
     if (contentGrew && shouldFollowBottom) {
       _scheduleScrollToBottom();
     }
@@ -2670,7 +2739,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
     return next.messages.length != previous.messages.length ||
         _activePendingTurnCount(next) != _activePendingTurnCount(previous) ||
-        next.personalAgentTimelineCount != previous.personalAgentTimelineCount;
+        _visiblePersonalAgentTimelineCount(next) !=
+            _visiblePersonalAgentTimelineCount(previous);
   }
 
   void _settleOpeningBottomAnchorForCurrentThread(ChatThreadState thread) {
@@ -2686,7 +2756,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   bool _threadHasBottomAnchorContent(ChatThreadState thread) {
     return thread.messages.isNotEmpty ||
         _activePendingTurnCount(thread) > 0 ||
-        thread.personalAgentTimelineCount > 0;
+        _visiblePersonalAgentTimelineCount(thread) > 0;
   }
 
   void _scheduleOpeningBottomAnchorSettle({required int settleFrames}) {
@@ -2831,14 +2901,24 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   List<_PersonalAgentTimelineItem> _personalAgentTimelineItems(
-    ChatThreadState thread,
-  ) {
+    ChatThreadState thread, {
+    required bool visible,
+  }) {
+    if (!visible) {
+      return const <_PersonalAgentTimelineItem>[];
+    }
     return <_PersonalAgentTimelineItem>[
       for (final sync in thread.personalAgentSyncs)
         _PersonalAgentSyncTimelineItem(sync),
       for (final action in thread.appActionRecords.values)
         _PersonalAgentActionTimelineItem(action),
     ];
+  }
+
+  int _visiblePersonalAgentTimelineCount(ChatThreadState thread) {
+    return ref.read(personalAgentFeatureVisibleProvider)
+        ? thread.personalAgentTimelineCount
+        : 0;
   }
 
   ConversationSummary? _matchingConversationByThread(

@@ -19,6 +19,7 @@ import '../../l10n/l10n.dart';
 import '../chat/chat_page.dart';
 import '../chat/chat_provider.dart';
 import '../agents/agents_provider.dart';
+import '../agents/personal_agent_feature_visibility.dart';
 import '../agents/agent_status_indicator.dart';
 import '../agents/agent_visual_status.dart';
 import '../group/group_provider.dart';
@@ -80,6 +81,11 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
   Widget build(BuildContext context) {
     final buildWatch = Stopwatch()..start();
     final state = ref.watch(conversationListProvider);
+    final conversations = personalAgentVisibleConversations(
+      conversations: state.conversations,
+      agents: ref.watch(agentsProvider.select((state) => state.agents)),
+      personalAgentVisible: ref.watch(personalAgentFeatureVisibleProvider),
+    );
     final composerDrafts = ref.watch(chatComposerDraftsProvider);
     final responsive = context.awikiResponsive;
     buildWatch.stop();
@@ -87,7 +93,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
       'conversation_list_page.build.prepare',
       elapsed: buildWatch.elapsed,
       fields: <String, Object?>{
-        'items': state.conversations.length,
+        'items': conversations.length,
         'loading': state.isLoading,
         'mac_style': widget.macStyle && responsive.usesDesktopLayout,
       },
@@ -109,7 +115,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
 
     if (widget.macStyle && responsive.usesDesktopLayout) {
       return _MacConversationList(
-        conversations: state.conversations,
+        conversations: conversations,
         loadState: state.loadState,
         composerDrafts: composerDrafts,
         selectedConversationId: _selectedConversationKey(
@@ -139,7 +145,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
         anchoredToTrigger: true,
       ),
       child: _ConversationRefreshView(
-        conversations: state.conversations,
+        conversations: conversations,
         loadState: state.loadState,
         composerDrafts: composerDrafts,
         selectedConversationId: _selectedConversationKey(

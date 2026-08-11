@@ -5321,7 +5321,7 @@ void main() {
     expect(thread.agentPendingTurns, isEmpty);
   });
 
-  test('发送给智能体时必须等消息投递成功后才进入处理中状态', () async {
+  test('发送给智能体时投递成功后建立等待回执状态但不冒充权威运行', () async {
     gateway.sendDelay = const Duration(milliseconds: 50);
     final sendContainer = ProviderContainer(
       overrides: <Override>[
@@ -5372,7 +5372,7 @@ void main() {
     expect(thread.agentPendingTurns.single.hasAuthoritativeRunStatus, isFalse);
   });
 
-  test('发送给智能体成功后显示处理中，收到智能体回复后清除', () async {
+  test('发送成功后由权威 running 进入处理中，收到智能体回复后清除', () async {
     final sendContainer = ProviderContainer(
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(gateway),
@@ -5408,6 +5408,28 @@ void main() {
     expect(thread.pendingAgentReplyCount, 1);
     expect(thread.agentPendingTurns.single.agentDid, 'did:peer');
     expect(thread.agentPendingTurns.single.remoteMessageId, isNotEmpty);
+    expect(thread.agentPendingTurns.single.hasAuthoritativeRunStatus, isFalse);
+
+    final sourceMessageId = thread.agentPendingTurns.single.remoteMessageId!;
+    sendContainer.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'run',
+        'conversation_id': timelineThreadId,
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_agent_reply_1',
+            'runtime_agent_did': 'did:peer',
+            'source_message_id': sourceMessageId,
+            'status': 'running',
+          },
+        ],
+      },
+    );
+
+    thread = sendContainer.read(chatThreadProvider(timelineThreadId));
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.agentPendingTurns.single.hasAuthoritativeRunStatus, isTrue);
 
     sendContainer
         .read(chatThreadsProvider.notifier)

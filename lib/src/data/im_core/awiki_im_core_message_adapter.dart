@@ -18,6 +18,7 @@ import 'awiki_im_core_runtime.dart';
 class AwikiImCoreMessageAdapter
     implements
         MessageCorePort,
+        AttachmentDownloadCancellationCorePort,
         LocalHistoryMessageCorePort,
         ThreadPatchMessageCorePort,
         ControlThreadPatchMessageCorePort,
@@ -271,35 +272,48 @@ class AwikiImCoreMessageAdapter
     String? localPath,
   }) async {
     return _runtime.withCurrentClient((client) async {
-      final result = await client.attachments.download(
-        core.DownloadAttachmentRequest(
-          thread: _mappers.threadRefToCore(thread),
-          messageId: messageId,
-          attachmentId: attachmentId,
-          destination: localPath == null
-              ? const core.AttachmentDestination.memory()
-              : core.AttachmentDestination.localFile(localPath),
-          overwrite: true,
-        ),
-      );
-      return AttachmentDownloadResult(
-        attachmentId: result.attachmentId,
-        filename: result.filename,
-        mimeType: result.mimeType,
-        sizeBytes: result.sizeBytes,
-        localPath: switch (result.destination) {
-          core.DownloadedAttachmentLocalFile(:final path) => path,
-          core.DownloadedAttachmentMemory() => null,
-        },
-        bytes: switch (result.destination) {
-          core.DownloadedAttachmentLocalFile() => null,
-          core.DownloadedAttachmentMemory(:final bytes) => Uint8List.fromList(
-            bytes,
+      try {
+        final result = await client.attachments.download(
+          core.DownloadAttachmentRequest(
+            thread: _mappers.threadRefToCore(thread),
+            messageId: messageId,
+            attachmentId: attachmentId,
+            destination: localPath == null
+                ? const core.AttachmentDestination.memory()
+                : core.AttachmentDestination.localFile(localPath),
+            overwrite: true,
           ),
-        },
-        warnings: result.warnings,
-      );
+        );
+        return AttachmentDownloadResult(
+          attachmentId: result.attachmentId,
+          filename: result.filename,
+          mimeType: result.mimeType,
+          sizeBytes: result.sizeBytes,
+          localPath: switch (result.destination) {
+            core.DownloadedAttachmentLocalFile(:final path) => path,
+            core.DownloadedAttachmentMemory() => null,
+          },
+          bytes: switch (result.destination) {
+            core.DownloadedAttachmentLocalFile() => null,
+            core.DownloadedAttachmentMemory(:final bytes) => Uint8List.fromList(
+              bytes,
+            ),
+          },
+          warnings: result.warnings,
+        );
+      } on core.AwikiImCoreException catch (error) {
+        if (error.code == 'attachment_transfer_cancelled') {
+          throw const AttachmentDownloadCancelledException();
+        }
+        rethrow;
+      }
     });
+  }
+
+  @override
+  Future<bool> cancelAttachmentDownload(String localPath) async {
+    final client = await _runtime.currentClient();
+    return client.attachments.cancelDownload(localPath);
   }
 
   @override

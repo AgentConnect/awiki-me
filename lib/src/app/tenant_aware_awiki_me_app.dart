@@ -12,6 +12,7 @@ import '../application/config/awiki_environment_config.dart';
 import '../application/desktop_shell_service.dart';
 import '../application/desktop_startup_presentation_service.dart';
 import '../application/tenant/app_tenant.dart';
+import '../data/storage/local_data_recovery_platform.dart';
 import '../data/tenant/app_tenant_store.dart';
 import '../data/services/app_notification_facade.dart';
 import '../data/services/method_channel_desktop_shell_service.dart';
@@ -23,10 +24,12 @@ import '../data/im_core/storage_scope_im_core_validator.dart';
 import '../data/push/remote_push_client_factory.dart';
 import '../domain/services/remote_push_client.dart';
 import '../presentation/shared/awiki_me_design.dart';
+import '../presentation/shared/app_dialog.dart';
 import '../presentation/shared/desktop_startup_ready_boundary.dart';
 import '../presentation/shared/responsive_layout.dart';
 import '../presentation/shared/startup_splash.dart';
 import 'app_locale.dart';
+import 'app_router.dart';
 import 'app_services.dart';
 import 'awiki_me_app.dart';
 import 'bootstrap.dart';
@@ -38,12 +41,14 @@ class TenantAwareAwikiMeApp extends StatefulWidget {
     this.desktopShellService,
     this.desktopStartupPresentationService,
     this.remotePushClient,
+    this.localDataRecoveryPlatform,
   });
 
   final String? appStateRoot;
   final DesktopShellService? desktopShellService;
   final DesktopStartupPresentationService? desktopStartupPresentationService;
   final RemotePushClient? remotePushClient;
+  final LocalDataRecoveryPlatform? localDataRecoveryPlatform;
 
   @override
   State<TenantAwareAwikiMeApp> createState() => _TenantAwareAwikiMeAppState();
@@ -60,6 +65,7 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
   late final Future<void> _shellReady;
   late final Future<AppNotificationFacade> _notificationFacadeReady;
   late final RemotePushClient _remotePushClient;
+  late final LocalDataRecoveryPlatform _localDataRecoveryPlatform;
   Future<void>? _remotePushInitialization;
   Future<_TenantRuntime>? _runtimeFuture;
   Future<void>? _runtimeDisposeOperation;
@@ -92,6 +98,9 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
     );
     WidgetsBinding.instance.addObserver(this);
     _remotePushClient = widget.remotePushClient ?? buildRemotePushClient();
+    _localDataRecoveryPlatform =
+        widget.localDataRecoveryPlatform ??
+        const MethodChannelLocalDataRecoveryPlatform();
     _startRemotePushInitialization();
     final scopeSecrets = buildScopeSecretRepository(
       appStateRoot: widget.appStateRoot,
@@ -165,25 +174,38 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
     return _createRuntime(registry, generation: generation);
   }
 
+  Future<void> _resetLocalDataForRecovery() async {
+    await _store.resetAllLocalDataForRecovery(
+      resetSecureStorage: _localDataRecoveryPlatform.resetSecureStorage,
+    );
+    if (!mounted) return;
+    setState(_startInitialLoad);
+  }
+
   void _startInitialLoad() {
     final generation = ++_runtimeGeneration;
     _bootstrapProgress = AppBootstrapProgress.preparing;
     final future = _loadRuntime(generation);
     _runtimeFuture = future;
     unawaited(
-      future.then((runtime) async {
-        if (!mounted ||
-            generation != _runtimeGeneration ||
-            !identical(_runtimeFuture, future)) {
-          if (!_shutdownRequested) {
-            await runtime.bootstrap.dispose();
-          }
-          return;
-        }
-        setState(() {
-          _runtime = runtime;
-        });
-      }),
+      future
+          .then((runtime) async {
+            if (!mounted ||
+                generation != _runtimeGeneration ||
+                !identical(_runtimeFuture, future)) {
+              if (!_shutdownRequested) {
+                await runtime.bootstrap.dispose();
+              }
+              return;
+            }
+            setState(() {
+              _runtime = runtime;
+            });
+          })
+          .catchError((Object _, StackTrace __) {
+            // FutureBuilder owns the user-visible startup error state. This
+            // terminates only the side-effect listener created by then().
+          }),
     );
   }
 
@@ -434,9 +456,17 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
         final runtime = _runtime ?? snapshot.data;
         if (runtime == null) {
           if (snapshot.hasError) {
+            final diagnosticCode = tenantBootstrapDiagnosticCode(
+              snapshot.error,
+            );
             return buildTenantBootstrapErrorApp(
               snapshot.error,
               onRetry: () => setState(_startInitialLoad),
+              onRecover:
+                  _localDataRecoveryPlatform.isSupported &&
+                      tenantBootstrapAllowsLocalRecovery(diagnosticCode)
+                  ? _resetLocalDataForRecovery
+                  : null,
               startupPresentationService: _desktopStartupPresentation,
             );
           }
@@ -469,16 +499,21 @@ class _TenantBootstrapErrorApp extends StatelessWidget {
     required this.startupPresentationService,
     this.onRetry,
     this.onExit,
+    this.onRecover,
   });
 
   final Object? error;
   final DesktopStartupPresentationService startupPresentationService;
   final VoidCallback? onRetry;
   final VoidCallback? onExit;
+  final Future<void> Function()? onRecover;
 
   @override
   Widget build(BuildContext context) {
     final diagnosticCode = tenantBootstrapDiagnosticCode(error);
+    final effectiveRecover = tenantBootstrapAllowsLocalRecovery(diagnosticCode)
+        ? onRecover
+        : null;
     final appTheme = AwikiMeTheme.current;
     return CupertinoApp(
       debugShowCheckedModeBanner: false,
@@ -487,62 +522,180 @@ class _TenantBootstrapErrorApp extends StatelessWidget {
       supportedLocales: AppLocalizations.supportedLocales,
       home: DesktopStartupReadyBoundary(
         presentationService: startupPresentationService,
-        child: CupertinoPageScaffold(
-          backgroundColor: AwikiMePalette.canvas,
-          child: AwikiAdaptiveScaffold(
-            maxWidth: 420,
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+        child: _TenantBootstrapErrorPage(
+          diagnosticCode: diagnosticCode,
+          onRetry: onRetry,
+          onExit: onExit ?? SystemNavigator.pop,
+          onRecover: effectiveRecover,
+        ),
+      ),
+    );
+  }
+}
+
+class _TenantBootstrapErrorPage extends StatefulWidget {
+  const _TenantBootstrapErrorPage({
+    required this.diagnosticCode,
+    required this.onExit,
+    this.onRetry,
+    this.onRecover,
+  });
+
+  final String diagnosticCode;
+  final VoidCallback onExit;
+  final VoidCallback? onRetry;
+  final Future<void> Function()? onRecover;
+
+  @override
+  State<_TenantBootstrapErrorPage> createState() =>
+      _TenantBootstrapErrorPageState();
+}
+
+class _TenantBootstrapErrorPageState extends State<_TenantBootstrapErrorPage> {
+  bool _recoveryInProgress = false;
+  bool _recoveryFailed = false;
+
+  Future<void> _confirmRecovery() async {
+    if (_recoveryInProgress || widget.onRecover == null) return;
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await AppNavigator.showDialog<bool>(
+      context,
+      (dialogContext) => AppConfirmationDialog(
+        title: l10n.startupRecoveryConfirmTitle,
+        message: l10n.startupRecoveryConfirmMessage,
+        helperMessage: l10n.startupRecoveryConfirmHint,
+        cancelLabel: l10n.commonCancel,
+        confirmLabel: l10n.startupRecoveryConfirmAction,
+        destructive: true,
+        confirmButtonKey: const Key('startup-recovery-confirm'),
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+        onConfirm: () => Navigator.of(dialogContext).pop(true),
+      ),
+      barrierDismissible: false,
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _recoveryInProgress = true;
+      _recoveryFailed = false;
+    });
+    try {
+      await widget.onRecover!();
+      if (mounted) {
+        setState(() => _recoveryInProgress = false);
+      }
+    } on Object catch (error) {
+      debugPrint('[awiki_me][local-recovery][error] ${error.runtimeType}');
+      if (mounted) {
+        setState(() {
+          _recoveryInProgress = false;
+          _recoveryFailed = true;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return CupertinoPageScaffold(
+      backgroundColor: AwikiMePalette.canvas,
+      child: AwikiAdaptiveScaffold(
+        maxWidth: 420,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                l10n.startupFailureTitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AwikiMePalette.actionInk,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SelectionArea(
+                child: Text(
+                  l10n.startupFailureDiagnostic(widget.diagnosticCode),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AwikiMePalette.actionMuted,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+              if (widget.onRecover != null) ...<Widget>[
+                const SizedBox(height: 12),
+                Text(
+                  l10n.startupRecoveryExplanation,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AwikiMePalette.actionMuted,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+              if (_recoveryInProgress) ...<Widget>[
+                const SizedBox(height: 16),
+                const CupertinoActivityIndicator(),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.startupRecoveryInProgress,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AwikiMePalette.actionMuted,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+              if (_recoveryFailed) ...<Widget>[
+                const SizedBox(height: 12),
+                Text(
+                  l10n.startupRecoveryFailed,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: CupertinoColors.systemRed,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                alignment: WrapAlignment.center,
                 children: <Widget>[
-                  const Text(
-                    'AWikiMe failed to start.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AwikiMePalette.actionInk,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w400,
+                  CupertinoButton(
+                    onPressed: _recoveryInProgress
+                        ? null
+                        : () => Clipboard.setData(
+                            ClipboardData(text: widget.diagnosticCode),
+                          ),
+                    child: Text(l10n.startupFailureCopyDiagnostics),
+                  ),
+                  CupertinoButton(
+                    onPressed: _recoveryInProgress ? null : widget.onExit,
+                    child: Text(l10n.startupFailureExit),
+                  ),
+                  if (widget.onRecover != null)
+                    CupertinoButton(
+                      key: const Key('startup-recovery-action'),
+                      onPressed: _recoveryInProgress ? null : _confirmRecovery,
+                      child: Text(l10n.startupRecoveryAction),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  SelectionArea(
-                    child: Text(
-                      'Diagnostic code: $diagnosticCode',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: AwikiMePalette.actionMuted,
-                        fontSize: 13,
-                        height: 1.35,
-                      ),
+                  if (widget.onRetry != null)
+                    CupertinoButton.filled(
+                      onPressed: _recoveryInProgress ? null : widget.onRetry,
+                      child: Text(l10n.commonRetry),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    alignment: WrapAlignment.center,
-                    children: <Widget>[
-                      CupertinoButton(
-                        onPressed: () => Clipboard.setData(
-                          ClipboardData(text: diagnosticCode),
-                        ),
-                        child: const Text('Copy diagnostics'),
-                      ),
-                      CupertinoButton(
-                        onPressed: onExit ?? SystemNavigator.pop,
-                        child: const Text('Exit'),
-                      ),
-                      if (onRetry != null)
-                        CupertinoButton.filled(
-                          onPressed: onRetry,
-                          child: const Text('Retry'),
-                        ),
-                    ],
-                  ),
                 ],
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -555,6 +708,7 @@ Widget buildTenantBootstrapErrorApp(
   Object? error, {
   VoidCallback? onRetry,
   VoidCallback? onExit,
+  Future<void> Function()? onRecover,
   DesktopStartupPresentationService startupPresentationService =
       const NoopDesktopStartupPresentationService(),
 }) => _TenantBootstrapErrorApp(
@@ -562,6 +716,7 @@ Widget buildTenantBootstrapErrorApp(
   startupPresentationService: startupPresentationService,
   onRetry: onRetry,
   onExit: onExit,
+  onRecover: onRecover,
 );
 
 @visibleForTesting
@@ -577,6 +732,24 @@ String tenantBootstrapDiagnosticCode(Object? error) {
       ? code
       : 'bootstrap_failed';
 }
+
+@visibleForTesting
+bool tenantBootstrapAllowsLocalRecovery(String diagnosticCode) =>
+    const <String>{
+      'vault_key_missing',
+      'vault_key_bundle_corrupt',
+      'vault_key_scope_mismatch',
+      'vault_key_schema_unsupported',
+      'vault_key_provider_unavailable',
+      'vault_context_mismatch',
+      'identity_vault_unavailable',
+      'identity_vault_metadata_missing',
+      'identity_vault_metadata_unverified',
+      'identity_vault_workspace_mismatch',
+      'identity_vault_device_mismatch',
+      'identity_vault_record_open_failed',
+      'identity_vault_verification_failed',
+    }.contains(diagnosticCode);
 
 Future<T> openTenantRuntimeAfterDispose<T>({
   required T? previous,

@@ -28,6 +28,25 @@
   "commonUnknown": "未知",
   "commonLoadMore": "加载更多",
   "commonPleaseWait": "请稍候...",
+  "startupFailureTitle": "AWikiMe 无法启动",
+  "startupFailureDiagnostic": "诊断代码：{diagnosticCode}",
+  "@startupFailureDiagnostic": {
+    "placeholders": {
+      "diagnosticCode": {
+        "type": "String"
+      }
+    }
+  },
+  "startupFailureCopyDiagnostics": "复制诊断信息",
+  "startupFailureExit": "退出",
+  "startupRecoveryAction": "重置此设备并恢复",
+  "startupRecoveryExplanation": "此设备上的本地凭证无法读取。你可以重试，或重置本机 AWiki 数据后，通过加入设备或恢复 Handle 继续使用。",
+  "startupRecoveryConfirmTitle": "重置此设备上的 AWiki？",
+  "startupRecoveryConfirmMessage": "这会删除此设备本地保存的全部 AWiki 身份、租户、消息和设置。",
+  "startupRecoveryConfirmHint": "线上身份不会被删除，其他设备也不受影响。之后需要通过加入设备或恢复 Handle，才能在此设备重新使用已有身份。",
+  "startupRecoveryConfirmAction": "重置此设备",
+  "startupRecoveryInProgress": "正在重置本地数据...",
+  "startupRecoveryFailed": "无法重置本地数据。你可以重试，或复制诊断代码并寻求支持。",
   "commonLoading": "加载中...",
   "commonError": "错误",
   "commonErrorDetails": "错误详情",
@@ -1049,6 +1068,10 @@
       "status": {}
     }
   },
+  "agentTerminalNotificationTitle": "智能体",
+  "agentTerminalCompleted": "智能体任务已完成",
+  "agentTerminalActionRequired": "智能体任务等待确认",
+  "agentTerminalRuntimeFailed": "智能体任务处理失败",
   "agentErrorLoginRequired": "请先登录。",
   "agentErrorHandleUnavailable": "当前账号没有可用 Handle，暂时不能生成 Daemon 安装命令。",
   "agentSkillUnsupportedTenant": "当前租户尚未启用 Skill Agent onboarding。",
@@ -1331,6 +1354,24 @@
   "documentPickerFailed": "文件选择失败，请稍后重试。",
   "documentSaveFailed": "文件保存失败，请稍后重试。",
   "attachmentDownloadEmpty": "附件下载结果为空。",
+  "attachmentDownloading": "正在下载",
+  "attachmentDownloadingProgress": "正在下载 · {progress}",
+  "@attachmentDownloadingProgress": {
+    "placeholders": {
+      "progress": {"type": "String"}
+    }
+  },
+  "attachmentDownloadPaused": "下载已暂停",
+  "attachmentDownloadPausedProgress": "下载已暂停 · {progress}",
+  "@attachmentDownloadPausedProgress": {
+    "placeholders": {
+      "progress": {
+        "type": "String"
+      }
+    }
+  },
+  "attachmentDownloadCancelFailed": "暂时无法暂停下载，请重试。",
+  "attachmentDownloadInterrupted": "下载已中断，当前进度已保留，请重试以继续下载。",
   "chatImageActionsTitle": "图片",
   "chatCopyImage": "复制图片",
   "chatSaveImageAs": "图片另存为...",

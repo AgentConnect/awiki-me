@@ -8,6 +8,8 @@ import '../../l10n/l10n.dart';
 import '../app_shell/providers/navigation_provider.dart';
 import '../app_shell/providers/selected_conversation_provider.dart';
 import '../chat/chat_page.dart';
+import '../agents/agents_provider.dart';
+import '../agents/personal_agent_feature_visibility.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/compact_nested_navigator_back_scope.dart';
 import '../shared/copyable_did_line.dart';
@@ -41,9 +43,14 @@ class _ConversationWorkspacePageState
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final conversations = personalAgentVisibleConversations(
+      conversations: ref.watch(conversationListProvider).conversations,
+      agents: ref.watch(agentsProvider.select((state) => state.agents)),
+      personalAgentVisible: ref.watch(personalAgentFeatureVisibleProvider),
+    );
     final selectedConversation = _selectedConversation(
       ref.watch(selectedConversationProvider),
-      ref.watch(conversationListProvider).conversations,
+      conversations,
     );
     if (!responsive.supportsTwoPane) {
       final active =

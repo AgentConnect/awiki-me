@@ -68,6 +68,51 @@ void main() {
     },
   );
 
+  test(
+    'resumable staging is stable, hidden, and atomically published',
+    () async {
+      final root = await Directory.systemTemp.createTemp('awiki-attachments-');
+      addTearDown(() async {
+        if (await root.exists()) await root.delete(recursive: true);
+      });
+      final service = FileAttachmentCacheService(
+        rootDirectory: () async => root,
+      );
+
+      final first = await service.prepareDownloadedFile(
+        messageId: 'message',
+        attachmentId: 'attachment',
+      );
+      final second = await service.prepareDownloadedFile(
+        messageId: 'message',
+        attachmentId: 'attachment',
+      );
+      expect(second, first);
+      await File('$first.awiki-part').writeAsString('partial');
+      expect(
+        await service.lookup(messageId: 'message', attachmentId: 'attachment'),
+        isNull,
+      );
+
+      await File(first).writeAsString('complete');
+      final committed = await service.commitDownloadedFileIfCurrent(
+        messageId: 'message',
+        attachmentId: 'attachment',
+        filename: 'video.mp4',
+        mimeType: 'video/mp4',
+        stagedPath: first,
+        isCurrent: () => true,
+      );
+
+      expect(committed, isNotNull);
+      expect(await File(committed!).readAsString(), 'complete');
+      expect(
+        await service.lookup(messageId: 'message', attachmentId: 'attachment'),
+        committed,
+      );
+    },
+  );
+
   test('identical attachment ids never cross storage-scope roots', () async {
     final sandbox = await Directory.systemTemp.createTemp('awiki-attachments-');
     addTearDown(() async {

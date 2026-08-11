@@ -28,6 +28,25 @@
   "commonUnknown": "Unknown",
   "commonLoadMore": "Load more",
   "commonPleaseWait": "Please wait...",
+  "startupFailureTitle": "AWikiMe could not start",
+  "startupFailureDiagnostic": "Diagnostic code: {diagnosticCode}",
+  "@startupFailureDiagnostic": {
+    "placeholders": {
+      "diagnosticCode": {
+        "type": "String"
+      }
+    }
+  },
+  "startupFailureCopyDiagnostics": "Copy diagnostics",
+  "startupFailureExit": "Exit",
+  "startupRecoveryAction": "Reset this device and recover",
+  "startupRecoveryExplanation": "The local credentials on this device cannot be read. You can retry, or reset local AWiki data and then use Device Join or Handle Recovery.",
+  "startupRecoveryConfirmTitle": "Reset AWiki on this device?",
+  "startupRecoveryConfirmMessage": "This removes all AWiki identities, tenants, messages, and settings stored locally on this device.",
+  "startupRecoveryConfirmHint": "Online identities are not deleted, and other devices are not affected. You will need Device Join or Handle Recovery to use an existing identity here again.",
+  "startupRecoveryConfirmAction": "Reset this device",
+  "startupRecoveryInProgress": "Resetting local data...",
+  "startupRecoveryFailed": "Local data could not be reset. You can retry or copy the diagnostic code for support.",
   "commonLoading": "Loading...",
   "commonError": "Error",
   "commonErrorDetails": "Error details",
@@ -1049,6 +1068,10 @@
       "status": {}
     }
   },
+  "agentTerminalNotificationTitle": "Agent",
+  "agentTerminalCompleted": "Agent task completed",
+  "agentTerminalActionRequired": "Agent task needs confirmation",
+  "agentTerminalRuntimeFailed": "Agent task failed",
   "agentErrorLoginRequired": "Please log in first.",
   "agentErrorHandleUnavailable": "This account has no available Handle, so a daemon install command cannot be created right now.",
   "agentSkillUnsupportedTenant": "Skill Agent onboarding is not enabled for this tenant.",
@@ -1331,6 +1354,24 @@
   "documentPickerFailed": "File selection failed. Please try again later.",
   "documentSaveFailed": "File save failed. Please try again later.",
   "attachmentDownloadEmpty": "Attachment download returned no file.",
+  "attachmentDownloading": "Downloading",
+  "attachmentDownloadingProgress": "Downloading · {progress}",
+  "@attachmentDownloadingProgress": {
+    "placeholders": {
+      "progress": {"type": "String"}
+    }
+  },
+  "attachmentDownloadPaused": "Download paused",
+  "attachmentDownloadPausedProgress": "Download paused · {progress}",
+  "@attachmentDownloadPausedProgress": {
+    "placeholders": {
+      "progress": {
+        "type": "String"
+      }
+    }
+  },
+  "attachmentDownloadCancelFailed": "Unable to pause the download. Please try again.",
+  "attachmentDownloadInterrupted": "The download was interrupted. Your progress has been kept; try again to resume.",
   "chatImageActionsTitle": "Image",
   "chatCopyImage": "Copy Image",
   "chatSaveImageAs": "Save Image As...",

@@ -6,12 +6,14 @@ class _ChatInformationPage extends ConsumerStatefulWidget {
     required this.target,
     required this.displayName,
     required this.displayThreadId,
+    required this.onOpenDirectConversation,
   });
 
   final ConversationSummary conversation;
   final _PeerInfoTarget target;
   final String displayName;
   final String displayThreadId;
+  final PeerProfileDirectConversationOpener onOpenDirectConversation;
 
   @override
   ConsumerState<_ChatInformationPage> createState() =>
@@ -112,7 +114,7 @@ class _ChatInformationPageState extends ConsumerState<_ChatInformationPage> {
     }
   }
 
-  Future<void> _openPeerInfo() {
+  Future<void> _openPeerInfo() async {
     final runtimeAgent = localRuntimeAgentForConversationTarget(
       widget.target.targetDid,
       ref.read(agentsProvider).agents,
@@ -121,7 +123,7 @@ class _ChatInformationPageState extends ConsumerState<_ChatInformationPage> {
         runtimeAgent != null ||
         conversationTargetDidLooksLikeAgent(widget.target.targetDid);
     if (widget.target.targetDid.isNotEmpty && !isAgent) {
-      return AppNavigator.push<void>(
+      final result = await AppNavigator.push<PeerProfilePageResult>(
         context,
         (_) => PeerProfilePage(
           did: widget.target.targetDid,
@@ -129,11 +131,15 @@ class _ChatInformationPageState extends ConsumerState<_ChatInformationPage> {
           initialDisplayName: widget.target.displayName,
           initialFullHandle: widget.target.fullHandle,
           initialAvatarUri: widget.target.avatarUri,
-          returnToPreviousOnSend: true,
+          onOpenDirectConversation: widget.onOpenDirectConversation,
         ),
       );
+      if (result == PeerProfilePageResult.directConversationOpened && mounted) {
+        Navigator.of(context).pop();
+      }
+      return;
     }
-    return AppNavigator.push<void>(
+    await AppNavigator.push<void>(
       context,
       (_) => _PeerInfoDialog(target: widget.target, fullPage: true),
     );

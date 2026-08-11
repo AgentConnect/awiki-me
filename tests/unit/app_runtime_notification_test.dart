@@ -3747,6 +3747,45 @@ void main() {
       expect(notificationFacade.lastSystemBody, contains('确认是否继续'));
     });
 
+    test('后台 Personal Agent 终态保留状态但不发送系统通知', () async {
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      await activate();
+      container.read(agentsProvider.notifier).applyControlPayload(
+        const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:personal',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'hermes',
+              'handle': 'hermes-personal-app-default',
+              'display_name': 'Hermes Personal Agent',
+              'status': 'ready',
+            },
+          ],
+        },
+      );
+
+      await emitControl(<String, Object?>{
+        ...terminalPayload(),
+        'runtime_agent_did': 'did:agent:personal',
+        'runs': const <Object?>[
+          <String, Object?>{'agent_did': 'did:agent:personal'},
+        ],
+      });
+
+      expect(notificationFacade.inAppNotificationCount, 0);
+      expect(notificationFacade.systemNotificationCount, 0);
+    });
+
     test('实时可见控制状态不进入最近会话、消息或通知', () async {
       container
           .read(appLifecycleProvider.notifier)

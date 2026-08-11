@@ -30,6 +30,7 @@ import '../../../domain/services/realtime_gateway.dart';
 import '../../../l10n/app_message.dart';
 import '../../agents/agent_inbox_provider.dart';
 import '../../agents/agents_provider.dart';
+import '../../agents/personal_agent_feature_visibility.dart';
 import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_provider.dart';
 import '../../friends/friends_navigation_provider.dart';
@@ -1348,7 +1349,13 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           .applyPersonalAgentControlPayload(controlPayload);
       final terminalNotification = _agentTerminalNotificationDeduplicator
           .acceptStatus(controlPayload);
-      if (terminalNotification != null) {
+      final hiddenPersonalAgentStatus =
+          !ref.read(personalAgentFeatureVisibleProvider) &&
+          isPersonalAgentControlPayload(
+            controlPayload,
+            ref.read(agentsProvider).agents,
+          );
+      if (terminalNotification != null && !hiddenPersonalAgentStatus) {
         _showAgentTerminalNotification(terminalNotification);
       }
       _runtimeTrace(
@@ -1532,7 +1539,10 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     unawaited(
       ref
           .read(notificationFacadeProvider)
-          .showSystemNotification(title: l10n.personalAgentTitle, body: body),
+          .showSystemNotification(
+            title: l10n.agentTerminalNotificationTitle,
+            body: body,
+          ),
     );
   }
 

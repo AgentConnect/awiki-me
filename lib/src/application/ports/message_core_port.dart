@@ -69,6 +69,14 @@ abstract interface class MessageCorePort {
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed);
 }
 
+/// Optional local-file transfer control kept separate from message operations.
+///
+/// Implementations that do not own cancellable disk downloads do not need to
+/// implement this port.
+abstract interface class AttachmentDownloadCancellationCorePort {
+  Future<bool> cancelAttachmentDownload(String localPath);
+}
+
 abstract interface class LocalHistoryMessageCorePort {
   /// Legacy migration adapter. New local-first timeline reads should use
   /// [ConversationTimelineMessageCorePort.loadConversationTimeline].

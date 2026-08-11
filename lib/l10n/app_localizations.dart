@@ -266,6 +266,78 @@ abstract class AppLocalizations {
   /// **'请稍候...'**
   String get commonPleaseWait;
 
+  /// No description provided for @startupFailureTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'AWikiMe 无法启动'**
+  String get startupFailureTitle;
+
+  /// No description provided for @startupFailureDiagnostic.
+  ///
+  /// In zh, this message translates to:
+  /// **'诊断代码：{diagnosticCode}'**
+  String startupFailureDiagnostic(String diagnosticCode);
+
+  /// No description provided for @startupFailureCopyDiagnostics.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制诊断信息'**
+  String get startupFailureCopyDiagnostics;
+
+  /// No description provided for @startupFailureExit.
+  ///
+  /// In zh, this message translates to:
+  /// **'退出'**
+  String get startupFailureExit;
+
+  /// No description provided for @startupRecoveryAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'重置此设备并恢复'**
+  String get startupRecoveryAction;
+
+  /// No description provided for @startupRecoveryExplanation.
+  ///
+  /// In zh, this message translates to:
+  /// **'此设备上的本地凭证无法读取。你可以重试，或重置本机 AWiki 数据后，通过加入设备或恢复 Handle 继续使用。'**
+  String get startupRecoveryExplanation;
+
+  /// No description provided for @startupRecoveryConfirmTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'重置此设备上的 AWiki？'**
+  String get startupRecoveryConfirmTitle;
+
+  /// No description provided for @startupRecoveryConfirmMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'这会删除此设备本地保存的全部 AWiki 身份、租户、消息和设置。'**
+  String get startupRecoveryConfirmMessage;
+
+  /// No description provided for @startupRecoveryConfirmHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'线上身份不会被删除，其他设备也不受影响。之后需要通过加入设备或恢复 Handle，才能在此设备重新使用已有身份。'**
+  String get startupRecoveryConfirmHint;
+
+  /// No description provided for @startupRecoveryConfirmAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'重置此设备'**
+  String get startupRecoveryConfirmAction;
+
+  /// No description provided for @startupRecoveryInProgress.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在重置本地数据...'**
+  String get startupRecoveryInProgress;
+
+  /// No description provided for @startupRecoveryFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法重置本地数据。你可以重试，或复制诊断代码并寻求支持。'**
+  String get startupRecoveryFailed;
+
   /// No description provided for @commonLoading.
   ///
   /// In zh, this message translates to:
@@ -4344,6 +4416,30 @@ abstract class AppLocalizations {
   /// **'智能体状态：{status}'**
   String agentStatusSemantic(Object status);
 
+  /// No description provided for @agentTerminalNotificationTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体'**
+  String get agentTerminalNotificationTitle;
+
+  /// No description provided for @agentTerminalCompleted.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体任务已完成'**
+  String get agentTerminalCompleted;
+
+  /// No description provided for @agentTerminalActionRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体任务等待确认'**
+  String get agentTerminalActionRequired;
+
+  /// No description provided for @agentTerminalRuntimeFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体任务处理失败'**
+  String get agentTerminalRuntimeFailed;
+
   /// No description provided for @agentErrorLoginRequired.
   ///
   /// In zh, this message translates to:
@@ -5675,6 +5771,42 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'附件下载结果为空。'**
   String get attachmentDownloadEmpty;
+
+  /// No description provided for @attachmentDownloading.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在下载'**
+  String get attachmentDownloading;
+
+  /// No description provided for @attachmentDownloadingProgress.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在下载 · {progress}'**
+  String attachmentDownloadingProgress(String progress);
+
+  /// No description provided for @attachmentDownloadPaused.
+  ///
+  /// In zh, this message translates to:
+  /// **'下载已暂停'**
+  String get attachmentDownloadPaused;
+
+  /// No description provided for @attachmentDownloadPausedProgress.
+  ///
+  /// In zh, this message translates to:
+  /// **'下载已暂停 · {progress}'**
+  String attachmentDownloadPausedProgress(String progress);
+
+  /// No description provided for @attachmentDownloadCancelFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法暂停下载，请重试。'**
+  String get attachmentDownloadCancelFailed;
+
+  /// No description provided for @attachmentDownloadInterrupted.
+  ///
+  /// In zh, this message translates to:
+  /// **'下载已中断，当前进度已保留，请重试以继续下载。'**
+  String get attachmentDownloadInterrupted;
 
   /// No description provided for @chatImageActionsTitle.
   ///

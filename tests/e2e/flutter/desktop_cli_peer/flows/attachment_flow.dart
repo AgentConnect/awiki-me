@@ -266,6 +266,13 @@ Future<void> _verifyAttachmentRegression({
   }
   final openedFile = File(attachmentOpenRecorder.lastOpenedPath!);
   expect(await openedFile.exists(), isTrue);
+  expect(openedFile.path, isNot(contains('._awiki_cache_download')));
+  expect(
+    await File(
+      '${openedFile.parent.path}/._awiki_cache_download.awiki-part',
+    ).exists(),
+    isFalse,
+  );
   expect(await openedFile.readAsString(), cliAttachmentText);
   expect(await _fileSha256Hex(openedFile), cliAttachmentSha256Hex);
 

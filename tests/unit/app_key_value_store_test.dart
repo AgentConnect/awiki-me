@@ -97,18 +97,15 @@ void main() {
       expect(options, isNotNull);
       expect(options, containsPair('encryptedSharedPreferences', 'false'));
       expect(options, containsPair('resetOnError', 'false'));
-      expect(options, containsPair('migrateOnAlgorithmChange', 'true'));
-      expect(options, containsPair('migrateWithBackup', 'true'));
+      expect(options, isNot(contains('migrateOnAlgorithmChange')));
+      expect(options, isNot(contains('migrateWithBackup')));
       expect(
         options,
-        containsPair(
-          'keyCipherAlgorithm',
-          'RSA_ECB_OAEPwithSHA_256andMGF1Padding',
-        ),
+        containsPair('keyCipherAlgorithm', 'RSA_ECB_PKCS1Padding'),
       );
       expect(
         options,
-        containsPair('storageCipherAlgorithm', 'AES_GCM_NoPadding'),
+        containsPair('storageCipherAlgorithm', 'AES_CBC_PKCS7Padding'),
       );
       expect(
         options,
@@ -208,7 +205,7 @@ void main() {
       expect(legacyCalls, hasLength(1));
       final arguments = legacyCalls.single.arguments as Map<Object?, Object?>;
       final options = arguments['options'] as Map<Object?, Object?>;
-      expect(options['usesDataProtectionKeychain'], 'false');
+      expect(options['useDataProtectionKeyChain'], 'false');
     },
   );
 

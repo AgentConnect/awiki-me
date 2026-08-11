@@ -110,7 +110,7 @@ void main() {
           'next_step': null,
           'final_message_id': 'msg_widget_completed',
         },
-        '个人助理已完成处理: 任务已完成',
+        '智能体任务已完成: 任务已完成',
       ),
       (
         <String, Object?>{
@@ -136,7 +136,7 @@ void main() {
           'next_step': '确认是否继续',
           'final_message_id': 'msg_widget_action',
         },
-        '等待确认: 需要确认范围. 下一步: 确认是否继续',
+        '智能体任务等待确认: 需要确认范围. 下一步: 确认是否继续',
       ),
       (
         <String, Object?>{
@@ -145,7 +145,7 @@ void main() {
           'run_id': 'run_widget_failed',
           'state': 'failed',
         },
-        '个人助理处理失败',
+        '智能体任务处理失败',
       ),
     ]) {
       gateway.nextRealtimeUpdate = RealtimeUpdate(

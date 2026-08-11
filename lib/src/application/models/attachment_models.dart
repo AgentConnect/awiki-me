@@ -43,3 +43,10 @@ class AttachmentDownloadResult {
   final Uint8List? bytes;
   final List<String> warnings;
 }
+
+class AttachmentDownloadCancelledException implements Exception {
+  const AttachmentDownloadCancelledException();
+
+  @override
+  String toString() => 'AttachmentDownloadCancelledException';
+}

@@ -30,6 +30,7 @@ import '../../domain/entities/conversation_summary.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
 import '../agents/agents_provider.dart';
+import '../agents/personal_agent_feature_visibility.dart';
 import '../app_shell/providers/app_lifecycle_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../conversation_list/conversation_provider.dart';
@@ -3406,6 +3407,7 @@ class ChatThreadsController
   Future<AttachmentDownloadResult> downloadAttachment({
     required ConversationSummary conversation,
     required ChatMessage message,
+    String? localPath,
   }) async {
     final sessionEpoch = _captureSessionEpoch();
     if (sessionEpoch == null) {
@@ -3422,11 +3424,21 @@ class ChatThreadsController
           thread: _attachmentThreadRefFor(conversation),
           messageId: messageId,
           attachmentId: attachment.attachmentId,
+          localPath: localPath,
         );
     if (!_isCurrentSessionEpoch(sessionEpoch)) {
       throw sessionEpochChangedError();
     }
     return downloaded;
+  }
+
+  Future<bool> cancelAttachmentDownload(String localPath) {
+    final messaging = ref.read(messagingServiceProvider);
+    if (messaging is! AttachmentDownloadCancellationService) {
+      return Future<bool>.value(false);
+    }
+    return (messaging as AttachmentDownloadCancellationService)
+        .cancelAttachmentDownload(localPath);
   }
 
   Future<void> retryMessage({
@@ -5598,6 +5610,9 @@ class ChatThreadsController
       return;
     }
     _upsertPersonalAgentSyncRecord(threadId, record);
+    if (!ref.read(personalAgentFeatureVisibleProvider)) {
+      return;
+    }
     final runtimeAgentDid = record.runtimeAgentDid?.trim();
     if (runtimeAgentDid == null || runtimeAgentDid.isEmpty) {
       return;

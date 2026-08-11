@@ -502,10 +502,10 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('个人助理已完成处理: 通知 Smoke 已完成'), findsNothing);
+    expect(find.text('智能体任务已完成: 通知 Smoke 已完成'), findsNothing);
     expect(harness.notificationFacade.systemNotificationCount, 1);
-    expect(harness.notificationFacade.lastSystemTitle, isNotEmpty);
-    expect(harness.notificationFacade.lastSystemBody, contains('通知 Smoke 已完成'));
+    expect(harness.notificationFacade.lastSystemTitle, '智能体');
+    expect(harness.notificationFacade.lastSystemBody, '智能体任务已完成: 通知 Smoke 已完成');
     await E2eCaseAttestationWriter.markPassed(
       'AGENT-NOTIFY-SMOKE-E2E-001',
       phases: const <String>[
@@ -911,7 +911,7 @@ void main() {
     },
   );
 
-  testWidgets('AwikiMeApp authenticated smoke shows Personal Agent entry', (
+  testWidgets('AwikiMeApp authenticated smoke hides Personal Agent surfaces', (
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -924,6 +924,28 @@ void main() {
       jwtToken: 'test-jwt',
     );
     final harness = createFakeAwikiMeAppHarness(session: session);
+    harness.gateway.conversations = <ConversationSummary>[
+      ConversationSummary(
+        threadId: 'direct:did:human:bob',
+        conversationId: 'direct:did:human:bob',
+        displayName: 'Bob',
+        lastMessagePreview: 'hello',
+        lastMessageAt: DateTime(2026, 8, 11, 10),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:human:bob',
+      ),
+      ConversationSummary(
+        threadId: 'direct:did:test:personal-agent',
+        conversationId: 'direct:did:test:personal-agent',
+        displayName: 'Hermes Personal Agent',
+        lastMessagePreview: 'ready',
+        lastMessageAt: DateTime(2026, 8, 11, 11),
+        unreadCount: 7,
+        isGroup: false,
+        targetDid: 'did:test:personal-agent',
+      ),
+    ];
     final control =
         harness.bootstrap.agentControlService!
             as test_support.FakeAgentControlService;
@@ -946,6 +968,26 @@ void main() {
           },
         ),
       ),
+      AgentSummary(
+        agentDid: 'did:test:personal-agent',
+        kind: AgentKind.runtime,
+        daemonAgentDid: 'did:test:daemon:message',
+        runtime: 'hermes',
+        handle: 'hermes-personal-app-default',
+        displayName: 'Hermes Personal Agent',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      ),
+      AgentSummary(
+        agentDid: 'did:test:codex-worker',
+        kind: AgentKind.runtime,
+        daemonAgentDid: 'did:test:daemon:message',
+        runtime: 'codex',
+        handle: 'codex-worker',
+        displayName: 'Codex Worker',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      ),
     ];
 
     try {
@@ -955,12 +997,21 @@ void main() {
           providerOverrides: <Override>[
             ...harness.providerOverrides,
             agentImEnabledProvider.overrideWithValue(true),
+            conversationListProvider.overrideWith(
+              (ref) => _StaticConversationListController(
+                ref,
+                harness.gateway.conversations,
+              ),
+            ),
           ],
         ),
       );
       await _pumpSmokeFrame(tester);
 
       expect(find.byType(AppShell), findsOneWidget);
+      expect(find.text('Bob'), findsOneWidget);
+      expect(find.text('Hermes Personal Agent'), findsNothing);
+      expect(find.byKey(const Key('mac-messages-unread-badge')), findsNothing);
       await _tapFirstFound(tester, <Finder>[
         find.bySemanticsIdentifier('e2e-agents-tab'),
         find.bySemanticsLabel('智能体'),
@@ -971,7 +1022,17 @@ void main() {
       await _pumpSmokeFrame(tester);
 
       expect(find.text('Message Daemon'), findsWidgets);
-      expect(find.text('个人助理'), findsOneWidget);
+      expect(find.text('Codex Worker'), findsWidgets);
+      expect(find.text('Hermes Personal Agent'), findsNothing);
+      expect(find.text('个人助理'), findsNothing);
+      expect(
+        find.bySemanticsIdentifier('personal-agent-settings-entry'),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('personal-agent-settings-entry-card')),
+        findsNothing,
+      );
       expect(find.text('所有可处理会话'), findsNothing);
       expect(find.text('Hermes message runtime'), findsNothing);
       expect(find.text('启用个人助理'), findsNothing);
@@ -1236,7 +1297,7 @@ void main() {
     }
   });
 
-  testWidgets('AwikiMeApp smoke recovers Personal Agent action into chat', (
+  testWidgets('AwikiMeApp smoke hides Personal Agent controls from chat', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
@@ -1338,6 +1399,7 @@ void main() {
       final container = ProviderScope.containerOf(
         tester.element(find.byType(AppShell)),
       );
+      final sendTextMessageCallsBefore = harness.gateway.sendTextMessageCalls;
       container
           .read(chatThreadsProvider.notifier)
           .applyPersonalAgentControlPayload(const <String, Object?>{
@@ -1367,14 +1429,16 @@ void main() {
           });
       await _pumpSmokeFrame(tester);
 
-      expect(find.text('个人助理已完成处理'), findsOneWidget);
-      expect(find.text('个人助理生成了草稿'), findsOneWidget);
-      await tester.tap(find.text('使用草稿'));
-      await _pumpSmokeFrame(tester);
-
-      expect(find.text('草稿已放入输入框'), findsOneWidget);
-      expect(harness.gateway.lastSentPayloadPeerDid, 'did:agent:daemon');
-      expect(harness.gateway.lastSentPayload?['state'], 'succeeded');
+      expect(find.text('hello'), findsOneWidget);
+      expect(find.text('个人助理已完成处理'), findsNothing);
+      expect(find.text('个人助理生成了草稿'), findsNothing);
+      expect(find.text('使用草稿'), findsNothing);
+      expect(find.text('草稿已放入输入框'), findsNothing);
+      final input = tester.widget<CupertinoTextField>(
+        find.byKey(const Key('chat-composer-input')),
+      );
+      expect(input.controller?.text, isEmpty);
+      expect(harness.gateway.sendTextMessageCalls, sendTextMessageCallsBefore);
     } finally {
       await tester.binding.setSurfaceSize(null);
     }

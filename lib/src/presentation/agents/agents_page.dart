@@ -40,6 +40,7 @@ import 'agent_runtime_display.dart';
 import 'agent_status_indicator.dart';
 import 'agent_visual_status.dart';
 import 'agents_provider.dart';
+import 'personal_agent_feature_visibility.dart';
 import 'skill_onboarding_provider.dart';
 
 part 'parts/agents_list_part.dart';
@@ -121,10 +122,11 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
 
   @override
   Widget build(BuildContext context) {
-    final personalAgentEnabled = ref.watch(agentImEnabledProvider);
-    if (!personalAgentEnabled) {
+    final agentsEnabled = ref.watch(agentImEnabledProvider);
+    if (!agentsEnabled) {
       return const _AgentsTenantUnsupportedView();
     }
+    final personalAgentVisible = ref.watch(personalAgentFeatureVisibleProvider);
     ref.listen<AgentsState>(agentsProvider, (previous, next) {
       final command = next.installCommand;
       if (command != null && previous?.installCommand != command) {
@@ -164,12 +166,14 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
     final selected = _agentSelectionForLayout(
       state,
       fallbackToFirst: responsive.supportsTwoPane,
+      personalAgentVisible: personalAgentVisible,
     );
     final selectedAgentDidForList = responsive.supportsTwoPane
         ? selected?.agentDid
         : state.selectedAgentDid;
     final list = _AgentListPane(
       state: state,
+      personalAgentVisible: personalAgentVisible,
       footer: widget.listFooter,
       pendingAgentDids: pendingAgentDids,
       selectedAgentDid: selectedAgentDidForList,
@@ -216,7 +220,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       onCancelUpgrade: (agent) =>
           ref.read(agentsProvider.notifier).cancelDaemonUpgrade(agent.agentDid),
       onDelete: (agent) => _confirmDeleteAgent(context, ref, agent),
-      personalAgentEnabled: personalAgentEnabled,
+      personalAgentVisible: personalAgentVisible,
       onOpenPersonalAgentSettings: (agent) => AppNavigator.push<void>(
         context,
         (_) => PersonalAgentSettingsPage(initialDaemonDid: agent.agentDid),
@@ -311,18 +315,24 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
 AgentSummary? _agentSelectionForLayout(
   AgentsState state, {
   required bool fallbackToFirst,
+  required bool personalAgentVisible,
 }) {
   final selectedDid = state.selectedAgentDid;
   if (selectedDid != null) {
     for (final agent in state.agents) {
-      if (agent.agentDid == selectedDid) {
+      if (agent.agentDid == selectedDid &&
+          (personalAgentVisible || !isPersonalAgentRuntime(agent))) {
         return agent;
       }
     }
     return null;
   }
-  if (fallbackToFirst && state.agents.isNotEmpty) {
-    return state.agents.first;
+  if (fallbackToFirst) {
+    for (final agent in state.agents) {
+      if (personalAgentVisible || !isPersonalAgentRuntime(agent)) {
+        return agent;
+      }
+    }
   }
   return null;
 }

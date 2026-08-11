@@ -21,12 +21,12 @@ import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
-import '../../domain/entities/agent/personal_agent_runtime_provider.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../app_shell/providers/app_lifecycle_provider.dart';
 import 'agent_display_name.dart';
 import 'agent_ui_messages.dart';
+import 'personal_agent_feature_visibility.dart';
 
 const agentStatusQueryTimeout = Duration(seconds: 10);
 const agentRuntimeCreationTimeout = Duration(seconds: 45);
@@ -327,7 +327,7 @@ class AgentsState {
 
   AgentSummary? personalAgentRuntimeFor(String daemonDid) {
     for (final runtime in runtimesFor(daemonDid)) {
-      if (_isPersonalAgentRuntime(runtime)) {
+      if (isPersonalAgentRuntime(runtime)) {
         return runtime;
       }
     }
@@ -4498,23 +4498,6 @@ bool _canUnbindUnfinishedDaemonInstall(AgentSummary agent) {
     return false;
   }
   return agent.latest.lastSeenAt == null;
-}
-
-bool _isPersonalAgentRuntime(AgentSummary agent) {
-  if (!agent.isRuntime) {
-    return false;
-  }
-  final provider = PersonalAgentRuntimeProviders.byRuntime(agent.runtime);
-  if (provider == null || !provider.enabled) {
-    return false;
-  }
-  final display = agent.displayName.trim().toLowerCase();
-  final handle = agent.handle?.trim() ?? '';
-  return display.contains('personal agent') ||
-      display.contains('个人助理') ||
-      display == legacyPersonalAgentRuntimeDisplayName.toLowerCase() ||
-      display.contains(legacyPersonalAgentChineseDisplayMarker) ||
-      provider.matchesHandle(handle);
 }
 
 bool _isArchivedAgentPayload(Map<String, Object?> payload) {

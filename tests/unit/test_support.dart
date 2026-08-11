@@ -603,6 +603,37 @@ class FakeAttachmentCacheService implements AttachmentCacheService {
   String? lastSourcePath;
 
   @override
+  Future<String> prepareDownloadedFile({
+    required String messageId,
+    required String attachmentId,
+  }) async {
+    lastMessageId = messageId;
+    lastAttachmentId = attachmentId;
+    return '/tmp/awiki-test-cache/$messageId/$attachmentId/._awiki_cache_download';
+  }
+
+  @override
+  Future<String?> commitDownloadedFileIfCurrent({
+    required String messageId,
+    required String attachmentId,
+    required String filename,
+    required String mimeType,
+    required String stagedPath,
+    required bool Function() isCurrent,
+  }) async {
+    lastMessageId = messageId;
+    lastAttachmentId = attachmentId;
+    lastFilename = filename;
+    lastMimeType = mimeType;
+    if (!isCurrent()) {
+      return null;
+    }
+    final path = '/tmp/awiki-test-cache/$messageId/$attachmentId/$filename';
+    pathsByKey[_key(messageId, attachmentId)] = path;
+    return path;
+  }
+
+  @override
   Future<String?> cacheLocalSource({
     required String messageId,
     required String attachmentId,
@@ -2017,6 +2048,7 @@ class FakeMessagingService
   int sendConversationAttachmentCalls = 0;
   int downloadAttachmentCalls = 0;
   AppThreadRef? lastDownloadedAttachmentThread;
+  String? lastDownloadedAttachmentLocalPath;
   AttachmentDownloadResult? nextAttachmentDownloadResult;
   AppConversationReadRef? lastAttachmentConversation;
   String? lastSentAttachmentClientMessageId;
@@ -2045,6 +2077,7 @@ class FakeMessagingService
   }) async {
     downloadAttachmentCalls += 1;
     lastDownloadedAttachmentThread = thread;
+    lastDownloadedAttachmentLocalPath = localPath;
     final configured = nextAttachmentDownloadResult;
     if (configured != null) {
       return configured;

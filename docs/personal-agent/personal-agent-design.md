@@ -141,20 +141,19 @@ Settings / Personal Agent
 - 最近处理状态或错误。
 - 停用、删除、重新连接等操作。
 
-当前实现状态（2026-07-01）：
+当前实现状态（2026-08-11）：
 
-- App Settings 已提供 `Personal Agent` 稳定入口，进入独立的「个人助理」设置页。
-- Agents tab 的 daemon detail 只提供「配置个人助理」摘要跳转卡，不再暴露旧的内嵌生命周期管理面板。
-- 独立设置页展示运行 daemon、Hermes runtime provider、普通 `direct text` 处理范围、安全 bootstrap 公钥状态、授权状态和权限摘要。
-- 启用按钮仅在 `AWIKI_AGENT_IM_ENABLED=true`、daemon ready 且 daemon 已上报 bootstrap public key 时可用；缺 key 或 daemon 未就绪时提示刷新 daemon 状态。
-- 页面文案必须持续强调「只生成草稿，发送前需用户确认」「不会自动发送消息」「不处理 E2EE 明文」。
+- 当前产品暂不向用户开放 Personal Agent。默认构建统一隐藏设置入口、Agents 中的 Personal Agent runtime 与管理卡、聊天处理卡、Personal Agent 会话及其未读角标和系统通知。
+- 隐藏只发生在展示投影层；runtime inventory、会话、消息、control payload、binding 与生命周期实现继续保留，不删除或迁移用户数据。
+- `personalAgentFeatureVisibleProvider` 是唯一的产品可见性策略，默认固定关闭；专项测试可以显式 override，以继续覆盖独立设置页、Hermes runtime、bootstrap、授权、草稿与 action 回收实现。
+- `AWIKI_AGENT_IM_ENABLED` 继续表示租户和服务能力边界，不再作为当前产品暴露 Personal Agent 的开关。
 
 创建 Agent 流程可以保留「作为个人助理」的选项，但它不是唯一入口。两个入口最终进入同一套启用流程。
 
-如果 `AWIKI_AGENT_IM_ENABLED=false`：
+在当前隐藏发布策略下，无论 `AWIKI_AGENT_IM_ENABLED` 的值是什么：
 
-- UI 应隐藏 Personal Agent 设置入口，或只显示「实验功能未开启」。
-- 当前产品 UI 在 Settings 显示「实验功能未开启」，且 Agents/daemon detail 不展示可触发生命周期请求的管理按钮。
+- UI 必须隐藏 Personal Agent 设置入口、runtime、会话、处理卡和通知，不显示「实验功能未开启」占位。
+- Agents/daemon detail 不展示可触发生命周期请求的管理按钮。
 - 不展示半成品创建、绑定、配置入口。
 - 不能让用户进入会失败或不可完成的流程。
 
@@ -581,11 +580,11 @@ MVP 完成时，应能验证：
 
 ## 当前落地状态
 
-截至 2026-07-01，MVP 已按以下仓库切片落地：
+截至 2026-08-11，MVP 已按以下仓库切片落地：
 
 - `awiki-me`
-  - App Settings 已提供稳定 `Personal Agent` 入口，进入独立「个人助理」设置页；Agents tab 的 daemon detail 只保留摘要和跳转，不再把旧内嵌面板作为唯一入口。
-  - `AWIKI_AGENT_IM_ENABLED=false` 时不触发生命周期请求；当前 UI 显示实验功能关闭或隐藏触发入口，不暴露半成品启用流程。
+  - Personal Agent 产品入口和运行结果当前统一隐藏；底层设置页、生命周期、状态和数据实现保留，并由默认关闭的单一展示策略管理。
+  - 当前 UI 不触发生命周期请求、不显示实验功能占位，也不暴露半成品启用流程。
   - 设置页可以选择 daemon，展示 daemon ready、Hermes runtime provider、普通 `direct text` 处理范围、安全 bootstrap 公钥状态、授权状态和权限摘要。
   - App 能从 daemon diagnostics 读取 `bootstrap_key_id`、`bootstrap_public_key_b64u`、`bootstrap_key_algorithm`，并使用 daemon `#key-3` X25519 公钥生成 `awiki.daemon.bootstrap.secure.v1`。
   - App 回收 `awiki.message.sync.v1`、`runtime_final`、`awiki.app.action.v1`、`awiki.app.action.result.v1`，在聊天中展示处理状态、草稿和确认 / 拒绝 UI；raw JSON 不作为普通消息显示。
@@ -653,7 +652,7 @@ handle 配额已满，可以用 `AWIKI_PERSONAL_AGENT_E2E_APP_HANDLE`、
 
 发布建议：
 
-- 当前默认构建可以展示独立 Personal Agent 设置入口，但仍应受 `AWIKI_AGENT_IM_ENABLED` 灰度开关约束；关闭时不能触发生命周期请求。
+- 当前默认构建固定隐藏 Personal Agent；重新开放前必须显式调整统一展示策略，并完整通过专项 UI、真实后端和普通 Agent 回归测试，不能只恢复单个页面入口。
 - 发布默认开启构建前确认 daemon 版本包含 secure bootstrap、bootstrap public key diagnostics、no-send enforcement、inactive binding fail-closed 和 App outbox 回收。
 - 发布默认开启构建前确认 user-service 已部署 `/user-service/v1/personal-agent/rpc`，并且 delegated key 默认 scope 不包含 `message.send.plain`。
 - 发布默认开启构建前确认 message-service 能接受 Human DID `#daemon-key-1` 作为当前 DID Document authentication 中的 delegated client。

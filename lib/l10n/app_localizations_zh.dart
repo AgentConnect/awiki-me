@@ -93,6 +93,47 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonPleaseWait => '请稍候...';
 
   @override
+  String get startupFailureTitle => 'AWikiMe 无法启动';
+
+  @override
+  String startupFailureDiagnostic(String diagnosticCode) {
+    return '诊断代码：$diagnosticCode';
+  }
+
+  @override
+  String get startupFailureCopyDiagnostics => '复制诊断信息';
+
+  @override
+  String get startupFailureExit => '退出';
+
+  @override
+  String get startupRecoveryAction => '重置此设备并恢复';
+
+  @override
+  String get startupRecoveryExplanation =>
+      '此设备上的本地凭证无法读取。你可以重试，或重置本机 AWiki 数据后，通过加入设备或恢复 Handle 继续使用。';
+
+  @override
+  String get startupRecoveryConfirmTitle => '重置此设备上的 AWiki？';
+
+  @override
+  String get startupRecoveryConfirmMessage =>
+      '这会删除此设备本地保存的全部 AWiki 身份、租户、消息和设置。';
+
+  @override
+  String get startupRecoveryConfirmHint =>
+      '线上身份不会被删除，其他设备也不受影响。之后需要通过加入设备或恢复 Handle，才能在此设备重新使用已有身份。';
+
+  @override
+  String get startupRecoveryConfirmAction => '重置此设备';
+
+  @override
+  String get startupRecoveryInProgress => '正在重置本地数据...';
+
+  @override
+  String get startupRecoveryFailed => '无法重置本地数据。你可以重试，或复制诊断代码并寻求支持。';
+
+  @override
   String get commonLoading => '加载中...';
 
   @override
@@ -2285,6 +2326,18 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get agentTerminalNotificationTitle => '智能体';
+
+  @override
+  String get agentTerminalCompleted => '智能体任务已完成';
+
+  @override
+  String get agentTerminalActionRequired => '智能体任务等待确认';
+
+  @override
+  String get agentTerminalRuntimeFailed => '智能体任务处理失败';
+
+  @override
   String get agentErrorLoginRequired => '请先登录。';
 
   @override
@@ -2999,6 +3052,28 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get attachmentDownloadEmpty => '附件下载结果为空。';
+
+  @override
+  String get attachmentDownloading => '正在下载';
+
+  @override
+  String attachmentDownloadingProgress(String progress) {
+    return '正在下载 · $progress';
+  }
+
+  @override
+  String get attachmentDownloadPaused => '下载已暂停';
+
+  @override
+  String attachmentDownloadPausedProgress(String progress) {
+    return '下载已暂停 · $progress';
+  }
+
+  @override
+  String get attachmentDownloadCancelFailed => '暂时无法暂停下载，请重试。';
+
+  @override
+  String get attachmentDownloadInterrupted => '下载已中断，当前进度已保留，请重试以继续下载。';
 
   @override
   String get chatImageActionsTitle => '图片';

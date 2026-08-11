@@ -345,6 +345,68 @@ void main() {
     },
   );
 
+  test('downloadAttachment forwards a disk destination to Core', () async {
+    final client = _FakeClient(ownerDid: 'did:alice');
+    final adapter = AwikiImCoreMessageAdapter(runtime: _FakeRuntime(client));
+
+    final result = await adapter.downloadAttachment(
+      thread: const AppThreadRef.direct('did:bob'),
+      messageId: 'message-1',
+      attachmentId: 'attachment-1',
+      localPath: '/tmp/awiki-download-target',
+    );
+
+    expect(client.attachments.downloadCalls, 1);
+    expect(client.attachments.lastDownloadMessageId, 'message-1');
+    expect(client.attachments.lastDownloadAttachmentId, 'attachment-1');
+    expect(
+      client.attachments.lastDownloadLocalPath,
+      '/tmp/awiki-download-target',
+    );
+    expect(result.localPath, '/tmp/awiki-download-target');
+    expect(result.bytes, isNull);
+  });
+
+  test(
+    'cancelAttachmentDownload forwards the exact local path to Core',
+    () async {
+      final client = _FakeClient(ownerDid: 'did:alice');
+      final adapter = AwikiImCoreMessageAdapter(runtime: _FakeRuntime(client));
+
+      final cancelled = await adapter.cancelAttachmentDownload(
+        '/tmp/awiki-download-target',
+      );
+
+      expect(cancelled, isTrue);
+      expect(client.attachments.cancelDownloadCalls, 1);
+      expect(
+        client.attachments.lastCancelledLocalPath,
+        '/tmp/awiki-download-target',
+      );
+    },
+  );
+
+  test(
+    'download cancellation is mapped to the application exception',
+    () async {
+      final client = _FakeClient(ownerDid: 'did:alice');
+      client.attachments.downloadError = const core.AwikiImCoreException(
+        code: 'attachment_transfer_cancelled',
+        message: 'cancelled',
+      );
+      final adapter = AwikiImCoreMessageAdapter(runtime: _FakeRuntime(client));
+
+      await expectLater(
+        adapter.downloadAttachment(
+          thread: const AppThreadRef.direct('did:bob'),
+          messageId: 'message-1',
+          localPath: '/tmp/awiki-download-target',
+        ),
+        throwsA(isA<AttachmentDownloadCancelledException>()),
+      );
+    },
+  );
+
   test('owner did cache is invalidated when current client changes', () async {
     final firstClient = _FakeClient(ownerDid: 'did:alice');
     final secondClient = _FakeClient(ownerDid: 'did:carol');
@@ -760,6 +822,50 @@ class _FakeAttachmentApi implements core.AttachmentApi {
   String? lastMimeType;
   String? lastClientMessageId;
   String? lastIdempotencyKey;
+  int downloadCalls = 0;
+  int cancelDownloadCalls = 0;
+  String? lastDownloadMessageId;
+  String? lastDownloadAttachmentId;
+  String? lastDownloadLocalPath;
+  String? lastCancelledLocalPath;
+  Object? downloadError;
+
+  @override
+  Future<core.DownloadedAttachment> download(
+    core.DownloadAttachmentRequest request,
+  ) async {
+    downloadCalls += 1;
+    final error = downloadError;
+    if (error != null) {
+      throw error;
+    }
+    lastDownloadMessageId = request.messageId;
+    lastDownloadAttachmentId = request.attachmentId;
+    final destination = switch (request.destination) {
+      core.LocalFileAttachmentDestination(:final path) =>
+        core.DownloadedAttachmentLocalFile(path),
+      core.MemoryAttachmentDestination() =>
+        const core.DownloadedAttachmentMemory(<int>[1, 2, 3]),
+    };
+    lastDownloadLocalPath = switch (request.destination) {
+      core.LocalFileAttachmentDestination(:final path) => path,
+      core.MemoryAttachmentDestination() => null,
+    };
+    return core.DownloadedAttachment(
+      attachmentId: request.attachmentId ?? 'attachment-1',
+      filename: 'download.bin',
+      mimeType: 'application/octet-stream',
+      sizeBytes: 3,
+      destination: destination,
+    );
+  }
+
+  @override
+  Future<bool> cancelDownload(String localPath) async {
+    cancelDownloadCalls += 1;
+    lastCancelledLocalPath = localPath;
+    return true;
+  }
 
   @override
   Future<core.AttachmentSendResult> send(core.AttachmentSendRequest request) {

@@ -22,6 +22,7 @@ import '../devices/device_join_approval_sheet.dart';
 import '../devices/devices_provider.dart';
 import '../agents/agents_page.dart';
 import '../agents/agents_provider.dart';
+import '../agents/personal_agent_feature_visibility.dart';
 import '../friends/friends_navigation_provider.dart';
 import '../friends/friends_workspace_page.dart';
 import '../onboarding/onboarding_page.dart';
@@ -132,8 +133,14 @@ class _AppShellState extends ConsumerState<AppShell> {
     final responsive = context.awikiResponsive;
     final selectedDestination = ref.watch(shellDestinationProvider);
     final navigationController = ref.read(shellDestinationProvider.notifier);
-    final unreadCount = ref.watch(
-      conversationListProvider.select((state) => state.unreadCount),
+    final visibleConversations = personalAgentVisibleConversations(
+      conversations: ref.watch(conversationListProvider).conversations,
+      agents: ref.watch(agentsProvider.select((state) => state.agents)),
+      personalAgentVisible: ref.watch(personalAgentFeatureVisibleProvider),
+    );
+    final unreadCount = visibleConversations.fold<int>(
+      0,
+      (sum, conversation) => sum + conversation.unreadCount,
     );
     final pendingJoinRequest = ref.watch(
       devicesProvider.select((state) {

@@ -91,7 +91,7 @@ android {
             buildConfigField "String", "AWIKI_EMAS_APP_KEY", quoteBuildConfigString(releaseEmas.appKey)
             buildConfigField "String", "AWIKI_EMAS_APP_SECRET", quoteBuildConfigString(releaseEmas.appSecret)
             buildConfigField "boolean", "AWIKI_EMAS_LOG_DEVICE_ID", "false"
-            proguardFiles "proguard-rules.pro"
+            proguardFiles "proguard-rules.pro", "proguard-emas.pro"
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.release
             }

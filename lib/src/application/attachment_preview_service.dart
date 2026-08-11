@@ -11,7 +11,7 @@ import 'attachment_image_dimensions.dart';
 import 'attachment_resource_reference.dart';
 import 'models/attachment_models.dart';
 
-enum AttachmentPreviewPhase { idle, loading, ready, failed }
+enum AttachmentPreviewPhase { idle, loading, paused, ready, failed }
 
 enum _AttachmentPreviewOrigin {
   authoritativeLocalSource,
@@ -21,6 +21,7 @@ enum _AttachmentPreviewOrigin {
 
 typedef AttachmentPreviewBytesReader =
     Future<Uint8List> Function(String localPath);
+typedef AttachmentDownloadCanceller = Future<bool> Function(String localPath);
 
 class AttachmentPreviewSnapshot {
   const AttachmentPreviewSnapshot._({
@@ -29,6 +30,8 @@ class AttachmentPreviewSnapshot {
     this.dimensions,
     this.error,
     this.stackTrace,
+    this.receivedBytes,
+    this.totalBytes,
   });
 
   const AttachmentPreviewSnapshot.idle({AttachmentImageDimensions? dimensions})
@@ -36,7 +39,25 @@ class AttachmentPreviewSnapshot {
 
   const AttachmentPreviewSnapshot.loading({
     AttachmentImageDimensions? dimensions,
-  }) : this._(phase: AttachmentPreviewPhase.loading, dimensions: dimensions);
+    int? receivedBytes,
+    int? totalBytes,
+  }) : this._(
+         phase: AttachmentPreviewPhase.loading,
+         dimensions: dimensions,
+         receivedBytes: receivedBytes,
+         totalBytes: totalBytes,
+       );
+
+  const AttachmentPreviewSnapshot.paused({
+    AttachmentImageDimensions? dimensions,
+    int? receivedBytes,
+    int? totalBytes,
+  }) : this._(
+         phase: AttachmentPreviewPhase.paused,
+         dimensions: dimensions,
+         receivedBytes: receivedBytes,
+         totalBytes: totalBytes,
+       );
 
   const AttachmentPreviewSnapshot.ready(
     String path, {
@@ -65,6 +86,8 @@ class AttachmentPreviewSnapshot {
   final AttachmentImageDimensions? dimensions;
   final Object? error;
   final StackTrace? stackTrace;
+  final int? receivedBytes;
+  final int? totalBytes;
 }
 
 class AttachmentPreviewHandle {
@@ -99,6 +122,12 @@ class AttachmentPreviewHandle {
   _AttachmentPreviewOrigin? _rejectedDecodeOrigin;
   bool _bypassExistingCache = false;
   String? _dimensionProbePath;
+  Timer? _progressTimer;
+  bool _progressReadInFlight = false;
+  String? _transferTargetPath;
+  bool _cancellationRequested = false;
+  Object? _deferredTransferError;
+  StackTrace? _deferredTransferStackTrace;
 
   bool get _hasListeners => _changes.hasListener;
 
@@ -110,6 +139,7 @@ class AttachmentPreviewHandle {
   }
 
   void _close() {
+    _progressTimer?.cancel();
     if (!_changes.isClosed) {
       unawaited(_changes.close());
     }
@@ -121,6 +151,7 @@ class AttachmentPreviewService {
     required this.cache,
     this.imageDimensionProbe = const NoopAttachmentImageDimensionProbe(),
     AttachmentPreviewBytesReader? bytesReader,
+    this.cancelDownload,
     this.maxRetainedEntries = 512,
   }) : _bytesReader = bytesReader ?? _readLocalFileBytes,
        assert(maxRetainedEntries > 0);
@@ -128,6 +159,7 @@ class AttachmentPreviewService {
   final AttachmentCacheService cache;
   final AttachmentImageDimensionProbe imageDimensionProbe;
   final AttachmentPreviewBytesReader _bytesReader;
+  final AttachmentDownloadCanceller? cancelDownload;
 
   /// Maximum inactive handles retained in memory. Handles with listeners or an
   /// active resolution may temporarily exceed this value; completion and the
@@ -183,6 +215,7 @@ class AttachmentPreviewService {
   Future<String> previewPathFor({
     required ChatMessage message,
     required Future<AttachmentDownloadResult> Function() download,
+    Future<AttachmentDownloadResult> Function(String localPath)? downloadToPath,
   }) {
     final attachment = message.attachment;
     if (attachment == null) {
@@ -196,6 +229,10 @@ class AttachmentPreviewService {
     }
 
     final generation = handle._generation;
+    handle
+      .._cancellationRequested = false
+      .._deferredTransferError = null
+      .._deferredTransferStackTrace = null;
     final currentPath = handle.snapshot.path;
     final currentOrigin = handle._readyOrigin;
     final rejectedDecodePath = handle._rejectedDecodePath;
@@ -226,6 +263,7 @@ class AttachmentPreviewService {
               rejectedDecodeOrigin: rejectedDecodeOrigin,
               bypassExistingCache: bypassExistingCache,
               download: download,
+              downloadToPath: downloadToPath,
               isActive: () => _isCurrent(handle, generation),
               onRemoteResolutionStarted: () {
                 if (_isCurrent(handle, generation) &&
@@ -237,9 +275,23 @@ class AttachmentPreviewService {
                   );
                 }
               },
+              onTransferTargetPrepared: (path) {
+                if (_isCurrent(handle, generation)) {
+                  handle._transferTargetPath = path;
+                  _startProgressPolling(
+                    handle: handle,
+                    stagedPath: path,
+                    totalBytes: attachment.sizeBytes,
+                    generation: generation,
+                  );
+                }
+              },
             )
             .then<String>(
               (resolved) {
+                if (!_isCurrent(handle, generation)) {
+                  throw const AttachmentPreviewResolutionInvalidatedException();
+                }
                 if (_isCurrent(handle, generation) &&
                     resolved.publishReady &&
                     (resolved.isFresh ||
@@ -270,26 +322,108 @@ class AttachmentPreviewService {
               },
               onError: (Object error, StackTrace stackTrace) {
                 if (_isCurrent(handle, generation)) {
-                  handle._replace(
-                    AttachmentPreviewSnapshot.failed(
-                      error,
-                      path: handle.snapshot.path,
-                      dimensions: handle.snapshot.dimensions,
-                      stackTrace: stackTrace,
-                    ),
-                  );
+                  if (handle._cancellationRequested) {
+                    handle
+                      .._deferredTransferError = error
+                      .._deferredTransferStackTrace = stackTrace;
+                  } else {
+                    handle._replace(
+                      AttachmentPreviewSnapshot.failed(
+                        error,
+                        path: handle.snapshot.path,
+                        dimensions: handle.snapshot.dimensions,
+                        stackTrace: stackTrace,
+                      ),
+                    );
+                  }
                 }
                 Error.throwWithStackTrace(error, stackTrace);
               },
             )
             .whenComplete(() {
               if (identical(handle._inFlight, resolution)) {
+                handle._progressTimer?.cancel();
+                handle._progressTimer = null;
+                handle._transferTargetPath = null;
                 handle._inFlight = null;
               }
               _scheduleTrim();
             });
     handle._inFlight = resolution;
     return resolution;
+  }
+
+  Future<bool> cancelPreviewDownload(ChatMessage message) async {
+    if (_disposed || message.attachment == null || cancelDownload == null) {
+      return false;
+    }
+    final handle = _entries[_previewIdentity(message)];
+    final targetPath = handle?._transferTargetPath;
+    if (handle == null || handle._inFlight == null || targetPath == null) {
+      return false;
+    }
+    final snapshot = handle.snapshot;
+    handle
+      .._cancellationRequested = true
+      .._replace(
+        AttachmentPreviewSnapshot.paused(
+          dimensions: snapshot.dimensions,
+          receivedBytes: snapshot.receivedBytes,
+          totalBytes: snapshot.totalBytes,
+        ),
+      );
+    final bool cancelled;
+    try {
+      cancelled = await cancelDownload!(targetPath);
+    } on Object {
+      _restoreAfterRejectedCancellation(handle, snapshot);
+      rethrow;
+    }
+    if (!cancelled) {
+      _restoreAfterRejectedCancellation(handle, snapshot);
+      return false;
+    }
+    if (_disposed || handle._inFlight == null) {
+      handle
+        .._cancellationRequested = false
+        .._deferredTransferError = null
+        .._deferredTransferStackTrace = null;
+      return true;
+    }
+    handle
+      .._generation += 1
+      .._cancellationRequested = false
+      .._deferredTransferError = null
+      .._deferredTransferStackTrace = null
+      .._progressTimer?.cancel()
+      .._progressTimer = null
+      .._replace(handle.snapshot);
+    return true;
+  }
+
+  void _restoreAfterRejectedCancellation(
+    AttachmentPreviewHandle handle,
+    AttachmentPreviewSnapshot previous,
+  ) {
+    if (_disposed) return;
+    final deferredError = handle._deferredTransferError;
+    final deferredStackTrace = handle._deferredTransferStackTrace;
+    handle
+      .._cancellationRequested = false
+      .._deferredTransferError = null
+      .._deferredTransferStackTrace = null;
+    if (deferredError != null) {
+      handle._replace(
+        AttachmentPreviewSnapshot.failed(
+          deferredError,
+          path: previous.path,
+          dimensions: previous.dimensions,
+          stackTrace: deferredStackTrace,
+        ),
+      );
+    } else if (handle._inFlight != null) {
+      handle._replace(previous);
+    }
   }
 
   Future<Uint8List> readPreviewBytes(String previewPath) async {
@@ -357,6 +491,8 @@ class AttachmentPreviewService {
     }
     _disposed = true;
     for (final handle in _entries.values) {
+      final targetPath = handle._transferTargetPath;
+      if (targetPath != null) _cancelTransferBestEffort(targetPath);
       handle._close();
     }
     _entries.clear();
@@ -370,8 +506,11 @@ class AttachmentPreviewService {
     required _AttachmentPreviewOrigin? rejectedDecodeOrigin,
     required bool bypassExistingCache,
     required Future<AttachmentDownloadResult> Function() download,
+    required Future<AttachmentDownloadResult> Function(String localPath)?
+    downloadToPath,
     required bool Function() isActive,
     required void Function() onRemoteResolutionStarted,
+    required void Function(String path) onTransferTargetPrepared,
   }) async {
     _ensureResolutionActive(isActive);
     final attachment = message.attachment!;
@@ -433,11 +572,43 @@ class AttachmentPreviewService {
 
     _ensureResolutionActive(isActive);
     onRemoteResolutionStarted();
-    final result = await download();
+    final String? stagedPath;
+    final AttachmentDownloadResult result;
+    if (downloadToPath == null) {
+      stagedPath = null;
+      result = await download();
+    } else {
+      stagedPath = await cache.prepareDownloadedFile(
+        messageId: messageId,
+        attachmentId: attachment.attachmentId,
+      );
+      _ensureResolutionActive(isActive);
+      onTransferTargetPrepared(stagedPath);
+      result = await downloadToPath(stagedPath);
+    }
     _ensureResolutionActive(isActive);
     final downloadedPath = await availableAttachmentPath(result.localPath);
     _ensureResolutionActive(isActive);
     if (downloadedPath != null) {
+      if (stagedPath != null) {
+        final path = await cache.commitDownloadedFileIfCurrent(
+          messageId: messageId,
+          attachmentId: attachment.attachmentId,
+          filename: result.filename ?? attachment.filename,
+          mimeType: result.mimeType ?? attachment.mimeType,
+          stagedPath: downloadedPath,
+          isCurrent: isActive,
+        );
+        if (path == null) {
+          throw const AttachmentPreviewResolutionInvalidatedException();
+        }
+        _ensureResolutionActive(isActive);
+        return _AttachmentPreviewResolution(
+          path: path,
+          origin: _AttachmentPreviewOrigin.appCache,
+          isFresh: true,
+        );
+      }
       return _AttachmentPreviewResolution(
         path: downloadedPath,
         origin: _AttachmentPreviewOrigin.downloadedLocalSource,
@@ -466,6 +637,54 @@ class AttachmentPreviewService {
       path: path,
       origin: _AttachmentPreviewOrigin.appCache,
       isFresh: true,
+    );
+  }
+
+  void _startProgressPolling({
+    required AttachmentPreviewHandle handle,
+    required String stagedPath,
+    required int? totalBytes,
+    required int generation,
+  }) {
+    handle._progressTimer?.cancel();
+    Future<void> publish() async {
+      if (!_isCurrent(handle, generation) || handle._progressReadInFlight) {
+        return;
+      }
+      handle._progressReadInFlight = true;
+      try {
+        final partial = File('$stagedPath$attachmentResumablePartialSuffix');
+        final staged = File(stagedPath);
+        final int receivedBytes;
+        if (await partial.exists()) {
+          receivedBytes = await partial.length();
+        } else if (await staged.exists()) {
+          receivedBytes = await staged.length();
+        } else {
+          receivedBytes = 0;
+        }
+        if (_isCurrent(handle, generation) &&
+            handle.snapshot.phase == AttachmentPreviewPhase.loading &&
+            handle.snapshot.receivedBytes != receivedBytes) {
+          handle._replace(
+            AttachmentPreviewSnapshot.loading(
+              dimensions: handle.snapshot.dimensions,
+              receivedBytes: receivedBytes,
+              totalBytes: totalBytes,
+            ),
+          );
+        }
+      } on FileSystemException {
+        // The Core owns creation and atomic renames; a polling miss is normal.
+      } finally {
+        handle._progressReadInFlight = false;
+      }
+    }
+
+    unawaited(publish());
+    handle._progressTimer = Timer.periodic(
+      const Duration(milliseconds: 250),
+      (_) => unawaited(publish()),
     );
   }
 
@@ -530,12 +749,21 @@ class AttachmentPreviewService {
       return;
     }
 
+    final transferTargetPath = handle._transferTargetPath;
+    if (transferTargetPath != null) {
+      _cancelTransferBestEffort(transferTargetPath);
+    }
+
     final provisionalDimensions = handle.snapshot.dimensions;
     handle
       .._sourceLocalPath = localPath
       .._sourceObjectUri = objectUri
       .._generation += 1
       .._inFlight = null
+      .._transferTargetPath = null
+      .._cancellationRequested = false
+      .._deferredTransferError = null
+      .._deferredTransferStackTrace = null
       .._dimensionProbeInFlight = null
       .._dimensionProbePath = null
       .._rejectedDecodePath = null
@@ -562,6 +790,16 @@ class AttachmentPreviewService {
 
   bool _isCurrent(AttachmentPreviewHandle handle, int generation) {
     return !_disposed && handle._generation == generation;
+  }
+
+  void _cancelTransferBestEffort(String localPath) {
+    final cancel = cancelDownload;
+    if (cancel == null) return;
+    try {
+      unawaited(cancel(localPath).catchError((Object _) => false));
+    } on Object {
+      // Provider disposal can invalidate the host callback synchronously.
+    }
   }
 
   void _maybeProbeImageDimensions({

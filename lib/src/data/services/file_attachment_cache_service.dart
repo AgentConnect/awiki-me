@@ -13,7 +13,50 @@ class FileAttachmentCacheService implements AttachmentCacheService {
   final Future<Directory> Function() _rootDirectory;
 
   static const String _transientPrefix = '._awiki_cache_';
+  static const String _downloadStagingName = '${_transientPrefix}download';
   static int _nextTransactionId = 0;
+
+  @override
+  Future<String> prepareDownloadedFile({
+    required String messageId,
+    required String attachmentId,
+  }) async {
+    final directory = await _attachmentDirectory(
+      messageId: messageId,
+      attachmentId: attachmentId,
+    );
+    await directory.create(recursive: true);
+    return p.join(directory.path, _downloadStagingName);
+  }
+
+  @override
+  Future<String?> commitDownloadedFileIfCurrent({
+    required String messageId,
+    required String attachmentId,
+    required String filename,
+    required String mimeType,
+    required String stagedPath,
+    required bool Function() isCurrent,
+  }) async {
+    final directory = await _attachmentDirectory(
+      messageId: messageId,
+      attachmentId: attachmentId,
+    );
+    final expectedPath = p.join(directory.path, _downloadStagingName);
+    if (p.normalize(stagedPath) != p.normalize(expectedPath)) {
+      throw StateError('attachment_download_staging_path_mismatch');
+    }
+    final staging = File(expectedPath);
+    if (!await staging.exists()) {
+      return null;
+    }
+    return _commitStagedFile(
+      directory: directory,
+      staging: staging,
+      filename: filename,
+      isCurrent: isCurrent,
+    );
+  }
 
   @override
   Future<String?> cacheLocalSource({

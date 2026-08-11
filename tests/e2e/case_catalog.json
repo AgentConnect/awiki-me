@@ -968,14 +968,15 @@
       "feature": "CLI group to App message",
       "layer": "product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Send a run-unique group message from CLI and navigate to it in App UI.",
+      "action": "Send a run-unique group message from CLI, navigate to it in App UI, then open the sender profile and choose Send Message.",
       "exactOracles": [
         "Closed-view CLI delivery increments only the canonical group unread by exactly one and the visible row shows exact title, preview and unread.",
         "App renders exactly one canonical group message with exact content/sender/group and the visible sender label uses the same nickname as the group identity projection.",
+        "The sender profile action switches from Group to exactly one canonical Direct for that sender, creating it when absent or reusing it when present, and the flow can reopen the original Group.",
         "Opening the exact row clears only that group unread and stable history requery does not duplicate the message."
       ],
       "negativeChecks": [
-        "Wrong row/thread, missing/duplicate bubble, incorrect preview/unread, sender Handle/DID drift despite an available nickname, or mismatched content/identity fails."
+        "Wrong row/thread, missing/duplicate bubble, incorrect preview/unread, sender Handle/DID drift despite an available nickname, returning to Group instead of opening Direct, creating a duplicate or noncanonical Direct, replacing an existing Direct, or mismatched content/identity fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -990,7 +991,8 @@
       "assertionContract": {
         "assertionIds": [
           "GROUP-E2E-002:cli_group_send_verified_in_app_ui",
-          "GROUP-E2E-002:group_row_preview_unread_and_sender_nickname_exact"
+          "GROUP-E2E-002:group_row_preview_unread_and_sender_nickname_exact",
+          "GROUP-E2E-002:group_sender_profile_opened_exact_one_canonical_direct"
         ],
         "exactOracleAssertions": [
           [
@@ -1001,6 +1003,9 @@
             "GROUP-E2E-002:group_row_preview_unread_and_sender_nickname_exact"
           ],
           [
+            "GROUP-E2E-002:group_sender_profile_opened_exact_one_canonical_direct"
+          ],
+          [
             "GROUP-E2E-002:cli_group_send_verified_in_app_ui",
             "GROUP-E2E-002:group_row_preview_unread_and_sender_nickname_exact"
           ]
@@ -1008,7 +1013,8 @@
         "negativeCheckAssertions": [
           [
             "GROUP-E2E-002:cli_group_send_verified_in_app_ui",
-            "GROUP-E2E-002:group_row_preview_unread_and_sender_nickname_exact"
+            "GROUP-E2E-002:group_row_preview_unread_and_sender_nickname_exact",
+            "GROUP-E2E-002:group_sender_profile_opened_exact_one_canonical_direct"
           ]
         ]
       }

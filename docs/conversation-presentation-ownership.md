@@ -533,6 +533,18 @@ Product cache 的 domain/inventory/status/profile/registry version 与 Registry 
 的 generation。v3 的 `local_agent_states` 只允许在显式稳定 binding 和旧 owner DID 同时给出后
 copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
 
+### 附件下载与展示边界
+
+- `im-core` 是网络重试、Range 续传、size/digest 校验、E2EE 对象解密和目标文件原子发布的唯一
+  owner；App 不拼接响应字节，也不把未完成文件当成可打开的附件。
+- App 为每个 message/attachment 生成稳定隐藏暂存路径，正式缓存查询忽略该路径及其
+  `.awiki-part`。只有 Core 完成校验和原子发布后，App 才把暂存目标提交为正式缓存文件。
+- App 轮询 `.awiki-part` 长度只用于进度展示。网络失败显示“进度已保留，可重试继续”；用户主动
+  取消进入“下载已暂停”，不显示失败反馈。再次点击使用同一路径继续。
+- 取消通过独立可选 `AttachmentDownloadCancellationService` 端口下沉到 Core，避免把传输控制
+  强塞进所有消息测试替身。会话切换、source replacement 和 preview service dispose 采用
+  best-effort 取消；同路径单 writer 仍由 Core 强制保证。
+
 ## 13. 回归测试
 
 当前必须保留以下测试覆盖：
@@ -612,6 +624,7 @@ Core cutover 后继续显示 overlay 收尾阶段，完成前不创建业务 Sto
 - 移动端点击聊天标题进入完整用户 / 智能体或群聊资料子页；桌面端点击头像或标题打开完整资料 Dialog。两种形态复用同一份 provider 与资料内容组件。
 - 普通消息左右两侧的发送者头像都是资料入口：自己的消息打开当前身份资料，其他消息打开实际发送者资料；该规则只依赖 `ChatMessage.isMine` 和发送者 canonical identity，因此 Direct、Group 和 Agent 会话使用同一条渲染路径。群消息不得回退为群资料或会话对端资料。
 - 当前身份入口复用 `showCurrentIdentityDialog` 和 `ProfilePage`，与主导航 / 设置中的“我的资料”保持同一实现；对方用户与 Agent 继续复用 peer profile provider 和资料组件。自己可编辑、对方可关注 / 发消息、Agent 运行状态等能力边界不同，不把它们强行合并成同一个带业务动作的大组件；共同的资料卡、metadata 和链接样式继续由 `identity_profile_surface.dart` 统一维护。
+- 对方用户资料中的“发消息”始终表示打开该用户的 canonical Direct，不能根据来源页面退化为普通返回。资料页只发出动作并在打开成功后关闭；来源聊天页持有 shell 导航上下文，复用统一 Direct resolver、`ensureConversation` 和 timeline open，再按 canonical `conversationId` 切换选中会话。群消息发送者资料必须从当前 Group 切到该发送者 Direct；已有 Direct 必须复用且不得增加第二条会话。解析、提交或打开失败时保留资料页并显示统一错误，不得先关闭页面。
 - 直聊资料采用 shell-first 渲染：点击后立即基于 `ConversationSummary`、本地 runtime `AgentSummary` 和 DID 展示标题、头像、DID、类型与 Agent 收件箱入口；`peerProfileProvider` 的公开 profile、关系状态和主页 Markdown 返回后再增量补齐昵称、头像、handle、身份卡正文和关系标签。
 - 公开 profile 或后续关系 / 主页 Markdown 加载失败不得阻塞资料页或 Dialog 打开，也不得清空已展示的基础信息；只在身份卡区域内提示资料暂不可用或继续保留已返回的 profile 内容。
 - 群详情里的成员刷新能力不属于聊天头部入口，保留在群详情 / 群信息组件内。
@@ -619,6 +632,7 @@ Core cutover 后继续显示 overlay 收尾阶段，完成前不创建业务 Sto
 相关回归覆盖在：
 
 - `tests/unit/chat_page_test.dart`：除头部入口移除外，还固定头像信息弹窗必须先展示基础信息，并在 profile 返回后补齐资料。
-- `tests/unit/conversation_workspace_test.dart`
+- `tests/unit/conversation_workspace_test.dart`：固定 macOS / Android 从 Group 发送者资料切换到唯一 canonical Direct，以及 Android 多层会话信息入口成功后完整退出资料层。
+- `tests/unit/identity_flow_test.dart`：固定 Direct 解析失败时不创建会话、不改变 selected state，并保留当前资料页。
 - `tests/e2e/flutter/app/app_smoke_test.dart`
 - `tests/e2e/flutter/app/ui_visual_verification_test.dart`

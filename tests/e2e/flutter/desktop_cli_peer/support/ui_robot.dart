@@ -450,6 +450,107 @@ class _DesktopAppRobot {
     );
   }
 
+  Future<ConversationSummary> openDirectFromGroupSenderProfile({
+    required String groupConversationId,
+    required ChatMessage message,
+    required String expectedPeerDid,
+    String? expectedConversationId,
+  }) async {
+    final anchor = requireGroupSenderLabelAnchor(
+      messages: _uiMessages(this, groupConversationId),
+      target: message,
+    );
+    final senderAvatar = find.byKey(
+      Key('chat-message-avatar:${anchor.localId}:peer'),
+    );
+    await pumpUntilFinder(
+      senderAvatar,
+      description: 'group sender avatar for Direct navigation',
+    );
+    await tester.ensureVisible(senderAvatar);
+    await tapOne(
+      senderAvatar,
+      description: 'group sender avatar for Direct navigation',
+    );
+    final sendMessage = find.byKey(const Key('peer-profile-send-message'));
+    await pumpUntilFinder(
+      sendMessage,
+      description: 'group sender profile send-message action',
+      enabled: true,
+    );
+    await tapOne(
+      sendMessage,
+      description: 'group sender profile send-message action',
+    );
+    await pumpUntilObservation(
+      description: 'canonical Direct selected from group sender profile',
+      timeout: const Duration(seconds: 90),
+      observe: () {
+        final selectedId = container.read(selectedConversationProvider);
+        if (selectedId == null || selectedId == groupConversationId) {
+          return const E2eObservation.pending(
+            'group_sender_direct_selection_pending',
+          );
+        }
+        final selected = container
+            .read(conversationListProvider)
+            .entitiesById[selectedId];
+        if (selected == null) {
+          return const E2eObservation.fatal(
+            'group_sender_direct_projection_missing',
+          );
+        }
+        if (selected.isGroup ||
+            selected.targetDid?.trim() != expectedPeerDid.trim()) {
+          return const E2eObservation.fatal(
+            'group_sender_profile_opened_wrong_conversation',
+          );
+        }
+        if (!selected.conversationId.startsWith('dm:peer-scope:v1:')) {
+          return const E2eObservation.fatal(
+            'group_sender_profile_opened_noncanonical_direct',
+          );
+        }
+        if (expectedConversationId != null &&
+            selected.conversationId != expectedConversationId) {
+          return const E2eObservation.fatal(
+            'group_sender_profile_replaced_existing_direct',
+          );
+        }
+        if (sendMessage.evaluate().isNotEmpty) {
+          return const E2eObservation.pending(
+            'group_sender_profile_still_visible',
+          );
+        }
+        return const E2eObservation.pass();
+      },
+    );
+    final selectedId = container.read(selectedConversationProvider)!;
+    final selected = container
+        .read(conversationListProvider)
+        .entitiesById[selectedId]!;
+    final matchingDirects = container
+        .read(conversationListProvider)
+        .conversations
+        .where(
+          (conversation) =>
+              !conversation.isGroup &&
+              conversation.targetDid?.trim() == expectedPeerDid.trim() &&
+              conversation.conversationId.startsWith('dm:peer-scope:v1:'),
+        )
+        .toList(growable: false);
+    if (matchingDirects.length != 1) {
+      fail(
+        'Group sender profile did not reuse exactly one canonical Direct; '
+        'count=${matchingDirects.length}.',
+      );
+    }
+    if (matchingDirects.single.conversationId != selected.conversationId) {
+      fail('Group sender profile selected a different Direct projection.');
+    }
+    return selected;
+  }
+
   Future<String> sendMention({
     required String handle,
     required String expectedFullHandle,

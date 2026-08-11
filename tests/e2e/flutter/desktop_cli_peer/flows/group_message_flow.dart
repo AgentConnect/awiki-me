@@ -273,6 +273,37 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     message: cliGroupMessage,
     expectedName: expectedCliPublicIdentityName,
   );
+  final existingCliDirects = robot.container
+      .read(conversationListProvider)
+      .conversations
+      .where(
+        (item) =>
+            !item.isGroup &&
+            item.targetDid?.trim() == cliMemberDid &&
+            item.conversationId.startsWith('dm:peer-scope:v1:'),
+      )
+      .toList(growable: false);
+  if (existingCliDirects.length > 1) {
+    fail(
+      'Expected at most one canonical CLI Direct before opening the '
+      'group sender profile; count=${existingCliDirects.length}.',
+    );
+  }
+  final openedCliDirect = await robot.openDirectFromGroupSenderProfile(
+    groupConversationId: conversation.conversationId,
+    message: cliGroupMessage,
+    expectedPeerDid: cliMemberDid,
+    expectedConversationId: existingCliDirects.isEmpty
+        ? null
+        : existingCliDirects.single.conversationId,
+  );
+  if (existingCliDirects.isNotEmpty &&
+      openedCliDirect.conversationId !=
+          existingCliDirects.single.conversationId) {
+    fail('Group sender profile did not reuse the existing canonical Direct.');
+  }
+  await robot.openConversationRow(conversation.conversationId);
+  await robot.expectSelectedConversationHeader(groupName);
   await _waitForUiConversationUnread(
     robot: robot,
     conversationId: conversation.conversationId,

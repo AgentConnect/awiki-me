@@ -13,6 +13,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
+import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
 import 'package:awiki_me/src/presentation/shared/identity_flow.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
@@ -301,6 +302,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatView), findsNothing);
+    expect(find.byType(PeerProfilePage), findsOneWidget);
     expect(container.read(conversationListProvider).conversations, isEmpty);
     expect(container.read(selectedConversationProvider), isNull);
   });
@@ -351,6 +353,7 @@ void main() {
     await tester.tap(find.byKey(const Key('peer-profile-send-message')));
     await tester.pumpAndSettle();
 
+    expect(find.byType(PeerProfilePage), findsOneWidget);
     expect(container.read(selectedConversationProvider), isNull);
     expect(container.read(conversationListProvider).conversations, isEmpty);
   });

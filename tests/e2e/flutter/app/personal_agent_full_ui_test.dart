@@ -29,6 +29,7 @@ import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/personal_agent_feature_visibility.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
@@ -132,6 +133,7 @@ void main() {
           providerOverrides: <Override>[
             ...harness.providerOverrides,
             agentImEnabledProvider.overrideWithValue(true),
+            personalAgentFeatureVisibleProvider.overrideWithValue(true),
           ],
         ),
       );
@@ -263,6 +265,7 @@ void main() {
             bootstrap: harness.bootstrap,
             providerOverrides: <Override>[
               ...harness.providerOverrides,
+              personalAgentFeatureVisibleProvider.overrideWithValue(true),
               conversationListProvider.overrideWith(
                 (ref) => _StaticConversationListController(
                   ref,
@@ -378,6 +381,7 @@ void runPersonalAgentRealBackendE2e() {
             bootstrap: bootstrap,
             providerOverrides: <Override>[
               agentImEnabledProvider.overrideWithValue(true),
+              personalAgentFeatureVisibleProvider.overrideWithValue(true),
             ],
           ),
         );

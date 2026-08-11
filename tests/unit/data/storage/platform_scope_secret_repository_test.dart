@@ -245,6 +245,26 @@ void main() {
       expect(secureStorage.maximumConcurrentCalls, 1);
     },
   );
+
+  test('Android scope secrets keep the production v9 namespace', () async {
+    final secureStorage = _CapturingSecureStorage();
+    final store = FlutterSecureScopeSecretPlatformStore(storage: secureStorage);
+    final scope = StorageScopeId.generate();
+
+    await store.read(
+      service: 'ai.awiki.awikime.dev.scope-secrets',
+      account: 'scope/${scope.value}',
+    );
+
+    expect(secureStorage.options, <String, String>{
+      'encryptedSharedPreferences': 'true',
+      'resetOnError': 'false',
+      'keyCipherAlgorithm': 'RSA_ECB_PKCS1Padding',
+      'storageCipherAlgorithm': 'AES_CBC_PKCS7Padding',
+      'sharedPreferencesName': 'awiki_me_scope_secrets',
+      'preferencesKeyPrefix': 'awiki_scope_',
+    });
+  });
 }
 
 ScopeSecretRecord _record(StorageScopeId scope) => ScopeSecretRecord(
@@ -339,6 +359,24 @@ class _ContendedSecureStorage extends FlutterSecureStorage {
         : maximumConcurrentCalls;
     await Future<void>.delayed(const Duration(milliseconds: 10));
     _concurrentCalls -= 1;
+    return null;
+  }
+}
+
+class _CapturingSecureStorage extends FlutterSecureStorage {
+  Map<String, String>? options;
+
+  @override
+  Future<String?> read({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    options = aOptions?.toMap();
     return null;
   }
 }

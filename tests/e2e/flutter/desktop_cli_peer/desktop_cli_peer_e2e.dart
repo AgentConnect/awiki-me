@@ -489,6 +489,7 @@ void runDesktopCliPeerE2e({
             'GROUP-E2E-002': const <String>[
               'cli_group_send_verified_in_app_ui',
               'group_row_preview_unread_and_sender_nickname_exact',
+              'group_sender_profile_opened_exact_one_canonical_direct',
             ],
             'GROUP-P9-001': const <String>[
               'app_ui_structured_group_mention_verified',

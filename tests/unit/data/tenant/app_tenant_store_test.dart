@@ -480,4 +480,90 @@ void main() {
       expect(layout.scopeRoot, startsWith(p.join(root.path, 'support')));
     },
   );
+
+  test(
+    'local recovery clears secure storage and all AWiki roots idempotently',
+    () async {
+      final original = await store.loadRegistry();
+      final layout = await store.layoutForScope(
+        original.activeTenant.storageScopeId,
+      );
+      final sentinels = <File>[
+        File(p.join(layout.awikiRoot, 'support-sentinel')),
+        File(p.join(layout.cacheRoot, 'awiki-me', 'cache-sentinel')),
+        File(p.join(layout.tempRoot, 'awiki-me', 'temp-sentinel')),
+      ];
+      for (final sentinel in sentinels) {
+        await sentinel.parent.create(recursive: true);
+        await sentinel.writeAsString('local-only');
+      }
+      var secureResetCalls = 0;
+
+      Future<void> resetSecureStorage() async {
+        secureResetCalls += 1;
+      }
+
+      await store.resetAllLocalDataForRecovery(
+        resetSecureStorage: resetSecureStorage,
+      );
+      expect(secureResetCalls, 1);
+      for (final sentinel in sentinels) {
+        expect(await sentinel.exists(), isFalse);
+      }
+
+      await store.resetAllLocalDataForRecovery(
+        resetSecureStorage: resetSecureStorage,
+      );
+      expect(secureResetCalls, 2);
+
+      final recovered = await store.loadRegistry();
+      expect(
+        recovered.activeTenant.storageScopeId,
+        isNot(original.activeTenant.storageScopeId),
+      );
+    },
+  );
+
+  test('local recovery deletes a target link without following it', () async {
+    if (Platform.isWindows) return;
+    final registry = await store.loadRegistry();
+    final layout = await store.layoutForScope(
+      registry.activeTenant.storageScopeId,
+    );
+    final external = Directory(p.join(root.path, 'external-data'));
+    final externalSentinel = File(p.join(external.path, 'keep.txt'));
+    await external.create(recursive: true);
+    await externalSentinel.writeAsString('keep');
+    await Directory(layout.awikiRoot).delete(recursive: true);
+    await Link(layout.awikiRoot).create(external.path);
+
+    await store.resetAllLocalDataForRecovery(resetSecureStorage: () async {});
+
+    expect(
+      await FileSystemEntity.type(layout.awikiRoot, followLinks: false),
+      FileSystemEntityType.notFound,
+    );
+    expect(await externalSentinel.readAsString(), 'keep');
+  });
+
+  test('local recovery rejects a linked trusted root before reset', () async {
+    if (Platform.isWindows) return;
+    final support = Directory(p.join(root.path, 'support'));
+    final external = Directory(p.join(root.path, 'external-support'));
+    await support.create(recursive: true);
+    await support.delete(recursive: true);
+    await external.create(recursive: true);
+    await Link(support.path).create(external.path);
+    var secureResetCalls = 0;
+
+    await expectLater(
+      store.resetAllLocalDataForRecovery(
+        resetSecureStorage: () async => secureResetCalls += 1,
+      ),
+      throwsA(isA<FileSystemException>()),
+    );
+
+    expect(secureResetCalls, 0);
+    expect(await external.exists(), isTrue);
+  });
 }
