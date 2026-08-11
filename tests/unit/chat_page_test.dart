@@ -940,6 +940,7 @@ void main() {
         tags: <String>[],
         profileMarkdown: 'My profile',
         fullHandle: 'me.awiki.ai',
+        avatarUri: 'https://cdn.example/current-identity.png',
       );
       final conversation = scenario.conversation;
       final message = ChatMessage(
@@ -948,7 +949,7 @@ void main() {
         conversationId: conversation.conversationId,
         threadId: conversation.threadId,
         senderDid: profile.did,
-        senderName: profile.displayName,
+        senderName: 'Stale Message Name',
         receiverDid: conversation.targetDid,
         groupId: conversation.groupId,
         content: 'hello',
@@ -968,10 +969,14 @@ void main() {
       final ownAvatar = find.byKey(
         const Key('chat-message-avatar:own-message:mine'),
       );
-      expect(
-        find.descendant(of: ownAvatar, matching: find.byType(AvatarBadge)),
-        findsOneWidget,
+      final ownBadge = find.descendant(
+        of: ownAvatar,
+        matching: find.byType(AvatarBadge),
       );
+      expect(ownBadge, findsOneWidget);
+      expect(tester.widget<AvatarBadge>(ownBadge).seed, profile.displayName);
+      expect(tester.widget<AvatarBadge>(ownBadge).userId, profile.did);
+      expect(tester.widget<AvatarBadge>(ownBadge).avatarUri, profile.avatarUri);
       await tester.tap(ownAvatar);
       await tester.pumpAndSettle();
 
@@ -993,6 +998,52 @@ void main() {
       expect(find.byType(ChatView), findsOneWidget);
     });
   }
+
+  testWidgets('macOS 自己的消息头像复用当前 Profile 投影', (tester) async {
+    final conversation = _scrollConversation('dm:mac-own-profile-avatar');
+    const profile = UserProfile(
+      did: 'did:test:me',
+      displayName: '长山',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+      fullHandle: 'chenzh4.agent-connect.cn',
+    );
+    final message = ChatMessage(
+      localId: 'mac-own-profile-avatar',
+      remoteId: 'mac-own-profile-avatar',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: profile.did,
+      senderName: 'chenzh4',
+      receiverDid: conversation.targetDid,
+      content: 'hello',
+      createdAt: conversation.lastMessageAt,
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+
+    await _pumpScrollableChatView(
+      tester,
+      gateway: FakeAwikiGateway(),
+      conversation: conversation,
+      messages: <ChatMessage>[message],
+      profile: profile,
+      surfaceSize: const Size(960, 640),
+      macStyle: true,
+    );
+
+    final ownAvatar = find.byKey(
+      const Key('chat-message-avatar:mac-own-profile-avatar:mine'),
+    );
+    final ownBadge = find.descendant(
+      of: ownAvatar,
+      matching: find.byType(AvatarBadge),
+    );
+    expect(ownBadge, findsOneWidget);
+    expect(tester.widget<AvatarBadge>(ownBadge).seed, '长山');
+    expect(tester.widget<AvatarBadge>(ownBadge).userId, profile.did);
+  });
 
   testWidgets('macOS 聊天输入条保持发送能力', (tester) async {
     final gateway = FakeAwikiGateway();
