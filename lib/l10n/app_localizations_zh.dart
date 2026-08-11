@@ -909,6 +909,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceJoinEntrySubtitle => '需要已有管理设备确认两端的 6 位验证码';
 
   @override
+  String get onboardingExistingHandleTitle => '这个 Handle 已经存在';
+
+  @override
+  String get onboardingExistingHandleMessage =>
+      '请选择将本设备加入现有身份，或使用绑定手机号和独立恢复验证码恢复 Handle。';
+
+  @override
   String get deviceJoinTitle => '添加新设备';
 
   @override
@@ -1156,6 +1163,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get messageSyncStatusAuthRevoked => '登录状态已失效或此设备已被取消授权，请重新登录。';
+
+  @override
+  String get authRevokedDialogTitle => '账号登录状态已失效';
+
+  @override
+  String get authRevokedDialogMessage => '此账号可能已在其他设备完成重置，请重新登录。';
 
   @override
   String get messageSyncRetryAction => '重试';
@@ -3131,7 +3144,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get handleRecoveryDidOnlyUnsupported =>
-      'V1 不会自动恢复任何 E2EE 群或 DID-only 群。';
+      '当前版本不会自动恢复任何 E2EE 群或 DID-only 群。';
 
   @override
   String get handleRecoveryRiskConfirm => '我已了解以上影响';
@@ -3150,6 +3163,34 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get handleRecoveryFailed => '恢复操作失败，请稍后重试。';
+
+  @override
+  String get handleRecoveryOtpRequested => '恢复操作已由 Core 保存。请输入短信验证码继续。';
+
+  @override
+  String get handleRecoveryStillConfirming =>
+      '远端结果仍在确认中。请保留并继续同一操作，不要重新开始或销毁其密钥。';
+
+  @override
+  String get handleRecoveryKeyUnavailable =>
+      '本机已无法读取此恢复操作的密钥。开始新的恢复前，需要先隔离这个操作。';
+
+  @override
+  String get handleRecoveryQuarantine => '隔离密钥不可用的操作';
+
+  @override
+  String get handleRecoveryQuarantineReason => '确认此恢复操作的密钥已永久不可用';
+
+  @override
+  String get handleRecoveryQuarantined =>
+      '密钥不可用的操作已隔离，并由 Core 保留用于审计。现在可以开始新的恢复。';
+
+  @override
+  String get handleRecoveryStartNew => '开始新的恢复';
+
+  @override
+  String get handleRecoveryMigrationUnsupported =>
+      'V4.0 无法安全迁移当前本地身份。尚未发起远端提交，请选择 fresh start 或普通设备加入。';
 
   @override
   String get handleRecoveryErrorNotPrepared => '恢复尚未准备完成；本次流程已终止，请重新开始。';

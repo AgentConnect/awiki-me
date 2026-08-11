@@ -955,6 +955,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'An existing admin device must verify the 6-digit code shown on both devices';
 
   @override
+  String get onboardingExistingHandleTitle => 'This Handle already exists';
+
+  @override
+  String get onboardingExistingHandleMessage =>
+      'Choose whether to add this device to the existing identity or recover the Handle with its bound phone and a dedicated recovery code.';
+
+  @override
   String get deviceJoinTitle => 'Add a new device';
 
   @override
@@ -1221,6 +1228,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get messageSyncStatusAuthRevoked =>
       'Your sign-in expired or this device is no longer authorized. Sign in again.';
+
+  @override
+  String get authRevokedDialogTitle => 'Account sign-in expired';
+
+  @override
+  String get authRevokedDialogMessage =>
+      'This account may have been reset on another device. Sign in again.';
 
   @override
   String get messageSyncRetryAction => 'Retry';
@@ -3330,7 +3344,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryDidOnlyUnsupported =>
-      'V1 does not automatically restore any E2EE or DID-only group.';
+      'This version does not automatically restore any E2EE or DID-only group.';
 
   @override
   String get handleRecoveryRiskConfirm => 'I understand these effects';
@@ -3350,6 +3364,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryFailed => 'Recovery failed. Try again later.';
+
+  @override
+  String get handleRecoveryOtpRequested =>
+      'The recovery operation is saved in Core. Enter the SMS code to continue.';
+
+  @override
+  String get handleRecoveryStillConfirming =>
+      'The remote result is still being confirmed. Keep this operation and resume it; do not start over or discard its key.';
+
+  @override
+  String get handleRecoveryKeyUnavailable =>
+      'The recovery key is no longer available on this device. Quarantine this operation before starting a new recovery.';
+
+  @override
+  String get handleRecoveryQuarantine => 'Quarantine unavailable operation';
+
+  @override
+  String get handleRecoveryQuarantineReason =>
+      'Confirm that this recovery key is permanently unavailable';
+
+  @override
+  String get handleRecoveryQuarantined =>
+      'The unavailable operation is quarantined and retained in Core for audit. You may now start a new recovery.';
+
+  @override
+  String get handleRecoveryStartNew => 'Start a new recovery';
+
+  @override
+  String get handleRecoveryMigrationUnsupported =>
+      'This local identity cannot be migrated safely in V4.0. No remote commit was attempted; use a fresh start or ordinary Device Join.';
 
   @override
   String get handleRecoveryErrorNotPrepared =>

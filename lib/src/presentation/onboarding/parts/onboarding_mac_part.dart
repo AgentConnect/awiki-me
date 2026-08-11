@@ -1,3 +1,7 @@
+// [INPUT]: Onboarding page state and callbacks from the parent presentation surface.
+// [OUTPUT]: Desktop login, registration, and local-identity login controls.
+// [POS]: Part of onboarding_page.dart; existing Handle actions are chosen by the parent.
+
 part of '../onboarding_page.dart';
 
 class _MacOnboardingScaffold extends StatelessWidget {
@@ -20,8 +24,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.localeMode,
     required this.onLanguagePressed,
     required this.onTenantPressed,
-    this.onJoinDevice,
-    this.onRecoverHandle,
   });
 
   final OnboardingState onboarding;
@@ -42,8 +44,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final AppLocaleMode localeMode;
   final VoidCallback onLanguagePressed;
   final VoidCallback onTenantPressed;
-  final VoidCallback? onJoinDevice;
-  final Future<void> Function(SessionIdentity identity)? onRecoverHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -73,8 +73,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
             onRequestEmailActivation: onRequestEmailActivation,
             onCheckEmailActivation: onCheckEmailActivation,
             onSubmitRegister: onSubmitRegister,
-            onJoinDevice: onJoinDevice,
-            onRecoverHandle: onRecoverHandle,
           );
           if (useCompactLayout) {
             return DecoratedBox(
@@ -395,8 +393,6 @@ class _MacAuthCard extends StatelessWidget {
     required this.onRequestEmailActivation,
     required this.onCheckEmailActivation,
     required this.onSubmitRegister,
-    this.onJoinDevice,
-    this.onRecoverHandle,
   });
 
   final double maxHeight;
@@ -416,8 +412,6 @@ class _MacAuthCard extends StatelessWidget {
   final VoidCallback onRequestEmailActivation;
   final VoidCallback onCheckEmailActivation;
   final VoidCallback onSubmitRegister;
-  final VoidCallback? onJoinDevice;
-  final Future<void> Function(SessionIdentity identity)? onRecoverHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -491,14 +485,6 @@ class _MacAuthCard extends StatelessWidget {
                   onSubmitRegister: onSubmitRegister,
                 ),
               ),
-              if (onJoinDevice != null) ...<Widget>[
-                const SizedBox(height: 18),
-                AppSecondaryButton(
-                  label: context.l10n.deviceJoinEntry,
-                  semanticsIdentifier: 'multi-device-join-entry',
-                  onPressed: onJoinDevice,
-                ),
-              ],
               if (credentials.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 22),
                 _OnboardingLocalIdentitySection(
@@ -508,7 +494,6 @@ class _MacAuthCard extends StatelessWidget {
                   actionsEnabled: !onboarding.isBusy,
                   deletingIdentitySelector:
                       onboarding.deletingLocalIdentitySelector,
-                  onRecoverHandle: onRecoverHandle,
                 ),
               ],
             ],
@@ -700,7 +685,6 @@ class _OnboardingLocalIdentitySection extends StatelessWidget {
     required this.onDeleteCredential,
     required this.actionsEnabled,
     this.deletingIdentitySelector,
-    this.onRecoverHandle,
   });
 
   final List<SessionIdentity> credentials;
@@ -708,7 +692,6 @@ class _OnboardingLocalIdentitySection extends StatelessWidget {
   final ValueChanged<SessionIdentity> onDeleteCredential;
   final bool actionsEnabled;
   final String? deletingIdentitySelector;
-  final Future<void> Function(SessionIdentity identity)? onRecoverHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -753,18 +736,6 @@ class _OnboardingLocalIdentitySection extends StatelessWidget {
                   onLogin: () => onLogin(identity.credentialName),
                   onDelete: () => onDeleteCredential(identity),
                 ),
-                if (onRecoverHandle != null) ...<Widget>[
-                  const SizedBox(height: 6),
-                  AppSecondaryButton(
-                    key: const Key('handle-recovery-entry'),
-                    label: context.l10n.handleRecoveryTitle,
-                    semanticsIdentifier:
-                        'handle-recovery-entry:${identity.credentialName}',
-                    onPressed: actionsEnabled
-                        ? () => onRecoverHandle!(identity)
-                        : null,
-                  ),
-                ],
               ],
             ),
           ),
@@ -1000,6 +971,7 @@ class _MacRegisterForm extends StatelessWidget {
           const SizedBox(height: 18),
           _MacOutlinedField(
             controller: phoneController,
+            semanticsIdentifier: 'e2e-phone-input',
             label: context.l10n.onboardingPhone,
             placeholder: context.l10n.onboardingPhonePlaceholder,
             keyboardType: TextInputType.phone,
@@ -1008,6 +980,7 @@ class _MacRegisterForm extends StatelessWidget {
           const SizedBox(height: 16),
           _MacOutlinedField(
             controller: handleController,
+            semanticsIdentifier: 'e2e-handle-input',
             label: context.l10n.onboardingHandle,
             placeholder: context.l10n.onboardingHandlePlaceholder,
             icon: CupertinoIcons.at,
@@ -1027,6 +1000,7 @@ class _MacRegisterForm extends StatelessWidget {
         children: <Widget>[
           _MacOutlinedField(
             controller: phoneController,
+            semanticsIdentifier: 'e2e-phone-input',
             label: context.l10n.onboardingPhone,
             placeholder: context.l10n.onboardingPhonePlaceholder,
             keyboardType: TextInputType.phone,
@@ -1035,6 +1009,7 @@ class _MacRegisterForm extends StatelessWidget {
           const SizedBox(height: 16),
           _MacOutlinedField(
             controller: handleController,
+            semanticsIdentifier: 'e2e-handle-input',
             label: context.l10n.onboardingHandle,
             placeholder: context.l10n.onboardingHandlePlaceholder,
             icon: CupertinoIcons.at,
@@ -1042,11 +1017,13 @@ class _MacRegisterForm extends StatelessWidget {
           const SizedBox(height: 16),
           _MacOutlinedField(
             controller: otpController,
+            semanticsIdentifier: 'e2e-otp-input',
             label: context.l10n.onboardingOtp,
             placeholder: context.l10n.onboardingOtpPlaceholder,
             keyboardType: TextInputType.number,
             icon: CupertinoIcons.number,
             suffix: _MacInlineAction(
+              semanticsIdentifier: 'e2e-send-otp-button',
               label: otpCooldown.isCoolingDown
                   ? context.l10n.onboardingResendOtpIn(
                       otpCooldown.remainingSeconds,
@@ -1057,6 +1034,8 @@ class _MacRegisterForm extends StatelessWidget {
                   : onRequestOtp,
             ),
           ),
+          if (otpCooldown.isCoolingDown) const E2eMarker('e2e-otp-sent'),
+          _OtpCompleteMarker(controller: otpController),
           const SizedBox(height: 22),
           SizedBox(
             key: const Key('onboarding-mac-phone-submit-action'),
@@ -1075,6 +1054,7 @@ class _MacRegisterForm extends StatelessWidget {
       children: <Widget>[
         _MacOutlinedField(
           controller: handleController,
+          semanticsIdentifier: 'e2e-handle-input',
           label: context.l10n.onboardingHandle,
           placeholder: context.l10n.onboardingHandlePlaceholder,
           icon: CupertinoIcons.at,
@@ -1082,6 +1062,7 @@ class _MacRegisterForm extends StatelessWidget {
         const SizedBox(height: 16),
         _MacOutlinedField(
           controller: emailController,
+          semanticsIdentifier: 'e2e-email-input',
           label: context.l10n.onboardingEmail,
           placeholder: context.l10n.onboardingEmailPlaceholder,
           icon: CupertinoIcons.mail,
@@ -1140,6 +1121,7 @@ class _MacOutlinedField extends StatelessWidget {
     required this.controller,
     required this.label,
     required this.placeholder,
+    this.semanticsIdentifier,
     this.icon,
     this.keyboardType,
     this.prefix,
@@ -1149,6 +1131,7 @@ class _MacOutlinedField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final String placeholder;
+  final String? semanticsIdentifier;
   final IconData? icon;
   final TextInputType? keyboardType;
   final Widget? prefix;
@@ -1177,22 +1160,25 @@ class _MacOutlinedField extends StatelessWidget {
                 const SizedBox(width: 11),
               ],
               Expanded(
-                child: CupertinoTextField(
-                  controller: controller,
-                  keyboardType: keyboardType,
-                  placeholder: placeholder,
-                  decoration: null,
-                  padding: EdgeInsets.zero,
-                  textAlignVertical: TextAlignVertical.center,
-                  style: const TextStyle(
-                    color: AwikiMePalette.inkNeutral,
-                    fontSize: 14,
-                    height: 1.2,
-                  ),
-                  placeholderStyle: const TextStyle(
-                    color: AwikiMePalette.messagePreview,
-                    fontSize: 14,
-                    height: 1.2,
+                child: Semantics(
+                  identifier: semanticsIdentifier,
+                  child: CupertinoTextField(
+                    controller: controller,
+                    keyboardType: keyboardType,
+                    placeholder: placeholder,
+                    decoration: null,
+                    padding: EdgeInsets.zero,
+                    textAlignVertical: TextAlignVertical.center,
+                    style: const TextStyle(
+                      color: AwikiMePalette.inkNeutral,
+                      fontSize: 14,
+                      height: 1.2,
+                    ),
+                    placeholderStyle: const TextStyle(
+                      color: AwikiMePalette.messagePreview,
+                      fontSize: 14,
+                      height: 1.2,
+                    ),
                   ),
                 ),
               ),
@@ -1245,9 +1231,14 @@ class _MacFieldLabel extends StatelessWidget {
 }
 
 class _MacInlineAction extends StatelessWidget {
-  const _MacInlineAction({required this.label, this.onPressed});
+  const _MacInlineAction({
+    required this.label,
+    this.semanticsIdentifier,
+    this.onPressed,
+  });
 
   final String label;
+  final String? semanticsIdentifier;
   final VoidCallback? onPressed;
 
   @override
@@ -1255,6 +1246,7 @@ class _MacInlineAction extends StatelessWidget {
     return AppPressable(
       onTap: onPressed,
       semanticLabel: label,
+      semanticsIdentifier: semanticsIdentifier,
       tooltip: label,
       enabled: onPressed != null,
       scaleOnPress: true,

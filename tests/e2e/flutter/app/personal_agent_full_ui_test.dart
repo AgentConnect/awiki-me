@@ -42,8 +42,9 @@ import 'package:integration_test/integration_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../../unit/test_support.dart' as test_support;
-import '../support/fake_app_bootstrap.dart';
 import '../../case_attestation.dart';
+import '../support/fake_app_bootstrap.dart';
+import '../support/protected_otp_config.dart';
 
 const String _personalAgentRunConfigPath =
     '.e2e/personal-agent/current/run_config.json';
@@ -1497,6 +1498,9 @@ class _PersonalAgentRealBackendConfig {
         personalAgent['realBackend']?.toString().toLowerCase() == 'true';
     final service = _mapAt(map, 'service');
     final otp = _mapAt(map, 'otp');
+    final protectedOtp = ProtectedOtpConfig.load(
+      _requiredConfig(otp, 'localConfigPath', 'otp.localConfigPath'),
+    );
     final accounts = _mapAt(map, 'accounts');
     final appUser = _mapAt(accounts, 'appUser');
     final cliPeerAccount = _mapAt(accounts, 'cliPeer');
@@ -1531,8 +1535,8 @@ class _PersonalAgentRealBackendConfig {
         'handle',
         'accounts.cliPeer.handle',
       ),
-      otpPhone: _requiredConfig(otp, 'phone', 'otp.phone'),
-      otpCode: _requiredConfig(otp, 'code', 'otp.code'),
+      otpPhone: protectedOtp.phone,
+      otpCode: protectedOtp.code,
       cliBin: _requiredConfig(cliPeer, 'binary', 'cliPeer.binary'),
       cliWorkspace: _requiredConfig(cliPeer, 'workspace', 'cliPeer.workspace'),
       cliHome: _requiredConfig(cliPeer, 'home', 'cliPeer.home'),

@@ -9,6 +9,7 @@ import '../../application/models/onboarding_server_info.dart';
 import '../../application/onboarding_support_service.dart';
 import '../../application/ports/identity_core_port.dart';
 import '../../application/ports/legacy_identity_upgrade_port.dart';
+import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../l10n/app_message.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
@@ -30,6 +31,9 @@ class OnboardingState {
     this.legacyUpgradeStatus = const LegacyIdentityUpgradeStatus.idle(),
     this.otpTargetFullHandle,
     this.otpTargetPhone,
+    this.existingHandleContinuationId,
+    this.existingHandleJoinMode,
+    this.existingHandleJoinRequiresUserPresence = false,
     this.serverInfoStatus = OnboardingServerInfoStatus.loading,
     this.serverInfo,
     this.serverInfoError,
@@ -44,6 +48,9 @@ class OnboardingState {
   final LegacyIdentityUpgradeStatus legacyUpgradeStatus;
   final String? otpTargetFullHandle;
   final String? otpTargetPhone;
+  final String? existingHandleContinuationId;
+  final ExistingHandleJoinMode? existingHandleJoinMode;
+  final bool existingHandleJoinRequiresUserPresence;
   final OnboardingServerInfoStatus serverInfoStatus;
   final OnboardingServerInfo? serverInfo;
   final String? serverInfoError;
@@ -109,6 +116,9 @@ class OnboardingState {
     LegacyIdentityUpgradeStatus? legacyUpgradeStatus,
     Object? otpTargetFullHandle = _unset,
     Object? otpTargetPhone = _unset,
+    Object? existingHandleContinuationId = _unset,
+    Object? existingHandleJoinMode = _unset,
+    bool? existingHandleJoinRequiresUserPresence,
     OnboardingServerInfoStatus? serverInfoStatus,
     Object? serverInfo = _unset,
     Object? serverInfoError = _unset,
@@ -130,6 +140,16 @@ class OnboardingState {
       otpTargetPhone: identical(otpTargetPhone, _unset)
           ? this.otpTargetPhone
           : otpTargetPhone as String?,
+      existingHandleContinuationId:
+          identical(existingHandleContinuationId, _unset)
+          ? this.existingHandleContinuationId
+          : existingHandleContinuationId as String?,
+      existingHandleJoinMode: identical(existingHandleJoinMode, _unset)
+          ? this.existingHandleJoinMode
+          : existingHandleJoinMode as ExistingHandleJoinMode?,
+      existingHandleJoinRequiresUserPresence:
+          existingHandleJoinRequiresUserPresence ??
+          this.existingHandleJoinRequiresUserPresence,
       serverInfoStatus: serverInfoStatus ?? this.serverInfoStatus,
       serverInfo: identical(serverInfo, _unset)
           ? this.serverInfo
@@ -225,13 +245,16 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .read(onboardingSupportServiceProvider)
           .loadServerInfo()
           .timeout(_requestTimeout);
+      if (!mounted) return;
       _applyServerInfo(info);
     } on TimeoutException {
+      if (!mounted) return;
       state = state.copyWith(
         serverInfoStatus: OnboardingServerInfoStatus.failed,
         serverInfoError: 'request_timeout_retry',
       );
     } catch (error) {
+      if (!mounted) return;
       state = state.copyWith(
         serverInfoStatus: OnboardingServerInfoStatus.failed,
         serverInfoError: error.toString(),
@@ -476,13 +499,22 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       if (!_sessionService.isLatestSessionTransition(transition)) {
         throw const AppSessionTransitionSuperseded();
       }
-      final progress = result.joinProgress;
-      if (progress == null) {
+      final continuationId = result.existingHandleContinuationId;
+      final mode = result.existingHandleJoinMode;
+      if (continuationId == null ||
+          mode == null ||
+          result.existingHandleJoinRequiresUserPresence !=
+              (mode == ExistingHandleJoinMode.handleRecoveryRebind)) {
         throw StateError(
-          'Join-required registration did not include Join progress.',
+          'Join-required registration did not include a valid continuation.',
         );
       }
-      ref.read(devicesProvider.notifier).resumeNewDevice(progress);
+      state = state.copyWith(
+        existingHandleContinuationId: continuationId,
+        existingHandleJoinMode: mode,
+        existingHandleJoinRequiresUserPresence:
+            result.existingHandleJoinRequiresUserPresence,
+      );
       return IdentityRegistrationStatus.joinRequired;
     }
     final session = result.identity;
@@ -496,6 +528,62 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         .read(appRuntimeProvider.notifier)
         .activateCommittedSession(session, expectedTransition: transition);
     return IdentityRegistrationStatus.registered;
+  }
+
+  Future<bool> beginExistingHandleDeviceJoin({
+    required String presenceReason,
+  }) async {
+    final continuationId = state.existingHandleContinuationId;
+    final mode = state.existingHandleJoinMode;
+    if (continuationId == null || mode == null) {
+      throw StateError('existing_handle_continuation_unavailable');
+    }
+    final port = ref.read(identityCorePortProvider);
+    if (port is! ExistingHandleContinuationPort) {
+      throw StateError('existing_handle_continuation_unavailable');
+    }
+    final continuationPort = port as ExistingHandleContinuationPort;
+    var userPresenceConfirmed = false;
+    if (state.existingHandleJoinRequiresUserPresence) {
+      userPresenceConfirmed = await ref
+          .read(userPresencePortProvider)
+          .confirm(reason: presenceReason);
+      if (!userPresenceConfirmed) {
+        return false;
+      }
+    }
+    final progress = await continuationPort.beginExistingHandleDeviceJoin(
+      continuationId,
+      userPresenceConfirmed: userPresenceConfirmed,
+    );
+    final expectedCause = mode == ExistingHandleJoinMode.handleRecoveryRebind
+        ? DeviceJoinCause.handleRecovery
+        : DeviceJoinCause.ordinary;
+    if (progress.cause != expectedCause) {
+      throw StateError('registration_join_mode_mismatch');
+    }
+    ref.read(devicesProvider.notifier).resumeNewDevice(progress);
+    state = state.copyWith(
+      existingHandleContinuationId: null,
+      existingHandleJoinMode: null,
+      existingHandleJoinRequiresUserPresence: false,
+    );
+    return true;
+  }
+
+  Future<void> discardExistingHandleContinuation() async {
+    final continuationId = state.existingHandleContinuationId;
+    if (continuationId == null) return;
+    final port = ref.read(identityCorePortProvider);
+    if (port is ExistingHandleContinuationPort) {
+      final continuationPort = port as ExistingHandleContinuationPort;
+      await continuationPort.discardExistingHandleContinuation(continuationId);
+    }
+    state = state.copyWith(
+      existingHandleContinuationId: null,
+      existingHandleJoinMode: null,
+      existingHandleJoinRequiresUserPresence: false,
+    );
   }
 
   Future<void> loginWithLocalCredential(String identityIdOrAlias) {

@@ -225,7 +225,7 @@ Linux 用例独立报告真实通过或失败。
 | 3：已读、离线与 Snapshot | `DEVICE-MESSAGE-READ-SYNC-E2E-001`、`DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001`、`DEVICE-MESSAGE-TAIL-ONLY-E2E-001` | 覆盖单调已读、新设备 tail-only、已有设备 compact recovery 和保留窗口外本地消息。47:59/48:00/48:01 与 499/500/501 精确边界仍由隔离 Message Service/Core 测试证明，不能在共享远端造数替代。 |
 | 4：账号状态域 | `DEVICE-AGENT-SYNC-E2E-001`、`DEVICE-AGENT-ADD-SYNC-E2E-001`、`DEVICE-AGENT-RENAME-SYNC-E2E-001`、`DEVICE-AGENT-UNBIND-SYNC-E2E-001`、`DEVICE-AGENT-DELETE-SYNC-E2E-001`、`DEVICE-AGENT-ARCHIVE-SYNC-E2E-001`、`DEVICE-PROFILE-SYNC-E2E-001`、`DEVICE-REGISTRY-SYNC-E2E-001`、`DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001` | Agent topology/current status、Profile 和 Registry 使用独立 versioned snapshot；一个域失败不能阻止消息或其他域收敛。Archive case 创建第三个独立 runtime，再经 App `deleteSelected` → daemon runtime delete → User Service archive 的真实产品链路验证 active→archived，不能使用 test operator 或复用 Codex 删除。 |
 | 5：Dirty Hint | `DEVICE-MESSAGE-HINT-LOSS-E2E-001`、`DEVICE-MESSAGE-RECONNECT-E2E-001` | WebSocket 只作 dirty hint；断线或提示丢失后必须由前台/重连 HTTP pull exact-once 恢复。Push wake-up 当前为 `DEFERRED`，没有 active pass case。 |
-| 6：体验、观测与发布验收 | `DEVICE-MESSAGE-PATCH-READY-E2E-001`、`DEVICE-MESSAGE-DIAGNOSTICS-E2E-001`、`DEVICE-MESSAGE-GENERATION-FENCE-E2E-001`、`MESSAGE-PATCH-RESTART-E2E-001`，以及上述 active case 的完整、顺序一致 schema-v2 attestation | 覆盖产品观测的 subscribe→reset→first-sync 顺序、diagnostics 成功刷新序列与脱敏、同 DID revoked-device auth fencing，以及 Phase A 完全销毁后提交 gap 的跨进程恢复；不宣称测试直接注入了旧 generation Patch。 |
+| 6：体验、观测与发布验收 | `DEVICE-MESSAGE-PATCH-READY-E2E-001`、`DEVICE-MESSAGE-DIAGNOSTICS-E2E-001`、`DEVICE-MESSAGE-GENERATION-FENCE-E2E-001`、`MESSAGE-PATCH-RESTART-E2E-001`，以及上述 active case 的完整、顺序一致 schema-v2 attestation | 覆盖产品观测的 subscribe→reset→first-sync 顺序、diagnostics 成功刷新序列与脱敏、同 DID revoked-device auth fencing、撤权 App 自动回到登录页，以及 Phase A 完全销毁后提交 gap 的跨进程恢复；不宣称测试直接注入了旧 generation Patch。 |
 
 本同步方案的共同 oracle：
 
@@ -279,7 +279,8 @@ dart run tests/e2e/runner.dart --case multi-device \
 
 This suite launches the real production bootstrap/native Core with an
 independent temporary Storage Scope and deletes that root after the run. It
-checks the default device-management composition and public Join entry while
+checks the default device-management composition and mounts the Join surface in
+the production provider tree while
 the independent root-transfer, revoke, Direct, and Group security gates remain
 closed. It uses no backend, OTP, CLI peer, copied secret state, or fake
 providers. The remote Join case remains separate and is not included in this
@@ -290,68 +291,70 @@ after the dedicated ali deployment and account have been reviewed:
 
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
-AWIKI_MULTI_DEVICE_E2E_PHONE=<dedicated-test-phone> \
-AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='["ssh","ali","--","sudo","-n","/usr/bin/env","PYTHONDONTWRITEBYTECODE=1","/opt/awiki/services/user-service/current/.venv/bin/python","/opt/awiki/services/user-service/current/scripts/issue_multi_device_test_otp.py","--env-file","/etc/awiki/user-service.env","--apply"]' \
 AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=appmd \
 dart run tests/e2e/runner.dart \
   --case multi-device-remote-join \
   --config <local-awiki-info-config.yaml>
 ```
 
-The local YAML supplies only the reviewed `awiki.info` service endpoints, the
-CLI binary, and its exact 40-character source revision. The dedicated phone and
-JSON-argv OTP resolver are environment-only inputs; `otp.code`, a static OTP,
-or a command whose local executable is a shell is never accepted by this suite.
-Every argv item rejects whitespace, newlines, shell metacharacters and
-multi-command strings; a nested `bash`/`sh -c` after `ssh` is also rejected.
-The ali-side services must allow the dedicated phone hash and support the
-message-driven member Join contract. The CLI must be built from exactly the
-configured revision. The runner installs an E2E-only UserPresencePort and
-requires exactly one successful decision, so this suite is unattended.
-Production continues to use LocalAuthentication, which this suite does not
-attest.
+The ignored, mode-`0600` local YAML supplies the reviewed `awiki.info` service
+endpoints, `otp.phone`, six-digit `otp.code`, the CLI binary, and its exact
+40-character source revision. Join and registration still call the real
+purpose-bound SMS endpoint; the protected test account makes the configured
+code valid without sending a real SMS. The code is loaded only by the App test
+process, registered with the runner redactor, and is never copied to run config,
+attestation, diagnostics, or reports. The runner installs an E2E-only
+UserPresencePort and requires exactly one successful decision. Production
+continues to use LocalAuthentication, which this suite does not attest.
 
-By default the purpose-bound `/user-service/v1/auth/sms-codes` request remains
-strictly 200-only. For the user-authorized synthetic test number, an explicit
-operator-only mode may be added to the command above:
+The same platform-neutral suite requires
+`DEVICE-JOIN-MESSAGE-CORE-E2E-001`: after `DEVICE-JOIN-E2E-001`, the joined App
+sends one ordinary Direct message, the sibling CLI admin observes the exact
+own-sync, then the App is stopped while an independent CLI peer replies. A
+same-root App restart must render that reply exactly once, commit the visible
+read state, and return the Core-directed sync coordinator to current idle
+diagnostics. This is the first-stage App+CLI core subset; the larger two-App
+functional matrix remains separate.
+
+Handle Recovery V1 has a separate visible UI suite and must not be inferred
+from the local capability gate or Join suite. This focused suite supports the
+Linux Flutter desktop runner in addition to macOS:
 
 ```bash
-AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR=1
+AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
+AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=recovery \
+dart run tests/e2e/runner.dart \
+  --case multi-device-remote-recovery \
+  --config <local-awiki-info-config.yaml>
 ```
 
-An HTTP 429 remains a real rate-limit response, not a staged-SMS condition.
-The runner honors the bounded `Retry-After` header before retrying the HTTP
-request and never invokes the OTP resolver merely because it was rate-limited.
-This flag is accepted only with the exact reviewed resolver argv shown above.
-It permits one non-retried HTTP 503 only when the response media type is
-`application/problem+json` and its object contains exactly `type`, `title`,
-`status`, `detail`, and `instance`: `type=about:blank`,
-`title="SMS Service Error"`, integer `status=503`,
-`instance=/user-service/v1/auth/sms-codes`, and `detail` matching the deployed
-`[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] ...` shape. The two
-fixed markers must appear exactly once; another channel prefix, provider code,
-additional marker, secret-related word, or standalone six-digit value fails
-before the scoped resolver is invoked. A valid resolver response must contain
-exactly six ASCII digits. Any other status, content type, key, value, resolver
-output, or malformed flag fails closed without recording the response body.
-The normal HTTP 200 delivery path is unchanged and does not require staged mode.
+This gate uses current purpose `awiki.identity.handle-recovery.v1` and drives
+prepare/risk confirmation/activate/resume through visible Flutter controls.
+After a remote Commit, a typed `local_transition_pending` result keeps the same
+operation: the App performs one automatic exact resume, then the E2E may use the
+visible resume control within its existing bounded budget. A terminal or
+non-resumable error still fails closed.
+It also keeps one independently rooted old App member across Recovery, proves
+the old principal is fenced, ordinarily re-Joins that App to the replacement
+DID, and requires both App Registry/session views to converge. It then uses an
+independent identity in the second App for bidirectional Direct messages while
+checking sibling own-sync exact-one. The same case IDs and oracles run on Linux
+and macOS.
+It uses the same ignored YAML phone/code fixture and still requires a successful
+purpose-bound SMS request. HTTP 429 honors the bounded `Retry-After`; any other
+non-success response fails closed without recording its body. See
+[handle-recovery-ui.md](handle-recovery-ui.md).
 
 Run the unattended one-host App + App member Join with the same reviewed
 remote account inputs:
 
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
-AWIKI_MULTI_DEVICE_E2E_PHONE=<dedicated-test-phone> \
-AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='<reviewed-json-argv-resolver>' \
 AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=apppair \
 dart run tests/e2e/runner.dart \
   --case multi-device-app-pair \
   --config <local-awiki-info-macos-config.yaml>
 ```
-
-When this mode uses the explicitly authorized synthetic test number, add
-`AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR=1`; the same exact
-problem-response and reviewed-resolver restrictions above apply.
 
 Unlike `multi-device-remote-join`, the YAML for this mode does not require a CLI
 binary or source revision. `tool/build_isolated_e2e_app.dart` owns reusable
@@ -390,12 +393,11 @@ boundary: running Python without it can mutate bytecode beneath an otherwise
 immutable managed release and invalidate its artifact checksum. Local
 `/home/ecs-user/...` paths and environment-selected hosts/scripts are rejected.
 
-Staged-OTP mode proves only the explicitly reviewed operator test path; it does
-not prove SMS delivery, does not turn the 503 into a product-visible success,
-and changes no production service behavior. The ali SSH key is not yet limited
-by a server-side forced command, which remains tracked security debt. Do not
-replace this mode with an online DEV route, plaintext OTP, mock, or generic
-shell command.
+The protected preset-OTP path proves only the reviewed test account flow; it
+does not prove SMS delivery. Registration, Join, and Recovery still call the
+real send/exchange APIs and consume an expiring purpose/target-scoped row once.
+The phone and code stay in the ignored permission-restricted local config and
+must not enter argv, run config, attestation, diagnostics, or reports.
 
 The suite first bootstraps a CLI ready admin and joins a newly generated App
 device through the real onboarding UI and foreground CLI approval contract. It
@@ -965,7 +967,7 @@ backend credentials, OTP, and CLI peer configuration are prepared.
 | Release | Release candidate validation | Stable nightly environment plus release owner review. | P0/P1 regression subset for desktop smoke, native SDK smoke, App + CLI basics, mobile when available. | New feature cases that have not been promoted. |
 | Manual | Developer or QA runbook | Local or remote environment prepared by the runner. | Any focused case needed for debugging or evidence, with command, runId, platform, endpoints, and report path recorded. | Manual results presented as automatic PR gate evidence. |
 
-Real E2E reports must record `runId`, platform, scenario, case IDs,
+Real E2E reports must record the current `awiki-me` Git HEAD, `runId`, platform, scenario, case IDs,
 pass/fail/skipped status, skipped reason when applicable, and a redaction scan
 result. Keep `.e2e/`, `*.local.yaml`, OTP values, JWTs, private keys, CLI
 workspaces, App state roots, remote logs, screenshots, and device state out of

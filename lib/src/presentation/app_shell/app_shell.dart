@@ -1,3 +1,7 @@
+// [INPUT]: Runtime/session state, shell navigation, sync status, and App feedback.
+// [OUTPUT]: Authenticated workspaces or onboarding with one-shot security notices.
+// [POS]: Root presentation switchboard for login state and primary App navigation.
+
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -68,6 +72,8 @@ class _AppShellState extends ConsumerState<AppShell> {
   String? _retainedSessionDid;
   bool? _previousExpandedLayout;
   bool _desktopIdentityDialogOpen = false;
+  bool _authRevokedDialogOpen = false;
+  bool _authRevokedDialogAcknowledged = false;
 
   @override
   void initState() {
@@ -107,6 +113,11 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     final runtime = ref.watch(appRuntimeProvider);
     final session = ref.watch(sessionProvider);
+    if (!runtime.authRevoked) {
+      _authRevokedDialogAcknowledged = false;
+    } else {
+      _scheduleAuthRevokedDialog();
+    }
     if (!runtime.isInitialized) {
       return const AwikiMeStartupPlaceholder();
     }
@@ -313,6 +324,48 @@ class _AppShellState extends ConsumerState<AppShell> {
     } finally {
       _desktopIdentityDialogOpen = false;
     }
+  }
+
+  void _scheduleAuthRevokedDialog() {
+    if (_authRevokedDialogOpen || _authRevokedDialogAcknowledged) {
+      return;
+    }
+    _authRevokedDialogOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _authRevokedDialogOpen = false;
+        return;
+      }
+      Navigator.of(
+        context,
+        rootNavigator: true,
+      ).popUntil((route) => route.isFirst);
+      await showCupertinoDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        useRootNavigator: true,
+        builder: (dialogContext) => PopScope<void>(
+          canPop: false,
+          child: CupertinoAlertDialog(
+            key: const Key('auth-revoked-dialog'),
+            title: Text(context.l10n.authRevokedDialogTitle),
+            content: Text(context.l10n.authRevokedDialogMessage),
+            actions: <Widget>[
+              CupertinoDialogAction(
+                key: const Key('auth-revoked-dialog-confirm'),
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(context.l10n.commonConfirm),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _authRevokedDialogOpen = false;
+        _authRevokedDialogAcknowledged = true;
+      });
+    });
   }
 
   Future<void> _openDeviceJoinRequest(DeviceJoinRequestNotice request) async {

@@ -162,9 +162,13 @@ class ImCoreOnboardingService implements OnboardingService {
     String? profileMarkdown,
   }) async {
     if (result.status == IdentityRegistrationStatus.joinRequired) {
-      if (result.joinProgress == null) {
+      final mode = result.existingHandleJoinMode;
+      if (result.existingHandleContinuationId == null ||
+          mode == null ||
+          result.existingHandleJoinRequiresUserPresence !=
+              (mode == ExistingHandleJoinMode.handleRecoveryRebind)) {
         throw StateError(
-          'Join-required registration did not include Join progress.',
+          'Join-required registration did not include a valid continuation.',
         );
       }
       _sessions.cancelPendingSessionTransition(transition);

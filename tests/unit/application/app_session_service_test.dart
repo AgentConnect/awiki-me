@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/application/active_session_store.dart';
+import 'package:awiki_me/src/application/app_bootstrap_epoch_barrier.dart';
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/models/app_auth_state.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
@@ -19,6 +20,185 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('ImCoreAppSessionService', () {
     test(
+      'epoch barrier completes after Core binding and before auth/session commit',
+      () async {
+        final identity = _session('id-barrier');
+        final auth = _FakeAuth();
+        final active = _FakeActiveSessionStore();
+        final barrier = _FakeBootstrapEpochBarrier(
+          onEnsure: (candidate, binding) {
+            expect(candidate.accountBinding, same(binding));
+            expect(binding.ownerIdentityId, identity.identityId);
+            expect(auth.ensureCount, 0);
+          },
+        );
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: auth,
+          activeSessionStore: active,
+          bootstrapEpochBarrier: barrier,
+        );
+
+        final session = await service.loginWithIdentity(identity.identityId);
+
+        expect(barrier.calls, 1);
+        expect(auth.ensureCount, 1);
+        expect(await active.readActiveIdentityId(), identity.identityId);
+        expect(session.accountBinding, isNotNull);
+      },
+    );
+
+    test('epoch barrier failure prevents auth and session commit', () async {
+      final identity = _session('id-barrier-fail');
+      final auth = _FakeAuth();
+      final active = _FakeActiveSessionStore();
+      final barrier = _FakeBootstrapEpochBarrier(
+        error: const AppBootstrapEpochBarrierFailure(
+          AppBootstrapEpochBarrierFailureCode.unknownEpoch,
+        ),
+      );
+      final service = ImCoreAppSessionService(
+        runtime: _FakeRuntime(),
+        identities: _FakeIdentities(defaultIdentity: identity),
+        auth: auth,
+        activeSessionStore: active,
+        bootstrapEpochBarrier: barrier,
+      );
+
+      await expectLater(
+        service.loginWithIdentity(identity.identityId),
+        throwsA(isA<AppBootstrapEpochBarrierFailure>()),
+      );
+
+      expect(barrier.calls, 1);
+      expect(auth.ensureCount, 0);
+      expect(await active.readActiveIdentityId(), isNull);
+      expect(await service.currentSession(), isNull);
+    });
+
+    test(
+      'hot restore fresh-reads binding and rechecks the epoch barrier',
+      () async {
+        final identity = _session('id-hot-restore');
+        final binding = _bindingFor(identity);
+        final identities = _FakeIdentities(
+          defaultIdentity: identity,
+          activeBindings: <SessionAccountBinding>[binding, binding],
+        );
+        final auth = _FakeAuth();
+        final barrier = _FakeBootstrapEpochBarrier();
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: identities,
+          auth: auth,
+          activeSessionStore: _FakeActiveSessionStore(identity.identityId),
+          bootstrapEpochBarrier: barrier,
+        );
+
+        await service.restoreSession();
+        final restored = await service.restoreSession();
+
+        expect(restored?.did, identity.did);
+        expect(identities.activeBindingCount, 2);
+        expect(barrier.calls, 2);
+        expect(auth.ensureCount, 1);
+      },
+    );
+
+    test(
+      'refresh reactivates a changed Core epoch through the barrier',
+      () async {
+        final oldIdentity = _session('id-hot-refresh');
+        final newIdentity = oldIdentity.copyWith(
+          did: 'did:wba:awiki.ai:alice:e2_id-hot-refresh',
+        );
+        final oldBinding = _bindingFor(oldIdentity);
+        final newBinding = _bindingForGeneration(newIdentity, '2');
+        final identities = _FakeIdentities(
+          defaultIdentity: oldIdentity,
+          activeBindings: <SessionAccountBinding>[
+            oldBinding,
+            newBinding,
+            newBinding,
+          ],
+        );
+        final auth = _FakeAuth();
+        final seenGenerations = <String>[];
+        final barrier = _FakeBootstrapEpochBarrier(
+          onEnsure: (_, binding) {
+            seenGenerations.add(binding.identityGeneration);
+          },
+        );
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: identities,
+          auth: auth,
+          activeSessionStore: _FakeActiveSessionStore(oldIdentity.identityId),
+          bootstrapEpochBarrier: barrier,
+        );
+
+        await service.restoreSession();
+        identities.replaceDefaultIdentity(newIdentity);
+        final refreshed = await service.refreshSession();
+
+        expect(refreshed?.did, newIdentity.did);
+        expect(refreshed?.accountBinding?.identityGeneration, '2');
+        expect(seenGenerations, <String>['1', '2']);
+        expect(auth.ensureCount, 2);
+        expect(auth.refreshCount, 0);
+      },
+    );
+
+    test(
+      'hot restore fails closed when the changed epoch is unknown',
+      () async {
+        final oldIdentity = _session('id-hot-unknown');
+        final newIdentity = oldIdentity.copyWith(
+          did: 'did:wba:awiki.ai:alice:e2_id-hot-unknown',
+        );
+        final active = _FakeActiveSessionStore(oldIdentity.identityId);
+        final realtime = _FakeRealtime();
+        final identities = _FakeIdentities(
+          defaultIdentity: oldIdentity,
+          activeBindings: <SessionAccountBinding>[
+            _bindingFor(oldIdentity),
+            _bindingForGeneration(newIdentity, '2'),
+            _bindingForGeneration(newIdentity, '2'),
+          ],
+        );
+        final barrier = _FakeBootstrapEpochBarrier(
+          onEnsure: (_, binding) {
+            if (binding.identityGeneration == '2') {
+              throw const AppBootstrapEpochBarrierFailure(
+                AppBootstrapEpochBarrierFailureCode.unknownEpoch,
+              );
+            }
+          },
+        );
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: identities,
+          auth: _FakeAuth(),
+          activeSessionStore: active,
+          realtime: realtime,
+          bootstrapEpochBarrier: barrier,
+        );
+
+        await service.restoreSession();
+        identities.replaceDefaultIdentity(newIdentity);
+
+        await expectLater(
+          service.restoreSession(),
+          throwsA(isA<AppBootstrapEpochBarrierFailure>()),
+        );
+        expect(await service.currentSession(), isNull);
+        expect(await active.readActiveIdentityId(), isNull);
+        expect(realtime.stopCount, 1);
+      },
+    );
+
+    test(
       'restoreSession does not treat SDK default identity as login state',
       () async {
         final runtime = _FakeRuntime();
@@ -26,6 +206,7 @@ void main() {
         final auth = _FakeAuth();
         final identities = _FakeIdentities(defaultIdentity: identity);
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: identities,
           auth: auth,
@@ -55,6 +236,7 @@ void main() {
           ),
         );
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: _FakeIdentities(defaultIdentity: identity),
           auth: auth,
@@ -88,6 +270,7 @@ void main() {
         final runtime = _FakeRuntime();
         final identities = _FakeIdentities(defaultIdentity: identity);
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: identities,
           auth: _FakeAuth(),
@@ -110,6 +293,7 @@ void main() {
       final activeStore = _FakeActiveSessionStore(identity.identityId);
       final runtime = _FakeRuntime();
       final service = ImCoreAppSessionService(
+        bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
         runtime: runtime,
         identities: _FakeIdentities(defaultIdentity: identity),
         auth: _FakeAuth(),
@@ -146,6 +330,7 @@ void main() {
           ),
         );
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: _FakeIdentities(defaultIdentity: identity),
           auth: auth,
@@ -167,6 +352,7 @@ void main() {
     test('restoreSession still fails on non-transient auth errors', () async {
       final runtime = _FakeRuntime();
       final service = ImCoreAppSessionService(
+        bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
         runtime: runtime,
         identities: _FakeIdentities(defaultIdentity: _session('id-auth')),
         auth: _FakeAuth(ensureError: StateError('private key missing')),
@@ -186,6 +372,7 @@ void main() {
         final active = _FakeActiveSessionStore();
         final auth = _FakeAuth();
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: _FakeIdentities(defaultIdentity: _session('id-vault')),
           auth: auth,
@@ -210,6 +397,7 @@ void main() {
         final runtime = _FakeRuntime();
         final active = _FakeActiveSessionStore.failing('id-old');
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: _FakeIdentities(
             defaultIdentity: _session('id-replacement'),
@@ -235,6 +423,7 @@ void main() {
         final runtime = _FakeRuntime();
         final identity = _session('id-other');
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: _FakeIdentities(defaultIdentity: identity),
           auth: _FakeAuth(),
@@ -259,6 +448,7 @@ void main() {
           'id-handle',
         ).copyWith(handle: 'alice.awiki.ai', localAlias: null);
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: _FakeIdentities(defaultIdentity: identity),
           auth: _FakeAuth(),
@@ -280,6 +470,7 @@ void main() {
           resolvedIdentity: _session('id-resolved'),
         );
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: identities,
           auth: _FakeAuth(),
@@ -312,6 +503,7 @@ void main() {
         final active = _FakeActiveSessionStore('id-previous');
         final auth = _FakeAuth();
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: _FakeRuntime(),
           identities: identities,
           auth: auth,
@@ -342,6 +534,7 @@ void main() {
         );
         final auth = _FakeAuth();
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: _FakeRuntime(),
           identities: identities,
           auth: auth,
@@ -360,32 +553,35 @@ void main() {
     );
 
     test(
-      'activateIdentity rejects non-canonical binding generations',
+      'activateIdentity rejects binding generations outside the frozen profile',
       () async {
-        final identity = _session('id-generation');
-        final auth = _FakeAuth();
-        final service = ImCoreAppSessionService(
-          runtime: _FakeRuntime(),
-          identities: _FakeIdentities(
-            defaultIdentity: identity,
-            activeBinding: SessionAccountBinding(
-              ownerIdentityId: identity.identityId,
-              accountId: 'account-generation',
-              currentDid: identity.did,
-              protocolDeviceId: 'protocol-device-generation',
-              identityGeneration: '01',
-              deviceAuthGeneration: '2',
+        for (final invalidGeneration in ['01', '1' * 256]) {
+          final identity = _session('id-generation');
+          final auth = _FakeAuth();
+          final service = ImCoreAppSessionService(
+            bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+            runtime: _FakeRuntime(),
+            identities: _FakeIdentities(
+              defaultIdentity: identity,
+              activeBinding: SessionAccountBinding(
+                ownerIdentityId: identity.identityId,
+                accountId: 'account-generation',
+                currentDid: identity.did,
+                protocolDeviceId: 'protocol-device-generation',
+                identityGeneration: invalidGeneration,
+                deviceAuthGeneration: '2',
+              ),
             ),
-          ),
-          auth: auth,
-          activeSessionStore: _FakeActiveSessionStore(),
-        );
+            auth: auth,
+            activeSessionStore: _FakeActiveSessionStore(),
+          );
 
-        await expectLater(
-          service.loginWithIdentity('alice-local'),
-          throwsStateError,
-        );
-        expect(auth.ensureCount, 0);
+          await expectLater(
+            service.loginWithIdentity('alice-local'),
+            throwsStateError,
+          );
+          expect(auth.ensureCount, 0);
+        }
       },
     );
 
@@ -398,6 +594,7 @@ void main() {
       ]) {
         final auth = _FakeAuth();
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: _FakeRuntime(),
           identities: _FakeIdentities(
             defaultIdentity: identity,
@@ -426,6 +623,7 @@ void main() {
       final identity = _session('id-reserved-device');
       final auth = _FakeAuth();
       final service = ImCoreAppSessionService(
+        bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
         runtime: _FakeRuntime(),
         identities: _FakeIdentities(
           defaultIdentity: identity,
@@ -466,6 +664,7 @@ void main() {
           ),
         );
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: _FakeRuntime(),
           identities: _FakeIdentities(defaultIdentity: identity),
           auth: auth,
@@ -486,6 +685,7 @@ void main() {
       () async {
         final identity = _session('id-default');
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: _FakeRuntime(),
           identities: _FakeIdentities(defaultIdentity: identity),
           auth: _FakeAuth(),
@@ -522,6 +722,7 @@ void main() {
       final active = _FakeActiveSessionStore(identity.identityId);
       final realtime = _FakeRealtime();
       final service = ImCoreAppSessionService(
+        bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
         runtime: _FakeRuntime(),
         identities: _FakeIdentities(defaultIdentity: identity),
         auth: _FakeAuth(),
@@ -545,6 +746,7 @@ void main() {
       () async {
         final identity = _session('id-default');
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: _FakeRuntime(),
           identities: _FakeIdentities(defaultIdentity: identity),
           auth: _FakeAuth(),
@@ -573,6 +775,7 @@ void main() {
           ..clearError = StateError('active session store unavailable');
         final realtime = _FakeRealtime();
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: _FakeRuntime(),
           identities: _FakeIdentities(defaultIdentity: identity),
           auth: _FakeAuth(),
@@ -602,6 +805,7 @@ void main() {
       ).copyWith(handle: 'bob.awiki', localAlias: 'bob-local');
       final active = _FakeActiveSessionStore(first.identityId);
       final service = ImCoreAppSessionService(
+        bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
         runtime: _FakeRuntime(),
         identities: _FakeIdentities(
           defaultIdentity: first,
@@ -638,6 +842,7 @@ void main() {
         );
         final active = _FakeActiveSessionStore(first.identityId);
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: _FakeIdentities(
             defaultIdentity: first,
@@ -674,6 +879,7 @@ void main() {
         final realtime = _FakeRealtime();
         final active = _FakeActiveSessionStore(first.identityId);
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: _FakeIdentities(
             defaultIdentity: first,
@@ -725,6 +931,7 @@ void main() {
         final realtime = _FakeRealtime();
         final active = _FakeActiveSessionStore(first.identityId);
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: _FakeIdentities(
             defaultIdentity: first,
@@ -765,6 +972,7 @@ void main() {
       final realtime = _FakeRealtime();
       final active = _FakeActiveSessionStore('id-default');
       final service = ImCoreAppSessionService(
+        bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
         runtime: runtime,
         identities: _FakeIdentities(defaultIdentity: _session('id-default')),
         auth: _FakeAuth(),
@@ -790,6 +998,7 @@ void main() {
           ..clearError = StateError('active session store unavailable');
         final realtime = _FakeRealtime();
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: _FakeRuntime(),
           identities: _FakeIdentities(defaultIdentity: identity),
           auth: _FakeAuth(),
@@ -820,6 +1029,7 @@ void main() {
         );
         final active = _FakeActiveSessionStore('id-default');
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: _FakeIdentities(defaultIdentity: _session('id-default')),
           auth: _FakeAuth(),
@@ -848,6 +1058,7 @@ void main() {
       final stopCompleter = Completer<void>();
       final realtime = _FakeRealtime(onStop: () async => stopCompleter.future);
       final service = ImCoreAppSessionService(
+        bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
         runtime: _FakeRuntime(),
         identities: _FakeIdentities(defaultIdentity: _session('id-default')),
         auth: _FakeAuth(),
@@ -875,6 +1086,7 @@ void main() {
           'id-second',
         ).copyWith(handle: 'bob.awiki', localAlias: 'bob-local');
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: _FakeIdentities(
             defaultIdentity: first,
@@ -918,6 +1130,7 @@ void main() {
         final runtime = _FakeRuntime();
         final active = _FakeActiveSessionStore(first.identityId);
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: _FakeIdentities(
             defaultIdentity: first,
@@ -983,6 +1196,7 @@ void main() {
           ensureCompleterCall: 2,
         );
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: _FakeRuntime(),
           identities: _FakeIdentities(
             defaultIdentity: first,
@@ -1018,10 +1232,16 @@ void main() {
       final refreshResult = Completer<AppAuthState>();
       final auth = _FakeAuth(refreshCompleter: refreshResult);
       final service = ImCoreAppSessionService(
+        bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
         runtime: _FakeRuntime(),
         identities: _FakeIdentities(
           defaultIdentity: first,
           extraIdentities: <AppSession>[latest],
+          activeBindings: <SessionAccountBinding>[
+            _bindingFor(first),
+            _bindingFor(first),
+            _bindingFor(latest),
+          ],
         ),
         auth: auth,
         activeSessionStore: _FakeActiveSessionStore(first.identityId),
@@ -1050,6 +1270,7 @@ void main() {
       final runtime = _FakeRuntime();
       final realtime = _FakeRealtime();
       final service = ImCoreAppSessionService(
+        bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
         runtime: runtime,
         identities: _FakeIdentities(defaultIdentity: _session('id-default')),
         auth: _FakeAuth(),
@@ -1073,6 +1294,7 @@ void main() {
           onStop: () async => throw StateError('realtime stop failed'),
         );
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: _FakeIdentities(defaultIdentity: _session('id-default')),
           auth: _FakeAuth(),
@@ -1097,6 +1319,7 @@ void main() {
         final identity = _session('id-default');
         final identities = _FakeIdentities(defaultIdentity: identity);
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: identities,
           auth: _FakeAuth(),
@@ -1129,6 +1352,7 @@ void main() {
         final identities = _FakeIdentities(defaultIdentity: identity);
         final active = _FakeActiveSessionStore('id-default');
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: identities,
           auth: _FakeAuth(),
@@ -1171,6 +1395,7 @@ void main() {
         );
         final activeStore = _FakeActiveSessionStore(active.identityId);
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: runtime,
           identities: identities,
           auth: _FakeAuth(),
@@ -1202,6 +1427,7 @@ void main() {
           ],
         );
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: _FakeRuntime(),
           identities: identities,
           auth: _FakeAuth(),
@@ -1218,6 +1444,7 @@ void main() {
       'loginWithIdentity rejects cross-domain local identities locally',
       () async {
         final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
           runtime: _FakeRuntime(),
           identities: _FakeIdentities(
             defaultIdentity: _session(
@@ -1235,6 +1462,26 @@ void main() {
       },
     );
   });
+}
+
+class _FakeBootstrapEpochBarrier implements AppBootstrapEpochBarrierPort {
+  _FakeBootstrapEpochBarrier({this.onEnsure, this.error});
+
+  final void Function(AppSession identity, SessionAccountBinding binding)?
+  onEnsure;
+  final Object? error;
+  int calls = 0;
+
+  @override
+  Future<void> ensureReady({
+    required AppSession identity,
+    required SessionAccountBinding binding,
+  }) async {
+    calls += 1;
+    onEnsure?.call(identity, binding);
+    final failure = error;
+    if (failure != null) throw failure;
+  }
 }
 
 AppSession _session(String id) {
@@ -1317,7 +1564,7 @@ class _FakeIdentities implements IdentityCorePort {
                ].map(_bindingFor),
            ];
 
-  final AppSession? _defaultIdentity;
+  AppSession? _defaultIdentity;
   final AppSession? _resolvedIdentity;
   final List<AppSession> _extraIdentities;
   final List<SessionAccountBinding> _activeBindings;
@@ -1326,6 +1573,10 @@ class _FakeIdentities implements IdentityCorePort {
   final List<String> deletedSelectors = <String>[];
   int activeBindingCount = 0;
   int listCount = 0;
+
+  void replaceDefaultIdentity(AppSession identity) {
+    _defaultIdentity = identity;
+  }
 
   @override
   Future<SessionAccountBinding> activeSyncAccountBinding() async {
@@ -1344,8 +1595,9 @@ class _FakeIdentities implements IdentityCorePort {
   @override
   Future<List<AppSession>> listLocalIdentities() async {
     listCount += 1;
+    final defaultIdentity = _defaultIdentity;
     return <AppSession>[
-      if (_defaultIdentity != null) _defaultIdentity,
+      if (defaultIdentity != null) defaultIdentity,
       ..._extraIdentities,
     ];
   }
@@ -1411,8 +1663,9 @@ class _FakeIdentities implements IdentityCorePort {
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
     deletedSelectors.add(identityIdOrAlias);
+    final defaultIdentity = _defaultIdentity;
     final identities = <AppSession>[
-      if (_defaultIdentity != null) _defaultIdentity,
+      if (defaultIdentity != null) defaultIdentity,
       ..._extraIdentities,
     ];
     return identities.firstWhere(
@@ -1460,6 +1713,20 @@ SessionAccountBinding _bindingFor(AppSession identity) {
     currentDid: identity.did,
     protocolDeviceId: 'protocol-device-${identity.identityId}',
     identityGeneration: '1',
+    deviceAuthGeneration: '2',
+  );
+}
+
+SessionAccountBinding _bindingForGeneration(
+  AppSession identity,
+  String generation,
+) {
+  return SessionAccountBinding(
+    ownerIdentityId: identity.identityId,
+    accountId: 'account-${identity.identityId}',
+    currentDid: identity.did,
+    protocolDeviceId: 'protocol-device-${identity.identityId}',
+    identityGeneration: generation,
     deviceAuthGeneration: '2',
   );
 }

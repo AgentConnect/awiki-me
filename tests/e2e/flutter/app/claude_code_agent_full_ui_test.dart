@@ -26,6 +26,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../case_attestation.dart';
+import '../support/protected_otp_config.dart';
 
 const String _claudeCodeAgentRunConfigPath =
     '.e2e/claude-code-agent/current/run_config.json';
@@ -965,6 +966,9 @@ class _ClaudeCodeAgentRealBackendConfig {
     }
     final service = _mapAt(map, 'service');
     final otp = _mapAt(map, 'otp');
+    final protectedOtp = ProtectedOtpConfig.load(
+      _requiredConfig(otp, 'localConfigPath', 'otp.localConfigPath'),
+    );
     final accounts = _mapAt(map, 'accounts');
     final appUser = _mapAt(accounts, 'appUser');
     final app = _mapAt(map, 'app');
@@ -996,8 +1000,8 @@ class _ClaudeCodeAgentRealBackendConfig {
         agentImEnabled: true,
       ),
       appHandle: _requiredConfig(appUser, 'handle', 'accounts.appUser.handle'),
-      otpPhone: _requiredConfig(otp, 'phone', 'otp.phone'),
-      otpCode: _requiredConfig(otp, 'code', 'otp.code'),
+      otpPhone: protectedOtp.phone,
+      otpCode: protectedOtp.code,
       appStateRoot: _requiredConfig(app, 'stateRoot', 'app.stateRoot'),
       daemonBinary: _requiredConfig(daemon, 'binary', 'daemon.binary'),
       daemonStateRoot: _requiredConfig(daemon, 'stateRoot', 'daemon.stateRoot'),

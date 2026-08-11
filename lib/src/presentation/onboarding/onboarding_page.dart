@@ -14,7 +14,6 @@ import '../../application/ports/identity_core_port.dart';
 import '../../application/tenant/app_tenant.dart';
 import '../../l10n/l10n.dart';
 import '../../domain/entities/session_identity.dart';
-import '../../domain/entities/handle_recovery.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../devices/device_join_page.dart';
 import '../recovery/handle_recovery_page.dart';
@@ -107,9 +106,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final localeMode = ref.watch(appLocaleModeProvider);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    final handleRecoveryAvailable =
-        ref.watch(multiDeviceHandleRecoveryEnabledProvider) &&
-        (onboarding.serverInfo?.supportsPhoneHandleRecovery ?? false);
     if (responsive.usesDesktopLayout) {
       return _withLegacyUpgradeProjection(
         _MacOnboardingScaffold(
@@ -132,10 +128,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           localeMode: localeMode,
           onLanguagePressed: _showLanguageSheet,
           onTenantPressed: _showTenantManagementDialog,
-          onJoinDevice: () => openDeviceJoinPage(context),
-          onRecoverHandle: handleRecoveryAvailable
-              ? (identity) => _openHandleRecoveryPage(context, identity)
-              : null,
         ),
         onboarding,
       );
@@ -210,26 +202,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                                   !onboarding.isBusy,
                                               deletingIdentitySelector: onboarding
                                                   .deletingLocalIdentitySelector,
-                                              onRecoverHandle:
-                                                  handleRecoveryAvailable
-                                                  ? (identity) =>
-                                                        _openHandleRecoveryPage(
-                                                          context,
-                                                          identity,
-                                                        )
-                                                  : null,
                                             ),
                                           ],
-                                          SizedBox(
-                                            height: responsive.spacing(18),
-                                          ),
-                                          AppSecondaryButton(
-                                            label: context.l10n.deviceJoinEntry,
-                                            semanticsIdentifier:
-                                                'multi-device-join-entry',
-                                            onPressed: () =>
-                                                openDeviceJoinPage(context),
-                                          ),
                                         ],
                                       ),
                                     ),
@@ -489,21 +463,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     await showTenantManagementDialog(context);
   }
 
-  Future<void> _openHandleRecoveryPage(
-    BuildContext context,
-    SessionIdentity identity,
-  ) {
-    return AppNavigator.push<void>(
-      context,
-      (_) => HandleRecoveryPage(
-        identityScope: HandleRecoveryIdentityScope(
-          localIdentityId: identity.credentialName,
-        ),
-        initialHandle: identity.handle,
-      ),
-    );
-  }
-
   Future<void> _submitRegister(BuildContext context) async {
     final notifier = ref.read(onboardingProvider.notifier);
     final handle = handleController.text.trim();
@@ -535,7 +494,80 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       );
     }
     if (result == IdentityRegistrationStatus.joinRequired && context.mounted) {
-      await openDeviceJoinPage(context);
+      final verifiedOnboarding = ref.read(onboardingProvider);
+      await _chooseExistingHandleAction(
+        context,
+        fullHandle:
+            verifiedOnboarding.otpTargetFullHandle ??
+            '${handle.toLowerCase()}.${ref.read(activeAppTenantProvider).didHost.toLowerCase()}',
+        phone: verifiedOnboarding.otpTargetPhone ?? _normalizedPhone,
+      );
+    }
+  }
+
+  Future<void> _chooseExistingHandleAction(
+    BuildContext context, {
+    required String fullHandle,
+    required String phone,
+  }) async {
+    final recoveryAvailable =
+        phone.isNotEmpty &&
+        ref.read(multiDeviceHandleRecoveryEnabledProvider) &&
+        (ref.read(onboardingProvider).serverInfo?.supportsPhoneHandleRecovery ??
+            false);
+    final action = await showCupertinoDialog<_ExistingHandleAction>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text(context.l10n.onboardingExistingHandleTitle),
+        content: Text(context.l10n.onboardingExistingHandleMessage),
+        actions: <Widget>[
+          CupertinoDialogAction(
+            key: const Key('existing-handle-join-action'),
+            onPressed: () => Navigator.of(
+              dialogContext,
+            ).pop(_ExistingHandleAction.joinDevice),
+            child: Text(context.l10n.deviceJoinEntry),
+          ),
+          CupertinoDialogAction(
+            key: const Key('existing-handle-recovery-action'),
+            onPressed: recoveryAvailable
+                ? () => Navigator.of(
+                    dialogContext,
+                  ).pop(_ExistingHandleAction.recoverHandle)
+                : null,
+            child: Text(context.l10n.handleRecoveryTitle),
+          ),
+          CupertinoDialogAction(
+            key: const Key('existing-handle-cancel-action'),
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(_ExistingHandleAction.cancel),
+            child: Text(context.l10n.commonCancel),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted) return;
+    final controller = ref.read(onboardingProvider.notifier);
+    switch (action ?? _ExistingHandleAction.cancel) {
+      case _ExistingHandleAction.joinDevice:
+        final started = await controller.beginExistingHandleDeviceJoin(
+          presenceReason: context.l10n.handleRecoveryPresenceReason,
+        );
+        if (started && context.mounted) await openDeviceJoinPage(context);
+      case _ExistingHandleAction.recoverHandle:
+        await controller.discardExistingHandleContinuation();
+        if (context.mounted) {
+          await AppNavigator.push<void>(
+            context,
+            (_) => HandleRecoveryPage(
+              initialHandle: fullHandle,
+              initialPhone: phone,
+            ),
+          );
+        }
+      case _ExistingHandleAction.cancel:
+        await controller.discardExistingHandleContinuation();
     }
   }
 
@@ -740,3 +772,5 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     _e2eOtpRetryTimer = null;
   }
 }
+
+enum _ExistingHandleAction { joinDevice, recoverHandle, cancel }

@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import '../../../app/app_services.dart';
 import '../../../app/app_locale.dart';
 import '../../../application/messaging_service.dart';
+import '../../../application/models/app_session.dart';
 import '../../../application/models/message_sync_diagnostics.dart';
 import '../../../application/models/remote_push_sync_receipt.dart';
 import '../../../application/ports/message_sync_core_port.dart';
@@ -307,7 +308,35 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   Future<RemotePushSyncReceipt> requestRemotePushSync({
     RemotePushPresentationDisposition presentation =
         RemotePushPresentationDisposition.providerPresented,
-  }) {
+  }) async {
+    final epoch = _captureCurrentEpoch();
+    if (epoch == null) {
+      return const RemotePushSyncReceipt(
+        disposition: RemotePushSyncDisposition.ignored,
+      );
+    }
+    try {
+      final refreshed = await ref
+          .read(appSessionServiceProvider)
+          .refreshSession();
+      if (refreshed == null || !_isCurrentEpoch(epoch)) {
+        return const RemotePushSyncReceipt(
+          disposition: RemotePushSyncDisposition.staleSession,
+        );
+      }
+      final updated = ref
+          .read(sessionProvider.notifier)
+          .updateSessionMetadataIfCurrent(refreshed.toLegacySessionIdentity());
+      if (!updated || !_isCurrentEpoch(epoch)) {
+        return const RemotePushSyncReceipt(
+          disposition: RemotePushSyncDisposition.staleSession,
+        );
+      }
+    } on Object {
+      return const RemotePushSyncReceipt(
+        disposition: RemotePushSyncDisposition.staleSession,
+      );
+    }
     return _requestSync(
       'remote_push',
       immediate: true,
@@ -857,7 +886,11 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       );
       return waiter?.future;
     }
-    queued.reason = reason;
+    // The asynchronous remote-push epoch fence must not let an older Push
+    // request overwrite a normal request that was queued while the fence ran.
+    if (reason != 'remote_push' || queued.reason == 'remote_push') {
+      queued.reason = reason;
+    }
     queued.immediate = queued.immediate || immediate;
     queued.policy.merge(
       suppressNotificationPresentation: policy.suppressNotificationPresentation,

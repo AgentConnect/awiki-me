@@ -72,6 +72,7 @@ class AppNotificationFacade implements NotificationFacade {
     final settings = InitializationSettings(
       android: android,
       iOS: darwin,
+      linux: const LinuxInitializationSettings(defaultActionName: 'Open'),
       macOS: darwin,
       windows: WindowsInitializationSettings(
         appName: 'AWiki Me',
@@ -91,11 +92,15 @@ class AppNotificationFacade implements NotificationFacade {
       },
     );
 
-    final launchDetails = await _plugin.getNotificationAppLaunchDetails();
-    if (launchDetails?.didNotificationLaunchApp ?? false) {
-      _initialActivation = NotificationActivation.fromPayload(
-        launchDetails?.notificationResponse?.payload,
-      );
+    try {
+      final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+      if (launchDetails?.didNotificationLaunchApp ?? false) {
+        _initialActivation = NotificationActivation.fromPayload(
+          launchDetails?.notificationResponse?.payload,
+        );
+      }
+    } on UnimplementedError {
+      // Some desktop plugin implementations do not expose launch details.
     }
 
     await _plugin

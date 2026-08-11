@@ -79,12 +79,10 @@ tests in this repository, put cross-service system coverage in
 `tests/e2e/`; when another repository owns a required test layer, update it in
 the same task.
 
-For development/test OTP flows, use the shared non-production credentials below:
-
-```bash
-DEV_OTP_PHONE=+8610022229999
-DEV_OTP_CODE=987580
-```
+For development/test OTP flows, load the protected phone and code only from
+the ignored, permission-restricted local E2E configuration. Never place those
+values in tracked files, process arguments, run configuration, reports, or
+test artifacts.
 
 ## Multi-Platform Safety
 AWiki Me supports Android, iOS, macOS, and web. When fixing or changing one

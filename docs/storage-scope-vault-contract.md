@@ -44,6 +44,11 @@ Tenant Profile（App 业务连接配置）
   都必须保留。App 恢复 `authorized` Join 前必须通过 Core 验证本地仍存在同一
   DID + `protocol_device_id` 绑定；旧版本遗留的孤立 journal 直接忽略并显示新的 Join
   表单，不能尝试激活已删除身份，也不能由 App 直接删除 Core 文件。
+- identity-retirement 保留普通消息投影使用的 stable account binding。若本地 registry 已无
+  相关凭证，且该唯一 binding 与 completed retirement marker 的 identity ID、DID、
+  `protocol_device_id` 精确一致，统一 onboarding 再提交同 Handle 时由 Core 返回 ordinary
+  `joinRequired`，App 显示 Join/Handle Recovery 选择；任何缺失、未完成或不匹配状态仍由 Core
+  fail closed，App 不读取 SQLite 或 marker 自行判断。
 - 每个有效 scope/account/device binding 默认参加普通消息与账号状态同步，不按本地 scope、
   账号或设备做产品灰度；raw cursor、recovery 和 mutation outbox 仍只属于该 scope 的 Core
   SQLite。测试 operator allowlist 不得写入 scope registry 或业务 cache。

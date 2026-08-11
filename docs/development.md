@@ -37,6 +37,14 @@ cd ../awiki-me
 flutter pub get
 ```
 
+For the two local Intel macOS Debug Apps, use
+`scripts/build_manual_dual_macos_apps.sh`. Before either Flutter build, the
+script verifies the sibling Core artifact against the exact
+`awiki-cli-rs2` source revision and input hashes. A stale artifact is rebuilt
+for `x86_64` automatically, stale CocoaPods XCFramework copies and their Pod
+target state are invalidated, and both builds must use the verified archive
+before their Apps are accepted.
+
 Use the option for the target platform when needed:
 
 ```bash

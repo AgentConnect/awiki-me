@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/app_presentation_service.dart';
+import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
+import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/message_sync_diagnostics.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/models/remote_push_sync_receipt.dart';
@@ -306,6 +308,52 @@ void main() {
 
     expect(receipt.disposition, RemotePushSyncDisposition.staleSession);
     expect(receipt.canAcknowledge, isFalse);
+  });
+
+  test('remote Push waits for the fresh epoch barrier before sync', () async {
+    final barrier = _RemotePushBarrierSessionService(_appSession('me'));
+    final sync = FakeMessageSyncService();
+    final container = _container(
+      FakeAwikiGateway(),
+      sync,
+      appSessions: barrier,
+    );
+    addTearDown(container.dispose);
+
+    final pending = container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestRemotePushSync();
+    await pumpEventQueue();
+
+    expect(barrier.refreshCalls, 1);
+    expect(sync.syncReasons, isEmpty);
+
+    barrier.complete();
+    final receipt = await pending;
+    expect(receipt.disposition, RemotePushSyncDisposition.succeeded);
+    expect(sync.syncReasons, <String>['remote_push']);
+  });
+
+  test('remote Push returns stale when the barrier changes epoch', () async {
+    final barrier = _RemotePushBarrierSessionService(_appSession('next'));
+    final sync = FakeMessageSyncService();
+    final container = _container(
+      FakeAwikiGateway(),
+      sync,
+      appSessions: barrier,
+    );
+    addTearDown(container.dispose);
+
+    final pending = container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestRemotePushSync();
+    await pumpEventQueue();
+    barrier.complete();
+
+    final receipt = await pending;
+    expect(receipt.disposition, RemotePushSyncDisposition.staleSession);
+    expect(receipt.canAcknowledge, isFalse);
+    expect(sync.syncReasons, isEmpty);
   });
 
   test(
@@ -2095,7 +2143,16 @@ ProviderContainer _container(
   FakeMessagingService? messagingService,
   ConversationService? conversationService,
   FakeProductLocalStore? productLocalStore,
+  AppSessionService? appSessions,
 }) {
+  final activeSession =
+      session ??
+      const SessionIdentity(
+        did: 'did:test:me',
+        credentialName: 'default',
+        displayName: 'Me',
+        handle: 'me',
+      );
   return ProviderContainer(
     overrides: <Override>[
       awikiGatewayProvider.overrideWithValue(gateway),
@@ -2119,6 +2176,10 @@ ProviderContainer _container(
         conversationService: conversationService,
         agentControlService: agentControl,
       ),
+      appSessionServiceProvider.overrideWithValue(
+        appSessions ??
+            _RemotePushBarrierSessionService.immediate(activeSession),
+      ),
       if (productLocalStore != null)
         productLocalStoreProvider.overrideWithValue(productLocalStore),
       messageSyncCoordinatorProvider.overrideWith(
@@ -2131,19 +2192,52 @@ ProviderContainer _container(
       ),
       sessionProvider.overrideWith((ref) {
         final controller = SessionController();
-        controller.setSession(
-          session ??
-              const SessionIdentity(
-                did: 'did:test:me',
-                credentialName: 'default',
-                displayName: 'Me',
-                handle: 'me',
-              ),
-        );
+        controller.setSession(activeSession);
         return controller;
       }),
     ],
   );
+}
+
+AppSession _appSession(String identity) => AppSession(
+  did: 'did:test:$identity',
+  identityId: identity == 'me' ? 'default' : identity,
+  displayName: identity,
+  handle: identity,
+  localAlias: identity == 'me' ? 'default' : identity,
+  authenticated: true,
+);
+
+class _RemotePushBarrierSessionService implements AppSessionService {
+  _RemotePushBarrierSessionService(this.result)
+    : _refresh = Completer<AppSession?>();
+
+  _RemotePushBarrierSessionService.immediate(SessionIdentity session)
+    : result = AppSession(
+        did: session.did,
+        identityId: session.credentialName,
+        displayName: session.displayName,
+        handle: session.handle,
+        localAlias: session.credentialName,
+        authenticated: true,
+        accountBinding: session.accountBinding,
+      ),
+      _refresh = null;
+
+  final AppSession result;
+  final Completer<AppSession?>? _refresh;
+  int refreshCalls = 0;
+
+  void complete() => _refresh?.complete(result);
+
+  @override
+  Future<AppSession?> refreshSession() {
+    refreshCalls += 1;
+    return _refresh?.future ?? Future<AppSession?>.value(result);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 SessionIdentity _boundSession({required String deviceAuthGeneration}) {

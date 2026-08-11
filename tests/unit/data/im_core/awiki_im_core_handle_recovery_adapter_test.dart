@@ -1,143 +1,224 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_handle_recovery_adapter.dart';
-import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _didOld = 'did:wba:awiki.info:users:alice-old';
-const _didNew = 'did:wba:awiki.info:users:alice-new';
+const _owner = HandleRecoveryOwner(
+  localIdentityId: 'identity-alice',
+  handle: 'alice.awiki.info',
+);
+const _stateRoot =
+    'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 void main() {
-  test(
-    'public facade adapter forwards all seven Recovery operations',
-    () async {
-      final sdk = _FakeRecoveryCore();
-      final adapter = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
-        coreInstance: () async => sdk,
-      );
+  test('V4 adapter uses the Core-owned operation journal end to end', () async {
+    final sdk = _FakeRecoveryCore();
+    final adapter = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+      coreInstance: () async => sdk,
+    );
 
-      final otp = await adapter.requestHandleRecoveryOtp(
-        handle: 'alice.awiki.info',
-        phone: '+8613800138000',
-        operationId: 'recover-op-1',
-      );
-      expect(otp.accepted, isTrue);
-      expect(otp.operationId, 'recover-op-1');
-      expect(otp.retryAfterSeconds, 60);
-      expect(otp.retryAt, DateTime.utc(2026, 8, 6, 12, 1));
+    final otp = await adapter.requestOtp(
+      handle: _owner.handle,
+      localIdentityId: _owner.localIdentityId,
+      phone: '+8613800138000',
+    );
+    expect(otp.operationId, 'recover-op-1');
+    expect(otp.operation.ownerIdentityId, _owner.localIdentityId);
+    expect(
+      otp.operation.lifecycleClass,
+      HandleRecoveryLifecycleClass.preCommit,
+    );
+    expect(otp.operation.readyToCommit, isFalse);
+    expect(
+      (sdk.selector! as core.IdIdentitySelector).id,
+      _owner.localIdentityId,
+    );
 
-      final prepared = await adapter.prepareHandleRecovery(
-        scope: const HandleRecoveryIdentityScope(
-          localIdentityId: 'identity-alice',
-        ),
-        handle: 'alice.awiki.info',
-        phone: '+8613800138000',
-        otp: '987580',
-        operationId: 'recover-op-1',
-      );
-      expect(sdk.selector, isA<core.IdIdentitySelector>());
-      expect((sdk.selector! as core.IdIdentitySelector).id, 'identity-alice');
-      expect(prepared.phase, HandleRecoveryProgressPhase.prepared);
-      expect(prepared.impact.unsupportedE2eeGroupCount, 2);
+    final prepared = await adapter.prepare(
+      operationId: otp.operationId,
+      phone: '+8613800138000',
+      otp: '987580',
+    );
+    expect(prepared.readyToCommit, isTrue);
+    expect(prepared.accountUserId, 'account-1');
+    expect(prepared.impact.unsupportedE2eeGroupCount, 2);
+    expect(prepared.canDiscard, isTrue);
 
-      await adapter.activateHandleRecovery(
-        recoveryId: 'recovery-1',
-        userPresenceConfirmed: true,
-      );
-      await adapter.resumeHandleRecovery(recoveryId: 'recovery-1');
-      await adapter.handleRecoveryStatus('recovery-1');
+    final activated = await adapter.activate(
+      operationId: otp.operationId,
+      userPresenceConfirmed: true,
+    );
+    expect(
+      activated.lifecycleClass,
+      HandleRecoveryLifecycleClass.remoteUnresolved,
+    );
+    expect(activated.commitAttempted, isTrue);
+    expect(activated.canDiscard, isFalse);
 
-      final activatedJoin = await adapter.activateAuthorizedJoin(
-        scope: const HandleRecoveryIdentityScope(
-          localIdentityId: 'identity-alice',
-        ),
-        phone: '+8613800138000',
-        otp: '987580',
-        handle: 'alice.awiki.info',
-        did: _didNew,
-        operationId: 'join-op-1',
-        ttlSeconds: 600,
-        userPresenceConfirmed: true,
-      );
-      expect(sdk.selector, isA<core.IdIdentitySelector>());
-      expect(activatedJoin.join.joinSessionId, 'join-recovery-1');
-      expect(activatedJoin.join.phase, DeviceJoinPhase.authorized);
-      expect(
-        activatedJoin.registryEpochReset?.sourceKind,
-        HandleRecoveryTransitionSourceKind.joinedDevice,
-      );
+    final applied = await adapter.reconcile(otp.operationId);
+    expect(applied.lifecycleClass, HandleRecoveryLifecycleClass.applied);
+    expect(applied.stateRootFingerprint, _stateRoot);
+    expect(applied.registryEpochReset?.sourceId, otp.operationId);
+    expect(applied.registryEpochReset?.stateRootFingerprint, _stateRoot);
 
-      final resumedJoin = await adapter.resumeAuthorizedJoinActivation(
-        joinSessionId: 'join-recovery-1',
-      );
-      expect(resumedJoin.join.did, _didNew);
-      expect(sdk.calls, <String>[
+    final listed = await adapter.listOperations(_owner);
+    expect(listed.single.lifecycleClass, HandleRecoveryLifecycleClass.applied);
+    expect(
+      (await adapter.getStatus(otp.operationId)).operationId,
+      otp.operationId,
+    );
+
+    final receipt = await adapter.authorizedEpochReceipt(_owner);
+    expect(receipt?.receiptSchemaVersion, '4');
+    expect(receipt?.sourceId, otp.operationId);
+    expect(receipt?.deviceAuthGeneration, 9);
+    expect(receipt?.registryVersion, 11);
+    expect(receipt?.stateRootFingerprint, _stateRoot);
+
+    expect(
+      sdk.calls,
+      containsAll(<String>[
         'requestOtp',
         'prepare',
         'activate',
         'resume',
         'status',
-        'activateJoin',
-        'resumeJoin',
-      ]);
-    },
-  );
+        'list',
+        'receipt',
+      ]),
+    );
+  });
 
   test(
-    'adapter maps legacy Registry authority without weakening fields',
+    'terminal discard and quarantine use summary without reloading Vault',
     () async {
+      final sdk = _FakeRecoveryCore();
       final adapter = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
-        coreInstance: () async => _FakeRecoveryCore(),
+        coreInstance: () async => sdk,
+      );
+      await adapter.requestOtp(
+        handle: _owner.handle,
+        localIdentityId: _owner.localIdentityId,
+        phone: '+8613800138000',
       );
 
-      final authority = await adapter.legacyRegistryEpochAdoptionAuthority(
-        'identity-alice',
+      await adapter.discardPreAttempt('recover-op-1');
+      expect(
+        sdk.summary.lifecycleClass,
+        core.HandleRecoveryOperationLifecycle.discardedPreAttempt,
       );
-      expect(authority?.ownerIdentityId, 'identity-alice');
-      expect(authority?.accountUserId, 'account-1');
-      expect(authority?.currentDid, _didOld);
-      expect(authority?.bindingGeneration, '7');
-      expect(authority?.protocolDeviceId, 'device-old');
-      expect(authority?.deviceAuthGeneration, '4');
-      expect(authority?.provenanceId, 'checkpoint-1');
+
+      sdk.resetAwaitingFactor(
+        keyState: core.HandleRecoveryKeyState.permanentlyUnavailable,
+      );
+      final statusCallsBefore = sdk.calls
+          .where((call) => call == 'status')
+          .length;
+      final quarantined = await adapter.quarantineKeyUnavailable(
+        operationId: 'recover-op-1',
+        confirmed: true,
+      );
+      expect(
+        quarantined.lifecycleClass,
+        HandleRecoveryLifecycleClass.quarantinedKeyUnavailable,
+      );
+      expect(
+        quarantined.keyState,
+        HandleRecoveryKeyState.permanentlyUnavailable,
+      );
+      expect(
+        sdk.calls.where((call) => call == 'status').length,
+        statusCallsBefore,
+        reason: 'quarantine must not reload an unreadable key',
+      );
     },
   );
 
-  test('adapter maps only the closed Core Recovery failure enum', () async {
+  test('progress projection uses the same retryability table', () async {
     final sdk = _FakeRecoveryCore()
-      ..error = const core.AwikiImCoreException(
-        code: 'handle_recovery_remote_state_changed',
-        message: 'changed',
-        handleRecoveryFailureCode:
-            core.HandleRecoveryFailureCode.remoteStateChanged,
+      ..phase = core.HandleRecoveryPhase.remoteOutcomeUnknown
+      ..summary = _summary(
+        lifecycle: core.HandleRecoveryOperationLifecycle.remoteUnresolved,
+        accountUserId: 'account-1',
+        commitAttempted: true,
+        lastErrorCode: 'result_absent',
       );
     final adapter = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
       coreInstance: () async => sdk,
     );
 
-    await expectLater(
-      adapter.handleRecoveryStatus('recovery-1'),
-      throwsA(
-        isA<HandleRecoveryFailure>().having(
-          (error) => error.code,
-          'code',
-          HandleRecoveryFailureCode.remoteStateChanged,
+    final progress = await adapter.getStatus('recover-op-1');
+
+    expect(progress.failureCode, HandleRecoveryFailureCode.resultAbsent);
+    expect(progress.retryable, isTrue);
+  });
+
+  test(
+    'applied progress rejects a mismatched authorized epoch receipt',
+    () async {
+      final sdk = _FakeRecoveryCore()..receiptSourceId = 'different-operation';
+      final adapter = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+        coreInstance: () async => sdk,
+      );
+
+      await expectLater(
+        adapter.reconcile('recover-op-1'),
+        throwsA(
+          isA<HandleRecoveryFailure>().having(
+            (error) => error.code,
+            'code',
+            HandleRecoveryFailureCode.transitionMismatch,
+          ),
         ),
-      ),
+      );
+    },
+  );
+
+  test('adapter maps the exact closed retryability table', () async {
+    final sdk = _FakeRecoveryCore();
+    final adapter = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+      coreInstance: () async => sdk,
     );
+
+    const cases = <core.HandleRecoveryFailureCode, bool>{
+      core.HandleRecoveryFailureCode.factorRetryRequired: true,
+      core.HandleRecoveryFailureCode.resultAbsent: true,
+      core.HandleRecoveryFailureCode.outcomeUnknown: true,
+      core.HandleRecoveryFailureCode.localTransitionPending: true,
+      core.HandleRecoveryFailureCode.localKeyUnavailable: false,
+      core.HandleRecoveryFailureCode.localMigrationUnsupported: false,
+      core.HandleRecoveryFailureCode.unknownEpoch: false,
+    };
+    for (final entry in cases.entries) {
+      sdk.error = core.AwikiImCoreException(
+        code: 'service_error',
+        message: entry.key.name,
+        handleRecoveryFailureCode: entry.key,
+      );
+      await expectLater(
+        adapter.getStatus('recover-op-1'),
+        throwsA(
+          isA<HandleRecoveryFailure>().having(
+            (error) => error.retryable,
+            entry.key.name,
+            entry.value,
+          ),
+        ),
+      );
+    }
 
     sdk.error = const core.AwikiImCoreException(
       code: 'unrelated_core_error',
       message: 'unrelated',
     );
     await expectLater(
-      adapter.handleRecoveryStatus('recovery-1'),
+      adapter.getStatus('recover-op-1'),
       throwsA(isA<core.AwikiImCoreException>()),
     );
   });
 
-  test('adapter maps only a structured OTP rate-limit boundary', () async {
+  test('adapter accepts only the structured OTP rate-limit shape', () async {
     final sdk = _FakeRecoveryCore()
       ..error = const core.AwikiImCoreException(
         code: 'service_error',
@@ -151,14 +232,14 @@ void main() {
     );
 
     await expectLater(
-      adapter.requestHandleRecoveryOtp(
-        handle: 'alice.awiki.info',
+      adapter.requestOtp(
+        handle: _owner.handle,
+        localIdentityId: _owner.localIdentityId,
         phone: '+8613800138000',
-        operationId: 'recover-op-1',
       ),
       throwsA(
         isA<HandleRecoveryOtpRateLimited>()
-            .having((error) => error.retryAfterSeconds, 'retryAfterSeconds', 37)
+            .having((error) => error.retryAfterSeconds, 'seconds', 37)
             .having(
               (error) => error.retryAt,
               'retryAt',
@@ -166,22 +247,32 @@ void main() {
             ),
       ),
     );
+  });
 
-    sdk.error = const core.AwikiImCoreException(
-      code: 'service_error',
-      message: 'rate limited',
-      serviceDataJson:
-          '{"code":"otp_rate_limited","retry_after_seconds":37,'
-          '"retry_at":"2026-08-06T12:00:37+00:00"}',
-    );
-    await expectLater(
-      adapter.requestHandleRecoveryOtp(
+  test('legacy Join reset maps only to a Join transition reference', () {
+    final reference = handleRecoveryJoinTransitionReferenceFromCore(
+      const core.HandleRecoveryRegistryEpochReset(
+        accountUserId: 'account-1',
+        ownerIdentityId: 'identity-alice',
         handle: 'alice.awiki.info',
-        phone: '+8613800138000',
-        operationId: 'recover-op-1',
+        previousDid: 'did:wba:awiki.info:users:alice-old',
+        currentDid: 'did:wba:awiki.info:users:alice-new',
+        bindingGeneration: '8',
+        sourceKind: core.HandleRecoveryTransitionSourceKind.joinedDevice,
+        sourceId: 'join-1',
       ),
-      throwsA(isA<core.AwikiImCoreException>()),
     );
+
+    expect(reference, isA<HandleRecoveryJoinTransitionReference>());
+    expect(reference.accountUserId, 'account-1');
+    expect(reference.ownerIdentityId, 'identity-alice');
+    expect(reference.handle, 'alice.awiki.info');
+    expect(reference.bindingGeneration, '8');
+    expect(
+      reference.sourceKind,
+      HandleRecoveryTransitionSourceKind.joinedDevice,
+    );
+    expect(reference.sourceId, 'join-1');
   });
 }
 
@@ -189,39 +280,37 @@ class _FakeRecoveryCore implements core.AwikiImCore {
   final List<String> calls = <String>[];
   core.IdentitySelector? selector;
   Object? error;
+  String receiptSourceId = 'recover-op-1';
+  core.HandleRecoveryPhase phase = core.HandleRecoveryPhase.awaitingFactor;
+  late core.HandleRecoveryOperationSummary summary = _summary();
 
   void _checkError() {
-    final failure = error;
-    if (failure != null) throw failure;
+    final current = error;
+    if (current != null) throw current;
   }
 
-  @override
-  Future<core.LegacyRegistryEpochAdoptionAuthority?>
-  legacyRegistryEpochAdoptionAuthority(core.IdentitySelector selector) async {
-    _checkError();
-    this.selector = selector;
-    return const core.LegacyRegistryEpochAdoptionAuthority(
-      ownerIdentityId: 'identity-alice',
-      accountUserId: 'account-1',
-      currentDid: _didOld,
-      bindingGeneration: '7',
-      protocolDeviceId: 'device-old',
-      deviceAuthGeneration: '4',
-      provenanceId: 'checkpoint-1',
-    );
+  void resetAwaitingFactor({
+    core.HandleRecoveryKeyState keyState =
+        core.HandleRecoveryKeyState.available,
+  }) {
+    phase = core.HandleRecoveryPhase.awaitingFactor;
+    summary = _summary(keyState: keyState);
   }
 
   @override
   Future<core.HandleRecoveryOtpResult> requestHandleRecoveryOtp({
+    core.IdentitySelector? selector,
+    required String fullHandle,
     required String phone,
-    required String handle,
-    required String operationId,
   }) async {
     _checkError();
     calls.add('requestOtp');
+    this.selector = selector;
+    resetAwaitingFactor();
     return core.HandleRecoveryOtpResult(
-      handle: handle,
-      operationId: operationId,
+      fullHandle: _owner.handle,
+      ownerIdentityId: _owner.localIdentityId,
+      operationId: 'recover-op-1',
       accepted: true,
       retryAfterSeconds: 60,
       retryAt: DateTime.utc(2026, 8, 6, 12, 1),
@@ -230,117 +319,175 @@ class _FakeRecoveryCore implements core.AwikiImCore {
 
   @override
   Future<core.HandleRecoveryProgress> prepareHandleRecovery({
-    required core.IdentitySelector selector,
+    required String operationId,
     required String phone,
     required String code,
-    required String handle,
-    required String operationId,
   }) async {
     _checkError();
-    this.selector = selector;
     calls.add('prepare');
-    return _coreProgress(core.HandleRecoveryPhase.prepared);
+    phase = core.HandleRecoveryPhase.readyToCommit;
+    summary = _summary(accountUserId: 'account-1');
+    return _progress();
   }
 
   @override
   Future<core.HandleRecoveryProgress> activateHandleRecovery({
-    required String recoveryId,
+    required String operationId,
     required bool userPresenceConfirmed,
   }) async {
     _checkError();
     calls.add('activate');
-    return _coreProgress(core.HandleRecoveryPhase.remoteCommitPending);
+    phase = core.HandleRecoveryPhase.remoteOutcomeUnknown;
+    summary = _summary(
+      lifecycle: core.HandleRecoveryOperationLifecycle.remoteUnresolved,
+      accountUserId: 'account-1',
+      commitAttempted: true,
+    );
+    return _progress();
   }
 
   @override
   Future<core.HandleRecoveryProgress> resumeHandleRecovery(
-    String recoveryId,
+    String operationId,
   ) async {
     _checkError();
     calls.add('resume');
-    return _coreProgress(core.HandleRecoveryPhase.completed);
+    phase = core.HandleRecoveryPhase.applied;
+    summary = _summary(
+      lifecycle: core.HandleRecoveryOperationLifecycle.applied,
+      accountUserId: 'account-1',
+      commitAttempted: true,
+      stateRootFingerprint: _stateRoot,
+    );
+    return _progress(stateRootFingerprint: _stateRoot);
   }
 
   @override
   Future<core.HandleRecoveryProgress> handleRecoveryStatus(
-    String recoveryId,
+    String operationId,
   ) async {
     _checkError();
     calls.add('status');
-    return _coreProgress(core.HandleRecoveryPhase.remoteCommitted);
+    return _progress(stateRootFingerprint: summary.stateRootFingerprint);
   }
 
   @override
-  Future<core.AuthorizedJoinActivationProgress> activateAuthorizedJoin({
-    required core.IdentitySelector selector,
-    required String phone,
-    required String code,
-    required String handle,
-    required String did,
+  Future<List<core.HandleRecoveryOperationSummary>>
+  listHandleRecoveryOperations(core.IdentitySelector selector) async {
+    _checkError();
+    calls.add('list');
+    this.selector = selector;
+    return <core.HandleRecoveryOperationSummary>[summary];
+  }
+
+  @override
+  Future<core.HandleRecoveryOperationSummary> discardHandleRecoveryPreAttempt(
+    String operationId,
+  ) async {
+    _checkError();
+    calls.add('discard');
+    summary = _summary(
+      lifecycle: core.HandleRecoveryOperationLifecycle.discardedPreAttempt,
+      keyState: core.HandleRecoveryKeyState.destroyedPreAttempt,
+    );
+    return summary;
+  }
+
+  @override
+  Future<core.HandleRecoveryOperationSummary>
+  quarantineHandleRecoveryKeyUnavailable({
     required String operationId,
-    int? ttlSeconds,
     required bool userPresenceConfirmed,
   }) async {
     _checkError();
-    this.selector = selector;
-    calls.add('activateJoin');
-    return _coreJoinProgress();
+    calls.add('quarantine');
+    summary = _summary(
+      lifecycle:
+          core.HandleRecoveryOperationLifecycle.quarantinedKeyUnavailable,
+      keyState: core.HandleRecoveryKeyState.permanentlyUnavailable,
+    );
+    return summary;
   }
 
   @override
-  Future<core.AuthorizedJoinActivationProgress> resumeAuthorizedJoinActivation(
-    String joinSessionId,
-  ) async {
+  Future<core.HandleRecoveryAccountEpochReceipt?>
+  authorizedHandleRecoveryReceipt(core.IdentitySelector selector) async {
     _checkError();
-    calls.add('resumeJoin');
-    return _coreJoinProgress();
+    calls.add('receipt');
+    this.selector = selector;
+    return core.HandleRecoveryAccountEpochReceipt(
+      receiptSchemaVersion: '4',
+      sourceKind: core.HandleRecoveryTransitionSourceKind.initiator,
+      sourceId: receiptSourceId,
+      accountUserId: 'account-1',
+      ownerIdentityId: _owner.localIdentityId,
+      fullHandle: _owner.handle,
+      localPreviousDid: 'did:wba:awiki.info:users:alice-old',
+      currentDid: 'did:wba:awiki.info:users:alice-new',
+      bindingGeneration: '8',
+      currentDeviceId: 'device-1',
+      deviceAuthGeneration: 9,
+      registryVersion: 11,
+      stateRootFingerprint: _stateRoot,
+      appliedAt: DateTime.utc(2026, 8, 6, 12, 10),
+      metadataJson: '{}',
+    );
   }
+
+  core.HandleRecoveryProgress _progress({String? stateRootFingerprint}) =>
+      core.HandleRecoveryProgress(
+        operationId: 'recover-op-1',
+        ownerIdentityId: _owner.localIdentityId,
+        accountUserId: summary.accountUserId,
+        fullHandle: _owner.handle,
+        localPreviousDid: 'did:wba:awiki.info:users:alice-old',
+        currentDid: 'did:wba:awiki.info:users:alice-new',
+        bindingGeneration: '8',
+        stateRootFingerprint: stateRootFingerprint,
+        phase: phase,
+        impact: const core.HandleRecoveryImpact(
+          localOrdinaryDataWillMigrate: true,
+          otherDevicesMustRejoin: true,
+          unsupportedE2eeGroupCount: 2,
+          unsupportedDidOnlyGroupCount: 1,
+        ),
+        registryEpochReset: phase == core.HandleRecoveryPhase.applied
+            ? const core.HandleRecoveryRegistryEpochReset(
+                accountUserId: 'account-1',
+                ownerIdentityId: 'identity-alice',
+                handle: 'alice.awiki.info',
+                previousDid: 'did:wba:awiki.info:users:alice-old',
+                currentDid: 'did:wba:awiki.info:users:alice-new',
+                bindingGeneration: '8',
+                sourceKind: core.HandleRecoveryTransitionSourceKind.initiator,
+                sourceId: 'recover-op-1',
+              )
+            : null,
+      );
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-core.HandleRecoveryProgress _coreProgress(core.HandleRecoveryPhase phase) {
-  return core.HandleRecoveryProgress(
-    recoveryId: 'recovery-1',
-    operationId: 'recover-op-1',
-    ownerIdentityId: 'identity-alice',
-    handle: 'alice.awiki.info',
-    previousDid: _didOld,
-    currentDid: _didNew,
-    bindingGeneration: '8',
-    phase: phase,
-    impact: const core.HandleRecoveryImpact(
-      localOrdinaryDataWillMigrate: true,
-      otherDevicesMustRejoin: true,
-      unsupportedE2eeGroupCount: 2,
-      unsupportedDidOnlyGroupCount: 1,
-    ),
-  );
-}
-
-core.AuthorizedJoinActivationProgress _coreJoinProgress() {
-  return const core.AuthorizedJoinActivationProgress(
-    join: core.DeviceJoinProgress(
-      session: core.DeviceJoinSessionSummary(
-        joinSessionId: 'join-recovery-1',
-        did: _didNew,
-        protocolDeviceId: 'device-new',
-        side: core.DeviceJoinSide.newDevice,
-        phase: core.DeviceJoinPhase.authorized,
-        expiresAt: '2030-01-01T00:00:00.000Z',
-      ),
-      remoteState: core.DeviceJoinRemoteState.consumed,
-    ),
-    registryEpochReset: core.HandleRecoveryRegistryEpochReset(
-      accountUserId: 'account-1',
-      ownerIdentityId: 'identity-alice',
-      handle: 'alice.awiki.info',
-      previousDid: _didOld,
-      currentDid: _didNew,
-      bindingGeneration: '8',
-      sourceKind: core.HandleRecoveryTransitionSourceKind.joinedDevice,
-      sourceId: 'join-recovery-1',
-    ),
-  );
-}
+core.HandleRecoveryOperationSummary _summary({
+  core.HandleRecoveryOperationLifecycle lifecycle =
+      core.HandleRecoveryOperationLifecycle.preCommit,
+  String? accountUserId,
+  bool commitAttempted = false,
+  core.HandleRecoveryKeyState keyState = core.HandleRecoveryKeyState.available,
+  String? stateRootFingerprint,
+  String? lastErrorCode,
+}) => core.HandleRecoveryOperationSummary(
+  operationId: 'recover-op-1',
+  ownerIdentityId: _owner.localIdentityId,
+  accountUserId: accountUserId,
+  fullHandle: _owner.handle,
+  lifecycleClass: lifecycle,
+  commitAttempted: commitAttempted,
+  keyState: keyState,
+  intentHash: 'sha256:intent',
+  stateRootFingerprint: stateRootFingerprint,
+  lastErrorCode: lastErrorCode,
+  createdAt: DateTime.utc(2026, 8, 6, 12),
+  updatedAt: DateTime.utc(2026, 8, 6, 12, 1),
+);

@@ -1,6 +1,6 @@
-// [INPUT]: Typed host intent, transient phone/OTP input, user-presence result, and safe references.
-// [OUTPUT]: Secret-free coarse Recovery progress from the frozen Core facade boundary.
-// [POS]: App-owned adapter seam; generated Core bindings implement this only in Wave 2.
+// [INPUT]: Canonical Handle, optional local owner, transient phone/OTP input, explicit confirmation, and operation IDs.
+// [OUTPUT]: Secret-free Core-owned Recovery operation and epoch projections.
+// [POS]: App-owned adapter seam; the App never creates or persists operation state.
 
 import '../../domain/entities/handle_recovery.dart';
 
@@ -15,31 +15,43 @@ class HandleRecoveryOtpRateLimited implements Exception {
 }
 
 abstract interface class HandleRecoveryCorePort {
-  Future<HandleRecoveryOtpResult> requestHandleRecoveryOtp({
+  /// Core creates and durably indexes the operation before sending the OTP.
+  Future<HandleRecoveryOtpResult> requestOtp({
     required String handle,
     required String phone,
-    required String operationId,
+    String? localIdentityId,
   });
 
-  Future<HandleRecoveryProgress> prepareHandleRecovery({
-    required HandleRecoveryIdentityScope scope,
-    required String handle,
+  Future<HandleRecoveryProgress> prepare({
+    required String operationId,
     required String phone,
     required String otp,
-    required String operationId,
   });
 
-  Future<HandleRecoveryProgress> activateHandleRecovery({
-    required String recoveryId,
+  Future<List<HandleRecoveryProgress>> listOperations(
+    HandleRecoveryOwner owner,
+  );
+
+  /// Read-only projection. Implementations must not advance Core state.
+  Future<HandleRecoveryProgress> getStatus(String operationId);
+
+  Future<HandleRecoveryProgress> activate({
+    required String operationId,
     required bool userPresenceConfirmed,
   });
 
-  Future<HandleRecoveryProgress> resumeHandleRecovery({
-    required String recoveryId,
+  Future<HandleRecoveryProgress> reconcile(String operationId);
+
+  Future<void> discardPreAttempt(String operationId);
+
+  Future<HandleRecoveryProgress> quarantineKeyUnavailable({
+    required String operationId,
+    required bool confirmed,
   });
 
-  /// Read-only. Implementations must not advance Core state.
-  Future<HandleRecoveryProgress> handleRecoveryStatus(String recoveryId);
+  Future<HandleRecoveryRegistryEpochReset?> authorizedEpochReceipt(
+    HandleRecoveryOwner owner,
+  );
 
   Future<HandleRecoveryAuthorizedJoinProgress> activateAuthorizedJoin({
     required HandleRecoveryIdentityScope scope,

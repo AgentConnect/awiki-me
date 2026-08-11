@@ -1,6 +1,6 @@
-// [INPUT]: Frozen public AwikiImCore Handle Recovery facade and exact identity selectors.
-// [OUTPUT]: App-owned secret-free Recovery and legacy Registry-adoption projections.
-// [POS]: Production boundary adapter; it does not recreate or persist Core state.
+// [INPUT]: Public AwikiImCore Handle Recovery facade, canonical Handle, and optional local selector.
+// [OUTPUT]: App-owned V4 operation, receipt, and authorized-Join projections.
+// [POS]: Production boundary adapter; it never recreates or persists Core state.
 
 import 'dart:convert';
 
@@ -48,91 +48,160 @@ class AwikiImCoreHandleRecoveryAdapter
   }
 
   @override
-  Future<HandleRecoveryOtpResult> requestHandleRecoveryOtp({
+  Future<HandleRecoveryOtpResult> requestOtp({
     required String handle,
     required String phone,
-    required String operationId,
-  }) async {
-    try {
-      return await _runRecovery(() async {
-        final instance = await _coreInstance();
-        final result = await instance.requestHandleRecoveryOtp(
-          phone: phone,
-          handle: handle,
-          operationId: operationId,
-        );
-        return HandleRecoveryOtpResult(
-          handle: result.handle,
-          operationId: result.operationId,
-          accepted: result.accepted,
-          retryAfterSeconds: result.retryAfterSeconds,
-          retryAt: result.retryAt,
-        );
-      });
-    } on core.AwikiImCoreException catch (error) {
-      final rateLimited = _handleRecoveryOtpRateLimit(error);
-      if (rateLimited != null) throw rateLimited;
-      rethrow;
-    }
-  }
-
-  @override
-  Future<HandleRecoveryProgress> prepareHandleRecovery({
-    required HandleRecoveryIdentityScope scope,
-    required String handle,
-    required String phone,
-    required String otp,
-    required String operationId,
+    String? localIdentityId,
   }) {
     return _runRecovery(() async {
       final instance = await _coreInstance();
-      return handleRecoveryProgressFromCore(
-        await instance.prepareHandleRecovery(
-          selector: _identitySelector(scope),
-          phone: phone,
-          code: otp,
-          handle: handle,
-          operationId: operationId,
-        ),
+      final result = await instance.requestHandleRecoveryOtp(
+        selector: localIdentityId == null
+            ? null
+            : core.IdentitySelector.id(localIdentityId),
+        fullHandle: handle,
+        phone: phone,
+      );
+      final owner = HandleRecoveryOwner(
+        localIdentityId: result.ownerIdentityId,
+        handle: result.fullHandle,
+      );
+      final operation = await _loadOperation(
+        instance,
+        operationId: result.operationId,
+        owner: owner,
+      );
+      if (result.fullHandle != operation.handle) {
+        throw const HandleRecoveryFailure(
+          HandleRecoveryFailureCode.transitionMismatch,
+        );
+      }
+      return HandleRecoveryOtpResult(
+        operation: operation,
+        accepted: result.accepted,
+        retryAfterSeconds: result.retryAfterSeconds,
+        retryAt: result.retryAt,
       );
     });
   }
 
   @override
-  Future<HandleRecoveryProgress> activateHandleRecovery({
-    required String recoveryId,
+  Future<HandleRecoveryProgress> prepare({
+    required String operationId,
+    required String phone,
+    required String otp,
+  }) {
+    return _runRecovery(() async {
+      final instance = await _coreInstance();
+      final progress = await instance.prepareHandleRecovery(
+        operationId: operationId,
+        phone: phone,
+        code: otp,
+      );
+      return _mergeOperation(instance, progress);
+    });
+  }
+
+  @override
+  Future<List<HandleRecoveryProgress>> listOperations(
+    HandleRecoveryOwner owner,
+  ) {
+    return _runRecovery(() async {
+      final instance = await _coreInstance();
+      final summaries = await instance.listHandleRecoveryOperations(
+        _ownerSelector(owner),
+      );
+      return Future.wait(
+        summaries.map((summary) async {
+          if (summary.keyState != core.HandleRecoveryKeyState.available ||
+              !_coreLifecycleIsReadable(summary.lifecycleClass)) {
+            return _operationFromSummary(summary);
+          }
+          try {
+            final progress = await instance.handleRecoveryStatus(
+              summary.operationId,
+            );
+            return _operationFromCoreWithReceipt(instance, progress, summary);
+          } on core.AwikiImCoreException catch (error) {
+            if (error.handleRecoveryFailureCode !=
+                core.HandleRecoveryFailureCode.localKeyUnavailable) {
+              rethrow;
+            }
+            return _operationFromSummary(summary);
+          }
+        }),
+      );
+    });
+  }
+
+  @override
+  Future<HandleRecoveryProgress> getStatus(String operationId) {
+    return _runRecovery(() async {
+      final instance = await _coreInstance();
+      final progress = await instance.handleRecoveryStatus(operationId);
+      return _mergeOperation(instance, progress);
+    });
+  }
+
+  @override
+  Future<HandleRecoveryProgress> activate({
+    required String operationId,
     required bool userPresenceConfirmed,
   }) {
     return _runRecovery(() async {
       final instance = await _coreInstance();
-      return handleRecoveryProgressFromCore(
-        await instance.activateHandleRecovery(
-          recoveryId: recoveryId,
-          userPresenceConfirmed: userPresenceConfirmed,
-        ),
+      final progress = await instance.activateHandleRecovery(
+        operationId: operationId,
+        userPresenceConfirmed: userPresenceConfirmed,
       );
+      return _mergeOperation(instance, progress);
     });
   }
 
   @override
-  Future<HandleRecoveryProgress> resumeHandleRecovery({
-    required String recoveryId,
+  Future<HandleRecoveryProgress> reconcile(String operationId) {
+    return _runRecovery(() async {
+      final instance = await _coreInstance();
+      final progress = await instance.resumeHandleRecovery(operationId);
+      return _mergeOperation(instance, progress);
+    });
+  }
+
+  @override
+  Future<void> discardPreAttempt(String operationId) {
+    return _runRecovery(() async {
+      final instance = await _coreInstance();
+      await instance.discardHandleRecoveryPreAttempt(operationId);
+    });
+  }
+
+  @override
+  Future<HandleRecoveryProgress> quarantineKeyUnavailable({
+    required String operationId,
+    required bool confirmed,
   }) {
     return _runRecovery(() async {
       final instance = await _coreInstance();
-      return handleRecoveryProgressFromCore(
-        await instance.resumeHandleRecovery(recoveryId),
+      final summary = await instance.quarantineHandleRecoveryKeyUnavailable(
+        operationId: operationId,
+        userPresenceConfirmed: confirmed,
       );
+      // Quarantine is specifically the key-unreadable escape hatch. Do not
+      // call status after Core has proven the key unavailable.
+      return _operationFromSummary(summary);
     });
   }
 
   @override
-  Future<HandleRecoveryProgress> handleRecoveryStatus(String recoveryId) {
+  Future<HandleRecoveryRegistryEpochReset?> authorizedEpochReceipt(
+    HandleRecoveryOwner owner,
+  ) {
     return _runRecovery(() async {
       final instance = await _coreInstance();
-      return handleRecoveryProgressFromCore(
-        await instance.handleRecoveryStatus(recoveryId),
+      final receipt = await instance.authorizedHandleRecoveryReceipt(
+        _ownerSelector(owner),
       );
+      return receipt == null ? null : _epochReceiptFromCore(receipt);
     });
   }
 
@@ -187,17 +256,328 @@ core.IdentitySelector _identitySelector(HandleRecoveryIdentityScope scope) {
   return core.IdentitySelector.id(identityId);
 }
 
+core.IdentitySelector _ownerSelector(HandleRecoveryOwner owner) {
+  final identityId = owner.localIdentityId;
+  if (identityId.isEmpty || identityId.trim() != identityId) {
+    throw const HandleRecoveryFailure(
+      HandleRecoveryFailureCode.transitionMismatch,
+    );
+  }
+  return core.IdentitySelector.id(identityId);
+}
+
+Future<HandleRecoveryProgress> _loadOperation(
+  core.AwikiImCore instance, {
+  required String operationId,
+  required HandleRecoveryOwner owner,
+}) async {
+  final summaries = await instance.listHandleRecoveryOperations(
+    _ownerSelector(owner),
+  );
+  final matches = summaries
+      .where((summary) => summary.operationId == operationId)
+      .toList();
+  if (matches.length != 1) {
+    throw const HandleRecoveryFailure(
+      HandleRecoveryFailureCode.transitionMismatch,
+    );
+  }
+  // OTP send/re-send must not immediately reconcile an unresolved remote
+  // outcome. The authoritative summary already carries the lifecycle,
+  // commit-attempt, key, and operation identity needed by the App boundary.
+  return _operationFromSummary(matches.single);
+}
+
+Future<HandleRecoveryProgress> _mergeOperation(
+  core.AwikiImCore instance,
+  core.HandleRecoveryProgress progress,
+) async {
+  final summaries = await instance.listHandleRecoveryOperations(
+    core.IdentitySelector.id(progress.ownerIdentityId),
+  );
+  final matches = summaries
+      .where((summary) => summary.operationId == progress.operationId)
+      .toList();
+  if (matches.length != 1) {
+    throw const HandleRecoveryFailure(
+      HandleRecoveryFailureCode.transitionMismatch,
+    );
+  }
+  return _operationFromCoreWithReceipt(instance, progress, matches.single);
+}
+
+Future<HandleRecoveryProgress> _operationFromCoreWithReceipt(
+  core.AwikiImCore instance,
+  core.HandleRecoveryProgress progress,
+  core.HandleRecoveryOperationSummary summary,
+) async {
+  final reset = progress.registryEpochReset;
+  if (reset == null) return _operationFromCore(progress, summary);
+  final rawReceipt = await instance.authorizedHandleRecoveryReceipt(
+    core.IdentitySelector.id(progress.ownerIdentityId),
+  );
+  if (rawReceipt == null) {
+    throw const HandleRecoveryFailure(
+      HandleRecoveryFailureCode.transitionMismatch,
+    );
+  }
+  final receipt = _epochReceiptFromCore(rawReceipt);
+  if (reset.accountUserId != receipt.accountUserId ||
+      reset.ownerIdentityId != receipt.ownerIdentityId ||
+      reset.handle != receipt.handle ||
+      reset.previousDid != receipt.previousDid ||
+      reset.currentDid != receipt.currentDid ||
+      reset.bindingGeneration != receipt.bindingGeneration ||
+      reset.sourceKind.name != receipt.sourceKind.name ||
+      reset.sourceId != receipt.sourceId ||
+      receipt.ownerIdentityId != progress.ownerIdentityId ||
+      receipt.stateRootFingerprint != progress.stateRootFingerprint) {
+    throw const HandleRecoveryFailure(
+      HandleRecoveryFailureCode.transitionMismatch,
+    );
+  }
+  return _operationFromCore(progress, summary, registryEpochReset: receipt);
+}
+
+HandleRecoveryProgress _operationFromCore(
+  core.HandleRecoveryProgress progress,
+  core.HandleRecoveryOperationSummary summary, {
+  HandleRecoveryRegistryEpochReset? registryEpochReset,
+}) {
+  final stateRoot = _consistentOptionalValue(
+    progress.stateRootFingerprint,
+    summary.stateRootFingerprint,
+  );
+  if (progress.operationId != summary.operationId ||
+      progress.ownerIdentityId != summary.ownerIdentityId ||
+      progress.fullHandle != summary.fullHandle ||
+      (progress.accountUserId != null &&
+          summary.accountUserId != null &&
+          progress.accountUserId != summary.accountUserId)) {
+    throw const HandleRecoveryFailure(
+      HandleRecoveryFailureCode.transitionMismatch,
+    );
+  }
+  final failureCode = progress.failureCode == null
+      ? _failureCodeFromStableString(summary.lastErrorCode)
+      : handleRecoveryFailureCodeFromCore(progress.failureCode!);
+  return HandleRecoveryProgress(
+    operationId: summary.operationId,
+    ownerIdentityId: summary.ownerIdentityId,
+    accountUserId: progress.accountUserId ?? summary.accountUserId,
+    handle: summary.fullHandle,
+    lifecycleClass: _lifecycleFromCore(summary.lifecycleClass),
+    impact: _impactFromCore(progress.impact),
+    commitAttempted: summary.commitAttempted,
+    keyState: _keyStateFromCore(summary.keyState),
+    resultAbsent: failureCode == HandleRecoveryFailureCode.resultAbsent,
+    readyToCommit: progress.phase == core.HandleRecoveryPhase.readyToCommit,
+    localMigration: _localMigration(
+      failureCode: failureCode,
+      lastErrorCode: summary.lastErrorCode,
+    ),
+    discardAllowed:
+        summary.lifecycleClass ==
+            core.HandleRecoveryOperationLifecycle.preCommit &&
+        !summary.commitAttempted &&
+        summary.keyState == core.HandleRecoveryKeyState.available,
+    intentHash: summary.intentHash,
+    stateRootFingerprint: stateRoot,
+    supersededByOperationId: summary.supersededByOperationId,
+    lastErrorCode: summary.lastErrorCode,
+    createdAt: summary.createdAt,
+    updatedAt: summary.updatedAt,
+    registryEpochReset: registryEpochReset,
+    failureCode: failureCode,
+    retryable: _isRetryableFailure(failureCode),
+  );
+}
+
+HandleRecoveryProgress _operationFromSummary(
+  core.HandleRecoveryOperationSummary summary,
+) {
+  final failureCode = _failureCodeFromStableString(summary.lastErrorCode);
+  return HandleRecoveryProgress(
+    operationId: summary.operationId,
+    ownerIdentityId: summary.ownerIdentityId,
+    accountUserId: summary.accountUserId,
+    handle: summary.fullHandle,
+    lifecycleClass: _lifecycleFromCore(summary.lifecycleClass),
+    // Terminal and key-unreadable summaries intentionally do not reload the
+    // Vault. These conservative values are not used to authorize a commit.
+    impact: const HandleRecoveryImpact(
+      localOrdinaryDataWillMigrate: true,
+      otherDevicesMustRejoin: true,
+    ),
+    commitAttempted: summary.commitAttempted,
+    keyState: _keyStateFromCore(summary.keyState),
+    resultAbsent: failureCode == HandleRecoveryFailureCode.resultAbsent,
+    readyToCommit: false,
+    localMigration: _localMigration(
+      failureCode: failureCode,
+      lastErrorCode: summary.lastErrorCode,
+    ),
+    discardAllowed:
+        summary.lifecycleClass ==
+            core.HandleRecoveryOperationLifecycle.preCommit &&
+        !summary.commitAttempted &&
+        summary.keyState == core.HandleRecoveryKeyState.available,
+    intentHash: summary.intentHash,
+    stateRootFingerprint: summary.stateRootFingerprint,
+    supersededByOperationId: summary.supersededByOperationId,
+    lastErrorCode: summary.lastErrorCode,
+    createdAt: summary.createdAt,
+    updatedAt: summary.updatedAt,
+    failureCode: failureCode,
+    retryable: _isRetryableFailure(failureCode),
+  );
+}
+
+bool _coreLifecycleIsReadable(
+  core.HandleRecoveryOperationLifecycle lifecycle,
+) =>
+    lifecycle == core.HandleRecoveryOperationLifecycle.preCommit ||
+    lifecycle == core.HandleRecoveryOperationLifecycle.remoteUnresolved ||
+    lifecycle == core.HandleRecoveryOperationLifecycle.remoteCommitted ||
+    lifecycle == core.HandleRecoveryOperationLifecycle.localTransitionPending ||
+    lifecycle == core.HandleRecoveryOperationLifecycle.applied;
+
+HandleRecoveryLifecycleClass _lifecycleFromCore(
+  core.HandleRecoveryOperationLifecycle value,
+) => switch (value) {
+  core.HandleRecoveryOperationLifecycle.preCommit =>
+    HandleRecoveryLifecycleClass.preCommit,
+  core.HandleRecoveryOperationLifecycle.remoteUnresolved =>
+    HandleRecoveryLifecycleClass.remoteUnresolved,
+  core.HandleRecoveryOperationLifecycle.remoteCommitted =>
+    HandleRecoveryLifecycleClass.remoteCommitted,
+  core.HandleRecoveryOperationLifecycle.localTransitionPending =>
+    HandleRecoveryLifecycleClass.localTransitionPending,
+  core.HandleRecoveryOperationLifecycle.applied =>
+    HandleRecoveryLifecycleClass.applied,
+  core.HandleRecoveryOperationLifecycle.discardedPreAttempt =>
+    HandleRecoveryLifecycleClass.discardedPreAttempt,
+  core.HandleRecoveryOperationLifecycle.quarantinedKeyUnavailable =>
+    HandleRecoveryLifecycleClass.quarantinedKeyUnavailable,
+  core.HandleRecoveryOperationLifecycle.supersededByStateChange =>
+    HandleRecoveryLifecycleClass.supersededByStateChange,
+  core.HandleRecoveryOperationLifecycle.failedTerminal =>
+    HandleRecoveryLifecycleClass.failedTerminal,
+};
+
+HandleRecoveryKeyState _keyStateFromCore(core.HandleRecoveryKeyState value) =>
+    switch (value) {
+      core.HandleRecoveryKeyState.available => HandleRecoveryKeyState.available,
+      core.HandleRecoveryKeyState.temporarilyLocked =>
+        HandleRecoveryKeyState.temporarilyLocked,
+      core.HandleRecoveryKeyState.permanentlyUnavailable =>
+        HandleRecoveryKeyState.permanentlyUnavailable,
+      core.HandleRecoveryKeyState.destroyedPreAttempt =>
+        HandleRecoveryKeyState.destroyedPreAttempt,
+    };
+
+HandleRecoveryImpact _impactFromCore(core.HandleRecoveryImpact value) =>
+    HandleRecoveryImpact(
+      localOrdinaryDataWillMigrate: value.localOrdinaryDataWillMigrate,
+      otherDevicesMustRejoin: value.otherDevicesMustRejoin,
+      unsupportedE2eeGroupCount: value.unsupportedE2eeGroupCount,
+      unsupportedDidOnlyGroupCount: value.unsupportedDidOnlyGroupCount,
+    );
+
+HandleRecoveryLocalMigration _localMigration({
+  required HandleRecoveryFailureCode? failureCode,
+  required String? lastErrorCode,
+}) {
+  if (failureCode == HandleRecoveryFailureCode.localMigrationUnsupported ||
+      lastErrorCode == 'local_migration_unsupported') {
+    return HandleRecoveryLocalMigration.preCommitUnsupported;
+  }
+  return HandleRecoveryLocalMigration.supported;
+}
+
+String? _consistentOptionalValue(String? first, String? second) {
+  if (first != null && second != null && first != second) {
+    throw const HandleRecoveryFailure(
+      HandleRecoveryFailureCode.transitionMismatch,
+    );
+  }
+  return first ?? second;
+}
+
+HandleRecoveryFailureCode? _failureCodeFromStableString(String? value) =>
+    switch (value) {
+      'factor_retry_required' => HandleRecoveryFailureCode.factorRetryRequired,
+      'result_absent' => HandleRecoveryFailureCode.resultAbsent,
+      'outcome_unknown' => HandleRecoveryFailureCode.outcomeUnknown,
+      'local_key_unavailable' => HandleRecoveryFailureCode.localKeyUnavailable,
+      'local_transition_pending' =>
+        HandleRecoveryFailureCode.localTransitionPending,
+      'local_migration_unsupported' =>
+        HandleRecoveryFailureCode.localMigrationUnsupported,
+      'unknown_epoch' => HandleRecoveryFailureCode.unknownEpoch,
+      _ => null,
+    };
+
+bool _isRetryableFailure(HandleRecoveryFailureCode? value) => switch (value) {
+  HandleRecoveryFailureCode.factorRetryRequired ||
+  HandleRecoveryFailureCode.resultAbsent ||
+  HandleRecoveryFailureCode.outcomeUnknown ||
+  HandleRecoveryFailureCode.localTransitionPending => true,
+  HandleRecoveryFailureCode.notPrepared ||
+  HandleRecoveryFailureCode.userPresenceRequired ||
+  HandleRecoveryFailureCode.transitionMismatch ||
+  HandleRecoveryFailureCode.transitionChainUnsupported ||
+  HandleRecoveryFailureCode.remoteStateChanged ||
+  HandleRecoveryFailureCode.localStateUnavailable ||
+  HandleRecoveryFailureCode.localKeyUnavailable ||
+  HandleRecoveryFailureCode.localMigrationUnsupported ||
+  HandleRecoveryFailureCode.unknownEpoch ||
+  HandleRecoveryFailureCode.blocked ||
+  null => false,
+};
+
+HandleRecoveryRegistryEpochReset _epochReceiptFromCore(
+  core.HandleRecoveryAccountEpochReceipt value,
+) => HandleRecoveryRegistryEpochReset(
+  receiptSchemaVersion: value.receiptSchemaVersion,
+  accountUserId: value.accountUserId,
+  ownerIdentityId: value.ownerIdentityId,
+  handle: value.fullHandle,
+  previousDid: value.localPreviousDid,
+  currentDid: value.currentDid,
+  bindingGeneration: value.bindingGeneration,
+  currentDeviceId: value.currentDeviceId,
+  deviceAuthGeneration: value.deviceAuthGeneration,
+  registryVersion: value.registryVersion,
+  stateRootFingerprint: value.stateRootFingerprint,
+  appliedAt: value.appliedAt,
+  metadataJson: value.metadataJson,
+  sourceKind: switch (value.sourceKind) {
+    core.HandleRecoveryTransitionSourceKind.initiator =>
+      HandleRecoveryTransitionSourceKind.initiator,
+    core.HandleRecoveryTransitionSourceKind.joinedDevice =>
+      HandleRecoveryTransitionSourceKind.joinedDevice,
+  },
+  sourceId: value.sourceId,
+);
+
 Future<T> _runRecovery<T>(Future<T> Function() action) async {
   try {
     return await action();
   } on core.AwikiImCoreException catch (error) {
+    final rateLimit = handleRecoveryOtpRateLimitFromCore(error);
+    if (rateLimit != null) throw rateLimit;
     final failureCode = error.handleRecoveryFailureCode;
     if (failureCode == null) rethrow;
-    throw HandleRecoveryFailure(handleRecoveryFailureCodeFromCore(failureCode));
+    final projected = handleRecoveryFailureCodeFromCore(failureCode);
+    throw HandleRecoveryFailure(
+      projected,
+      retryable: _isRetryableFailure(projected),
+    );
   }
 }
 
-HandleRecoveryOtpRateLimited? _handleRecoveryOtpRateLimit(
+HandleRecoveryOtpRateLimited? handleRecoveryOtpRateLimitFromCore(
   core.AwikiImCoreException error,
 ) {
   final raw = error.serviceDataJson;
@@ -228,57 +608,25 @@ HandleRecoveryOtpRateLimited? _handleRecoveryOtpRateLimit(
   );
 }
 
-HandleRecoveryProgress handleRecoveryProgressFromCore(
-  core.HandleRecoveryProgress value,
-) {
-  return HandleRecoveryProgress(
-    recoveryId: value.recoveryId,
-    handle: value.handle,
-    phase: switch (value.phase) {
-      core.HandleRecoveryPhase.prepared => HandleRecoveryProgressPhase.prepared,
-      core.HandleRecoveryPhase.remoteCommitPending =>
-        HandleRecoveryProgressPhase.remoteCommitPending,
-      core.HandleRecoveryPhase.remoteCommitted =>
-        HandleRecoveryProgressPhase.remoteCommitted,
-      core.HandleRecoveryPhase.identityTransitionPending =>
-        HandleRecoveryProgressPhase.identityTransitionPending,
-      core.HandleRecoveryPhase.identitySwitched =>
-        HandleRecoveryProgressPhase.identitySwitched,
-      core.HandleRecoveryPhase.completed =>
-        HandleRecoveryProgressPhase.completed,
-      core.HandleRecoveryPhase.blocked => HandleRecoveryProgressPhase.blocked,
-    },
-    impact: HandleRecoveryImpact(
-      localOrdinaryDataWillMigrate: value.impact.localOrdinaryDataWillMigrate,
-      otherDevicesMustRejoin: value.impact.otherDevicesMustRejoin,
-      unsupportedE2eeGroupCount: value.impact.unsupportedE2eeGroupCount,
-      unsupportedDidOnlyGroupCount: value.impact.unsupportedDidOnlyGroupCount,
-    ),
-    registryEpochReset: value.registryEpochReset == null
-        ? null
-        : handleRecoveryRegistryEpochResetFromCore(value.registryEpochReset!),
-    failureCode: value.failureCode == null
-        ? null
-        : handleRecoveryFailureCodeFromCore(value.failureCode!),
-  );
-}
-
 HandleRecoveryAuthorizedJoinProgress
 handleRecoveryAuthorizedJoinProgressFromCore(
   core.AuthorizedJoinActivationProgress value,
 ) {
   return HandleRecoveryAuthorizedJoinProgress(
     join: deviceJoinProgressFromCore(value.join),
-    registryEpochReset: value.registryEpochReset == null
+    joinTransitionReference: value.registryEpochReset == null
         ? null
-        : handleRecoveryRegistryEpochResetFromCore(value.registryEpochReset!),
+        : handleRecoveryJoinTransitionReferenceFromCore(
+            value.registryEpochReset!,
+          ),
   );
 }
 
-HandleRecoveryRegistryEpochReset handleRecoveryRegistryEpochResetFromCore(
+HandleRecoveryJoinTransitionReference
+handleRecoveryJoinTransitionReferenceFromCore(
   core.HandleRecoveryRegistryEpochReset value,
 ) {
-  return HandleRecoveryRegistryEpochReset(
+  return HandleRecoveryJoinTransitionReference(
     accountUserId: value.accountUserId,
     ownerIdentityId: value.ownerIdentityId,
     handle: value.handle,
@@ -298,19 +646,18 @@ HandleRecoveryRegistryEpochReset handleRecoveryRegistryEpochResetFromCore(
 HandleRecoveryFailureCode handleRecoveryFailureCodeFromCore(
   core.HandleRecoveryFailureCode value,
 ) => switch (value) {
-  core.HandleRecoveryFailureCode.notPrepared =>
-    HandleRecoveryFailureCode.notPrepared,
-  core.HandleRecoveryFailureCode.userPresenceRequired =>
-    HandleRecoveryFailureCode.userPresenceRequired,
-  core.HandleRecoveryFailureCode.transitionMismatch =>
-    HandleRecoveryFailureCode.transitionMismatch,
-  core.HandleRecoveryFailureCode.transitionChainUnsupported =>
-    HandleRecoveryFailureCode.transitionChainUnsupported,
-  core.HandleRecoveryFailureCode.remoteStateChanged =>
-    HandleRecoveryFailureCode.remoteStateChanged,
+  core.HandleRecoveryFailureCode.factorRetryRequired =>
+    HandleRecoveryFailureCode.factorRetryRequired,
+  core.HandleRecoveryFailureCode.resultAbsent =>
+    HandleRecoveryFailureCode.resultAbsent,
   core.HandleRecoveryFailureCode.outcomeUnknown =>
     HandleRecoveryFailureCode.outcomeUnknown,
-  core.HandleRecoveryFailureCode.localStateUnavailable =>
-    HandleRecoveryFailureCode.localStateUnavailable,
-  core.HandleRecoveryFailureCode.blocked => HandleRecoveryFailureCode.blocked,
+  core.HandleRecoveryFailureCode.localKeyUnavailable =>
+    HandleRecoveryFailureCode.localKeyUnavailable,
+  core.HandleRecoveryFailureCode.localTransitionPending =>
+    HandleRecoveryFailureCode.localTransitionPending,
+  core.HandleRecoveryFailureCode.localMigrationUnsupported =>
+    HandleRecoveryFailureCode.localMigrationUnsupported,
+  core.HandleRecoveryFailureCode.unknownEpoch =>
+    HandleRecoveryFailureCode.unknownEpoch,
 };

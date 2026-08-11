@@ -39,6 +39,52 @@ const _session = SessionIdentity(
 );
 
 void main() {
+  test('new Join supersedes a stale authorized-session restore', () async {
+    final registryStarted = Completer<void>();
+    final blockedRegistry = Completer<DeviceRegistrySnapshot>();
+    final authorized = testJoinProgress(
+      side: DeviceJoinSide.newDevice,
+      phase: DeviceJoinPhase.authorized,
+      remoteState: DeviceJoinRemoteState.consumed,
+      sas: null,
+    );
+    final core = FakeDeviceManagementCore()
+      ..localSessions = <DeviceJoinProgress>[authorized]
+      ..localIdentityDeviceBindings.add((
+        did: authorized.did,
+        protocolDeviceId: authorized.protocolDeviceId,
+      ))
+      ..registryLoader = (_) {
+        registryStarted.complete();
+        return blockedRegistry.future;
+      };
+    final container = _deviceContainer(core);
+    addTearDown(() {
+      if (!blockedRegistry.isCompleted) {
+        blockedRegistry.completeError(StateError('test_disposed'));
+      }
+      container.dispose();
+    });
+    final controller = container.read(devicesProvider.notifier);
+
+    final restore = controller.loadNewDevice();
+    await registryStarted.future;
+    final started = await controller.beginNewDeviceJoin(
+      handle: 'alice.awiki.info',
+      phone: '+8613800138000',
+      otp: '123456',
+    );
+    blockedRegistry.completeError(StateError('device_authorization_inactive'));
+    await restore;
+
+    final state = container.read(devicesProvider);
+    expect(started, isTrue);
+    expect(state.isLoading, isFalse);
+    expect(state.error, isNull);
+    expect(state.activeJoin?.phase, DeviceJoinPhase.pending);
+    expect(core.beginCalls, 1);
+  });
+
   test('stale Join inbox result cannot populate the next identity', () async {
     final blocked = Completer<List<DeviceJoinRequestNotice>>();
     final refreshStarted = Completer<void>();
@@ -226,7 +272,7 @@ void main() {
     expect(core.localSessionCalls, 1);
   });
 
-  testWidgets('onboarding exposes new-device Join by default', (tester) async {
+  testWidgets('onboarding hides standalone new-device Join', (tester) async {
     final core = FakeDeviceManagementCore();
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -243,12 +289,11 @@ void main() {
 
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -500));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('将此设备加入已有账户'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('device-join-page')), findsOneWidget);
+    expect(find.text('将此设备加入已有账户'), findsNothing);
+    expect(find.byKey(const Key('device-join-page')), findsNothing);
   });
 
-  testWidgets('macOS onboarding exposes new-device Join by default', (
+  testWidgets('macOS onboarding hides standalone new-device Join', (
     tester,
   ) async {
     addTearDown(() {
@@ -271,12 +316,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final entry = find.text('将此设备加入已有账户');
-    expect(entry, findsOneWidget);
-    await tester.ensureVisible(entry);
-    await tester.tap(entry);
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('device-join-page')), findsOneWidget);
+    expect(find.text('将此设备加入已有账户'), findsNothing);
+    expect(find.byKey(const Key('device-join-page')), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -760,65 +801,75 @@ void main() {
     expect(find.text('管理设备等待根密钥'), findsNothing);
   });
 
-  testWidgets(
-    'Recovery Join uses high-level activation and never DID-only login',
-    (tester) async {
-      final sdk = _ProductionJoinRecoveryCore();
-      final recovery = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
-        coreInstance: () async => sdk,
-      );
-      final deviceCore = FakeDeviceManagementCore()..resolvedJoinDid = testDid;
-      final gateway = FakeAwikiGateway()
-        ..localCredentials = const <SessionIdentity>[
-          SessionIdentity(
-            did: 'did:wba:awiki.info:users:alice-old',
-            credentialName: 'identity-alice',
-            displayName: 'Alice',
-            handle: 'alice.awiki.info',
-          ),
-        ];
-      await tester.pumpWidget(
-        _app(
-          const DeviceJoinPage(autoPoll: false),
-          deviceCore,
-          recovery: recovery,
-          gateway: gateway,
-          session: null,
-          handleRecoveryEnabled: true,
+  testWidgets('Recovery Join activates through the central App runtime', (
+    tester,
+  ) async {
+    final sdk = _ProductionJoinRecoveryCore();
+    final recovery = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+      coreInstance: () async => sdk,
+    );
+    final deviceCore = FakeDeviceManagementCore()..resolvedJoinDid = testDid;
+    final gateway = FakeAwikiGateway()
+      ..localCredentials = const <SessionIdentity>[
+        SessionIdentity(
+          did: 'did:wba:awiki.info:users:alice-old',
+          localIdentityId: 'identity-alice',
+          credentialName: 'identity-alice',
+          displayName: 'Alice',
+          handle: 'alice.awiki.info',
         ),
+      ]
+      ..loginResult = const SessionIdentity(
+        did: testDid,
+        localIdentityId: 'identity-alice',
+        credentialName: 'identity-alice',
+        displayName: 'Alice',
+        handle: 'alice.awiki.info',
       );
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      _app(
+        const DeviceJoinPage(autoPoll: false),
+        deviceCore,
+        recovery: recovery,
+        gateway: gateway,
+        session: null,
+        handleRecoveryEnabled: true,
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      final fields = find.byType(CupertinoTextField);
-      await tester.enterText(fields.at(0), '+8613800138000');
-      await tester.enterText(fields.at(1), 'alice.awiki.info');
-      await tester.enterText(fields.at(2), '987580');
-      await tester.tap(find.text('开始关联'));
-      await tester.pumpAndSettle();
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '+8613800138000');
+    await tester.enterText(fields.at(1), 'alice.awiki.info');
+    await tester.enterText(fields.at(2), '987580');
+    await tester.tap(find.text('开始关联'));
+    await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const Key('handle-recovery-join-banner')),
-        findsOneWidget,
-      );
-      expect(find.textContaining('已完成身份恢复'), findsOneWidget);
-      expect(find.textContaining('迁移此设备上的本地数据'), findsOneWidget);
-      expect(find.textContaining('加密群暂不支持身份恢复'), findsOneWidget);
-      expect(find.textContaining('DID-only'), findsOneWidget);
-      expect(sdk.activateJoinCalls, 1);
-      expect(sdk.resumeJoinCalls, 1);
-      expect(deviceCore.beginCalls, 0);
-      expect(deviceCore.pollCalls, 0);
-      expect(gateway.loginCalls, 0);
-      expect(
-        find.byKey(const Key('handle-recovery-join-resume')),
-        findsNothing,
-      );
-      expect(gateway.loginCalls, 0);
-    },
-  );
+    expect(
+      find.byKey(const Key('handle-recovery-join-banner')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('已完成身份恢复'), findsOneWidget);
+    expect(find.textContaining('迁移此设备上的本地数据'), findsOneWidget);
+    expect(find.textContaining('加密群暂不支持身份恢复'), findsOneWidget);
+    expect(find.textContaining('DID-only'), findsOneWidget);
+    expect(sdk.activateJoinCalls, 1);
+    expect(sdk.resumeJoinCalls, 1);
+    expect(deviceCore.beginCalls, 0);
+    expect(deviceCore.pollCalls, 0);
+    expect(gateway.loginCalls, 1);
+    expect(gateway.lastLoginCredentialName, testDid);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('device-join-page'))),
+    );
+    expect(container.read(sessionProvider).session?.did, testDid);
+    expect(container.read(appRuntimeProvider).activatedDid, testDid);
+    expect(find.byKey(const Key('handle-recovery-join-resume')), findsNothing);
+    expect(gateway.loginCalls, 1);
+  });
 
   test(
-    'production adapter keeps pending Recovery cause across ProviderContainer restart and resets once consumed',
+    'Recovery provider restart preserves cause without mutating Product epoch',
     () async {
       final sdk = _ProductionJoinRecoveryCore(activationPending: true);
       final recovery = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
@@ -830,6 +881,7 @@ void main() {
           SessionController()..setLocalCredentials(const <SessionIdentity>[
             SessionIdentity(
               did: 'did:wba:awiki.info:users:alice-old',
+              localIdentityId: 'identity-alice',
               credentialName: 'identity-alice',
               displayName: 'Alice',
               handle: 'alice.awiki.info',
@@ -898,8 +950,7 @@ void main() {
           accountId: 'account-1',
         ),
       );
-      expect(epoch?.currentDid, testDid);
-      expect(epoch?.bindingGeneration, '8');
+      expect(epoch, isNull);
     },
   );
 
@@ -918,6 +969,7 @@ void main() {
         ..localCredentials = const <SessionIdentity>[
           SessionIdentity(
             did: 'did:wba:awiki.info:users:alice-old',
+            localIdentityId: 'identity-alice',
             credentialName: 'identity-alice',
             displayName: 'Alice',
             handle: 'alice.awiki.info',
@@ -976,6 +1028,7 @@ void main() {
       ..localCredentials = const <SessionIdentity>[
         SessionIdentity(
           did: 'did:wba:awiki.info:users:alice-old',
+          localIdentityId: 'identity-alice',
           credentialName: 'identity-alice',
           displayName: 'Alice',
           handle: 'alice.awiki.info',
@@ -1041,6 +1094,7 @@ void main() {
       ..localCredentials = const <SessionIdentity>[
         SessionIdentity(
           did: 'did:wba:awiki.info:users:alice-old',
+          localIdentityId: 'identity-alice',
           credentialName: 'identity-alice',
           displayName: 'Alice',
           handle: 'alice.awiki.info',

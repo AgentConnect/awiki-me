@@ -12,6 +12,7 @@ import '../application/agent/agent_control_service.dart';
 import '../application/auth/auth_session_coordinator.dart';
 import '../application/conversation_service.dart';
 import '../application/models/app_session.dart';
+import '../application/tenant/app_tenant.dart';
 import '../application/ports/account_state_sync_port.dart';
 import '../application/profile_application_service.dart';
 import '../data/agent/user_service_agent_inventory_adapter.dart';
@@ -52,6 +53,14 @@ class AwikiMeApp extends StatelessWidget {
     return ProviderScope(
       overrides: <Override>[
         awikiEnvironmentConfigProvider.overrideWithValue(bootstrap.environment),
+        if (bootstrap.tenantRegistry != null)
+          appTenantRegistryProvider.overrideWithValue(
+            bootstrap.tenantRegistry!,
+          ),
+        if (bootstrap.tenantRegistry != null)
+          activeAppTenantProvider.overrideWithValue(
+            bootstrap.tenantRegistry!.activeTenant,
+          ),
         awikiAccountGatewayProvider.overrideWithValue(bootstrap.accountGateway),
         awikiGatewayProvider.overrideWithValue(bootstrap.gateway),
         realtimeGatewayProvider.overrideWithValue(bootstrap.realtimeGateway),

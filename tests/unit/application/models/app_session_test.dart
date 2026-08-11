@@ -26,6 +26,7 @@ void main() {
       final legacy = session.toLegacySessionIdentity();
 
       expect(legacy.did, 'did:wba:awiki.ai:user:alice:e1_123');
+      expect(legacy.localIdentityId, 'identity-1');
       expect(legacy.credentialName, 'alice-local');
       expect(legacy.displayName, 'Alice');
       expect(legacy.handle, 'alice.awiki.ai');
@@ -45,6 +46,7 @@ void main() {
       final legacy = session.toLegacySessionIdentity();
 
       expect(legacy.credentialName, 'identity-2');
+      expect(legacy.localIdentityId, 'identity-2');
       expect(legacy.handle, isNull);
       expect(legacy.jwtToken, isNull);
       expect(legacy.accountBinding, isNull);

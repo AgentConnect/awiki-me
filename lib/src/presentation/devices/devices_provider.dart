@@ -1,4 +1,4 @@
-// [INPUT]: Session identity, Device Registry/Join/revoke services, root-transfer service, and UI intents.
+// [INPUT]: Session identity with exact local ID, Device Registry/Join/revoke services, root-transfer service, and UI intents.
 // [OUTPUT]: Secret-free device list, Join continuity, revoke, and admin-readiness presentation state.
 // [POS]: Riverpod controller for device management; Registry remains the durable readiness truth.
 
@@ -531,7 +531,12 @@ class DevicesController extends StateNotifier<DevicesState> {
     String presenceReason = 'Confirm Handle Recovery authorized Join',
   }) async {
     if (state.isActionPending) return false;
-    state = state.copyWith(isActionPending: true, clearError: true);
+    final generation = ++_generation;
+    state = state.copyWith(
+      isLoading: false,
+      isActionPending: true,
+      clearError: true,
+    );
     try {
       final deviceService = ref.read(deviceManagementServiceProvider);
       final operationId = _newOperationId('join');
@@ -554,7 +559,7 @@ class DevicesController extends StateNotifier<DevicesState> {
                   operationId: operationId,
                   presenceReason: presenceReason,
                 );
-      if (!mounted) return false;
+      if (!mounted || generation != _generation) return false;
       state = state.copyWith(
         activeJoin: progress,
         localJoins: _replaceJoin(state.localJoins, progress),
@@ -562,7 +567,7 @@ class DevicesController extends StateNotifier<DevicesState> {
       );
       return true;
     } catch (error) {
-      if (!mounted) return false;
+      if (!mounted || generation != _generation) return false;
       state = state.copyWith(
         isActionPending: false,
         error: _classifyDeviceError(error),
@@ -1307,13 +1312,15 @@ class DevicesController extends StateNotifier<DevicesState> {
         .localCredentials
         .where(
           (credential) =>
-              credential.credentialName.trim().isNotEmpty &&
+              credential.localIdentityId?.trim().isNotEmpty == true &&
+              credential.localIdentityId?.trim() ==
+                  credential.localIdentityId &&
               credential.handle?.trim().toLowerCase() == normalizedHandle,
         )
         .toList(growable: false);
     if (matches.length != 1) return null;
     return HandleRecoveryIdentityScope(
-      localIdentityId: matches.single.credentialName.trim(),
+      localIdentityId: matches.single.localIdentityId!,
     );
   }
 }

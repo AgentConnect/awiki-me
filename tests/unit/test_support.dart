@@ -43,7 +43,6 @@ import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
-import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -738,6 +737,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   bool handleAlreadyRegistered = false;
   IdentityRegistrationStatus registrationStatus =
       IdentityRegistrationStatus.registered;
+  ExistingHandleJoinMode existingHandleJoinMode =
+      ExistingHandleJoinMode.ordinary;
+  bool existingHandleJoinRequiresUserPresence = false;
   String? lastFollowedDidOrHandle;
   String? lastUnfollowedDidOrHandle;
   String? lastRegisteredNickName;
@@ -3238,28 +3240,6 @@ class FakePersonalAgentBindingPort implements PersonalAgentBindingPort {
 }
 
 class FakeProductLocalStore implements ProductLocalStore {
-  final Map<String, ProductHandleRecoveryLocator> handleRecoveryLocators =
-      <String, ProductHandleRecoveryLocator>{};
-
-  @override
-  Future<ProductHandleRecoveryLocator?> loadHandleRecoveryLocator({
-    required String localIdentityId,
-  }) async => handleRecoveryLocators[localIdentityId];
-
-  @override
-  Future<void> saveHandleRecoveryLocator(
-    ProductHandleRecoveryLocator locator,
-  ) async {
-    handleRecoveryLocators[locator.localIdentityId] = locator;
-  }
-
-  @override
-  Future<void> deleteHandleRecoveryLocator({
-    required String localIdentityId,
-  }) async {
-    handleRecoveryLocators.remove(localIdentityId);
-  }
-
   final Map<String, ProductConversationOverlay> overlays =
       <String, ProductConversationOverlay>{};
   final Map<String, MessageDraft> drafts = <String, MessageDraft>{};
@@ -3832,9 +3812,10 @@ class FakeOnboardingService implements OnboardingService {
     AppSessionTransition? transition,
   }) async {
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
-      return IdentityRegistrationResult(
+      return const IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
-        joinProgress: _testRegistrationJoinProgress,
+        existingHandleContinuationId: 'existing-handle-test',
+        existingHandleJoinMode: ExistingHandleJoinMode.ordinary,
       );
     }
     final session = await _activate(
@@ -3868,7 +3849,10 @@ class FakeOnboardingService implements OnboardingService {
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
       return IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
-        joinProgress: _testRegistrationJoinProgress,
+        existingHandleContinuationId: 'existing-handle-test',
+        existingHandleJoinMode: gateway.existingHandleJoinMode,
+        existingHandleJoinRequiresUserPresence:
+            gateway.existingHandleJoinRequiresUserPresence,
       );
     }
     final session = await _activate(
@@ -3900,9 +3884,10 @@ class FakeOnboardingService implements OnboardingService {
     AppSessionTransition? transition,
   }) async {
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
-      return IdentityRegistrationResult(
+      return const IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
-        joinProgress: _testRegistrationJoinProgress,
+        existingHandleContinuationId: 'existing-handle-test',
+        existingHandleJoinMode: ExistingHandleJoinMode.ordinary,
       );
     }
     final session = await _activate(
@@ -3934,16 +3919,6 @@ class FakeOnboardingService implements OnboardingService {
     return service.activateIdentity(session, transition: transition);
   }
 }
-
-final DeviceJoinProgress _testRegistrationJoinProgress = DeviceJoinProgress(
-  joinSessionId: 'registration-join-1',
-  did: 'did:wba:awiki.ai:alice:e1_registration',
-  protocolDeviceId: 'registration-device-1',
-  side: DeviceJoinSide.newDevice,
-  phase: DeviceJoinPhase.pending,
-  remoteState: DeviceJoinRemoteState.pending,
-  expiresAt: DateTime.utc(2030),
-);
 
 class FakeOnboardingSupportService implements OnboardingSupportService {
   const FakeOnboardingSupportService(this.gateway);
@@ -4129,7 +4104,7 @@ class FakeIdentityCorePort implements IdentityCorePort {
 AppSession _appSessionFromLegacy(SessionIdentity session) {
   return AppSession(
     did: session.did,
-    identityId: session.identityId ?? session.credentialName,
+    identityId: session.localIdentityId ?? session.credentialName,
     displayName: session.displayName,
     handle: session.handle,
     localAlias: session.credentialName,
@@ -4140,7 +4115,7 @@ AppSession _appSessionFromLegacy(SessionIdentity session) {
 }
 
 bool _matchesLocalCredential(SessionIdentity identity, String selector) {
-  return identity.identityId == selector ||
+  return identity.localIdentityId == selector ||
       identity.did == selector ||
       identity.credentialName == selector;
 }

@@ -5,13 +5,17 @@ import '../../application/models/daemon_subkey_authorization_revoke_result.dart'
 import '../../application/ports/identity_core_port.dart';
 import '../../application/ports/legacy_identity_upgrade_port.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
+import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_device_management_adapter.dart';
 import 'awiki_im_core_runtime.dart';
 
 class AwikiImCoreIdentityAdapter
-    implements IdentityCorePort, LegacyIdentityUpgradePort {
+    implements
+        IdentityCorePort,
+        ExistingHandleContinuationPort,
+        LegacyIdentityUpgradePort {
   AwikiImCoreIdentityAdapter({
     required AwikiImCoreRuntime runtime,
     AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
@@ -20,6 +24,9 @@ class AwikiImCoreIdentityAdapter
 
   final AwikiImCoreRuntime _runtime;
   final AwikiImCoreMappers _mappers;
+  final Map<String, _PendingExistingHandleRegistration>
+  _existingHandleContinuations = <String, _PendingExistingHandleRegistration>{};
+  int _continuationSequence = 0;
 
   @override
   Future<List<AppSession>> listLocalIdentities() async {
@@ -222,15 +229,26 @@ class AwikiImCoreIdentityAdapter
           'IM Core joinRequired registration did not include a continuation.',
         );
       }
-      final progress = await coreInstance.beginDeviceJoin(
-        did: continuation.did,
-        operationId:
-            'awiki-me-register-join-${DateTime.now().microsecondsSinceEpoch}',
-        accountVerificationGrant: continuation.accountVerificationGrant,
-      );
+      final mode = existingHandleJoinModeFromCore(continuation.mode);
+      if (continuation.requiresUserPresence !=
+          (mode == ExistingHandleJoinMode.handleRecoveryRebind)) {
+        throw StateError('registration_join_preparation_invalid');
+      }
+      final continuationId =
+          'existing-handle-${DateTime.now().microsecondsSinceEpoch}-${_continuationSequence++}';
+      _existingHandleContinuations[continuationId] =
+          _PendingExistingHandleRegistration(
+            coreInstance: coreInstance,
+            preparationId: continuation.preparationId,
+            mode: mode,
+            requiresUserPresence: continuation.requiresUserPresence,
+          );
       return IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
-        joinProgress: deviceJoinProgressFromCore(progress),
+        existingHandleContinuationId: continuationId,
+        existingHandleJoinMode: mode,
+        existingHandleJoinRequiresUserPresence:
+            continuation.requiresUserPresence,
         warnings: List<String>.unmodifiable(result.warnings),
       );
     }
@@ -249,6 +267,98 @@ class AwikiImCoreIdentityAdapter
       warnings: List<String>.unmodifiable(result.warnings),
     );
   }
+
+  @override
+  Future<DeviceJoinProgress> beginExistingHandleDeviceJoin(
+    String continuationId, {
+    required bool userPresenceConfirmed,
+  }) async {
+    final pending = _existingHandleContinuations[continuationId];
+    if (pending == null || continuationId.trim() != continuationId) {
+      throw StateError('existing_handle_continuation_unavailable');
+    }
+    if (pending.requiresUserPresence && !userPresenceConfirmed) {
+      throw StateError('registration_join_user_presence_required');
+    }
+    final progress = await pending.coreInstance
+        .beginPreparedRegistrationDeviceJoin(
+          preparationId: pending.preparationId,
+          operationId: 'awiki-me-register-join-${pending.preparationId}',
+          userPresenceConfirmed: userPresenceConfirmed,
+        );
+    final mapped = preparedRegistrationJoinProgressFromCore(
+      progress,
+      pending.mode,
+    );
+    _existingHandleContinuations.remove(continuationId);
+    return mapped;
+  }
+
+  @override
+  Future<void> discardExistingHandleContinuation(String continuationId) async {
+    _existingHandleContinuations.remove(continuationId);
+  }
+}
+
+class _PendingExistingHandleRegistration {
+  const _PendingExistingHandleRegistration({
+    required this.coreInstance,
+    required this.preparationId,
+    required this.mode,
+    required this.requiresUserPresence,
+  });
+
+  final core.AwikiImCore coreInstance;
+  final String preparationId;
+  final ExistingHandleJoinMode mode;
+  final bool requiresUserPresence;
+}
+
+ExistingHandleJoinMode existingHandleJoinModeFromCore(
+  core.HandleRegistrationJoinMode value,
+) => switch (value) {
+  core.HandleRegistrationJoinMode.ordinary => ExistingHandleJoinMode.ordinary,
+  core.HandleRegistrationJoinMode.handleRecoveryRebind =>
+    ExistingHandleJoinMode.handleRecoveryRebind,
+};
+
+DeviceJoinProgress preparedRegistrationJoinProgressFromCore(
+  core.AuthorizedJoinActivationProgress value,
+  ExistingHandleJoinMode mode,
+) {
+  final join = deviceJoinProgressFromCore(value.join);
+  final reset = value.registryEpochReset;
+  if (mode == ExistingHandleJoinMode.ordinary) {
+    if (reset != null) {
+      throw StateError('registration_join_transition_mismatch');
+    }
+    return join;
+  }
+  if (reset == null ||
+      reset.sourceKind !=
+          core.HandleRecoveryTransitionSourceKind.joinedDevice ||
+      reset.sourceId != join.joinSessionId ||
+      reset.currentDid != join.did ||
+      reset.handle.trim().isEmpty ||
+      reset.handle.trim() != reset.handle) {
+    throw StateError('registration_join_transition_mismatch');
+  }
+  return DeviceJoinProgress(
+    joinSessionId: join.joinSessionId,
+    did: join.did,
+    protocolDeviceId: join.protocolDeviceId,
+    side: join.side,
+    phase: join.phase,
+    remoteState: join.remoteState,
+    expiresAt: join.expiresAt,
+    sas: join.sas,
+    authorizedDevice: join.authorizedDevice,
+    cause: DeviceJoinCause.handleRecovery,
+    handleRecovery: DeviceJoinHandleRecoveryContext(
+      handle: reset.handle,
+      localOrdinaryDataWillMigrate: true,
+    ),
+  );
 }
 
 LegacyIdentityUpgradeStatus _legacyUpgradeStatus(

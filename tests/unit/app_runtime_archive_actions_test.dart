@@ -165,7 +165,7 @@ void main() {
     test('删除非当前本地身份使用稳定 ID 且保留当前会话', () async {
       const current = SessionIdentity(
         did: 'did:test:alice',
-        identityId: 'identity-alice',
+        localIdentityId: 'identity-alice',
         credentialName: 'alice-local',
         displayName: 'Alice',
         handle: 'alice',
@@ -173,7 +173,7 @@ void main() {
       );
       const other = SessionIdentity(
         did: 'did:test:bob',
-        identityId: 'identity-bob',
+        localIdentityId: 'identity-bob',
         credentialName: 'bob-local',
         displayName: 'Bob',
         handle: 'bob',
@@ -197,7 +197,7 @@ void main() {
         container
             .read(sessionProvider)
             .localCredentials
-            .map((identity) => identity.identityId),
+            .map((identity) => identity.localIdentityId),
         <String?>['identity-alice'],
       );
       expect(gateway.logoutCalls, 0);

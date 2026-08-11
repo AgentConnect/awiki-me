@@ -3,14 +3,6 @@ import 'models/product_local_models.dart';
 abstract interface class ProductLocalStore {
   Future<void> warmUp();
 
-  Future<ProductHandleRecoveryLocator?> loadHandleRecoveryLocator({
-    required String localIdentityId,
-  });
-
-  Future<void> saveHandleRecoveryLocator(ProductHandleRecoveryLocator locator);
-
-  Future<void> deleteHandleRecoveryLocator({required String localIdentityId});
-
   Future<ProductConversationOverlay?> loadConversationOverlay({
     required String ownerDid,
     required String threadId,

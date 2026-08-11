@@ -15,6 +15,7 @@ import '../application/desktop_shell_service.dart';
 import '../application/agent/agent_control_service.dart';
 import '../application/agent/agent_control_status_store.dart';
 import '../application/auth/auth_session_coordinator.dart';
+import '../application/app_bootstrap_epoch_barrier.dart';
 import '../application/app_session_service.dart';
 import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
@@ -118,6 +119,7 @@ class AppBootstrap {
     required this.e2eeFacade,
     required this.localePreferenceService,
     required this.updateService,
+    this.tenantRegistry,
     this.displayScalePreferenceService =
         const NoopDisplayScalePreferenceService(),
     this.smsOtpCooldownService = const NoopSmsOtpCooldownService(),
@@ -163,6 +165,7 @@ class AppBootstrap {
   final E2eeFacade e2eeFacade;
   final LocalePreferenceService localePreferenceService;
   final UpdateService updateService;
+  final AppTenantRegistry? tenantRegistry;
   final DisplayScalePreferenceService displayScalePreferenceService;
   final SmsOtpCooldownService smsOtpCooldownService;
   final DesktopShellService desktopShellService;
@@ -291,6 +294,7 @@ class AppBootstrap {
           effectiveEnvironment.multiDeviceGroupE2eeEnabled,
       multiDeviceHandleRecoveryEnabled:
           effectiveEnvironment.multiDeviceHandleRecoveryEnabled,
+      multiDeviceAudience: effectiveEnvironment.multiDeviceAudience,
       onProgress: (progress) {
         if (progress == AwikiImCoreRuntimeProgress.upgradingLocalState) {
           onProgress?.call(AppBootstrapProgress.upgradingLocalState);
@@ -414,6 +418,10 @@ class AppBootstrap {
         activeSessionStore: activeSessionStore,
         expectedDidDomain: effectiveEnvironment.didDomain,
         realtime: realtimeAdapter,
+        bootstrapEpochBarrier: AppBootstrapEpochBarrier(
+          recovery: handleRecoveryAdapter,
+          local: productLocalStore,
+        ),
       );
       final onboardingService = ImCoreOnboardingService(
         identities: identityAdapter,
@@ -481,6 +489,7 @@ class AppBootstrap {
         displayScalePreferenceService: displayScalePreferenceService,
         smsOtpCooldownService: smsOtpCooldownService,
         updateService: updateService,
+        tenantRegistry: registry,
         desktopShellService: shell,
         appSessionService: appSessionService,
         identityCorePort: identityAdapter,
@@ -583,6 +592,7 @@ class AppBootstrap {
       displayScalePreferenceService: displayScalePreferenceService,
       smsOtpCooldownService: smsOtpCooldownService,
       updateService: updateService,
+      tenantRegistry: tenantRegistry,
       desktopShellService: desktopShellService,
       appSessionService: appSessionService,
       identityCorePort: identityCorePort,

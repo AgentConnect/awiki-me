@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-31.published-legacy-upgrade-compatibility",
+  "sourceRevision": "2026-08-10.handle-recovery-registration-rejoin",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
@@ -2199,15 +2199,15 @@
       "caseId": "DEVICE-JOIN-E2E-001",
       "feature": "AWiki Me new-device Join with CLI admin",
       "layer": "remote_product_ui_security",
-      "preconditions": "The dedicated phone allowlist is enabled on awiki.info; AWiki Me and an exact-revision CLI admin use independent fresh native Core roots; purpose-bound OTPs are resolved through validated fixed argv; the CLI admin runs its production foreground listener with the dedicated file host-notification sink before Join starts.",
-      "action": "Bootstrap the existing CLI admin, start its real listener, start Join through the real AWiki Me onboarding UI, restart the App while Join is pending, require the CLI listener to emit the redacted im.device.join.requested event before reading the local Core projection or starting verification, compare the independently displayed six-digit SAS, approve through the foreground CLI as a member, and wait for AWiki Me to re-resolve authorization.",
+      "preconditions": "The dedicated phone allowlist is enabled on awiki.info; the protected ignored YAML contains the fixed test phone/code; AWiki Me and an exact-revision CLI admin use independent fresh native Core roots; the CLI admin runs its production foreground listener with the dedicated file host-notification sink before Join starts.",
+      "action": "Bootstrap the existing CLI admin, start its real listener, verify that same existing Handle through unified AWiki Me onboarding, choose Join so the opaque continuation creates the pending session without duplicate Join inputs, restart the App while Join is pending, require the CLI listener to emit the redacted im.device.join.requested event before reading the local Core projection or starting verification, compare the independently displayed six-digit SAS, approve through the foreground CLI as a member, and wait for AWiki Me to re-resolve authorization.",
       "exactOracles": [
         "The independently bootstrapped CLI admin and App requester use distinct fresh native Core roots; the OTP-authenticated App request remains pending before the admin starts verification, an App restart restores that same pending session without persisting SAS, and the listener emits exactly the dedicated redacted Join wake before any admin mutation.",
         "The App-visible and CLI-derived six-digit SAS match without recording either value, and the production foreground CLI contract approves the fixed member role without an admin-role choice.",
         "Both Registries contain exactly two devices: AWiki Me is the current active member with management_ready false only after authoritative re-resolution, while the CLI remains the current active management-ready admin."
       ],
       "negativeChecks": [
-        "A fake provider, copied state, static OTP, unsafe resolver argv, malformed SMS-error response, missing listener host wake, direct Message Inbox hydration, unapproved host-event fields, split claim or admin polling, missing pending phase, changed or terminal Join after restart, persisted SAS, mismatched SAS/session/device, non-foreground approval, retained terminal SAS, admin role, or server success without final Registry authorization prevents pass attestation."
+        "A fake provider, copied state, missing or reported protected OTP, duplicate Join credential input, missing onboarding continuation, missing listener host wake, direct Message Inbox hydration, unapproved host-event fields, split claim or admin polling, missing pending phase, changed or terminal Join after restart, persisted SAS, mismatched SAS/session/device, non-foreground approval, retained terminal SAS, admin role, or server success without final Registry authorization prevents pass attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
@@ -2222,7 +2222,7 @@
       "assertionContract": {
         "assertionIds": [
           "DEVICE-JOIN-E2E-001:independent_native_devices_bootstrapped",
-          "DEVICE-JOIN-E2E-001:app_otp_left_join_pending",
+          "DEVICE-JOIN-E2E-001:existing_handle_onboarding_continuation_left_join_pending",
           "DEVICE-JOIN-E2E-001:app_restart_restored_pending_without_sas",
           "DEVICE-JOIN-E2E-001:cli_listener_join_wake_received",
           "DEVICE-JOIN-E2E-001:sas_matched_without_secret_evidence",
@@ -2232,7 +2232,7 @@
         "exactOracleAssertions": [
           [
             "DEVICE-JOIN-E2E-001:independent_native_devices_bootstrapped",
-            "DEVICE-JOIN-E2E-001:app_otp_left_join_pending",
+            "DEVICE-JOIN-E2E-001:existing_handle_onboarding_continuation_left_join_pending",
             "DEVICE-JOIN-E2E-001:app_restart_restored_pending_without_sas",
             "DEVICE-JOIN-E2E-001:cli_listener_join_wake_received"
           ],
@@ -2247,7 +2247,7 @@
         "negativeCheckAssertions": [
           [
             "DEVICE-JOIN-E2E-001:independent_native_devices_bootstrapped",
-            "DEVICE-JOIN-E2E-001:app_otp_left_join_pending",
+            "DEVICE-JOIN-E2E-001:existing_handle_onboarding_continuation_left_join_pending",
             "DEVICE-JOIN-E2E-001:app_restart_restored_pending_without_sas",
             "DEVICE-JOIN-E2E-001:cli_listener_join_wake_received",
             "DEVICE-JOIN-E2E-001:sas_matched_without_secret_evidence",
@@ -2261,7 +2261,7 @@
       "caseId": "DEVICE-JOIN-E2E-002",
       "feature": "AWiki Me admin-side approval defaults to member",
       "layer": "remote_product_ui_security",
-      "preconditions": "The dedicated phone allowlist is enabled on awiki.info; the runner explicitly enables the E2E-only unattended UserPresencePort; AWiki Me and an exact-revision CLI use independent native Core roots; OTPs are resolved through validated fixed argv; the authenticated App runtime is connected before the CLI starts Join. SMS request delivery is 200-only unless the explicit operator staged-OTP flag and exact reviewed SSH resolver are used.",
+      "preconditions": "The dedicated phone allowlist is enabled on awiki.info; the protected ignored YAML contains the fixed test phone/code; the runner explicitly enables the E2E-only unattended UserPresencePort; AWiki Me and an exact-revision CLI use independent native Core roots; the authenticated App runtime is connected before the CLI starts Join.",
       "action": "Bootstrap AWiki Me as the ready admin, start an independent CLI Join request while the App is on its normal authenticated shell, wait for system_notification_changed to refresh the Core Join inbox and expose the global review entry, open that entry to start verification exactly once, compare the independently derived six-digit SAS, approve the fixed member role through exactly one test-scoped user-presence decision, and poll the new-device result.",
       "exactOracles": [
         "The independently bootstrapped App admin and CLI requester use distinct fresh native Core roots; the OTP-authenticated request remains pending until the App receives its system notification, refreshes the typed Core Join inbox independently of general message sync, exposes the global review entry, and the user explicitly starts verification.",
@@ -2269,7 +2269,7 @@
         "Both Registries contain exactly two devices: the joining protocol_device_id is the CLI current active member with management_ready false, while the original App device remains the unique current active management-ready admin."
       ],
       "negativeChecks": [
-        "A production user-presence override, copied or non-fresh local state, static OTP, unsafe resolver argv, unapproved or malformed SMS-error response, Registry discovery, direct requestSync/refreshJoinInbox calls, pre-opening Devices to bypass the global entry, split claim or admin polling, repeated verification start, secret-bearing evidence, mismatched SAS, an enabled approval action before SAS confirmation, any admin-role control, a denied or repeated user-presence result, mismatched protocol_device_id, or an active-admin joining result prevents pass attestation."
+        "A production user-presence override, copied or non-fresh local state, missing or reported protected OTP, Registry discovery, direct requestSync/refreshJoinInbox calls, pre-opening Devices to bypass the global entry, split claim or admin polling, repeated verification start, secret-bearing evidence, mismatched SAS, an enabled approval action before SAS confirmation, any admin-role control, a denied or repeated user-presence result, mismatched protocol_device_id, or an active-admin joining result prevents pass attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
@@ -2312,6 +2312,65 @@
             "DEVICE-JOIN-E2E-002:sas_matched_without_secret_evidence",
             "DEVICE-JOIN-E2E-002:single_e2e_user_presence_confirmed",
             "DEVICE-JOIN-E2E-002:joined_device_active_member_not_admin"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-JOIN-MESSAGE-CORE-E2E-001",
+      "feature": "A joined AWiki Me App and CLI siblings preserve minimal Direct and reconnect convergence",
+      "layer": "remote_product_ui_security",
+      "preconditions": "DEVICE-JOIN-E2E-001 has joined one real App as a member beside the exact-revision CLI admin; a second independent CLI identity is available as the external Direct peer; all three native roots are isolated and the protected fixed OTP remains process-only.",
+      "action": "Send one ordinary Direct message from the joined App to the external CLI peer, require the sibling CLI admin to observe the exact canonical own-sync, stop the App, send one reply while it is offline, restart the App from the same root, open the exact visible conversation, and wait for the product read and Core-directed sync chain to settle.",
+      "exactOracles": [
+        "The joined App commits one canonical sent Direct message and the external CLI peer observes exactly that message ID and content once through its realtime listener.",
+        "The external peer sends only after the App process is offline; the same-root App restart restores the joined identity and projects the exact incoming ID/content once in the canonical conversation.",
+        "Opening the visible conversation commits unread count zero and the message-sync coordinator returns to current idle diagnostics with no pending retry."
+      ],
+      "negativeChecks": [
+        "A two-App runner, copied root, fake message provider, application-service-only visibility claim, wrong or duplicate canonical ID, missing peer realtime receipt, peer send before App shutdown, different restart root, missing visible reply, unread state remaining positive, non-idle sync diagnostics, secret-bearing evidence, or unaudited host prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-JOIN-MESSAGE-CORE-E2E-001:joined_app_direct_committed",
+          "DEVICE-JOIN-MESSAGE-CORE-E2E-001:peer_cli_observed_exact_incoming",
+          "DEVICE-JOIN-MESSAGE-CORE-E2E-001:app_went_offline_before_peer_send",
+          "DEVICE-JOIN-MESSAGE-CORE-E2E-001:same_root_restart_converged_exact_incoming_once",
+          "DEVICE-JOIN-MESSAGE-CORE-E2E-001:visible_read_committed",
+          "DEVICE-JOIN-MESSAGE-CORE-E2E-001:core_directed_sync_chain_returned_idle"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-JOIN-MESSAGE-CORE-E2E-001:joined_app_direct_committed",
+            "DEVICE-JOIN-MESSAGE-CORE-E2E-001:peer_cli_observed_exact_incoming"
+          ],
+          [
+            "DEVICE-JOIN-MESSAGE-CORE-E2E-001:app_went_offline_before_peer_send",
+            "DEVICE-JOIN-MESSAGE-CORE-E2E-001:same_root_restart_converged_exact_incoming_once"
+          ],
+          [
+            "DEVICE-JOIN-MESSAGE-CORE-E2E-001:visible_read_committed",
+            "DEVICE-JOIN-MESSAGE-CORE-E2E-001:core_directed_sync_chain_returned_idle"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-JOIN-MESSAGE-CORE-E2E-001:joined_app_direct_committed",
+            "DEVICE-JOIN-MESSAGE-CORE-E2E-001:peer_cli_observed_exact_incoming",
+            "DEVICE-JOIN-MESSAGE-CORE-E2E-001:app_went_offline_before_peer_send",
+            "DEVICE-JOIN-MESSAGE-CORE-E2E-001:same_root_restart_converged_exact_incoming_once",
+            "DEVICE-JOIN-MESSAGE-CORE-E2E-001:visible_read_committed",
+            "DEVICE-JOIN-MESSAGE-CORE-E2E-001:core_directed_sync_chain_returned_idle"
           ]
         ]
       }
@@ -2380,14 +2439,15 @@
       "feature": "Joined AWiki Me device deletes its local credential and starts Join again",
       "layer": "remote_product_ui_security",
       "preconditions": "DEVICE-JOIN-E2E-004 has completed on two isolated real App processes, the joining App is the current active member, and its completed New Device Join journal belongs to the same local identity and protocol device.",
-      "action": "On the joining App, leave the completed Join page, open Settings, confirm Exit and delete current credential through visible UI, verify the completed local Join journal is retired, then reopen Join from onboarding.",
+      "action": "On the joining App, leave the completed Join page, open Settings, confirm Exit and delete current credential through visible UI, verify the completed local Join journal is retired, submit the same verified Handle from onboarding, then reopen the standalone Join form.",
       "exactOracles": [
         "Deleting the joined credential returns the real App to onboarding without affecting the admin App or remotely revoking either registered device.",
         "The joining App Core no longer lists the completed New Device Join session that created the deleted local identity.",
+        "Submitting the same Handle after completed local retirement shows the explicit Join-or-Handle-Recovery choice instead of handle_recovery.transition_missing.",
         "Opening Join again shows one fresh phone, Handle, OTP, and start-action form with no active Join, activation retry, completed-state projection, or device error."
       ],
       "negativeChecks": [
-        "A fake Core, direct provider mutation, copied state root, retained completed Join session, DID-only match for another protocol device, stale Device joined page, activation retry, error banner, or missing fresh Join input prevents pass attestation."
+        "A fake Core, direct provider mutation, copied state root, retained completed Join session, handle_recovery.transition_missing, DID-only match for another protocol device, stale Device joined page, activation retry, error banner, or missing Join/Recovery choice or fresh Join input prevents pass attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
@@ -2403,6 +2463,7 @@
         "assertionIds": [
           "DEVICE-JOIN-E2E-005:joined_device_credential_deleted",
           "DEVICE-JOIN-E2E-005:completed_join_retired_from_local_core",
+          "DEVICE-JOIN-E2E-005:same_handle_join_or_recovery_choice_visible",
           "DEVICE-JOIN-E2E-005:fresh_join_form_visible_without_activation_error"
         ],
         "exactOracleAssertions": [
@@ -2413,6 +2474,9 @@
             "DEVICE-JOIN-E2E-005:completed_join_retired_from_local_core"
           ],
           [
+            "DEVICE-JOIN-E2E-005:same_handle_join_or_recovery_choice_visible"
+          ],
+          [
             "DEVICE-JOIN-E2E-005:fresh_join_form_visible_without_activation_error"
           ]
         ],
@@ -2420,6 +2484,7 @@
           [
             "DEVICE-JOIN-E2E-005:joined_device_credential_deleted",
             "DEVICE-JOIN-E2E-005:completed_join_retired_from_local_core",
+            "DEVICE-JOIN-E2E-005:same_handle_join_or_recovery_choice_visible",
             "DEVICE-JOIN-E2E-005:fresh_join_form_visible_without_activation_error"
           ]
         ]
@@ -2717,17 +2782,17 @@
     },
     {
       "caseId": "MULTI-DEVICE-CAPABILITY-GATE-E2E-001",
-      "feature": "AWiki Me default device entry and independent security gates",
+      "feature": "AWiki Me local Join surface and independent security gates",
       "layer": "product_ui",
       "preconditions": "Flutter desktop and debug native IM Core artifacts are available; no backend, OTP, CLI peer, or pre-existing identity is used.",
-      "action": "Open one temporary Storage Scope through production AppBootstrap/native Core, verify the default device-management composition, and open the public onboarding Join entry without submitting an OTP.",
+      "action": "Open one temporary Storage Scope through production AppBootstrap/native Core, verify the default device-management composition, and mount the Join surface inside the production App provider tree without submitting an OTP.",
       "exactOracles": [
         "The launch uses a real Storage Scope ID, and the temporary App root is deleted after native runtime disposal.",
-        "With default configuration the production device-management and root-transfer adapters plus the public Join entry exist; the gated group-encryption adapter is absent.",
-        "The public entry opens the real Handle/phone/OTP Join form without exposing root transfer before authorized-member eligibility and explicit user presence; revoke and Direct/Group E2EE rollout gates remain closed, and Handle Recovery has no executable V1 flow."
+        "With default configuration the production device-management and root-transfer adapters exist while the gated group-encryption adapter is absent.",
+        "The production provider tree mounts the real Handle/phone/OTP Join form without exposing root transfer before authorized-member eligibility and explicit user presence; revoke and Direct/Group E2EE rollout gates remain closed."
       ],
       "negativeChecks": [
-        "A reused/copied Core root, fake provider, backend-dependent oracle, a missing Join entry, root-transfer execution from the public form, hidden enablement of a gated capability, OTP submission, or any claim that remote Join/SAS/Root/Recovery passed fails the case."
+        "A reused/copied Core root, fake provider tree, backend-dependent oracle, an unavailable Join surface, root-transfer execution from the local form, hidden enablement of a gated capability, OTP submission, or any claim that remote Join/SAS/Root/Recovery passed in this local gate fails the case."
       ],
       "environment": "no_service",
       "cleanupPolicy": "test_owned_temporary_scope_delete",
@@ -2741,32 +2806,30 @@
       "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
-          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:isolated_scopes_opened",
-          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:default_capabilities_failed_closed",
-          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_only_public_entry_opened",
+          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:isolated_scope_opened",
+          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_surface_opened_with_production_adapters",
           "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:high_risk_capabilities_stayed_closed",
-          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:temporary_scopes_deleted"
+          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:temporary_scope_deleted"
         ],
         "exactOracleAssertions": [
           [
-            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:isolated_scopes_opened",
-            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:temporary_scopes_deleted"
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:isolated_scope_opened",
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:temporary_scope_deleted"
           ],
           [
-            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:default_capabilities_failed_closed"
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_surface_opened_with_production_adapters"
           ],
           [
-            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_only_public_entry_opened",
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_surface_opened_with_production_adapters",
             "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:high_risk_capabilities_stayed_closed"
           ]
         ],
         "negativeCheckAssertions": [
           [
-            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:isolated_scopes_opened",
-            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:default_capabilities_failed_closed",
-            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_only_public_entry_opened",
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:isolated_scope_opened",
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_surface_opened_with_production_adapters",
             "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:high_risk_capabilities_stayed_closed",
-            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:temporary_scopes_deleted"
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:temporary_scope_deleted"
           ]
         ]
       }
@@ -3900,6 +3963,260 @@
             "DEVICE-REGISTRY-SYNC-E2E-001:admin_revoked_exact_active_sibling_with_user_presence",
             "DEVICE-REGISTRY-SYNC-E2E-001:active_admin_registry_cache_converged_higher_version",
             "DEVICE-REGISTRY-SYNC-E2E-001:revoked_sibling_product_request_was_fenced"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-V1-E2E-001",
+      "feature": "AWiki Me visible Manifest Handle Recovery V1 replaces a lost identity DID",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The audited awiki.info target advertises phone Handle Recovery V1; one dedicated allowlisted SMS account and six-digit fixed code are available only in the protected ignored local YAML; setup and Recovery use separate fresh production Core roots and E2E-only user presence.",
+      "action": "Register one remote ready-admin fixture, destroy the setup root, then on a machine with no local identity use unified phone onboarding to verify the existing Handle, choose Recovery, and complete the dedicated OTP, irreversible-risk confirmation, activation, and bounded resume controls.",
+      "exactOracles": [
+        "The fresh App has no local identity, unified onboarding exposes Join/Recovery only after existing-Handle verification, and Recovery reuses the exact verified Handle and phone as read-only context with only one OTP input before requesting one OTP bound to purpose awiki.identity.handle-recovery.v1 plus the exact opaque operation ID without supplying a local selector.",
+        "The UI reaches prepared, visibly presents irreversible consequences, requires explicit confirmation, and uses exactly one test-only user-presence decision before activation; any intermediate Core phase completes only through the visible bounded resume action.",
+        "Completion preserves the canonical Handle, installs the Core-returned new local owner, replaces the old DID with the Core-authorized current DID, leaves one ready current admin Registry device, and keeps the old DID absent from the fresh local projection."
+      ],
+      "negativeChecks": [
+        "A fake Core/provider, retained or copied setup identity, checked-in or reported OTP, staged SMS-error continuation, supplied local selector, missing operation binding, legacy recovery purpose, direct activation/resume service call, bypassed risk UI, production LocalAuthentication claim, unchanged DID, changed Handle, non-ready replacement Registry, old DID in the fresh local projection, secret-bearing evidence, or unaudited remote host prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-V1-E2E-001:existing_ready_admin_created",
+          "HANDLE-RECOVERY-V1-E2E-001:fresh_machine_has_no_local_identity",
+          "HANDLE-RECOVERY-V1-E2E-001:existing_handle_choice_opened_recovery",
+          "HANDLE-RECOVERY-V1-E2E-001:verified_context_reused_without_duplicate_inputs",
+          "HANDLE-RECOVERY-V1-E2E-001:operation_bound_otp_prepared_through_ui",
+          "HANDLE-RECOVERY-V1-E2E-001:irreversible_risks_confirmed_through_ui",
+          "HANDLE-RECOVERY-V1-E2E-001:recovery_completed_through_ui_resume",
+          "HANDLE-RECOVERY-V1-E2E-001:new_local_owner_handle_and_replacement_did_verified",
+          "HANDLE-RECOVERY-V1-E2E-001:old_did_absent_from_fresh_local_projection"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-V1-E2E-001:fresh_machine_has_no_local_identity",
+            "HANDLE-RECOVERY-V1-E2E-001:existing_handle_choice_opened_recovery",
+            "HANDLE-RECOVERY-V1-E2E-001:verified_context_reused_without_duplicate_inputs",
+            "HANDLE-RECOVERY-V1-E2E-001:operation_bound_otp_prepared_through_ui"
+          ],
+          [
+            "HANDLE-RECOVERY-V1-E2E-001:irreversible_risks_confirmed_through_ui",
+            "HANDLE-RECOVERY-V1-E2E-001:recovery_completed_through_ui_resume"
+          ],
+          [
+            "HANDLE-RECOVERY-V1-E2E-001:existing_ready_admin_created",
+            "HANDLE-RECOVERY-V1-E2E-001:new_local_owner_handle_and_replacement_did_verified",
+            "HANDLE-RECOVERY-V1-E2E-001:old_did_absent_from_fresh_local_projection"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-V1-E2E-001:existing_ready_admin_created",
+            "HANDLE-RECOVERY-V1-E2E-001:fresh_machine_has_no_local_identity",
+            "HANDLE-RECOVERY-V1-E2E-001:existing_handle_choice_opened_recovery",
+            "HANDLE-RECOVERY-V1-E2E-001:verified_context_reused_without_duplicate_inputs",
+            "HANDLE-RECOVERY-V1-E2E-001:operation_bound_otp_prepared_through_ui",
+            "HANDLE-RECOVERY-V1-E2E-001:irreversible_risks_confirmed_through_ui",
+            "HANDLE-RECOVERY-V1-E2E-001:recovery_completed_through_ui_resume",
+            "HANDLE-RECOVERY-V1-E2E-001:new_local_owner_handle_and_replacement_did_verified",
+            "HANDLE-RECOVERY-V1-E2E-001:old_did_absent_from_fresh_local_projection"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-V1-E2E-002",
+      "feature": "Handle Recovery committed-to-Product-reset crash cut converges on the next App process",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The audited awiki.info target advertises Handle Recovery V4; an old local identity has a durable Product Registry epoch and stable account Profile; phase A and phase B use the same isolated App/native Core state root.",
+      "action": "Phase A completes one visible, risk-confirmed Recovery with an E2E-only fail-closed cut before recovered-identity activation, then terminates without disposing the AppBootstrap. Phase B launches a new Flutter process over the same state root and restores the session.",
+      "exactOracles": [
+        "Phase A records a committed Core receipt while the Product Registry still holds the exact old DID/generation and the App session still projects the old DID.",
+        "Phase B cannot publish the replacement authenticated session until the bootstrap epoch barrier applies the authorized reset; the old Registry snapshot is cleared exactly once and the new DID/generation is current.",
+        "Stable account Profile data survives the epoch reset, the old DID is absent from local identity projection, and the E2E barrier metric records one ready application."
+      ],
+      "negativeChecks": [
+        "A same-process resume, a different state root, a production-enabled fault, Product reset before the cut, session/realtime publication before the barrier, repeated reset, lost stable-account Profile, retained old DID, raw secret in attestation, or unaudited host prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-V1-E2E-002:phase_a_committed_with_old_product_epoch",
+          "HANDLE-RECOVERY-V1-E2E-002:phase_a_process_terminated_before_product_reset",
+          "HANDLE-RECOVERY-V1-E2E-002:phase_b_reopened_same_state_root",
+          "HANDLE-RECOVERY-V1-E2E-002:bootstrap_barrier_reset_before_session_activation",
+          "HANDLE-RECOVERY-V1-E2E-002:epoch_bound_registry_cleared_exactly_once",
+          "HANDLE-RECOVERY-V1-E2E-002:stable_account_profile_preserved",
+          "HANDLE-RECOVERY-V1-E2E-002:replacement_identity_visible_without_old_did"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-V1-E2E-002:phase_a_committed_with_old_product_epoch",
+            "HANDLE-RECOVERY-V1-E2E-002:phase_a_process_terminated_before_product_reset"
+          ],
+          [
+            "HANDLE-RECOVERY-V1-E2E-002:phase_b_reopened_same_state_root",
+            "HANDLE-RECOVERY-V1-E2E-002:bootstrap_barrier_reset_before_session_activation",
+            "HANDLE-RECOVERY-V1-E2E-002:epoch_bound_registry_cleared_exactly_once"
+          ],
+          [
+            "HANDLE-RECOVERY-V1-E2E-002:stable_account_profile_preserved",
+            "HANDLE-RECOVERY-V1-E2E-002:replacement_identity_visible_without_old_did"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-V1-E2E-002:phase_a_committed_with_old_product_epoch",
+            "HANDLE-RECOVERY-V1-E2E-002:phase_a_process_terminated_before_product_reset",
+            "HANDLE-RECOVERY-V1-E2E-002:phase_b_reopened_same_state_root",
+            "HANDLE-RECOVERY-V1-E2E-002:bootstrap_barrier_reset_before_session_activation",
+            "HANDLE-RECOVERY-V1-E2E-002:epoch_bound_registry_cleared_exactly_once",
+            "HANDLE-RECOVERY-V1-E2E-002:stable_account_profile_preserved",
+            "HANDLE-RECOVERY-V1-E2E-002:replacement_identity_visible_without_old_did"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-V1-E2E-003",
+      "feature": "A fenced old App peer ordinarily re-Joins the recovered App identity",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The audited awiki.info target advertises Handle Recovery V4; two independently rooted Apps are joined as one admin and one member on the old DID before the visible Recovery; the protected fixed OTP fixture is available on Linux or macOS.",
+      "action": "Complete visible App Handle Recovery, prove the old peer App principal cannot perform a remote message action, then use a fresh ordinary Join grant and SAS approval to re-Join that App to the Recovery DID before exchanging Direct messages with one independently registered external identity.",
+      "exactOracles": [
+        "The old peer App is an active member before Recovery and its old authenticated remote action is rejected after Recovery but before any re-Join grant is issued.",
+        "A fresh purpose-bound ordinary Join converges both App views to the exact Recovery DID with one current ready admin, one current member in the peer view, and unchanged recovered-App session activation.",
+        "The recovered App sends to the external DID and the rejoined App sibling observes exact own-sync; the external DID replies to the recovered DID and both Apps converge the exact message once with correct sender, receiver, and ownership."
+      ],
+      "negativeChecks": [
+        "Reusing a Recovery Grant or operation, accepting an old authenticated message action, changing the recovered App session, converging a Registry to the old DID, copying either App root, treating self-DID delivery as an ordinary Direct oracle, skipping SAS comparison, duplicating either exact message, platform-skipping the business case, leaking OTP or raw DID evidence, or expanding into dual initiators, a second Recovery, revoke, or MLS prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-V1-E2E-003:old_app_peer_joined_before_recovery",
+          "HANDLE-RECOVERY-V1-E2E-003:old_principal_remote_action_fenced",
+          "HANDLE-RECOVERY-V1-E2E-003:fresh_ordinary_rejoin_authorized_to_recovery_did",
+          "HANDLE-RECOVERY-V1-E2E-003:two_app_registry_session_converged",
+          "HANDLE-RECOVERY-V1-E2E-003:app_to_external_direct_exact_one",
+          "HANDLE-RECOVERY-V1-E2E-003:external_to_app_and_sibling_direct_exact_one"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-V1-E2E-003:old_app_peer_joined_before_recovery",
+            "HANDLE-RECOVERY-V1-E2E-003:old_principal_remote_action_fenced"
+          ],
+          [
+            "HANDLE-RECOVERY-V1-E2E-003:fresh_ordinary_rejoin_authorized_to_recovery_did",
+            "HANDLE-RECOVERY-V1-E2E-003:two_app_registry_session_converged"
+          ],
+          [
+            "HANDLE-RECOVERY-V1-E2E-003:app_to_external_direct_exact_one",
+            "HANDLE-RECOVERY-V1-E2E-003:external_to_app_and_sibling_direct_exact_one"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-V1-E2E-003:old_app_peer_joined_before_recovery",
+            "HANDLE-RECOVERY-V1-E2E-003:old_principal_remote_action_fenced",
+            "HANDLE-RECOVERY-V1-E2E-003:fresh_ordinary_rejoin_authorized_to_recovery_did",
+            "HANDLE-RECOVERY-V1-E2E-003:two_app_registry_session_converged",
+            "HANDLE-RECOVERY-V1-E2E-003:app_to_external_direct_exact_one",
+            "HANDLE-RECOVERY-V1-E2E-003:external_to_app_and_sibling_direct_exact_one"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001",
+      "feature": "A fenced old App peer re-Joins the recovered identity through opaque registration continuation and becomes management-ready",
+      "layer": "remote_product_ui_security",
+      "preconditions": "An explicit Linux/Xvfb or macOS awiki.info configuration, protected fixed OTP account, and two fresh isolated App roots are available; the Apps are one ready admin and one member on the old DID before visible Handle Recovery.",
+      "action": "Complete visible Handle Recovery, prove the old peer is fenced, submit the recovered Handle through the peer App registration UI, select the Core-owned opaque Join continuation, approve the exact member Join, send standard Root/P5 to that device, and verify bidirectional Direct delivery.",
+      "exactOracles": [
+        "Registration produces one opaque Recovery-rebind continuation, requests one user-presence decision, and creates one pending joined-device-marked Join for the Recovery DID without exposing grant or transition material to Dart.",
+        "Both App Registry and session views converge after approval, then standard Root/P5 makes the rejoined current peer an active management-ready admin while the recovered sender remains a ready admin.",
+        "The old principal stays fenced, Root/P5 is absent from ordinary message history, and both post-transfer Direct directions project exactly once with correct ownership."
+      ],
+      "negativeChecks": [
+        "A direct Join-OTP bypass, App-selected owner, exposed preparation secret, missing user presence, old-DID convergence, copied state root, root-transfer envelope in ordinary history, duplicate Direct message, non-Linux/macOS execution, implicit or non-awiki.info config, or any skipped business step prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_peer_joined_before_recovery",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_principal_remote_action_fenced",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_returned_opaque_recovery_join_continuation",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_continuation_rejoined_recovery_did",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:two_app_registry_session_converged",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:standard_root_transfer_made_rejoined_peer_management_ready",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:app_to_external_direct_exact_one",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:external_to_app_and_sibling_direct_exact_one"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_peer_joined_before_recovery",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_principal_remote_action_fenced"
+          ],
+          [
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_returned_opaque_recovery_join_continuation",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_continuation_rejoined_recovery_did",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:two_app_registry_session_converged",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:standard_root_transfer_made_rejoined_peer_management_ready"
+          ],
+          [
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:app_to_external_direct_exact_one",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:external_to_app_and_sibling_direct_exact_one"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_peer_joined_before_recovery",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_principal_remote_action_fenced",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_returned_opaque_recovery_join_continuation",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_continuation_rejoined_recovery_did",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:two_app_registry_session_converged",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:standard_root_transfer_made_rejoined_peer_management_ready",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:app_to_external_direct_exact_one",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:external_to_app_and_sibling_direct_exact_one"
           ]
         ]
       }

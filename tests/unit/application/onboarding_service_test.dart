@@ -8,7 +8,6 @@ import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/ports/profile_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
-import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
@@ -73,7 +72,7 @@ void main() {
 
     expect(result.status, IdentityRegistrationStatus.joinRequired);
     expect(result.identity, isNull);
-    expect(result.joinProgress?.joinSessionId, 'join-1');
+    expect(result.existingHandleContinuationId, 'existing-handle-test');
     expect(sessions.activated, isEmpty);
     expect(profiles.patches, isEmpty);
   });
@@ -216,9 +215,9 @@ class _FakeIdentities implements IdentityCorePort, LegacyIdentityUpgradePort {
       identity: registrationStatus == IdentityRegistrationStatus.registered
           ? _session('phone-id', handle: handle)
           : null,
-      joinProgress:
+      existingHandleContinuationId:
           registrationStatus == IdentityRegistrationStatus.joinRequired
-          ? _joinProgress
+          ? 'existing-handle-test'
           : null,
       warnings: registrationWarnings,
     );
@@ -268,16 +267,6 @@ class _FakeIdentities implements IdentityCorePort, LegacyIdentityUpgradePort {
     throw UnsupportedError('unsupported');
   }
 }
-
-final DeviceJoinProgress _joinProgress = DeviceJoinProgress(
-  joinSessionId: 'join-1',
-  did: 'did:wba:awiki.ai:alice:e1_join',
-  protocolDeviceId: 'device-1',
-  side: DeviceJoinSide.newDevice,
-  phase: DeviceJoinPhase.pending,
-  remoteState: DeviceJoinRemoteState.pending,
-  expiresAt: DateTime.utc(2030),
-);
 
 class _FakeSessions
     with AppSessionTransitionGuard

@@ -11,6 +11,36 @@ import 'package:flutter_test/flutter_test.dart';
 const scopeValue = '22222222-2222-4222-8222-222222222222';
 
 void main() {
+  test('Handle Recovery runtime requires an explicit valid audience', () {
+    final layout = AwikiImCorePathLayout.fromRoots(
+      appSupportRoot: '/tmp/awiki-runtime-audience-support',
+      cacheRoot: '/tmp/awiki-runtime-audience-cache',
+      tempRoot: '/tmp/awiki-runtime-audience-temp',
+      scopeId: StorageScopeId.parse(scopeValue),
+    );
+    final vaultProvider = _FakeVaultSecretProvider(
+      secrets: core.DeviceVaultRootKey.fromList(List<int>.filled(32, 7)),
+    );
+
+    for (final audience in <String?>[null, '', ' bad', 'bad ', 'x' * 256]) {
+      expect(
+        () => AwikiImCoreRuntime(
+          config: const AwikiImCoreEnvironmentConfig(
+            serviceBaseUrl: 'https://example.test',
+            didDomain: 'example.test',
+          ),
+          paths: layout,
+          scopeId: StorageScopeId.parse(scopeValue),
+          vaultSecretProvider: vaultProvider,
+          multiDeviceHandleRecoveryEnabled: true,
+          multiDeviceAudience: audience,
+        ),
+        throwsArgumentError,
+        reason: audience,
+      );
+    }
+  });
+
   test('open creates directories before invoking the SDK opener', () async {
     final root = await Directory.systemTemp.createTemp(
       'awiki_me_runtime_test_',
@@ -46,6 +76,7 @@ void main() {
       multiDeviceDirectE2eeEnabled: true,
       multiDeviceGroupE2eeEnabled: true,
       multiDeviceHandleRecoveryEnabled: true,
+      multiDeviceAudience: 'awiki-test-multi-device',
       inspectLocalStateUpgrade: (paths) async {
         inspectionCalled = true;
         expect(await Directory(paths.identityRootDir).exists(), isTrue);
@@ -102,10 +133,12 @@ void main() {
             expect(openOptions?.multiDeviceHandleRecoveryEnabled, isTrue);
             expect(openOptions?.multiDeviceDirectE2eeEnabled, isTrue);
             expect(openOptions?.multiDeviceGroupE2eeEnabled, isTrue);
+            expect(openOptions?.multiDeviceAudience, 'awiki-test-multi-device');
             throw UnsupportedError('fake opener stops before native load');
           },
     );
 
+    expect(runtime.multiDeviceAudience, 'awiki-test-multi-device');
     await expectLater(runtime.open(), throwsA(isA<UnsupportedError>()));
     expect(openerCalled, isTrue);
     expect(upgradeCalled, isTrue);

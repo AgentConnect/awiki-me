@@ -103,6 +103,10 @@ Future<void> _verifyCrossConversationCorrectness({
     caseId: 'CONV-LIST-E2E-001',
   );
 
+  // Remote Direct timestamps have whole-second precision while Group
+  // timestamps include fractional seconds. Cross the next Direct timestamp
+  // boundary so the canonical activity order matches this send order.
+  await Future<void>.delayed(const Duration(milliseconds: 1100));
   final directSecondId = await _cliSendDirectText(
     config: config,
     text: directSecondText,
