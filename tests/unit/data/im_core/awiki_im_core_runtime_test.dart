@@ -71,9 +71,6 @@ void main() {
       paths: layout,
       scopeId: StorageScopeId.parse(scopeValue),
       vaultSecretProvider: vaultProvider,
-      multiDeviceDeviceRevokeEnabled: true,
-      multiDeviceDirectE2eeEnabled: true,
-      multiDeviceGroupE2eeEnabled: true,
       multiDeviceAudience: 'awiki-test-multi-device',
       inspectLocalStateUpgrade: (paths) async {
         inspectionCalled = true;

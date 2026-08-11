@@ -30,9 +30,9 @@ void main() {
     expect(config.updateManifestUrl, '$baseUrl/downloads/awiki-me/latest.json');
     expect(config.releasesUrl, '$baseUrl/#download');
     expect(config.agentImEnabled, isTrue);
-    expect(config.multiDeviceDeviceRevokeEnabled, isFalse);
-    expect(config.multiDeviceDirectE2eeEnabled, isFalse);
-    expect(config.multiDeviceGroupE2eeEnabled, isFalse);
+    expect(config.multiDeviceDeviceRevokeEnabled, isTrue);
+    expect(config.multiDeviceDirectE2eeEnabled, isTrue);
+    expect(config.multiDeviceGroupE2eeEnabled, isTrue);
     expect(config.multiDeviceAudience, 'awiki-user-service');
     expect(config.messageSyncV2ReadEnabled, isTrue);
   });
@@ -174,8 +174,12 @@ void main() {
     expect(first.didDomain, isNot(second.didDomain));
   });
 
-  test('Direct rollout provider is independent from other device gates', () {
-    final config = AwikiEnvironmentConfig(multiDeviceDirectE2eeEnabled: true);
+  test('explicit rollback keeps multi-device gates independent', () {
+    final config = AwikiEnvironmentConfig(
+      multiDeviceDeviceRevokeEnabled: false,
+      multiDeviceDirectE2eeEnabled: true,
+      multiDeviceGroupE2eeEnabled: false,
+    );
     final container = ProviderContainer(
       overrides: <Override>[
         awikiEnvironmentConfigProvider.overrideWithValue(config),
@@ -199,7 +203,7 @@ void main() {
     addTearDown(container.dispose);
 
     expect(container.read(messageSyncV2ReadEnabledProvider), isFalse);
-    expect(container.read(multiDeviceDirectE2eeEnabledProvider), isFalse);
-    expect(container.read(multiDeviceGroupE2eeEnabledProvider), isFalse);
+    expect(container.read(multiDeviceDirectE2eeEnabledProvider), isTrue);
+    expect(container.read(multiDeviceGroupE2eeEnabledProvider), isTrue);
   });
 }
