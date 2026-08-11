@@ -1590,6 +1590,7 @@ class _ChatNeutralIconButton extends StatelessWidget {
 
 class _MacChatPill extends StatelessWidget {
   const _MacChatPill({
+    super.key,
     required this.label,
     required this.color,
     required this.textColor,

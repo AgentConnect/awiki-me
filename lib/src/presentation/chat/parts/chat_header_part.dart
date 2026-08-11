@@ -262,6 +262,7 @@ class _MacHeaderIdentityText extends StatelessWidget {
         if (agentBadgeLabel != null && showAgentBadge) ...<Widget>[
           SizedBox(width: responsive.displayScaled(8)),
           _MacChatPill(
+            key: const Key('chat-header-agent-badge'),
             label: agentBadgeLabel!,
             color: isDeletedAgentConversation
                 ? AwikiMePalette.mist

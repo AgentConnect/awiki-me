@@ -14,6 +14,7 @@ import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
+import '../../domain/entities/user_profile.dart';
 import '../../domain/services/realtime_gateway.dart';
 import '../../l10n/l10n.dart';
 import '../conversation_list/conversation_workspace_page.dart';
@@ -27,6 +28,7 @@ import '../friends/friends_navigation_provider.dart';
 import '../friends/friends_workspace_page.dart';
 import '../onboarding/onboarding_page.dart';
 import '../profile/profile_workspace_page.dart';
+import '../profile/profile_provider.dart';
 import '../settings/settings_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
@@ -114,6 +116,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     final runtime = ref.watch(appRuntimeProvider);
     final session = ref.watch(sessionProvider);
+    final profile = ref.watch(profileProvider.select((state) => state.profile));
     if (!runtime.authRevoked) {
       _authRevokedDialogAcknowledged = false;
     } else {
@@ -249,6 +252,7 @@ class _AppShellState extends ConsumerState<AppShell> {
             currentDestination: destination,
             unreadCount: unreadCount,
             session: session.session,
+            profile: profile,
             onTap: (next) {
               ref.read(shellDestinationProvider.notifier).selectExpanded(next);
             },
@@ -626,6 +630,7 @@ class _DesktopShell extends StatelessWidget {
     required this.currentDestination,
     required this.unreadCount,
     required this.session,
+    required this.profile,
     required this.onTap,
     required this.onProfileTap,
     required this.child,
@@ -634,6 +639,7 @@ class _DesktopShell extends StatelessWidget {
   final ShellDestination currentDestination;
   final int unreadCount;
   final SessionIdentity? session;
+  final UserProfile? profile;
   final ValueChanged<ShellDestination> onTap;
   final VoidCallback onProfileTap;
   final Widget child;
@@ -654,6 +660,7 @@ class _DesktopShell extends StatelessWidget {
             currentDestination: currentDestination,
             unreadCount: unreadCount,
             session: session,
+            profile: profile,
             onTap: onTap,
             onProfileTap: onProfileTap,
           ),
@@ -734,6 +741,7 @@ class _DesktopRail extends StatelessWidget {
     required this.currentDestination,
     required this.unreadCount,
     required this.session,
+    required this.profile,
     required this.onTap,
     required this.onProfileTap,
   });
@@ -741,6 +749,7 @@ class _DesktopRail extends StatelessWidget {
   final ShellDestination currentDestination;
   final int unreadCount;
   final SessionIdentity? session;
+  final UserProfile? profile;
   final ValueChanged<ShellDestination> onTap;
   final VoidCallback onProfileTap;
 
@@ -753,7 +762,7 @@ class _DesktopRail extends StatelessWidget {
         builder: (context, constraints) {
           final compact = constraints.maxHeight < 760;
           final gap = responsive.displayScaled(compact ? 7.0 : 10.0);
-          final avatar = _avatarSeedForSession(session);
+          final avatar = _avatarForCurrentIdentity(session, profile);
           return Column(
             children: <Widget>[
               SizedBox(height: responsive.displayScaled(compact ? 40 : 50)),
@@ -761,6 +770,8 @@ class _DesktopRail extends StatelessWidget {
                 key: const Key('mac-me-rail-avatar'),
                 seed: avatar.seed,
                 labelOverride: avatar.labelOverride,
+                avatarUri: avatar.avatarUri,
+                userId: avatar.userId,
                 onTap: onProfileTap,
               ),
               SizedBox(height: responsive.displayScaled(compact ? 10 : 12)),
@@ -841,22 +852,48 @@ class _DesktopRail extends StatelessWidget {
     );
   }
 
-  ({String seed, String? labelOverride}) _avatarSeedForSession(
-    SessionIdentity? session,
-  ) {
-    final handle = session?.handle?.trim();
-    if (handle != null && handle.isNotEmpty) {
-      return (seed: handle, labelOverride: null);
+  ({String seed, String? labelOverride, String? avatarUri, String? userId})
+  _avatarForCurrentIdentity(SessionIdentity? session, UserProfile? profile) {
+    final sessionDid = session?.did.trim() ?? '';
+    final matchingProfile = profile != null && profile.did.trim() == sessionDid
+        ? profile
+        : null;
+    final profileDisplayName = matchingProfile?.displayName.trim() ?? '';
+    if (profileDisplayName.isNotEmpty) {
+      return (
+        seed: profileDisplayName,
+        labelOverride: null,
+        avatarUri: matchingProfile?.avatarUri,
+        userId: sessionDid,
+      );
     }
     final displayName = session?.displayName.trim();
     if (displayName != null && displayName.isNotEmpty) {
-      return (seed: displayName, labelOverride: null);
+      return (
+        seed: displayName,
+        labelOverride: null,
+        avatarUri: matchingProfile?.avatarUri,
+        userId: sessionDid,
+      );
     }
-    final did = session?.did.trim();
-    if (did != null && did.isNotEmpty) {
-      return (seed: did, labelOverride: null);
+    final handle = session?.handle?.trim();
+    if (handle != null && handle.isNotEmpty) {
+      return (
+        seed: handle,
+        labelOverride: null,
+        avatarUri: matchingProfile?.avatarUri,
+        userId: sessionDid,
+      );
     }
-    return (seed: 'Me', labelOverride: 'Me');
+    if (sessionDid.isNotEmpty) {
+      return (
+        seed: sessionDid,
+        labelOverride: null,
+        avatarUri: matchingProfile?.avatarUri,
+        userId: sessionDid,
+      );
+    }
+    return (seed: 'Me', labelOverride: 'Me', avatarUri: null, userId: null);
   }
 }
 
@@ -1032,11 +1069,15 @@ class _DesktopRailAvatar extends StatelessWidget {
     super.key,
     required this.seed,
     this.labelOverride,
+    this.avatarUri,
+    this.userId,
     required this.onTap,
   });
 
   final String seed;
   final String? labelOverride;
+  final String? avatarUri;
+  final String? userId;
   final VoidCallback onTap;
 
   @override
@@ -1063,6 +1104,8 @@ class _DesktopRailAvatar extends StatelessWidget {
               seed: seed,
               size: responsive.displayScaled(34),
               labelOverride: labelOverride,
+              avatarUri: avatarUri,
+              userId: userId,
             ),
           ),
         ),

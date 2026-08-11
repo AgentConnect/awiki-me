@@ -898,6 +898,7 @@ class _MessageAvatar extends StatelessWidget {
     required this.isMine,
     required this.size,
     this.avatarUri,
+    this.userId,
   });
 
   final String messageId;
@@ -905,12 +906,18 @@ class _MessageAvatar extends StatelessWidget {
   final bool isMine;
   final double size;
   final String? avatarUri;
+  final String? userId;
 
   @override
   Widget build(BuildContext context) {
     return KeyedSubtree(
       key: Key('chat-message-avatar:$messageId:${isMine ? 'mine' : 'peer'}'),
-      child: AvatarBadge(seed: label, size: size, avatarUri: avatarUri),
+      child: AvatarBadge(
+        seed: label,
+        size: size,
+        avatarUri: avatarUri,
+        userId: userId,
+      ),
     );
   }
 }
@@ -1052,6 +1059,7 @@ class _MessageBubble extends StatelessWidget {
     required this.mentionPresentation,
     required this.senderLabel,
     required this.senderAvatarUri,
+    required this.senderAvatarUserId,
     required this.showSenderLabel,
     this.macStyle = false,
     this.onRetry,
@@ -1068,6 +1076,7 @@ class _MessageBubble extends StatelessWidget {
   final ChatMentionPresentationResolver mentionPresentation;
   final String senderLabel;
   final String? senderAvatarUri;
+  final String? senderAvatarUserId;
   final bool showSenderLabel;
   final bool macStyle;
   final Future<void> Function()? onRetry;
@@ -1313,6 +1322,7 @@ class _MessageBubble extends StatelessWidget {
                   messageId: message.localId,
                   label: senderLabel,
                   avatarUri: senderAvatarUri,
+                  userId: senderAvatarUserId,
                   isMine: false,
                   size: responsive.displayScaled(30),
                 ),
@@ -1332,6 +1342,8 @@ class _MessageBubble extends StatelessWidget {
                 child: _MessageAvatar(
                   messageId: message.localId,
                   label: senderLabel,
+                  avatarUri: senderAvatarUri,
+                  userId: senderAvatarUserId,
                   isMine: true,
                   size: responsive.displayScaled(30),
                 ),
@@ -1483,6 +1495,7 @@ class _MessageBubble extends StatelessWidget {
                   messageId: message.localId,
                   label: senderLabel,
                   avatarUri: senderAvatarUri,
+                  userId: senderAvatarUserId,
                   isMine: false,
                   size: responsive.displayScaled(32),
                 ),
@@ -1502,6 +1515,8 @@ class _MessageBubble extends StatelessWidget {
                 child: _MessageAvatar(
                   messageId: message.localId,
                   label: senderLabel,
+                  avatarUri: senderAvatarUri,
+                  userId: senderAvatarUserId,
                   isMine: true,
                   size: responsive.displayScaled(32),
                 ),

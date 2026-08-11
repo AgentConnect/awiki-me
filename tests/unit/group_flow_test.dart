@@ -1017,13 +1017,11 @@ void main() {
       ),
     );
 
-    expect(find.text('李智诚'), findsOneWidget);
-    expect(
-      find.byKey(
-        const Key('group-member-title:did:wba:awiki.ai:user:lzc:e1_member'),
-      ),
-      findsOneWidget,
+    final memberTitle = find.byKey(
+      const Key('group-member-title:did:wba:awiki.ai:user:lzc:e1_member'),
     );
+    expect(memberTitle, findsOneWidget);
+    expect(tester.widget<Text>(memberTitle).data, '李智诚');
     expect(find.text('lzc'), findsNothing);
     expect(find.text('@lzc'), findsOneWidget);
     expect(
@@ -1595,13 +1593,19 @@ void main() {
     expect(candidate, findsOneWidget);
     expect(
       find.descendant(of: candidate, matching: find.text('卓诚')),
-      findsOneWidget,
+      findsNWidgets(2),
     );
-    final avatar = tester.widget<AvatarBadge>(
-      find.descendant(of: candidate, matching: find.byType(AvatarBadge)),
+    final avatarFinder = find.descendant(
+      of: candidate,
+      matching: find.byType(AvatarBadge),
     );
+    final avatar = tester.widget<AvatarBadge>(avatarFinder);
     expect(avatar.seed, '卓诚');
     expect(avatar.avatarUri, avatarUri);
+    expect(
+      find.descendant(of: avatarFinder, matching: find.text('卓诚')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('群详情邀请候选排除已删除智能体的所有本地来源', (tester) async {

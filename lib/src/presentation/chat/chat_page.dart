@@ -991,9 +991,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
         ? const <GroupMemberSummary>[]
         : ref.watch(groupMembersProvider(mentionGroupDid));
     final peerDisplayProfiles = ref.watch(peerDisplayProfileProvider);
+    final currentSession = ref.watch(sessionProvider).session;
+    final currentSessionDid = currentSession?.did.trim();
+    final currentProfile = ref.watch(profileProvider).profile;
     final mentionPresentation = ChatMentionPresentationResolver(
-      session: ref.watch(sessionProvider).session,
-      currentProfile: ref.watch(profileProvider).profile,
+      session: currentSession,
+      currentProfile: currentProfile,
       peerProfiles: peerDisplayProfiles,
       groupMembers: mentionGroupMembers,
       agentInventory: agents,
@@ -1215,17 +1218,28 @@ class _ChatViewState extends ConsumerState<ChatView> {
                           final next = messageIndex + 1 < messages.length
                               ? messages[messageIndex + 1]
                               : null;
-                          final senderLabel = _displayNameForMessage(
-                            context,
-                            message,
-                          );
+                          final ownProfile =
+                              message.isMine &&
+                                  currentProfile != null &&
+                                  currentProfile.did.trim() == currentSessionDid
+                              ? currentProfile
+                              : null;
+                          final ownDisplayName = ownProfile?.displayName.trim();
+                          final senderLabel =
+                              ownDisplayName != null &&
+                                  ownDisplayName.isNotEmpty
+                              ? ownDisplayName
+                              : _displayNameForMessage(context, message);
                           final senderAvatarUri = message.isMine
-                              ? null
+                              ? ownProfile?.avatarUri
                               : peerAvatarUri(
                                   peerDisplayProfiles,
                                   message.senderDid,
                                   peerPersonaId: message.senderPeerPersonaId,
                                 );
+                          final senderAvatarUserId = message.isMine
+                              ? ownProfile?.did ?? currentSessionDid
+                              : null;
                           final showSenderLabel = _shouldShowSenderLabel(
                             previous,
                             message,
@@ -1273,6 +1287,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                             mentionPresentation,
                                         senderLabel: senderLabel,
                                         senderAvatarUri: senderAvatarUri,
+                                        senderAvatarUserId: senderAvatarUserId,
                                         showSenderLabel: showSenderLabel,
                                         macStyle: macStyle,
                                         onRetry:

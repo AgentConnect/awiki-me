@@ -357,18 +357,23 @@ void main() {
     expect(find.text('B'), findsOneWidget);
   });
 
-  testWidgets('AvatarBadge 对所有文字占位头像使用统一主题配色', (tester) async {
+  testWidgets('AvatarBadge 使用生成文字和统一主题配色', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const CupertinoPageScaffold(
           child: SafeArea(
             child: Row(
               children: <Widget>[
-                AvatarBadge(key: Key('avatar-alice'), seed: 'Alice'),
+                AvatarBadge(
+                  key: Key('avatar-alice'),
+                  seed: 'Alice Chen',
+                  userId: 'did:test:alice',
+                ),
                 AvatarBadge(
                   key: Key('avatar-jin'),
                   seed: 'different-seed',
                   labelOverride: '锦',
+                  userId: 'did:test:alice',
                 ),
               ],
             ),
@@ -395,8 +400,36 @@ void main() {
       );
       expect(label.style?.color, AwikiMePalette.avatarForeground);
     }
-    expect(find.text('A'), findsOneWidget);
+    expect(find.text('AC'), findsOneWidget);
     expect(find.text('锦'), findsOneWidget);
+  });
+
+  testWidgets('AvatarBadge 为两字中文头像使用标准字号', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const CupertinoPageScaffold(
+          child: Center(child: AvatarBadge(seed: '欧阳娜娜', size: 48)),
+        ),
+      ),
+    );
+
+    final label = tester.widget<Text>(find.text('娜娜'));
+    expect(label.style?.fontSize, closeTo(48 / 3.1, 0.01));
+    expect(label.style?.color, AwikiMePalette.avatarForeground);
+  });
+
+  testWidgets('AvatarBadge 为智能体后缀保留三字并使用紧凑字号', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const CupertinoPageScaffold(
+          child: Center(child: AvatarBadge(seed: '通知智能体', size: 48)),
+        ),
+      ),
+    );
+
+    final label = tester.widget<Text>(find.text('智能体'));
+    expect(label.style?.fontSize, 12);
+    expect(label.style?.color, AwikiMePalette.avatarForeground);
   });
 }
 

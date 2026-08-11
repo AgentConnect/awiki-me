@@ -300,7 +300,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('项目群'), findsOneWidget);
+    expect(
+      find.byKey(const Key('conversation-row-title:group:did:group:mentions')),
+      findsOneWidget,
+    );
     final unreadBadge = find.byKey(const Key('conversation-row-unread-badge'));
     expect(unreadBadge, findsOneWidget);
     expect(
@@ -994,7 +997,7 @@ void main() {
 
     await tester.tap(find.text('普通用户'));
     await tester.pumpAndSettle();
-    expect(find.text('用户'), findsNothing);
+    expect(find.byKey(const Key('chat-header-agent-badge')), findsNothing);
     expect(
       find.byKey(const Key('chat-conversation-info-button')),
       findsNothing,
@@ -1002,7 +1005,12 @@ void main() {
 
     await tester.tap(find.text('远端智能体'));
     await tester.pumpAndSettle();
-    expect(find.text('智能体'), findsWidgets);
+    final agentBadge = find.byKey(const Key('chat-header-agent-badge'));
+    expect(agentBadge, findsOneWidget);
+    expect(
+      find.descendant(of: agentBadge, matching: find.text('智能体')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const Key('chat-conversation-info-button')),
       findsNothing,
@@ -2765,8 +2773,8 @@ void main() {
     const session = SessionIdentity(
       did: 'did:test:me',
       credentialName: 'me.json',
-      displayName: 'Mia',
-      handle: 'mia',
+      displayName: 'Stale Session Name',
+      handle: 'mia.agent-connect.cn',
       jwtToken: 'token',
     );
     const profile = UserProfile(
@@ -2776,6 +2784,7 @@ void main() {
       tags: <String>['agent'],
       profileMarkdown: '',
       handle: 'mia',
+      avatarUri: 'https://cdn.example/mia.png',
     );
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]
@@ -2806,13 +2815,16 @@ void main() {
     expect(find.text('AW'), findsNothing);
     expect(find.text('Me'), findsNothing);
     final railAvatar = find.byKey(const Key('mac-me-rail-avatar'));
-    expect(
-      find.descendant(of: railAvatar, matching: find.byType(AvatarBadge)),
-      findsOneWidget,
+    final railBadge = find.descendant(
+      of: railAvatar,
+      matching: find.byType(AvatarBadge),
     );
+    expect(railBadge, findsOneWidget);
+    expect(tester.widget<AvatarBadge>(railBadge).seed, 'Mia');
+    expect(tester.widget<AvatarBadge>(railBadge).userId, 'did:test:me');
     expect(
-      find.descendant(of: railAvatar, matching: find.text('M')),
-      findsOneWidget,
+      tester.widget<AvatarBadge>(railBadge).avatarUri,
+      'https://cdn.example/mia.png',
     );
     expect(find.byKey(const Key('conversation-search-field')), findsOneWidget);
     expect(find.text('智能体'), findsOneWidget);
@@ -2862,6 +2874,14 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('我'), findsOneWidget);
+    final profileBadge = find.byKey(const Key('profile-avatar'));
+    expect(profileBadge, findsOneWidget);
+    expect(tester.widget<AvatarBadge>(profileBadge).seed, 'Mia');
+    expect(tester.widget<AvatarBadge>(profileBadge).userId, 'did:test:me');
+    expect(
+      tester.widget<AvatarBadge>(profileBadge).avatarUri,
+      'https://cdn.example/mia.png',
+    );
     await tester.tap(find.byKey(const Key('desktop-current-identity-close')));
     await tester.pumpAndSettle();
 

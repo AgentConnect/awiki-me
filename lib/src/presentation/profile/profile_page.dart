@@ -132,6 +132,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                       bio: profile.bio,
                       tags: profile.tags,
                       avatarUri: profile.avatarUri,
+                      userId: profile.did,
                       isSaving: state.isSaving,
                       onEdit: () => _showEditProfileDialog(context, profile),
                       followersCount: friendsState.followers.length,
@@ -174,6 +175,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                         displayNameKey: const Key('profile-display-name'),
                         avatarSeed: displayName,
                         avatarUri: profile.avatarUri,
+                        avatarUserId: profile.did,
+                        avatarKey: const Key('profile-avatar'),
                         avatarSize: responsive.displayScaled(64),
                         handle: handleLabel,
                         handleKey: const Key('profile-handle-value'),
@@ -474,6 +477,7 @@ class _CompactProfileSummary extends StatelessWidget {
     required this.bio,
     required this.tags,
     required this.avatarUri,
+    required this.userId,
     required this.isSaving,
     required this.onEdit,
     required this.followersCount,
@@ -486,6 +490,7 @@ class _CompactProfileSummary extends StatelessWidget {
   final String bio;
   final List<String> tags;
   final String? avatarUri;
+  final String userId;
   final bool isSaving;
   final VoidCallback onEdit;
   final int followersCount;
@@ -521,6 +526,7 @@ class _CompactProfileSummary extends StatelessWidget {
                       seed: displayName,
                       size: 72,
                       avatarUri: avatarUri,
+                      userId: userId,
                     ),
                     const SizedBox(width: 16),
                     Expanded(
