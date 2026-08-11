@@ -91,7 +91,7 @@ void main() {
     );
 
     test(
-      'filters by displayName, handle, and DID while inserting agent handle',
+      'filters by displayName, handle, and DID while inserting agent name',
       () {
         final candidates =
             ChatMentionCandidate.forGroupMembers(const <GroupMemberSummary>[
@@ -108,8 +108,8 @@ void main() {
         final member = candidates.singleWhere(
           (candidate) => candidate.id.startsWith('member:'),
         );
-        expect(member.surface, '@hermes1');
-        expect(member.title, 'hermes1');
+        expect(member.surface, '@Hermes One');
+        expect(member.title, 'Hermes One');
         expect(member.enabled, isTrue);
         expect(member.target.did, 'did:wba:awiki.info:u:hermes');
         expect(member.target.handle, 'hermes1');
@@ -229,38 +229,42 @@ void main() {
       expect(insertion.mention.target.did, 'did:agent:runtime-hermes');
     });
 
-    test('agent mention displays short handle for full handle values', () {
-      final candidates =
-          ChatMentionCandidate.forGroupMembers(const <GroupMemberSummary>[
-            GroupMemberSummary(
-              userId: 'did:wba:awiki.info:agent:runtime:hermes:e1_member',
-              did: 'did:wba:awiki.info:agent:runtime:hermes:e1_member',
-              handle: 'hermes.awiki.info',
-              role: 'member',
-              displayName: 'Hermes Agent',
-              subjectType: GroupMemberSubjectType.agent,
-            ),
-          ], query: 'hermes.awiki');
+    test(
+      'agent mention prefers display name and preserves full handle metadata',
+      () {
+        final candidates =
+            ChatMentionCandidate.forGroupMembers(const <GroupMemberSummary>[
+              GroupMemberSummary(
+                userId: 'did:wba:awiki.info:agent:runtime:hermes:e1_member',
+                did: 'did:wba:awiki.info:agent:runtime:hermes:e1_member',
+                handle: 'hermes.awiki.info',
+                role: 'member',
+                displayName: 'Hermes Agent',
+                subjectType: GroupMemberSubjectType.agent,
+              ),
+            ], query: 'hermes.awiki');
 
-      final member = candidates.singleWhere(
-        (candidate) => candidate.id.startsWith('member:'),
-      );
-      expect(member.surface, '@hermes');
-      expect(member.title, 'hermes');
-      expect(member.subtitle, '@hermes · did:wba:aw…member');
-      const original = '@hermes.awiki';
-      final insertion = const ChatMentionTrigger(
-        start: 0,
-        end: original.length,
-        query: 'hermes.awiki',
-      ).insert(member).applyTo(original);
-      expect(insertion.text, '@hermes ');
-      expect(insertion.mention.surface, '@hermes');
-      expect(
-        insertion.mention.target.did,
-        'did:wba:awiki.info:agent:runtime:hermes:e1_member',
-      );
-    });
+        final member = candidates.singleWhere(
+          (candidate) => candidate.id.startsWith('member:'),
+        );
+        expect(member.surface, '@Hermes Agent');
+        expect(member.title, 'Hermes Agent');
+        expect(member.subtitle, '@hermes.awiki.info · did:wba:aw…member');
+        const original = '@hermes.awiki';
+        final insertion = const ChatMentionTrigger(
+          start: 0,
+          end: original.length,
+          query: 'hermes.awiki',
+        ).insert(member).applyTo(original);
+        expect(insertion.text, '@Hermes Agent ');
+        expect(insertion.mention.surface, '@Hermes Agent');
+        expect(insertion.mention.target.handle, 'hermes.awiki.info');
+        expect(
+          insertion.mention.target.did,
+          'did:wba:awiki.info:agent:runtime:hermes:e1_member',
+        );
+      },
+    );
 
     test('keeps unknown subjectType visible but not selectable', () {
       final candidates =

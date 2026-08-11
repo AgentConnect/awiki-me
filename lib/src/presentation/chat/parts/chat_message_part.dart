@@ -1049,6 +1049,7 @@ class _ChatBubbleShapeBorder extends ShapeBorder {
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
+    required this.mentionPresentation,
     required this.senderLabel,
     required this.senderAvatarUri,
     required this.showSenderLabel,
@@ -1063,6 +1064,7 @@ class _MessageBubble extends StatelessWidget {
   });
 
   final ChatMessage message;
+  final ChatMentionPresentationResolver mentionPresentation;
   final String senderLabel;
   final String? senderAvatarUri;
   final bool showSenderLabel;
@@ -1190,11 +1192,13 @@ class _MessageBubble extends StatelessWidget {
             text: message.content,
             mentions: message.mentions,
             payloadJson: message.payloadJson,
+            mentionPresentation: mentionPresentation,
             style: textStyle,
             renderMarkdown: !isMine,
           )
         : _AttachmentContent(
             message: message,
+            mentionPresentation: mentionPresentation,
             macStyle: true,
             onDownload: onDownload,
             onResolveImagePreview: onResolveImagePreview,
@@ -1349,11 +1353,13 @@ class _MessageBubble extends StatelessWidget {
             text: message.content,
             mentions: message.mentions,
             payloadJson: message.payloadJson,
+            mentionPresentation: mentionPresentation,
             style: textStyle,
             renderMarkdown: !isMine,
           )
         : _AttachmentContent(
             message: message,
+            mentionPresentation: mentionPresentation,
             macStyle: false,
             onDownload: onDownload,
             onResolveImagePreview: onResolveImagePreview,
@@ -1623,6 +1629,7 @@ const int _maxInlineImageBytes = 20 * 1024 * 1024;
 class _AttachmentContent extends ConsumerStatefulWidget {
   const _AttachmentContent({
     required this.message,
+    required this.mentionPresentation,
     required this.macStyle,
     required this.onDownload,
     required this.onResolveImagePreview,
@@ -1632,6 +1639,7 @@ class _AttachmentContent extends ConsumerStatefulWidget {
   });
 
   final ChatMessage message;
+  final ChatMentionPresentationResolver mentionPresentation;
   final bool macStyle;
   final Future<void> Function()? onDownload;
   final Future<String> Function()? onResolveImagePreview;
@@ -1746,6 +1754,7 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
                 text: caption,
                 mentions: message.mentions,
                 payloadJson: message.payloadJson,
+                mentionPresentation: widget.mentionPresentation,
                 style: TextStyle(
                   color: widget.macStyle
                       ? AwikiMePalette.inkNeutral
@@ -2622,6 +2631,7 @@ class _MessageTextContent extends StatelessWidget {
     required this.text,
     required this.mentions,
     required this.payloadJson,
+    required this.mentionPresentation,
     required this.style,
     required this.renderMarkdown,
   });
@@ -2629,6 +2639,7 @@ class _MessageTextContent extends StatelessWidget {
   final String text;
   final List<ChatMessageMention> mentions;
   final String? payloadJson;
+  final ChatMentionPresentationResolver mentionPresentation;
   final TextStyle style;
   final bool renderMarkdown;
 
@@ -2649,7 +2660,11 @@ class _MessageTextContent extends StatelessWidget {
       return MarkdownBody(
         data: validMentions.isEmpty
             ? text
-            : _textWithMarkdownMentionMarkers(text, validMentions),
+            : _textWithMarkdownMentionMarkers(
+                text,
+                validMentions,
+                mentionPresentation,
+              ),
         selectable: false,
         shrinkWrap: true,
         styleSheet: _chatMarkdownStyleSheet(context, style),
@@ -2690,7 +2705,9 @@ class _MessageTextContent extends StatelessWidget {
       }
       spans.add(
         TextSpan(
-          text: text.substring(mention.start, mention.end),
+          text:
+              mentionPresentation.surfaceForTarget(mention.target) ??
+              text.substring(mention.start, mention.end),
           style: mentionStyle,
         ),
       );
@@ -2757,6 +2774,7 @@ const _awikiMentionStartMarkerCodeUnit = 0xE000;
 String _textWithMarkdownMentionMarkers(
   String text,
   List<ChatMessageMention> validMentions,
+  ChatMentionPresentationResolver mentionPresentation,
 ) {
   final buffer = StringBuffer();
   var cursor = 0;
@@ -2772,7 +2790,10 @@ String _textWithMarkdownMentionMarkers(
       ..write(_awikiMentionStartMarker)
       ..write(index.toRadixString(36))
       ..write(_awikiMentionSeparatorMarker)
-      ..write(text.substring(mention.start, mention.end))
+      ..write(
+        mentionPresentation.surfaceForTarget(mention.target) ??
+            text.substring(mention.start, mention.end),
+      )
       ..write(_awikiMentionEndMarker);
     cursor = mention.end;
   }

@@ -109,19 +109,7 @@ class _ComposerState extends ConsumerState<_Composer> {
   }
 
   String? get _mentionGroupDid {
-    final groupId = widget.conversation.groupId?.trim();
-    if (groupId != null && groupId.isNotEmpty) {
-      return groupId;
-    }
-    if (widget.conversation.isGroup) {
-      final thread = widget.conversation.threadId.trim();
-      if (thread.isNotEmpty) {
-        return thread.startsWith('group:')
-            ? thread.substring('group:'.length)
-            : thread;
-      }
-    }
-    return null;
+    return _mentionGroupDidForConversation(widget.conversation);
   }
 
   Future<void> _preloadMentionMembers() async {
@@ -191,22 +179,23 @@ class _ComposerState extends ConsumerState<_Composer> {
     }
     final requestSerial = ++_mentionCandidateRequestSerial;
     try {
-      final groupState = ref.read(groupProvider);
-      final members =
-          groupState.membersByGroup[groupDid] ??
-          await ref
-              .read(groupProvider.notifier)
-              .ensureGroupMembersLoaded(groupDid);
+      final members = await ref
+          .read(groupProvider.notifier)
+          .ensureGroupMembersLoaded(groupDid);
       if (!mounted ||
           requestSerial != _mentionCandidateRequestSerial ||
           trigger != _activeMentionTrigger) {
         return;
       }
       final profileState = ref.read(peerDisplayProfileProvider);
+      final presentation = ChatMentionPresentationResolver(
+        session: ref.read(sessionProvider).session,
+        currentProfile: ref.read(profileProvider).profile,
+        peerProfiles: profileState,
+        groupMembers: members,
+      );
       final candidates = ChatMentionCandidate.forGroupMembers(
-        members.map(
-          (member) => _mentionMemberPresentation(member, profileState),
-        ),
+        members.map(presentation.projectGroupMember),
         query: trigger.query,
         currentUserDid: ref.read(sessionProvider).session?.did,
         currentUserHandle: ref.read(sessionProvider).session?.handle,
@@ -235,46 +224,6 @@ class _ComposerState extends ConsumerState<_Composer> {
         _selectedMentionIndex = 0;
       });
     }
-  }
-
-  GroupMemberSummary _mentionMemberPresentation(
-    GroupMemberSummary member,
-    PeerDisplayProfileState profileState,
-  ) {
-    final profile = profileState.forPeer(
-      peerPersonaId: member.peerPersonaId,
-      did: member.did,
-    );
-    final displayName = resolvePeerDisplayName(
-      profileState,
-      PeerDisplayNameRequest(
-        peerPersonaId: member.peerPersonaId,
-        did: member.did,
-        nickname: member.displayName,
-        fullHandle: member.handle,
-      ),
-    );
-    final projectedHandle = profile?.handle?.trim() ?? '';
-    return GroupMemberSummary(
-      userId: member.userId,
-      did: member.did,
-      handle: projectedHandle.isEmpty ? member.handle : projectedHandle,
-      role: member.role,
-      membershipId: member.membershipId,
-      peerPersonaId: member.peerPersonaId,
-      credentialDid: member.credentialDid,
-      profileUrl: member.profileUrl,
-      displayName: displayName,
-      avatarUri:
-          peerAvatarUri(
-            profileState,
-            member.did,
-            peerPersonaId: member.peerPersonaId,
-          ) ??
-          member.avatarUri,
-      subjectType: member.subjectType,
-      membershipStatus: member.membershipStatus,
-    );
   }
 
   bool get _hasMentionPanel =>

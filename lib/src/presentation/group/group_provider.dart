@@ -88,6 +88,18 @@ class _GroupMemberLoadOperation {
   final Future<List<GroupMemberSummary>> operation;
 }
 
+class _GroupMemberProfilePrewarmOperation {
+  const _GroupMemberProfilePrewarmOperation({
+    required this.owner,
+    required this.rosterKey,
+    required this.operation,
+  });
+
+  final _GroupOwnerOperation owner;
+  final String rosterKey;
+  final Future<void> operation;
+}
+
 class _GroupRecoveryOperation {
   const _GroupRecoveryOperation({required this.owner, required this.operation});
 
@@ -125,6 +137,9 @@ class GroupController extends StateNotifier<GroupState> {
   final Ref ref;
   final Map<String, _GroupMemberLoadOperation> _initialMemberLoads =
       <String, _GroupMemberLoadOperation>{};
+  final Map<String, _GroupMemberProfilePrewarmOperation>
+  _memberProfilePrewarms = <String, _GroupMemberProfilePrewarmOperation>{};
+  final Map<String, String> _memberProfileReadyKeys = <String, String>{};
   int _memberLoadGeneration = 0;
   _GroupRecoveryOperation? _recoveryOperation;
   final Map<String, int> _memberLoadGenerations = <String, int>{};
@@ -240,7 +255,14 @@ class GroupController extends StateNotifier<GroupState> {
     _requireCurrentOwnerOperation(ownerOperation);
     final cached = state.membersByGroup[normalizedGroupId];
     if (cached != null) {
-      return Future<List<GroupMemberSummary>>.value(cached);
+      return _ensureCachedMemberProfilesLoaded(
+        normalizedGroupId,
+        cached,
+        ownerOperation: ownerOperation,
+      ).then((_) {
+        _requireCurrentOwnerOperation(ownerOperation);
+        return state.membersByGroup[normalizedGroupId] ?? cached;
+      });
     }
     final active = _initialMemberLoads[normalizedGroupId];
     if (active != null && active.owner == ownerOperation) {
@@ -299,6 +321,15 @@ class GroupController extends StateNotifier<GroupState> {
       throw StateError('group_member_page_binding_mismatch');
     }
     _publishGroupMembers(groupId, members, page: page);
+    await _ensureCachedMemberProfilesLoaded(
+      groupId,
+      members,
+      ownerOperation: ownerOperation,
+    );
+    _requireCurrentOwnerOperation(ownerOperation);
+    if (generation != _memberLoadGenerations[groupId]) {
+      return members;
+    }
     if (!hydrateProfiles) {
       return members;
     }
@@ -378,6 +409,15 @@ class GroupController extends StateNotifier<GroupState> {
         ...page.items,
       ]);
       _publishGroupMembers(normalizedGroupId, combined, page: page);
+      await _ensureCachedMemberProfilesLoaded(
+        normalizedGroupId,
+        combined,
+        ownerOperation: ownerOperation,
+      );
+      if (!_isGroupOwnerOperationCurrent(ownerOperation) ||
+          generation != _memberLoadGenerations[normalizedGroupId]) {
+        return;
+      }
       final hydrated = await _hydrateMemberProfiles(
         combined,
         ownerOperation: ownerOperation,
@@ -404,11 +444,96 @@ class GroupController extends StateNotifier<GroupState> {
   }
 
   void _invalidateMemberPage(String groupId) {
+    _memberProfilePrewarms.remove(groupId);
+    _memberProfileReadyKeys.remove(groupId);
     final members = <String, List<GroupMemberSummary>>{...state.membersByGroup}
       ..remove(groupId);
     final pages = <String, GroupMemberPageState>{...state.memberPages}
       ..remove(groupId);
     state = state.copyWith(membersByGroup: members, memberPages: pages);
+  }
+
+  Future<void> _ensureCachedMemberProfilesLoaded(
+    String groupId,
+    List<GroupMemberSummary> members, {
+    required _GroupOwnerOperation ownerOperation,
+  }) {
+    _requireCurrentOwnerOperation(ownerOperation);
+    final rosterKey = _memberProfileRosterKey(groupId, members);
+    if (_memberProfileReadyKeys[groupId] == rosterKey) {
+      return Future<void>.value();
+    }
+    final active = _memberProfilePrewarms[groupId];
+    if (active != null &&
+        active.owner == ownerOperation &&
+        active.rosterKey == rosterKey) {
+      return active.operation;
+    }
+    late final Future<void> load;
+    load =
+        _prewarmCachedMemberProfiles(
+          groupId,
+          members,
+          rosterKey: rosterKey,
+          ownerOperation: ownerOperation,
+        ).whenComplete(() {
+          if (identical(_memberProfilePrewarms[groupId]?.operation, load)) {
+            _memberProfilePrewarms.remove(groupId);
+          }
+        });
+    _memberProfilePrewarms[groupId] = _GroupMemberProfilePrewarmOperation(
+      owner: ownerOperation,
+      rosterKey: rosterKey,
+      operation: load,
+    );
+    return load;
+  }
+
+  Future<void> _prewarmCachedMemberProfiles(
+    String groupId,
+    List<GroupMemberSummary> members, {
+    required String rosterKey,
+    required _GroupOwnerOperation ownerOperation,
+  }) async {
+    try {
+      await ref
+          .read(peerDisplayProfileProvider.notifier)
+          .loadCached(
+            ownerDid: ownerOperation.epoch.ownerDid,
+            dids: members.map((member) => member.did),
+            peerPersonaIdsByDid: <String, String>{
+              for (final member in members)
+                if (member.did.trim().isNotEmpty &&
+                    (member.peerPersonaId?.trim().isNotEmpty ?? false))
+                  member.did.trim(): member.peerPersonaId!.trim(),
+            },
+            expectedEpoch: ownerOperation.epoch,
+          );
+    } catch (_) {
+      // A local cache miss or legacy cache failure must not block mentions.
+    }
+    if (!_isGroupOwnerOperationCurrent(ownerOperation)) {
+      return;
+    }
+    final currentMembers = state.membersByGroup[groupId];
+    if (currentMembers != null &&
+        _memberProfileRosterKey(groupId, currentMembers) == rosterKey) {
+      _memberProfileReadyKeys[groupId] = rosterKey;
+    }
+  }
+
+  String _memberProfileRosterKey(
+    String groupId,
+    List<GroupMemberSummary> members,
+  ) {
+    final version = state.memberPages[groupId]?.groupStateVersion?.trim() ?? '';
+    final identities = members
+        .map(
+          (member) =>
+              '${member.did.trim()}\u0001${member.peerPersonaId?.trim() ?? ''}',
+        )
+        .join('\u0002');
+    return '$version\u0000$identities';
   }
 
   Future<List<GroupMemberSummary>> _hydrateMemberProfiles(
@@ -630,6 +755,8 @@ class GroupController extends StateNotifier<GroupState> {
     _groupLoadGeneration += 1;
     _memberLoadGeneration += 1;
     _initialMemberLoads.clear();
+    _memberProfilePrewarms.clear();
+    _memberProfileReadyKeys.clear();
     _recoveryOperation = null;
     state = const GroupState();
   }

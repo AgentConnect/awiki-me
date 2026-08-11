@@ -68,6 +68,7 @@ import '../group/group_provider.dart';
 import '../profile/peer_profile_provider.dart';
 import '../profile/peer_profile_page.dart';
 import '../profile/peer_display_profile_provider.dart';
+import '../profile/profile_provider.dart';
 import '../profile/profile_markdown.dart';
 import '../profile/profile_workspace_page.dart';
 import '../shared/awiki_me_design.dart';
@@ -83,6 +84,7 @@ import '../shared/identity_profile_surface.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
+import 'chat_mention_presentation.dart';
 import 'chat_provider.dart';
 
 part 'parts/chat_header_part.dart';
@@ -263,6 +265,23 @@ class _AttachmentDropOverlay extends StatelessWidget {
 
 String _timelineDisplayThreadId(ConversationSummary conversation) {
   return conversation.conversationId;
+}
+
+String? _mentionGroupDidForConversation(ConversationSummary conversation) {
+  if (!conversation.isGroup) {
+    return null;
+  }
+  final groupId = conversation.groupId?.trim();
+  if (groupId != null && groupId.isNotEmpty) {
+    return groupId;
+  }
+  final thread = conversation.threadId.trim();
+  if (thread.isEmpty) {
+    return null;
+  }
+  return thread.startsWith('group:')
+      ? thread.substring('group:'.length)
+      : thread;
 }
 
 bool _sameCanonicalConversation(
@@ -708,6 +727,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       );
     }
     _restoreComposerDraft(widget.conversation);
+    unawaited(_prewarmMentionPresentation(widget.conversation));
     textController.addListener(_persistComposerText);
     scrollController.addListener(_handleScrollPositionChanged);
   }
@@ -754,10 +774,25 @@ class _ChatViewState extends ConsumerState<ChatView> {
         );
       }
       _restoreComposerDraft(widget.conversation, updateState: true);
+      unawaited(_prewarmMentionPresentation(widget.conversation));
       _hasDeferredBottomNotice = false;
       _userAwayFromBottom = false;
       _cancelPendingScrollRequests();
       _beginOpeningBottomAnchor();
+    }
+  }
+
+  Future<void> _prewarmMentionPresentation(
+    ConversationSummary conversation,
+  ) async {
+    final groupDid = _mentionGroupDidForConversation(conversation);
+    if (groupDid == null) {
+      return;
+    }
+    try {
+      await ref.read(groupProvider.notifier).ensureGroupMembersLoaded(groupDid);
+    } catch (_) {
+      // The composer owns the visible retry/loading state for mention members.
     }
   }
 
@@ -939,6 +974,19 @@ class _ChatViewState extends ConsumerState<ChatView> {
           _handleThreadChanged(previous, next, currentConversation),
     );
     final messages = thread.messages;
+    final mentionGroupDid = _mentionGroupDidForConversation(
+      currentConversation,
+    );
+    final mentionGroupMembers = mentionGroupDid == null
+        ? const <GroupMemberSummary>[]
+        : ref.watch(groupMembersProvider(mentionGroupDid));
+    final peerDisplayProfiles = ref.watch(peerDisplayProfileProvider);
+    final mentionPresentation = ChatMentionPresentationResolver(
+      session: ref.watch(sessionProvider).session,
+      currentProfile: ref.watch(profileProvider).profile,
+      peerProfiles: peerDisplayProfiles,
+      groupMembers: mentionGroupMembers,
+    );
     final deferRealtimeTailFirstPaint =
         thread.isHydratingLocalHistory && messages.length <= 1;
     _settleOpeningBottomAnchorForCurrentThread(thread);
@@ -1160,7 +1208,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                           final senderAvatarUri = message.isMine
                               ? null
                               : peerAvatarUri(
-                                  ref.watch(peerDisplayProfileProvider),
+                                  peerDisplayProfiles,
                                   message.senderDid,
                                   peerPersonaId: message.senderPeerPersonaId,
                                 );
@@ -1207,6 +1255,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                     else
                                       _MessageBubble(
                                         message: message,
+                                        mentionPresentation:
+                                            mentionPresentation,
                                         senderLabel: senderLabel,
                                         senderAvatarUri: senderAvatarUri,
                                         showSenderLabel: showSenderLabel,

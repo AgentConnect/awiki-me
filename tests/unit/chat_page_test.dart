@@ -5896,6 +5896,19 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ChatView)),
     );
+    container
+        .read(peerDisplayProfileProvider.notifier)
+        .updateFromRemote(
+          ownerDid: session.did,
+          profile: const UserProfile(
+            did: 'did:test:alice',
+            displayName: '艾丽丝',
+            bio: '',
+            tags: <String>[],
+            profileMarkdown: '',
+            fullHandle: 'alice.awiki.info',
+          ),
+        );
     await container
         .read(chatThreadsProvider.notifier)
         .openConversation(conversation);
@@ -5907,7 +5920,7 @@ void main() {
       find.byWidgetPredicate(
         (widget) =>
             widget is RichText &&
-            _textSpanHasStyledMention(widget.text, '@Alice'),
+            _textSpanHasStyledMention(widget.text, '@艾丽丝'),
       ),
       findsOneWidget,
     );
@@ -6050,10 +6063,13 @@ void main() {
     await tester.enterText(find.byType(CupertinoTextField), '@h');
     await tester.pump();
     await tester.pump();
-    await tester.tap(find.text('@hermes'));
+    await tester.tap(find.text('@Hermes Agent'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(CupertinoTextField), '@hermes 请总结');
+    await tester.enterText(
+      find.byType(CupertinoTextField),
+      '@Hermes Agent 请总结',
+    );
     await tester.testTextInput.receiveAction(TextInputAction.send);
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ChatView)),
@@ -6066,7 +6082,7 @@ void main() {
         );
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('@hermes 请总结'), findsOneWidget);
+    expect(find.text('@Hermes Agent 请总结'), findsOneWidget);
     expect(find.text('已发送，等待 @hermes 接收...'), findsOneWidget);
 
     container
@@ -6093,7 +6109,7 @@ void main() {
     expect(
       find.byWidgetPredicate(
         (widget) =>
-            widget is RichText && _textSpanHasStyledMention(widget.text, '@me'),
+            widget is RichText && _textSpanHasStyledMention(widget.text, '@Me'),
       ),
       findsOneWidget,
     );
@@ -7821,7 +7837,7 @@ void main() {
     expect(gateway.lastSentGroupId, conversation.groupId);
     expect(gateway.lastSentAttachment?.filename, 'report.md');
     expect(gateway.lastSentAttachmentCaption, '@codex 看看这个文件');
-    expect(find.text('@codex 看看这个文件'), findsOneWidget);
+    expect(find.text('@CodeX 看看这个文件'), findsOneWidget);
     final thread = container.read(
       chatThreadProvider(conversation.conversationId),
     );

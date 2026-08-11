@@ -48,6 +48,7 @@ import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
+import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_feedback.dart';
@@ -491,9 +492,11 @@ void runDesktopCliPeerE2e({
             ],
             'GROUP-P9-001': const <String>[
               'app_ui_structured_group_mention_verified',
+              'candidate_display_name_full_handle_did_no_flash_verified',
             ],
             'GROUP-P9-002': const <String>[
               'cli_structured_group_mention_verified_in_app_ui',
+              'raw_handle_payload_visible_display_name_verified',
             ],
             'GROUP-REG-001': const <String>[
               'group_history_exact_order_and_stability_checked',

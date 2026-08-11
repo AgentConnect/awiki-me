@@ -181,6 +181,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
 
   final appMentionText = await robot.sendMention(
     handle: config.cliHandle,
+    expectedFullHandle: cliFullHandle,
     expectedDid: cliMemberDid,
     expectedDisplayName: expectedCliMemberName,
     suffix: 'e2e app group mention ${config.runId} $nonce',
@@ -281,8 +282,8 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
   );
 
   final cliMentionSurface = '@${config.appHandle}';
-  final cliMentionText =
-      '$cliMentionSurface e2e cli group mention ${config.runId} $nonce';
+  final cliMentionSuffix = 'e2e cli group mention ${config.runId} $nonce';
+  final cliMentionText = '$cliMentionSurface $cliMentionSuffix';
   final cliMentionPayload = jsonEncode(<String, Object?>{
     'text': cliMentionText,
     'mentions': <Map<String, Object?>>[
@@ -346,7 +347,21 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     sendState: MessageSendState.sent,
   );
   requireSingleMentionTarget(message: cliMention, targetDid: ownerDid);
-  await robot.expectMessageContentVisible(cliMention);
+  final currentProfile = robot.container.read(profileProvider).profile;
+  final expectedCurrentDisplayName = const PeerDisplayNameResolver().resolve(
+    nickname: currentProfile?.displayName ?? session.displayName,
+    fullHandle:
+        currentProfile?.fullHandle ?? currentProfile?.handle ?? session.handle,
+    did: ownerDid,
+    compactQualifiedHandle: true,
+  );
+  if (expectedCurrentDisplayName.isEmpty) {
+    fail('Current App identity has no displayable mention name.');
+  }
+  await robot.expectMessageContentVisible(
+    cliMention,
+    expectedText: '@$expectedCurrentDisplayName $cliMentionSuffix',
+  );
 
   await _assertUiMessagesExactlyOnce(
     robot: robot,

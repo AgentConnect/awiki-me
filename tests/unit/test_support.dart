@@ -701,6 +701,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   Completer<void>? listGroupMembersCompleter;
   Map<String, List<GroupMemberSummary>> groupMembersByGroupId =
       <String, List<GroupMemberSummary>>{};
+  List<PeerDisplayProfile> cachedPeerDisplayProfiles =
+      const <PeerDisplayProfile>[];
+  Completer<void>? cachedPeerDisplayProfilesCompleter;
+  int loadCachedDisplayProfilesCalls = 0;
   Map<String, UserProfile> publicProfilesByQuery = <String, UserProfile>{};
   final List<String> loadPublicProfileQueries = <String>[];
   Map<String, String> directoryConversationIdsByQuery = <String, String>{};
@@ -1631,7 +1635,17 @@ class FakeDirectoryApplicationService implements DirectoryApplicationService {
   @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
-  ) async => const <PeerDisplayProfile>[];
+  ) async {
+    gateway.loadCachedDisplayProfilesCalls += 1;
+    final gate = gateway.cachedPeerDisplayProfilesCompleter;
+    if (gate != null) {
+      await gate.future;
+    }
+    final requested = dids.map((did) => did.trim()).toSet();
+    return gateway.cachedPeerDisplayProfiles
+        .where((profile) => requested.contains(profile.did.trim()))
+        .toList(growable: false);
+  }
 
   @override
   Future<DirectoryPeerResolution> lookupHandle(String handle) {

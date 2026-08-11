@@ -452,6 +452,7 @@ class _DesktopAppRobot {
 
   Future<String> sendMention({
     required String handle,
+    required String expectedFullHandle,
     required String expectedDid,
     required String expectedDisplayName,
     required String suffix,
@@ -570,6 +571,8 @@ class _DesktopAppRobot {
           .forDid(expectedDid)
           ?.avatarUri,
       expectedSurface: '@$expectedDisplayName',
+      expectedSubtitle:
+          '@$expectedFullHandle · ${_compactMentionDid(expectedDid)}',
     );
     await tester.tap(candidate.first);
     await tester.pump();
@@ -1433,6 +1436,7 @@ class _DesktopAppRobot {
     required String expectedDisplayName,
     required String? expectedAvatarUri,
     String? expectedSurface,
+    String? expectedSubtitle,
   }) {
     final expectedTitle = expectedSurface ?? expectedDisplayName;
     final titleCount = find
@@ -1443,10 +1447,17 @@ class _DesktopAppRobot {
         .descendant(of: candidate, matching: find.byType(AvatarBadge))
         .evaluate()
         .toList(growable: false);
-    if (titleCount != 1 || avatars.length != 1) {
+    final subtitleCount = expectedSubtitle == null
+        ? 1
+        : find
+              .descendant(of: candidate, matching: find.text(expectedSubtitle))
+              .evaluate()
+              .length;
+    if (titleCount != 1 || avatars.length != 1 || subtitleCount != 1) {
       fail(
-        'Identity candidate did not expose one exact projected title/avatar; '
-        'title_count=$titleCount avatar_count=${avatars.length}.',
+        'Identity candidate did not expose one exact projected '
+        'title/subtitle/avatar; title_count=$titleCount '
+        'subtitle_count=$subtitleCount avatar_count=${avatars.length}.',
       );
     }
     final avatar = avatars.single.widget as AvatarBadge;
@@ -1460,6 +1471,14 @@ class _DesktopAppRobot {
         '${actualAvatar == expectedAvatar}.',
       );
     }
+  }
+
+  String _compactMentionDid(String source) {
+    final did = source.trim();
+    if (did.length <= 18) {
+      return did;
+    }
+    return '${did.substring(0, 10)}…${did.substring(did.length - 6)}';
   }
 
   Future<void> stageAttachmentByDesktopDrop({

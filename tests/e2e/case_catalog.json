@@ -1020,12 +1020,12 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Compose a group mention through App UI and send it.",
       "exactOracles": [
-        "The real composer retains exact typed input, opens the candidate panel from an explicit @ trigger, and after the GroupState member projection is preloaded filters to the exact enabled member in the first local frame without a loading indicator; the title and avatar match the Persona Profile projection and the composer clears only after send submission.",
-        "P9 payload contains exactly the intended member DID and valid range.",
-        "CLI projection preserves canonical ID, exact text and structured mention metadata."
+        "After roster and local Profile prewarm, the first filtered frame shows exact @Display Name with no loading/Handle flash; the second line preserves the full @Handle and compact DID, the avatar matches the Persona Profile projection, and the composer clears only after send submission.",
+        "The visible sent message uses Display Name while P9 retains the exact intended target DID and valid range.",
+        "CLI projection preserves canonical ID, exact raw text and structured mention metadata."
       ],
       "negativeChecks": [
-        "A per-query roster reload/loading frame, stale roster title, generic @ avatar, text-only arrival, wrong DID/range/role, malformed JSON, or duplicate message fails."
+        "A per-query roster/Profile reload, loading/Handle flash after readiness, missing full Handle/DID, stale title, generic @ avatar, text-only arrival, wrong DID/range/role, malformed JSON, or duplicate message fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -1039,11 +1039,12 @@
       "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
-          "GROUP-P9-001:app_ui_structured_group_mention_verified"
+          "GROUP-P9-001:app_ui_structured_group_mention_verified",
+          "GROUP-P9-001:candidate_display_name_full_handle_did_no_flash_verified"
         ],
         "exactOracleAssertions": [
           [
-            "GROUP-P9-001:app_ui_structured_group_mention_verified"
+            "GROUP-P9-001:candidate_display_name_full_handle_did_no_flash_verified"
           ],
           [
             "GROUP-P9-001:app_ui_structured_group_mention_verified"
@@ -1054,7 +1055,8 @@
         ],
         "negativeCheckAssertions": [
           [
-            "GROUP-P9-001:app_ui_structured_group_mention_verified"
+            "GROUP-P9-001:app_ui_structured_group_mention_verified",
+            "GROUP-P9-001:candidate_display_name_full_handle_did_no_flash_verified"
           ]
         ]
       }
@@ -1067,11 +1069,11 @@
       "action": "Send a structured group mention from CLI to the App.",
       "exactOracles": [
         "CLI send succeeds with a canonical message id and exact application/json result type.",
-        "App canonical projection preserves target DID/range and exact text.",
-        "Mention renders in the correct group message exactly once."
+        "App canonical projection preserves the raw @Handle text, target DID and range.",
+        "The one visible group message renders that structured span as the current App Display Name."
       ],
       "negativeChecks": [
-        "Substring-only matching, metadata loss, wrong target, or duplicate render fails."
+        "Raw payload/range mutation, unstructured substring rewriting, metadata loss, wrong target, Handle shown despite an available Display Name, or duplicate render fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -1085,22 +1087,25 @@
       "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
-          "GROUP-P9-002:cli_structured_group_mention_verified_in_app_ui"
+          "GROUP-P9-002:cli_structured_group_mention_verified_in_app_ui",
+          "GROUP-P9-002:raw_handle_payload_visible_display_name_verified"
         ],
         "exactOracleAssertions": [
           [
             "GROUP-P9-002:cli_structured_group_mention_verified_in_app_ui"
           ],
           [
-            "GROUP-P9-002:cli_structured_group_mention_verified_in_app_ui"
+            "GROUP-P9-002:raw_handle_payload_visible_display_name_verified"
           ],
           [
-            "GROUP-P9-002:cli_structured_group_mention_verified_in_app_ui"
+            "GROUP-P9-002:cli_structured_group_mention_verified_in_app_ui",
+            "GROUP-P9-002:raw_handle_payload_visible_display_name_verified"
           ]
         ],
         "negativeCheckAssertions": [
           [
-            "GROUP-P9-002:cli_structured_group_mention_verified_in_app_ui"
+            "GROUP-P9-002:cli_structured_group_mention_verified_in_app_ui",
+            "GROUP-P9-002:raw_handle_payload_visible_display_name_verified"
           ]
         ]
       }

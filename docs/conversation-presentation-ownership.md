@@ -214,9 +214,20 @@ mention 渲染规则：
 1. 先用 `ChatMessage.mentions` 校验 `rangeMatches(text)`。
 2. 再从 `payloadJson` 解析 P9 payload，补充合法 mention ranges。
 3. 去重并按 start offset 排序。
-4. 如果当前允许 Markdown 且文本含 Markdown 语法，使用私有 marker + custom inline syntax / builder 把 mention 高亮嵌入 `MarkdownBody`。
-5. 如果不走 Markdown 且存在合法 mention，使用 `Text.rich` 和 `TextSpan` 高亮。
-6. 无合法 mention 时按当前 bubble context 走 Markdown 或 plain text。
+4. 只对合法结构化 mention 的可见 span 做展示投影；`ChatMessage.content`、`payloadJson`、range、target DID、数据库记录和线上 payload 均保持原值。
+5. `ChatMentionPresentationResolver` 以 target DID 为唯一身份键。当前身份按当前 Profile、Session、payload snapshot、Handle、DID 顺序投影；其他成员按本地 `PeerDisplayProfile`、群成员 snapshot、payload snapshot、Handle、DID 顺序投影。Agent 和用户使用同一套名称优先级。
+6. 如果当前允许 Markdown 且文本含 Markdown 语法，使用私有 marker + custom inline syntax / builder 把投影后的 mention 高亮嵌入 `MarkdownBody`。
+7. 如果不走 Markdown 且存在合法 mention，使用 `Text.rich` 和 `TextSpan` 高亮投影后的 span。
+8. 无合法 mention 时按当前 bubble context 走 Markdown 或 plain text；没有结构化 metadata 的普通 `@text` 不猜测身份，也不改写。
+
+群聊 mention 的读取边界：
+
+- `GroupController` 拥有群成员 roster 与本地 Profile 批量预热。预热复用 core 已持久化的 Profile projection，不在 App 新增第二份持久化缓存。
+- 单次预热以 `SessionEpoch + Group DID + roster version/member DID/Persona signature` 隔离并 single-flight；身份切换、成员页失效或 roster 变化后旧 readiness 不可复用。
+- 打开群聊可以 best-effort 提前预热；候选查询必须等待当前 roster 的本地预热完成，完成后每次键入只做内存过滤，不再重复读取 roster 或 Profile。
+- 本地 Profile 缺失或旧缓存读取失败时，本次 roster generation 记录负向 readiness 并使用 roster/Handle/DID fallback，避免每次键入重复 I/O。
+- 输入 `@`、消息 build/rebuild、滚动和历史渲染都不得触发远端 Profile 请求。显式 Profile 刷新仍由 Profile domain 拥有；Provider 更新只让相关可见 span 收敛，不创建、删除或替换消息。
+- 候选第一行显示 `@Display Name`，第二行保留完整 `@Handle · compact DID`；target 中仍只使用 DID 做路由。群 selector 保持原有本地化文案，不进入个人 Profile 投影。
 
 这意味着历史 plan 中“mention payload 默认不走 MarkdownBody”的说明只代表当时计划；当前实现支持 mention 与 Markdown 渲染组合，本文档记录当前事实。
 
@@ -514,7 +525,7 @@ copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
 - `tests/unit/data/im_core/awiki_im_core_mappers_test.dart`：验证 core DTO 到 App summary 的映射只通过 App 侧参数应用 overlay，并固定带显式可见文本的 control payload 可以更新 recents 预览、payload-only control 继续隐藏。
 - `tests/unit/data/im_core/awiki_im_core_payload_mapper_test.dart`：验证 payload / mention 解析、合法 range 投影和无效 payload fallback。
 - `tests/unit/chat_mention_send_test.dart`：验证有 valid mentions 时发送 payload，无 mentions 时继续走普通 sendText。
-- `tests/unit/chat_mention_composer_test.dart`：验证 draft mention range 维护、编辑失效、候选插入，以及冷加载合并和连续 query 只使用一次群成员请求。
+- `tests/unit/chat_mention_composer_test.dart`：验证 draft mention range 维护、编辑失效、候选插入、本地 Profile single-flight 预热、首帧不闪现 Handle、连续 query 只使用一次 roster/Profile 请求，以及气泡按 DID 重投影但不修改原始消息。
 - `tests/unit/chat_page_test.dart`：验证聊天窗口渲染、read ack 边界、header 行为、sending indicator 的 3 秒延迟与明确终态清理等关键 widget 行为。
 - `tests/unit/chat_provider_open_test.dart`：验证打开会话 local-first conversation timeline、conversation-after/remote fallback、conversation timeline patch version gap repair、stream closed repair/re-subscribe、read ack、文本 / payload / 附件 send intent 和附件 retry 都按 `conversationId` / `AppConversationReadRef` 走主路径；其中可见群聊必须在 Controller 自身建立持久 intent，不依赖 Widget 二次回调，并覆盖在途 `seq 5 -> seq 6` 串行合并和 Core `pendingRemoteAck` local-first 成功。
   - Agent pending turn 必须覆盖精确 reply correlation、多个 legacy candidate 不猜测、单 candidate 旧回复兼容、final/terminal 后迟到 running 不复活，以及 session 切换清空完成 ledger。

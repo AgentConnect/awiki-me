@@ -141,11 +141,11 @@ class ChatMentionCandidate {
 
   factory ChatMentionCandidate.fromGroupMember(GroupMemberSummary member) {
     final did = member.did.trim();
-    final handle = _mentionHandle(member.handle);
+    final fullHandle = _mentionFullHandle(member.handle);
+    final handle = _mentionHandle(fullHandle);
     final displayName = _mentionDisplayName(member.displayName);
     final subjectType = _effectiveGroupMemberSubjectType(member);
     final label = _memberMentionLabel(
-      subjectType: subjectType,
       handle: handle,
       displayName: displayName,
       did: did,
@@ -168,12 +168,12 @@ class ChatMentionCandidate {
           ? ChatMentionTargetDraft.member(
               kind: targetKind,
               did: did,
-              handle: handle,
+              handle: fullHandle,
               displayName: displayName,
             )
           : ChatMentionTargetDraft.unknownMember(
               did: did,
-              handle: handle,
+              handle: fullHandle,
               displayName: displayName,
             ),
       subjectType: subjectType,
@@ -188,6 +188,7 @@ class ChatMentionCandidate {
         label,
         displayName ?? '',
         handle ?? '',
+        fullHandle ?? '',
         member.handle,
         did,
         member.userId,
@@ -853,7 +854,7 @@ String? _normalizeHandleKey(String? value) {
 }
 
 String _memberSubtitle(GroupMemberSummary member) {
-  final handle = _mentionHandle(member.handle);
+  final handle = _mentionFullHandle(member.handle);
   final fields = <String>[
     if (handle != null) '@$handle',
     if (member.did.trim().isNotEmpty) _compactDid(member.did.trim()),
@@ -885,24 +886,15 @@ GroupMemberSubjectType _inferGroupMemberSubjectType({required String did}) {
 }
 
 String _memberMentionLabel({
-  required GroupMemberSubjectType subjectType,
   required String? handle,
   required String? displayName,
   required String did,
 }) {
   final safeDisplayName = _isDidLike(displayName) ? null : displayName;
-  return switch (subjectType) {
-    GroupMemberSubjectType.agent => _firstNonEmpty(<String?>[
-      handle,
-      safeDisplayName,
-      _compactDid(did),
-    ]),
-    GroupMemberSubjectType.human || GroupMemberSubjectType.unknown =>
-      _firstNonEmpty(<String?>[safeDisplayName, handle, _compactDid(did)]),
-  };
+  return _firstNonEmpty(<String?>[safeDisplayName, handle, _compactDid(did)]);
 }
 
-String? _mentionHandle(String? value) {
+String? _mentionFullHandle(String? value) {
   var trimmed = value?.trim() ?? '';
   if (trimmed.isEmpty) {
     return null;
@@ -913,7 +905,12 @@ String? _mentionHandle(String? value) {
   if (trimmed.startsWith('wba://')) {
     trimmed = trimmed.substring('wba://'.length).trimLeft();
   }
-  if (trimmed.isEmpty || _isDidLike(trimmed)) {
+  return trimmed.isEmpty || _isDidLike(trimmed) ? null : trimmed;
+}
+
+String? _mentionHandle(String? value) {
+  var trimmed = _mentionFullHandle(value);
+  if (trimmed == null) {
     return null;
   }
   final dotIndex = trimmed.indexOf('.');
