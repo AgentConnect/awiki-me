@@ -2,6 +2,8 @@
 // [OUTPUT]: UI-facing local identity, account-binding, and credential metadata.
 // [POS]: Domain session projection; exact Core identity IDs remain distinct from local aliases.
 
+import '../services/peer_display_name_resolver.dart';
+
 class SessionAccountBinding {
   const SessionAccountBinding({
     required this.ownerIdentityId,
@@ -52,6 +54,12 @@ class SessionIdentity {
 
   String? get protocolDeviceId => accountBinding?.protocolDeviceId;
 
+  String get visibleDisplayName => const PeerDisplayNameResolver().resolve(
+    nickname: displayName,
+    fullHandle: handle,
+    did: did,
+  );
+
   String get localIdentitySelector {
     final stableId = localIdentityId?.trim();
     if (stableId != null && stableId.isNotEmpty) {
@@ -62,5 +70,17 @@ class SessionIdentity {
       return currentDid;
     }
     return credentialName.trim();
+  }
+
+  SessionIdentity withDisplayName(String value) {
+    return SessionIdentity(
+      did: did,
+      credentialName: credentialName,
+      displayName: value,
+      localIdentityId: localIdentityId,
+      handle: handle,
+      jwtToken: jwtToken,
+      accountBinding: accountBinding,
+    );
   }
 }

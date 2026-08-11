@@ -5,6 +5,8 @@ class PeerDisplayProfile {
     this.displayName,
     this.handle,
     this.avatarUri,
+    this.isStale = false,
+    this.legacyFallback = false,
   });
 
   final String did;
@@ -12,4 +14,6 @@ class PeerDisplayProfile {
   final String? displayName;
   final String? handle;
   final String? avatarUri;
+  final bool isStale;
+  final bool legacyFallback;
 }

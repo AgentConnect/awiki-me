@@ -105,7 +105,7 @@ Rust im-core
 | conversation preview | Rust `im-core` conversation summary + `awiki-me` mapper/overlay | SDK snapshot、conversation patch、latest renderable core message projection | `ConversationListProvider`、conversation workspace |
 | control payload 会话预览可见性 | `awiki-me` mapper / realtime projection | SDK message 的 `body.text` + `payloadJson` | 只允许带显式可见文本的 control payload 更新 recents 预览；payload-only control 继续隐藏 |
 | `hidden`、`pinned`、`muted` | `awiki-me` `ProductLocalStore` | `ConversationService.setThreadHidden`、`hideConversationFromRecents`、`restoreConversationToRecents` | `ImCoreConversationService` 加载 overlay 后过滤、排序和展示 |
-| Direct `customTitle`、`avatarSeed` | `awiki-me` `ProductLocalStore` | `ProductLocalStore.upsertConversationOverlay` | Direct `customTitle` 只投影为 Persona 级本地备注，不再改写 Core `displayName`；`avatarSeed` 仍为 App overlay |
+| Direct `customTitle`、`avatarSeed` | `awiki-me` `ProductLocalStore` | `ProductLocalStore.upsertConversationOverlay` | `customTitle` 仅作为旧本地备注数据保留，不参与当前身份主名称解析；未来如恢复备注功能必须作为显式次级信息展示。`avatarSeed` 仍为 App overlay |
 | 当前账号 Agent inventory topology | User Service 权威、AWiki Me `ProductLocalStore` v4 展示 cache | 版本化完整快照；App 只通过 `replaceAgentInventorySnapshot` 单事务替换 | Agent 页面；topology 不覆盖独立 status，也不替代 Core committed Agent control projection |
 | 当前账号 Agent latest status | User Service 权威、AWiki Me `ProductLocalStore` v4 展示 cache | 独立 status version；`replaceAgentStatusSnapshot` 单事务替换 | Agent 页面将 status 按 `agentDid` 叠加到 topology；status 不能改变 `activeState` 或重新激活 Agent |
 | 当前账号 Profile / Device Registry | User Service 权威、AWiki Me `ProductLocalStore` v4 展示 cache | `replaceProfileSnapshot` / `replaceDeviceRegistrySnapshot` 完整快照 + 单调版本 | 当前账号资料和设备管理 UI；不用于推断消息 owner、协议设备或身份绑定 |
@@ -407,7 +407,7 @@ Timeline merge 必须把“同一条本机发送消息的 durable server row”�
 
 特殊边界：`dm:peer-scope:*`、legacy DID direct、old Flutter direct alias、handle 切换和 DID rotation 都必须在 `im-core` identity resolver / migration 中收敛到 canonical `conversationId`。AWiki Me 可以展示 alias/handle/DID，但不能用这些字段决定消息归属、read ack key 或 timeline patch key。旧 `ThreadRef` / raw thread history 能力只作为 compatibility adapter；App 主路径不得把 `unsupported_capability: thread-history` 暴露为可见错误。附件下载是明确的网络寻址例外：timeline 归属仍保持 canonical peer-scoped conversation，但下载请求必须使用该会话已解析的 direct peer reference，不能把不可逆的 `dm:peer-scope:*` storage thread 传给只支持 direct/group 的 attachment lookup。
 
-会话列表、聊天头部、联系人、添加群成员候选、`@` 候选、群成员和群消息发送人属于同一个 Profile 展示投影消费面。持久投影由 `im-core` 按 storage scope、owner identity 和 `peerPersonaId` 隔离；当前 DID 只是 Persona 的 route。App `PeerDisplayProfileStore` 以 Persona 为主键，DID-only unresolved 项进入独立 bucket，不能把一个 DID 查询结果复制成另一个身份的 alias。以上消费面必须同时复用该投影的名称与头像；候选列表不得直接展示原始 conversation/roster 快照，也不得使用与 Persona 无关的固定占位头像。切换消息页、选择会话和联系人首页预览都不得触发远端 Profile 查询；完整关注/粉丝页和用户主动打开头像时才刷新远端资料，单个失败保留旧缓存且不能阻断其他条目。群会话 Composer 打开时通过 `GroupController.ensureGroupMembersLoaded` 合并同群冷加载并把 roster 发布到 `GroupState.membersByGroup`；`@` 的每次 query 只读取该应用层投影、叠加本地 Persona Profile 后过滤，禁止按字符重复调用 `group.list_members`。添加/移除成员和用户显式刷新仍通过 `GroupController.loadGroupMembers` 更新该投影。主名称展示顺序为本地备注、昵称、短 Handle、紧凑 DID、unknown；完整 Handle 必须继续保存在同一 Profile 投影中，并在身份查找、群成员和用户资料等可容纳第二行身份信息的页面显示为 `@完整Handle`，在协议寻址时原样使用。有本地昵称时首帧必须直接显示昵称，不得出现 `Unknown → 昵称` 或 `Handle → 昵称` 闪烁。群名的冷启动基线来自 `im-core` owner-scoped Group profile projection，并随 conversation snapshot/patch 携带；View 层可按同一 canonical `conversationId` 组合更新后的群资料，但不得改写 Core conversation identity。群资料刷新、添加成员和移除成员回调必须保留已选会话原有的 `conversationId`，不得用 `groupId` 重新拼接 `group:*`。
+会话列表、聊天头部、联系人、添加群成员候选、`@` 候选、群成员和群消息发送人属于同一个 Profile 展示投影消费面。持久投影由 `im-core` 按 storage scope、owner identity 和 `peerPersonaId` 隔离；当前 DID 只是 Persona 的 route。App `PeerDisplayProfileStore` 以 Persona 为主键，DID-only unresolved 项进入独立 bucket，不能把一个 DID 查询结果复制成另一个身份的 alias。以上消费面必须同时复用该投影的名称与头像；候选列表不得直接展示原始 conversation/roster 快照，也不得使用与 Persona 无关的固定占位头像。切换消息页、选择会话和联系人首页预览都不得触发阻塞式远端 Profile 查询；完整关注/粉丝页、显式 Profile 入口和 stale cache 后台刷新可以合并远端读取，单个失败保留旧缓存且不能阻断其他条目。群会话 Composer 打开时通过 `GroupController.ensureGroupMembersLoaded` 合并同群冷加载并把 roster 发布到 `GroupState.membersByGroup`；`@` 的每次 query 只读取该应用层投影、叠加本地 Persona Profile 后过滤，禁止按字符重复调用 `group.list_members`。添加/移除成员和用户显式刷新仍通过 `GroupController.loadGroupMembers` 更新该投影。主名称展示顺序固定为当前权威 Profile Display Name、完整 Handle、历史 sender snapshot（仅前两者都不可用）、紧凑 DID、unknown；旧 `customTitle`、联系人 `name/nick_name`、本地 credential alias 和 `user_name` 都不得覆盖权威 Display Name。完整 Handle 必须继续保存在同一 Profile 投影中，并在身份查找、群成员和用户资料等可容纳第二行身份信息的页面显示为 `@完整Handle`，在协议寻址时原样使用。有可用缓存时首帧必须直接显示缓存名称；过期值允许 stale-while-revalidate，刷新不得先清空名称造成闪烁。群名的冷启动基线来自 `im-core` owner-scoped Group profile projection，并随 conversation snapshot/patch 携带；View 层可按同一 canonical `conversationId` 组合更新后的群资料，但不得改写 Core conversation identity。群资料刷新、添加成员和移除成员回调必须保留已选会话原有的 `conversationId`，不得用 `groupId` 重新拼接 `group:*`。
 
 身份查找结果使用“当前昵称 > 短 Handle > DID”作为主名称，并在 Handle 可用且未完整出现在主名称时显示 `@完整Handle` 作为第二身份行。群系统事件、通知等无法同时承载第二身份行的单行公共身份场景使用“当前昵称 > 完整 Handle > DID”。DID 只是最后 fallback，UI 可使用紧凑格式显示；不得在 nickname 或 Handle 已知时优先显示 DID。这些 UI 仍必须消费同一 Persona Profile 投影，Widget 不得自行拼接 fallback。删除成员等破坏性操作的确认文案必须同时保留完整 Handle，Handle 不可用时保留完整 DID，避免短名碰撞导致误操作。
 
@@ -458,7 +458,7 @@ Timeline merge 必须把“同一条本机发送消息的 durable server row”�
 1. 通过 `ConversationCorePort.ensureConversation` 提交显式打开的Direct/Group存在性，并从Core registry-backed list、snapshot或patch读取base row。
 2. 使用 `ProductLocalStore` 读取 overlay。
 3. 过滤隐藏会话。隐藏规则使用 overlay 的 `updatedAt` 或 provider memory waterline，只有 `lastMessageAt` 晚于隐藏时间的新消息才可以恢复会话。
-4. Direct `customTitle` 只作为 `peerLocalNote` 输入统一 Peer View Provider，不改写 conversation base `displayName`；再应用 `avatarSeed`、Agent lifecycle 和 group display enrichment。
+4. Direct `customTitle` 只作为旧 overlay 数据保留，不进入 Peer View 主名称；再应用 `avatarSeed`、Agent lifecycle 和 group display enrichment。
 5. 输出 `ConversationSummary` 给 presentation provider。
 
 `ConversationListController` 可以维护短生命周期 UI waterline，但只能用于防止 optimistic hide 后的旧 snapshot/patch 回填。它不是持久事实源，`clear()`、session switch 和 provider dispose 必须清理它。
@@ -485,11 +485,15 @@ reset/upsert/remove/reorder 在同一次 state assignment 中前进。空数据�
 `initializing/stale/error` 正交；Core 加载失败显示可重试错误，不得伪装成真实空列表。
 
 Peer 名称只由纯 `PeerDisplayNameResolver` 和 `peerDisplayNameProvider`
-组合，主名称固定优先级为“Persona 本地备注 > 当前昵称 > 短 Handle >
-历史 sender snapshot（仅未解析/Profile 缺失）> 紧凑 DID > unknown”。完整 Handle
+组合，主名称固定优先级为“当前权威 Profile Display Name > 完整 Handle >
+历史 sender snapshot（仅 Profile/Handle 均缺失）> 紧凑 DID > unknown”。旧 Persona 本地备注
+不得覆盖主名称；未来如恢复备注产品能力，只能作为显式次级信息。完整 Handle
 仍属于同一身份投影，必须用于第二身份行、协议寻址和破坏性操作确认。
+当前账号拥有的 Runtime/Daemon Agent 使用独立的 Agent Inventory 权威名称，顺序为
+“Inventory Display Name > Handle > DID”；Persona Profile 不能反向覆盖 Inventory 名称。
+`localAlias` / `credentialName` 只用于本机身份选择和运维定位，不得作为用户名称展示。
 会话列表、聊天页头、联系人、添加群成员候选、`@` 候选、群成员、群消息发送人和用户详情都消费
-同一 ID-scoped provider，并通过 `peerAvatarUri` 复用相同头像投影；Widget 不得自己重写 DID/Handle 回退或使用脱离 Persona 的候选头像。会话本地 bundle
+同一 ID-scoped provider，并通过 `peerAvatarUri` 复用相同头像投影；Widget 不得直接显示历史 `senderName`、credential alias、`customTitle`，也不得自己重写 DID/Handle 回退或使用脱离 Persona 的候选头像。会话本地 bundle
 与 cached Persona profile 完成后才发布首个内容帧，避免
 `Unknown/Handle -> 昵称` 闪烁。
 身份查找结果使用短主名称并在第二身份行保留完整 Handle；群系统事件等单行公共身份场景使用“当前昵称 > 完整 Handle > DID”。DID 在 UI 中可紧凑显示，但只能作为最后 fallback。

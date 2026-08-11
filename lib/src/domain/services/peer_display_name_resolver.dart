@@ -2,7 +2,6 @@ class PeerDisplayNameResolver {
   const PeerDisplayNameResolver();
 
   String resolve({
-    String? localNote,
     String? nickname,
     String? fullHandle,
     String? senderNameSnapshot,
@@ -12,10 +11,6 @@ class PeerDisplayNameResolver {
   }) {
     final normalizedDid = did?.trim() ?? '';
     final compact = compactDid(normalizedDid);
-    final note = _humanName(localNote, normalizedDid, compact);
-    if (note.isNotEmpty) {
-      return note;
-    }
     final handle = cleanHandle(fullHandle);
     final name = _visibleName(
       nickname,

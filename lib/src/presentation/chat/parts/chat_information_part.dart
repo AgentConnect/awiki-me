@@ -581,6 +581,17 @@ class _ChatHistorySearchPageState
         widget.displayThreadId,
       ).select((state) => state.messages),
     );
+    final senderNames = <String, String>{
+      for (final message in messages)
+        message.localId: message.isMine
+            ? context.l10n.profileMeTitle
+            : _historyMessageSenderName(
+                ref,
+                context,
+                message,
+                fallback: widget.displayName,
+              ),
+    };
     final normalizedQuery = _query.trim().toLowerCase();
     final results =
         messages
@@ -590,6 +601,7 @@ class _ChatHistorySearchPageState
               }
               final searchable = <String>[
                 localizeMessagePreview(context.l10n, message),
+                senderNames[message.localId] ?? '',
                 message.senderName ?? '',
                 message.attachment?.filename ?? '',
                 message.attachment?.caption ?? '',
@@ -648,11 +660,8 @@ class _ChatHistorySearchPageState
                       ),
                       itemBuilder: (context, index) {
                         final message = results[index];
-                        final sender = message.isMine
-                            ? context.l10n.profileMeTitle
-                            : (message.senderName?.trim().isNotEmpty == true
-                                  ? message.senderName!.trim()
-                                  : widget.displayName);
+                        final sender =
+                            senderNames[message.localId] ?? widget.displayName;
                         return Container(
                           color: theme.surface,
                           padding: EdgeInsets.symmetric(
@@ -725,6 +734,31 @@ class _ChatHistorySearchPageState
       ),
     );
   }
+}
+
+String _historyMessageSenderName(
+  WidgetRef ref,
+  BuildContext context,
+  ChatMessage message, {
+  required String fallback,
+}) {
+  final runtimeAgent = localRuntimeAgentForConversationTarget(
+    message.senderDid.trim(),
+    ref.watch(agentsProvider).agents,
+  );
+  if (runtimeAgent != null) {
+    return localizeAgentTitle(context.l10n, runtimeAgent);
+  }
+  return ref.watch(
+    peerDisplayNameProvider(
+      PeerDisplayNameRequest(
+        peerPersonaId: message.senderPeerPersonaId,
+        did: message.senderDid,
+        senderNameSnapshot: message.senderName,
+        unknownLabel: fallback,
+      ),
+    ),
+  );
 }
 
 String _chatInformationHandle(

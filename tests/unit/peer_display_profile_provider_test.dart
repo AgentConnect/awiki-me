@@ -8,7 +8,6 @@ import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
-import 'package:awiki_me/src/domain/services/peer_display_name_resolver.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -128,7 +127,7 @@ void main() {
     final session = container.read(sessionProvider.notifier);
     final controller = container.read(peerDisplayProfileProvider.notifier);
 
-    final staleRefresh = controller.refreshRemoteMissing(
+    final staleRefresh = controller.refreshRemoteProfilesIfNeeded(
       ownerDid: _ownerDid,
       dids: const <String>['did:test:alice'],
     );
@@ -137,7 +136,7 @@ void main() {
     session.clear();
     controller.clear();
     session.setSession(_ownerSession());
-    final currentRefresh = controller.refreshRemoteMissing(
+    final currentRefresh = controller.refreshRemoteProfilesIfNeeded(
       ownerDid: _ownerDid,
       dids: const <String>['did:test:alice'],
     );
@@ -151,7 +150,7 @@ void main() {
     );
     await staleRefresh;
 
-    final joinedCurrentRefresh = controller.refreshRemoteMissing(
+    final joinedCurrentRefresh = controller.refreshRemoteProfilesIfNeeded(
       ownerDid: _ownerDid,
       dids: const <String>['did:test:alice'],
     );
@@ -342,7 +341,7 @@ void main() {
     );
   });
 
-  test('统一 View Provider 在所有 DID 路由上优先使用 Persona 本地备注', () async {
+  test('统一 View Provider 在所有 DID 路由上优先使用当前 Profile', () async {
     final container = ProviderContainer(
       overrides: <Override>[
         directoryApplicationServiceProvider.overrideWithValue(
@@ -360,13 +359,6 @@ void main() {
         'did:test:alice': 'persona:alice',
       },
     );
-    controller.registerLocalNotes(
-      ownerDid: 'did:test:owner-a',
-      localNotesByPersonaId: const <String, String>{
-        'persona:alice': 'Alice local note',
-      },
-    );
-
     expect(
       container.read(
         peerDisplayNameProvider(
@@ -377,7 +369,7 @@ void main() {
           ),
         ),
       ),
-      'Alice local note',
+      'Alice',
     );
 
     await controller.loadCached(
@@ -385,7 +377,7 @@ void main() {
       dids: const <String>['did:test:bob'],
     );
     expect(
-      container.read(peerDisplayProfileProvider).localNotesByPersonaId,
+      container.read(peerDisplayProfileProvider).profilesByPersonaId,
       isEmpty,
     );
   });
@@ -413,13 +405,6 @@ void main() {
         fullHandle: 'alice.awiki.info',
       ),
     );
-    controller.registerLocalNotes(
-      ownerDid: 'did:test:owner',
-      localNotesByPersonaId: const <String, String>{
-        'persona:alice': 'Alice local note',
-      },
-    );
-
     expect(
       container.read(
         publicIdentityDisplayNameProvider(
@@ -466,11 +451,11 @@ void main() {
     addTearDown(container.dispose);
     final controller = container.read(peerDisplayProfileProvider.notifier);
 
-    await controller.refreshRemoteMissing(
+    await controller.refreshRemoteProfilesIfNeeded(
       ownerDid: 'did:test:owner',
       dids: const <String>['did:test:alice', 'did:test:bob'],
     );
-    await controller.refreshRemoteMissing(
+    await controller.refreshRemoteProfilesIfNeeded(
       ownerDid: 'did:test:owner',
       dids: const <String>['did:test:alice', 'did:test:bob'],
     );
@@ -492,7 +477,7 @@ void main() {
       final container = ProviderContainer(
         overrides: <Override>[
           directoryApplicationServiceProvider.overrideWithValue(
-            _FallbackCachedDirectoryService(),
+            const _FallbackCachedDirectoryService(),
           ),
           profileApplicationServiceProvider.overrideWithValue(profiles),
         ],
@@ -500,11 +485,11 @@ void main() {
       addTearDown(container.dispose);
       final controller = container.read(peerDisplayProfileProvider.notifier);
 
-      await controller.refreshRemoteMissing(
+      await controller.refreshRemoteProfilesIfNeeded(
         ownerDid: 'did:test:owner',
         dids: const <String>['did:test:alice'],
       );
-      await controller.refreshRemoteMissing(
+      await controller.refreshRemoteProfilesIfNeeded(
         ownerDid: 'did:test:owner',
         dids: const <String>['did:test:alice'],
       );
@@ -515,6 +500,52 @@ void main() {
           .forDid('did:test:alice');
       expect(projected?.displayName, 'alice nickname');
       expect(projected?.handle, 'alice.awiki.ai');
+    },
+  );
+
+  test(
+    'stale profile remains visible while one remote refresh replaces it',
+    () async {
+      final profiles = _RemoteProfileService();
+      final container = ProviderContainer(
+        overrides: <Override>[
+          directoryApplicationServiceProvider.overrideWithValue(
+            const _FallbackCachedDirectoryService(
+              isStale: true,
+              legacyFallback: false,
+            ),
+          ),
+          profileApplicationServiceProvider.overrideWithValue(profiles),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(peerDisplayProfileProvider.notifier);
+
+      await controller.loadCached(
+        ownerDid: 'did:test:owner',
+        dids: const <String>['did:test:alice'],
+      );
+      expect(
+        container
+            .read(peerDisplayProfileProvider)
+            .forDid('did:test:alice')
+            ?.displayName,
+        'Cached Alice',
+      );
+
+      await controller.refreshRemoteProfilesIfNeeded(
+        ownerDid: 'did:test:owner',
+        dids: const <String>['did:test:alice'],
+      );
+
+      expect(profiles.requests, const <String>['did:test:alice']);
+      expect(
+        container
+            .read(peerDisplayProfileProvider)
+            .forDid('did:test:alice')
+            ?.displayName,
+        'alice nickname',
+      );
     },
   );
 
@@ -688,6 +719,14 @@ class _EmptyCachedDirectoryService implements DirectoryApplicationService {
 }
 
 class _FallbackCachedDirectoryService implements DirectoryApplicationService {
+  const _FallbackCachedDirectoryService({
+    this.isStale = false,
+    this.legacyFallback = true,
+  });
+
+  final bool isStale;
+  final bool legacyFallback;
+
   @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
@@ -695,7 +734,10 @@ class _FallbackCachedDirectoryService implements DirectoryApplicationService {
       .map(
         (did) => PeerDisplayProfile(
           did: did,
-          displayName: PeerDisplayNameResolver.compactDid(did),
+          displayName: 'Cached Alice',
+          handle: 'alice.awiki.ai',
+          isStale: isStale,
+          legacyFallback: legacyFallback,
         ),
       )
       .toList(growable: false);

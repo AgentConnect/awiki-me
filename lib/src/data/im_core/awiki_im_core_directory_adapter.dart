@@ -36,6 +36,8 @@ class AwikiImCoreDirectoryAdapter implements DirectoryCorePort {
             displayName: profile.displayName,
             handle: profile.handle,
             avatarUri: profile.avatarUri ?? profile.avatarUrl,
+            isStale: profile.isStale,
+            legacyFallback: profile.legacyFallback,
           ),
         )
         .toList(growable: false);

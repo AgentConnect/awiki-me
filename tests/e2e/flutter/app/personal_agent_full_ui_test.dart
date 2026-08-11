@@ -1869,6 +1869,17 @@ class _UiIdentityCorePort implements IdentityCorePort {
   final List<String> calls = <String>[];
 
   @override
+  Future<AppSession> updateDisplayNameProjection({
+    required String identityId,
+    String? displayName,
+  }) async {
+    final identity = (await defaultIdentity())!;
+    return identity.copyWith(
+      displayName: displayName ?? identity.handle ?? identity.did,
+    );
+  }
+
+  @override
   Future<SessionAccountBinding> activeSyncAccountBinding() async {
     return const SessionAccountBinding(
       ownerIdentityId: 'default',

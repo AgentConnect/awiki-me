@@ -1,5 +1,6 @@
 import 'agent_status.dart';
 import 'agent_summary.dart';
+import '../../services/peer_display_name_resolver.dart';
 
 class AgentDisplayName {
   const AgentDisplayName._();
@@ -9,7 +10,13 @@ class AgentDisplayName {
     if (_isUserVisibleName(name)) {
       return name;
     }
-    return fallbackForKind(agent.kind);
+    final identityFallback = const PeerDisplayNameResolver().resolve(
+      fullHandle: agent.handle,
+      did: agent.agentDid,
+    );
+    return identityFallback.isNotEmpty
+        ? identityFallback
+        : fallbackForKind(agent.kind);
   }
 
   static String fallbackForKind(AgentKind kind) {
@@ -25,7 +32,9 @@ class AgentDisplayName {
       return false;
     }
     final normalized = name.toLowerCase();
-    return !normalized.startsWith('awiki-daemon-') &&
+    return normalized != 'unnamed daemon' &&
+        normalized != 'unnamed agent' &&
+        !normalized.startsWith('awiki-daemon-') &&
         !normalized.startsWith('awiki-agent-') &&
         !normalized.startsWith('awiki_daemon_') &&
         !normalized.startsWith('awiki_agent_');

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
+import '../../domain/entities/agent/agent_display_name.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_identity.dart';
 import '../../domain/entities/group_summary.dart';
@@ -24,6 +25,8 @@ import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../app_shell/providers/session_provider.dart';
+import '../agents/agents_provider.dart';
+import '../conversation_list/conversation_peer_classifier.dart';
 import '../profile/peer_display_profile_provider.dart';
 import 'create_group_dialog.dart';
 import 'group_chat_navigation.dart';
@@ -915,9 +918,7 @@ class GroupMemberRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final title = ref.watch(
-      peerDisplayNameProvider(_memberDisplayNameRequest(item)),
-    );
+    final title = _memberDisplayName(ref, item, watch: true);
     final identityLabel = _memberIdentityLabel(item);
     final avatarUri =
         peerAvatarUri(
@@ -988,9 +989,7 @@ Future<void> showRemoveGroupMemberDialog({
   required GroupMemberSummary member,
   required ValueChanged<GroupSummary> onGroupUpdated,
 }) async {
-  final memberTitle = ref.read(
-    peerDisplayNameProvider(_memberDisplayNameRequest(member)),
-  );
+  final memberTitle = _memberDisplayName(ref, member, watch: false);
   final actionLabel = _memberDestructiveActionLabel(member, memberTitle);
   await AppNavigator.showDialog<void>(
     context,
@@ -1027,6 +1026,26 @@ PeerDisplayNameRequest _memberDisplayNameRequest(GroupMemberSummary member) {
     nickname: member.displayName,
     fullHandle: member.handle,
   );
+}
+
+String _memberDisplayName(
+  WidgetRef ref,
+  GroupMemberSummary member, {
+  required bool watch,
+}) {
+  final agents = watch
+      ? ref.watch(agentsProvider).agents
+      : ref.read(agentsProvider).agents;
+  final runtimeAgent = localRuntimeAgentForConversationTarget(
+    member.did.trim(),
+    agents,
+  );
+  if (runtimeAgent != null) {
+    return AgentDisplayName.title(runtimeAgent);
+  }
+  return watch
+      ? ref.watch(peerDisplayNameProvider(_memberDisplayNameRequest(member)))
+      : ref.read(peerDisplayNameProvider(_memberDisplayNameRequest(member)));
 }
 
 String? _memberIdentityLabel(GroupMemberSummary member) {

@@ -125,6 +125,34 @@ class SessionController extends StateNotifier<SessionState> {
     return true;
   }
 
+  bool applyDisplayNameProjectionIfCurrent({
+    required SessionEpoch expectedEpoch,
+    required String identityId,
+    required String displayName,
+  }) {
+    final current = state.session;
+    final normalizedIdentityId = identityId.trim();
+    if (current == null ||
+        normalizedIdentityId.isEmpty ||
+        state.activeEpoch != expectedEpoch ||
+        !_sessionOwnsIdentityId(current, normalizedIdentityId)) {
+      return false;
+    }
+    final updatedSession = current.withDisplayName(displayName);
+    final updatedCredentials = <SessionIdentity>[
+      for (final item in state.localCredentials)
+        if (item.localIdentityId?.trim() == normalizedIdentityId)
+          item.withDisplayName(displayName)
+        else
+          item,
+    ];
+    state = state.copyWith(
+      session: updatedSession,
+      localCredentials: updatedCredentials,
+    );
+    return true;
+  }
+
   void clear() {
     state = state.copyWith(
       localCredentials: state.localCredentials,
@@ -132,6 +160,18 @@ class SessionController extends StateNotifier<SessionState> {
       generation: state.generation + 1,
     );
   }
+}
+
+bool _sessionOwnsIdentityId(SessionIdentity session, String identityId) {
+  final localIdentityId = session.localIdentityId?.trim() ?? '';
+  final ownerIdentityId = session.ownerIdentityId?.trim() ?? '';
+  if (localIdentityId.isNotEmpty && localIdentityId != identityId) {
+    return false;
+  }
+  if (ownerIdentityId.isNotEmpty && ownerIdentityId != identityId) {
+    return false;
+  }
+  return localIdentityId == identityId || ownerIdentityId == identityId;
 }
 
 bool _sameActiveIdentity(SessionIdentity? first, SessionIdentity? second) {

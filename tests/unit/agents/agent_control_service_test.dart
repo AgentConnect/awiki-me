@@ -1291,6 +1291,14 @@ class _IdentityCoreStub implements IdentityCorePort {
   String verificationMethod = 'did:human:me#daemon-key-1';
 
   @override
+  Future<AppSession> updateDisplayNameProjection({
+    required String identityId,
+    String? displayName,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<SessionAccountBinding> activeSyncAccountBinding() {
     throw UnimplementedError();
   }

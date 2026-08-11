@@ -21,7 +21,6 @@ import '../../../l10n/app_message.dart';
 import '../../agents/agents_provider.dart';
 import '../../conversation_list/conversation_peer_classifier.dart';
 import '../../profile/peer_display_profile_provider.dart';
-import '../../shared/formatters/display_formatters.dart';
 import '../../shared/formatters/localized_ui_formatters.dart';
 import '../../conversation_list/conversation_provider.dart';
 import '../../devices/devices_provider.dart';
@@ -1345,12 +1344,18 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       }
       agentDisplayName = _agentDisplayNameForSender(l10n, message.senderDid);
     }
-    final title = DidDisplayFormatter.compactDisplayName(
-      displayName: agentDisplayName?.isNotEmpty == true
-          ? agentDisplayName!
-          : message.senderName ?? '',
-      fallbackDid: message.senderDid,
-    ).trim();
+    final title = agentDisplayName?.isNotEmpty == true
+        ? agentDisplayName!.trim()
+        : ref
+              .read(
+                peerDisplayNameProvider(
+                  PeerDisplayNameRequest(
+                    did: message.senderDid,
+                    senderNameSnapshot: message.senderName,
+                  ),
+                ),
+              )
+              .trim();
     final resolvedTitle = title.isNotEmpty
         ? title
         : AppMessage.newMessageArrived().resolveForFallback();

@@ -1267,26 +1267,31 @@ void main() {
       const Size.square(18),
     );
 
-    await tester.scrollUntilVisible(
+    expect(
       find.text('最近联系人'),
+      findsNothing,
+      reason: 'a historical conversation title must not override its Handle',
+    );
+    await tester.scrollUntilVisible(
+      find.text('recent'),
       100,
       scrollable: candidateList,
     );
-    expect(find.text('最近联系人'), findsOneWidget);
+    expect(find.text('recent'), findsOneWidget);
 
-    await tester.scrollUntilVisible(
-      find.text('关注联系人'),
-      -100,
-      scrollable: candidateList,
+    final followerCandidate = find.byKey(
+      const Key('group-invite-candidate:$followerDid'),
     );
-    await tester.tap(find.text('关注联系人'));
+    await tester.ensureVisible(followerCandidate);
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('测试智能体'),
-      -100,
-      scrollable: candidateList,
+    await tester.tap(followerCandidate);
+    await tester.pumpAndSettle();
+    final agentCandidate = find.byKey(
+      const Key('group-invite-candidate:$agentDid'),
     );
-    await tester.tap(find.text('测试智能体'));
+    await tester.ensureVisible(agentCandidate);
+    await tester.pumpAndSettle();
+    await tester.tap(agentCandidate);
     await tester.pumpAndSettle();
     expect(find.text('确认添加 (2)'), findsOneWidget);
 

@@ -23,6 +23,7 @@ import '../../domain/entities/relationship_summary.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/entities/identity_type.dart';
+import '../../domain/services/peer_display_name_resolver.dart';
 import '../../domain/services/realtime_gateway.dart';
 
 class AwikiImCoreMappers {
@@ -37,11 +38,11 @@ class AwikiImCoreMappers {
     return AppSession(
       did: identity.did,
       identityId: identity.id,
-      displayName:
-          _nonEmpty(identity.displayName) ??
-          _nonEmpty(identity.handle) ??
-          _nonEmpty(identity.localAlias) ??
-          _compactDid(identity.did),
+      displayName: const PeerDisplayNameResolver().resolve(
+        nickname: identity.displayName,
+        fullHandle: identity.handle,
+        did: identity.did,
+      ),
       handle: _nonEmpty(identity.handle),
       localAlias: _nonEmpty(identity.localAlias),
       authenticated: authenticated,

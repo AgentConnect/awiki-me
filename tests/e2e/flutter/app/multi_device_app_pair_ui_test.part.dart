@@ -2486,11 +2486,25 @@ Future<void> _waitForAppPairProfile({
     tester,
     () {
       final profile = container.read(profileProvider).profile;
+      final sessionState = container.read(sessionProvider);
+      final session = sessionState.session;
+      final identityId = session?.ownerIdentityId ?? session?.localIdentityId;
+      final localIdentityMatches =
+          identityId != null &&
+          sessionState.localCredentials.any(
+            (identity) =>
+                identity.localIdentityId == identityId &&
+                identity.displayName == displayName,
+          );
       return profile?.displayName == displayName &&
+          session?.displayName == displayName &&
+          localIdentityMatches &&
           (bio == null || profile?.bio == bio);
     },
     timeout: const Duration(seconds: 60),
-    failure: 'The App-pair Profile projection did not converge exactly.',
+    failure:
+        'The App-pair Profile, active session, and local identity projections '
+        'did not converge exactly.',
   );
 }
 

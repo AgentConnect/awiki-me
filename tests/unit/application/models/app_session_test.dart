@@ -86,4 +86,37 @@ void main() {
       );
     });
   });
+
+  group('SessionIdentity visible name', () {
+    test(
+      'uses Profile, Handle, then DID without exposing credential alias',
+      () {
+        const profile = SessionIdentity(
+          did: 'did:wba:awiki.ai:user:alice:e1_123',
+          credentialName: 'alice-local',
+          displayName: 'Alice Profile',
+          handle: 'alice.awiki.ai',
+        );
+        const handle = SessionIdentity(
+          did: 'did:wba:awiki.ai:user:bob:e1_456',
+          credentialName: 'bob-local',
+          displayName: '',
+          handle: 'bob.awiki.ai',
+        );
+        const didOnly = SessionIdentity(
+          did: 'did:wba:awiki.ai:user:carol:e1_789',
+          credentialName: 'private-carol-alias',
+          displayName: '',
+        );
+
+        expect(profile.visibleDisplayName, 'Alice Profile');
+        expect(handle.visibleDisplayName, 'bob.awiki.ai');
+        expect(didOnly.visibleDisplayName, 'carol');
+        expect(
+          didOnly.visibleDisplayName,
+          isNot(contains('private-carol-alias')),
+        );
+      },
+    );
+  });
 }

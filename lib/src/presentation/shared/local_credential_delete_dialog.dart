@@ -44,7 +44,7 @@ class LocalCredentialDeleteDialog extends StatelessWidget {
 }
 
 String _identityLabel(SessionIdentity identity) {
-  final displayName = identity.displayName.trim();
+  final displayName = identity.visibleDisplayName;
   final handle = identity.handle?.trim();
   if (handle != null && handle.isNotEmpty) {
     final normalizedHandle = handle.startsWith('@') ? handle : '@$handle';
@@ -53,8 +53,5 @@ String _identityLabel(SessionIdentity identity) {
     }
     return normalizedHandle;
   }
-  if (displayName.isNotEmpty) {
-    return displayName;
-  }
-  return identity.credentialName;
+  return displayName;
 }

@@ -1593,6 +1593,18 @@ class _FakeIdentities implements IdentityCorePort {
   Future<AppSession?> defaultIdentity() async => _defaultIdentity;
 
   @override
+  Future<AppSession> updateDisplayNameProjection({
+    required String identityId,
+    String? displayName,
+  }) async {
+    final identity =
+        _resolvedIdentity ?? _defaultIdentity ?? _session(identityId);
+    return identity.copyWith(
+      displayName: displayName ?? identity.handle ?? identity.did,
+    );
+  }
+
+  @override
   Future<List<AppSession>> listLocalIdentities() async {
     listCount += 1;
     final defaultIdentity = _defaultIdentity;

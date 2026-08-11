@@ -10,6 +10,7 @@ import '../../application/profile_application_service.dart';
 import '../../domain/entities/profile_patch.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../domain/entities/user_profile.dart';
+import '../../domain/services/peer_display_name_resolver.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
 import '../app_shell/providers/session_provider.dart';
@@ -91,6 +92,7 @@ class ProfileController extends StateNotifier<ProfileState> {
   Future<void> refresh() async {
     final generation = _stateGeneration;
     final epoch = ref.read(sessionProvider).activeEpoch;
+    final sessionBefore = ref.read(sessionProvider);
     final accountStateRequests = ref.read(accountStateSyncRequestBusProvider);
     if (accountStateRequests.hasHandler &&
         ref.read(sessionProvider).session?.accountBinding != null) {
@@ -105,6 +107,12 @@ class ProfileController extends StateNotifier<ProfileState> {
       return;
     }
     state = _profileStateAfterRefresh(profile, isLoading: false);
+    await _synchronizeCurrentIdentityDisplayName(
+      profile.displayName,
+      generation: generation,
+      epoch: epoch,
+      sessionBefore: sessionBefore,
+    );
   }
 
   Future<void> refreshWithHomepage(String url) async {
@@ -178,6 +186,19 @@ class ProfileController extends StateNotifier<ProfileState> {
       return;
     }
     state = _profileStateAfterRefresh(profile, isSaving: false);
+    await _synchronizeCurrentIdentityDisplayName(
+      profile.displayName,
+      generation: generation,
+      epoch: epoch,
+      sessionBefore: sessionBefore,
+    );
+    if (!_isOperationCurrent(generation, epoch) ||
+        !_sameProfileProviderSession(
+          sessionBefore,
+          ref.read(sessionProvider),
+        )) {
+      return;
+    }
     await ref
         .read(accountStateSyncRequestBusProvider)
         .request(
@@ -202,11 +223,14 @@ class ProfileController extends StateNotifier<ProfileState> {
     ref.read(uiFeedbackProvider.notifier).showInfo(AppMessage.profileUpdated());
   }
 
-  void applyAccountStateSnapshot(
+  Future<void> applyAccountStateSnapshot(
     ProductProfileSnapshot snapshot, {
     required SessionIdentity session,
-  }) {
-    final current = ref.read(sessionProvider).session;
+  }) async {
+    final generation = _stateGeneration;
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    final sessionBefore = ref.read(sessionProvider);
+    final current = sessionBefore.session;
     if (!mounted || current == null || current.did != session.did) {
       return;
     }
@@ -223,6 +247,20 @@ class ProfileController extends StateNotifier<ProfileState> {
       avatarUri: _optionalString(payload['avatar_url']),
       profileVersion: snapshot.domainVersion,
     );
+    await _synchronizeCurrentIdentityDisplayName(
+      profile.displayName,
+      generation: generation,
+      epoch: epoch,
+      sessionBefore: sessionBefore,
+      strict: true,
+    );
+    if (!_isOperationCurrent(generation, epoch) ||
+        !_sameProfileProviderSession(
+          sessionBefore,
+          ref.read(sessionProvider),
+        )) {
+      return;
+    }
     state = _profileStateAfterRefresh(
       profile,
       isLoading: false,
@@ -257,6 +295,78 @@ class ProfileController extends StateNotifier<ProfileState> {
       isSaving: isSaving,
       clearHomepageMarkdown: !shouldKeepHomepageMarkdown,
     );
+  }
+
+  Future<void> _synchronizeCurrentIdentityDisplayName(
+    String rawDisplayName, {
+    required int generation,
+    required SessionEpoch? epoch,
+    required SessionState sessionBefore,
+    bool strict = false,
+  }) async {
+    final session = sessionBefore.session;
+    if (session == null ||
+        epoch == null ||
+        !_isOperationCurrent(generation, epoch) ||
+        !_sameProfileProviderSession(
+          sessionBefore,
+          ref.read(sessionProvider),
+        )) {
+      return;
+    }
+    final localIdentityId = session.localIdentityId?.trim() ?? '';
+    final ownerIdentityId = session.ownerIdentityId?.trim() ?? '';
+    if (localIdentityId.isNotEmpty &&
+        ownerIdentityId.isNotEmpty &&
+        localIdentityId != ownerIdentityId) {
+      if (strict) {
+        throw StateError('profile_identity_owner_mismatch');
+      }
+      return;
+    }
+    final identityId = ownerIdentityId.isNotEmpty
+        ? ownerIdentityId
+        : localIdentityId;
+    if (identityId.isEmpty) {
+      return;
+    }
+    final normalizedDisplayName = rawDisplayName.trim();
+    try {
+      final projected = await ref
+          .read(identityCorePortProvider)
+          .updateDisplayNameProjection(
+            identityId: identityId,
+            displayName: normalizedDisplayName.isEmpty
+                ? null
+                : normalizedDisplayName,
+          );
+      if (!_isOperationCurrent(generation, epoch) ||
+          !_sameProfileProviderSession(
+            sessionBefore,
+            ref.read(sessionProvider),
+          )) {
+        return;
+      }
+      if (projected.identityId.trim() != identityId) {
+        throw StateError('profile_identity_projection_mismatch');
+      }
+      final visibleDisplayName = normalizedDisplayName.isNotEmpty
+          ? normalizedDisplayName
+          : (session.handle?.trim().isNotEmpty == true
+                ? session.handle!.trim()
+                : PeerDisplayNameResolver.compactDid(session.did));
+      ref
+          .read(sessionProvider.notifier)
+          .applyDisplayNameProjectionIfCurrent(
+            expectedEpoch: epoch,
+            identityId: identityId,
+            displayName: visibleDisplayName,
+          );
+    } catch (_) {
+      if (strict) {
+        rethrow;
+      }
+    }
   }
 
   String visibleProfileContent() {

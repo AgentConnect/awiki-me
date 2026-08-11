@@ -4328,7 +4328,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Controller'));
+    await tester.tap(
+      find.byKey(const Key('conversation-row:dm:peer-scope:v1:controller')),
+    );
     await tester.pumpAndSettle();
 
     ChatView chatView() => tester.widget<ChatView>(find.byType(ChatView));

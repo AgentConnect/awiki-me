@@ -60,44 +60,38 @@ void main() {
     expect(sessionBinding.deviceAuthGeneration, binding.deviceAuthGeneration);
   });
 
-  test(
-    'identity display name falls back through handle, alias, compact DID',
-    () {
-      const withHandle = core.IdentitySummary(
-        id: 'id-handle',
-        did: 'did:wba:awiki.ai:user:alice:e1_1234567890',
-        handle: 'alice.awiki.ai',
-        isDefault: false,
-        readyForAuth: true,
-        readyForMessaging: true,
-      );
-      const withAlias = core.IdentitySummary(
-        id: 'id-alias',
-        did: 'did:wba:awiki.ai:user:bob:e1_1234567890',
-        localAlias: 'bob-local',
-        isDefault: false,
-        readyForAuth: true,
-        readyForMessaging: true,
-      );
-      const withDidOnly = core.IdentitySummary(
-        id: 'id-did',
-        did: 'did:wba:awiki.ai:user:carol:e1_1234567890',
-        isDefault: false,
-        readyForAuth: true,
-        readyForMessaging: true,
-      );
+  test('identity display name never uses the local alias', () {
+    const withHandle = core.IdentitySummary(
+      id: 'id-handle',
+      did: 'did:wba:awiki.ai:user:alice:e1_1234567890',
+      handle: 'alice.awiki.ai',
+      isDefault: false,
+      readyForAuth: true,
+      readyForMessaging: true,
+    );
+    const withAlias = core.IdentitySummary(
+      id: 'id-alias',
+      did: 'did:wba:awiki.ai:user:bob:e1_1234567890',
+      localAlias: 'bob-local',
+      isDefault: false,
+      readyForAuth: true,
+      readyForMessaging: true,
+    );
+    const withDidOnly = core.IdentitySummary(
+      id: 'id-did',
+      did: 'did:wba:awiki.ai:user:carol:e1_1234567890',
+      isDefault: false,
+      readyForAuth: true,
+      readyForMessaging: true,
+    );
 
-      expect(
-        mapper.appSessionFromIdentity(withHandle).displayName,
-        'alice.awiki.ai',
-      );
-      expect(mapper.appSessionFromIdentity(withAlias).displayName, 'bob-local');
-      expect(
-        mapper.appSessionFromIdentity(withDidOnly).displayName,
-        'did:wba:aw…567890',
-      );
-    },
-  );
+    expect(
+      mapper.appSessionFromIdentity(withHandle).displayName,
+      'alice.awiki.ai',
+    );
+    expect(mapper.appSessionFromIdentity(withAlias).displayName, 'bob');
+    expect(mapper.appSessionFromIdentity(withDidOnly).displayName, 'carol');
+  });
 
   test('daemon subkey package maps to bootstrap user subkey package', () {
     const package = core.DaemonSubkeyPrivatePackage(
