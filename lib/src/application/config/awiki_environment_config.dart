@@ -10,15 +10,15 @@ const String primaryTenantDomain = String.fromEnvironment(
 const String primaryTenantBaseUrl = 'https://$primaryTenantDomain';
 const bool defaultMultiDeviceDeviceRevokeEnabled = bool.fromEnvironment(
   'AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED',
-  defaultValue: false,
+  defaultValue: true,
 );
 const bool defaultMultiDeviceDirectE2eeEnabled = bool.fromEnvironment(
   'AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED',
-  defaultValue: false,
+  defaultValue: true,
 );
 const bool defaultMultiDeviceGroupE2eeEnabled = bool.fromEnvironment(
   'AWIKI_MULTI_DEVICE_GROUP_E2EE_ENABLED',
-  defaultValue: false,
+  defaultValue: true,
 );
 const String defaultMultiDeviceAudience = String.fromEnvironment(
   'AWIKI_MULTI_DEVICE_AUDIENCE',

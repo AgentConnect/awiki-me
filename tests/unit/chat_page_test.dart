@@ -53,7 +53,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 import 'package:flutter/material.dart'
-    show FontWeight, InlineSpan, RichText, SelectionArea, TextSpan;
+    show FontWeight, InlineSpan, SelectableText, SelectionArea, TextSpan;
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -343,10 +343,15 @@ Finder _chatMessagesListFinder() {
 }
 
 ScrollableState _chatScrollable(WidgetTester tester) {
+  final list = tester.widget<ListView>(_chatMessagesListFinder());
   return tester.state<ScrollableState>(
     find.descendant(
       of: _chatMessagesListFinder(),
-      matching: find.byType(Scrollable),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable &&
+            identical(widget.controller, list.controller),
+      ),
     ),
   );
 }
@@ -624,7 +629,11 @@ void main() {
         outgoingBubbleWidget.decoration! as ShapeDecoration;
     expect(incomingDecoration.color, AwikiMePalette.content);
     expect(outgoingDecoration.color, AwikiMePalette.messageOutgoing);
-    final outgoingText = tester.widget<Text>(find.text('outgoing'));
+    final outgoingText = tester.widget<SelectableText>(
+      find.byWidgetPredicate(
+        (widget) => widget is SelectableText && widget.data == 'outgoing',
+      ),
+    );
     expect(outgoingText.style?.fontSize, 14);
     expect(outgoingText.style?.fontWeight, FontWeight.w400);
     for (final decoration in <ShapeDecoration>[
@@ -4202,7 +4211,7 @@ void main() {
     expect(
       find.ancestor(
         of: find.text('独立的图片说明'),
-        matching: find.byType(SelectionArea),
+        matching: find.byType(SelectableText),
       ),
       findsOneWidget,
     );
@@ -5636,12 +5645,139 @@ void main() {
         .openConversation(conversation);
     await tester.pumpAndSettle();
 
-    expect(find.byType(SelectionArea), findsWidgets);
+    final content = find.byKey(
+      const Key('chat-message-content:selectable-text-message'),
+    );
+    expect(content, findsOneWidget);
     expect(
-      find.byKey(const Key('chat-message-content:selectable-text-message')),
+      find.descendant(of: content, matching: find.byType(SelectableText)),
       findsOneWidget,
     );
     expect(find.text('这是一条可以复制的消息'), findsOneWidget);
+  });
+
+  testWidgets('消息右键支持复制全文、全选并保持部分文本选区', (tester) async {
+    String? clipboardText;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            final data = call.arguments as Map<Object?, Object?>;
+            clipboardText = data['text'] as String?;
+          }
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    final conversation = _scrollConversation('dm:text-context-menu');
+    const messageText = '部分文本复制应该保持当前选择并且支持复制全文';
+    final message = ChatMessage(
+      localId: 'text-context-menu',
+      remoteId: 'text-context-menu',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:test:me',
+      receiverDid: 'did:test:alice',
+      content: messageText,
+      createdAt: conversation.lastMessageAt,
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+
+    await _pumpScrollableChatView(
+      tester,
+      gateway: FakeAwikiGateway(),
+      conversation: conversation,
+      messages: <ChatMessage>[message],
+      surfaceSize: const Size(960, 640),
+      macStyle: true,
+    );
+
+    final content = find.byKey(
+      const Key('chat-message-content:text-context-menu'),
+    );
+    final selectable = find.descendant(
+      of: content,
+      matching: find.byType(SelectableText),
+    );
+    final editable = find.descendant(
+      of: content,
+      matching: find.byType(EditableText),
+    );
+    expect(selectable, findsOneWidget);
+    expect(editable, findsOneWidget);
+
+    await tester.tap(selectable, buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('复制'));
+    await tester.pumpAndSettle();
+    expect(clipboardText, messageText);
+
+    final editableWidget = tester.widget<EditableText>(editable);
+    const selection = TextSelection(
+      baseOffset: 2,
+      extentOffset: messageText.length - 2,
+    );
+    editableWidget.focusNode.requestFocus();
+    editableWidget.controller.selection = selection;
+    tester.widget<SelectableText>(selectable).onSelectionChanged!(
+      selection,
+      SelectionChangedCause.drag,
+    );
+    await tester.pump();
+
+    await tester.tap(selectable, buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    expect(editableWidget.controller.selection, selection);
+    await tester.tap(find.text('复制'));
+    await tester.pumpAndSettle();
+    expect(clipboardText, messageText.substring(2, messageText.length - 2));
+
+    await tester.tap(selectable, buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('全选'));
+    await tester.pump();
+    expect(
+      editableWidget.controller.selection,
+      const TextSelection(baseOffset: 0, extentOffset: messageText.length),
+    );
+  });
+
+  testWidgets('消息气泡最大宽度随聊天区域宽度自适应', (tester) async {
+    final conversation = _scrollConversation('dm:adaptive-message-width');
+    final message = ChatMessage(
+      localId: 'adaptive-message-width',
+      remoteId: 'adaptive-message-width',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:test:me',
+      receiverDid: 'did:test:alice',
+      content: List<String>.filled(30, '消息气泡宽度应跟随聊天区域变化').join(),
+      createdAt: conversation.lastMessageAt,
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+
+    await _pumpScrollableChatView(
+      tester,
+      gateway: FakeAwikiGateway(),
+      conversation: conversation,
+      messages: <ChatMessage>[message],
+      surfaceSize: const Size(700, 640),
+      macStyle: true,
+    );
+    final bubble = find.byKey(
+      const Key('chat-message-bubble:adaptive-message-width'),
+    );
+    final narrowWidth = tester.getSize(bubble).width;
+
+    await tester.binding.setSurfaceSize(const Size(1200, 640));
+    await tester.pumpAndSettle();
+    final wideWidth = tester.getSize(bubble).width;
+
+    expect(wideWidth, greaterThan(narrowWidth + 100));
   });
 
   testWidgets('对方文本消息按 Markdown 渲染并保留可选中复制', (tester) async {
@@ -5703,7 +5839,8 @@ void main() {
 
     final body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     expect(body.data, markdown);
-    expect(body.selectable, isFalse);
+    expect(body.selectable, isTrue);
+    expect(body.contextMenuBuilder, isNotNull);
   });
 
   testWidgets('自己发出的 Markdown 样式文本仍按普通文本显示', (tester) async {
@@ -5855,7 +5992,7 @@ void main() {
 
     var body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     expect(body.data, groupMarkdown);
-    expect(body.selectable, isFalse);
+    expect(body.selectable, isTrue);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -5879,7 +6016,7 @@ void main() {
 
     body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     expect(body.data, agentMarkdown);
-    expect(body.selectable, isFalse);
+    expect(body.selectable, isTrue);
   });
 
   testWidgets('群聊收到带 mention 的 Markdown 消息仍按 Markdown 渲染', (tester) async {
@@ -5968,12 +6105,13 @@ void main() {
     await tester.pumpAndSettle();
 
     final body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
-    expect(body.selectable, isFalse);
+    expect(body.selectable, isTrue);
     expect(
       find.byWidgetPredicate(
         (widget) =>
-            widget is RichText &&
-            _textSpanHasStyledMention(widget.text, '@艾丽丝'),
+            widget is SelectableText &&
+            widget.textSpan != null &&
+            _textSpanHasStyledMention(widget.textSpan!, '@艾丽丝'),
       ),
       findsOneWidget,
     );
@@ -6162,7 +6300,9 @@ void main() {
     expect(
       find.byWidgetPredicate(
         (widget) =>
-            widget is RichText && _textSpanHasStyledMention(widget.text, '@Me'),
+            widget is SelectableText &&
+            widget.textSpan != null &&
+            _textSpanHasStyledMention(widget.textSpan!, '@Me'),
       ),
       findsOneWidget,
     );
@@ -6736,6 +6876,7 @@ void main() {
     await tester.tap(find.byKey(const Key('chat-send-button')));
     await tester.pumpAndSettle();
     expect(gateway.lastSentContent, 'hello 😀');
+    expect(find.byKey(const Key('chat-emoji-picker')), findsNothing);
   });
 
   testWidgets('peer-scoped 会话用 direct peer 下载收到的小图片', (tester) async {
@@ -9184,7 +9325,7 @@ void main() {
 
     final body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     expect(body.data, caption);
-    expect(body.selectable, isFalse);
+    expect(body.selectable, isTrue);
     expect(find.text(filename), findsOneWidget);
   });
 

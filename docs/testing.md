@@ -119,7 +119,7 @@ refresh/prewarm，以及产品安全 diagnostics mapping。selector 必须实际
 production `AppBootstrap` 和 native Core，验证默认组合设备管理 adapter 和 onboarding
 Join 入口。Root transfer adapter 默认组合，但只有已授权 member、管理设备资格和显式
 user-presence 同时成立后才显示执行入口；公开 Join 表单不暴露它。Revoke、Direct/Group
-E2EE 的 rollout gate 默认保持关闭。该用例不发送 OTP，也不声称完成远端 Join、SAS、
+E2EE 产品能力默认开启，并保留显式关闭回滚。该用例不发送 OTP，也不声称完成远端 Join、SAS、
 审批、根导入、撤销、MLS 或 Handle Recovery。
 
 `DEVICE-JOIN-E2E-001/002` 由独立的 `multi-device-remote-join` suite 承载；它们不会混入
@@ -280,9 +280,9 @@ dart run tests/e2e/runner.dart --case multi-device \
 This suite launches the real production bootstrap/native Core with an
 independent temporary Storage Scope and deletes that root after the run. It
 checks the default device-management composition and mounts the Join surface in
-the production provider tree while
-the independent root-transfer, revoke, Direct, and Group security gates remain
-closed. It uses no backend, OTP, CLI peer, copied secret state, or fake
+the production provider tree while the revoke, Direct, and Group product
+capabilities are enabled by default. Root transfer remains subject to member
+eligibility and explicit user presence. It uses no backend, OTP, CLI peer, copied secret state, or fake
 providers. The remote Join case remains separate and is not included in this
 suite's pass attestation.
 

@@ -3,12 +3,17 @@ import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 import 'package:flutter/material.dart'
     show
+        AdaptiveTextSelectionToolbar,
+        ContextMenuButtonItem,
+        ContextMenuButtonType,
         PopupMenuEntry,
         PopupMenuItem,
         RelativeRect,
         RoundedRectangleBorder,
+        SelectableText,
         SelectionArea,
         SelectionContainer,
         showMenu;

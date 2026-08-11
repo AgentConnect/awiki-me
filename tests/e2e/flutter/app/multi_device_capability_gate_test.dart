@@ -1,5 +1,5 @@
 // [INPUT]: Production AppBootstrap/native Core and two isolated temporary App roots.
-// [OUTPUT]: Real product evidence for the default device entry, adapters, and independent gates.
+// [OUTPUT]: Real product evidence for the default-on multi-device product adapters.
 // [POS]: Local entry E2E; it does not claim remote Join/SAS/Root/Recovery acceptance.
 
 import 'dart:async';
@@ -23,7 +23,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'production bootstrap exposes Join while high-risk gates stay closed',
+    'production bootstrap enables multi-device product capabilities by default',
     (tester) async {
       final appRoot = await Directory.systemTemp.createTemp(
         'awiki_me_multi_device_default_',
@@ -44,7 +44,7 @@ void main() {
           didDomain: 'multi-device-e2e.invalid',
           agentImEnabled: false,
         );
-        _expectRolloutGatesDisabled(environment);
+        _expectProductCapabilitiesEnabled(environment);
         bootstrap = await AppBootstrap.create(
           environment: environment,
           appStateRoot: appRoot.path,
@@ -52,7 +52,7 @@ void main() {
         scopeId = bootstrap.storageScopeLayout!.scopeId.value;
         expect(bootstrap.deviceManagementCorePort, isNotNull);
         expect(bootstrap.rootKeyTransferPort, isNotNull);
-        expect(bootstrap.groupEncryptionCorePort, isNull);
+        expect(bootstrap.groupEncryptionCorePort, isNotNull);
 
         await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
         await _pumpUntilVisible(tester, find.byType(OnboardingPage));
@@ -132,7 +132,7 @@ void main() {
         phases: const <String>[
           'isolated_scope_opened',
           'join_surface_opened_with_production_adapters',
-          'high_risk_capabilities_stayed_closed',
+          'multi_device_product_capabilities_enabled',
           'temporary_scope_deleted',
         ],
       );
@@ -140,10 +140,10 @@ void main() {
   );
 }
 
-void _expectRolloutGatesDisabled(AwikiEnvironmentConfig environment) {
-  expect(environment.multiDeviceDeviceRevokeEnabled, isFalse);
-  expect(environment.multiDeviceDirectE2eeEnabled, isFalse);
-  expect(environment.multiDeviceGroupE2eeEnabled, isFalse);
+void _expectProductCapabilitiesEnabled(AwikiEnvironmentConfig environment) {
+  expect(environment.multiDeviceDeviceRevokeEnabled, isTrue);
+  expect(environment.multiDeviceDirectE2eeEnabled, isTrue);
+  expect(environment.multiDeviceGroupE2eeEnabled, isTrue);
 }
 
 Future<void> _pumpUntilVisible(

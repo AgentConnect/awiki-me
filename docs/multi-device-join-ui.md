@@ -15,13 +15,14 @@
 - 未登录首页只显示统一登录/注册；当已验证 Handle 已存在时，用户可选择“加入新设备”；
 - V1 只比较两端独立计算的 6 位验证码，不提供二维码或扫码入口。
 
-永久撤销由独立编译期开关 `AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED` 控制，默认
-`false`。它只开放撤销动作；关闭时仍可进入设备页读取权威 Registry。
+永久撤销由独立编译期开关 `AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED` 控制，产品默认
+`true`；显式 `false` 仅用于应急回滚。它只开放撤销动作；关闭时仍可进入设备页读取权威 Registry。
 
 设备级 Direct 产品路径由编译期开关 `AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED` 控制，
-默认 `false`。App 只把该值传给 `AwikiImCoreOpenOptions`，不新增 UI；它与 Join、根密钥
-传输、永久撤销和 Group E2EE 开关彼此独立，也不进入跨域协议字段。V1 不提供 Handle
-Recovery 服务或远端流程，只显示明确的不支持提示。
+产品默认 `true`，显式 `false` 仅用于应急回滚。App 只把该值传给
+`AwikiImCoreOpenOptions`，不新增 UI；它与 Join、根密钥传输、永久撤销和 Group E2EE
+开关彼此独立，也不进入跨域协议字段。Handle Recovery 是默认开启的产品基线，最终可用性
+仍由租户 `server-info` 的 phone + SMS OTP 能力声明协商决定。
 
 ## 2. App 状态流
 

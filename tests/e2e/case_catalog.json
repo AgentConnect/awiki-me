@@ -2793,17 +2793,17 @@
     },
     {
       "caseId": "MULTI-DEVICE-CAPABILITY-GATE-E2E-001",
-      "feature": "AWiki Me local Join surface and independent security gates",
+      "feature": "AWiki Me local Join surface and default-on multi-device product capabilities",
       "layer": "product_ui",
       "preconditions": "Flutter desktop and debug native IM Core artifacts are available; no backend, OTP, CLI peer, or pre-existing identity is used.",
       "action": "Open one temporary Storage Scope through production AppBootstrap/native Core, verify the default device-management composition, and mount the Join surface inside the production App provider tree without submitting an OTP.",
       "exactOracles": [
         "The launch uses a real Storage Scope ID, and the temporary App root is deleted after native runtime disposal.",
-        "With default configuration the production device-management and root-transfer adapters exist while the gated group-encryption adapter is absent.",
-        "The production provider tree mounts the real Handle/phone/OTP Join form without exposing root transfer before authorized-member eligibility and explicit user presence; revoke and Direct/Group E2EE rollout gates remain closed."
+        "With default configuration the production device-management, root-transfer, and group-encryption adapters exist.",
+        "The production provider tree mounts the real Handle/phone/OTP Join form without exposing root transfer before authorized-member eligibility and explicit user presence; revoke and Direct/Group E2EE product capabilities are enabled."
       ],
       "negativeChecks": [
-        "A reused/copied Core root, fake provider tree, backend-dependent oracle, an unavailable Join surface, root-transfer execution from the local form, hidden enablement of a gated capability, OTP submission, or any claim that remote Join/SAS/Root/Recovery passed in this local gate fails the case."
+        "A reused/copied Core root, fake provider tree, backend-dependent oracle, an unavailable Join surface, a disabled default product capability, root-transfer execution from the local form, OTP submission, or any claim that remote Join/SAS/Root/Recovery passed in this local gate fails the case."
       ],
       "environment": "no_service",
       "cleanupPolicy": "test_owned_temporary_scope_delete",
@@ -2819,7 +2819,7 @@
         "assertionIds": [
           "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:isolated_scope_opened",
           "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_surface_opened_with_production_adapters",
-          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:high_risk_capabilities_stayed_closed",
+          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:multi_device_product_capabilities_enabled",
           "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:temporary_scope_deleted"
         ],
         "exactOracleAssertions": [
@@ -2832,14 +2832,14 @@
           ],
           [
             "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_surface_opened_with_production_adapters",
-            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:high_risk_capabilities_stayed_closed"
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:multi_device_product_capabilities_enabled"
           ]
         ],
         "negativeCheckAssertions": [
           [
             "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:isolated_scope_opened",
             "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_surface_opened_with_production_adapters",
-            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:high_risk_capabilities_stayed_closed",
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:multi_device_product_capabilities_enabled",
             "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:temporary_scope_deleted"
           ]
         ]
