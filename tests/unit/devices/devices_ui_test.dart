@@ -9,6 +9,7 @@ import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_handle_recovery_adapter.dart';
 import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
+import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
@@ -833,7 +834,6 @@ void main() {
         recovery: recovery,
         gateway: gateway,
         session: null,
-        handleRecoveryEnabled: true,
       ),
     );
     await tester.pumpAndSettle();
@@ -889,7 +889,6 @@ void main() {
           ]);
       ProviderContainer container() => ProviderContainer(
         overrides: <Override>[
-          multiDeviceHandleRecoveryEnabledProvider.overrideWithValue(true),
           deviceManagementCorePortProvider.overrideWithValue(deviceCore),
           handleRecoveryCorePortProvider.overrideWithValue(recovery),
           productLocalStoreProvider.overrideWithValue(local),
@@ -982,7 +981,6 @@ void main() {
           recovery: recovery,
           gateway: gateway,
           session: null,
-          handleRecoveryEnabled: true,
         ),
       );
       await tester.pumpAndSettle();
@@ -1047,7 +1045,6 @@ void main() {
         recovery: recovery,
         gateway: gateway,
         session: null,
-        handleRecoveryEnabled: true,
       ),
     );
     await tester.pumpAndSettle();
@@ -1073,70 +1070,6 @@ void main() {
     expect(gateway.loginCalls, 1);
     expect(container.read(appRuntimeProvider).activatedDid, testDid);
     expect(find.byKey(const Key('handle-recovery-join-banner')), findsNothing);
-  });
-
-  testWidgets('feature-off exact local handle keeps legacy ordinary Join', (
-    tester,
-  ) async {
-    final sdk = _ProductionJoinRecoveryCore();
-    final recovery = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
-      coreInstance: () async => sdk,
-    );
-    final deviceCore = FakeDeviceManagementCore()
-      ..beginResult = _authorizedNewDeviceProgress(
-        authorizedDevice: _device(
-          id: 'member-new',
-          role: DeviceRole.member,
-          isCurrent: true,
-        ),
-      );
-    final gateway = FakeAwikiGateway()
-      ..localCredentials = const <SessionIdentity>[
-        SessionIdentity(
-          did: 'did:wba:awiki.info:users:alice-old',
-          localIdentityId: 'identity-alice',
-          credentialName: 'identity-alice',
-          displayName: 'Alice',
-          handle: 'alice.awiki.info',
-        ),
-      ]
-      ..loginResult = const SessionIdentity(
-        did: testDid,
-        credentialName: 'member-new-local',
-        displayName: 'Alice',
-        handle: 'alice.awiki.info',
-      );
-    await tester.pumpWidget(
-      _app(
-        const DeviceJoinPage(autoPoll: false),
-        deviceCore,
-        recovery: recovery,
-        gateway: gateway,
-        session: null,
-        handleRecoveryEnabled: false,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final fields = find.byType(CupertinoTextField);
-    await tester.enterText(fields.at(0), '+8613800138000');
-    await tester.enterText(fields.at(1), 'alice.awiki.info');
-    await tester.enterText(fields.at(2), '987580');
-    await tester.tap(find.text('开始关联'));
-    await tester.pumpAndSettle();
-
-    final container = ProviderScope.containerOf(
-      tester.element(find.byKey(const Key('device-join-page'))),
-    );
-    expect(
-      container.read(devicesProvider).activeJoin?.cause,
-      DeviceJoinCause.ordinary,
-    );
-    expect(deviceCore.beginCalls, 1);
-    expect(sdk.activateJoinCalls, 0);
-    expect(sdk.resumeJoinCalls, 0);
-    expect(gateway.loginCalls, 1);
-    expect(container.read(appRuntimeProvider).activatedDid, testDid);
   });
 
   testWidgets(
@@ -1267,7 +1200,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(core.pollCalls, 1);
+      expect(core.pollCalls, 2);
       expect(gateway.loginCalls, 0);
       expect(find.text('重试设备激活'), findsOneWidget);
       expect(find.text('完成'), findsNothing);
@@ -1282,7 +1215,7 @@ void main() {
       await tester.tap(find.text('重试设备激活'));
       await tester.pumpAndSettle();
 
-      expect(core.pollCalls, 2);
+      expect(core.pollCalls, 3);
       expect(gateway.loginCalls, 1);
     },
   );
@@ -1469,6 +1402,15 @@ void main() {
           ),
         ]
         ..registry = _currentMemberRegistry('member-valid')
+        ..pollNewResult = _authorizedNewDeviceProgress(
+          joinSessionId: 'join-valid',
+          protocolDeviceId: 'member-valid',
+          authorizedDevice: _device(
+            id: 'member-valid',
+            role: DeviceRole.member,
+            isCurrent: true,
+          ),
+        )
         ..localIdentityDeviceBindings.add((
           did: testDid,
           protocolDeviceId: 'member-valid',
@@ -2273,7 +2215,6 @@ Widget _app(
   HandleRecoveryCorePort? recovery,
   FakeAwikiGateway? gateway,
   bool deviceRevokeEnabled = false,
-  bool handleRecoveryEnabled = false,
   SessionIdentity? session = _session,
   DateTime Function()? deviceJoinNow,
 }) {
@@ -2284,9 +2225,6 @@ Widget _app(
     providerOverrides: <Override>[
       multiDeviceDeviceRevokeEnabledProvider.overrideWithValue(
         deviceRevokeEnabled,
-      ),
-      multiDeviceHandleRecoveryEnabledProvider.overrideWithValue(
-        handleRecoveryEnabled,
       ),
       deviceManagementCorePortProvider.overrideWithValue(core),
       if (deviceJoinNow != null)
@@ -2300,10 +2238,30 @@ Widget _app(
       userPresencePortProvider.overrideWithValue(
         presence ?? FakeUserPresence(),
       ),
-      if (recovery != null)
-        handleRecoveryCorePortProvider.overrideWithValue(recovery),
+      handleRecoveryCorePortProvider.overrideWithValue(
+        recovery ?? _OrdinaryJoinRecoveryCore(core),
+      ),
     ],
   );
+}
+
+class _OrdinaryJoinRecoveryCore implements HandleRecoveryCorePort {
+  _OrdinaryJoinRecoveryCore(this._devices);
+
+  final DeviceManagementCorePort _devices;
+
+  @override
+  Future<HandleRecoveryAuthorizedJoinProgress> resumeAuthorizedJoinActivation({
+    required String joinSessionId,
+  }) async {
+    return HandleRecoveryAuthorizedJoinProgress(
+      join: await _devices.pollNewDeviceJoin(joinSessionId),
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('Unexpected Handle Recovery test call.');
 }
 
 class _ProductionJoinRecoveryCore implements core.AwikiImCore {

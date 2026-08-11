@@ -14,8 +14,10 @@ void main() {
     expect(script, contains('ai.awiki.awikime.dev.manual.joiner'));
     expect(script, contains('joiner-flutter-build'));
     expect(script, contains('AWIKI_PRIMARY_TENANT_DOMAIN'));
-    expect(script, contains('AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED'));
-    expect(script, contains('HANDLE_RECOVERY_ENABLED:-true'));
+    expect(
+      script,
+      isNot(contains('AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED')),
+    );
     expect(script, contains('AWIKI_IM_CORE_REPO_DIR'));
     expect(script, contains('build-sdk-native.sh'));
     expect(script, contains('verify_im_core_native_artifact.sh'));

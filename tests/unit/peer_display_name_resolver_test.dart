@@ -7,12 +7,11 @@ void main() {
   test('uses one stable peer display priority', () {
     expect(
       resolver.resolve(
-        localNote: 'Local note',
         nickname: 'Nickname',
         fullHandle: 'alice.awiki.info',
         did: 'did:wba:awiki.info:alice:e1_test',
       ),
-      'Local note',
+      'Nickname',
     );
     expect(
       resolver.resolve(
@@ -46,15 +45,6 @@ void main() {
         compactQualifiedHandle: true,
       ),
       'bob',
-    );
-    expect(
-      resolver.resolve(
-        localNote: 'alice.awiki.info',
-        fullHandle: 'alice.awiki.info',
-        compactQualifiedHandle: true,
-      ),
-      'alice.awiki.info',
-      reason: 'an explicit local contact note must remain unchanged',
     );
     expect(
       resolver.resolve(

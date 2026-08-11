@@ -119,12 +119,6 @@ final multiDeviceGroupE2eeEnabledProvider = Provider<bool>(
       ref.watch(awikiEnvironmentConfigProvider).multiDeviceGroupE2eeEnabled,
 );
 
-final multiDeviceHandleRecoveryEnabledProvider = Provider<bool>(
-  (ref) => ref
-      .watch(awikiEnvironmentConfigProvider)
-      .multiDeviceHandleRecoveryEnabled,
-);
-
 final messageSyncV2ReadEnabledProvider = Provider<bool>(
   (ref) => ref.watch(awikiEnvironmentConfigProvider).messageSyncV2ReadEnabled,
 );

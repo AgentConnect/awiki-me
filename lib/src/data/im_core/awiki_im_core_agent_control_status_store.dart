@@ -146,20 +146,25 @@ class AwikiImCoreAgentControlStatusStore
     required Set<String> statusScopes,
     required bool Function(Map<String, Object?> payload) matches,
   }) async {
+    final messagePort = _messages;
+    if (messagePort is! LocalHistoryMessageCorePort) {
+      return null;
+    }
+    final localHistory = messagePort as LocalHistoryMessageCorePort;
     try {
-      final history = await _messages
-          .loadHistory(
+      final history = await localHistory
+          .loadLocalHistory(
             AppThreadRef.direct(daemonAgentDid),
             limit: 100,
             includeControlPayloads: true,
           )
           .timeout(_lookupTimeout);
-      final messages =
+      final candidates =
           history
               .where((message) => message.senderDid == daemonAgentDid)
               .toList()
             ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
-      for (final message in messages) {
+      for (final message in candidates) {
         final rawPayload = _controlPayloadJson(message);
         if (rawPayload == null) {
           continue;

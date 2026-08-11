@@ -9,6 +9,7 @@ MACOS_DMG_BACKGROUND="$ROOT_DIR/installer/macos/dmg-background.png"
 MACOS_DMG_SETTINGS="$ROOT_DIR/installer/macos/dmg_settings.py"
 ANDROID_APP_ID="ai.awiki.awikime"
 ANDROID_EXPECTED_CERT_SHA256="F2:67:E9:18:57:54:ED:C1:2B:E5:69:69:1B:39:B9:EF:D4:EF:1E:CF:2D:7E:D8:18:81:42:69:B3:70:85:D8:75"
+ANDROID_EMAS_CONFIG_TOOL="$SCRIPT_DIR/android_emas_release_config.py"
 cd "$ROOT_DIR"
 
 fail() {
@@ -236,6 +237,9 @@ verify_android_startup_smoke() {
 
 build_android() {
   [[ -f android/key.properties ]] || fail "android/key.properties is required for release signing"
+  [[ -f "$ANDROID_EMAS_CONFIG_TOOL" ]] || fail "Android EMAS release config validator is missing"
+  python3 "$ANDROID_EMAS_CONFIG_TOOL" validate \
+    --path android/emas.properties || fail "Android Release EMAS configuration is invalid"
   (cd "$CORE_DIR" &&
     scripts/flutter/build-sdk-native.sh \
       --android-only \
@@ -249,7 +253,6 @@ build_android() {
     --target-platform android-arm64 \
     --split-per-abi \
     --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$PRIMARY_TENANT_DOMAIN" \
-    --dart-define=AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED=true \
     --dart-define="AWIKI_APP_SOURCE_REF=$APP_REF" \
     --dart-define="AWIKI_IM_CORE_SOURCE_REF=$CORE_REF" \
     --build-name "$VERSION" \
@@ -451,7 +454,6 @@ build_macos() {
     --no-pub \
     --config-only \
     --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$PRIMARY_TENANT_DOMAIN" \
-    --dart-define=AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED=true \
     --dart-define="AWIKI_APP_SOURCE_REF=$APP_REF" \
     --dart-define="AWIKI_IM_CORE_SOURCE_REF=$CORE_REF" \
     --build-name "$VERSION" \

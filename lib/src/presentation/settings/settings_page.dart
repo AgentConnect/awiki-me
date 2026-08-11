@@ -546,15 +546,7 @@ class SettingsPage extends ConsumerWidget {
 }
 
 String _sessionProfileTitle(SessionIdentity session) {
-  final displayName = session.displayName.trim();
-  if (displayName.isNotEmpty) {
-    return displayName;
-  }
-  final handle = session.handle?.trim() ?? '';
-  if (handle.isNotEmpty) {
-    return handle.startsWith('@') ? handle.substring(1) : handle;
-  }
-  return session.credentialName.trim();
+  return session.visibleDisplayName;
 }
 
 String _sessionProfileSubtitle(SessionIdentity session) {

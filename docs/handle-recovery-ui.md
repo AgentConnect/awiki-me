@@ -2,9 +2,10 @@
 
 Handle Recovery 是已有 Handle 登录/注册流程中的高风险分支，不再是首页独立入口。
 首页只保留统一的登录/注册动作；当已验证的手机号、验证码和 Handle 对应一个已存在
-Manifest 身份时，App 才让用户选择“加入新设备”或“恢复 Handle”。Recovery 选项仍要求
-`AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED` 和当前租户 Server Info 的 phone Recovery
-capability 同时开启。
+Manifest 身份时，App 才让用户选择“加入新设备”或“恢复 Handle”。Handle Recovery 是
+AWiki Me 的基线能力，不使用 Debug/Release 或平台编译开关；当前租户仍须通过 Server Info
+声明 phone Recovery capability，避免向旧版或第三方租户发送其不支持的 V4 请求。租户未声明
+能力时，弹窗只展示加入设备和取消，并使用 join-only 文案，不显示无法点击的恢复按钮。
 
 选择 Recovery 后，Handle 和手机号以只读方式沿用已验证的 onboarding 上下文，页面不会
 要求再次输入；注册授权会被丢弃，并立即请求 purpose 为

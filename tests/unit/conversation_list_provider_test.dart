@@ -1989,7 +1989,7 @@ void main() {
     },
   );
 
-  test('同 DID 重登后旧会话缓存 Future 不能注册旧本地备注', () async {
+  test('同 DID 重登后旧会话缓存 Future 不能发布到新 epoch', () async {
     final service = _PatchConversationService(
       conversations: const <ConversationSummary>[],
     );
@@ -2037,23 +2037,12 @@ void main() {
         displayName: 'Alice',
       ),
     );
-    final currentEpoch = container.read(sessionProvider).activeEpoch!;
-    profiles.registerLocalNotes(
-      ownerDid: 'did:alice',
-      expectedEpoch: currentEpoch,
-      localNotesByPersonaId: const <String, String>{
-        'persona:bob': 'current epoch note',
-      },
-    );
-
     directory.complete(const <PeerDisplayProfile>[]);
     await pumpEventQueue();
 
     expect(
-      container
-          .read(peerDisplayProfileProvider)
-          .localNotesByPersonaId['persona:bob'],
-      'current epoch note',
+      container.read(peerDisplayProfileProvider).forDid('did:bob'),
+      isNull,
     );
     expect(container.read(conversationListProvider).conversations, isEmpty);
   });

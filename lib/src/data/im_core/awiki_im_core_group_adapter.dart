@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/ports/group_core_port.dart';
@@ -167,10 +169,18 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     required String memberRef,
     String role = 'member',
   }) async {
-    await _runtime.withCurrentClient(
-      (client) =>
-          client.groups.addMember(groupDid, memberRef: memberRef, role: role),
-    );
+    try {
+      await _runtime.withCurrentClient(
+        (client) =>
+            client.groups.addMember(groupDid, memberRef: memberRef, role: role),
+      );
+    } catch (error, stackTrace) {
+      final admission = mapCoreGroupMemberAdmissionError(error);
+      if (admission != null) {
+        Error.throwWithStackTrace(admission, stackTrace);
+      }
+      rethrow;
+    }
     return getGroup(groupDid);
   }
 
@@ -195,6 +205,28 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     }
     throw StateError('IM Core group response did not include a group.');
   }
+}
+
+GroupMemberAdmissionException? mapCoreGroupMemberAdmissionError(Object error) {
+  if (error is! core.AwikiImCoreException ||
+      error.serviceCode?.trim().toLowerCase() !=
+          'group.admission_not_allowed') {
+    return null;
+  }
+  var reason = GroupMemberAdmissionDenialReason.unspecified;
+  final raw = error.serviceDataJson;
+  if (raw != null) {
+    try {
+      final data = jsonDecode(raw);
+      if (data is Map &&
+          data['admission_reason'] == 'agent_not_group_invitable') {
+        reason = GroupMemberAdmissionDenialReason.agentNotGroupInvitable;
+      }
+    } on FormatException {
+      // The stable service code still identifies a group-admission denial.
+    }
+  }
+  return GroupMemberAdmissionException(reason);
 }
 
 core.CreateGroupRequest mapCoreCreateGroupRequest({

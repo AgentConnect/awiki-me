@@ -185,36 +185,49 @@ void main() {
     expect(result.message, 'Handle is reserved.');
   });
 
-  test('handle Recovery capability is phone-only and fails closed', () {
-    expect(
-      _serverInfoWithRecovery(<String, Object?>{
-        'methods': <Object?>[_recoveryMethod('phone', 'sms_otp')],
-      }).supportsPhoneHandleRecovery,
-      isTrue,
-    );
-    expect(
-      _serverInfoWithRecovery(<String, Object?>{
-        'enabled': false,
-        'methods': <Object?>[_recoveryMethod('phone', 'sms_otp')],
-      }).supportsPhoneHandleRecovery,
-      isFalse,
-    );
-    expect(
-      _serverInfoWithRecovery(<String, Object?>{
-        'methods': <Object?>[_recoveryMethod('email', 'email_activation')],
-      }).supportsPhoneHandleRecovery,
-      isFalse,
-    );
-    expect(
-      _serverInfoWithRecovery(<String, Object?>{
-        'methods': <Object?>[
-          _recoveryMethod('phone', 'sms_otp'),
-          _recoveryMethod('email', 'email_activation'),
-        ],
-      }).supportsPhoneHandleRecovery,
-      isFalse,
-    );
-  });
+  test(
+    'handle Recovery selects one valid phone method and tolerates extensions',
+    () {
+      expect(
+        _serverInfoWithRecovery(<String, Object?>{
+          'methods': <Object?>[_recoveryMethod('phone', 'sms_otp')],
+        }).supportsPhoneHandleRecovery,
+        isTrue,
+      );
+      expect(
+        _serverInfoWithRecovery(<String, Object?>{
+          'enabled': false,
+          'methods': <Object?>[_recoveryMethod('phone', 'sms_otp')],
+        }).supportsPhoneHandleRecovery,
+        isFalse,
+      );
+      expect(
+        _serverInfoWithRecovery(<String, Object?>{
+          'methods': <Object?>[_recoveryMethod('email', 'email_activation')],
+        }).supportsPhoneHandleRecovery,
+        isFalse,
+      );
+      expect(
+        _serverInfoWithRecovery(<String, Object?>{
+          'methods': <Object?>[
+            _recoveryMethod('phone', 'sms_otp'),
+            _recoveryMethod('email', 'email_activation'),
+            _recoveryMethod('future_method', 'future_verification'),
+          ],
+        }).supportsPhoneHandleRecovery,
+        isTrue,
+      );
+      expect(
+        _serverInfoWithRecovery(<String, Object?>{
+          'methods': <Object?>[
+            _recoveryMethod('phone', 'sms_otp'),
+            _recoveryMethod('phone', 'sms_otp'),
+          ],
+        }).supportsPhoneHandleRecovery,
+        isFalse,
+      );
+    },
+  );
 
   test('missing or malformed handle Recovery advertisement fails closed', () {
     expect(_serverInfoWithRecovery(null).supportsPhoneHandleRecovery, isFalse);

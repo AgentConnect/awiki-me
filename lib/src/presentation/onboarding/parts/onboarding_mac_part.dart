@@ -774,7 +774,8 @@ class _OnboardingCredentialTile extends StatelessWidget {
     final theme = context.awikiTheme;
     final subtitle = (identity.handle?.trim().isNotEmpty == true)
         ? identity.handle!.trim()
-        : identity.credentialName;
+        : identity.did;
+    final displayName = identity.visibleDisplayName;
     final enabled = actionsEnabled && !isDeleting;
     return Container(
       constraints: const BoxConstraints(minHeight: 68),
@@ -790,8 +791,7 @@ class _OnboardingCredentialTile extends StatelessWidget {
                   'onboarding-local-credential-select:${identity.credentialName}',
                 ),
                 onTap: enabled ? onLogin : null,
-                semanticLabel:
-                    '${context.l10n.onboardingLogin}: ${identity.displayName}',
+                semanticLabel: '${context.l10n.onboardingLogin}: $displayName',
                 semanticsIdentifier:
                     'onboarding-local-credential-select:${identity.credentialName}',
                 borderRadius: const BorderRadius.horizontal(
@@ -801,7 +801,7 @@ class _OnboardingCredentialTile extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(15, 11, 12, 11),
                   child: Row(
                     children: <Widget>[
-                      AvatarBadge(seed: identity.displayName, size: 38),
+                      AvatarBadge(seed: displayName, size: 38),
                       const SizedBox(width: 13),
                       Expanded(
                         child: Column(
@@ -809,9 +809,9 @@ class _OnboardingCredentialTile extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: <Widget>[
                             _DesktopCredentialTooltip(
-                              message: identity.displayName,
+                              message: displayName,
                               child: Text(
-                                identity.displayName,
+                                displayName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -853,7 +853,7 @@ class _OnboardingCredentialTile extends StatelessWidget {
               ),
               onTap: enabled ? onDelete : null,
               semanticLabel:
-                  '${context.l10n.localCredentialDeleteAction}: ${identity.displayName}',
+                  '${context.l10n.localCredentialDeleteAction}: $displayName',
               tooltip: context.l10n.localCredentialDeleteAction,
               borderRadius: const BorderRadius.horizontal(
                 right: Radius.circular(10),

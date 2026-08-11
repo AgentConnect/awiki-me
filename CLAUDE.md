@@ -54,7 +54,7 @@
 - [docs/multi-device-app-pair-e2e.md](docs/multi-device-app-pair-e2e.md)：单机双隔离 App 的构建、驱动、协调与秘密边界。
 - [docs/root-key-transfer-ui.md](docs/root-key-transfer-ui.md)：默认关闭的管理设备根导入、user-presence、management-ready 投影与控制消息过滤边界。
 - [docs/group-encryption-ui.md](docs/group-encryption-ui.md)：默认关闭的本设备群加密准备/重试/就绪投影与 P6 v2 Core 启用门禁。
-- [docs/handle-recovery-ui.md](docs/handle-recovery-ui.md)：默认关闭的 Manifest Handle Recovery V1、operation-bound OTP、风险确认、post-commit 同 operation 精确续跑、Core-owned activate/resume 与 DID replacement 边界。
+- [docs/handle-recovery-ui.md](docs/handle-recovery-ui.md)：基线 Manifest Handle Recovery V1、租户能力协商、operation-bound OTP、风险确认、post-commit 同 operation 精确续跑、Core-owned activate/resume 与 DID replacement 边界。
 - [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md)：首发 UUID Storage Scope、稳定 Keychain locator 与 lifecycle 权威契约。
 - [docs/scope-secret-platform.md](docs/scope-secret-platform.md)：typed envelope、平台 provider、channel 隔离与 native/E2E gate。
 - [docs/pre-release-storage-cleanup.md](docs/pre-release-storage-cleanup.md)：首发前旧 namespace 目录/Keychain inventory、dry-run、archive 与显式删除 runbook。

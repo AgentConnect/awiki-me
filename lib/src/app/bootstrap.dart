@@ -295,8 +295,6 @@ class AppBootstrap {
           effectiveEnvironment.multiDeviceDirectE2eeEnabled,
       multiDeviceGroupE2eeEnabled:
           effectiveEnvironment.multiDeviceGroupE2eeEnabled,
-      multiDeviceHandleRecoveryEnabled:
-          effectiveEnvironment.multiDeviceHandleRecoveryEnabled,
       multiDeviceAudience: effectiveEnvironment.multiDeviceAudience,
       onProgress: (progress) {
         if (progress == AwikiImCoreRuntimeProgress.upgradingLocalState) {

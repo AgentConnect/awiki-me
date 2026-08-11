@@ -39,7 +39,6 @@ import '../../group/group_provider.dart';
 import '../../profile/peer_display_profile_provider.dart';
 import '../../profile/peer_profile_provider.dart';
 import '../../profile/profile_provider.dart';
-import '../../shared/formatters/display_formatters.dart';
 import '../../shared/formatters/localized_ui_formatters.dart';
 import '../../shared/realtime_conversation_identity_projection.dart';
 import 'app_lifecycle_provider.dart';
@@ -1861,10 +1860,16 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (message == null) {
       return AppMessage.newMessageArrived().resolveForFallback();
     }
-    final title = DidDisplayFormatter.compactDisplayName(
-      displayName: message.senderName ?? '',
-      fallbackDid: message.senderDid,
-    ).trim();
+    final title = ref
+        .read(
+          peerDisplayNameProvider(
+            PeerDisplayNameRequest(
+              did: message.senderDid,
+              senderNameSnapshot: message.senderName,
+            ),
+          ),
+        )
+        .trim();
     if (title.isNotEmpty) {
       return title;
     }

@@ -84,13 +84,7 @@ void main() {
       );
 
     await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const OnboardingPage(),
-        gateway: gateway,
-        providerOverrides: <Override>[
-          multiDeviceHandleRecoveryEnabledProvider.overrideWithValue(true),
-        ],
-      ),
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
     await tester.pumpAndSettle();
 
@@ -1837,6 +1831,46 @@ void main() {
     expect(join.toString(), isNot(contains('123456')));
   });
 
+  testWidgets('服务器未提供恢复能力时使用加入设备文案且不显示无效按钮', (tester) async {
+    final defaultInfo = OnboardingServerInfo.userServiceDefault();
+    final gateway = FakeAwikiGateway()
+      ..registrationStatus = IdentityRegistrationStatus.joinRequired
+      ..serverInfo = OnboardingServerInfo(
+        schemaVersion: defaultInfo.schemaVersion,
+        service: defaultInfo.service,
+        identity: OnboardingIdentityCapabilities(
+          handleRegistration: defaultInfo.identity.handleRegistration,
+        ),
+      );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.enterText(fields.at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('existing-handle-join-action')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('existing-handle-recovery-action')),
+      findsNothing,
+    );
+    expect(
+      find.text('当前服务器暂未提供 Handle 恢复。你仍可将本设备加入现有身份，或取消后稍后重试。'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('已有 Handle 可进入新机器恢复且复用已验证的 Handle 和手机号', (tester) async {
     final defaultInfo = OnboardingServerInfo.userServiceDefault();
     final gateway = FakeAwikiGateway()
@@ -1871,7 +1905,6 @@ void main() {
         providerOverrides: <Override>[
           identityCorePortProvider.overrideWithValue(identityPort),
           handleRecoveryCorePortProvider.overrideWithValue(recoveryCore),
-          multiDeviceHandleRecoveryEnabledProvider.overrideWithValue(true),
         ],
       ),
     );

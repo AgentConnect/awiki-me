@@ -4,6 +4,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/account_state_sync_request_bus.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
+import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/ports/account_state_sync_port.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/application/profile_homepage_resolver.dart';
@@ -220,9 +221,19 @@ void main() {
           profileVersion: '7',
         ),
       );
+      final identities = FakeIdentityCorePort(
+        defaultSession: const AppSession(
+          did: 'did:test:alice',
+          identityId: 'owner-one',
+          displayName: 'Alice',
+          handle: 'alice.awiki.test',
+          localAlias: 'one',
+        ),
+      );
       final container = ProviderContainer(
         overrides: <Override>[
           profileApplicationServiceProvider.overrideWithValue(profiles),
+          identityCorePortProvider.overrideWithValue(identities),
         ],
       );
       addTearDown(container.dispose);
@@ -245,6 +256,53 @@ void main() {
       expect(observedFloor?.domain, ProductAccountDomain.profile);
       expect(observedFloor?.version, '7');
       expect(container.read(profileProvider).profile?.profileVersion, '7');
+      expect(identities.lastDisplayNameProjectionIdentityId, 'owner-one');
+      expect(identities.lastDisplayNameProjection, 'Alice 2');
+      expect(container.read(sessionProvider).session?.displayName, 'Alice 2');
+    },
+  );
+
+  test(
+    'account Profile is not published when identity projection fails',
+    () async {
+      final identities = _FailingDisplayProjectionIdentityCorePort(
+        defaultSession: const AppSession(
+          did: 'did:test:alice',
+          identityId: 'owner-one',
+          displayName: 'Alice',
+          handle: 'alice.awiki.test',
+          localAlias: 'one',
+        ),
+      );
+      final container = ProviderContainer(
+        overrides: <Override>[
+          identityCorePortProvider.overrideWithValue(identities),
+        ],
+      );
+      addTearDown(container.dispose);
+      final session = _boundSession('one');
+      container.read(sessionProvider.notifier).setSession(session);
+
+      await expectLater(
+        container
+            .read(profileProvider.notifier)
+            .applyAccountStateSnapshot(
+              ProductProfileSnapshot(
+                binding: const ProductAccountBinding(
+                  ownerIdentityId: 'owner-one',
+                  accountId: 'account-one',
+                ),
+                domainVersion: '2',
+                refreshedAt: DateTime.utc(2026, 8, 11),
+                payloadJson: '{"nick_name":"Alice New"}',
+              ),
+              session: session,
+            ),
+        throwsStateError,
+      );
+
+      expect(container.read(profileProvider).profile, isNull);
+      expect(container.read(sessionProvider).session?.displayName, 'Alice');
     },
   );
 
@@ -342,6 +400,7 @@ SessionIdentity _boundSession(String accountId) {
   return SessionIdentity(
     did: 'did:test:alice',
     credentialName: accountId,
+    localIdentityId: 'owner-$accountId',
     displayName: 'Alice',
     accountBinding: SessionAccountBinding(
       ownerIdentityId: 'owner-$accountId',
@@ -389,5 +448,17 @@ class _UnexpectedProfileMutationPort
     ProfilePatch patch,
   ) {
     throw StateError('account-state mutation must not run while unbound');
+  }
+}
+
+class _FailingDisplayProjectionIdentityCorePort extends FakeIdentityCorePort {
+  _FailingDisplayProjectionIdentityCorePort({required super.defaultSession});
+
+  @override
+  Future<AppSession> updateDisplayNameProjection({
+    required String identityId,
+    String? displayName,
+  }) {
+    throw StateError('projection failed');
   }
 }

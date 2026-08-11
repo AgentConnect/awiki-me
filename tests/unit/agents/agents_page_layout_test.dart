@@ -18,6 +18,7 @@ import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_me/src/presentation/agents/skill_onboarding_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
@@ -1079,7 +1080,7 @@ void main() {
           providerOverrides: <Override>[
             agentControlServiceProvider.overrideWithValue(control),
             agentControlStatusStoreProvider.overrideWithValue(
-              _StaticAgentControlStatusStore(
+              _CorrelatedAgentControlStatusStore(
                 daemonPayload: <String, Object?>{
                   'schema': AgentControlPayloads.statusSchema,
                   'status_scope': 'daemon',
@@ -1109,19 +1110,40 @@ void main() {
       );
       await tester.pump();
 
+      AppPressable currentCreateRuntimePressable() {
+        return tester.widget<AppPressable>(
+          find.descendant(
+            of: find.byKey(const Key('agent-action-create-runtime')),
+            matching: find.byType(AppPressable),
+          ),
+        );
+      }
+
+      expect(currentCreateRuntimePressable().enabled, isTrue);
       await tester.tap(_agentRefreshButton().first);
       await tester.pump();
       expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
+      expect(currentCreateRuntimePressable().enabled, isTrue);
 
       await tester.tap(find.text('改名'));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('agent-rename-field')), findsOneWidget);
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
+      expect(currentCreateRuntimePressable().enabled, isTrue);
 
-      await tester.tap(find.text('创建 Agent'));
+      final createRuntimeAction = find.byKey(
+        const Key('agent-action-create-runtime'),
+      );
+      expect(createRuntimeAction, findsOneWidget);
+      final createRuntimePressable = find.descendant(
+        of: createRuntimeAction,
+        matching: find.byType(AppPressable),
+      );
+      expect(createRuntimePressable, findsOneWidget);
+      await tester.tap(createRuntimePressable);
       await tester.pumpAndSettle();
-      expect(find.text('Agent 类型'), findsOneWidget);
+      expect(find.byKey(const Key('agent-create-scroll-body')), findsOneWidget);
     },
   );
 
@@ -2754,6 +2776,7 @@ void main() {
     container.read(agentsProvider.notifier).applyControlPayload(
       <String, Object?>{
         'schema': AgentControlPayloads.statusSchema,
+        'command_id': control.lastRefreshedDaemonCommandId,
         'status_scope': 'daemon',
         'daemon_agent_did': 'did:agent:daemon',
         'daemon': <String, Object?>{
@@ -3075,8 +3098,8 @@ class _SeededAgentsController extends AgentsController {
   }
 }
 
-class _StaticAgentControlStatusStore implements AgentControlStatusStore {
-  const _StaticAgentControlStatusStore({this.daemonPayload});
+class _CorrelatedAgentControlStatusStore implements AgentControlStatusStore {
+  const _CorrelatedAgentControlStatusStore({this.daemonPayload});
 
   final Map<String, Object?>? daemonPayload;
 
@@ -3092,7 +3115,11 @@ class _StaticAgentControlStatusStore implements AgentControlStatusStore {
     required String daemonAgentDid,
     required String requestId,
   }) async {
-    return daemonPayload;
+    final payload = daemonPayload;
+    if (payload == null) {
+      return null;
+    }
+    return <String, Object?>{...payload, 'request_id': requestId};
   }
 
   @override

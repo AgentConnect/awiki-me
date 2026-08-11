@@ -30,12 +30,48 @@ compiled into the Android application because the mobile SDK must initialize
 before Flutter starts. Treat them as mobile application credentials, not as
 server credentials.
 
+Keep the ignored file owner-only when using the Release packaging worker:
+
+```bash
+chmod 600 android/emas.properties
+```
+
 The Push SDK does not consume `appRsaSecret`. It remains only in the ignored
 local file for future EMAS APM or remote-log integration and is not packaged by
 the current Gradle configuration.
 
 Each build type has an independent `enabled`, `appKey`, and `appSecret` entry.
 Release remains disabled unless release credentials are explicitly configured.
+
+## GitHub Actions Release configuration
+
+`scripts/package_app.sh` dispatches an immutable GitHub Actions build; it does
+not upload a developer's ignored `android/emas.properties`. The
+`app-packaging` GitHub Environment must therefore define these Environment
+Secrets:
+
+```text
+AWIKI_ANDROID_EMAS_APP_KEY
+AWIKI_ANDROID_EMAS_APP_SECRET
+```
+
+For the `android-arm64` matrix entry, the workflow uses only those two values
+to generate a temporary owner-only Release configuration. Debug/Profile
+credentials and `appRsaSecret` are not copied into CI. The Android Release
+worker validates that `release.enabled=true`, both credentials are real rather
+than placeholders, and the file is not group/world-readable before starting
+the expensive native build. Missing or invalid configuration fails the package
+instead of silently producing an EMAS-disabled APK.
+
+The workflow removes `android/emas.properties`, `android/key.properties`, and
+the temporary upload keystore in an `always()` cleanup step. Credentials must
+never be passed as `workflow_dispatch` inputs or written to package metadata,
+logs, caches, or uploaded artifacts.
+
+The package workflow controller runs from the repository default branch. A
+change to `.github/workflows/package-app.yml` does not affect packaging until
+that workflow change is present on the default branch, even when `app_ref`
+points at a `release/*` commit.
 
 The EMAS application package must match the build variant:
 

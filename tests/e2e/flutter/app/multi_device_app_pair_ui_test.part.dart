@@ -2486,11 +2486,25 @@ Future<void> _waitForAppPairProfile({
     tester,
     () {
       final profile = container.read(profileProvider).profile;
+      final sessionState = container.read(sessionProvider);
+      final session = sessionState.session;
+      final identityId = session?.ownerIdentityId ?? session?.localIdentityId;
+      final localIdentityMatches =
+          identityId != null &&
+          sessionState.localCredentials.any(
+            (identity) =>
+                identity.localIdentityId == identityId &&
+                identity.displayName == displayName,
+          );
       return profile?.displayName == displayName &&
+          session?.displayName == displayName &&
+          localIdentityMatches &&
           (bio == null || profile?.bio == bio);
     },
     timeout: const Duration(seconds: 60),
-    failure: 'The App-pair Profile projection did not converge exactly.',
+    failure:
+        'The App-pair Profile, active session, and local identity projections '
+        'did not converge exactly.',
   );
 }
 
@@ -3208,6 +3222,13 @@ Future<void> _waitForAppPairDaemonDrivers({
       if (drivers is List &&
           drivers.map((value) => value.toString()).contains('codex') &&
           drivers.map((value) => value.toString()).contains('claude-code')) {
+        expect(
+          container.read(agentsProvider).statusQueryErrors,
+          isNot(contains(daemonDid)),
+          reason:
+              'A committed or authoritative daemon status must clear the '
+              'older refresh wait state on the active App device.',
+        );
         return;
       }
     }

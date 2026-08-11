@@ -137,4 +137,50 @@ void main() {
     expect(bobEpoch.generation, aliceEpoch.generation + 1);
     expect(bobEpoch, isNot(aliceEpoch));
   });
+
+  test('display name projection updates only the fenced stable identity', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    const identity = SessionIdentity(
+      did: 'did:test:alice',
+      credentialName: 'alice-local-alias',
+      localIdentityId: 'alice-id',
+      displayName: 'Alice Old',
+    );
+    final controller = container.read(sessionProvider.notifier)
+      ..setLocalCredentials(const <SessionIdentity>[identity])
+      ..setSession(identity);
+    final epoch = container.read(sessionProvider).activeEpoch!;
+
+    expect(
+      controller.applyDisplayNameProjectionIfCurrent(
+        expectedEpoch: epoch,
+        identityId: 'alice-id',
+        displayName: 'Alice Current',
+      ),
+      isTrue,
+    );
+    expect(
+      container.read(sessionProvider).session?.displayName,
+      'Alice Current',
+    );
+    expect(
+      container.read(sessionProvider).localCredentials.single.displayName,
+      'Alice Current',
+    );
+    expect(container.read(sessionProvider).activeEpoch, epoch);
+
+    expect(
+      controller.applyDisplayNameProjectionIfCurrent(
+        expectedEpoch: epoch,
+        identityId: 'different-id',
+        displayName: 'Wrong',
+      ),
+      isFalse,
+    );
+    expect(
+      container.read(sessionProvider).session?.displayName,
+      'Alice Current',
+    );
+  });
 }

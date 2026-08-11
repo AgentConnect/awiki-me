@@ -1349,7 +1349,6 @@ AwikiEnvironmentConfig _environment(_RemoteRecoveryRunConfig config) {
     didDomain: config.didDomain,
     anpServiceUrl: config.anpServiceUrl,
     anpServiceDid: config.anpServiceDid,
-    multiDeviceHandleRecoveryEnabled: true,
   );
 }
 

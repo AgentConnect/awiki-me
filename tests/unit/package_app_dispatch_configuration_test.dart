@@ -183,6 +183,38 @@ ${{
       '4.1.2',
     );
 
+    final androidEmas = _stepNamed(
+      buildSteps,
+      'Prepare Android EMAS release configuration',
+    );
+    expect(androidEmas['if'], "matrix.target == 'android-arm64'");
+    expect(androidEmas['working-directory'], 'awiki-me');
+    final androidEmasEnvironment = androidEmas['env'] as YamlMap;
+    expect(
+      androidEmasEnvironment['AWIKI_ANDROID_EMAS_APP_KEY'],
+      r'${{ secrets.AWIKI_ANDROID_EMAS_APP_KEY }}',
+    );
+    expect(
+      androidEmasEnvironment['AWIKI_ANDROID_EMAS_APP_SECRET'],
+      r'${{ secrets.AWIKI_ANDROID_EMAS_APP_SECRET }}',
+    );
+    final androidEmasScript = androidEmas['run'].toString();
+    expect(androidEmasScript, contains('android_emas_release_config.py write'));
+    expect(androidEmasScript, contains('--output android/emas.properties'));
+
+    final androidCredentialCleanup = _stepNamed(
+      buildSteps,
+      'Remove Android release credentials',
+    );
+    expect(
+      androidCredentialCleanup['if'],
+      "always() && matrix.target == 'android-arm64'",
+    );
+    final cleanupScript = androidCredentialCleanup['run'].toString();
+    expect(cleanupScript, contains('awiki-me/android/emas.properties'));
+    expect(cleanupScript, contains('awiki-me/android/key.properties'));
+    expect(cleanupScript, contains('awiki-me/android/upload-keystore.jks'));
+
     final unixWorker = File(
       'scripts/package_unix_worker.sh',
     ).readAsStringSync();
@@ -192,18 +224,25 @@ ${{
     expect(unixWorker, contains('--macos-arch "\$arch"'));
     expect(unixWorker, contains('--android-abi arm64-v8a'));
     expect(
-      RegExp(
-        '--dart-define=AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED=true',
-      ).allMatches(unixWorker),
-      hasLength(2),
-      reason: 'Android and macOS release packages must enable Handle Recovery',
+      unixWorker,
+      contains('android_emas_release_config.py'),
+      reason: 'Android Release packaging must validate EMAS before building',
+    );
+    expect(unixWorker, contains('--path android/emas.properties'));
+    _expectBefore(
+      unixWorker,
+      'python3 "\$ANDROID_EMAS_CONFIG_TOOL" validate',
+      'scripts/flutter/build-sdk-native.sh',
+    );
+    expect(
+      unixWorker,
+      isNot(contains('AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED')),
+      reason: 'Handle Recovery is a product baseline, not a package flag',
     );
     expect(
       windowsWorker,
-      contains(
-        '--dart-define=AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED=true',
-      ),
-      reason: 'Windows release packages must enable Handle Recovery',
+      isNot(contains('AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED')),
+      reason: 'Handle Recovery is a product baseline, not a package flag',
     );
 
     final aggregateSteps = aggregate['steps'] as YamlList;

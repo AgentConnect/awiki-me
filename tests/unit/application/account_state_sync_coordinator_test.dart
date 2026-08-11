@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/account_state_sync_request_bus.dart';
+import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/ports/account_state_sync_port.dart';
 import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
@@ -14,13 +15,17 @@ import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../test_support.dart';
+
 void main() {
   test(
     'reconcile publishes committed Profile and display-only Registry',
     () async {
       final remote = _CoordinatorRemote();
+      final identities = _identityCorePort();
       final container = ProviderContainer(
         overrides: <Override>[
+          identityCorePortProvider.overrideWithValue(identities),
           productLocalStoreProvider.overrideWithValue(
             InMemoryAwikiProductLocalStore(),
           ),
@@ -29,9 +34,11 @@ void main() {
       );
       addTearDown(container.dispose);
       container.read(accountStateSyncCoordinatorProvider);
-      container
-          .read(sessionProvider.notifier)
-          .setSession(_session(accountId: 'account-1'));
+      final session = _session(accountId: 'account-1');
+      container.read(sessionProvider.notifier)
+        ..setLocalCredentials(<SessionIdentity>[session])
+        ..setSession(session);
+      final epoch = container.read(sessionProvider).activeEpoch;
 
       await container
           .read(accountStateSyncCoordinatorProvider.notifier)
@@ -42,6 +49,14 @@ void main() {
         AccountStateSyncCoordinatorStatus.ready,
       );
       expect(container.read(profileProvider).profile?.displayName, 'Alice v1');
+      expect(container.read(sessionProvider).session?.displayName, 'Alice v1');
+      expect(
+        container.read(sessionProvider).localCredentials.single.displayName,
+        'Alice v1',
+      );
+      expect(container.read(sessionProvider).activeEpoch, epoch);
+      expect(identities.lastDisplayNameProjectionIdentityId, 'owner-account-1');
+      expect(identities.lastDisplayNameProjection, 'Alice v1');
       final devices = container.read(devicesProvider);
       expect(
         devices.registry,
@@ -60,6 +75,7 @@ void main() {
     final remote = _CoordinatorRemote(blockManifest: true);
     final container = ProviderContainer(
       overrides: <Override>[
+        identityCorePortProvider.overrideWithValue(_identityCorePort()),
         productLocalStoreProvider.overrideWithValue(
           InMemoryAwikiProductLocalStore(),
         ),
@@ -104,6 +120,7 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: <Override>[
+        identityCorePortProvider.overrideWithValue(_identityCorePort()),
         productLocalStoreProvider.overrideWithValue(
           InMemoryAwikiProductLocalStore(),
         ),
@@ -140,6 +157,7 @@ void main() {
     final remote = _CoordinatorRemote(version: '1');
     final container = ProviderContainer(
       overrides: <Override>[
+        identityCorePortProvider.overrideWithValue(_identityCorePort()),
         productLocalStoreProvider.overrideWithValue(
           InMemoryAwikiProductLocalStore(),
         ),
@@ -191,6 +209,7 @@ void main() {
     final remote = _CoordinatorRemote(blockManifest: true);
     final container = ProviderContainer(
       overrides: <Override>[
+        identityCorePortProvider.overrideWithValue(_identityCorePort()),
         productLocalStoreProvider.overrideWithValue(
           InMemoryAwikiProductLocalStore(),
         ),
@@ -226,6 +245,7 @@ void main() {
       final store = InMemoryAwikiProductLocalStore();
       final container = ProviderContainer(
         overrides: <Override>[
+          identityCorePortProvider.overrideWithValue(_identityCorePort()),
           productLocalStoreProvider.overrideWithValue(store),
           accountStateSyncPortProvider.overrideWithValue(
             _CoordinatorRemote(withAgents: true),
@@ -276,6 +296,7 @@ void main() {
       final remote = _CoordinatorRemote(blockManifest: true, version: '0');
       final container = ProviderContainer(
         overrides: <Override>[
+          identityCorePortProvider.overrideWithValue(_identityCorePort()),
           productLocalStoreProvider.overrideWithValue(store),
           accountStateSyncPortProvider.overrideWithValue(remote),
         ],
@@ -316,6 +337,7 @@ SessionIdentity _session({required String accountId}) {
   return SessionIdentity(
     did: 'did:wba:example.test:alice',
     credentialName: accountId,
+    localIdentityId: 'owner-$accountId',
     displayName: 'Alice',
     accountBinding: SessionAccountBinding(
       ownerIdentityId: 'owner-$accountId',
@@ -324,6 +346,18 @@ SessionIdentity _session({required String accountId}) {
       protocolDeviceId: 'device-1',
       identityGeneration: '1',
       deviceAuthGeneration: '1',
+    ),
+  );
+}
+
+FakeIdentityCorePort _identityCorePort() {
+  return FakeIdentityCorePort(
+    defaultSession: const AppSession(
+      did: 'did:wba:example.test:alice',
+      identityId: 'owner-account-1',
+      displayName: 'Alice',
+      handle: 'alice.example.test',
+      localAlias: 'account-1',
     ),
   );
 }

@@ -916,6 +916,10 @@ class AppLocalizationsZh extends AppLocalizations {
       '请选择将本设备加入现有身份，或使用绑定手机号和独立恢复验证码恢复 Handle。';
 
   @override
+  String get onboardingExistingHandleJoinOnlyMessage =>
+      '当前服务器暂未提供 Handle 恢复。你仍可将本设备加入现有身份，或取消后稍后重试。';
+
+  @override
   String get deviceJoinTitle => '添加新设备';
 
   @override

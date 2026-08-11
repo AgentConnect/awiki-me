@@ -3327,7 +3327,7 @@ class ChatThreadsController
       threadId: targetThreadId,
       senderDid: session.did,
       senderDidSnapshot: session.did,
-      senderName: session.handle ?? session.displayName,
+      senderName: session.visibleDisplayName,
       receiverDid: conversation.targetDid,
       groupId: conversation.groupId,
       content: pendingAttachment.caption ?? '',

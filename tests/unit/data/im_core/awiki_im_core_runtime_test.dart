@@ -32,7 +32,6 @@ void main() {
           paths: layout,
           scopeId: StorageScopeId.parse(scopeValue),
           vaultSecretProvider: vaultProvider,
-          multiDeviceHandleRecoveryEnabled: true,
           multiDeviceAudience: audience,
         ),
         throwsArgumentError,
@@ -75,7 +74,6 @@ void main() {
       multiDeviceDeviceRevokeEnabled: true,
       multiDeviceDirectE2eeEnabled: true,
       multiDeviceGroupE2eeEnabled: true,
-      multiDeviceHandleRecoveryEnabled: true,
       multiDeviceAudience: 'awiki-test-multi-device',
       inspectLocalStateUpgrade: (paths) async {
         inspectionCalled = true;
@@ -172,6 +170,7 @@ void main() {
       paths: layout,
       scopeId: StorageScopeId.parse(scopeValue),
       vaultSecretProvider: _FakeVaultSecretProvider(),
+      multiDeviceAudience: 'awiki-user-service',
       onProgress: (progress) => events.add(progress.name),
       inspectLocalStateUpgrade: (paths) async {
         events.add('inspect');
@@ -244,6 +243,7 @@ void main() {
       paths: layout,
       scopeId: StorageScopeId.parse(scopeValue),
       vaultSecretProvider: _FakeVaultSecretProvider(),
+      multiDeviceAudience: 'awiki-user-service',
       inspectLocalStateUpgrade: (paths) async {
         events.add('inspect');
         expect(await File(paths.sqlitePath).exists(), isFalse);
@@ -320,6 +320,7 @@ void main() {
       paths: layout,
       scopeId: StorageScopeId.parse(scopeValue),
       vaultSecretProvider: _FakeVaultSecretProvider(),
+      multiDeviceAudience: 'awiki-user-service',
       inspectLocalStateUpgrade: (paths) async =>
           const core.LocalStateUpgradeInspection(
             eligibility: core.LocalStateUpgradeEligibility.required,
@@ -382,6 +383,7 @@ void main() {
       paths: layout,
       scopeId: StorageScopeId.parse(scopeValue),
       vaultSecretProvider: _FailingVaultSecretProvider(),
+      multiDeviceAudience: 'awiki-user-service',
       openCore:
           ({
             required core.AwikiImCoreConfig config,
@@ -422,6 +424,7 @@ void main() {
       ),
       scopeId: StorageScopeId.parse(scopeValue),
       vaultSecretProvider: _FakeVaultSecretProvider(),
+      multiDeviceAudience: 'awiki-user-service',
     );
 
     await expectLater(runtime.currentClient(), throwsA(isA<StateError>()));

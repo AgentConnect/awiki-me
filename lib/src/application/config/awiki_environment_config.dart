@@ -1,5 +1,5 @@
 // [INPUT]: Compile-time flags and optional tenant/service overrides.
-// [OUTPUT]: Normalized AWiki runtime endpoints, default-on Handle Recovery, and independent gates.
+// [OUTPUT]: Normalized AWiki runtime endpoints, baseline Handle Recovery inputs, and independent gates.
 // [POS]: Application configuration boundary shared by bootstrap and feature providers.
 
 const String primaryTenantDomainEnvironmentKey = 'AWIKI_PRIMARY_TENANT_DOMAIN';
@@ -19,10 +19,6 @@ const bool defaultMultiDeviceDirectE2eeEnabled = bool.fromEnvironment(
 const bool defaultMultiDeviceGroupE2eeEnabled = bool.fromEnvironment(
   'AWIKI_MULTI_DEVICE_GROUP_E2EE_ENABLED',
   defaultValue: false,
-);
-const bool defaultMultiDeviceHandleRecoveryEnabled = bool.fromEnvironment(
-  'AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED',
-  defaultValue: true,
 );
 const String defaultMultiDeviceAudience = String.fromEnvironment(
   'AWIKI_MULTI_DEVICE_AUDIENCE',
@@ -55,7 +51,6 @@ class AwikiEnvironmentConfig {
     bool? multiDeviceDeviceRevokeEnabled,
     bool? multiDeviceDirectE2eeEnabled,
     bool? multiDeviceGroupE2eeEnabled,
-    bool? multiDeviceHandleRecoveryEnabled,
     String? multiDeviceAudience,
     bool? messageSyncV2ReadEnabled,
   }) {
@@ -109,12 +104,8 @@ class AwikiEnvironmentConfig {
         multiDeviceDirectE2eeEnabled ?? defaultMultiDeviceDirectE2eeEnabled;
     this.multiDeviceGroupE2eeEnabled =
         multiDeviceGroupE2eeEnabled ?? defaultMultiDeviceGroupE2eeEnabled;
-    this.multiDeviceHandleRecoveryEnabled =
-        multiDeviceHandleRecoveryEnabled ??
-        defaultMultiDeviceHandleRecoveryEnabled;
     this.multiDeviceAudience = _validatedMultiDeviceAudience(
       multiDeviceAudience ?? defaultMultiDeviceAudience,
-      requiredForRecovery: this.multiDeviceHandleRecoveryEnabled,
     );
     this.messageSyncV2ReadEnabled =
         messageSyncV2ReadEnabled ?? defaultMessageSyncV2ReadEnabled;
@@ -138,24 +129,17 @@ class AwikiEnvironmentConfig {
   late final bool multiDeviceDeviceRevokeEnabled;
   late final bool multiDeviceDirectE2eeEnabled;
   late final bool multiDeviceGroupE2eeEnabled;
-  late final bool multiDeviceHandleRecoveryEnabled;
-  late final String? multiDeviceAudience;
+  late final String multiDeviceAudience;
   late final bool messageSyncV2ReadEnabled;
 }
 
-String? _validatedMultiDeviceAudience(
-  String? value, {
-  required bool requiredForRecovery,
-}) {
+String _validatedMultiDeviceAudience(String? value) {
   if (value == null || value.isEmpty) {
-    if (requiredForRecovery) {
-      throw ArgumentError.value(
-        value,
-        'multiDeviceAudience',
-        'must be configured when Handle Recovery is enabled',
-      );
-    }
-    return null;
+    throw ArgumentError.value(
+      value,
+      'multiDeviceAudience',
+      'must be configured for baseline Handle Recovery',
+    );
   }
   if (value.trim() != value || value.runes.length > 255) {
     throw ArgumentError.value(

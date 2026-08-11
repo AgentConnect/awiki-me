@@ -183,6 +183,12 @@ class _FakeIdentities implements IdentityCorePort, LegacyIdentityUpgradePort {
   Future<List<AppSession>> listLocalIdentities() async => const <AppSession>[];
 
   @override
+  Future<AppSession> updateDisplayNameProjection({
+    required String identityId,
+    String? displayName,
+  }) async => _session(identityId).copyWith(displayName: displayName);
+
+  @override
   Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
@@ -218,6 +224,10 @@ class _FakeIdentities implements IdentityCorePort, LegacyIdentityUpgradePort {
       existingHandleContinuationId:
           registrationStatus == IdentityRegistrationStatus.joinRequired
           ? 'existing-handle-test'
+          : null,
+      existingHandleJoinMode:
+          registrationStatus == IdentityRegistrationStatus.joinRequired
+          ? ExistingHandleJoinMode.ordinary
           : null,
       warnings: registrationWarnings,
     );

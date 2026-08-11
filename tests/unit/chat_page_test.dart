@@ -1874,7 +1874,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Profile Agent'), findsWidgets);
+    expect(
+      find.text('Profile Agent'),
+      findsNothing,
+      reason: 'the remote Profile must not override Agent Inventory naming',
+    );
+    expect(find.text('本地智能体'), findsWidgets);
     expect(
       tester
           .widget<Text>(
@@ -2982,7 +2987,11 @@ void main() {
     ]);
     await tester.pumpAndSettle();
 
-    expect(find.text('Runtime normalized'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('chat-header-title'))).data,
+      'runtime',
+      reason: 'a current Handle must outrank the historical conversation title',
+    );
     expect(
       find.byKey(
         const ValueKey<String>(

@@ -295,6 +295,17 @@ jobs:
           path: anp/anp
           persist-credentials: false
 
+      - name: Prepare Android EMAS release configuration
+        if: matrix.target == 'android-arm64'
+        working-directory: awiki-me
+        shell: bash
+        env:
+          AWIKI_ANDROID_EMAS_APP_KEY: ${{ secrets.AWIKI_ANDROID_EMAS_APP_KEY }}
+          AWIKI_ANDROID_EMAS_APP_SECRET: ${{ secrets.AWIKI_ANDROID_EMAS_APP_SECRET }}
+        run: >-
+          python3 scripts/android_emas_release_config.py write
+          --output android/emas.properties
+
       - name: Setup Flutter 3.44.0
         uses: subosito/flutter-action@v2.23.0
         with:
@@ -443,6 +454,15 @@ jobs:
             -CoreDir ../awiki-cli-rs2 `
             -AnpDir ../anp/anp `
             -OutputDir "../package-output/${{ matrix.target }}"
+
+      - name: Remove Android release credentials
+        if: always() && matrix.target == 'android-arm64'
+        shell: bash
+        run: >-
+          rm -f
+          awiki-me/android/emas.properties
+          awiki-me/android/key.properties
+          awiki-me/android/upload-keystore.jks
 
       - name: Upload verified platform package
         uses: actions/upload-artifact@v7

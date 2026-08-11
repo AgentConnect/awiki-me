@@ -2710,6 +2710,7 @@ class FakeAgentControlService implements AgentControlService {
         'https://awiki.info/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
   );
   String? lastRefreshedDaemonDid;
+  String? lastRefreshedDaemonCommandId;
   String? lastInstallControllerDid;
   String? lastInstallControllerHandle;
   String? lastInstallClientPlatform;
@@ -2860,6 +2861,7 @@ class FakeAgentControlService implements AgentControlService {
     String? commandId,
   }) async {
     lastRefreshedDaemonDid = daemonAgentDid;
+    lastRefreshedDaemonCommandId = commandId;
   }
 
   @override
@@ -4024,6 +4026,8 @@ class FakeIdentityCorePort implements IdentityCorePort {
   String? lastDaemonSubkeySelector;
   String? lastEnsuredDaemonSubkeySelector;
   String? lastRevokedDaemonSubkeySelector;
+  String? lastDisplayNameProjectionIdentityId;
+  String? lastDisplayNameProjection;
 
   @override
   Future<SessionAccountBinding> activeSyncAccountBinding() async {
@@ -4109,6 +4113,18 @@ class FakeIdentityCorePort implements IdentityCorePort {
   @override
   Future<AppSession> resolveIdentity(String identityIdOrAlias) async =>
       defaultSession;
+
+  @override
+  Future<AppSession> updateDisplayNameProjection({
+    required String identityId,
+    String? displayName,
+  }) async {
+    lastDisplayNameProjectionIdentityId = identityId;
+    lastDisplayNameProjection = displayName;
+    return defaultSession.copyWith(
+      displayName: displayName ?? defaultSession.handle ?? defaultSession.did,
+    );
+  }
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async =>

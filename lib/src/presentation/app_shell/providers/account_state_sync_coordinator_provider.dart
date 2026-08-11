@@ -321,7 +321,7 @@ class AccountStateSyncCoordinator
     }
     if (profile != null) {
       try {
-        ref
+        await ref
             .read(profileProvider.notifier)
             .applyAccountStateSnapshot(profile, session: fence.session);
         projectionErrors.remove(ProductAccountDomain.profile);

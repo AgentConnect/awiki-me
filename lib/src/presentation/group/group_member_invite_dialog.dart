@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
 
-import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
@@ -10,6 +8,8 @@ import '../../l10n/l10n.dart';
 import '../../app/app_services.dart';
 import '../../app/e2e_semantics.dart';
 import '../../application/group_invite_eligibility.dart';
+import '../../application/ports/group_core_port.dart';
+import '../../domain/entities/agent/agent_display_name.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/skill_group_membership_capability.dart';
@@ -632,9 +632,7 @@ class GroupInviteCandidate {
         source: GroupInviteCandidateSource.agent,
       );
     }
-    final displayName = agent.displayName.trim().isNotEmpty
-        ? agent.displayName.trim()
-        : 'Unnamed agent';
+    final displayName = AgentDisplayName.title(agent);
     return GroupInviteCandidate(
       did: agent.agentDid.trim(),
       displayName: displayName,
@@ -682,9 +680,8 @@ class GroupInviteCandidate {
     final did = conversation.targetDid?.trim() ?? '';
     final peer = conversation.targetPeer?.trim();
     final displayName = const PeerDisplayNameResolver().resolve(
-      localNote: conversation.peerLocalNote,
-      nickname: conversation.displayName,
       fullHandle: peer,
+      senderNameSnapshot: conversation.displayName,
       did: did,
     );
     return GroupInviteCandidate(
@@ -763,15 +760,23 @@ class GroupInviteCandidate {
           peerPersonaId: peerPersonaId,
         )?.trim() ??
         '';
-    final projectedDisplayName = resolvePeerDisplayName(
-      profileState,
-      PeerDisplayNameRequest(
-        peerPersonaId: peerPersonaId,
-        did: did,
-        nickname: displayName,
-        fullHandle: handle,
-      ),
-    );
+    final isConversationSnapshot = source == GroupInviteCandidateSource.recent;
+    final projectedDisplayName = source == GroupInviteCandidateSource.agent
+        ? const PeerDisplayNameResolver().resolve(
+            nickname: displayName,
+            fullHandle: projectedHandle.isEmpty ? handle : projectedHandle,
+            did: did,
+          )
+        : resolvePeerDisplayName(
+            profileState,
+            PeerDisplayNameRequest(
+              peerPersonaId: peerPersonaId,
+              did: did,
+              nickname: isConversationSnapshot ? null : displayName,
+              fullHandle: handle,
+              senderNameSnapshot: isConversationSnapshot ? displayName : null,
+            ),
+          );
     return GroupInviteCandidate(
       did: did,
       displayName: projectedDisplayName,
@@ -1453,20 +1458,13 @@ String _groupInviteFailureText(
   GroupInviteCandidate candidate,
   Object error,
 ) {
-  if (error is core.AwikiImCoreException &&
-      error.serviceCode == 'group.admission_not_allowed') {
-    final raw = error.serviceDataJson;
-    try {
-      final data = raw == null ? null : jsonDecode(raw);
-      if (data is Map &&
-          data['admission_reason'] == 'agent_not_group_invitable') {
-        return candidate.identityType.isSkillAgent
-            ? l10n.groupInviteSkillAgentUnavailable
-            : l10n.groupInviteAgentKindUnavailable;
-      }
-    } on FormatException {
-      // The stable service code is sufficient for a safe generic message.
-    }
+  if (error is GroupMemberAdmissionException &&
+      error.reason == GroupMemberAdmissionDenialReason.agentNotGroupInvitable) {
+    return candidate.identityType.isSkillAgent
+        ? l10n.groupInviteSkillAgentUnavailable
+        : l10n.groupInviteAgentKindUnavailable;
+  }
+  if (error is GroupMemberAdmissionException) {
     return l10n.groupInviteAgentKindUnavailable;
   }
   return l10n.groupInviteAddFailed;

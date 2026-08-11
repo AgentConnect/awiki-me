@@ -1,4 +1,6 @@
 import '../../domain/entities/chat_mention.dart';
+import '../../domain/entities/agent/agent_display_name.dart';
+import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../domain/entities/user_profile.dart';
@@ -13,15 +15,22 @@ class ChatMentionPresentationResolver {
     required this.currentProfile,
     required this.peerProfiles,
     Iterable<GroupMemberSummary> groupMembers = const <GroupMemberSummary>[],
+    Iterable<AgentSummary> agentInventory = const <AgentSummary>[],
   }) : _groupMembersByDid = <String, GroupMemberSummary>{
          for (final member in groupMembers)
            if (member.did.trim().isNotEmpty) member.did.trim(): member,
+       },
+       _agentDisplayNamesByDid = <String, String>{
+         for (final agent in agentInventory)
+           if (agent.agentDid.trim().isNotEmpty)
+             agent.agentDid.trim(): AgentDisplayName.title(agent),
        };
 
   final SessionIdentity? session;
   final UserProfile? currentProfile;
   final PeerDisplayProfileState peerProfiles;
   final Map<String, GroupMemberSummary> _groupMembersByDid;
+  final Map<String, String> _agentDisplayNamesByDid;
 
   String? surfaceForTarget(ChatMentionTargetDraft target) {
     if (target.kind == ChatMentionTargetKind.groupSelector) {
@@ -42,6 +51,10 @@ class ChatMentionPresentationResolver {
     if (_isCurrentIdentity(did)) {
       return _resolveCurrentIdentity(target, did);
     }
+    final agentDisplayName = _agentDisplayNamesByDid[did]?.trim() ?? '';
+    if (agentDisplayName.isNotEmpty) {
+      return agentDisplayName;
+    }
     final member = _groupMembersByDid[did];
     return _resolvePeer(
       did: did,
@@ -60,6 +73,7 @@ class ChatMentionPresentationResolver {
       peerPersonaId: member.peerPersonaId,
       did: did,
     );
+    final agentDisplayName = _agentDisplayNamesByDid[did]?.trim() ?? '';
     final displayName = _isCurrentIdentity(did)
         ? _resolveCurrentIdentity(
             ChatMentionTargetDraft.unknownMember(
@@ -69,6 +83,8 @@ class ChatMentionPresentationResolver {
             ),
             did,
           )
+        : agentDisplayName.isNotEmpty
+        ? agentDisplayName
         : _resolvePeer(
             did: did,
             peerPersonaId: member.peerPersonaId,

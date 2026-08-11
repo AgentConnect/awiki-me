@@ -932,7 +932,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final displayThreadId = _displayThreadId;
     final thread = ref.watch(chatThreadProvider(displayThreadId));
     final currentConversation = _currentConversationForTitle();
-    final headerNickname = _headerNickname(currentConversation);
     _requestAgentsIfNeeded(currentConversation);
     final agentsState = ref.watch(agentsProvider);
     final agents = agentsState.agents;
@@ -941,6 +940,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final runtimeAgent = _runtimeAgentForConversation(
       currentConversation,
       agents,
+    );
+    final headerNickname = _headerNickname(
+      currentConversation,
+      runtimeAgent: runtimeAgent,
     );
     final groupSendDisabledReason = _groupSendDisabledReason(
       currentConversation,
@@ -988,6 +991,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       currentProfile: ref.watch(profileProvider).profile,
       peerProfiles: peerDisplayProfiles,
       groupMembers: mentionGroupMembers,
+      agentInventory: agents,
     );
     final deferRealtimeTailFirstPaint =
         thread.isHydratingLocalHistory && messages.length <= 1;
@@ -2906,9 +2910,15 @@ class _ChatViewState extends ConsumerState<ChatView> {
     );
   }
 
-  String? _headerNickname(ConversationSummary conversation) {
+  String? _headerNickname(
+    ConversationSummary conversation, {
+    AgentSummary? runtimeAgent,
+  }) {
     if (conversation.isGroup) {
       return null;
+    }
+    if (runtimeAgent != null) {
+      return localizeAgentTitle(context.l10n, runtimeAgent);
     }
     final targetDid = conversation.targetDid?.trim();
     final peerPersonaId = conversation.peerPersonaId?.trim();
@@ -2921,8 +2931,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
         PeerDisplayNameRequest(
           peerPersonaId: peerPersonaId,
           did: targetDid,
-          nickname: conversation.displayName,
           fullHandle: conversation.targetPeer,
+          senderNameSnapshot: conversation.displayName,
         ),
       ),
     );
@@ -3115,6 +3125,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   String _displayNameForMessage(BuildContext context, ChatMessage message) {
     final senderDid = message.senderDid.trim();
+    final runtimeAgent = localRuntimeAgentForConversationTarget(
+      senderDid,
+      ref.watch(agentsProvider).agents,
+    );
+    if (runtimeAgent != null) {
+      return localizeAgentTitle(context.l10n, runtimeAgent);
+    }
     return ref.watch(
       peerDisplayNameProvider(
         PeerDisplayNameRequest(

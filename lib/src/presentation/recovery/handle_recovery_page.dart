@@ -332,7 +332,7 @@ class _RecoveryVerifiedValue extends StatelessWidget {
             label,
             style: TextStyle(
               color: context.awikiTheme.secondaryText,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
           const SizedBox(height: 6),

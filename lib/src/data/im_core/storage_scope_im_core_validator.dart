@@ -1,3 +1,4 @@
+import '../../application/config/awiki_environment_config.dart';
 import '../storage/awiki_storage_scope_layout.dart';
 import '../storage/scope_manifest.dart';
 import '../storage/scope_secret_repository.dart';
@@ -30,6 +31,7 @@ class StorageScopeImCoreValidator {
       vaultSecretProvider: ScopeAwikiImCoreVaultSecretProvider(
         repository: repository,
       ),
+      multiDeviceAudience: defaultMultiDeviceAudience,
     );
     try {
       await runtime.openAndValidate();

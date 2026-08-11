@@ -731,16 +731,14 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (!expectedEpoch.matches(ref.read(sessionProvider))) {
       return;
     }
-    controller.registerLocalNotes(
-      ownerDid: ownerDid,
-      localNotesByPersonaId: <String, String>{
-        for (final conversation in items)
-          if (!conversation.isGroup &&
-              (conversation.peerPersonaId?.trim().isNotEmpty ?? false))
-            conversation.peerPersonaId!.trim():
-                conversation.peerLocalNote?.trim() ?? '',
-      },
-      expectedEpoch: expectedEpoch,
+    unawaited(
+      controller.refreshRemoteProfilesIfNeeded(
+        ownerDid: ownerDid,
+        dids: items
+            .where((conversation) => !conversation.isGroup)
+            .map((conversation) => conversation.targetDid ?? ''),
+        expectedEpoch: expectedEpoch,
+      ),
     );
   }
 

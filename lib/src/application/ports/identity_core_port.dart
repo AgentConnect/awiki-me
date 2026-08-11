@@ -33,6 +33,11 @@ abstract interface class IdentityCorePort {
 
   Future<AppSession> resolveIdentity(String identityIdOrAlias);
 
+  Future<AppSession> updateDisplayNameProjection({
+    required String identityId,
+    String? displayName,
+  });
+
   Future<SessionAccountBinding> activeSyncAccountBinding();
 
   Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias);

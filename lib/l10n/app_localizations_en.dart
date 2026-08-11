@@ -962,6 +962,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Choose whether to add this device to the existing identity or recover the Handle with its bound phone and a dedicated recovery code.';
 
   @override
+  String get onboardingExistingHandleJoinOnlyMessage =>
+      'This server does not currently provide Handle Recovery. You can still add this device to the existing identity, or cancel and try again later.';
+
+  @override
   String get deviceJoinTitle => 'Add a new device';
 
   @override

@@ -495,9 +495,10 @@ class RelationshipListController extends StateNotifier<RelationshipListState> {
   ) async {
     await ref
         .read(peerDisplayProfileProvider.notifier)
-        .refreshRemoteMissing(
+        .refreshRemoteProfilesIfNeeded(
           ownerDid: ownerOperation.epoch?.ownerDid ?? '',
           dids: items.map((item) => item.did),
+          expectedEpoch: ownerOperation.epoch,
         );
   }
 

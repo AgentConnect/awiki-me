@@ -117,23 +117,25 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     final responsive = context.awikiResponsive;
     final profile = state.profile;
     final profileDid = _profileDid(profile, fallbackDid: targetDid);
-    final displayName = ref.watch(
-      peerDisplayNameProvider(
-        PeerDisplayNameRequest(
-          peerPersonaId: profileDid == targetDid
-              ? widget.target.peerPersonaId
-              : null,
-          did: profileDid,
-          nickname: runtimeAgent?.displayName ?? profile?.displayName,
-          fullHandle:
-              profile?.fullHandle ??
-              profile?.handle ??
-              widget.target.fullHandle,
-          senderNameSnapshot: widget.target.displayName,
-          unknownLabel: context.l10n.chatPeerInfoUnknownContact,
-        ),
-      ),
-    );
+    final displayName = runtimeAgent == null
+        ? ref.watch(
+            peerDisplayNameProvider(
+              PeerDisplayNameRequest(
+                peerPersonaId: profileDid == targetDid
+                    ? widget.target.peerPersonaId
+                    : null,
+                did: profileDid,
+                nickname: profile?.displayName,
+                fullHandle:
+                    profile?.fullHandle ??
+                    profile?.handle ??
+                    widget.target.fullHandle,
+                senderNameSnapshot: widget.target.displayName,
+                unknownLabel: context.l10n.chatPeerInfoUnknownContact,
+              ),
+            ),
+          )
+        : localizeAgentTitle(context.l10n, runtimeAgent);
     final handleLabel = profile == null
         ? (widget.target.fullHandle?.trim() ?? '')
         : DidDisplayFormatter.profileHandleLabel(profile);

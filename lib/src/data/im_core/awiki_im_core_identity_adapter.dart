@@ -50,6 +50,23 @@ class AwikiImCoreIdentityAdapter
   }
 
   @override
+  Future<AppSession> updateDisplayNameProjection({
+    required String identityId,
+    String? displayName,
+  }) async {
+    final normalizedIdentityId = identityId.trim();
+    if (normalizedIdentityId.isEmpty) {
+      throw ArgumentError.value(identityId, 'identityId', 'must not be empty');
+    }
+    final coreInstance = await _runtime.coreInstance();
+    final identity = await coreInstance.updateDisplayNameProjection(
+      identityId: normalizedIdentityId,
+      displayName: _nonEmpty(displayName),
+    );
+    return _mappers.appSessionFromIdentity(identity);
+  }
+
+  @override
   Future<SessionAccountBinding> activeSyncAccountBinding() {
     return _runtime.withCurrentClient((client) async {
       final binding = await client.activeSyncAccountBinding();
@@ -298,6 +315,11 @@ class AwikiImCoreIdentityAdapter
   Future<void> discardExistingHandleContinuation(String continuationId) async {
     _existingHandleContinuations.remove(continuationId);
   }
+}
+
+String? _nonEmpty(String? value) {
+  final normalized = value?.trim() ?? '';
+  return normalized.isEmpty ? null : normalized;
 }
 
 class _PendingExistingHandleRegistration {

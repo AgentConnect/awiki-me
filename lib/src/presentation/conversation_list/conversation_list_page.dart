@@ -1491,13 +1491,23 @@ String _conversationPresentationTitle(
     }
   }
   if (!conversation.isGroup) {
+    final targetDid = conversation.targetDid?.trim() ?? '';
+    final runtimeAgent = targetDid.isEmpty
+        ? null
+        : localRuntimeAgentForConversationTarget(
+            targetDid,
+            ref.watch(agentsProvider).agents,
+          );
+    if (runtimeAgent != null) {
+      return localizeAgentTitle(l10n, runtimeAgent);
+    }
     return ref.watch(
       peerDisplayNameProvider(
         PeerDisplayNameRequest(
           peerPersonaId: conversation.peerPersonaId,
           did: conversation.targetDid,
-          nickname: conversation.displayName,
           fullHandle: conversation.targetPeer,
+          senderNameSnapshot: conversation.displayName,
           unknownLabel: l10n.chatUnknownUser,
         ),
       ),
