@@ -1177,7 +1177,11 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildMacBubble(BuildContext context, bool isMine) {
+  Widget _buildMacBubble(
+    BuildContext context,
+    bool isMine,
+    double maxBubbleWidth,
+  ) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final attachment = message.attachment;
@@ -1218,9 +1222,7 @@ class _MessageBubble extends StatelessWidget {
           macStyle: true,
           child: Container(
             key: Key('chat-message-bubble:${message.localId}'),
-            constraints: BoxConstraints(
-              maxWidth: responsive.displayScaled(420),
-            ),
+            constraints: BoxConstraints(maxWidth: maxBubbleWidth),
             padding: EdgeInsets.symmetric(
               horizontal: responsive.displayScaled(13),
               vertical: responsive.displayScaled(9),
@@ -1251,7 +1253,7 @@ class _MessageBubble extends StatelessWidget {
                     ]
                   : null,
             ),
-            child: attachment == null ? SelectionArea(child: child) : child,
+            child: child,
           ),
         ),
         if (message.sendState == MessageSendState.failed) ...<Widget>[
@@ -1338,7 +1340,11 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildCompactBubble(BuildContext context, bool isMine) {
+  Widget _buildCompactBubble(
+    BuildContext context,
+    bool isMine,
+    double maxBubbleWidth,
+  ) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final attachment = message.attachment;
@@ -1396,9 +1402,7 @@ class _MessageBubble extends StatelessWidget {
           macStyle: false,
           child: Container(
             key: Key('chat-message-bubble:${message.localId}'),
-            constraints: BoxConstraints(
-              maxWidth: responsive.displayScaled(300),
-            ),
+            constraints: BoxConstraints(maxWidth: maxBubbleWidth),
             padding: EdgeInsets.fromLTRB(
               horizontalPadding + (isMine ? 0 : bubbleTailExtent),
               responsive.displayScaled(9),
@@ -1418,7 +1422,7 @@ class _MessageBubble extends StatelessWidget {
                     ]
                   : null,
             ),
-            child: attachment == null ? SelectionArea(child: content) : content,
+            child: content,
           ),
         ),
         if (message.sendState == MessageSendState.failed) ...<Widget>[
@@ -1508,10 +1512,20 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMine = message.isMine;
-    if (macStyle) {
-      return _buildMacBubble(context, isMine);
-    }
-    return _buildCompactBubble(context, isMine);
+    final responsive = context.awikiResponsive;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fallbackWidth = responsive.displayScaled(macStyle ? 420 : 300);
+        final availableWidth = constraints.maxWidth;
+        final maxBubbleWidth = availableWidth.isFinite
+            ? availableWidth * (macStyle ? 0.68 : 0.72)
+            : fallbackWidth;
+        if (macStyle) {
+          return _buildMacBubble(context, isMine, maxBubbleWidth);
+        }
+        return _buildCompactBubble(context, isMine, maxBubbleWidth);
+      },
+    );
   }
 }
 
@@ -1749,23 +1763,21 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
     final content = hasCaption
         ? _AttachmentCaptionLayout(
             gap: captionGap,
-            caption: SelectionArea(
-              child: _MessageTextContent(
-                text: caption,
-                mentions: message.mentions,
-                payloadJson: message.payloadJson,
-                mentionPresentation: widget.mentionPresentation,
-                style: TextStyle(
-                  color: widget.macStyle
-                      ? AwikiMePalette.inkNeutral
-                      : theme.title,
-                  fontSize: widget.macStyle
-                      ? responsive.displayScaled(14)
-                      : responsive.bodyMd,
-                  height: 1.4,
-                ),
-                renderMarkdown: !message.isMine,
+            caption: _MessageTextContent(
+              text: caption,
+              mentions: message.mentions,
+              payloadJson: message.payloadJson,
+              mentionPresentation: widget.mentionPresentation,
+              style: TextStyle(
+                color: widget.macStyle
+                    ? AwikiMePalette.inkNeutral
+                    : theme.title,
+                fontSize: widget.macStyle
+                    ? responsive.displayScaled(14)
+                    : responsive.bodyMd,
+                height: 1.4,
               ),
+              renderMarkdown: !message.isMine,
             ),
             divider: _AttachmentCaptionDivider(macStyle: widget.macStyle),
             attachment: attachmentBody,
@@ -2657,35 +2669,56 @@ class _MessageTextContent extends StatelessWidget {
           : <String, MarkdownElementBuilder>{
               _awikiMentionTag: _AwikiMarkdownMentionBuilder(),
             };
-      return MarkdownBody(
-        data: validMentions.isEmpty
-            ? text
-            : _textWithMarkdownMentionMarkers(
-                text,
-                validMentions,
-                mentionPresentation,
-              ),
-        selectable: false,
-        shrinkWrap: true,
-        styleSheet: _chatMarkdownStyleSheet(context, style),
-        inlineSyntaxes: validMentions.isEmpty
-            ? null
-            : <md.InlineSyntax>[_AwikiMarkdownMentionSyntax()],
-        builders: mentionBuilders ?? const <String, MarkdownElementBuilder>{},
-      );
-    }
-    if (validMentions.isNotEmpty) {
-      return Text.rich(
-        TextSpan(
-          style: style,
-          children: _mentionTextSpans(context, validMentions),
+      return _MessageSelectableContent(
+        text: text,
+        builder: (onSelectionChanged, contextMenuBuilder) => MarkdownBody(
+          data: validMentions.isEmpty
+              ? text
+              : _textWithMarkdownMentionMarkers(
+                  text,
+                  validMentions,
+                  mentionPresentation,
+                ),
+          selectable: true,
+          shrinkWrap: true,
+          styleSheet: _chatMarkdownStyleSheet(context, style),
+          inlineSyntaxes: validMentions.isEmpty
+              ? null
+              : <md.InlineSyntax>[_AwikiMarkdownMentionSyntax()],
+          builders: mentionBuilders ?? const <String, MarkdownElementBuilder>{},
+          onSelectionChanged: (_, selection, cause) =>
+              onSelectionChanged(selection, cause),
+          contextMenuBuilder: contextMenuBuilder,
         ),
       );
     }
-    if (!renderMarkdown) {
-      return _MessagePlainText(text: text, style: style);
+    if (validMentions.isNotEmpty) {
+      return _MessageSelectableContent(
+        text: text,
+        builder: (onSelectionChanged, contextMenuBuilder) =>
+            SelectableText.rich(
+              TextSpan(
+                style: style,
+                children: _mentionTextSpans(context, validMentions),
+              ),
+              onSelectionChanged: onSelectionChanged,
+              contextMenuBuilder: contextMenuBuilder,
+              textWidthBasis: TextWidthBasis.parent,
+              textHeightBehavior: _messageTextHeightBehavior,
+            ),
+      );
     }
-    return _MessagePlainText(text: text, style: style);
+    return _MessageSelectableContent(
+      text: text,
+      builder: (onSelectionChanged, contextMenuBuilder) => SelectableText(
+        text,
+        style: style,
+        onSelectionChanged: onSelectionChanged,
+        contextMenuBuilder: contextMenuBuilder,
+        textWidthBasis: TextWidthBasis.parent,
+        textHeightBehavior: _messageTextHeightBehavior,
+      ),
+    );
   }
 
   List<InlineSpan> _mentionTextSpans(
@@ -2717,6 +2750,96 @@ class _MessageTextContent extends StatelessWidget {
       spans.add(TextSpan(text: text.substring(cursor)));
     }
     return spans;
+  }
+}
+
+const _messageTextHeightBehavior = TextHeightBehavior(
+  applyHeightToFirstAscent: false,
+  applyHeightToLastDescent: false,
+);
+
+typedef _MessageSelectableContentBuilder =
+    Widget Function(
+      void Function(TextSelection, SelectionChangedCause?) onSelectionChanged,
+      Widget Function(BuildContext, EditableTextState) contextMenuBuilder,
+    );
+
+class _MessageSelectableContent extends StatefulWidget {
+  const _MessageSelectableContent({required this.text, required this.builder});
+
+  final String text;
+  final _MessageSelectableContentBuilder builder;
+
+  @override
+  State<_MessageSelectableContent> createState() =>
+      _MessageSelectableContentState();
+}
+
+class _MessageSelectableContentState extends State<_MessageSelectableContent> {
+  TextSelection _selection = const TextSelection.collapsed(offset: 0);
+  TextSelection? _selectionBeforeSecondaryTap;
+  bool _hasSecondaryTapSnapshot = false;
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (event.buttons == kSecondaryMouseButton) {
+      _selectionBeforeSecondaryTap = _selection;
+      _hasSecondaryTapSnapshot = true;
+      return;
+    }
+    _selectionBeforeSecondaryTap = null;
+    _hasSecondaryTapSnapshot = false;
+  }
+
+  void _handleSelectionChanged(
+    TextSelection selection,
+    SelectionChangedCause? _,
+  ) {
+    _selection = selection;
+  }
+
+  TextSelection get _selectionForCopy => _hasSecondaryTapSnapshot
+      ? _selectionBeforeSecondaryTap ?? const TextSelection.collapsed(offset: 0)
+      : _selection;
+
+  Future<void> _copy(EditableTextState editableTextState) async {
+    final selection = _selectionForCopy;
+    final selectableText = editableTextState.textEditingValue.text;
+    final selectedText = selection.isValid && !selection.isCollapsed
+        ? selectableText.substring(selection.start, selection.end)
+        : widget.text;
+    await Clipboard.setData(ClipboardData(text: selectedText));
+    editableTextState.hideToolbar();
+    _hasSecondaryTapSnapshot = false;
+  }
+
+  Widget _buildContextMenu(
+    BuildContext context,
+    EditableTextState editableTextState,
+  ) {
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: editableTextState.contextMenuAnchors,
+      buttonItems: <ContextMenuButtonItem>[
+        ContextMenuButtonItem(
+          type: ContextMenuButtonType.copy,
+          onPressed: () => _copy(editableTextState),
+        ),
+        ContextMenuButtonItem(
+          type: ContextMenuButtonType.selectAll,
+          onPressed: () {
+            _hasSecondaryTapSnapshot = false;
+            editableTextState.selectAll(SelectionChangedCause.toolbar);
+          },
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: _handlePointerDown,
+      child: widget.builder(_handleSelectionChanged, _buildContextMenu),
+    );
   }
 }
 

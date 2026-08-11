@@ -31,10 +31,11 @@ import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/startup_splash.dart';
 import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 import 'package:flutter/services.dart'
     show JSONMessageCodec, LogicalKeyboardKey, SystemChannels;
 import 'package:flutter/widgets.dart'
-    show AppLifecycleState, Key, ListView, MediaQuery, Size, Text;
+    show AppLifecycleState, Container, Key, ListView, MediaQuery, Size, Text;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -708,6 +709,46 @@ void main() {
         await tester.tap(find.byKey(const Key('chat-emoji-button')));
         await _pumpSmokeFrame(tester);
         await tester.tap(find.byKey(const Key('chat-emoji-option:0')));
+        await _pumpSmokeFrame(tester);
+        expect(find.byKey(const Key('chat-emoji-picker')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('chat-send-button')));
+        await _pumpSmokeFrame(tester);
+        expect(harness.gateway.lastSentContent, '😀');
+        expect(find.byKey(const Key('chat-emoji-picker')), findsNothing);
+
+        final sentBubble = find.byWidgetPredicate(
+          (widget) =>
+              widget is Container &&
+              widget.key is ValueKey<String> &&
+              (widget.key! as ValueKey<String>).value.startsWith(
+                'chat-message-bubble:',
+              ),
+        );
+        expect(sentBubble, findsOneWidget);
+        final sentEmoji = find.descendant(
+          of: sentBubble,
+          matching: find.text('😀'),
+        );
+        expect(sentEmoji, findsOneWidget);
+        final wideMaxWidth = tester
+            .widget<Container>(sentBubble)
+            .constraints!
+            .maxWidth;
+        await tester.binding.setSurfaceSize(const Size(900, 820));
+        await _pumpSmokeFrame(tester);
+        final narrowMaxWidth = tester
+            .widget<Container>(sentBubble)
+            .constraints!
+            .maxWidth;
+        expect(narrowMaxWidth, lessThan(wideMaxWidth));
+        await tester.binding.setSurfaceSize(const Size(1280, 820));
+        await _pumpSmokeFrame(tester);
+
+        await tester.tap(sentEmoji, buttons: kSecondaryMouseButton);
+        await _pumpSmokeFrame(tester);
+        expect(find.text('复制'), findsOneWidget);
+        expect(find.text('全选'), findsOneWidget);
+        await tester.tap(find.text('复制'));
         await _pumpSmokeFrame(tester);
         final screenshotButton = find.byKey(
           const Key('chat-screenshot-button'),

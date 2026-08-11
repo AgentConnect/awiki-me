@@ -298,6 +298,7 @@ class _ComposerState extends ConsumerState<_Composer> {
     }
     setState(() {
       _isSending = true;
+      _showEmojiPicker = false;
     });
     try {
       await widget.onSend();
