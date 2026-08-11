@@ -29,6 +29,7 @@ import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
 import '../application/ports/account_state_sync_port.dart';
+import '../application/ports/agent_notification_preference_port.dart';
 import '../application/ports/device_management_core_port.dart';
 import '../application/ports/group_encryption_core_port.dart';
 import '../application/ports/handle_recovery_core_port.dart';
@@ -153,6 +154,7 @@ class AppBootstrap {
     this.storageScopeLayout,
     this.remotePushClient,
     this.remotePushInstallationCoordinator,
+    this.agentNotificationPreferencePort,
     this.remotePushDisposeTimeout = const Duration(seconds: 3),
     this.disposeNotificationFacade = true,
   });
@@ -198,6 +200,7 @@ class AppBootstrap {
   final AwikiStorageScopeLayout? storageScopeLayout;
   final RemotePushClient? remotePushClient;
   final RemotePushInstallationCoordinator? remotePushInstallationCoordinator;
+  final AgentNotificationPreferencePort? agentNotificationPreferencePort;
   final Duration remotePushDisposeTimeout;
   final bool disposeNotificationFacade;
   Future<void>? _disposeOperation;
@@ -572,12 +575,14 @@ class AppBootstrap {
         client: remotePushClient,
         installations: pushInstallations,
       ),
+      agentNotificationPreferencePort: pushInstallations,
     );
   }
 
   AppBootstrap _copyWithRemotePush({
     required RemotePushClient client,
     required RemotePushInstallationCoordinator coordinator,
+    required AgentNotificationPreferencePort agentNotificationPreferencePort,
   }) {
     return AppBootstrap(
       environment: environment,
@@ -621,6 +626,7 @@ class AppBootstrap {
       storageScopeLayout: storageScopeLayout,
       remotePushClient: client,
       remotePushInstallationCoordinator: coordinator,
+      agentNotificationPreferencePort: agentNotificationPreferencePort,
       remotePushDisposeTimeout: remotePushDisposeTimeout,
       disposeNotificationFacade: disposeNotificationFacade,
     );

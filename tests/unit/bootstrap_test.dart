@@ -88,6 +88,9 @@ void main() {
                   'platform': 'android',
                   'logical_device_id': 'device-a',
                   'app_id': 'app-key-a',
+                  'client_product': 'awiki-me',
+                  'client_version': '0.1.22+32',
+                  'capabilities': <String>['awiki.agent.message.v1'],
                   'status': 'active',
                 },
               },
@@ -280,6 +283,9 @@ final class _FakeRemotePushClient implements RemotePushClient {
     provider: 'aliyun_emas',
     providerDeviceId: 'provider-device-a',
     platform: 'android',
+    clientProduct: 'awiki-me',
+    clientVersion: '0.1.22+32',
+    capabilities: <String>['awiki.agent.message.v1'],
     appId: 'app-key-a',
   );
 
@@ -307,6 +313,9 @@ final class _RecordingPushInstallationPort implements PushInstallationPort {
       providerDeviceId: 'provider-device-a',
       platform: 'android',
       status: 'disabled',
+      clientProduct: 'awiki-me',
+      clientVersion: '0.1.22+32',
+      capabilities: <String>['awiki.agent.message.v1'],
       logicalDeviceId: 'device-a',
       appId: 'app-key-a',
     );
@@ -320,6 +329,9 @@ final class _RecordingPushInstallationPort implements PushInstallationPort {
       providerDeviceId: registration.providerDeviceId,
       platform: registration.platform,
       status: 'active',
+      clientProduct: registration.clientProduct,
+      clientVersion: registration.clientVersion,
+      capabilities: registration.capabilities,
       logicalDeviceId: registration.logicalDeviceId,
       appId: registration.appId,
     );

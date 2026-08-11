@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path/path.dart' as p;
 
@@ -15,16 +16,44 @@ import 'notification_screen_wake.dart';
 
 class AppNotificationFacade implements NotificationFacade {
   AppNotificationFacade._(
-    this._plugin,
-    this._menuBarStatus,
-    this._desktopShell,
-    this._screenWake,
-  );
+    FlutterLocalNotificationsPlugin plugin,
+    MacMenuBarStatusService menuBarStatus,
+    DesktopShellService desktopShell,
+    NotificationScreenWake screenWake,
+  ) : _plugin = plugin,
+      _menuBarStatus = menuBarStatus,
+      _desktopShell = desktopShell,
+      _screenWake = screenWake,
+      _structuredSubmit = plugin.show,
+      _urgentCue = _defaultUrgentCue,
+      _structuredEligibility = _StructuredNotificationEligibilityQuery(
+        plugin,
+      ).call;
+
+  AppNotificationFacade.forTesting({
+    required StructuredNotificationSubmit structuredSubmit,
+    required Future<void> Function() urgentCue,
+    required Future<StructuredNotificationEligibility> Function()
+    structuredEligibility,
+    NotificationScreenWake? screenWake,
+  }) : _plugin = FlutterLocalNotificationsPlugin(),
+       _menuBarStatus = MacMenuBarStatusService(isMacOS: () => false),
+       _desktopShell = const NoopDesktopShellService(),
+       _screenWake = screenWake ?? _NoopNotificationScreenWake(),
+       _structuredSubmit = structuredSubmit,
+       _urgentCue = urgentCue,
+       _structuredEligibility = structuredEligibility {
+    _initialization = Future<void>.value();
+  }
 
   final FlutterLocalNotificationsPlugin _plugin;
   final MacMenuBarStatusService _menuBarStatus;
   final DesktopShellService _desktopShell;
   final NotificationScreenWake _screenWake;
+  final StructuredNotificationSubmit _structuredSubmit;
+  final Future<void> Function() _urgentCue;
+  final Future<StructuredNotificationEligibility> Function()
+  _structuredEligibility;
   final StreamController<NotificationActivation> _activations =
       StreamController<NotificationActivation>.broadcast(sync: true);
   int _lastBadgeCount = 0;
@@ -187,6 +216,66 @@ class AppNotificationFacade implements NotificationFacade {
   }
 
   @override
+  Future<StructuredNotificationSubmission> showStructuredNotification(
+    StructuredNotification notification,
+  ) async {
+    try {
+      await _initialization?.timeout(
+        const Duration(milliseconds: 500),
+        onTimeout: () {},
+      );
+      final eligibility = await _structuredEligibility();
+      if (eligibility == StructuredNotificationEligibility.denied) {
+        return StructuredNotificationSubmission.permissionDenied;
+      }
+      if (eligibility == StructuredNotificationEligibility.unavailable) {
+        return StructuredNotificationSubmission.unavailable;
+      }
+      await _structuredSubmit(
+        id: notification.nativeId,
+        title: notification.title,
+        body: notification.body,
+        notificationDetails: structuredNotificationDetails(notification.level),
+        payload: notification.target?.encode(),
+      );
+      debugPrint(
+        '[awiki_me][structured-notification][submitted] '
+        'level=${notification.level.name} '
+        'target=${notification.target == null ? 'none' : 'conversation'}',
+      );
+      return StructuredNotificationSubmission.submitted;
+    } on Object {
+      debugPrint('[awiki_me][structured-notification][failed]');
+      return StructuredNotificationSubmission.unavailable;
+    }
+  }
+
+  @override
+  Future<StructuredNotificationEligibility>
+  structuredNotificationEligibility() async {
+    try {
+      await _initialization?.timeout(
+        const Duration(milliseconds: 500),
+        onTimeout: () {},
+      );
+      return await _structuredEligibility();
+    } on Object {
+      return StructuredNotificationEligibility.unavailable;
+    }
+  }
+
+  @override
+  Future<StructuredUrgentCueResult> playStructuredUrgentCue() async {
+    try {
+      await _urgentCue();
+      return StructuredUrgentCueResult.played;
+    } on Object {
+      debugPrint('[awiki_me][structured-urgent-cue][failed]');
+      return StructuredUrgentCueResult.failed;
+    }
+  }
+
+  @override
   Future<void> updateBadgeCount(int count) async {
     final normalizedCount = max(0, count);
     if (_lastBadgeCount == normalizedCount) {
@@ -221,4 +310,115 @@ class AppNotificationFacade implements NotificationFacade {
     }
     await _activations.close();
   }
+}
+
+typedef StructuredNotificationSubmit =
+    Future<void> Function({
+      required int id,
+      String? title,
+      String? body,
+      NotificationDetails? notificationDetails,
+      String? payload,
+    });
+
+Future<void> _defaultUrgentCue() async {
+  await SystemSound.play(SystemSoundType.alert);
+  await HapticFeedback.mediumImpact();
+}
+
+final class _StructuredNotificationEligibilityQuery {
+  const _StructuredNotificationEligibilityQuery(this.plugin);
+
+  final FlutterLocalNotificationsPlugin plugin;
+
+  Future<StructuredNotificationEligibility> call() async {
+    if (kIsWeb) {
+      return StructuredNotificationEligibility.unavailable;
+    }
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final enabled = await plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.areNotificationsEnabled();
+      return switch (enabled) {
+        true => StructuredNotificationEligibility.allowed,
+        false => StructuredNotificationEligibility.denied,
+        null => StructuredNotificationEligibility.unavailable,
+      };
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      final options = await plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >()
+          ?.checkPermissions();
+      if (options == null) {
+        return StructuredNotificationEligibility.unavailable;
+      }
+      return options.isEnabled && options.isAlertEnabled
+          ? StructuredNotificationEligibility.allowed
+          : StructuredNotificationEligibility.denied;
+    }
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      final options = await plugin
+          .resolvePlatformSpecificImplementation<
+            MacOSFlutterLocalNotificationsPlugin
+          >()
+          ?.checkPermissions();
+      if (options == null) {
+        return StructuredNotificationEligibility.unavailable;
+      }
+      return options.isEnabled && options.isAlertEnabled
+          ? StructuredNotificationEligibility.allowed
+          : StructuredNotificationEligibility.denied;
+    }
+    return StructuredNotificationEligibility.unavailable;
+  }
+}
+
+final class _NoopNotificationScreenWake implements NotificationScreenWake {
+  @override
+  Future<void> wakeIfNeeded() async {}
+}
+
+@visibleForTesting
+NotificationDetails structuredNotificationDetails(
+  StructuredNotificationLevel level,
+) {
+  final urgent = level == StructuredNotificationLevel.urgent;
+  final android = AndroidNotificationDetails(
+    urgent
+        ? awikiStructuredUrgentNotificationChannelId
+        : awikiStructuredNormalNotificationChannelId,
+    urgent
+        ? awikiStructuredUrgentNotificationChannelName
+        : awikiStructuredNormalNotificationChannelName,
+    channelDescription: urgent
+        ? awikiStructuredUrgentNotificationChannelDescription
+        : awikiStructuredNormalNotificationChannelDescription,
+    importance: urgent ? Importance.high : Importance.defaultImportance,
+    priority: urgent ? Priority.high : Priority.defaultPriority,
+    playSound: urgent,
+    enableVibration: urgent,
+    vibrationPattern: urgent ? Int64List.fromList(<int>[0, 180]) : null,
+    onlyAlertOnce: true,
+    channelBypassDnd: false,
+    fullScreenIntent: false,
+    category: AndroidNotificationCategory.message,
+    visibility: NotificationVisibility.private,
+  );
+  final darwin = DarwinNotificationDetails(
+    presentAlert: true,
+    presentBadge: true,
+    presentSound: urgent,
+  );
+  return NotificationDetails(
+    android: android,
+    iOS: darwin,
+    macOS: darwin,
+    windows: const WindowsNotificationDetails(
+      duration: WindowsNotificationDuration.short,
+    ),
+  );
 }

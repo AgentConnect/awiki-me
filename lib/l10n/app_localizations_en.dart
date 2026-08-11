@@ -1172,6 +1172,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsPushNotification => 'Push notifications';
 
   @override
+  String get settingsAgentUrgentCalls => 'Urgent Agent calls';
+
+  @override
+  String get settingsAgentUrgentCallsSubtitle =>
+      'Allow trusted Agents to use one short sound and vibration. Off by default.';
+
+  @override
   String get settingsCurrentVersion => 'Current version';
 
   @override
@@ -3566,4 +3573,51 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get legacyIdentityUpgradeFailed =>
       'The legacy identity upgrade failed. Please try again.';
+
+  @override
+  String get agentMessageKindMessage => 'Message';
+
+  @override
+  String get agentMessageKindTaskResult => 'Task result';
+
+  @override
+  String get agentMessageKindAlert => 'Alert';
+
+  @override
+  String get agentMessageUrgent => 'Urgent';
+
+  @override
+  String get agentMessageUrgentCall => 'Urgent callout';
+
+  @override
+  String get agentMessageUnsupported =>
+      'This Agent message cannot be displayed safely.';
+
+  @override
+  String get agentMessageOpenConversation => 'Open conversation';
+
+  @override
+  String agentMessageEventNumber(Object eventId) {
+    return 'Event: $eventId';
+  }
+
+  @override
+  String get agentMessageTrustedAgent => 'Trusted Agent';
+
+  @override
+  String get agentMessageJustNow => 'Just now';
+
+  @override
+  String get agentMessageCueStops =>
+      'Sound and vibration stop after 30 seconds.';
+
+  @override
+  String get agentMessageNotVoiceCall =>
+      'This alert does not start a voice call.';
+
+  @override
+  String get agentMessageIgnore => 'Ignore';
+
+  @override
+  String get agentMessageActNow => 'Act now';
 }

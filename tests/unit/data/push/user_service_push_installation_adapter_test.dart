@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/auth/auth_session_coordinator.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
+import 'package:awiki_me/src/application/models/agent_notification_preference.dart';
 import 'package:awiki_me/src/data/push/user_service_push_installation_adapter.dart';
 import 'package:awiki_me/src/data/services/authenticated_user_service_rpc_client.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
@@ -15,6 +16,9 @@ void main() {
     provider: 'aliyun_emas',
     providerDeviceId: 'android-device-123',
     platform: 'android',
+    clientProduct: 'awiki-me',
+    clientVersion: '0.1.22+32',
+    capabilities: <String>['awiki.agent.message.v1'],
     logicalDeviceId: 'logical-device-1',
     appId: 'emas-app-key',
   );
@@ -43,6 +47,9 @@ void main() {
           'platform': 'android',
           'logical_device_id': 'logical-device-1',
           'app_id': 'emas-app-key',
+          'client_product': 'awiki-me',
+          'client_version': '0.1.22+32',
+          'capabilities': <String>['awiki.agent.message.v1'],
         },
         'id': 'req-1',
       });
@@ -77,6 +84,9 @@ void main() {
         provider: 'aliyun_emas',
         providerDeviceId: 'android-device-123',
         platform: 'android',
+        clientProduct: 'awiki-me',
+        clientVersion: '0.1.22+32',
+        capabilities: <String>['awiki.agent.message.v1'],
       ),
     );
 
@@ -84,6 +94,9 @@ void main() {
       'provider': 'aliyun_emas',
       'provider_device_id': 'android-device-123',
       'platform': 'android',
+      'client_product': 'awiki-me',
+      'client_version': '0.1.22+32',
+      'capabilities': <String>['awiki.agent.message.v1'],
     });
   });
 
@@ -158,6 +171,13 @@ void main() {
       value: 'logical-device-other',
     ),
     (name: 'AppKey', key: 'app_id', value: 'another-app-key'),
+    (name: 'client product', key: 'client_product', value: 'another-client'),
+    (name: 'client version', key: 'client_version', value: '0.1.23+33'),
+    (
+      name: 'capabilities',
+      key: 'capabilities',
+      value: <String>['another.capability'],
+    ),
     (name: 'status', key: 'status', value: 'disabled'),
   ]) {
     test(
@@ -201,7 +221,60 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('preference read accepts only the closed server response', () async {
+    final harness = _AdapterHarness(result: _preferenceResult('unset'));
+
+    final preference = await harness.adapter.getAgentNotificationPreference();
+
+    expect(preference.urgent, AgentNotificationUrgentPreference.unset);
+    expect(harness.httpClient.lastBody, <String, Object?>{
+      'jsonrpc': '2.0',
+      'method': 'get_agent_notification_preference',
+      'params': <String, Object?>{'schema': 'awiki.agent.message.v1'},
+      'id': 'req-1',
+    });
+  });
+
+  test(
+    'preference mutation requires matching server acknowledgement',
+    () async {
+      final harness = _AdapterHarness(result: _preferenceResult('enabled'));
+
+      final preference = await harness.adapter.setAgentNotificationPreference(
+        urgent: AgentNotificationUrgentPreference.enabled,
+      );
+
+      expect(preference.urgent, AgentNotificationUrgentPreference.enabled);
+      expect(harness.httpClient.lastBody, <String, Object?>{
+        'jsonrpc': '2.0',
+        'method': 'set_agent_notification_preference',
+        'params': <String, Object?>{
+          'schema': 'awiki.agent.message.v1',
+          'urgent': 'enabled',
+        },
+        'id': 'req-1',
+      });
+    },
+  );
+
+  test('preference mutation rejects a stale server acknowledgement', () async {
+    final harness = _AdapterHarness(result: _preferenceResult('disabled'));
+
+    await expectLater(
+      harness.adapter.setAgentNotificationPreference(
+        urgent: AgentNotificationUrgentPreference.enabled,
+      ),
+      throwsFormatException,
+    );
+  });
 }
+
+Map<String, Object?> _preferenceResult(String urgent) => <String, Object?>{
+  'schema': 'awiki.agent.message.v1',
+  'urgent': urgent,
+  'updated_at': urgent == 'unset' ? null : '2026-08-11T12:00:00Z',
+};
 
 Map<String, Object?> _installationResult({
   String installationId = 'installation-1',
@@ -210,6 +283,9 @@ Map<String, Object?> _installationResult({
   String platform = 'android',
   String? logicalDeviceId = 'logical-device-1',
   String? appId = 'emas-app-key',
+  String clientProduct = 'awiki-me',
+  String clientVersion = '0.1.22+32',
+  List<String> capabilities = const <String>['awiki.agent.message.v1'],
   required String status,
   required String? disabledAt,
 }) {
@@ -222,6 +298,9 @@ Map<String, Object?> _installationResult({
       'platform': platform,
       'logical_device_id': logicalDeviceId,
       'app_id': appId,
+      'client_product': clientProduct,
+      'client_version': clientVersion,
+      'capabilities': capabilities,
       'status': status,
       'last_seen_at': '2026-07-30T00:00:00Z',
       'disabled_at': disabledAt,

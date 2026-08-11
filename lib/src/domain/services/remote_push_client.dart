@@ -5,6 +5,9 @@ class RemotePushRegistration {
     required this.provider,
     required this.providerDeviceId,
     required this.platform,
+    required this.clientProduct,
+    required this.clientVersion,
+    required this.capabilities,
     this.appId,
     this.logicalDeviceId,
   });
@@ -12,6 +15,9 @@ class RemotePushRegistration {
   final String provider;
   final String providerDeviceId;
   final String platform;
+  final String clientProduct;
+  final String clientVersion;
+  final List<String> capabilities;
   final String? appId;
   final String? logicalDeviceId;
 
@@ -21,6 +27,9 @@ class RemotePushRegistration {
       provider: provider,
       providerDeviceId: providerDeviceId,
       platform: platform,
+      clientProduct: clientProduct,
+      clientVersion: clientVersion,
+      capabilities: capabilities,
       appId: appId,
       logicalDeviceId: normalized == null || normalized.isEmpty
           ? null
