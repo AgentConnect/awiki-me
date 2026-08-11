@@ -72,7 +72,14 @@ class _FallbackAvatarBadge extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: generated.backgroundColor,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            generated.backgroundTopColor,
+            generated.backgroundBottomColor,
+          ],
+        ),
         borderRadius: BorderRadius.circular(size / 2),
       ),
       alignment: Alignment.center,

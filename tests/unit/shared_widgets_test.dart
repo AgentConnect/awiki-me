@@ -382,7 +382,7 @@ void main() {
       ),
     );
 
-    Color? generatedColor;
+    LinearGradient? generatedGradient;
     for (final avatarKey in const <Key>[
       Key('avatar-alice'),
       Key('avatar-jin'),
@@ -395,9 +395,16 @@ void main() {
         find.descendant(of: avatar, matching: find.byType(Text)),
       );
 
-      final color = (container.decoration as BoxDecoration).color;
-      generatedColor ??= color;
-      expect(color, generatedColor);
+      final gradient =
+          (container.decoration as BoxDecoration).gradient! as LinearGradient;
+      generatedGradient ??= gradient;
+      expect(gradient.colors, generatedGradient.colors);
+      expect(gradient.begin, Alignment.topCenter);
+      expect(gradient.end, Alignment.bottomCenter);
+      expect(
+        HSLColor.fromColor(gradient.colors.first).lightness,
+        lessThan(HSLColor.fromColor(gradient.colors.last).lightness),
+      );
       expect(label.style?.color, CupertinoColors.white);
     }
     expect(find.text('AC'), findsOneWidget);

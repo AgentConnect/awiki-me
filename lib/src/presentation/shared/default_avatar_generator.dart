@@ -4,17 +4,28 @@ import 'package:flutter/cupertino.dart';
 
 /// The generated fallback content for an identity without a custom avatar.
 class DefaultAvatar {
-  const DefaultAvatar({required this.text, required this.backgroundColor});
+  const DefaultAvatar({
+    required this.text,
+    required this.backgroundColor,
+    required this.backgroundTopColor,
+    required this.backgroundBottomColor,
+  });
 
   final String text;
   final Color backgroundColor;
+  final Color backgroundTopColor;
+  final Color backgroundBottomColor;
 }
 
 DefaultAvatar generateDefaultAvatar({required String name, String? userId}) {
   final colorIdentity = userId?.trim().isNotEmpty == true ? userId! : name;
+  final backgroundColor = defaultAvatarColor(colorIdentity);
+  final gradient = defaultAvatarGradientColors(backgroundColor);
   return DefaultAvatar(
     text: extractDefaultAvatarText(name),
-    backgroundColor: defaultAvatarColor(colorIdentity),
+    backgroundColor: backgroundColor,
+    backgroundTopColor: gradient.top,
+    backgroundBottomColor: gradient.bottom,
   );
 }
 
@@ -58,6 +69,14 @@ Color defaultAvatarColor(String identity) {
   }
   final hue = (hash % 360).toDouble();
   return HSLColor.fromAHSL(1, hue, 0.6, 0.5).toColor();
+}
+
+({Color top, Color bottom}) defaultAvatarGradientColors(Color baseColor) {
+  final hsl = HSLColor.fromColor(baseColor);
+  return (
+    top: hsl.withLightness(0.38).toColor(),
+    bottom: hsl.withLightness(0.58).toColor(),
+  );
 }
 
 String _normalizeAvatarInput(String rawInput) {
