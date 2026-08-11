@@ -65,6 +65,19 @@ class OnboardingServerInfo {
             ),
           ],
         ),
+        handleRecovery: OnboardingHandleRecoveryCapabilities(
+          enabled: true,
+          methods: <OnboardingIdentityMethod>[
+            OnboardingIdentityMethod(
+              id: OnboardingIdentityMethodId.phone,
+              enabled: true,
+              verification: OnboardingVerificationRequirement(
+                required: true,
+                type: OnboardingVerificationType.smsOtp,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -291,10 +304,16 @@ class OnboardingHandleRecoveryCapabilities {
   final List<OnboardingIdentityMethod> methods;
 
   bool get supportsPhoneOtp {
-    if (!enabled || methods.length != 1) {
+    if (!enabled) {
       return false;
     }
-    final method = methods.single;
+    final phoneMethods = methods
+        .where((method) => method.id == OnboardingIdentityMethodId.phone)
+        .toList(growable: false);
+    if (phoneMethods.length != 1) {
+      return false;
+    }
+    final method = phoneMethods.single;
     return method.enabled &&
         method.id == OnboardingIdentityMethodId.phone &&
         method.verification.required &&
@@ -313,7 +332,7 @@ class OnboardingHandleRecoveryCapabilities {
       if (enabled != null && enabled is! bool) {
         return const OnboardingHandleRecoveryCapabilities.disabled();
       }
-      final methods = _methodList(
+      final methods = _recoveryMethodList(
         json['methods'],
         'identity.handle_recovery.methods',
       );
@@ -461,6 +480,24 @@ List<OnboardingIdentityMethod> _methodList(Object? raw, String fieldName) {
             OnboardingIdentityMethod.fromJson(_objectValue(item, fieldName)),
       )
       .toList(growable: false);
+}
+
+List<OnboardingIdentityMethod> _recoveryMethodList(
+  Object? raw,
+  String fieldName,
+) {
+  if (raw is! List) {
+    throw FormatException('$fieldName must be a list.');
+  }
+  final methods = <OnboardingIdentityMethod>[];
+  for (final item in raw) {
+    final json = _objectValue(item, fieldName);
+    if (_stringValue(json['id']) != 'phone') {
+      continue;
+    }
+    methods.add(OnboardingIdentityMethod.fromJson(json));
+  }
+  return methods;
 }
 
 Map<String, Object?> _objectValue(Object? raw, String fieldName) {

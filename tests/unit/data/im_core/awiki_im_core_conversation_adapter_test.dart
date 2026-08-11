@@ -449,6 +449,7 @@ class _FakeRuntime extends AwikiImCoreRuntime {
         ),
         scopeId: StorageScopeId.parse(_testScopeValue),
         vaultSecretProvider: _FakeVaultSecretProvider(),
+        multiDeviceAudience: 'awiki-user-service',
       );
 
   final _FakeClient client;

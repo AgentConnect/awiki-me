@@ -213,9 +213,6 @@ class DevicesController extends StateNotifier<DevicesState> {
   bool get _deviceRevokeEnabled =>
       ref.read(multiDeviceDeviceRevokeEnabledProvider);
 
-  bool get _handleRecoveryEnabled =>
-      ref.read(multiDeviceHandleRecoveryEnabledProvider);
-
   String? get _selector {
     final did = ref.read(sessionProvider).session?.did.trim();
     return did == null || did.isEmpty ? null : did;
@@ -494,8 +491,7 @@ class DevicesController extends StateNotifier<DevicesState> {
           }
         }
       }
-      if (_handleRecoveryEnabled &&
-          activeJoin != null &&
+      if (activeJoin != null &&
           activeJoin.phase == DeviceJoinPhase.authorized) {
         final restoredActiveJoin = await ref
             .read(handleRecoveryServiceProvider)
@@ -669,17 +665,12 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
     state = state.copyWith(isActionPending: true, clearError: true);
     try {
-      final next = _handleRecoveryEnabled
-          ? await ref
-                .read(handleRecoveryServiceProvider)
-                .resumeAuthorizedJoinActivation(
-                  joinSessionId: progress.joinSessionId,
-                  recoveryExpected:
-                      progress.cause == DeviceJoinCause.handleRecovery,
-                )
-          : await ref
-                .read(deviceManagementServiceProvider)
-                .pollNewDeviceJoin(progress: progress);
+      final next = await ref
+          .read(handleRecoveryServiceProvider)
+          .resumeAuthorizedJoinActivation(
+            joinSessionId: progress.joinSessionId,
+            recoveryExpected: progress.cause == DeviceJoinCause.handleRecovery,
+          );
       if (!mounted) return;
       state = state.copyWith(
         activeJoin: next,
@@ -1304,7 +1295,6 @@ class DevicesController extends StateNotifier<DevicesState> {
   }
 
   HandleRecoveryIdentityScope? _recoveryScopeForHandle(String handle) {
-    if (!_handleRecoveryEnabled) return null;
     final normalizedHandle = handle.trim().toLowerCase();
     if (normalizedHandle.isEmpty) return null;
     final matches = ref

@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_locale.dart';
 import '../../app/app_router.dart';
 import '../../app/e2e_semantics.dart';
-import '../../app/app_services.dart';
 import '../../application/models/onboarding_server_info.dart';
 import '../../application/ports/identity_core_port.dart';
 import '../../application/tenant/app_tenant.dart';
@@ -512,7 +511,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   }) async {
     final recoveryAvailable =
         phone.isNotEmpty &&
-        ref.read(multiDeviceHandleRecoveryEnabledProvider) &&
         (ref.read(onboardingProvider).serverInfo?.supportsPhoneHandleRecovery ??
             false);
     final action = await showCupertinoDialog<_ExistingHandleAction>(
@@ -520,7 +518,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       barrierDismissible: false,
       builder: (dialogContext) => CupertinoAlertDialog(
         title: Text(context.l10n.onboardingExistingHandleTitle),
-        content: Text(context.l10n.onboardingExistingHandleMessage),
+        content: Text(
+          recoveryAvailable
+              ? context.l10n.onboardingExistingHandleMessage
+              : context.l10n.onboardingExistingHandleJoinOnlyMessage,
+        ),
         actions: <Widget>[
           CupertinoDialogAction(
             key: const Key('existing-handle-join-action'),
@@ -529,15 +531,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             ).pop(_ExistingHandleAction.joinDevice),
             child: Text(context.l10n.deviceJoinEntry),
           ),
-          CupertinoDialogAction(
-            key: const Key('existing-handle-recovery-action'),
-            onPressed: recoveryAvailable
-                ? () => Navigator.of(
-                    dialogContext,
-                  ).pop(_ExistingHandleAction.recoverHandle)
-                : null,
-            child: Text(context.l10n.handleRecoveryTitle),
-          ),
+          if (recoveryAvailable)
+            CupertinoDialogAction(
+              key: const Key('existing-handle-recovery-action'),
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(_ExistingHandleAction.recoverHandle),
+              child: Text(context.l10n.handleRecoveryTitle),
+            ),
           CupertinoDialogAction(
             key: const Key('existing-handle-cancel-action'),
             onPressed: () =>

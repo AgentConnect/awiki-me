@@ -1,6 +1,6 @@
-// [INPUT]: Owner-scoped IM Core paths, Vault secret provider, endpoints, and default-off capability gates.
+// [INPUT]: Owner-scoped IM Core paths, Vault secret provider, endpoints, and optional capability gates.
 // [OUTPUT]: One validated native IM Core runtime and identity-scoped clients.
-// [POS]: AWiki Me's lifecycle owner for native Core; it never exposes Vault/root-key material.
+// [POS]: AWiki Me's lifecycle owner for native Core; Handle Recovery is a product baseline.
 
 import 'dart:async';
 
@@ -43,7 +43,6 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     this.multiDeviceDeviceRevokeEnabled = false,
     this.multiDeviceDirectE2eeEnabled = false,
     this.multiDeviceGroupE2eeEnabled = false,
-    this.multiDeviceHandleRecoveryEnabled = false,
     String? multiDeviceAudience,
     AwikiImCoreOpen? openCore,
     AwikiImCoreInspectLocalStateUpgrade? inspectLocalStateUpgrade,
@@ -53,10 +52,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
        _paths = paths,
        _scopeId = scopeId,
        _vaultSecretProvider = vaultSecretProvider,
-       multiDeviceAudience = _validatedMultiDeviceAudience(
-         multiDeviceAudience,
-         requiredForRecovery: multiDeviceHandleRecoveryEnabled,
-       ),
+       multiDeviceAudience = _validatedMultiDeviceAudience(multiDeviceAudience),
        _openCore = openCore ?? core.AwikiImCore.open,
        _inspectLocalStateUpgrade =
            inspectLocalStateUpgrade ?? _inspectLocalStateUpgradeWithSdk,
@@ -70,8 +66,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   final bool multiDeviceDeviceRevokeEnabled;
   final bool multiDeviceDirectE2eeEnabled;
   final bool multiDeviceGroupE2eeEnabled;
-  final bool multiDeviceHandleRecoveryEnabled;
-  final String? multiDeviceAudience;
+  final String multiDeviceAudience;
   final AwikiImCoreOpen _openCore;
   final AwikiImCoreInspectLocalStateUpgrade _inspectLocalStateUpgrade;
   final AwikiImCoreUpgradeLocalState _upgradeLocalState;
@@ -143,7 +138,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
         multiDeviceDeviceRevokeEnabled: multiDeviceDeviceRevokeEnabled,
         multiDeviceDirectE2eeEnabled: multiDeviceDirectE2eeEnabled,
         multiDeviceGroupE2eeEnabled: multiDeviceGroupE2eeEnabled,
-        multiDeviceHandleRecoveryEnabled: multiDeviceHandleRecoveryEnabled,
+        multiDeviceHandleRecoveryEnabled: true,
         multiDeviceAudience: multiDeviceAudience,
         identitySecretVault: core.ImCoreSecretVaultOptions(
           rootKey: vaultSecrets.rootKey,
@@ -299,19 +294,13 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   }
 }
 
-String? _validatedMultiDeviceAudience(
-  String? value, {
-  required bool requiredForRecovery,
-}) {
+String _validatedMultiDeviceAudience(String? value) {
   if (value == null || value.isEmpty) {
-    if (requiredForRecovery) {
-      throw ArgumentError.value(
-        value,
-        'multiDeviceAudience',
-        'must be configured when Handle Recovery is enabled',
-      );
-    }
-    return null;
+    throw ArgumentError.value(
+      value,
+      'multiDeviceAudience',
+      'must be configured for baseline Handle Recovery',
+    );
   }
   if (value.trim() != value || value.runes.length > 255) {
     throw ArgumentError.value(

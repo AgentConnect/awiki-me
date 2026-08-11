@@ -16,8 +16,6 @@ Environment:
   AWIKI_IM_CORE_REPO_DIR              awiki-cli-rs2 checkout
                                       (default: ../awiki-cli-rs2)
   AWIKI_PRIMARY_TENANT_DOMAIN         Shared tenant domain (default: awiki.info)
-  AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED
-                                      Handle Recovery gate (default: true)
 USAGE
   exit 0
 fi
@@ -89,12 +87,6 @@ tenant_domain="${AWIKI_PRIMARY_TENANT_DOMAIN:-awiki.info}"
   echo "error: AWIKI_PRIMARY_TENANT_DOMAIN must be a lowercase hostname" >&2
   exit 2
 }
-handle_recovery_enabled="${AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED:-true}"
-[[ "$handle_recovery_enabled" == "true" || "$handle_recovery_enabled" == "false" ]] || {
-  echo "error: AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED must be true or false" >&2
-  exit 2
-}
-
 manual_root="$ROOT_DIR/build/manual-multi-device"
 admin_cache="$manual_root/admin-cache"
 joiner_cache="$manual_root/joiner-cache"
@@ -147,8 +139,7 @@ build_app() {
       --debug \
       --no-pub \
       --target=lib/main.dart \
-      --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$tenant_domain" \
-      --dart-define="AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED=$handle_recovery_enabled"
+      --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$tenant_domain"
 }
 
 verify_native_intermediate() {

@@ -1842,6 +1842,12 @@ abstract class AppLocalizations {
   /// **'请选择将本设备加入现有身份，或使用绑定手机号和独立恢复验证码恢复 Handle。'**
   String get onboardingExistingHandleMessage;
 
+  /// No description provided for @onboardingExistingHandleJoinOnlyMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前服务器暂未提供 Handle 恢复。你仍可将本设备加入现有身份，或取消后稍后重试。'**
+  String get onboardingExistingHandleJoinOnlyMessage;
+
   /// No description provided for @deviceJoinTitle.
   ///
   /// In zh, this message translates to:

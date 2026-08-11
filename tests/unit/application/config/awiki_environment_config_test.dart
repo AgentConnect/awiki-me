@@ -33,7 +33,6 @@ void main() {
     expect(config.multiDeviceDeviceRevokeEnabled, isFalse);
     expect(config.multiDeviceDirectE2eeEnabled, isFalse);
     expect(config.multiDeviceGroupE2eeEnabled, isFalse);
-    expect(config.multiDeviceHandleRecoveryEnabled, isTrue);
     expect(config.multiDeviceAudience, 'awiki-user-service');
     expect(config.messageSyncV2ReadEnabled, isTrue);
   });
@@ -111,7 +110,6 @@ void main() {
       multiDeviceDeviceRevokeEnabled: true,
       multiDeviceDirectE2eeEnabled: true,
       multiDeviceGroupE2eeEnabled: true,
-      multiDeviceHandleRecoveryEnabled: true,
       multiDeviceAudience: 'awiki-test-multi-device',
       messageSyncV2ReadEnabled: true,
     );
@@ -133,7 +131,6 @@ void main() {
     expect(config.multiDeviceDeviceRevokeEnabled, isTrue);
     expect(config.multiDeviceDirectE2eeEnabled, isTrue);
     expect(config.multiDeviceGroupE2eeEnabled, isTrue);
-    expect(config.multiDeviceHandleRecoveryEnabled, isTrue);
     expect(config.multiDeviceAudience, 'awiki-test-multi-device');
     expect(config.messageSyncV2ReadEnabled, isTrue);
   });
@@ -148,10 +145,7 @@ void main() {
 
       for (final audience in <String>['', ' leading', 'trailing ', 'x' * 256]) {
         expect(
-          () => AwikiEnvironmentConfig(
-            multiDeviceHandleRecoveryEnabled: true,
-            multiDeviceAudience: audience,
-          ),
+          () => AwikiEnvironmentConfig(multiDeviceAudience: audience),
           throwsArgumentError,
           reason: audience,
         );
@@ -160,7 +154,6 @@ void main() {
       final config = AwikiEnvironmentConfig(
         baseUrl: 'https://unrelated.example',
         didDomain: 'unrelated.example',
-        multiDeviceHandleRecoveryEnabled: true,
         multiDeviceAudience: 'explicit-authority',
       );
       expect(config.multiDeviceAudience, 'explicit-authority');
@@ -193,7 +186,6 @@ void main() {
     expect(container.read(multiDeviceDirectE2eeEnabledProvider), isTrue);
     expect(container.read(multiDeviceDeviceRevokeEnabledProvider), isFalse);
     expect(container.read(multiDeviceGroupE2eeEnabledProvider), isFalse);
-    expect(container.read(multiDeviceHandleRecoveryEnabledProvider), isTrue);
     expect(container.read(messageSyncV2ReadEnabledProvider), isTrue);
   });
 
