@@ -44,7 +44,7 @@ String extractDefaultAvatarText(String rawInput) {
   }
   if (hasHan) {
     final han = runes.where(_isHan).toList(growable: false);
-    return String.fromCharCodes(han.skip(han.length > 3 ? han.length - 3 : 0));
+    return String.fromCharCodes(han.skip(han.length > 2 ? han.length - 2 : 0));
   }
   if (!hasLatin && runes.any(_isAsciiDigit)) {
     return '#';

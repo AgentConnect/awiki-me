@@ -411,7 +411,7 @@ void main() {
     expect(find.text('锦'), findsOneWidget);
   });
 
-  testWidgets('AvatarBadge 为三字中文头像使用紧凑字号', (tester) async {
+  testWidgets('AvatarBadge 为两字中文头像使用标准字号', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const CupertinoPageScaffold(
@@ -420,8 +420,8 @@ void main() {
       ),
     );
 
-    final label = tester.widget<Text>(find.text('阳娜娜'));
-    expect(label.style?.fontSize, 12);
+    final label = tester.widget<Text>(find.text('娜娜'));
+    expect(label.style?.fontSize, closeTo(48 / 3.1, 0.01));
     expect(label.style?.color, CupertinoColors.white);
   });
 }
