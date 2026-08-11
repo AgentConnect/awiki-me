@@ -382,7 +382,7 @@ void main() {
       ),
     );
 
-    LinearGradient? generatedGradient;
+    Color? generatedColor;
     for (final avatarKey in const <Key>[
       Key('avatar-alice'),
       Key('avatar-jin'),
@@ -395,17 +395,10 @@ void main() {
         find.descendant(of: avatar, matching: find.byType(Text)),
       );
 
-      final gradient =
-          (container.decoration as BoxDecoration).gradient! as LinearGradient;
-      generatedGradient ??= gradient;
-      expect(gradient.colors, generatedGradient.colors);
-      expect(gradient.begin, Alignment.topLeft);
-      expect(gradient.end, Alignment.bottomRight);
-      expect(
-        HSLColor.fromColor(gradient.colors.first).lightness,
-        lessThan(HSLColor.fromColor(gradient.colors.last).lightness),
-      );
-      expect(label.style?.color, CupertinoColors.white);
+      final color = (container.decoration as BoxDecoration).color;
+      generatedColor ??= color;
+      expect(color, generatedColor);
+      expect(label.style?.color, AwikiMePalette.avatarForeground);
     }
     expect(find.text('AC'), findsOneWidget);
     expect(find.text('锦'), findsOneWidget);
@@ -422,7 +415,21 @@ void main() {
 
     final label = tester.widget<Text>(find.text('娜娜'));
     expect(label.style?.fontSize, closeTo(48 / 3.1, 0.01));
-    expect(label.style?.color, CupertinoColors.white);
+    expect(label.style?.color, AwikiMePalette.avatarForeground);
+  });
+
+  testWidgets('AvatarBadge 为智能体后缀保留三字并使用紧凑字号', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const CupertinoPageScaffold(
+          child: Center(child: AvatarBadge(seed: '通知智能体', size: 48)),
+        ),
+      ),
+    );
+
+    final label = tester.widget<Text>(find.text('智能体'));
+    expect(label.style?.fontSize, 12);
+    expect(label.style?.color, AwikiMePalette.avatarForeground);
   });
 }
 

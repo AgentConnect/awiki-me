@@ -4,28 +4,17 @@ import 'package:flutter/cupertino.dart';
 
 /// The generated fallback content for an identity without a custom avatar.
 class DefaultAvatar {
-  const DefaultAvatar({
-    required this.text,
-    required this.backgroundColor,
-    required this.backgroundTopColor,
-    required this.backgroundBottomColor,
-  });
+  const DefaultAvatar({required this.text, required this.backgroundColor});
 
   final String text;
   final Color backgroundColor;
-  final Color backgroundTopColor;
-  final Color backgroundBottomColor;
 }
 
 DefaultAvatar generateDefaultAvatar({required String name, String? userId}) {
   final colorIdentity = userId?.trim().isNotEmpty == true ? userId! : name;
-  final backgroundColor = defaultAvatarColor(colorIdentity);
-  final gradient = defaultAvatarGradientColors(backgroundColor);
   return DefaultAvatar(
     text: extractDefaultAvatarText(name),
-    backgroundColor: backgroundColor,
-    backgroundTopColor: gradient.top,
-    backgroundBottomColor: gradient.bottom,
+    backgroundColor: defaultAvatarColor(colorIdentity),
   );
 }
 
@@ -33,6 +22,9 @@ String extractDefaultAvatarText(String rawInput) {
   final normalized = _normalizeAvatarInput(rawInput);
   if (normalized.isEmpty) {
     return '?';
+  }
+  if (normalized.endsWith('智能体')) {
+    return '智能体';
   }
 
   final runes = normalized.runes.toList(growable: false);
@@ -69,14 +61,6 @@ Color defaultAvatarColor(String identity) {
   }
   final hue = (hash % 360).toDouble();
   return HSLColor.fromAHSL(1, hue, 0.6, 0.5).toColor();
-}
-
-({Color top, Color bottom}) defaultAvatarGradientColors(Color baseColor) {
-  final hsl = HSLColor.fromColor(baseColor);
-  return (
-    top: hsl.withLightness(0.38).toColor(),
-    bottom: hsl.withLightness(0.58).toColor(),
-  );
 }
 
 String _normalizeAvatarInput(String rawInput) {

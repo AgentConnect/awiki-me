@@ -11,6 +11,12 @@ void main() {
       expect(extractDefaultAvatarText('林'), '林');
     });
 
+    test('keeps the full agent suffix when the name ends with 智能体', () {
+      expect(extractDefaultAvatarText('通知智能体'), '智能体');
+      expect(extractDefaultAvatarText('AWiki 智能体'), '智能体');
+      expect(extractDefaultAvatarText('智能体通知'), '通知');
+    });
+
     test('extracts English word and camel-case initials', () {
       expect(extractDefaultAvatarText('Howard Chan'), 'HC');
       expect(extractDefaultAvatarText('Howard'), 'H');
@@ -60,17 +66,6 @@ void main() {
       expect(hsl.hue, inInclusiveRange(0, 359));
     });
 
-    test('creates same-hue diagonal gradient colors from dark to light', () {
-      final avatar = generateDefaultAvatar(name: 'Howard Chan');
-      final top = HSLColor.fromColor(avatar.backgroundTopColor);
-      final bottom = HSLColor.fromColor(avatar.backgroundBottomColor);
-
-      expect(top.hue, closeTo(bottom.hue, 1));
-      expect(top.lightness, lessThan(bottom.lightness));
-      expect(top.lightness, closeTo(0.38, 0.01));
-      expect(bottom.lightness, closeTo(0.58, 0.01));
-    });
-
     test('userId keeps the color stable when the display name changes', () {
       final first = generateDefaultAvatar(name: 'Howard', userId: 'did:test:1');
       final renamed = generateDefaultAvatar(name: '豪哥', userId: 'did:test:1');
@@ -78,8 +73,6 @@ void main() {
       expect(first.text, 'H');
       expect(renamed.text, '豪哥');
       expect(first.backgroundColor, renamed.backgroundColor);
-      expect(first.backgroundTopColor, renamed.backgroundTopColor);
-      expect(first.backgroundBottomColor, renamed.backgroundBottomColor);
     });
   });
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 
+import 'awiki_me_design.dart';
 import 'default_avatar_generator.dart';
 
 class AvatarBadge extends StatelessWidget {
@@ -64,6 +65,7 @@ class _FallbackAvatarBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
     final generated = generateDefaultAvatar(name: seed, userId: userId);
     final label = labelOverride?.trim().isNotEmpty == true
         ? labelOverride!.trim()
@@ -73,14 +75,7 @@ class _FallbackAvatarBadge extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            generated.backgroundTopColor,
-            generated.backgroundBottomColor,
-          ],
-        ),
+        color: generated.backgroundColor,
         borderRadius: BorderRadius.circular(size / 2),
       ),
       alignment: Alignment.center,
@@ -92,7 +87,7 @@ class _FallbackAvatarBadge extends StatelessWidget {
               : labelLength > 1
               ? size / 3.1
               : size / 2.4,
-          color: CupertinoColors.white,
+          color: theme.avatarForeground,
           fontWeight: FontWeight.w400,
         ),
       ),
