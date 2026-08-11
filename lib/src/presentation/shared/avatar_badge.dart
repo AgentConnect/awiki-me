@@ -68,6 +68,7 @@ class _FallbackAvatarBadge extends StatelessWidget {
     final label = labelOverride?.trim().isNotEmpty == true
         ? labelOverride!.trim()
         : generated.text;
+    final labelLength = label.runes.length;
     return Container(
       width: size,
       height: size,
@@ -86,7 +87,11 @@ class _FallbackAvatarBadge extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: label.length > 1 ? size / 3.1 : size / 2.4,
+          fontSize: labelLength > 2
+              ? size / 4
+              : labelLength > 1
+              ? size / 3.1
+              : size / 2.4,
           color: CupertinoColors.white,
           fontWeight: FontWeight.w400,
         ),

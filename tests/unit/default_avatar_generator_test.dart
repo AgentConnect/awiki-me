@@ -4,10 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('extractDefaultAvatarText', () {
-    test('extracts the last two Chinese characters', () {
-      expect(extractDefaultAvatarText('张小明'), '小明');
+    test('extracts the last three Chinese characters', () {
+      expect(extractDefaultAvatarText('张小明'), '张小明');
       expect(extractDefaultAvatarText('王强'), '王强');
-      expect(extractDefaultAvatarText('欧阳娜娜'), '娜娜');
+      expect(extractDefaultAvatarText('欧阳娜娜'), '阳娜娜');
       expect(extractDefaultAvatarText('林'), '林');
     });
 

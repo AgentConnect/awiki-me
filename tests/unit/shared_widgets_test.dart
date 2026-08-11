@@ -410,6 +410,20 @@ void main() {
     expect(find.text('AC'), findsOneWidget);
     expect(find.text('锦'), findsOneWidget);
   });
+
+  testWidgets('AvatarBadge 为三字中文头像使用紧凑字号', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const CupertinoPageScaffold(
+          child: Center(child: AvatarBadge(seed: '欧阳娜娜', size: 48)),
+        ),
+      ),
+    );
+
+    final label = tester.widget<Text>(find.text('阳娜娜'));
+    expect(label.style?.fontSize, 12);
+    expect(label.style?.color, CupertinoColors.white);
+  });
 }
 
 void _noop() {}
