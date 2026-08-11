@@ -444,6 +444,8 @@
   "settingsDisplayScaleReset": "Reset to 100%",
   "settingsWindowPlacementReset": "Reset window size and position",
   "settingsPushNotification": "Push notifications",
+  "settingsAgentUrgentCalls": "Urgent Agent calls",
+  "settingsAgentUrgentCallsSubtitle": "Allow trusted Agents to use one short sound and vibration. Off by default.",
   "settingsCurrentVersion": "Current version",
   "settingsCurrentVersionValue": "Current version: {version}",
   "@settingsCurrentVersionValue": {
@@ -1499,5 +1501,24 @@
   "handleRecoveryJoinLocalMigration": "Local data on this device will be migrated.",
   "handleRecoveryJoinE2eeUnsupported": "Encrypted groups do not support identity recovery yet. Old E2EE private keys do not migrate.",
   "handleRecoveryJoinDidOnlyUnsupported": "DID-only contacts and groups do not migrate.",
-  "legacyIdentityUpgradeFailed": "The legacy identity upgrade failed. Please try again."
+  "legacyIdentityUpgradeFailed": "The legacy identity upgrade failed. Please try again.",
+  "agentMessageKindMessage": "Message",
+  "agentMessageKindTaskResult": "Task result",
+  "agentMessageKindAlert": "Alert",
+  "agentMessageUrgent": "Urgent",
+  "agentMessageUrgentCall": "Urgent callout",
+  "agentMessageUnsupported": "This Agent message cannot be displayed safely.",
+  "agentMessageOpenConversation": "Open conversation",
+  "agentMessageEventNumber": "Event: {eventId}",
+  "@agentMessageEventNumber": {
+    "placeholders": {
+      "eventId": {}
+    }
+  },
+  "agentMessageTrustedAgent": "Trusted Agent",
+  "agentMessageJustNow": "Just now",
+  "agentMessageCueStops": "Sound and vibration stop after 30 seconds.",
+  "agentMessageNotVoiceCall": "This alert does not start a voice call.",
+  "agentMessageIgnore": "Ignore",
+  "agentMessageActNow": "Act now"
 }

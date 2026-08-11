@@ -94,46 +94,87 @@ void main() {
       },
     );
 
-    test('wakes a non-interactive device briefly when a notice arrives', () {
-      final manifest = File(
-        'android/app/src/main/AndroidManifest.xml',
-      ).readAsStringSync();
-      final receiver = File(
-        'android/app/src/main/kotlin/ai/awiki/awikime/push/'
-        'AwikiAliyunPushReceiver.kt',
-      ).readAsStringSync();
-      final wakeController = File(
-        'android/app/src/main/kotlin/ai/awiki/awikime/push/'
-        'NotificationScreenWakeController.kt',
-      );
+    test(
+      'keeps screen wake explicit and never auto-wakes provider notices',
+      () {
+        final manifest = File(
+          'android/app/src/main/AndroidManifest.xml',
+        ).readAsStringSync();
+        final receiver = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+          'AwikiAliyunPushReceiver.kt',
+        ).readAsStringSync();
+        final wakeController = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+          'NotificationScreenWakeController.kt',
+        );
+        final bridge = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+          'RemotePushEventBridge.kt',
+        ).readAsStringSync();
 
-      expect(
-        manifest,
-        contains('android.permission.WAKE_LOCK'),
-        reason: 'screen wake requires the platform wake-lock permission',
-      );
-      expect(wakeController.existsSync(), isTrue);
-      if (!wakeController.existsSync()) return;
-      final controllerSource = wakeController.readAsStringSync();
-      expect(
-        receiver,
-        contains('NotificationScreenWakeController.wakeIfNeeded'),
-      );
-      final inAppCallback = RegExp(
-        r'onNotificationReceivedInApp\(([\s\S]*?)\n    \}',
-      ).firstMatch(receiver)?.group(1);
-      expect(inAppCallback, isNotNull);
-      expect(
-        inAppCallback,
-        isNot(contains('NotificationScreenWakeController.wakeIfNeeded')),
-        reason: 'an in-app callback does not prove visible notification UI',
-      );
-      expect(controllerSource, contains('areNotificationsEnabled'));
-      expect(controllerSource, contains('getNotificationChannel'));
-      expect(controllerSource, contains('powerManager.isInteractive'));
-      expect(controllerSource, contains('ACQUIRE_CAUSES_WAKEUP'));
-      expect(controllerSource, contains('wakeLock.acquire(WAKE_DURATION_MS)'));
-    });
+        expect(
+          manifest,
+          contains('android.permission.WAKE_LOCK'),
+          reason: 'screen wake requires the platform wake-lock permission',
+        );
+        expect(wakeController.existsSync(), isTrue);
+        if (!wakeController.existsSync()) return;
+        final controllerSource = wakeController.readAsStringSync();
+        expect(
+          receiver,
+          isNot(contains('NotificationScreenWakeController.wakeIfNeeded')),
+          reason: 'provider NOTICE callbacks must never wake the screen',
+        );
+        expect(bridge, contains('"wakeNotificationScreen"'));
+        expect(
+          bridge,
+          contains('NotificationScreenWakeController.wakeIfNeeded'),
+        );
+        final inAppCallback = RegExp(
+          r'onNotificationReceivedInApp\(([\s\S]*?)\n    \}',
+        ).firstMatch(receiver)?.group(1);
+        expect(inAppCallback, isNotNull);
+        expect(
+          inAppCallback,
+          isNot(contains('NotificationScreenWakeController.wakeIfNeeded')),
+          reason: 'an in-app callback does not prove visible notification UI',
+        );
+        expect(controllerSource, contains('areNotificationsEnabled'));
+        expect(controllerSource, contains('getNotificationChannel'));
+        expect(controllerSource, contains('powerManager.isInteractive'));
+        expect(controllerSource, contains('ACQUIRE_CAUSES_WAKEUP'));
+        expect(
+          controllerSource,
+          contains('wakeLock.acquire(WAKE_DURATION_MS)'),
+        );
+      },
+    );
+
+    test(
+      'pre-creates the structured provider channel as normal and silent',
+      () {
+        final bridge = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+          'RemotePushEventBridge.kt',
+        ).readAsStringSync();
+        final client = File(
+          'lib/src/data/push/aliyun_emas_remote_push_client.dart',
+        ).readAsStringSync();
+
+        expect(bridge, contains('STRUCTURED_NORMAL_MESSAGE_CHANNEL_ID'));
+        expect(bridge, contains('"awiki_me_messages_v2"'));
+        expect(bridge, contains('NotificationManager.IMPORTANCE_DEFAULT'));
+        expect(bridge, contains('enableVibration(!structuredNormal)'));
+        expect(bridge, contains('setSound(null, null)'));
+        expect(bridge, contains('unsupported channel id'));
+        expect(client, contains('awikiStructuredNormalNotificationChannelId'));
+        expect(
+          client,
+          contains('create_structured_normal_notification_channel'),
+        );
+      },
+    );
 
     test('keeps native EMAS registration idempotent after SDK auto-retry', () {
       final bridge = File(

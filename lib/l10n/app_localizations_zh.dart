@@ -1121,6 +1121,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsPushNotification => '消息推送通知';
 
   @override
+  String get settingsAgentUrgentCalls => '允许 Agent 紧急呼叫';
+
+  @override
+  String get settingsAgentUrgentCallsSubtitle => '允许可信 Agent 使用一次短促声音和振动，默认关闭。';
+
+  @override
   String get settingsCurrentVersion => '当前版本';
 
   @override
@@ -3379,4 +3385,48 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get legacyIdentityUpgradeFailed => '旧身份升级失败，请重试。';
+
+  @override
+  String get agentMessageKindMessage => '消息';
+
+  @override
+  String get agentMessageKindTaskResult => '任务结果';
+
+  @override
+  String get agentMessageKindAlert => '告警';
+
+  @override
+  String get agentMessageUrgent => '紧急';
+
+  @override
+  String get agentMessageUrgentCall => '紧急呼叫';
+
+  @override
+  String get agentMessageUnsupported => '这条 Agent 消息无法安全显示。';
+
+  @override
+  String get agentMessageOpenConversation => '打开会话';
+
+  @override
+  String agentMessageEventNumber(Object eventId) {
+    return '事件编号：$eventId';
+  }
+
+  @override
+  String get agentMessageTrustedAgent => '可信 Agent';
+
+  @override
+  String get agentMessageJustNow => '刚刚';
+
+  @override
+  String get agentMessageCueStops => '铃声和振动将在 30 秒后停止';
+
+  @override
+  String get agentMessageNotVoiceCall => '此提醒不会建立语音通话。';
+
+  @override
+  String get agentMessageIgnore => '忽略';
+
+  @override
+  String get agentMessageActNow => '立即处理';
 }

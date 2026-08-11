@@ -43,6 +43,7 @@ import '../../application/models/product_local_models.dart';
 import '../../core/group_display_name.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_summary.dart';
+import '../../domain/entities/agent/agent_message_v1.dart';
 import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
@@ -91,6 +92,7 @@ import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'chat_mention_presentation.dart';
 import 'chat_provider.dart';
+import 'parts/agent_message_card.dart';
 
 part 'parts/chat_header_part.dart';
 part 'parts/chat_information_part.dart';
