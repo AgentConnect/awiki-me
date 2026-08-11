@@ -27,6 +27,7 @@ import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_message_v1.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
@@ -517,6 +518,120 @@ ConversationSummary _scrollConversation(String id) {
 }
 
 void main() {
+  testWidgets(
+    'timeline renders typed Agent cards and a raw-free invalid placeholder',
+    (tester) async {
+      final conversation = _scrollConversation('dm:agent-message-card');
+      final messages = <ChatMessage>[
+        ChatMessage(
+          localId: 'agent-valid',
+          remoteId: 'agent-valid',
+          conversationId: conversation.conversationId,
+          threadId: conversation.threadId,
+          senderDid: 'did:test:alice',
+          receiverDid: 'did:test:me',
+          content: '',
+          originalType: 'agent_message',
+          createdAt: DateTime(2026, 8, 11, 12),
+          isMine: false,
+          sendState: MessageSendState.sent,
+          agentMessage: const ValidAgentMessageProjection(
+            AgentMessageV1(
+              eventId: 'evt_task_20260811_001',
+              taskName: 'Production release review',
+              kind: AgentMessageKind.alert,
+              level: AgentMessageLevel.urgent,
+              summary: 'Review needed',
+              detail: 'Open the task.',
+              action: AgentMessageAction.openConversation,
+            ),
+          ),
+        ),
+        ChatMessage(
+          localId: 'agent-invalid',
+          remoteId: 'agent-invalid',
+          conversationId: conversation.conversationId,
+          threadId: conversation.threadId,
+          senderDid: 'did:test:alice',
+          receiverDid: 'did:test:me',
+          content: 'SHOULD_NOT_RENDER',
+          originalType: 'agent_message',
+          payloadJson: '{"private":"SHOULD_NOT_RENDER_RAW"}',
+          createdAt: DateTime(2026, 8, 11, 12, 1),
+          isMine: false,
+          sendState: MessageSendState.sent,
+          agentMessage: const InvalidAgentMessageProjection(),
+        ),
+      ];
+
+      final container = await _pumpScrollableChatView(
+        tester,
+        gateway: FakeAwikiGateway(),
+        conversation: conversation,
+        messages: messages,
+      );
+
+      expect(
+        find.byKey(const Key('agent-message-card:evt_task_20260811_001')),
+        findsOneWidget,
+      );
+      expect(find.text('Production release review'), findsOneWidget);
+      expect(find.byKey(const Key('agent-message-task-name')), findsOneWidget);
+      expect(find.text('Review needed'), findsOneWidget);
+      expect(find.text('Open the task.'), findsOneWidget);
+      expect(
+        find.byKey(const Key('agent-message-invalid:agent-invalid')),
+        findsOneWidget,
+      );
+      expect(find.text('这条 Agent 消息无法安全显示。'), findsOneWidget);
+      expect(find.text('SHOULD_NOT_RENDER'), findsNothing);
+      expect(find.textContaining('SHOULD_NOT_RENDER_RAW'), findsNothing);
+      for (final localId in <String>['agent-valid', 'agent-invalid']) {
+        final outer = tester.widget<Container>(
+          find.byKey(Key('chat-message-bubble:$localId')),
+        );
+        expect(outer.padding, isNull);
+        expect(outer.decoration, isNull);
+      }
+      final cardSize = tester.getSize(
+        find.byKey(const Key('agent-message-card:evt_task_20260811_001')),
+      );
+      final outerSize = tester.getSize(
+        find.byKey(const Key('chat-message-bubble:agent-valid')),
+      );
+      expect(cardSize.width, closeTo(outerSize.width, 0.1));
+      expect(cardSize.width, greaterThan(280));
+
+      container
+          .read(chatThreadsProvider.notifier)
+          .debugSeedMessageForTesting(
+            ChatMessage(
+              localId: 'agent-valid-refresh',
+              remoteId: 'agent-valid',
+              conversationId: conversation.conversationId,
+              threadId: conversation.threadId,
+              senderDid: 'did:test:alice',
+              receiverDid: 'did:test:me',
+              content: 'LEGACY_REFRESH_MUST_NOT_REPLACE_TYPED',
+              originalType: 'application/json',
+              payloadJson: '{"legacy":true}',
+              createdAt: DateTime(2026, 8, 11, 12),
+              isMine: false,
+              sendState: MessageSendState.sent,
+            ),
+          );
+      final merged = container
+          .read(chatThreadsProvider)
+          .values
+          .expand((thread) => thread.messages)
+          .singleWhere((message) => message.remoteId == 'agent-valid');
+      expect(merged.agentMessage, isA<ValidAgentMessageProjection>());
+      expect(merged.originalType, 'agent_message');
+      expect(merged.content, isEmpty);
+      expect(merged.payloadJson, isNull);
+    },
+  );
+
   testWidgets('compact 聊天使用暖中性整面背景、双方头像和 44px composer', (tester) async {
     final gateway = FakeAwikiGateway();
     final conversation = _scrollConversation('dm:compact-visual-contract');

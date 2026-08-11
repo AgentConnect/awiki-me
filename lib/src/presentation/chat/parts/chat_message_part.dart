@@ -1177,6 +1177,40 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
+  Widget? _buildAgentMessageCard(BuildContext context) {
+    final projection = message.agentMessage;
+    if (projection == null) return null;
+    if (projection is InvalidAgentMessageProjection) {
+      return Semantics(
+        label: context.l10n.agentMessageUnsupported,
+        child: Container(
+          key: Key('agent-message-invalid:${message.localId}'),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: context.awikiTheme.subtleSurface,
+            border: Border.all(color: context.awikiTheme.border),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(context.l10n.agentMessageUnsupported),
+        ),
+      );
+    }
+    final structured = (projection as ValidAgentMessageProjection).message;
+    return AgentMessageCard(
+      message: structured,
+      timeLabel: _agentMessageTimeLabel(message.createdAt),
+      copy: AgentMessageCardCopy(
+        message: context.l10n.agentMessageKindMessage,
+        taskResult: context.l10n.agentMessageKindTaskResult,
+        alert: context.l10n.agentMessageKindAlert,
+        urgent: context.l10n.agentMessageUrgent,
+        urgentCall: context.l10n.agentMessageUrgentCall,
+        eventNumber: context.l10n.agentMessageEventNumber(structured.eventId),
+      ),
+      onOpenConversation: null,
+    );
+  }
+
   Widget _buildMacBubble(BuildContext context, bool isMine) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
@@ -1187,25 +1221,28 @@ class _MessageBubble extends StatelessWidget {
       fontWeight: FontWeight.w400,
       height: 1.45,
     );
-    final child = message.attachment == null
-        ? _MessageTextContent(
-            text: message.content,
-            mentions: message.mentions,
-            payloadJson: message.payloadJson,
-            mentionPresentation: mentionPresentation,
-            style: textStyle,
-            renderMarkdown: !isMine,
-          )
-        : _AttachmentContent(
-            message: message,
-            mentionPresentation: mentionPresentation,
-            macStyle: true,
-            onDownload: onDownload,
-            onResolveImagePreview: onResolveImagePreview,
-            onCopyImage: onCopyImage,
-            onSaveImage: onSaveImage,
-            isDownloading: isDownloading,
-          );
+    final agentCard = _buildAgentMessageCard(context);
+    final child =
+        agentCard ??
+        (message.attachment == null
+            ? _MessageTextContent(
+                 text: message.content,
+                 mentions: message.mentions,
+                 payloadJson: message.payloadJson,
+                 mentionPresentation: mentionPresentation,
+                 style: textStyle,
+                 renderMarkdown: !isMine,
+               )
+             : _AttachmentContent(
+                 message: message,
+                 mentionPresentation: mentionPresentation,
+                 macStyle: true,
+                onDownload: onDownload,
+                onResolveImagePreview: onResolveImagePreview,
+                onCopyImage: onCopyImage,
+                onSaveImage: onSaveImage,
+                isDownloading: isDownloading,
+               ));
     final bubble = Column(
       crossAxisAlignment: isMine
           ? CrossAxisAlignment.end
@@ -1216,43 +1253,55 @@ class _MessageBubble extends StatelessWidget {
           context,
           isMine: isMine,
           macStyle: true,
-          child: Container(
-            key: Key('chat-message-bubble:${message.localId}'),
-            constraints: BoxConstraints(
-              maxWidth: responsive.displayScaled(420),
-            ),
-            padding: EdgeInsets.symmetric(
-              horizontal: responsive.displayScaled(13),
-              vertical: responsive.displayScaled(9),
-            ),
-            decoration: BoxDecoration(
-              color: attachment != null
-                  ? theme.surface
-                  : isMine
-                  ? theme.outgoingMessage
-                  : theme.incomingMessage,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(
-                  responsive.displayScaled(isMine ? 13 : 4),
-                ),
-                topRight: Radius.circular(
-                  responsive.displayScaled(isMine ? 4 : 13),
-                ),
-                bottomLeft: Radius.circular(responsive.displayScaled(13)),
-                bottomRight: Radius.circular(responsive.displayScaled(13)),
-              ),
-              boxShadow: attachment != null
-                  ? const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x0D000000),
-                        blurRadius: 2,
-                        offset: Offset(0, 1),
+          child: agentCard != null
+              ? Container(
+                  key: Key('chat-message-bubble:${message.localId}'),
+                  constraints: BoxConstraints(
+                    maxWidth: responsive.displayScaled(420),
+                  ),
+                  child: SelectionArea(child: agentCard),
+                )
+              : Container(
+                  key: Key('chat-message-bubble:${message.localId}'),
+                  constraints: BoxConstraints(
+                    maxWidth: responsive.displayScaled(420),
+                  ),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: responsive.displayScaled(13),
+                    vertical: responsive.displayScaled(9),
+                  ),
+                  decoration: BoxDecoration(
+                    color: attachment != null
+                        ? theme.surface
+                        : isMine
+                        ? theme.outgoingMessage
+                        : theme.incomingMessage,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(
+                        responsive.displayScaled(isMine ? 13 : 4),
                       ),
-                    ]
-                  : null,
-            ),
-            child: attachment == null ? SelectionArea(child: child) : child,
-          ),
+                      topRight: Radius.circular(
+                        responsive.displayScaled(isMine ? 4 : 13),
+                      ),
+                      bottomLeft: Radius.circular(responsive.displayScaled(13)),
+                      bottomRight: Radius.circular(
+                        responsive.displayScaled(13),
+                      ),
+                    ),
+                    boxShadow: attachment != null
+                        ? const <BoxShadow>[
+                            BoxShadow(
+                              color: Color(0x0D000000),
+                              blurRadius: 2,
+                              offset: Offset(0, 1),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: attachment == null
+                      ? SelectionArea(child: child)
+                      : child,
+                ),
         ),
         if (message.sendState == MessageSendState.failed) ...<Widget>[
           SizedBox(height: responsive.displayScaled(8)),
@@ -1348,25 +1397,28 @@ class _MessageBubble extends StatelessWidget {
       fontWeight: FontWeight.w400,
       height: 1.45,
     );
-    final content = attachment == null
-        ? _MessageTextContent(
-            text: message.content,
-            mentions: message.mentions,
-            payloadJson: message.payloadJson,
-            mentionPresentation: mentionPresentation,
-            style: textStyle,
-            renderMarkdown: !isMine,
-          )
-        : _AttachmentContent(
-            message: message,
-            mentionPresentation: mentionPresentation,
-            macStyle: false,
-            onDownload: onDownload,
-            onResolveImagePreview: onResolveImagePreview,
-            onCopyImage: onCopyImage,
-            onSaveImage: onSaveImage,
-            isDownloading: isDownloading,
-          );
+    final agentCard = _buildAgentMessageCard(context);
+    final content =
+        agentCard ??
+        (attachment == null
+            ? _MessageTextContent(
+                 text: message.content,
+                 mentions: message.mentions,
+                 payloadJson: message.payloadJson,
+                 mentionPresentation: mentionPresentation,
+                 style: textStyle,
+                 renderMarkdown: !isMine,
+               )
+             : _AttachmentContent(
+                 message: message,
+                 mentionPresentation: mentionPresentation,
+                 macStyle: false,
+                onDownload: onDownload,
+                onResolveImagePreview: onResolveImagePreview,
+                onCopyImage: onCopyImage,
+                onSaveImage: onSaveImage,
+                isDownloading: isDownloading,
+               ));
     final bubbleColor = attachment != null
         ? theme.surface
         : isMine
@@ -1394,32 +1446,42 @@ class _MessageBubble extends StatelessWidget {
           context,
           isMine: isMine,
           macStyle: false,
-          child: Container(
-            key: Key('chat-message-bubble:${message.localId}'),
-            constraints: BoxConstraints(
-              maxWidth: responsive.displayScaled(300),
-            ),
-            padding: EdgeInsets.fromLTRB(
-              horizontalPadding + (isMine ? 0 : bubbleTailExtent),
-              responsive.displayScaled(9),
-              horizontalPadding + (isMine ? bubbleTailExtent : 0),
-              responsive.displayScaled(9),
-            ),
-            decoration: ShapeDecoration(
-              color: bubbleColor,
-              shape: bubbleShape,
-              shadows: attachment != null
-                  ? const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x0D000000),
-                        blurRadius: 2,
-                        offset: Offset(0, 1),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: attachment == null ? SelectionArea(child: content) : content,
-          ),
+          child: agentCard != null
+              ? Container(
+                  key: Key('chat-message-bubble:${message.localId}'),
+                  constraints: BoxConstraints(
+                    maxWidth: responsive.displayScaled(310),
+                  ),
+                  child: SelectionArea(child: agentCard),
+                )
+              : Container(
+                  key: Key('chat-message-bubble:${message.localId}'),
+                  constraints: BoxConstraints(
+                    maxWidth: responsive.displayScaled(300),
+                  ),
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding + (isMine ? 0 : bubbleTailExtent),
+                    responsive.displayScaled(9),
+                    horizontalPadding + (isMine ? bubbleTailExtent : 0),
+                    responsive.displayScaled(9),
+                  ),
+                  decoration: ShapeDecoration(
+                    color: bubbleColor,
+                    shape: bubbleShape,
+                    shadows: attachment != null
+                        ? const <BoxShadow>[
+                            BoxShadow(
+                              color: Color(0x0D000000),
+                              blurRadius: 2,
+                              offset: Offset(0, 1),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: attachment == null
+                      ? SelectionArea(child: content)
+                      : content,
+                ),
         ),
         if (message.sendState == MessageSendState.failed) ...<Widget>[
           SizedBox(height: responsive.spacing(6)),
@@ -1513,6 +1575,12 @@ class _MessageBubble extends StatelessWidget {
     }
     return _buildCompactBubble(context, isMine);
   }
+}
+
+String _agentMessageTimeLabel(DateTime value) {
+  final local = value.toLocal();
+  return '${local.hour.toString().padLeft(2, '0')}:'
+      '${local.minute.toString().padLeft(2, '0')}';
 }
 
 class _DelayedSendingMessageRow extends StatefulWidget {

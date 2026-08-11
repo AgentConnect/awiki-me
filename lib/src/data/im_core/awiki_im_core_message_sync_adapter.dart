@@ -56,6 +56,9 @@ class AwikiImCoreMessageSyncAdapter
                 eventId: eventId,
                 logicalMessageId: logicalMessageId,
                 message: message,
+                authoritativeReceivedAt: _strictNullableTimestamp(
+                  committed.authoritativeReceivedAt,
+                ),
               ),
             );
           }
@@ -161,6 +164,14 @@ class AwikiImCoreMessageSyncAdapter
       }
     });
   }
+}
+
+DateTime? _strictNullableTimestamp(String? raw) {
+  final value = raw?.trim();
+  if (value == null || value.isEmpty) return null;
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null || !parsed.isUtc) return null;
+  return parsed;
 }
 
 String? _nonEmpty(String? value) {

@@ -420,6 +420,8 @@
   "settingsDisplayScaleReset": "恢复 100%",
   "settingsWindowPlacementReset": "重置窗口大小和位置",
   "settingsPushNotification": "消息推送通知",
+  "settingsAgentUrgentCalls": "允许 Agent 紧急呼叫",
+  "settingsAgentUrgentCallsSubtitle": "允许可信 Agent 使用一次短促声音和振动，默认关闭。",
   "settingsCurrentVersion": "当前版本",
   "settingsCurrentVersionValue": "当前版本：{version}",
   "@settingsCurrentVersionValue": {
@@ -1449,5 +1451,24 @@
   "handleRecoveryJoinLocalMigration": "将迁移此设备上的本地数据。",
   "handleRecoveryJoinE2eeUnsupported": "加密群暂不支持身份恢复，旧 E2EE 私钥不会迁移。",
   "handleRecoveryJoinDidOnlyUnsupported": "DID-only 联系与群组不会迁移。",
-  "legacyIdentityUpgradeFailed": "旧身份升级失败，请重试。"
+  "legacyIdentityUpgradeFailed": "旧身份升级失败，请重试。",
+  "agentMessageKindMessage": "消息",
+  "agentMessageKindTaskResult": "任务结果",
+  "agentMessageKindAlert": "告警",
+  "agentMessageUrgent": "紧急",
+  "agentMessageUrgentCall": "紧急呼叫",
+  "agentMessageUnsupported": "这条 Agent 消息无法安全显示。",
+  "agentMessageOpenConversation": "打开会话",
+  "agentMessageEventNumber": "事件编号：{eventId}",
+  "@agentMessageEventNumber": {
+    "placeholders": {
+      "eventId": {}
+    }
+  },
+  "agentMessageTrustedAgent": "可信 Agent",
+  "agentMessageJustNow": "刚刚",
+  "agentMessageCueStops": "铃声和振动将在 30 秒后停止",
+  "agentMessageNotVoiceCall": "此提醒不会建立语音通话。",
+  "agentMessageIgnore": "忽略",
+  "agentMessageActNow": "立即处理"
 }

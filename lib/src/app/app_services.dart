@@ -28,6 +28,7 @@ import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
+import '../application/ports/agent_notification_preference_port.dart';
 import '../application/ports/account_state_sync_port.dart';
 import '../application/ports/device_management_core_port.dart';
 import '../application/ports/group_encryption_core_port.dart';
@@ -289,6 +290,9 @@ final remotePushClientProvider = Provider<RemotePushClient?>((ref) => null);
 
 final remotePushInstallationCoordinatorProvider =
     Provider<RemotePushInstallationCoordinator?>((ref) => null);
+
+final agentNotificationPreferencePortProvider =
+    Provider<AgentNotificationPreferencePort?>((ref) => null);
 
 final remotePushStorageScopeIdProvider = Provider<StorageScopeId?>(
   (ref) => null,

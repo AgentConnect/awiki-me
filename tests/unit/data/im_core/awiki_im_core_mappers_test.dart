@@ -2,6 +2,8 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_mappers.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_message_v1.dart'
+    as app_agent;
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
@@ -640,6 +642,158 @@ void main() {
       expect(mapped.lastMessageSnapshot!.threadId, 'did:bob');
       expect(mapped.avatarSeed, 'seed-1');
       expect(mapped.unreadCount, 2);
+    },
+  );
+
+  test('live conversation preview consumes typed Agent projection first', () {
+    core.Conversation conversation(core.AgentMessageProjection projection) {
+      return core.Conversation(
+        conversationId: 'dm:peer-scope:v1:agent',
+        peerPersonaId: 'persona:v1:agent',
+        resolutionState: core.ConversationResolutionState.resolved,
+        threadKind: 'thread',
+        threadId: 'dm:peer-scope:v1:agent',
+        participants: const <String>['did:alice', 'did:agent'],
+        unreadCount: 1,
+        messageCount: 1,
+        lastMessageAt: '2026-08-11T12:00:00Z',
+        lastMessage: core.Message(
+          id: 'agent-message-live',
+          conversationId: 'dm:peer-scope:v1:agent',
+          senderDidSnapshot: 'did:agent',
+          threadKind: 'thread',
+          threadId: 'dm:peer-scope:v1:agent',
+          direction: core.MessageDirection.incoming,
+          sender: 'did:agent',
+          receiver: 'did:alice',
+          body: core.MessageBodyView(
+            text: 'SHOULD_NOT_BECOME_PREVIEW',
+            agentMessage: projection,
+          ),
+          metadata: const core.MessageMetadata(),
+        ),
+      );
+    }
+
+    final valid = mapper.conversationFromCore(
+      conversation(
+        const core.AgentMessageProjection(
+          state: core.AgentMessageProjectionState.valid,
+          message: core.AgentMessageV1(
+            schema: 'awiki.agent.message.v1',
+            eventId: 'event-live',
+            taskName: 'Live release verification',
+            kind: core.AgentMessageKind.message,
+            requestedLevel: core.AgentMessageRequestedLevel.normal,
+            summary: 'Validated live summary',
+            detail: null,
+            action: core.AgentMessageAction.openConversation,
+          ),
+        ),
+      ),
+      ownerDid: 'did:alice',
+    );
+    final invalid = mapper.conversationFromCore(
+      conversation(
+        const core.AgentMessageProjection(
+          state: core.AgentMessageProjectionState.invalid,
+        ),
+      ),
+      ownerDid: 'did:alice',
+    );
+
+    expect(valid.lastMessagePreview, 'Validated live summary');
+    expect(
+      valid.lastMessageSnapshot?.agentMessage,
+      isA<app_agent.ValidAgentMessageProjection>(),
+    );
+    expect(
+      (valid.lastMessageSnapshot!.agentMessage!
+              as app_agent.ValidAgentMessageProjection)
+          .message
+          .taskName,
+      'Live release verification',
+    );
+    expect(invalid.lastMessagePreview, isEmpty);
+    expect(
+      invalid.lastMessageSnapshot?.agentMessage,
+      isA<app_agent.InvalidAgentMessageProjection>(),
+    );
+  });
+
+  test(
+    'snapshot conversation preview consumes typed Agent projection first',
+    () {
+      core.ConversationSnapshotItem conversation(
+        core.AgentMessageProjection projection,
+      ) {
+        return core.ConversationSnapshotItem(
+          conversationId: 'dm:peer-scope:v1:agent',
+          peerPersonaId: 'persona:v1:agent',
+          resolutionState: core.ConversationResolutionState.resolved,
+          threadKind: 'thread',
+          threadId: 'dm:peer-scope:v1:agent',
+          participants: const <String>['did:alice', 'did:agent'],
+          unreadCount: 1,
+          messageCount: 1,
+          lastMessageAt: '2026-08-11T12:00:00Z',
+          lastMessage: core.ConversationSnapshotMessage(
+            id: 'agent-message-snapshot',
+            threadKind: 'thread',
+            threadId: 'dm:peer-scope:v1:agent',
+            direction: 'incoming',
+            sender: 'did:agent',
+            receiver: 'did:alice',
+            body: core.ConversationSnapshotMessageBody(
+              text: 'SHOULD_NOT_BECOME_PREVIEW',
+              agentMessage: projection,
+            ),
+            serverSequence: 2,
+            contentType: 'application/json',
+          ),
+        );
+      }
+
+      final valid = mapper.conversationFromSnapshot(
+        conversation(
+          const core.AgentMessageProjection(
+            state: core.AgentMessageProjectionState.valid,
+            message: core.AgentMessageV1(
+              schema: 'awiki.agent.message.v1',
+              eventId: 'event-snapshot',
+              taskName: 'Snapshot release verification',
+              kind: core.AgentMessageKind.taskResult,
+              requestedLevel: core.AgentMessageRequestedLevel.normal,
+              summary: 'Validated snapshot summary',
+              detail: null,
+              action: core.AgentMessageAction.openConversation,
+            ),
+          ),
+        ),
+        ownerDid: 'did:alice',
+      );
+      final invalid = mapper.conversationFromSnapshot(
+        conversation(
+          const core.AgentMessageProjection(
+            state: core.AgentMessageProjectionState.invalid,
+          ),
+        ),
+        ownerDid: 'did:alice',
+      );
+
+      expect(valid.lastMessagePreview, 'Validated snapshot summary');
+      expect(
+        (valid.lastMessageSnapshot!.agentMessage!
+                as app_agent.ValidAgentMessageProjection)
+            .message
+            .taskName,
+        'Snapshot release verification',
+      );
+      expect(invalid.lastMessagePreview, isEmpty);
+      expect(
+        invalid.lastMessageSnapshot?.agentMessage,
+        isA<app_agent.InvalidAgentMessageProjection>(),
+      );
     },
   );
 

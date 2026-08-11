@@ -12,6 +12,7 @@ import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
+import '../../domain/entities/agent/agent_message_v1.dart' as app_agent;
 import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
@@ -107,9 +108,12 @@ class AwikiImCoreMappers {
     core.Message message, {
     required String ownerDid,
   }) {
+    final agentMessage = _agentMessageFromCore(message.body.agentMessage);
     final manifest = _attachmentManifestJson(message);
     final attachment = _attachmentFromCoreMessage(message, manifest: manifest);
-    final systemEvent = GroupSystemEvent.tryParse(message.body.payloadJson);
+    final systemEvent = agentMessage == null
+        ? GroupSystemEvent.tryParse(message.body.payloadJson)
+        : null;
     final bodyMentionPayload = ChatMentionPayload.tryParsePayloadJson(
       message.body.payloadJson,
     );
@@ -117,7 +121,9 @@ class AwikiImCoreMappers {
     final mentionPayload =
         bodyMentionPayload ??
         ChatMentionPayload.tryParsePayloadJson(manifestMentionPayloadJson);
-    final payloadJson = bodyMentionPayload == null
+    final payloadJson = agentMessage != null
+        ? null
+        : bodyMentionPayload == null
         ? manifestMentionPayloadJson ?? message.body.payloadJson
         : message.body.payloadJson;
     final bodyText = message.body.text ?? '';
@@ -151,10 +157,14 @@ class AwikiImCoreMappers {
           _attribute(message.metadata, 'sender_name'),
       receiverDid: _nonEmpty(message.receiver),
       groupId: groupId,
-      content: systemEvent == null
+      content: agentMessage != null
+          ? ''
+          : systemEvent == null
           ? attachment?.caption ?? mentionPayload?.text ?? bodyText
           : '',
-      originalType: attachment != null
+      originalType: agentMessage != null
+          ? 'agent_message'
+          : attachment != null
           ? _attachmentManifestContentType
           : systemEvent != null
           ? 'application/json'
@@ -168,6 +178,7 @@ class AwikiImCoreMappers {
       isEncrypted: _isEncrypted(message.metadata.contentType),
       attachment: attachment,
       payloadJson: payloadJson,
+      agentMessage: agentMessage,
       mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],
     );
   }
@@ -177,9 +188,12 @@ class AwikiImCoreMappers {
     required String ownerDid,
     required String conversationId,
   }) {
+    final agentMessage = _agentMessageFromCore(message.body.agentMessage);
     final manifest = _snapshotAttachmentManifestJson(message);
     final attachment = _attachmentFromManifest(manifest);
-    final systemEvent = GroupSystemEvent.tryParse(message.body.payloadJson);
+    final systemEvent = agentMessage == null
+        ? GroupSystemEvent.tryParse(message.body.payloadJson)
+        : null;
     final bodyMentionPayload = ChatMentionPayload.tryParsePayloadJson(
       message.body.payloadJson,
     );
@@ -187,7 +201,9 @@ class AwikiImCoreMappers {
     final mentionPayload =
         bodyMentionPayload ??
         ChatMentionPayload.tryParsePayloadJson(manifestMentionPayloadJson);
-    final payloadJson = bodyMentionPayload == null
+    final payloadJson = agentMessage != null
+        ? null
+        : bodyMentionPayload == null
         ? manifestMentionPayloadJson ?? message.body.payloadJson
         : message.body.payloadJson;
     final bodyText = message.body.text ?? '';
@@ -226,10 +242,14 @@ class AwikiImCoreMappers {
           _snapshotAttribute(message, 'sender_name'),
       receiverDid: _nonEmpty(message.receiver),
       groupId: groupId,
-      content: systemEvent == null
+      content: agentMessage != null
+          ? ''
+          : systemEvent == null
           ? attachment?.caption ?? mentionPayload?.text ?? bodyText
           : '',
-      originalType: attachment != null
+      originalType: agentMessage != null
+          ? 'agent_message'
+          : attachment != null
           ? _attachmentManifestContentType
           : systemEvent != null
           ? 'application/json'
@@ -243,6 +263,7 @@ class AwikiImCoreMappers {
       isEncrypted: _isEncrypted(message.contentType),
       attachment: attachment,
       payloadJson: payloadJson,
+      agentMessage: agentMessage,
       mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],
     );
   }
@@ -1048,6 +1069,12 @@ String? _subjectTypeFromDid(String did) {
 }
 
 String _messagePreview(core.Message message) {
+  final agentMessage = message.body.agentMessage;
+  if (agentMessage != null) {
+    return agentMessage.state == core.AgentMessageProjectionState.valid
+        ? agentMessage.message?.summary ?? ''
+        : '';
+  }
   final systemEvent = GroupSystemEvent.tryParse(message.body.payloadJson);
   if (systemEvent != null) {
     return systemEvent.type;
@@ -1078,6 +1105,12 @@ String _messagePreview(core.Message message) {
 }
 
 String _snapshotMessagePreview(core.ConversationSnapshotMessage message) {
+  final agentMessage = message.body.agentMessage;
+  if (agentMessage != null) {
+    return agentMessage.state == core.AgentMessageProjectionState.valid
+        ? agentMessage.message?.summary ?? ''
+        : '';
+  }
   final systemEvent = GroupSystemEvent.tryParse(message.body.payloadJson);
   if (systemEvent != null) {
     return systemEvent.type;
@@ -1350,6 +1383,43 @@ Map<String, Object?>? _tryDecodeObject(String? raw) {
     return null;
   }
   return null;
+}
+
+app_agent.AgentMessageProjection? _agentMessageFromCore(
+  core.AgentMessageProjection? projection,
+) {
+  if (projection == null) return null;
+  if (projection.state == core.AgentMessageProjectionState.invalid) {
+    return const app_agent.InvalidAgentMessageProjection();
+  }
+  final message = projection.message;
+  if (message == null) {
+    return const app_agent.InvalidAgentMessageProjection();
+  }
+  return app_agent.ValidAgentMessageProjection(
+    app_agent.AgentMessageV1(
+      eventId: message.eventId,
+      taskName: message.taskName,
+      kind: switch (message.kind) {
+        core.AgentMessageKind.message => app_agent.AgentMessageKind.message,
+        core.AgentMessageKind.taskResult =>
+          app_agent.AgentMessageKind.taskResult,
+        core.AgentMessageKind.alert => app_agent.AgentMessageKind.alert,
+      },
+      level: switch (message.requestedLevel) {
+        core.AgentMessageRequestedLevel.normal =>
+          app_agent.AgentMessageLevel.normal,
+        core.AgentMessageRequestedLevel.urgent =>
+          app_agent.AgentMessageLevel.urgent,
+      },
+      summary: message.summary,
+      detail: message.detail,
+      action: switch (message.action) {
+        core.AgentMessageAction.openConversation =>
+          app_agent.AgentMessageAction.openConversation,
+      },
+    ),
+  );
 }
 
 String? _stringFromJsonMap(Map<String, Object?>? value, String key) {

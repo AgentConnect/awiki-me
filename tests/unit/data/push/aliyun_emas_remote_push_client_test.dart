@@ -1,10 +1,23 @@
+// ignore_for_file: invalid_use_of_visible_for_testing_member
+
 import 'package:awiki_me/src/data/push/aliyun_emas_platform.dart';
 import 'package:awiki_me/src/data/push/aliyun_emas_remote_push_client.dart';
 import 'package:awiki_me/src/domain/entities/remote_push_event.dart';
 import 'package:awiki_me/src/domain/services/notification_channels.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 void main() {
+  setUpAll(() async {
+    PackageInfo.setMockInitialValues(
+      appName: 'AWiki Me',
+      packageName: 'ai.awiki.awikime',
+      version: '0.1.22',
+      buildNumber: '32',
+      buildSignature: '',
+    );
+  });
+
   group('AliyunEmasRemotePushClient', () {
     test('initializes once and exposes the EMAS DeviceId', () async {
       final platform = _FakeAliyunEmasPlatform(
@@ -20,14 +33,27 @@ void main() {
       expect(first?.provider, aliyunEmasPushProvider);
       expect(first?.providerDeviceId, 'device-123');
       expect(first?.platform, 'android');
+      expect(first?.clientProduct, 'awiki-me');
+      expect(first?.clientVersion, '0.1.22+32');
+      expect(first?.capabilities, const <String>['awiki.agent.message.v1']);
       expect(first?.appId, '12345678');
       expect(first?.logicalDeviceId, isNull);
       expect(client.registration, same(first));
       expect(platform.initializeCalls, 1);
-      expect(platform.createChannelCalls, 1);
-      expect(platform.calls, <String>['create_channel', 'initialize']);
-      expect(platform.channelId, awikiMessageNotificationChannelId);
-      expect(platform.channelName, awikiMessageNotificationChannelName);
+      expect(platform.createChannelCalls, 2);
+      expect(platform.calls, <String>[
+        'create_channel',
+        'create_channel',
+        'initialize',
+      ]);
+      expect(platform.channelIds, <String>[
+        awikiMessageNotificationChannelId,
+        awikiStructuredNormalNotificationChannelId,
+      ]);
+      expect(platform.channelNames, <String>[
+        awikiMessageNotificationChannelName,
+        awikiStructuredNormalNotificationChannelName,
+      ]);
       await client.dispose();
     });
 
@@ -47,6 +73,27 @@ void main() {
       expect(platform.getAppIdCalls, 0);
       await client.dispose();
     });
+
+    test(
+      'uses a header-safe version without a trailing build separator',
+      () async {
+        final client = AliyunEmasRemotePushClient(
+          platform: _FakeAliyunEmasPlatform(),
+          packageInfoLoader: () async => PackageInfo(
+            appName: 'AWiki Me',
+            packageName: 'ai.awiki.awikime',
+            version: '0.1.22',
+            buildNumber: '',
+            buildSignature: '',
+          ),
+        );
+
+        final registration = await client.initialize();
+
+        expect(registration?.clientVersion, '0.1.22');
+        await client.dispose();
+      },
+    );
 
     test('delivers queued and live native events through one stream', () async {
       final platform = _FakeAliyunEmasPlatform(
@@ -350,6 +397,37 @@ void main() {
       expect(platform.initializeCalls, 0);
       await client.dispose();
     });
+
+    test(
+      'fails closed when the structured normal channel is unavailable',
+      () async {
+        final platform = _FakeAliyunEmasPlatform(
+          channelResults: <Map<dynamic, dynamic>>[
+            <dynamic, dynamic>{'code': '10000'},
+            <dynamic, dynamic>{
+              'code': 'channel_failed',
+              'errorMsg': 'structured channel unavailable',
+            },
+          ],
+        );
+        final client = AliyunEmasRemotePushClient(platform: platform);
+
+        await expectLater(
+          client.initialize(),
+          throwsA(
+            isA<RemotePushInitializationException>()
+                .having(
+                  (error) => error.operation,
+                  'operation',
+                  'create_structured_normal_notification_channel',
+                )
+                .having((error) => error.code, 'code', 'channel_failed'),
+          ),
+        );
+        expect(platform.initializeCalls, 0);
+        await client.dispose();
+      },
+    );
   });
 }
 
@@ -370,6 +448,7 @@ class _FakeAliyunEmasPlatform implements AliyunEmasPlatform {
     this.initializeResult = const <dynamic, dynamic>{'code': '10000'},
     this.initializeResults,
     this.channelResult = const <dynamic, dynamic>{'code': '10000'},
+    this.channelResults,
     this.pendingEvents = const <Object?>[],
   });
 
@@ -379,14 +458,15 @@ class _FakeAliyunEmasPlatform implements AliyunEmasPlatform {
   final Map<dynamic, dynamic> initializeResult;
   final List<Map<dynamic, dynamic>>? initializeResults;
   final Map<dynamic, dynamic> channelResult;
+  final List<Map<dynamic, dynamic>>? channelResults;
   final List<Object?> pendingEvents;
   RemotePushPlatformEventHandler? _handler;
   int initializeCalls = 0;
   int createChannelCalls = 0;
   int getAppIdCalls = 0;
   final List<String> calls = <String>[];
-  String? channelId;
-  String? channelName;
+  final List<String> channelIds = <String>[];
+  final List<String> channelNames = <String>[];
   Set<String> acknowledgedDeliveryIds = <String>{};
   String? activeTargetReference;
 
@@ -410,8 +490,12 @@ class _FakeAliyunEmasPlatform implements AliyunEmasPlatform {
   }) async {
     createChannelCalls += 1;
     calls.add('create_channel');
-    channelId = id;
-    channelName = name;
+    channelIds.add(id);
+    channelNames.add(name);
+    final results = channelResults;
+    if (results != null && createChannelCalls <= results.length) {
+      return results[createChannelCalls - 1];
+    }
     return channelResult;
   }
 

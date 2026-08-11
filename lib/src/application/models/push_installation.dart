@@ -5,6 +5,9 @@ final class PushInstallation {
     required this.providerDeviceId,
     required this.platform,
     required this.status,
+    required this.clientProduct,
+    required this.clientVersion,
+    required this.capabilities,
     this.logicalDeviceId,
     this.appId,
   });
@@ -14,6 +17,9 @@ final class PushInstallation {
   final String providerDeviceId;
   final String platform;
   final String status;
+  final String clientProduct;
+  final String clientVersion;
+  final List<String> capabilities;
   final String? logicalDeviceId;
   final String? appId;
 }

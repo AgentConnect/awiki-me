@@ -4859,6 +4859,16 @@ class ChatThreadsController
     final existingAttachment = existing.attachment;
     final sameStableMessage = _sameStableMessage(incoming, existing);
     final canPreserveExistingSemantics = trustMessageMatch || sameStableMessage;
+    if (incoming.agentMessage == null &&
+        existing.agentMessage != null &&
+        canPreserveExistingSemantics) {
+      incoming = incoming.copyWith(
+        content: '',
+        originalType: 'agent_message',
+        payloadJson: null,
+        agentMessage: existing.agentMessage,
+      );
+    }
     if (_shouldKeepExistingDeliveredMessage(
       incoming,
       existing,
@@ -7326,6 +7336,7 @@ ChatMessage _withThreadId(ChatMessage message, String threadId) {
     isEncrypted: message.isEncrypted,
     attachment: message.attachment,
     payloadJson: message.payloadJson,
+    agentMessage: message.agentMessage,
     mentions: message.mentions,
   );
 }

@@ -2416,6 +2416,7 @@ bool _sameLastMessageSnapshot(ChatMessage? first, ChatMessage? second) {
       first.serverSequence == second.serverSequence &&
       first.sendState == second.sendState &&
       first.payloadJson == second.payloadJson &&
+      first.agentMessage == second.agentMessage &&
       _sameAttachmentSnapshot(first.attachment, second.attachment) &&
       _sameMentions(first.mentions, second.mentions);
 }

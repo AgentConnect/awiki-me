@@ -8,6 +8,7 @@ import '../../domain/entities/session_identity.dart';
 import '../../l10n/l10n.dart';
 import '../app_shell/providers/app_update_provider.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
+import '../app_shell/providers/agent_urgent_opt_in_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../profile/profile_page.dart';
 import '../devices/devices_page.dart';
@@ -45,6 +46,7 @@ class SettingsPage extends ConsumerWidget {
     final updateState = ref.watch(appUpdateProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
     final displayScale = ref.watch(displayScaleProvider);
+    final urgentOptIn = ref.watch(agentUrgentOptInProvider);
     final isDesktopPlatform =
         defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.windows;
@@ -149,6 +151,22 @@ class SettingsPage extends ConsumerWidget {
               (_) => const LanguageSelectionPage(),
             ),
           ),
+          if (session != null) ...<Widget>[
+            const AppSectionDivider(),
+            AppListTile(
+              key: const Key('settings-agent-urgent-opt-in-row'),
+              title: l10n.settingsAgentUrgentCalls,
+              subtitle: l10n.settingsAgentUrgentCallsSubtitle,
+              leading: leading(const _SettingsIcon(icon: CupertinoIcons.bell)),
+              trailing: CupertinoSwitch(
+                key: const Key('settings-agent-urgent-opt-in-switch'),
+                value: urgentOptIn.enabled,
+                onChanged: urgentOptIn.canChange
+                    ? ref.read(agentUrgentOptInProvider.notifier).setEnabled
+                    : null,
+              ),
+            ),
+          ],
           if (isDesktopPlatform) ...<Widget>[
             const AppSectionDivider(),
             AppListTile(
@@ -320,6 +338,20 @@ class SettingsPage extends ConsumerWidget {
                 (_) => const LanguageSelectionPage(),
               ),
             ),
+            if (session != null)
+              _QuietSettingsRow(
+                key: const Key('settings-agent-urgent-opt-in-row'),
+                icon: CupertinoIcons.bell,
+                title: l10n.settingsAgentUrgentCalls,
+                height: optionRowHeight,
+                trailing: CupertinoSwitch(
+                  key: const Key('settings-agent-urgent-opt-in-switch'),
+                  value: urgentOptIn.enabled,
+                  onChanged: urgentOptIn.canChange
+                      ? ref.read(agentUrgentOptInProvider.notifier).setEnabled
+                      : null,
+                ),
+              ),
             if (isDesktopPlatform)
               _QuietSettingsRow(
                 key: const Key('settings-display-row'),
@@ -689,6 +721,7 @@ class _QuietSettingsRow extends StatelessWidget {
     required this.height,
     this.iconKey,
     this.trailingText,
+    this.trailing,
     this.onTap,
     this.destructive = false,
   });
@@ -698,6 +731,7 @@ class _QuietSettingsRow extends StatelessWidget {
   final String title;
   final double height;
   final String? trailingText;
+  final Widget? trailing;
   final VoidCallback? onTap;
   final bool destructive;
 
@@ -749,6 +783,7 @@ class _QuietSettingsRow extends StatelessWidget {
                   style: TextStyle(color: theme.secondaryText, fontSize: 12),
                 ),
               ),
+            if (trailing != null) trailing!,
             if (onTap != null) ...<Widget>[
               SizedBox(width: responsive.spacing(5)),
               Icon(

@@ -2,6 +2,7 @@ import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../../application/models/attachment_models.dart';
 import '../../../domain/entities/agent/agent_display_name.dart';
+import '../../../domain/entities/agent/agent_message_v1.dart';
 import '../../../domain/entities/agent/agent_status.dart';
 import '../../../domain/entities/agent/agent_summary.dart';
 import '../../../domain/entities/chat_attachment.dart';
@@ -255,6 +256,13 @@ String localizeMessagePreview(
   String? groupEventActorName,
   String? groupEventSubjectName,
 }) {
+  final agentMessage = message.agentMessage;
+  if (agentMessage is ValidAgentMessageProjection) {
+    return agentMessage.message.summary;
+  }
+  if (agentMessage is InvalidAgentMessageProjection) {
+    return l10n.agentMessageUnsupported;
+  }
   final systemEvent = message.groupSystemEvent;
   if (systemEvent != null) {
     return localizeGroupSystemEvent(

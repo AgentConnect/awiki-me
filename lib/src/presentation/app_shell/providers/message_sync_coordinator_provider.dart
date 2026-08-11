@@ -7,16 +7,21 @@ import 'package:flutter/widgets.dart';
 
 import '../../../app/app_services.dart';
 import '../../../app/app_locale.dart';
+import '../../../application/agent_message_presentation_store.dart';
+import '../../../application/app_presentation_service.dart';
 import '../../../application/messaging_service.dart';
 import '../../../application/models/app_session.dart';
 import '../../../application/models/message_sync_diagnostics.dart';
+import '../../../application/models/product_local_models.dart';
 import '../../../application/models/remote_push_sync_receipt.dart';
 import '../../../application/ports/message_sync_core_port.dart';
 import '../../../application/ports/remote_push_sync_port.dart';
 import '../../../application/tenant/app_tenant.dart';
 import '../../../core/performance_logger.dart';
+import '../../../domain/entities/agent/agent_message_v1.dart';
 import '../../../domain/entities/chat_message.dart';
 import '../../../domain/entities/notification_target.dart';
+import '../../../domain/services/notification_facade.dart';
 import '../../../l10n/app_message.dart';
 import '../../agents/agents_provider.dart';
 import '../../conversation_list/conversation_peer_classifier.dart';
@@ -26,8 +31,12 @@ import '../../shared/formatters/localized_ui_formatters.dart';
 import '../../conversation_list/conversation_provider.dart';
 import '../../devices/devices_provider.dart';
 import 'agent_terminal_notification_provider.dart';
+import 'agent_message_presentation_policy.dart';
+import 'agent_urgent_opt_in_provider.dart';
+import 'agent_urgent_overlay_provider.dart';
 import 'app_lifecycle_provider.dart';
 import 'ordinary_message_presentation_policy.dart';
+import 'selected_conversation_provider.dart';
 import 'session_provider.dart';
 
 const bool _messageSyncCoordinatorTraceEnabled = bool.fromEnvironment(
@@ -292,6 +301,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     _lastFailedAt = null;
     _notifiedCommittedEventIds.clear();
     _notifiedCommittedMessageIds.clear();
+    ref.read(agentUrgentOverlayProvider.notifier).clear();
     state = const MessageSyncCoordinatorState();
   }
 
@@ -686,7 +696,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
 
         try {
           activeSync.presentationFinalized = true;
-          _dispatchCommittedIncomingNotifications(
+          await _dispatchCommittedIncomingNotifications(
             result,
             suppressPresentation: policy.suppressNotificationPresentation,
           );
@@ -856,6 +866,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     _cancelFailureSurfaceTimer();
     _notifiedCommittedEventIds.clear();
     _notifiedCommittedMessageIds.clear();
+    ref.read(agentUrgentOverlayProvider.notifier).clear();
     _cancelPendingTimerAndCompleteWaiters();
     _completeQueuedWaiters(_queuedAfterActive);
     _queuedAfterActive = null;
@@ -1174,10 +1185,10 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     _coreDirectedRetryEpoch = null;
   }
 
-  void _dispatchCommittedIncomingNotifications(
+  Future<void> _dispatchCommittedIncomingNotifications(
     MessageSyncOutcome outcome, {
     required bool suppressPresentation,
-  }) {
+  }) async {
     if (!ref.read(messageSyncV2ReadEnabledProvider) ||
         outcome.status != MessageSyncStatus.changed) {
       return;
@@ -1186,6 +1197,20 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       final eventId = committed.eventId.trim();
       final logicalMessageId = committed.logicalMessageId.trim();
       final message = committed.message;
+      final agentMessage = message.agentMessage;
+      if (agentMessage is ValidAgentMessageProjection) {
+        await _dispatchStructuredAgentMessage(
+          committed: committed,
+          message: agentMessage.message,
+          providerPresented: suppressPresentation,
+        );
+        continue;
+      }
+      if (agentMessage is InvalidAgentMessageProjection) {
+        // Core has already committed the generic timeline placeholder. An
+        // invalid exact-schema projection must never reach a native surface.
+        continue;
+      }
       if (eventId.isEmpty ||
           logicalMessageId.isEmpty ||
           message.isMine ||
@@ -1229,6 +1254,375 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         unawaited(_showCommittedMessageNotification(message));
       }
     }
+  }
+
+  Future<void> _dispatchStructuredAgentMessage({
+    required CommittedIncomingMessage committed,
+    required AgentMessageV1 message,
+    required bool providerPresented,
+  }) async {
+    final chatMessage = committed.message;
+    final senderDid = chatMessage.senderDid;
+    final conversationId = chatMessage.conversationId?.trim() ?? '';
+    if (chatMessage.isMine ||
+        senderDid.isEmpty ||
+        conversationId.isEmpty ||
+        message.eventId.isEmpty) {
+      return;
+    }
+    final fence = _AgentMessagePresentationFence.capture(ref);
+    if (fence == null || !fence.matches(ref)) {
+      return;
+    }
+    final store = ref.read(agentMessagePresentationStoreProvider);
+    final now = ref.read(agentMessagePresentationClockProvider)().toUtc();
+    final AgentMessagePresentationClaim claim;
+    try {
+      claim = await store.claim(
+        owner: fence.owner,
+        eventId: message.eventId,
+        senderDid: senderDid,
+        now: now,
+      );
+    } on Object {
+      return;
+    }
+    if (!fence.matches(ref) || claim.isCollision) {
+      return;
+    }
+    final receipt = claim.receipt;
+    if (receipt == null || (!claim.isNew && receipt.isTerminal)) {
+      return;
+    }
+
+    if (providerPresented) {
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.providerPresented,
+      );
+      return;
+    }
+
+    final lifecycle = ref.read(appLifecycleProvider);
+    final AppPresentationState? nativePresentation;
+    if (lifecycle == AppLifecycleState.resumed) {
+      try {
+        nativePresentation = await ref
+            .read(appPresentationServiceProvider)
+            .currentState();
+      } on Object {
+        if (!fence.matches(ref)) return;
+        return;
+      }
+      if (!fence.matches(ref)) return;
+    } else {
+      nativePresentation = null;
+    }
+    final isForeground =
+        lifecycle == AppLifecycleState.resumed &&
+        (nativePresentation?.isForeground ?? true);
+    final isCurrentConversation =
+        isForeground &&
+        ref.read(selectedConversationProvider) == conversationId;
+
+    if (!isForeground) {
+      // EMAS NOTICE owns the one background-visible presentation. A Core or
+      // WebSocket commit may win the race, but it only durably defers here;
+      // submitting an App-owned notification would create a second native ID
+      // when the provider NOTICE is displayed later.
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.deferredProvider,
+      );
+      return;
+    }
+
+    // A previous process/run may have persisted the claim immediately before
+    // losing foreground execution. Never replay a cue in foreground. A
+    // background retry may safely re-submit the same native ID because the
+    // structured channel is configured with onlyAlertOnce.
+    if (!claim.isNew && isForeground) {
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.suppressedForeground,
+      );
+      return;
+    }
+
+    final localStore = ref.read(productLocalStoreProvider);
+    final ProductConversationOverlay? overlay;
+    try {
+      overlay = await localStore.loadConversationOverlayByConversationId(
+        ownerDid: fence.epoch.ownerDid,
+        conversationId: conversationId,
+      );
+    } on Object {
+      if (!fence.matches(ref)) return;
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.suppressedMuted,
+      );
+      return;
+    }
+    if (!fence.matches(ref)) return;
+    if (overlay?.muted == true) {
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.suppressedMuted,
+      );
+      return;
+    }
+
+    var senderTrusted = false;
+    try {
+      final inventory = await localStore.loadAgentInventorySnapshot(
+        binding: fence.productBinding,
+      );
+      if (!fence.matches(ref)) return;
+      senderTrusted =
+          inventory != null &&
+          inventory.binding.ownerIdentityId ==
+              fence.productBinding.ownerIdentityId &&
+          inventory.binding.accountId == fence.productBinding.accountId &&
+          inventory.agents.any(
+            (agent) =>
+                agent.agentDid == senderDid && agent.activeState == 'active',
+          );
+    } on Object {
+      if (!fence.matches(ref)) return;
+      senderTrusted = false;
+    }
+
+    var urgentOptIn = false;
+    try {
+      final preferences = ref.read(agentNotificationPreferencePortProvider);
+      urgentOptIn =
+          preferences != null &&
+          (await preferences.getAgentNotificationPreference()).urgentEnabled;
+    } on Object {
+      urgentOptIn = false;
+    }
+    if (!fence.matches(ref)) return;
+
+    AgentMessageUrgentPresentationCounts counts;
+    try {
+      counts = await store.recentUrgentPresentationCounts(
+        owner: fence.owner,
+        senderDid: senderDid,
+        since: now.subtract(const Duration(minutes: 15)),
+        now: now,
+      );
+    } on Object {
+      counts = const AgentMessageUrgentPresentationCounts(
+        senderCount: 3,
+        accountCount: 6,
+      );
+    }
+    if (!fence.matches(ref)) return;
+
+    final baseDecision = AgentMessagePresentationPolicy().decide(
+      message: message,
+      acceptedAt: committed.authoritativeReceivedAt,
+      now: now,
+      senderIsTrustedForCurrentSession: senderTrusted,
+      urgentOptIn: urgentOptIn,
+      conversationMuted: false,
+      // Permission is applied below only when a native surface or urgent cue
+      // is actually eligible. A normal foreground message remains silent.
+      platformPresentationAllowed: true,
+      isForeground: isForeground,
+      senderUrgentCountInWindow: counts.senderCount,
+      accountUrgentCountInWindow: counts.accountCount,
+    );
+
+    var decision = baseDecision;
+    final needsPresentationPermission =
+        !isForeground || baseDecision.shouldUseUrgentCue;
+    if (needsPresentationPermission) {
+      final StructuredNotificationEligibility eligibility;
+      try {
+        eligibility = await ref
+            .read(notificationFacadeProvider)
+            .structuredNotificationEligibility();
+      } on Object {
+        if (!fence.matches(ref)) return;
+        decision =
+            const AgentMessagePresentationDecision.suppressedPermission();
+        await _finishStructuredDecision(
+          fence: fence,
+          store: store,
+          eventId: message.eventId,
+          decision: decision,
+        );
+        return;
+      }
+      if (!fence.matches(ref)) return;
+      if (eligibility != StructuredNotificationEligibility.allowed) {
+        decision =
+            const AgentMessagePresentationDecision.suppressedPermission();
+      }
+    }
+
+    if (decision.disposition ==
+        AgentMessagePresentationDisposition.suppressedPermission) {
+      await _finishStructuredDecision(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        decision: decision,
+      );
+      return;
+    }
+    if (decision.disposition ==
+        AgentMessagePresentationDisposition.silentForeground) {
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.suppressedForeground,
+      );
+      return;
+    }
+
+    final senderLabel = _structuredSenderLabel(chatMessage);
+    if (decision.disposition ==
+        AgentMessagePresentationDisposition.normalNotification) {
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.deferredProvider,
+      );
+      return;
+    }
+
+    if (decision.disposition ==
+            AgentMessagePresentationDisposition.urgentForegroundCue ||
+        decision.disposition ==
+            AgentMessagePresentationDisposition.urgentForegroundCallout) {
+      // Persist cue-issued before either sound or overlay. A process loss
+      // after this point must suppress replay rather than double-ring.
+      final issued = await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.presentedApp,
+      );
+      if (!issued || !fence.matches(ref)) {
+        return;
+      }
+      if (decision.disposition ==
+              AgentMessagePresentationDisposition.urgentForegroundCallout &&
+          !isCurrentConversation &&
+          fence.matches(ref)) {
+        final overlayFence = AgentUrgentOverlaySessionFence.capture(
+          ref.read(sessionProvider),
+        );
+        if (overlayFence == null ||
+            !ref
+                .read(agentUrgentOverlayProvider.notifier)
+                .tryShow(
+                  AgentUrgentOverlayState(
+                    fence: overlayFence,
+                    navigationContext: RemotePushSessionContext(
+                      storageScopeId: fence.storageScopeId,
+                      ownerDid: fence.epoch.ownerDid,
+                      generation: fence.epoch.generation,
+                    ),
+                    conversationId: conversationId,
+                    senderLabel: senderLabel,
+                    message: message,
+                    authoritativeReceivedAt: committed.authoritativeReceivedAt,
+                  ),
+                )) {
+          // One authoritative callout already owns the UI. Do not ring for a
+          // second full-screen event that cannot be displayed.
+          return;
+        }
+      }
+      await ref.read(notificationFacadeProvider).playStructuredUrgentCue();
+      if (!fence.matches(ref)) return;
+      return;
+    }
+
+    if (decision.disposition ==
+        AgentMessagePresentationDisposition.urgentNotification) {
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.deferredProvider,
+      );
+      return;
+    }
+
+    await _finishStructuredDecision(
+      fence: fence,
+      store: store,
+      eventId: message.eventId,
+      decision: decision,
+    );
+  }
+
+  Future<void> _finishStructuredDecision({
+    required _AgentMessagePresentationFence fence,
+    required AgentMessagePresentationStore store,
+    required String eventId,
+    required AgentMessagePresentationDecision decision,
+  }) async {
+    final disposition = switch (decision.disposition) {
+      AgentMessagePresentationDisposition.suppressedMuted =>
+        AgentMessageReceiptDisposition.suppressedMuted,
+      AgentMessagePresentationDisposition.silentForeground =>
+        AgentMessageReceiptDisposition.suppressedForeground,
+      _ => AgentMessageReceiptDisposition.downgradedNormal,
+    };
+    await _markStructuredDisposition(
+      fence: fence,
+      store: store,
+      eventId: eventId,
+      disposition: disposition,
+    );
+  }
+
+  Future<bool> _markStructuredDisposition({
+    required _AgentMessagePresentationFence fence,
+    required AgentMessagePresentationStore store,
+    required String eventId,
+    required AgentMessageReceiptDisposition disposition,
+  }) async {
+    if (!fence.matches(ref)) return false;
+    try {
+      await store.markDisposition(
+        owner: fence.owner,
+        eventId: eventId,
+        disposition: disposition,
+        now: ref.read(agentMessagePresentationClockProvider)().toUtc(),
+      );
+    } on Object {
+      return false;
+    }
+    return fence.matches(ref);
+  }
+
+  String _structuredSenderLabel(ChatMessage message) {
+    final title = DidDisplayFormatter.compactDisplayName(
+      displayName: message.senderName ?? '',
+      fallbackDid: message.senderDid,
+    ).trim();
+    return title.isNotEmpty
+        ? title
+        : AppMessage.newMessageArrived().resolveForFallback();
   }
 
   void _rememberNotificationIdentity({
@@ -1499,6 +1893,98 @@ class MessageSyncCoordinatorFailure implements Exception {
 
   @override
   String toString() => code;
+}
+
+/// Full App-owned presentation fence. Durable Agent-message operations are
+/// allowed only while the selected session, bound account/device generation,
+/// current DID and tenant storage scope all remain exact.
+final class _AgentMessagePresentationFence {
+  const _AgentMessagePresentationFence._({
+    required this.epoch,
+    required this.ownerIdentityId,
+    required this.accountId,
+    required this.currentDid,
+    required this.protocolDeviceId,
+    required this.identityGeneration,
+    required this.deviceAuthGeneration,
+    required this.storageScopeId,
+    required this.owner,
+    required this.productBinding,
+  });
+
+  static _AgentMessagePresentationFence? capture(Ref ref) {
+    final state = ref.read(sessionProvider);
+    final epoch = state.activeEpoch;
+    final session = state.session;
+    final binding = session?.accountBinding;
+    if (epoch == null ||
+        session == null ||
+        binding == null ||
+        !_exactNonEmpty(binding.ownerIdentityId) ||
+        !_exactNonEmpty(binding.accountId) ||
+        !_exactNonEmpty(binding.currentDid) ||
+        !_exactNonEmpty(binding.protocolDeviceId) ||
+        !_exactNonEmpty(binding.identityGeneration) ||
+        !_exactNonEmpty(binding.deviceAuthGeneration) ||
+        session.localIdentityId != binding.ownerIdentityId ||
+        binding.protocolDeviceId == 'default' ||
+        !_canonicalPositive(binding.identityGeneration) ||
+        !_canonicalPositive(binding.deviceAuthGeneration) ||
+        binding.currentDid != session.did) {
+      return null;
+    }
+    final AgentMessagePresentationOwnerScope owner;
+    try {
+      owner = AgentMessagePresentationOwnerScope(
+        ownerIdentityId: binding.ownerIdentityId,
+        accountId: binding.accountId,
+      );
+    } on ArgumentError {
+      return null;
+    }
+    return _AgentMessagePresentationFence._(
+      epoch: epoch,
+      ownerIdentityId: binding.ownerIdentityId,
+      accountId: binding.accountId,
+      currentDid: binding.currentDid,
+      protocolDeviceId: binding.protocolDeviceId,
+      identityGeneration: binding.identityGeneration,
+      deviceAuthGeneration: binding.deviceAuthGeneration,
+      storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
+      owner: owner,
+      productBinding: ProductAccountBinding.fromSession(binding),
+    );
+  }
+
+  final SessionEpoch epoch;
+  final String ownerIdentityId;
+  final String accountId;
+  final String currentDid;
+  final String protocolDeviceId;
+  final String identityGeneration;
+  final String deviceAuthGeneration;
+  final StorageScopeId storageScopeId;
+  final AgentMessagePresentationOwnerScope owner;
+  final ProductAccountBinding productBinding;
+
+  bool matches(Ref ref) {
+    final current = capture(ref);
+    return current != null &&
+        current.epoch == epoch &&
+        current.ownerIdentityId == ownerIdentityId &&
+        current.accountId == accountId &&
+        current.currentDid == currentDid &&
+        current.protocolDeviceId == protocolDeviceId &&
+        current.identityGeneration == identityGeneration &&
+        current.deviceAuthGeneration == deviceAuthGeneration &&
+        current.storageScopeId == storageScopeId;
+  }
+
+  static bool _exactNonEmpty(String value) =>
+      value.isNotEmpty && value.trim() == value;
+
+  static bool _canonicalPositive(String value) =>
+      RegExp(r'^[1-9][0-9]*$').hasMatch(value);
 }
 
 class _MessageSyncSessionFence {

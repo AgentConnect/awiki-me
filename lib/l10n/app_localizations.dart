@@ -2118,6 +2118,18 @@ abstract class AppLocalizations {
   /// **'消息推送通知'**
   String get settingsPushNotification;
 
+  /// No description provided for @settingsAgentUrgentCalls.
+  ///
+  /// In zh, this message translates to:
+  /// **'允许 Agent 紧急呼叫'**
+  String get settingsAgentUrgentCalls;
+
+  /// No description provided for @settingsAgentUrgentCallsSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'允许可信 Agent 使用一次短促声音和振动，默认关闭。'**
+  String get settingsAgentUrgentCallsSubtitle;
+
   /// No description provided for @settingsCurrentVersion.
   ///
   /// In zh, this message translates to:
@@ -6137,6 +6149,90 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'旧身份升级失败，请重试。'**
   String get legacyIdentityUpgradeFailed;
+
+  /// No description provided for @agentMessageKindMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息'**
+  String get agentMessageKindMessage;
+
+  /// No description provided for @agentMessageKindTaskResult.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务结果'**
+  String get agentMessageKindTaskResult;
+
+  /// No description provided for @agentMessageKindAlert.
+  ///
+  /// In zh, this message translates to:
+  /// **'告警'**
+  String get agentMessageKindAlert;
+
+  /// No description provided for @agentMessageUrgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'紧急'**
+  String get agentMessageUrgent;
+
+  /// No description provided for @agentMessageUrgentCall.
+  ///
+  /// In zh, this message translates to:
+  /// **'紧急呼叫'**
+  String get agentMessageUrgentCall;
+
+  /// No description provided for @agentMessageUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'这条 Agent 消息无法安全显示。'**
+  String get agentMessageUnsupported;
+
+  /// No description provided for @agentMessageOpenConversation.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开会话'**
+  String get agentMessageOpenConversation;
+
+  /// No description provided for @agentMessageEventNumber.
+  ///
+  /// In zh, this message translates to:
+  /// **'事件编号：{eventId}'**
+  String agentMessageEventNumber(Object eventId);
+
+  /// No description provided for @agentMessageTrustedAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'可信 Agent'**
+  String get agentMessageTrustedAgent;
+
+  /// No description provided for @agentMessageJustNow.
+  ///
+  /// In zh, this message translates to:
+  /// **'刚刚'**
+  String get agentMessageJustNow;
+
+  /// No description provided for @agentMessageCueStops.
+  ///
+  /// In zh, this message translates to:
+  /// **'铃声和振动将在 30 秒后停止'**
+  String get agentMessageCueStops;
+
+  /// No description provided for @agentMessageNotVoiceCall.
+  ///
+  /// In zh, this message translates to:
+  /// **'此提醒不会建立语音通话。'**
+  String get agentMessageNotVoiceCall;
+
+  /// No description provided for @agentMessageIgnore.
+  ///
+  /// In zh, this message translates to:
+  /// **'忽略'**
+  String get agentMessageIgnore;
+
+  /// No description provided for @agentMessageActNow.
+  ///
+  /// In zh, this message translates to:
+  /// **'立即处理'**
+  String get agentMessageActNow;
 }
 
 class _AppLocalizationsDelegate
