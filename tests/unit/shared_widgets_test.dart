@@ -357,18 +357,23 @@ void main() {
     expect(find.text('B'), findsOneWidget);
   });
 
-  testWidgets('AvatarBadge 对所有文字占位头像使用统一主题配色', (tester) async {
+  testWidgets('AvatarBadge 使用生成文字、确定性颜色及可选身份 ID', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const CupertinoPageScaffold(
           child: SafeArea(
             child: Row(
               children: <Widget>[
-                AvatarBadge(key: Key('avatar-alice'), seed: 'Alice'),
+                AvatarBadge(
+                  key: Key('avatar-alice'),
+                  seed: 'Alice Chen',
+                  userId: 'did:test:alice',
+                ),
                 AvatarBadge(
                   key: Key('avatar-jin'),
                   seed: 'different-seed',
                   labelOverride: '锦',
+                  userId: 'did:test:alice',
                 ),
               ],
             ),
@@ -377,6 +382,7 @@ void main() {
       ),
     );
 
+    Color? generatedColor;
     for (final avatarKey in const <Key>[
       Key('avatar-alice'),
       Key('avatar-jin'),
@@ -389,13 +395,12 @@ void main() {
         find.descendant(of: avatar, matching: find.byType(Text)),
       );
 
-      expect(
-        (container.decoration as BoxDecoration).color,
-        AwikiMePalette.avatarBackground,
-      );
+      final color = (container.decoration as BoxDecoration).color;
+      generatedColor ??= color;
+      expect(color, generatedColor);
       expect(label.style?.color, AwikiMePalette.avatarForeground);
     }
-    expect(find.text('A'), findsOneWidget);
+    expect(find.text('AC'), findsOneWidget);
     expect(find.text('锦'), findsOneWidget);
   });
 }

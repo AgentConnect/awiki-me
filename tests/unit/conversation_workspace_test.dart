@@ -994,7 +994,7 @@ void main() {
 
     await tester.tap(find.text('普通用户'));
     await tester.pumpAndSettle();
-    expect(find.text('用户'), findsNothing);
+    expect(find.byKey(const Key('chat-header-agent-badge')), findsNothing);
     expect(
       find.byKey(const Key('chat-conversation-info-button')),
       findsNothing,
@@ -1002,7 +1002,12 @@ void main() {
 
     await tester.tap(find.text('远端智能体'));
     await tester.pumpAndSettle();
-    expect(find.text('智能体'), findsWidgets);
+    final agentBadge = find.byKey(const Key('chat-header-agent-badge'));
+    expect(agentBadge, findsOneWidget);
+    expect(
+      find.descendant(of: agentBadge, matching: find.text('智能体')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const Key('chat-conversation-info-button')),
       findsNothing,

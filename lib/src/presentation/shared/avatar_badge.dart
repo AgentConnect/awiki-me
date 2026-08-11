@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
 import 'awiki_me_design.dart';
+import 'default_avatar_generator.dart';
 
 class AvatarBadge extends StatelessWidget {
   const AvatarBadge({
@@ -9,12 +10,14 @@ class AvatarBadge extends StatelessWidget {
     this.size = 48,
     this.labelOverride,
     this.avatarUri,
+    this.userId,
   });
 
   final String seed;
   final double size;
   final String? labelOverride;
   final String? avatarUri;
+  final String? userId;
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +25,7 @@ class AvatarBadge extends StatelessWidget {
       seed: seed,
       size: size,
       labelOverride: labelOverride,
+      userId: userId,
     );
     final uri = _safeAvatarUri(avatarUri);
     if (uri == null) {
@@ -51,26 +55,26 @@ class _FallbackAvatarBadge extends StatelessWidget {
     required this.seed,
     required this.size,
     this.labelOverride,
+    this.userId,
   });
 
   final String seed;
   final double size;
   final String? labelOverride;
+  final String? userId;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
-    final normalized = seed.trim();
+    final generated = generateDefaultAvatar(name: seed, userId: userId);
     final label = labelOverride?.trim().isNotEmpty == true
         ? labelOverride!.trim()
-        : normalized.isEmpty
-        ? '?'
-        : normalized.substring(0, 1).toUpperCase();
+        : generated.text;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: theme.avatarBackground,
+        color: generated.backgroundColor,
         borderRadius: BorderRadius.circular(size / 2),
       ),
       alignment: Alignment.center,
