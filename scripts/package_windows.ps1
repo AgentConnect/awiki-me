@@ -184,7 +184,6 @@ try {
         --release `
         --no-pub `
         "--dart-define=AWIKI_PRIMARY_TENANT_DOMAIN=$PrimaryTenantDomain" `
-        --dart-define=AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED=true `
         "--dart-define=AWIKI_APP_SOURCE_REF=$AppRef" `
         "--dart-define=AWIKI_IM_CORE_SOURCE_REF=$CoreRef" `
         --build-name $Version `
