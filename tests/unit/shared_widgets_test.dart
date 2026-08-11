@@ -398,7 +398,7 @@ void main() {
       final color = (container.decoration as BoxDecoration).color;
       generatedColor ??= color;
       expect(color, generatedColor);
-      expect(label.style?.color, AwikiMePalette.avatarForeground);
+      expect(label.style?.color, CupertinoColors.white);
     }
     expect(find.text('AC'), findsOneWidget);
     expect(find.text('锦'), findsOneWidget);
