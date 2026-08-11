@@ -95,6 +95,12 @@ class AppMessage {
   factory AppMessage.registrationMethodUnavailable() =>
       const AppMessage._('registrationMethodUnavailable');
 
+  factory AppMessage.registrationVerificationInvalid() =>
+      const AppMessage._('registrationVerificationInvalid');
+
+  factory AppMessage.registrationVerificationUnavailable() =>
+      const AppMessage._('registrationVerificationUnavailable');
+
   factory AppMessage.handleRecoveryUnavailable() =>
       const AppMessage._('handleRecoveryUnavailable');
 
@@ -232,6 +238,12 @@ class AppMessage {
       const AppMessage._('screenshotPermissionRequired');
 
   factory AppMessage.fromError(Object error) {
+    switch (structuredAppErrorCode(error)) {
+      case 'identity.registration_verification_invalid':
+        return AppMessage.registrationVerificationInvalid();
+      case 'identity.registration_verification_unavailable':
+        return AppMessage.registrationVerificationUnavailable();
+    }
     final raw = normalizeAppError(error);
     if (raw.isEmpty) {
       return AppMessage.operationFailedRetry();
@@ -431,6 +443,10 @@ class AppMessage {
         return l10n.emailNotActivatedClickLink;
       case 'registrationMethodUnavailable':
         return l10n.registrationMethodUnavailable;
+      case 'registrationVerificationInvalid':
+        return l10n.registrationVerificationInvalid;
+      case 'registrationVerificationUnavailable':
+        return l10n.registrationVerificationUnavailable;
       case 'handleRecoveryUnavailable':
         return l10n.handleRecoveryUnavailable;
       case 'sessionExpiredRelogin':

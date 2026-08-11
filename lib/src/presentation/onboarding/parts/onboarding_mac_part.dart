@@ -1042,7 +1042,9 @@ class _MacRegisterForm extends StatelessWidget {
             width: double.infinity,
             child: _MacPrimaryAction(
               label: context.l10n.onboardingPhoneLoginOrRegisterAction,
-              onPressed: onboarding.isBusy ? null : onSubmitRegister,
+              onPressed: onboarding.isBusy || !onboarding.canSubmitPhoneOtp
+                  ? null
+                  : onSubmitRegister,
             ),
           ),
         ],

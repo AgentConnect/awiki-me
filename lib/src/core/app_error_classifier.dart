@@ -1,9 +1,52 @@
+import 'dart:convert';
+
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
+
 enum AppErrorKind {
   authentication,
   didNotFoundOrRevoked,
   networkUnavailable,
   timeout,
   other,
+}
+
+String? structuredAppErrorCode(Object error) {
+  if (error is! core.AwikiImCoreException) {
+    return null;
+  }
+  final raw = error.serviceDataJson;
+  if (raw == null || raw.trim().isEmpty) {
+    return null;
+  }
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map<String, dynamic>) {
+      return null;
+    }
+    final value = decoded['awiki_code'];
+    if (value is! String) {
+      return null;
+    }
+    final code = value.trim();
+    return _isStableErrorCode(code) ? code : null;
+  } on FormatException {
+    return null;
+  }
+}
+
+bool _isStableErrorCode(String value) {
+  if (value.isEmpty || value.length > 96) {
+    return false;
+  }
+  return value.codeUnits.every(
+    (unit) =>
+        unit >= 48 && unit <= 57 ||
+        unit >= 65 && unit <= 90 ||
+        unit >= 97 && unit <= 122 ||
+        unit == 45 ||
+        unit == 46 ||
+        unit == 95,
+  );
 }
 
 AppErrorKind classifyAppError(Object error) {

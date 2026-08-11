@@ -36,6 +36,43 @@ void main() {
     expect(message, AppMessage.didNotFoundOrRevoked());
   });
 
+  test(
+    'maps structured registration verification errors without parsing messages',
+    () {
+      final unavailable = AppMessage.fromError(
+        const core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'diagnostic text may change',
+          statusCode: 409,
+          serviceCode: '-32003',
+          serviceDataJson:
+              '{"awiki_code":"identity.registration_verification_unavailable","retryable":true}',
+        ),
+      );
+      final invalid = AppMessage.fromError(
+        const core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'another diagnostic',
+          statusCode: 400,
+          serviceDataJson:
+              '{"awiki_code":"identity.registration_verification_invalid","retryable":true}',
+        ),
+      );
+
+      expect(unavailable, AppMessage.registrationVerificationUnavailable());
+      expect(
+        unavailable.resolve(AppLocalizationsZh()),
+        '这个验证码已过期或已被使用，请重新发送验证码后再试。',
+      );
+      expect(
+        unavailable.resolve(AppLocalizationsEn()),
+        'This verification code has expired or has already been used. Send a new code and try again.',
+      );
+      expect(invalid, AppMessage.registrationVerificationInvalid());
+      expect(invalid.resolve(AppLocalizationsZh()), '验证码不正确，请核对后重试。');
+    },
+  );
+
   test('maps im-core transport unavailable errors to friendly network copy', () {
     final message = AppMessage.fromError(
       const core.AwikiImCoreException(

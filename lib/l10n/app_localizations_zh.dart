@@ -273,6 +273,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get registrationMethodUnavailable => '当前服务器不支持所选注册方式，请刷新后重试。';
 
   @override
+  String get registrationVerificationInvalid => '验证码不正确，请核对后重试。';
+
+  @override
+  String get registrationVerificationUnavailable =>
+      '这个验证码已过期或已被使用，请重新发送验证码后再试。';
+
+  @override
   String get tenantSwitcherLabel => '管理租户';
 
   @override

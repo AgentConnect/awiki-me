@@ -9,6 +9,7 @@ import '../../application/models/onboarding_server_info.dart';
 import '../../application/onboarding_support_service.dart';
 import '../../application/ports/identity_core_port.dart';
 import '../../application/ports/legacy_identity_upgrade_port.dart';
+import '../../core/app_error_classifier.dart';
 import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../l10n/app_message.dart';
@@ -31,6 +32,7 @@ class OnboardingState {
     this.legacyUpgradeStatus = const LegacyIdentityUpgradeStatus.idle(),
     this.otpTargetFullHandle,
     this.otpTargetPhone,
+    this.isPhoneOtpConsumed = false,
     this.existingHandleContinuationId,
     this.existingHandleJoinMode,
     this.existingHandleJoinRequiresUserPresence = false,
@@ -48,6 +50,7 @@ class OnboardingState {
   final LegacyIdentityUpgradeStatus legacyUpgradeStatus;
   final String? otpTargetFullHandle;
   final String? otpTargetPhone;
+  final bool isPhoneOtpConsumed;
   final String? existingHandleContinuationId;
   final ExistingHandleJoinMode? existingHandleJoinMode;
   final bool existingHandleJoinRequiresUserPresence;
@@ -69,6 +72,10 @@ class OnboardingState {
   bool get isDeletingLocalIdentity =>
       deletingLocalIdentitySelector?.isNotEmpty == true;
   bool get hasRegistrationMethods => registrationMethods.isNotEmpty;
+  bool get canSubmitPhoneOtp =>
+      otpTargetFullHandle != null &&
+      otpTargetPhone != null &&
+      !isPhoneOtpConsumed;
 
   List<OnboardingIdentityMethod> get registrationMethods {
     return serverInfo?.registrationMethods ??
@@ -116,6 +123,7 @@ class OnboardingState {
     LegacyIdentityUpgradeStatus? legacyUpgradeStatus,
     Object? otpTargetFullHandle = _unset,
     Object? otpTargetPhone = _unset,
+    bool? isPhoneOtpConsumed,
     Object? existingHandleContinuationId = _unset,
     Object? existingHandleJoinMode = _unset,
     bool? existingHandleJoinRequiresUserPresence,
@@ -140,6 +148,7 @@ class OnboardingState {
       otpTargetPhone: identical(otpTargetPhone, _unset)
           ? this.otpTargetPhone
           : otpTargetPhone as String?,
+      isPhoneOtpConsumed: isPhoneOtpConsumed ?? this.isPhoneOtpConsumed,
       existingHandleContinuationId:
           identical(existingHandleContinuationId, _unset)
           ? this.existingHandleContinuationId
@@ -208,6 +217,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       emailVerified: value == 'login' ? false : state.emailVerified,
       otpTargetFullHandle: value == 'login' ? null : state.otpTargetFullHandle,
       otpTargetPhone: value == 'login' ? null : state.otpTargetPhone,
+      isPhoneOtpConsumed: value == 'login' ? false : state.isPhoneOtpConsumed,
       emailResendCountdown: value == 'login' ? 0 : state.emailResendCountdown,
     );
     if (value == 'login') {
@@ -225,6 +235,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       emailVerified: false,
       otpTargetFullHandle: null,
       otpTargetPhone: null,
+      isPhoneOtpConsumed: false,
       emailResendCountdown: 0,
     );
     _cancelEmailResendCountdown();
@@ -306,6 +317,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         state = state.copyWith(
           otpTargetFullHandle: fullHandle!,
           otpTargetPhone: normalizedPhone,
+          isPhoneOtpConsumed: false,
         );
         await cooldown.completeAcceptedAt(receipt!.retryAt);
         ref.read(uiFeedbackProvider.notifier).showInfo(AppMessage.otpSent());
@@ -316,10 +328,16 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }
 
   void resetPhoneOtpTarget() {
-    if (state.otpTargetFullHandle == null && state.otpTargetPhone == null) {
+    if (state.otpTargetFullHandle == null &&
+        state.otpTargetPhone == null &&
+        !state.isPhoneOtpConsumed) {
       return;
     }
-    state = state.copyWith(otpTargetFullHandle: null, otpTargetPhone: null);
+    state = state.copyWith(
+      otpTargetFullHandle: null,
+      otpTargetPhone: null,
+      isPhoneOtpConsumed: false,
+    );
   }
 
   void updateOtpPhone(String phone) {
@@ -328,7 +346,11 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         state.otpTargetPhone == normalizedPhone) {
       return;
     }
-    state = state.copyWith(otpTargetFullHandle: null, otpTargetPhone: null);
+    state = state.copyWith(
+      otpTargetFullHandle: null,
+      otpTargetPhone: null,
+      isPhoneOtpConsumed: false,
+    );
   }
 
   Future<void> requestEmailActivation({
@@ -396,10 +418,19 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String nickName,
     required String profileMarkdown,
   }) async {
+    if (state.isBusy) {
+      return null;
+    }
     if (!state.supportsPhoneOtpRegistration) {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.registrationMethodUnavailable());
+      return null;
+    }
+    if (state.isPhoneOtpConsumed) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.registrationVerificationUnavailable());
       return null;
     }
     final domain = _normalizeHandleDomain(handleDomain);
@@ -415,17 +446,27 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
     final transition = _sessionService.beginSessionTransition();
     return _runBusy(() async {
-      final result = await ref
-          .read(onboardingServiceProvider)
-          .registerHandleWithPhone(
-            phone: phone,
-            otp: otp,
-            handle: handle,
-            nickName: nickName,
-            profileMarkdown: profileMarkdown,
-            transition: transition,
-          );
-      return _activateRegistrationResult(result, transition);
+      try {
+        final result = await ref
+            .read(onboardingServiceProvider)
+            .registerHandleWithPhone(
+              phone: phone,
+              otp: otp,
+              handle: handle,
+              nickName: nickName,
+              profileMarkdown: profileMarkdown,
+              transition: transition,
+            );
+        state = state.copyWith(isPhoneOtpConsumed: true);
+        final status = await _activateRegistrationResult(result, transition);
+        return status;
+      } catch (error) {
+        if (structuredAppErrorCode(error) ==
+            'identity.registration_verification_unavailable') {
+          state = state.copyWith(isPhoneOtpConsumed: true);
+        }
+        rethrow;
+      }
     }, sessionTransition: transition);
   }
 
@@ -435,6 +476,9 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String nickName,
     required String profileMarkdown,
   }) async {
+    if (state.isBusy) {
+      return null;
+    }
     if (!state.supportsEmailRegistration) {
       ref
           .read(uiFeedbackProvider.notifier)
@@ -470,6 +514,9 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String nickName,
     required String profileMarkdown,
   }) async {
+    if (state.isBusy) {
+      return null;
+    }
     if (!state.supportsPhoneNoVerificationRegistration) {
       ref
           .read(uiFeedbackProvider.notifier)
@@ -681,6 +728,9 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     Future<T> Function() action, {
     AppSessionTransition? sessionTransition,
   }) async {
+    if (state.isBusy) {
+      return null;
+    }
     final generation = ++_busyGeneration;
     if (sessionTransition != null) {
       _activeSessionTransition = sessionTransition;
@@ -770,6 +820,9 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       otpTargetPhone: authChanged || method == null
           ? null
           : state.otpTargetPhone,
+      isPhoneOtpConsumed: authChanged || method == null
+          ? false
+          : state.isPhoneOtpConsumed,
       emailResendCountdown: authChanged || method == null
           ? 0
           : state.emailResendCountdown,

@@ -302,11 +302,14 @@ void main() {
         tester,
         () {
           _failOnDangerousUiFeedback(container, 'Existing Handle verification');
+          final state = container.read(onboardingProvider);
           return find
-                  .byKey(const Key('existing-handle-recovery-action'))
-                  .evaluate()
-                  .length ==
-              1;
+                      .byKey(const Key('existing-handle-recovery-action'))
+                      .evaluate()
+                      .length ==
+                  1 &&
+              state.isPhoneOtpConsumed &&
+              !state.canSubmitPhoneOtp;
         },
         timeout: const Duration(seconds: 45),
         failure: 'Existing Handle did not expose the Join/Recovery choice.',
@@ -1534,6 +1537,8 @@ _startAppPeerRegistrationJoin({
       );
       final state = container.read(onboardingProvider);
       return joinAction.evaluate().length == 1 &&
+          state.isPhoneOtpConsumed &&
+          !state.canSubmitPhoneOtp &&
           state.existingHandleContinuationId != null &&
           state.existingHandleJoinMode ==
               ExistingHandleJoinMode.handleRecoveryRebind &&

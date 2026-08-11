@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/app/app_locale.dart';
@@ -1609,17 +1610,8 @@ void main() {
       await tester.pump();
       expect(container.read(onboardingProvider).otpTargetFullHandle, isNull);
 
-      await _tapVisible(tester, find.text('登录/注册'));
-      await tester.pump();
-
       expect(gateway.registerHandleCalls, 0);
-      container = ProviderScope.containerOf(
-        tester.element(find.byType(OnboardingPage)),
-      );
-      expect(
-        container.read(uiFeedbackProvider)?.message.id,
-        'operationFailedRetry',
-      );
+      expect(container.read(onboardingProvider).canSubmitPhoneOtp, isFalse);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
@@ -1760,6 +1752,14 @@ void main() {
       find.byKey(const Key('existing-handle-recovery-action')),
       findsOneWidget,
     );
+    expect(
+      tester
+          .widget<CupertinoTextField>(find.byType(CupertinoTextField).at(2))
+          .controller
+          ?.text,
+      isEmpty,
+    );
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
     expect(find.byKey(const Key('device-join-page')), findsNothing);
 
     await tester.tap(find.byKey(const Key('existing-handle-join-action')));
@@ -1777,6 +1777,140 @@ void main() {
     expect(
       container.read(onboardingProvider).toString(),
       isNot(contains('123456')),
+    );
+  });
+
+  testWidgets('join_required 取消后旧验证码不会被再次提交', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..registrationStatus = IdentityRegistrationStatus.joinRequired;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.enterText(fields.at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
+    await tester.tap(find.byKey(const Key('existing-handle-cancel-action')));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    final state = container.read(onboardingProvider);
+    expect(state.isPhoneOtpConsumed, isTrue);
+    expect(state.canSubmitPhoneOtp, isFalse);
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
+  });
+
+  testWidgets('服务端拒绝已失效验证码后清空输入并阻止重复提交', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..nextOnboardingPhoneRegistrationError = const core.AwikiImCoreException(
+        code: 'service_error',
+        message: 'diagnostic text may change',
+        statusCode: 409,
+        serviceCode: '-32003',
+        serviceDataJson:
+            '{"awiki_code":"identity.registration_verification_unavailable","retryable":true}',
+      );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.enterText(fields.at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    final state = container.read(onboardingProvider);
+    expect(state.isPhoneOtpConsumed, isTrue);
+    expect(state.canSubmitPhoneOtp, isFalse);
+    expect(
+      tester
+          .widget<CupertinoTextField>(find.byType(CupertinoTextField).at(2))
+          .controller
+          ?.text,
+      isEmpty,
+    );
+    expect(
+      container.read(uiFeedbackProvider)?.message.id,
+      'registrationVerificationUnavailable',
+    );
+
+    final duplicate = await container
+        .read(onboardingProvider.notifier)
+        .registerWithPhone(
+          phone: '13800138000',
+          otp: '123456',
+          handle: 'alice',
+          handleDomain: 'awiki.ai',
+          nickName: 'alice',
+          profileMarkdown: '# alice\n\n',
+        );
+
+    expect(duplicate, isNull);
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
+  });
+
+  testWidgets('手机号注册在 provider 边界阻止并发重复提交', (tester) async {
+    final pending = Completer<void>();
+    final gateway = FakeAwikiGateway()
+      ..registrationStatus = IdentityRegistrationStatus.joinRequired
+      ..onboardingPhoneRegistrationCompleter = pending;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.enterText(fields.at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pump();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    final duplicate = await container
+        .read(onboardingProvider.notifier)
+        .registerWithPhone(
+          phone: '13800138000',
+          otp: '123456',
+          handle: 'alice',
+          handleDomain: 'awiki.ai',
+          nickName: 'alice',
+          profileMarkdown: '# alice\n\n',
+        );
+
+    expect(duplicate, isNull);
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
+
+    pending.complete();
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('existing-handle-join-action')),
+      findsOneWidget,
     );
   });
 

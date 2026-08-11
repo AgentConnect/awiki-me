@@ -399,7 +399,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           child: AppPrimaryButton(
             label: context.l10n.onboardingPhoneLoginOrRegisterAction,
             semanticsIdentifier: 'e2e-complete-login-button',
-            onPressed: onboarding.isBusy
+            onPressed: onboarding.isBusy || !onboarding.canSubmitPhoneOtp
                 ? null
                 : () => _submitRegister(context),
           ),
@@ -491,6 +491,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         nickName: handle,
         profileMarkdown: profileMarkdown,
       );
+    }
+    if (ref.read(onboardingProvider).isPhoneOtpConsumed) {
+      otpController.clear();
     }
     if (result == IdentityRegistrationStatus.joinRequired && context.mounted) {
       final verifiedOnboarding = ref.read(onboardingProvider);

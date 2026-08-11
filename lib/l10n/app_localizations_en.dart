@@ -284,6 +284,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'This server does not support the selected registration method. Refresh and try again.';
 
   @override
+  String get registrationVerificationInvalid =>
+      'The verification code is incorrect. Check the code and try again.';
+
+  @override
+  String get registrationVerificationUnavailable =>
+      'This verification code has expired or has already been used. Send a new code and try again.';
+
+  @override
   String get tenantSwitcherLabel => 'Manage tenants';
 
   @override

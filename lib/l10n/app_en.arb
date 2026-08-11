@@ -112,6 +112,8 @@
   "onboardingRegistrationUnavailable": "This server does not currently support in-app identity registration.",
   "onboardingNoVerificationHint": "This server does not require SMS or email verification. You can create a new identity directly.",
   "registrationMethodUnavailable": "This server does not support the selected registration method. Refresh and try again.",
+  "registrationVerificationInvalid": "The verification code is incorrect. Check the code and try again.",
+  "registrationVerificationUnavailable": "This verification code has expired or has already been used. Send a new code and try again.",
   "tenantSwitcherLabel": "Manage tenants",
   "tenantManagementTitle": "Tenants",
   "tenantManagementSubtitle": "Switch the backend and DID host used by this app.",

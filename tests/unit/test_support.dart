@@ -772,6 +772,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   bool handleAlreadyRegistered = false;
   IdentityRegistrationStatus registrationStatus =
       IdentityRegistrationStatus.registered;
+  int onboardingPhoneRegistrationCalls = 0;
+  Completer<void>? onboardingPhoneRegistrationCompleter;
+  Object? nextOnboardingPhoneRegistrationError;
   ExistingHandleJoinMode existingHandleJoinMode =
       ExistingHandleJoinMode.ordinary;
   bool existingHandleJoinRequiresUserPresence = false;
@@ -3895,6 +3898,13 @@ class FakeOnboardingService implements OnboardingService {
     String? profileMarkdown,
     AppSessionTransition? transition,
   }) async {
+    gateway.onboardingPhoneRegistrationCalls += 1;
+    await gateway.onboardingPhoneRegistrationCompleter?.future;
+    final error = gateway.nextOnboardingPhoneRegistrationError;
+    gateway.nextOnboardingPhoneRegistrationError = null;
+    if (error != null) {
+      throw error;
+    }
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
       return IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,

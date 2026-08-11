@@ -596,6 +596,18 @@ abstract class AppLocalizations {
   /// **'当前服务器不支持所选注册方式，请刷新后重试。'**
   String get registrationMethodUnavailable;
 
+  /// No description provided for @registrationVerificationInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证码不正确，请核对后重试。'**
+  String get registrationVerificationInvalid;
+
+  /// No description provided for @registrationVerificationUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个验证码已过期或已被使用，请重新发送验证码后再试。'**
+  String get registrationVerificationUnavailable;
+
   /// No description provided for @tenantSwitcherLabel.
   ///
   /// In zh, this message translates to:
