@@ -357,7 +357,7 @@ void main() {
     expect(find.text('B'), findsOneWidget);
   });
 
-  testWidgets('AvatarBadge 使用生成文字、确定性颜色及可选身份 ID', (tester) async {
+  testWidgets('AvatarBadge 使用生成文字和统一主题配色', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const CupertinoPageScaffold(
@@ -382,7 +382,6 @@ void main() {
       ),
     );
 
-    Color? generatedColor;
     for (final avatarKey in const <Key>[
       Key('avatar-alice'),
       Key('avatar-jin'),
@@ -395,9 +394,10 @@ void main() {
         find.descendant(of: avatar, matching: find.byType(Text)),
       );
 
-      final color = (container.decoration as BoxDecoration).color;
-      generatedColor ??= color;
-      expect(color, generatedColor);
+      expect(
+        (container.decoration as BoxDecoration).color,
+        AwikiMePalette.avatarBackground,
+      );
       expect(label.style?.color, AwikiMePalette.avatarForeground);
     }
     expect(find.text('AC'), findsOneWidget);
