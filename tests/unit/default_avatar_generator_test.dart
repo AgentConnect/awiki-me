@@ -60,7 +60,7 @@ void main() {
       expect(hsl.hue, inInclusiveRange(0, 359));
     });
 
-    test('creates a same-hue vertical gradient from dark to light', () {
+    test('creates same-hue diagonal gradient colors from dark to light', () {
       final avatar = generateDefaultAvatar(name: 'Howard Chan');
       final top = HSLColor.fromColor(avatar.backgroundTopColor);
       final bottom = HSLColor.fromColor(avatar.backgroundBottomColor);

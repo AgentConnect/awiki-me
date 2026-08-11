@@ -399,8 +399,8 @@ void main() {
           (container.decoration as BoxDecoration).gradient! as LinearGradient;
       generatedGradient ??= gradient;
       expect(gradient.colors, generatedGradient.colors);
-      expect(gradient.begin, Alignment.topCenter);
-      expect(gradient.end, Alignment.bottomCenter);
+      expect(gradient.begin, Alignment.topLeft);
+      expect(gradient.end, Alignment.bottomRight);
       expect(
         HSLColor.fromColor(gradient.colors.first).lightness,
         lessThan(HSLColor.fromColor(gradient.colors.last).lightness),
