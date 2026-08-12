@@ -1614,11 +1614,6 @@ class DesktopE2eRunner {
     await _timed('Preparing CLI workspace', _prepareCliWorkspace);
     await _timed('Preparing CLI identity', _prepareCliIdentity);
     await _timed('Checking CLI ready state', _checkCliReady);
-    await _timed(
-      'Waiting for App registration OTP window',
-      _waitForAppRegistrationOtpWindow,
-    );
-
     if (options.prepareOnly) {
       _section('Prepare-only completed');
       _line('Flutter desktop E2E was not started.');
@@ -1816,23 +1811,11 @@ class DesktopE2eRunner {
       final otpInput = jsonEncode(<String, String>{
         'phone': peerConfig.otpPhone,
       });
-      var otpRequest = await _cli(
+      final otpRequest = await _cli(
         otpArgs,
         allowFailure: true,
         stdinText: otpInput,
       );
-      if (isRetryableCliRegistrationOtpServiceError(otpRequest)) {
-        _line(
-          'CLI registration OTP request was rate-limited; retrying once '
-          'after the remote window.',
-        );
-        await Future<void>.delayed(const Duration(seconds: 61));
-        otpRequest = await _cli(
-          otpArgs,
-          allowFailure: true,
-          stdinText: otpInput,
-        );
-      }
       if (otpRequest.exitCode != 0 && !options.dryRun) {
         throw E2eFailure(
           'CLI peer registration OTP request failed: '
@@ -1877,15 +1860,6 @@ class DesktopE2eRunner {
       ]);
       _resourceSideEffectsPossible = true;
     }
-  }
-
-  Future<void> _waitForAppRegistrationOtpWindow() async {
-    if (options.dryRun || commands.dryRun) {
-      return;
-    }
-    // CLI and App use the same dedicated E2E phone. The remote registration
-    // endpoint rate-limits OTP sends per phone for 60 seconds.
-    await Future<void>.delayed(const Duration(seconds: 61));
   }
 
   Future<void> _checkCliReady() async {
@@ -3301,25 +3275,6 @@ String cliBuildCommitFromVersionJson(String output) {
     );
   }
   return commit.trim().toLowerCase();
-}
-
-bool isRetryableCliRegistrationOtpServiceError(DesktopCommandResult result) {
-  if (result.exitCode == 0) {
-    return false;
-  }
-  Object? decoded;
-  try {
-    decoded = jsonDecode(result.output);
-  } on Object {
-    return false;
-  }
-  final error = decoded is Map ? decoded['error'] : null;
-  if (error is! Map || error['code'] != 'service_error') {
-    return false;
-  }
-  final details = error['details'];
-  final serviceCode = details is Map ? details['service_code'] : null;
-  return serviceCode is! String || serviceCode.trim().isEmpty;
 }
 
 String _basename(String path) {

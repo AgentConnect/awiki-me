@@ -77,9 +77,9 @@ Recovery 或 Join 找回。App 只有在 App overlay 与 Core owner 数据均删
 activate 后若 Core 回报 post-commit `local_transition_pending`，用例允许 App 在同一
 operation 上自动续跑一次；如仍为可恢复状态，再通过可见的“继续恢复”按钮在有界
 预算内推进，终态或不可恢复错误仍 fail closed。
-fixture 注册与 UI 验证复用同一测试手机号时，用例必须先遵守首个注册 OTP receipt 的
-`retry_at`，并确认 UI 已把第二次 OTP 绑定到规范化 Handle/手机号后才允许提交，避免把
-服务端冷却或异步请求竞态误判为产品恢复失败。
+fixture 注册与 UI 验证复用受保护的固定测试手机号时，服务端 preset 路径跳过发送冷却，
+用例不得再硬编码等待 60 秒；它仍确认 UI 已把第二次 OTP 绑定到规范化 Handle/手机号后才
+允许提交，避免把异步请求竞态误判为产品恢复失败。非 preset OTP 继续遵守服务端 receipt。
 进入 Recovery 后还会断言已验证 Handle/手机号仅以只读上下文展示、页面只保留一个 Recovery
 OTP 输入框，并且 Core 恰好收到一次同一 Handle/手机号且不带本地 identity selector。
 最终 oracle 要求：Handle 保留、新的本地 owner 被安装、DID 被替换、Registry 只有一个

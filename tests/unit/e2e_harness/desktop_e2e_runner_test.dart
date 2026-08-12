@@ -1116,64 +1116,6 @@ void main() {
     });
   });
 
-  group('CLI registration OTP retry', () {
-    test('retries only one opaque structured service error', () {
-      expect(
-        isRetryableCliRegistrationOtpServiceError(
-          DesktopCommandResult(
-            exitCode: 5,
-            output: jsonEncode(<String, Object?>{
-              'error': <String, Object?>{'code': 'service_error'},
-            }),
-          ),
-        ),
-        isTrue,
-      );
-      expect(
-        isRetryableCliRegistrationOtpServiceError(
-          DesktopCommandResult(
-            exitCode: 5,
-            output: jsonEncode(<String, Object?>{
-              'error': <String, Object?>{
-                'code': 'service_error',
-                'details': <String, Object?>{
-                  'service_code': 'registration.invalid_otp',
-                },
-              },
-            }),
-          ),
-        ),
-        isFalse,
-      );
-    });
-
-    test('does not retry success, malformed output, or another error', () {
-      expect(
-        isRetryableCliRegistrationOtpServiceError(
-          const DesktopCommandResult(exitCode: 0, output: ''),
-        ),
-        isFalse,
-      );
-      expect(
-        isRetryableCliRegistrationOtpServiceError(
-          const DesktopCommandResult(exitCode: 5, output: 'not-json'),
-        ),
-        isFalse,
-      );
-      expect(
-        isRetryableCliRegistrationOtpServiceError(
-          DesktopCommandResult(
-            exitCode: 5,
-            output: jsonEncode(<String, Object?>{
-              'error': <String, Object?>{'code': 'invalid_input'},
-            }),
-          ),
-        ),
-        isFalse,
-      );
-    });
-  });
-
   group('CLI tenant preflight', () {
     test('returns an exact reusable target or no match', () {
       final tenant = cliTenantConfigFromListJson(
@@ -2957,10 +2899,11 @@ performance:
         final steps = decoded['steps'] as List<dynamic>;
         expect(
           steps.map((step) => (step as Map<String, dynamic>)['name']),
-          containsAll(<String>[
-            'Waiting for App registration OTP window',
-            'Flutter App + CLI peer flow',
-          ]),
+          contains('Flutter App + CLI peer flow'),
+        );
+        expect(
+          steps.map((step) => (step as Map<String, dynamic>)['name']),
+          isNot(contains('Waiting for App registration OTP window')),
         );
       },
     );

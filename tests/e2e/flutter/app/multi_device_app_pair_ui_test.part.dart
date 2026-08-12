@@ -446,7 +446,6 @@ void appPairJoinerMain() {
       );
       await _enterText(tester, 'e2e-phone-input', account.phone);
       await _enterText(tester, 'e2e-handle-input', handle);
-      await Future<void>.delayed(const Duration(seconds: 61));
       await _tapOne(
         tester,
         find.bySemanticsIdentifier('e2e-send-otp-button'),

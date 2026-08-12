@@ -4743,33 +4743,23 @@ Future<({String otp, DateTime retryAt})> _requestAndResolveRegistrationOtp({
   required _DedicatedAccount account,
   required String handle,
 }) async {
-  for (var attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      final receipt = await onboardingSupport.sendRegistrationOtp(
-        phone: account.phone,
-        handle: handle,
-        domain: config.didDomain,
-        fullHandle: '$handle.${config.didDomain}',
-      );
-      final otp = await _resolveOtp(
-        account: account,
-        purpose: _registrationPurpose,
-        handle: handle,
-        didDomain: config.didDomain,
-      );
-      return (otp: otp, retryAt: receipt.retryAt);
-    } on RegistrationOtpRateLimited catch (error) {
-      if (attempt == 2 || error.retryAfterSeconds > 120) {
-        fail('The registration OTP request remained rate limited.');
-      }
-      await Future<void>.delayed(
-        Duration(seconds: error.retryAfterSeconds + 1),
-      );
-    } on Object {
-      fail('The registration OTP request failed safely.');
-    }
+  try {
+    final receipt = await onboardingSupport.sendRegistrationOtp(
+      phone: account.phone,
+      handle: handle,
+      domain: config.didDomain,
+      fullHandle: '$handle.${config.didDomain}',
+    );
+    final otp = await _resolveOtp(
+      account: account,
+      purpose: _registrationPurpose,
+      handle: handle,
+      didDomain: config.didDomain,
+    );
+    return (otp: otp, retryAt: receipt.retryAt);
+  } on Object {
+    fail('The fixed registration OTP request failed safely.');
   }
-  fail('The registration OTP request exhausted its retry budget.');
 }
 
 Future<
@@ -5083,42 +5073,31 @@ Future<DateTime> _requestScopedOtp({
   required String purpose,
   required String handle,
 }) async {
-  http.Response? response;
-  for (var attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      response = await client
-          .post(
-            Uri.parse(
-              config.userServiceUrl,
-            ).resolve('/user-service/v1/auth/sms-codes'),
-            headers: const <String, String>{'Content-Type': 'application/json'},
-            body: jsonEncode(<String, Object?>{
-              'phone': account.phone,
-              'purpose': purpose,
-              'target_handle': handle,
-              'target_handle_domain': config.didDomain,
-              'rate_limit_seconds': 60,
-              'code_expire_minutes': 5,
-            }),
-          )
-          .timeout(_remoteTimeout);
-    } on Object {
-      response = null;
-      if (attempt == 2) {
-        fail('The purpose-bound OTP request failed safely.');
-      }
-      await Future<void>.delayed(const Duration(seconds: 1));
-      continue;
-    }
-    if (response.statusCode != 429 || attempt == 2) break;
-    await Future<void>.delayed(
-      remoteMultiDeviceOtpRetryDelay(response.headers['retry-after']),
-    );
+  http.Response response;
+  try {
+    response = await client
+        .post(
+          Uri.parse(
+            config.userServiceUrl,
+          ).resolve('/user-service/v1/auth/sms-codes'),
+          headers: const <String, String>{'Content-Type': 'application/json'},
+          body: jsonEncode(<String, Object?>{
+            'phone': account.phone,
+            'purpose': purpose,
+            'target_handle': handle,
+            'target_handle_domain': config.didDomain,
+            'rate_limit_seconds': 60,
+            'code_expire_minutes': 5,
+          }),
+        )
+        .timeout(_remoteTimeout);
+  } on Object {
+    fail('The fixed purpose-bound OTP request failed safely.');
   }
-  if (response == null || response.statusCode != 200) {
-    fail('The purpose-bound OTP request was rejected.');
+  if (response.statusCode != 200) {
+    fail('The fixed purpose-bound OTP request was rejected.');
   }
-  return DateTime.now().toUtc().add(const Duration(seconds: 60));
+  return DateTime.now().toUtc().add(const Duration(seconds: 1));
 }
 
 Future<

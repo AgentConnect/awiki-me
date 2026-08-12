@@ -174,9 +174,6 @@ void main() {
         purpose: _registrationPurpose,
         handle: handle,
       );
-      final registrationRetryAt = DateTime.now().add(
-        const Duration(seconds: 61),
-      );
       final did = await cli.registerReadyAdmin(
         handle: handle,
         phone: account.phone,
@@ -210,7 +207,6 @@ void main() {
       );
       await _enterText(tester, 'e2e-phone-input', account.phone);
       await _enterText(tester, 'e2e-handle-input', handle);
-      await _waitUntil(registrationRetryAt);
       await _tapOne(
         tester,
         find.bySemanticsIdentifier('e2e-send-otp-button'),
@@ -3091,10 +3087,7 @@ Future<String> _requestAndResolveOtp({
       await Future<void>.delayed(const Duration(seconds: 1));
       continue;
     }
-    if (response.statusCode != 429 || attempt == 2) break;
-    await Future<void>.delayed(
-      remoteMultiDeviceOtpRetryDelay(response.headers['retry-after']),
-    );
+    break;
   }
   if (response == null) {
     fail('The purpose-bound OTP request was rejected.');
@@ -3372,13 +3365,6 @@ Future<void> _deleteDirectory(String path) async {
   final directory = Directory(path);
   if (await directory.exists()) {
     await directory.delete(recursive: true);
-  }
-}
-
-Future<void> _waitUntil(DateTime boundary) async {
-  final remaining = boundary.toUtc().difference(DateTime.now().toUtc());
-  if (remaining > Duration.zero) {
-    await Future<void>.delayed(remaining);
   }
 }
 
