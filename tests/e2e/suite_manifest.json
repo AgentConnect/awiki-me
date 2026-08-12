@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-12.settings-handle-recovery-continuity",
+  "sourceRevision": "2026-08-12.multi-device-content-sync",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -202,6 +202,39 @@
         "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001",
         "DEVICE-REGISTRY-SYNC-E2E-001",
         "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001"
+      ]
+    },
+    "multi-device-app-pair-content-sync": {
+      "tier": "remote_product_ui",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging+awiki-me-groups+awiki-me-attachments",
+      "estimatedMinutes": 16,
+      "timeoutMinutes": 22,
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "device_join_session",
+        "isolated_app_state",
+        "isolated_cli_state",
+        "direct_message",
+        "groups",
+        "group_messages",
+        "attachments"
+      ],
+      "caseIds": [
+        "DEVICE-CONTENT-TAIL-ONLY-E2E-001",
+        "DEVICE-GROUP-SYNC-E2E-001",
+        "DEVICE-ATTACHMENT-SYNC-E2E-001",
+        "DEVICE-GROUP-READ-SYNC-E2E-001"
       ]
     },
     "step4-revoke-mls": {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-12.settings-handle-recovery-continuity",
+  "sourceRevision": "2026-08-12.multi-device-content-sync",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
@@ -2207,6 +2207,142 @@
       }
     },
     {
+      "caseId": "DEVICE-CONTENT-TAIL-ONLY-E2E-001",
+      "feature": "Joined-device mixed-content tail boundary",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated AWiki Me Apps share one account only after a real member Join; an independent CLI peer, one Direct, one Group, and one small attachment fixture exist on awiki.info.",
+      "action": "Create unique Direct, Group, and attachment messages before Join, complete one real device Join, perform a reliable pull, then send all three content types after Join.",
+      "exactOracles": [
+        "The joining App cannot project the pre-Join Direct, Group, or attachment IDs or bodies, and those items contribute no unread state before or after an explicit reliable pull.",
+        "The same joining App projects each post-Join Direct, Group, and attachment message exactly once, proving that the negative result is a tail boundary rather than a broken sync path."
+      ],
+      "negativeChecks": [
+        "Any pre-Join message, attachment reference, filename, or unread contribution on the joining App; a missing post-Join positive control; or a duplicate canonical message prevents attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": ["optional_nightly", "release"],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_direct_group_attachment_absent",
+          "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread",
+          "DEVICE-CONTENT-TAIL-ONLY-E2E-001:explicit_pull_preserved_tail_boundary",
+          "DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_direct_group_attachment_visible_once"
+        ],
+        "exactOracleAssertions": [
+          ["DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_direct_group_attachment_absent", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:explicit_pull_preserved_tail_boundary"],
+          ["DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_direct_group_attachment_visible_once"]
+        ],
+        "negativeCheckAssertions": [["DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_direct_group_attachment_absent", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_direct_group_attachment_visible_once"]]
+      }
+    },
+    {
+      "caseId": "DEVICE-GROUP-SYNC-E2E-001",
+      "feature": "Joined sibling ordinary Group message convergence",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated joined Apps and one independent CLI peer are active in the same ordinary Group on awiki.info.",
+      "action": "Send one Group message from each App and one incoming Group message from the CLI peer in the shared App-pair scene.",
+      "exactOracles": [
+        "Both Apps preserve one canonical group, conversation, and message ID for each send; sibling-account sends remain isMine=true and the CLI send is isMine=false on both Apps.",
+        "Each canonical Group message and conversation is projected exactly once."
+      ],
+      "negativeChecks": [
+        "Wrong sender ownership, group or conversation drift, a duplicate projection, or delivery to only one joined App prevents attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": ["optional_nightly", "release"],
+      "owner": "awiki-me-groups+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-GROUP-SYNC-E2E-001:admin_group_own_sync_projected_once",
+          "DEVICE-GROUP-SYNC-E2E-001:joiner_group_own_sync_projected_once",
+          "DEVICE-GROUP-SYNC-E2E-001:canonical_group_and_conversation_preserved",
+          "DEVICE-GROUP-SYNC-E2E-001:external_group_message_projected_incoming_once"
+        ],
+        "exactOracleAssertions": [
+          ["DEVICE-GROUP-SYNC-E2E-001:admin_group_own_sync_projected_once", "DEVICE-GROUP-SYNC-E2E-001:joiner_group_own_sync_projected_once", "DEVICE-GROUP-SYNC-E2E-001:canonical_group_and_conversation_preserved", "DEVICE-GROUP-SYNC-E2E-001:external_group_message_projected_incoming_once"],
+          ["DEVICE-GROUP-SYNC-E2E-001:admin_group_own_sync_projected_once", "DEVICE-GROUP-SYNC-E2E-001:joiner_group_own_sync_projected_once", "DEVICE-GROUP-SYNC-E2E-001:external_group_message_projected_incoming_once"]
+        ],
+        "negativeCheckAssertions": [["DEVICE-GROUP-SYNC-E2E-001:canonical_group_and_conversation_preserved", "DEVICE-GROUP-SYNC-E2E-001:external_group_message_projected_incoming_once"]]
+      }
+    },
+    {
+      "caseId": "DEVICE-ATTACHMENT-SYNC-E2E-001",
+      "feature": "Joined sibling attachment convergence and download",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated Apps have completed one real member Join and share a canonical Direct with an independent CLI peer.",
+      "action": "Send one deterministic small attachment from the existing App and inspect and download its sibling projection on the joining App.",
+      "exactOracles": [
+        "Both Apps preserve the same canonical message and attachment IDs, filename, MIME, size, and exact-one timeline projection.",
+        "The joining App downloads bytes whose SHA-256 equals the sending fixture."
+      ],
+      "negativeChecks": [
+        "A second attachment object or message, metadata drift, download failure, or byte-digest mismatch prevents attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": ["optional_nightly", "release"],
+      "owner": "awiki-me-attachments+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-ATTACHMENT-SYNC-E2E-001:canonical_attachment_message_and_object_preserved",
+          "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_metadata_matched",
+          "DEVICE-ATTACHMENT-SYNC-E2E-001:joined_device_download_digest_matched",
+          "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_message_projected_once"
+        ],
+        "exactOracleAssertions": [
+          ["DEVICE-ATTACHMENT-SYNC-E2E-001:canonical_attachment_message_and_object_preserved", "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_metadata_matched", "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_message_projected_once"],
+          ["DEVICE-ATTACHMENT-SYNC-E2E-001:joined_device_download_digest_matched"]
+        ],
+        "negativeCheckAssertions": [["DEVICE-ATTACHMENT-SYNC-E2E-001:canonical_attachment_message_and_object_preserved", "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_metadata_matched", "DEVICE-ATTACHMENT-SYNC-E2E-001:joined_device_download_digest_matched", "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_message_projected_once"]]
+      }
+    },
+    {
+      "caseId": "DEVICE-GROUP-READ-SYNC-E2E-001",
+      "feature": "Joined sibling Group read convergence and conversation isolation",
+      "layer": "remote_product_ui",
+      "preconditions": "The two joined Apps are observing one Direct and one Group while an independent CLI peer can send into both conversations.",
+      "action": "Create incoming unread messages in both conversations, read Direct first and Group second on the joining App, then repeat reliable sync.",
+      "exactOracles": [
+        "Direct and Group unread state appears on both Apps; reading Direct converges to the sibling without clearing Group, then reading Group converges without regressing Direct.",
+        "A repeated reliable sync preserves zero unread and exact-one canonical message projection."
+      ],
+      "negativeChecks": [
+        "Cross-conversation unread clearing, a read watermark regression, unread rebound, duplicate messages, or writing App-only evidence prevents attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": ["optional_nightly", "release"],
+      "owner": "awiki-me-groups+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-GROUP-READ-SYNC-E2E-001:direct_and_group_unread_projected_independently",
+          "DEVICE-GROUP-READ-SYNC-E2E-001:direct_read_converged_without_clearing_group",
+          "DEVICE-GROUP-READ-SYNC-E2E-001:group_read_converged_without_regressing_direct",
+          "DEVICE-GROUP-READ-SYNC-E2E-001:repeat_sync_preserved_exact_once_and_zero_unread"
+        ],
+        "exactOracleAssertions": [
+          ["DEVICE-GROUP-READ-SYNC-E2E-001:direct_and_group_unread_projected_independently", "DEVICE-GROUP-READ-SYNC-E2E-001:direct_read_converged_without_clearing_group", "DEVICE-GROUP-READ-SYNC-E2E-001:group_read_converged_without_regressing_direct"],
+          ["DEVICE-GROUP-READ-SYNC-E2E-001:repeat_sync_preserved_exact_once_and_zero_unread"]
+        ],
+        "negativeCheckAssertions": [["DEVICE-GROUP-READ-SYNC-E2E-001:direct_read_converged_without_clearing_group", "DEVICE-GROUP-READ-SYNC-E2E-001:group_read_converged_without_regressing_direct", "DEVICE-GROUP-READ-SYNC-E2E-001:repeat_sync_preserved_exact_once_and_zero_unread"]]
+      }
+    },
+    {
       "caseId": "DEVICE-JOIN-E2E-001",
       "feature": "AWiki Me new-device Join with CLI admin",
       "layer": "remote_product_ui_security",
@@ -3146,10 +3282,10 @@
       "feature": "A newly joined AWiki Me replica bootstraps at the current ordinary-message tail",
       "layer": "remote_product_ui",
       "preconditions": "Before Device Join begins, the existing admin App commits one ordinary Direct message to an independent CLI peer; the joining App uses a fresh isolated Core root and AWIKI_SYNC_V2_READ is enabled.",
-      "action": "Complete member Join, allow the joining App startup sync to finish without test-side cursor or sync calls, prove the pre-Join message is absent, then send one post-Join message through the existing App.",
+      "action": "Complete member Join, allow the joining App startup sync to finish without test-side cursor or sync calls, prove the pre-Join message is absent, open the known Direct through the production chat provider and prove it remains absent, then send one post-Join message through the existing App.",
       "exactOracles": [
         "The ordinary pre-Join message is committed and visible on the existing App before the new replica is authorized.",
-        "The joining App completes bootstrap without exposing the pre-Join conversation or message.",
+        "The joining App completes bootstrap without exposing the pre-Join conversation or message, and opening the known Direct does not hydrate that pre-Join history.",
         "A post-Join ordinary message becomes visible exactly once on the joining App, proving bootstrap did not disable future delta."
       ],
       "negativeChecks": [
@@ -3170,6 +3306,7 @@
           "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_committed_on_existing_device",
           "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:new_replica_bootstrap_completed",
           "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_absent_on_joining_device",
+          "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_history_absent_after_open",
           "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:postjoin_message_visible_once"
         ],
         "exactOracleAssertions": [
@@ -3178,7 +3315,8 @@
           ],
           [
             "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:new_replica_bootstrap_completed",
-            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_absent_on_joining_device"
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_absent_on_joining_device",
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_history_absent_after_open"
           ],
           [
             "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:postjoin_message_visible_once"
@@ -3189,6 +3327,7 @@
             "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_committed_on_existing_device",
             "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:new_replica_bootstrap_completed",
             "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_absent_on_joining_device",
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_history_absent_after_open",
             "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:postjoin_message_visible_once"
           ]
         ]

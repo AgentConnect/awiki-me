@@ -42,6 +42,8 @@ const String _multiDeviceAppPairScenario =
     'multi-device-two-isolated-app-member-join';
 const String _multiDeviceAppPairFunctionalScenario =
     'multi-device-two-isolated-app-functional';
+const String _multiDeviceAppPairContentSyncScenario =
+    'multi-device-two-isolated-app-content-sync';
 const String _multiDeviceAppPairRunConfigPath =
     '.e2e/multi-device-app-pair/current/run_config.json';
 const String _multiDeviceAppPairTarget =
@@ -149,6 +151,12 @@ const List<String> _multiDeviceAppPairFunctionalCaseIds = <String>[
   'DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001',
   'DEVICE-REGISTRY-SYNC-E2E-001',
   'DEVICE-MESSAGE-GENERATION-FENCE-E2E-001',
+];
+const List<String> _multiDeviceAppPairContentSyncCaseIds = <String>[
+  'DEVICE-CONTENT-TAIL-ONLY-E2E-001',
+  'DEVICE-GROUP-SYNC-E2E-001',
+  'DEVICE-ATTACHMENT-SYNC-E2E-001',
+  'DEVICE-GROUP-READ-SYNC-E2E-001',
 ];
 const List<String> _step4RevokeMlsCaseIds = <String>[
   'STEP4-GROUP-PAGINATION-E2E-001',
@@ -522,10 +530,13 @@ class DesktopE2eRunner {
     }
     if (!options.dryRun &&
         (options.e2eCase == DesktopE2eCase.multiDeviceAppPair ||
-            options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional)) {
+            options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional ||
+            options.e2eCase == DesktopE2eCase.multiDeviceAppPairContentSync)) {
       resetAppPairRuntimeDirectories(
         functional:
             options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional,
+        contentSync:
+            options.e2eCase == DesktopE2eCase.multiDeviceAppPairContentSync,
         adminStateRoot: appPairAdminStateRootDir,
         joinerStateRoot: appPairJoinerStateRootDir,
         daemonStateRoot: appPairDaemonStateRootDir,
@@ -553,6 +564,8 @@ class DesktopE2eRunner {
         case DesktopE2eCase.multiDeviceAppPair:
           await _runRemoteMultiDeviceAppPair();
         case DesktopE2eCase.multiDeviceAppPairFunctional:
+          await _runRemoteMultiDeviceAppPair();
+        case DesktopE2eCase.multiDeviceAppPairContentSync:
           await _runRemoteMultiDeviceAppPair();
         case DesktopE2eCase.step4RevokeMls:
           await _runRemoteMultiDeviceJoin();
@@ -962,6 +975,8 @@ class DesktopE2eRunner {
       environment: Platform.environment,
       functional:
           options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional,
+      contentSync:
+          options.e2eCase == DesktopE2eCase.multiDeviceAppPairContentSync,
     );
     remoteMultiDeviceAppPairConfig = pairConfig;
     _addRuntimeSecret(pairConfig.phone);
@@ -1010,11 +1025,13 @@ class DesktopE2eRunner {
             'The App-pair Daemon state root exceeds the macOS Unix-domain socket path limit.',
           );
         }
-        await commands.requireFile(pairConfig.cliBin!);
         await commands.requireFile(pairConfig.daemonBinary!);
         if (pairConfig.daemonEnvFile != null) {
           await commands.requireFile(pairConfig.daemonEnvFile!);
         }
+      }
+      if (pairConfig.functional || pairConfig.contentSync) {
+        await commands.requireFile(pairConfig.cliBin!);
         final version = await commands.captureResult(pairConfig.cliBin!, const [
           '--format',
           'json',
@@ -1036,7 +1053,9 @@ class DesktopE2eRunner {
         'automatedUserPresence': true,
         'realUserPresenceAttested': false,
         'cliSourceVerified':
-            pairConfig.functional && !options.dryRun && !commands.dryRun,
+            (pairConfig.functional || pairConfig.contentSync) &&
+            !options.dryRun &&
+            !commands.dryRun,
         'containsRawDids': false,
       };
     });
@@ -1143,7 +1162,7 @@ class DesktopE2eRunner {
           await _deleteDirectoryBestEffort(appPairAdminStateRootDir);
           await _deleteDirectoryBestEffort(appPairJoinerStateRootDir);
           await _deleteDirectoryBestEffort(appPairDaemonStateRootDir);
-          if (pairConfig.functional) {
+          if (pairConfig.functional || pairConfig.contentSync) {
             await _deleteDirectoryBestEffort(cliWorkspaceDir);
             await _deleteDirectoryBestEffort(cliHomeDir);
           }
@@ -1212,6 +1231,15 @@ class DesktopE2eRunner {
             'operatorCommand': _accountStateOperatorCommand(
               Platform.environment,
             ),
+          },
+        },
+      if (pairConfig.contentSync)
+        'contentSync': <String, Object?>{
+          'cliPeer': <String, Object?>{
+            'binary': pairConfig.cliBin,
+            'sourceRef': pairConfig.cliSourceRef,
+            'workspace': cliWorkspaceDir.path,
+            'home': cliHomeDir.path,
           },
         },
       'suite': <String, Object?>{
@@ -3824,6 +3852,7 @@ Future<void> _deleteDirectoryBestEffort(Directory directory) async {
 
 void resetAppPairRuntimeDirectories({
   required bool functional,
+  bool contentSync = false,
   required Directory adminStateRoot,
   required Directory joinerStateRoot,
   required Directory daemonStateRoot,
@@ -3833,7 +3862,8 @@ void resetAppPairRuntimeDirectories({
   final directories = <Directory>[
     adminStateRoot,
     joinerStateRoot,
-    if (functional) ...<Directory>[daemonStateRoot, cliWorkspace, cliHome],
+    if (functional) daemonStateRoot,
+    if (functional || contentSync) ...<Directory>[cliWorkspace, cliHome],
   ];
   for (final directory in directories) {
     if (directory.existsSync()) {
@@ -4092,6 +4122,7 @@ Usage:
   dart run tests/e2e/runner.dart --case multi-device-app-pair-recovery-registration-rejoin-management-transfer
   dart run tests/e2e/runner.dart --case multi-device-app-pair
   dart run tests/e2e/runner.dart --case multi-device-app-pair-functional
+  dart run tests/e2e/runner.dart --case multi-device-app-pair-content-sync
   dart run tests/e2e/runner.dart --case step4-revoke-mls
   dart run tests/e2e/runner.dart --case full
   dart run tests/e2e/runner.dart --case inbound
@@ -4106,7 +4137,7 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair|multi-device-app-pair-functional|step4-revoke-mls|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
+  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|step4-revoke-mls|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
                                unattended real App/CLI message-driven
@@ -4133,6 +4164,9 @@ Options:
                                port to run unattended Agent-inventory and
                                Direct-message convergence checks. It does not
                                attest operating-system user presence.
+                               multi-device-app-pair-content-sync reuses one
+                               Join and one CLI peer to check mixed tail-only,
+                               Group, attachment, and read-state convergence.
                                full runs the audited App+CLI peer flow and then
                                one real App-admin/CLI-member Join + root
                                completion lifecycle; it therefore also requires
@@ -4305,6 +4339,7 @@ class RemoteMultiDeviceAppPairConfig {
   const RemoteMultiDeviceAppPairConfig._(
     this._base, {
     required this.functional,
+    required this.contentSync,
     this.cliBin,
     this.cliSourceRef,
     this.daemonBinary,
@@ -4314,6 +4349,7 @@ class RemoteMultiDeviceAppPairConfig {
 
   final _RemoteMultiDeviceBaseConfig _base;
   final bool functional;
+  final bool contentSync;
   final String? cliBin;
   final String? cliSourceRef;
   final String? daemonBinary;
@@ -4336,13 +4372,21 @@ class RemoteMultiDeviceAppPairConfig {
     required DesktopE2eFileConfig fileConfig,
     required Map<String, String> environment,
     bool functional = false,
+    bool contentSync = false,
   }) {
     final base = _RemoteMultiDeviceBaseConfig.from(
       fileConfig: fileConfig,
       environment: environment,
     );
-    if (!functional) {
-      return RemoteMultiDeviceAppPairConfig._(base, functional: false);
+    if (functional && contentSync) {
+      throw E2eFailure('App-pair functional and content-sync modes conflict.');
+    }
+    if (!functional && !contentSync) {
+      return RemoteMultiDeviceAppPairConfig._(
+        base,
+        functional: false,
+        contentSync: false,
+      );
     }
     final sourcePath = fileConfig.path ?? '<missing-config>';
     final cliBin = _requiredConfig(
@@ -4362,20 +4406,25 @@ class RemoteMultiDeviceAppPairConfig {
     }
     return RemoteMultiDeviceAppPairConfig._(
       base,
-      functional: true,
+      functional: functional,
+      contentSync: contentSync,
       cliBin: cliBin,
       cliSourceRef: cliSourceRef,
-      daemonBinary: _requiredConfig(
-        fileConfig.daemonBinary,
-        'daemon.binary',
-        sourcePath,
-      ),
-      daemonHandle: _requiredConfig(
-        fileConfig.daemonHandle,
-        'daemon.handle',
-        sourcePath,
-      ),
-      daemonEnvFile: fileConfig.daemonEnvFile,
+      daemonBinary: functional
+          ? _requiredConfig(
+              fileConfig.daemonBinary,
+              'daemon.binary',
+              sourcePath,
+            )
+          : null,
+      daemonHandle: functional
+          ? _requiredConfig(
+              fileConfig.daemonHandle,
+              'daemon.handle',
+              sourcePath,
+            )
+          : null,
+      daemonEnvFile: functional ? fileConfig.daemonEnvFile : null,
     );
   }
 }
@@ -5336,6 +5385,7 @@ enum DesktopE2eCase {
   ),
   multiDeviceAppPair(_multiDeviceAppPairCaseIds),
   multiDeviceAppPairFunctional(_multiDeviceAppPairFunctionalCaseIds),
+  multiDeviceAppPairContentSync(_multiDeviceAppPairContentSyncCaseIds),
   step4RevokeMls(_step4RevokeMlsCaseIds),
   full(_desktopCliPeerCaseIds),
   performance(_desktopCliPeerPerformanceCaseIds),
@@ -5368,6 +5418,7 @@ enum DesktopE2eCase {
         'integration_test/handle_recovery_ui_test.dart',
       DesktopE2eCase.multiDeviceAppPair => _multiDeviceAppPairTarget,
       DesktopE2eCase.multiDeviceAppPairFunctional => _multiDeviceAppPairTarget,
+      DesktopE2eCase.multiDeviceAppPairContentSync => _multiDeviceAppPairTarget,
       DesktopE2eCase.step4RevokeMls =>
         'integration_test/multi_device_join_ui_test.dart',
       DesktopE2eCase.full =>
@@ -5415,6 +5466,8 @@ enum DesktopE2eCase {
       DesktopE2eCase.multiDeviceAppPair => 'multi-device-app-pair',
       DesktopE2eCase.multiDeviceAppPairFunctional =>
         'multi-device-app-pair-functional',
+      DesktopE2eCase.multiDeviceAppPairContentSync =>
+        'multi-device-app-pair-content-sync',
       DesktopE2eCase.step4RevokeMls => 'step4-revoke-mls',
       _ => name,
     };
@@ -5443,6 +5496,8 @@ enum DesktopE2eCase {
       DesktopE2eCase.multiDeviceAppPair => 'multi-device-app-pair',
       DesktopE2eCase.multiDeviceAppPairFunctional =>
         'multi-device-app-pair-functional',
+      DesktopE2eCase.multiDeviceAppPairContentSync =>
+        'multi-device-app-pair-content-sync',
       DesktopE2eCase.step4RevokeMls => 'step4-revoke-mls',
       DesktopE2eCase.personalAgent => 'personal-agent',
       DesktopE2eCase.codexAgent => 'codex-agent',
@@ -5469,6 +5524,9 @@ enum DesktopE2eCase {
       DesktopE2eCase.multiDeviceAppPairFunctional => const Duration(
         minutes: 30,
       ),
+      DesktopE2eCase.multiDeviceAppPairContentSync => const Duration(
+        minutes: 20,
+      ),
       DesktopE2eCase.step4RevokeMls => const Duration(minutes: 25),
       _ => const Duration(minutes: 5),
     };
@@ -5489,6 +5547,8 @@ enum DesktopE2eCase {
       DesktopE2eCase.multiDeviceAppPair => _multiDeviceAppPairScenario,
       DesktopE2eCase.multiDeviceAppPairFunctional =>
         _multiDeviceAppPairFunctionalScenario,
+      DesktopE2eCase.multiDeviceAppPairContentSync =>
+        _multiDeviceAppPairContentSyncScenario,
       DesktopE2eCase.step4RevokeMls => _multiDeviceRemoteJoinScenario,
       _ => _desktopCliPeerScenario,
     };
@@ -5507,6 +5567,8 @@ enum DesktopE2eCase {
         _multiDeviceRemoteRecoveryRunConfigPath,
       DesktopE2eCase.multiDeviceAppPair => _multiDeviceAppPairRunConfigPath,
       DesktopE2eCase.multiDeviceAppPairFunctional =>
+        _multiDeviceAppPairRunConfigPath,
+      DesktopE2eCase.multiDeviceAppPairContentSync =>
         _multiDeviceAppPairRunConfigPath,
       DesktopE2eCase.step4RevokeMls => _multiDeviceRemoteJoinRunConfigPath,
       _ => _desktopCliPeerRunConfigPath,
@@ -5537,6 +5599,9 @@ enum DesktopE2eCase {
       'multi-device-app-pair-functional' ||
       'multi_device_app_pair_functional' =>
         DesktopE2eCase.multiDeviceAppPairFunctional,
+      'multi-device-app-pair-content-sync' ||
+      'multi_device_app_pair_content_sync' =>
+        DesktopE2eCase.multiDeviceAppPairContentSync,
       'step4-revoke-mls' || 'step4_revoke_mls' => DesktopE2eCase.step4RevokeMls,
       'full' => DesktopE2eCase.full,
       'performance' ||
@@ -5603,6 +5668,7 @@ enum DesktopE2eCase {
         'multi-device-remote-recovery, '
         'multi-device-app-pair-recovery-registration-rejoin-management-transfer, '
         'multi-device-app-pair, multi-device-app-pair-functional, '
+        'multi-device-app-pair-content-sync, '
         'step4-revoke-mls, full, performance, direct, '
         'group, attachment, contacts, inbound, identity-switch, restart, '
         'display-name-fallback, '

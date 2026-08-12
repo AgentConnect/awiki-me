@@ -188,6 +188,63 @@ void main() {
     },
   );
 
+  test(
+    'content-sync checkpoints accept only canonical public identifiers',
+    () async {
+      final server = await AppPairCoordinatorServer.start(
+        token: List<String>.filled(48, 't').join(),
+      );
+      addTearDown(server.close);
+      final client = AppPairCoordinatorClient(
+        endpoint: server.endpoint,
+        token: server.token,
+      );
+
+      await client.publish('joiner', 'content_ready');
+      await client.publish(
+        'admin',
+        'content_fixture_ready',
+        data: const <String, Object?>{
+          'peerDid': 'did:wba:awiki.info:peer',
+          'directConversationId': 'dm:peer-scope:v1:peer',
+          'groupDid': 'did:wba:awiki.info:group:g1',
+          'groupConversationId': 'group:did:wba:awiki.info:group:g1',
+          'preDirectMessageId': 'd0',
+          'preGroupMessageId': 'g0',
+          'preAttachmentMessageId': 'f0',
+          'preAttachmentId': 'attachment-0',
+        },
+      );
+      await client.publish('joiner', 'content_prejoin_absent');
+      await client.publish(
+        'admin',
+        'content_postjoin_sent',
+        data: const <String, Object?>{
+          'directMessageId': 'd1',
+          'groupMessageId': 'g1',
+          'attachmentMessageId': 'f1',
+          'attachmentId': 'attachment-1',
+        },
+      );
+      await client.publish('joiner', 'content_postjoin_visible');
+
+      await expectLater(
+        client.publish(
+          'admin',
+          'content_postjoin_sent',
+          data: const <String, Object?>{
+            'directMessageId': 'd1',
+            'groupMessageId': 'g1',
+            'attachmentMessageId': 'f1',
+            'attachmentId': 'attachment-1',
+            'content': 'forbidden',
+          },
+        ),
+        throwsA(isA<AppPairProtocolException>()),
+      );
+    },
+  );
+
   test('account-state checkpoints accept every exact route shape', () async {
     final server = await AppPairCoordinatorServer.start(
       token: List<String>.filled(48, 't').join(),

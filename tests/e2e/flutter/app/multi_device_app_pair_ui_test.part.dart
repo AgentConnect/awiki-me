@@ -21,6 +21,7 @@ void appPairAdminMain() {
       final httpClient = http.Client();
       final presence = E2eUserPresencePort();
       final functionalResources = _AppPairFunctionalAdminResources();
+      final contentResources = _AppPairContentAdminResources();
       AppBootstrap? bootstrap;
       await tester.binding.setSurfaceSize(const Size(1320, 820));
       _requireIndependentEmptyPaths(<String>[
@@ -28,9 +29,12 @@ void appPairAdminMain() {
         if (config.functional) config.cliWorkspace,
         if (config.functional) config.cliHome,
         if (config.functional) config.daemonStateRoot,
+        if (config.contentSync) config.cliWorkspace,
+        if (config.contentSync) config.cliHome,
       ]);
       addTearDown(() async {
         await functionalResources.dispose();
+        await contentResources.dispose();
         httpClient.close();
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
@@ -44,6 +48,7 @@ void appPairAdminMain() {
         environment: _joinOnlyEnvironment(
           config,
           enableAppPairFunctional: config.functional,
+          enableMessageSyncCore: config.contentSync,
         ),
         appStateRoot: config.adminStateRoot,
       );
@@ -114,6 +119,17 @@ void appPairAdminMain() {
           resources: functionalResources,
         );
       }
+      if (config.contentSync) {
+        await _prepareAppPairContentHistory(
+          config: config,
+          account: account,
+          httpClient: httpClient,
+          bootstrap: bootstrap,
+          container: container,
+          adminDid: adminSession.did,
+          resources: contentResources,
+        );
+      }
       await coordinator.publish(
         'admin',
         'ready',
@@ -127,7 +143,7 @@ void appPairAdminMain() {
       final pending = await coordinator.waitFor(
         'joiner',
         'pending',
-        timeout: config.functional
+        timeout: config.functional || config.contentSync
             ? const Duration(minutes: 8)
             : const Duration(minutes: 3),
       );
@@ -347,6 +363,15 @@ void appPairAdminMain() {
           joinedDeviceId: joinedDeviceId,
           resources: functionalResources,
         );
+      } else if (config.contentSync) {
+        await _runAppPairAdminContentSync(
+          tester: tester,
+          config: config,
+          bootstrap: bootstrap,
+          container: container,
+          adminDid: adminSession.did,
+          resources: contentResources,
+        );
       } else {
         await E2eCaseAttestationWriter.markPassed(
           _appPairCaseId,
@@ -391,7 +416,7 @@ void appPairJoinerMain() {
       final admin = await coordinator.waitFor(
         'admin',
         'ready',
-        timeout: config.functional
+        timeout: config.functional || config.contentSync
             ? const Duration(minutes: 8)
             : const Duration(minutes: 3),
       );
@@ -403,6 +428,7 @@ void appPairJoinerMain() {
         environment: _joinOnlyEnvironment(
           config,
           enableAppPairFunctional: config.functional,
+          enableMessageSyncCore: config.contentSync,
         ),
         appStateRoot: config.joinerStateRoot,
       );
@@ -570,6 +596,14 @@ void appPairJoinerMain() {
           container: container,
           accountDid: did,
           joinedDeviceId: pending.protocolDeviceId,
+        );
+      } else if (config.contentSync) {
+        await _runAppPairJoinerContentSync(
+          tester: tester,
+          config: config,
+          bootstrap: bootstrap,
+          container: container,
+          accountDid: did,
         );
       } else {
         await _leaveCompletedAppPairJoin(tester);
@@ -793,11 +827,19 @@ void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
       _invocationExpects(_appPairProfileSyncCaseId) ||
       _invocationExpects(_appPairRegistrySyncCaseId) ||
       _invocationExpects(_appPairDomainIsolationCaseId);
+  final expectsContentSync =
+      _invocationExpects(_appPairContentTailOnlyCaseId) ||
+      _invocationExpects(_appPairGroupSyncCaseId) ||
+      _invocationExpects(_appPairAttachmentSyncCaseId) ||
+      _invocationExpects(_appPairGroupReadSyncCaseId);
   final expectsSecurity =
       _invocationExpects(_appPairCaseId) ||
       _invocationExpects(_appPairCredentialResetCaseId);
   if (config.functional != expectsFunctional ||
-      config.functional == expectsSecurity ||
+      config.contentSync != expectsContentSync ||
+      (config.functional && config.contentSync) ||
+      (expectsSecurity && (config.functional || config.contentSync)) ||
+      (!expectsFunctional && !expectsContentSync && !expectsSecurity) ||
       !config.automatedUserPresence) {
     fail(
       'The App-pair run config mixed suite roles or omitted the E2E-only '
@@ -1172,6 +1214,43 @@ Future<void> _runAppPairJoinerFunctional({
   if (historicalConversationVisible || historicalMessageVisible) {
     fail('The joining App received a message committed before device Join.');
   }
+  await container
+      .read(chatThreadsProvider.notifier)
+      .openConversation(
+        ConversationSummary(
+          conversationId: historicalConversationId,
+          threadId: historicalConversationId,
+          displayName: peerDid,
+          lastMessagePreview: '',
+          lastMessageAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+          unreadCount: 0,
+          isGroup: false,
+          targetDid: peerDid,
+          targetPeer: peerDid,
+        ),
+      );
+  await tester.pump();
+  await _pumpUntil(
+    tester,
+    () =>
+        !container.read(chatThreadProvider(historicalConversationId)).isLoading,
+    timeout: const Duration(seconds: 45),
+    failure: 'The joining App did not finish opening the known Direct thread.',
+  );
+  for (var attempt = 0; attempt < 5; attempt += 1) {
+    await tester.pump(const Duration(seconds: 1));
+    final historyAfterOpen = container
+        .read(chatThreadProvider(historicalConversationId))
+        .messages;
+    if (historyAfterOpen.any(
+      (message) =>
+          message.localId == historicalMessageId ||
+          message.remoteId == historicalMessageId ||
+          message.content == historicalText,
+    )) {
+      fail('Opening a known Direct thread exposed pre-Join ordinary history.');
+    }
+  }
   final activeSession = container.read(sessionProvider).session;
   final activeBinding = activeSession?.accountBinding;
   if (activeSession?.did != accountDid ||
@@ -1295,6 +1374,7 @@ Future<void> _runAppPairJoinerFunctional({
       'prejoin_message_committed_on_existing_device',
       'new_replica_bootstrap_completed',
       'prejoin_message_absent_on_joining_device',
+      'prejoin_history_absent_after_open',
       'postjoin_message_visible_once',
     ],
   );

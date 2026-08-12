@@ -77,6 +77,37 @@ void main() {
       }
       expect(buildMarker.readAsStringSync(), 'cached');
     });
+
+    test('content-sync resets CLI roots without requiring a daemon root', () {
+      final root = Directory.systemTemp.createTempSync(
+        'awiki_app_pair_content_reset_',
+      );
+      addTearDown(() => root.deleteSync(recursive: true));
+      final admin = Directory('${root.path}/admin');
+      final joiner = Directory('${root.path}/joiner');
+      final daemon = Directory('${root.path}/daemon');
+      final workspace = Directory('${root.path}/workspace');
+      final home = Directory('${root.path}/home');
+      for (final directory in <Directory>[admin, joiner, workspace, home]) {
+        directory.createSync(recursive: true);
+        File('${directory.path}/stale').writeAsStringSync('stale');
+      }
+
+      resetAppPairRuntimeDirectories(
+        functional: false,
+        contentSync: true,
+        adminStateRoot: admin,
+        joinerStateRoot: joiner,
+        daemonStateRoot: daemon,
+        cliWorkspace: workspace,
+        cliHome: home,
+      );
+
+      expect(daemon.existsSync(), isFalse);
+      for (final directory in <Directory>[admin, joiner, workspace, home]) {
+        expect(directory.listSync(), isEmpty);
+      }
+    });
   });
 
   group('DesktopFlutterBuildIsolation', () {
@@ -387,6 +418,34 @@ void main() {
       );
     });
 
+    test('parses focused App-pair content-sync case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi-device-app-pair-content-sync',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi_device_app_pair_content_sync',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.multiDeviceAppPairContentSync);
+      expect(underscore.e2eCase, DesktopE2eCase.multiDeviceAppPairContentSync);
+      expect(hyphen.e2eCase.requiresCliPeer, isTrue);
+      expect(
+        hyphen.e2eCase.scenario,
+        'multi-device-two-isolated-app-content-sync',
+      );
+      expect(hyphen.e2eCase.caseIds, <String>[
+        'DEVICE-CONTENT-TAIL-ONLY-E2E-001',
+        'DEVICE-GROUP-SYNC-E2E-001',
+        'DEVICE-ATTACHMENT-SYNC-E2E-001',
+        'DEVICE-GROUP-READ-SYNC-E2E-001',
+      ]);
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 20));
+    });
+
     test('parses focused Step4 revoke MLS case', () {
       final options = DesktopE2eOptions.parse(const <String>[
         '--case',
@@ -599,7 +658,8 @@ void main() {
                 'Use smoke, multi-device, multi-device-remote-join, '
                 'multi-device-remote-recovery, '
                 'multi-device-app-pair-recovery-registration-rejoin-management-transfer, '
-                'multi-device-app-pair, multi-device-app-pair-functional, step4-revoke-mls, full, performance, direct, '
+                'multi-device-app-pair, multi-device-app-pair-functional, '
+                'multi-device-app-pair-content-sync, step4-revoke-mls, full, performance, direct, '
                 'group, attachment, contacts, inbound, identity-switch, restart, '
                 'display-name-fallback, '
                 'personal-agent, codex-agent, or claude-code-agent.',
@@ -918,6 +978,31 @@ void main() {
       expect(config.cliSourceRef, '1111111111111111111111111111111111111111');
       expect(config.daemonBinary, '/tmp/awiki-deamon');
       expect(config.daemonHandle, 'pair-daemon');
+    });
+
+    test('content-sync mode requires CLI but not daemon inputs', () {
+      const contentConfig = DesktopE2eFileConfig(
+        path: '/tmp/e2e.local.yaml',
+        platform: DesktopE2ePlatform.macos,
+        serviceBaseUrl: 'https://awiki.info',
+        didDomain: 'awiki.info',
+        otpPhone: 'local-test-phone',
+        otpCode: '123456',
+        cliBin: '/tmp/awiki-cli',
+        cliSourceRef: '1111111111111111111111111111111111111111',
+      );
+      final config = RemoteMultiDeviceAppPairConfig.from(
+        fileConfig: contentConfig,
+        environment: const <String, String>{
+          'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
+        },
+        contentSync: true,
+      );
+
+      expect(config.functional, isFalse);
+      expect(config.contentSync, isTrue);
+      expect(config.cliBin, '/tmp/awiki-cli');
+      expect(config.daemonBinary, isNull);
     });
   });
 

@@ -202,6 +202,13 @@ runner. `ROOT-TRANSFER-E2E-002` and `MLS-MULTI-DEVICE-E2E-001` remain planned.
 `step4-revoke-mls`; their scenario-owned attestations, not catalog text, are
 required remote pass evidence.
 
+`--case multi-device-app-pair-content-sync` is the focused two-App content
+entry. It reuses one real member Join and one independent CLI peer to attest
+pre-Join Direct/Group/attachment absence, post-Join Group ownership and
+exact-one projection, attachment download digest, and isolated Direct/Group
+read convergence. It does not run Agent, Profile, Recovery, Registry, or MLS
+flows.
+
 `--case personal-agent` is the durable acceptance entry for Personal Agent
 product behavior. It is a fail-fast real-backend gate: local YAML must provide
 `personalAgent.realBackend: true`, `service.messageServiceUrl`,

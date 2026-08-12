@@ -233,6 +233,12 @@ Linux 用例独立报告真实通过或失败。
   memory state 或 CLI 输出都不能替代。
 - 新设备只从 tail 开始；已有设备自动恢复只包含服务端当前时间最近 48 小时内、最多 500
   条普通逻辑消息。Agent/Profile/Registry 当前快照不受该窗口限制。
+
+`multi-device-app-pair-content-sync` 是内容同步的聚焦入口。它只建立一次账号、双 App、
+真实 member Join、CLI peer、Direct 和 Group，在同一轮中分别 attestation：混合内容
+tail-only、普通群聊同步、附件元数据与 SHA-256、以及 Direct/Group 已读隔离。该入口不启动
+Daemon、Agent、Profile、Recovery 或 Registry 流程；业务能力不满足时测试失败并保留报告，
+不由 E2E 用例修改业务实现。
 - App 必须先订阅 committed patch 并完成当前 session generation 的一次 bounded seed，
   再执行首次 `syncNow`。普通 delta/hint/reconnect 后不得做全 conversation refresh、
   20×50 history prewarm 或 forced visible refresh。
@@ -382,6 +388,12 @@ The functional suite still executes the real Join protocol, native Core,
 Daemon, User Service Agent Inventory, message service, realtime paths, and two
 visible App UIs; only the final local user-presence decision is replaced by the
 test-scoped port.
+
+For the smaller content-only matrix, use
+`--case multi-device-app-pair-content-sync`. It requires the audited CLI
+binary/source revision but no Debug Daemon or Account State operator. One Join
+shares the Direct, Group, attachment, and read/unread actions while four case
+attestations remain independent.
 
 The macOS runner is not the service host. Account State test actions therefore
 require `AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE=ali` and the exact reviewed

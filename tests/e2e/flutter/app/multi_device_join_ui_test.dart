@@ -2,8 +2,8 @@
 //          production AppBootstrap/native Core, independent CLI/App or App/App
 //          roots, explicit E2E-only user-presence control, foreground CLI TTY
 //          where used, and loopback App-pair phases.
-// [OUTPUT]: Real notification-driven member Join plus isolated App-pair Agent
-//           inventory and Direct-message convergence scenarios.
+// [OUTPUT]: Real notification-driven member Join plus isolated App-pair Agent,
+//           Direct, Group, attachment, and read-state convergence scenarios.
 // [POS]: Step 2 Join product E2E; no Registry discovery, implicit verification,
 //        copied state, fake Core, static OTP, or secret-bearing evidence.
 
@@ -11,13 +11,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/e2e_semantics.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
+import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/message_sync_diagnostics.dart';
@@ -28,6 +31,7 @@ import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
+import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
@@ -72,6 +76,7 @@ import '../../remote_multi_device_join_contract.dart';
 import '../../sync_recovery_operator_contract.dart';
 
 part 'multi_device_app_pair_ui_test.part.dart';
+part 'multi_device_app_pair_content_sync_test.part.dart';
 
 const String _newDeviceCaseId = 'DEVICE-JOIN-E2E-001';
 const String _adminApprovalCaseId = 'DEVICE-JOIN-E2E-002';
@@ -86,6 +91,10 @@ const String _appPairInboundSyncCaseId = 'DEVICE-MESSAGE-SYNC-E2E-002';
 const String _appPairOnlineSyncV2CaseId = 'DEVICE-MESSAGE-ONLINE-SYNC-E2E-001';
 const String _appPairTailOnlySyncV2CaseId = 'DEVICE-MESSAGE-TAIL-ONLY-E2E-001';
 const String _appPairReadSyncV2CaseId = 'DEVICE-MESSAGE-READ-SYNC-E2E-001';
+const String _appPairContentTailOnlyCaseId = 'DEVICE-CONTENT-TAIL-ONLY-E2E-001';
+const String _appPairGroupSyncCaseId = 'DEVICE-GROUP-SYNC-E2E-001';
+const String _appPairAttachmentSyncCaseId = 'DEVICE-ATTACHMENT-SYNC-E2E-001';
+const String _appPairGroupReadSyncCaseId = 'DEVICE-GROUP-READ-SYNC-E2E-001';
 const String _appPairOfflineRecoveryV2CaseId =
     'DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001';
 const String _appPairAgentAddSyncCaseId = 'DEVICE-AGENT-ADD-SYNC-E2E-001';
@@ -1414,6 +1423,7 @@ class _AppPairRunConfig implements _CliEndpointConfig {
     required this.joinerStateRoot,
     required this.coordinator,
     required this.functional,
+    required this.contentSync,
     required this.automatedUserPresence,
     required this.cliBin,
     required this.cliSourceRef,
@@ -1450,6 +1460,7 @@ class _AppPairRunConfig implements _CliEndpointConfig {
   final String joinerStateRoot;
   final AppPairCoordinatorClient coordinator;
   final bool functional;
+  final bool contentSync;
   final bool automatedUserPresence;
   @override
   bool get multiDeviceDirectE2eeEnabled => false;
@@ -1496,9 +1507,16 @@ class _AppPairRunConfig implements _CliEndpointConfig {
     final functional = root['functional'] is Map
         ? _stringMap(root['functional'] as Map)
         : const <String, Object?>{};
-    final cliPeer = functional.isEmpty
+    final contentSync = root['contentSync'] is Map
+        ? _stringMap(root['contentSync'] as Map)
+        : const <String, Object?>{};
+    if (functional.isNotEmpty && contentSync.isNotEmpty) {
+      throw StateError('The App-pair modes are mutually exclusive.');
+    }
+    final cliContainer = functional.isNotEmpty ? functional : contentSync;
+    final cliPeer = cliContainer.isEmpty
         ? const <String, Object?>{}
-        : _map(functional, 'cliPeer');
+        : _map(cliContainer, 'cliPeer');
     final daemon = functional.isEmpty
         ? const <String, Object?>{}
         : _map(functional, 'daemon');
@@ -1530,14 +1548,15 @@ class _AppPairRunConfig implements _CliEndpointConfig {
         token: _required(coordinator, 'token'),
       ),
       functional: functional.isNotEmpty,
+      contentSync: contentSync.isNotEmpty,
       automatedUserPresence: _requiredBool(
         testControl,
         'automatedUserPresence',
       ),
-      cliBin: functional.isEmpty ? '' : _required(cliPeer, 'binary'),
-      cliSourceRef: functional.isEmpty ? '' : _required(cliPeer, 'sourceRef'),
-      cliWorkspace: functional.isEmpty ? '' : _required(cliPeer, 'workspace'),
-      cliHome: functional.isEmpty ? '' : _required(cliPeer, 'home'),
+      cliBin: cliContainer.isEmpty ? '' : _required(cliPeer, 'binary'),
+      cliSourceRef: cliContainer.isEmpty ? '' : _required(cliPeer, 'sourceRef'),
+      cliWorkspace: cliContainer.isEmpty ? '' : _required(cliPeer, 'workspace'),
+      cliHome: cliContainer.isEmpty ? '' : _required(cliPeer, 'home'),
       daemonBinary: functional.isEmpty ? '' : _required(daemon, 'binary'),
       daemonStateRoot: functional.isEmpty ? '' : _required(daemon, 'stateRoot'),
       daemonReadyFile: functional.isEmpty ? '' : _required(daemon, 'readyFile'),
@@ -1594,6 +1613,23 @@ class _AppPairRunConfig implements _CliEndpointConfig {
       ];
       if (isolatedPaths.toSet().length != isolatedPaths.length) {
         throw StateError('The App-pair functional roots are not isolated.');
+      }
+    }
+    if (config.contentSync) {
+      if (config.cliBin.isEmpty ||
+          config.cliSourceRef.isEmpty ||
+          config.cliWorkspace.isEmpty ||
+          config.cliHome.isEmpty) {
+        throw StateError('The App-pair content-sync config is incomplete.');
+      }
+      final isolatedPaths = <String>[
+        config.adminStateRoot,
+        config.joinerStateRoot,
+        config.cliWorkspace,
+        config.cliHome,
+      ];
+      if (isolatedPaths.toSet().length != isolatedPaths.length) {
+        throw StateError('The App-pair content-sync roots are not isolated.');
       }
     }
     return config;
