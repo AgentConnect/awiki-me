@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-12.handle-recovery-fresh-suite",
+  "sourceRevision": "2026-08-12.android-device-join-native-capability",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
@@ -95,6 +95,30 @@
           ]
         ]
       }
+    },
+    {
+      "caseId": "ANDROID-DEVICE-JOIN-E2E-001",
+      "feature": "Android physical-device Join with Group E2EE capability retained",
+      "layer": "native_product_ui",
+      "preconditions": "A physical Android device has an isolated AWiki Me build whose native IM Core includes group-e2ee, an independent existing admin device is active on an approved tenant, and the protected Join OTP remains outside test evidence.",
+      "action": "Start ordinary new-device Join on Android, compare the independently rendered SAS, approve the member Join on the existing admin device, refresh Android through local activation, and restart the Android App.",
+      "exactOracles": [
+        "The admin approval consumes the remote Join exactly once and Android completes exact-device local activation without retaining the SAS page or showing the generic device-operation failure.",
+        "The joined Android device is the active current member after restart, the Group E2EE capability gate remains enabled, and ordinary Direct plus newly created groups remain default-plain unless explicitly requested otherwise."
+      ],
+      "negativeChecks": [
+        "Remote consumed state alone, disabling AWIKI_MULTI_DEVICE_GROUP_E2EE_ENABLED, an Android binary without the group-e2ee feature, emulator-only evidence, clearing App data before activation, or manual observation without case attestation cannot pass."
+      ],
+      "environment": "android_physical_remote",
+      "cleanupPolicy": "revoke_test_device_and_remove_isolated_app_state",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity+awiki-cli-rs2",
+      "implementationPath": "tests/e2e/planned/multi_device_future_cases.md",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
     },
     {
       "caseId": "ANDROID-PUSH-PRODUCT-E2E-001",

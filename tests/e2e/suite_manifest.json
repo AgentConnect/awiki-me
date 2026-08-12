@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-12.handle-recovery-fresh-suite",
+  "sourceRevision": "2026-08-12.android-device-join-native-capability",
   "suites": {
     "smoke": {
       "tier": "product_ui",
