@@ -1,11 +1,11 @@
 // [INPUT]: Audited awiki.info endpoints, one protected fixed test SMS account,
 //          server-issued SMS retry boundaries, a fresh production
 //          AppBootstrap/native Core root, and an E2E-only user-presence decision.
-// [OUTPUT]: Secret-free proof that Recovery replaces the DID, exactly resumes
-//           post-commit local transition, opens Messages, and sends a fenced
-//           old App back to acknowledged onboarding.
+// [OUTPUT]: Secret-free proof that Recovery replaces the DID once, exactly
+//           resumes post-commit local transition, preserves Direct/transport
+//           Group/Agent continuity, and fences an old App principal.
 // [POS]: Remote product UI acceptance; setup creates only the remote fixture,
-//        while the tested registration choice and Recovery are UI-driven.
+//        while the tested onboarding or Settings Recovery is UI-driven.
 
 import 'dart:async';
 import 'dart:convert';
@@ -17,17 +17,25 @@ import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/agent/agent_control_service.dart';
 import 'package:awiki_me/src/application/app_bootstrap_epoch_barrier.dart';
+import 'package:awiki_me/src/application/conversation_service.dart';
+import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
+import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
 import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
+import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
@@ -37,9 +45,12 @@ import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
+import 'package:awiki_me/src/presentation/group/group_provider.dart';
+import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:flutter/cupertino.dart';
@@ -47,6 +58,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:integration_test/integration_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:yaml/yaml.dart';
 
 import '../../case_attestation.dart';
@@ -55,6 +67,8 @@ import '../../remote_multi_device_join_contract.dart';
 
 const String _caseId = 'HANDLE-RECOVERY-V1-E2E-001';
 const String _crashCutCaseId = 'HANDLE-RECOVERY-V1-E2E-002';
+const String _settingsContinuityCaseId =
+    'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001';
 const String _rejoinCaseId = 'HANDLE-RECOVERY-V1-E2E-003';
 const String _registrationRejoinCaseId =
     'HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001';
@@ -70,6 +84,7 @@ const String _recoveryPurpose = 'awiki.identity.handle-recovery.v1';
 const Key _recoveryAdminAppKey = Key('recovery-admin-app');
 const Key _recoveryPeerAppKey = Key('recovery-peer-app');
 const Duration _remoteTimeout = Duration(seconds: 30);
+const String _agentReplyPrefix = 'RECOVERY_AGENT_REPLY:';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -110,7 +125,11 @@ void main() {
       });
 
       bootstrap = await AppBootstrap.create(
-        environment: _environment(config),
+        environment: _environment(
+          config,
+          directE2eeEnabled: registrationRejoinRequired,
+          groupE2eeEnabled: false,
+        ),
         appStateRoot: config.appStateRoot,
       );
       final bareHandle = _uniqueHandle(config.handlePrefix);
@@ -143,11 +162,33 @@ void main() {
       final initialRegistry = await bootstrap.deviceManagementCorePort!
           .identityDeviceRegistry(oldDid);
       _requireReadyCurrentAdmin(initialRegistry, expectedDid: oldDid);
+      final recoveryGroup = await bootstrap.groupApplicationService!
+          .createGroup(
+            name: 'Recovery continuity ${_nonce(8)}',
+            slug: 'recovery-${_nonce(10)}',
+            description: 'Handle Recovery group continuity',
+            goal: 'Verify old transport group continuity',
+            rules: 'E2E only',
+            identity: GroupIdentitySelection.handle(fullHandle),
+          );
+      final oldGroupText = 'before recovery ${config.runId} ${_nonce(8)}';
+      final oldGroupMessage = await bootstrap.messagingService!.sendText(
+        thread: AppThreadRef.group(recoveryGroup.groupId),
+        content: oldGroupText,
+      );
+      if (oldGroupMessage.remoteId?.trim().isEmpty != false ||
+          oldGroupMessage.sendState != MessageSendState.sent) {
+        fail('The pre-Recovery transport Group message was not committed.');
+      }
       var latestOtpRetryAt = registrationFactor.retryAt;
       String? oldPeerDeviceId;
       if (rejoinRequired) {
         peerBootstrap = await AppBootstrap.create(
-          environment: _environment(config),
+          environment: _environment(
+            config,
+            directE2eeEnabled: registrationRejoinRequired,
+            groupE2eeEnabled: false,
+          ),
           appStateRoot: config.peerAppStateRoot,
         );
         final oldJoin = await _startAppPeerJoin(
@@ -199,7 +240,11 @@ void main() {
       bootstrap = null;
       await _deleteDirectory(config.appStateRoot);
       bootstrap = await AppBootstrap.create(
-        environment: _environment(config),
+        environment: _environment(
+          config,
+          directE2eeEnabled: registrationRejoinRequired,
+          groupE2eeEnabled: false,
+        ),
         appStateRoot: config.appStateRoot,
       );
       if ((await bootstrap.appSessionService!.listLocalIdentities())
@@ -529,6 +574,16 @@ void main() {
               'message_workspace_visible=${find.byType(ConversationWorkspacePage).evaluate().isNotEmpty}';
         },
       );
+      await _verifyRecoveredTransportGroupContinuity(
+        container: container,
+        bootstrap: bootstrap,
+        groupDid: recoveryGroup.groupId,
+        previousDid: oldDid,
+        currentDid: reset.currentDid,
+        oldMessageId: oldGroupMessage.remoteId!,
+        oldMessageText: oldGroupText,
+        runId: config.runId,
+      );
 
       if (rejoinRequired) {
         if (peerBootstrap == null || oldPeerDeviceId == null) {
@@ -679,6 +734,9 @@ void main() {
             'recovery_opened_message_workspace',
             'new_local_owner_handle_and_replacement_did_verified',
             'old_did_absent_from_fresh_local_projection',
+            'old_transport_group_rebound_to_recovered_did',
+            'old_group_message_recognized_as_account_owned',
+            'recovered_identity_sent_in_old_group',
           ],
         );
       }
@@ -734,8 +792,13 @@ void main() {
     skip:
         _e2ePhase != 'crash_a' ||
         !_RemoteRecoveryRunConfig.exists() ||
-        !_invocationExpects(_crashCutCaseId),
-    timeout: const Timeout(Duration(minutes: 15)),
+        (!_invocationExpects(_crashCutCaseId) &&
+            !_invocationExpects(_settingsContinuityCaseId)),
+    timeout: Timeout(
+      Duration(
+        minutes: _invocationExpects(_settingsContinuityCaseId) ? 25 : 15,
+      ),
+    ),
   );
 
   testWidgets(
@@ -744,20 +807,1242 @@ void main() {
     skip:
         _e2ePhase != 'crash_b' ||
         !_RemoteRecoveryRunConfig.exists() ||
-        !_invocationExpects(_crashCutCaseId),
-    timeout: const Timeout(Duration(minutes: 8)),
+        (!_invocationExpects(_crashCutCaseId) &&
+            !_invocationExpects(_settingsContinuityCaseId)),
+    timeout: Timeout(
+      Duration(minutes: _invocationExpects(_settingsContinuityCaseId) ? 15 : 8),
+    ),
   );
+}
+
+class _ContinuityDaemonConfig {
+  const _ContinuityDaemonConfig({
+    required this.binary,
+    required this.stateRoot,
+    required this.readyFile,
+    required this.handle,
+  });
+
+  final String binary;
+  final String stateRoot;
+  final String readyFile;
+  final String handle;
+}
+
+class _SettingsRecoveryContinuitySeed {
+  const _SettingsRecoveryContinuitySeed({
+    required this.registrationRetryAt,
+    required this.peerIdentityId,
+    required this.peerDid,
+    required this.directConversationId,
+    required this.peerDirectConversationId,
+    required this.directOutgoing,
+    required this.directIncoming,
+    required this.groupDid,
+    required this.groupConversationId,
+    required this.groupOutgoing,
+    required this.groupIncoming,
+    required this.daemonDid,
+    required this.runtimeDid,
+    required this.runtimeHandle,
+    required this.agentConversationId,
+    required this.agentPrompt,
+    required this.agentReply,
+    required this.conversationIds,
+    required this.agentDids,
+    required this.directMessageCount,
+    required this.groupMessageCount,
+    required this.agentMessageCount,
+  });
+
+  final DateTime registrationRetryAt;
+  final String peerIdentityId;
+  final String peerDid;
+  final String directConversationId;
+  final String peerDirectConversationId;
+  final ChatMessage directOutgoing;
+  final ChatMessage directIncoming;
+  final String groupDid;
+  final String groupConversationId;
+  final ChatMessage groupOutgoing;
+  final ChatMessage groupIncoming;
+  final String daemonDid;
+  final String runtimeDid;
+  final String runtimeHandle;
+  final String agentConversationId;
+  final ChatMessage agentPrompt;
+  final ChatMessage agentReply;
+  final List<String> conversationIds;
+  final List<String> agentDids;
+  final int directMessageCount;
+  final int groupMessageCount;
+  final int agentMessageCount;
+
+  Map<String, Object?> toHandoffFields() => <String, Object?>{
+    'peerIdentityId': peerIdentityId,
+    'peerDid': peerDid,
+    'directConversationId': directConversationId,
+    'peerDirectConversationId': peerDirectConversationId,
+    'directOutgoingId': _requiredMessageId(directOutgoing),
+    'directOutgoingText': directOutgoing.content,
+    'directIncomingId': _requiredMessageId(directIncoming),
+    'directIncomingText': directIncoming.content,
+    'groupDid': groupDid,
+    'groupConversationId': groupConversationId,
+    'groupOutgoingId': _requiredMessageId(groupOutgoing),
+    'groupOutgoingText': groupOutgoing.content,
+    'groupIncomingId': _requiredMessageId(groupIncoming),
+    'groupIncomingText': groupIncoming.content,
+    'daemonDid': daemonDid,
+    'runtimeDid': runtimeDid,
+    'runtimeHandle': runtimeHandle,
+    'agentConversationId': agentConversationId,
+    'agentPromptId': _requiredMessageId(agentPrompt),
+    'agentPromptText': agentPrompt.content,
+    'agentReplyId': _requiredMessageId(agentReply),
+    'agentReplyText': agentReply.content,
+    'conversationIds': conversationIds,
+    'agentDids': agentDids,
+    'directMessageCount': directMessageCount,
+    'groupMessageCount': groupMessageCount,
+    'agentMessageCount': agentMessageCount,
+  };
+}
+
+_ContinuityDaemonConfig _requireContinuityDaemonConfig(
+  _RemoteRecoveryRunConfig config,
+) {
+  final binary = config.daemonBinary?.trim() ?? '';
+  final stateRoot = config.daemonStateRoot?.trim() ?? '';
+  final readyFile = config.daemonReadyFile?.trim() ?? '';
+  final handle = config.daemonHandle?.trim() ?? '';
+  if (binary.isEmpty ||
+      stateRoot.isEmpty ||
+      readyFile.isEmpty ||
+      handle.isEmpty ||
+      !File(binary).existsSync()) {
+    fail('Settings Recovery continuity requires one audited daemon fixture.');
+  }
+  return _ContinuityDaemonConfig(
+    binary: binary,
+    stateRoot: stateRoot,
+    readyFile: readyFile,
+    handle: handle,
+  );
+}
+
+Future<_SettingsRecoveryContinuitySeed> _seedSettingsRecoveryContinuity({
+  required WidgetTester tester,
+  required _RemoteRecoveryRunConfig config,
+  required _DedicatedAccount account,
+  required AppBootstrap bootstrap,
+  required ProviderContainer container,
+  required AgentInventoryPort inventory,
+  required AgentControlService agentControl,
+  required ConversationService conversations,
+  required AppSession ownerSession,
+  required DateTime registrationRetryAt,
+  required _ContinuityDaemonConfig daemonConfig,
+}) async {
+  final ownerDid = ownerSession.did;
+  final ownerHandle = ownerSession.handle?.trim().toLowerCase() ?? '';
+  final messaging = bootstrap.messagingService;
+  final sync = bootstrap.messageSyncService;
+  final groups = bootstrap.groupApplicationService;
+  if (ownerHandle.isEmpty ||
+      messaging == null ||
+      sync == null ||
+      groups == null) {
+    fail('Settings Recovery continuity dependencies were unavailable.');
+  }
+
+  final peerBootstrap = await AppBootstrap.create(
+    environment: _environment(
+      config,
+      groupE2eeEnabled: false,
+      agentImEnabled: true,
+    ),
+    appStateRoot: config.peerAppStateRoot,
+  );
+  try {
+    await _waitForRegistrationRetryBoundary(registrationRetryAt);
+    final peerHandle = _uniqueHandle('${config.handlePrefix}peer');
+    final peerFactor = await _requestAndResolveRegistrationOtp(
+      onboardingSupport: peerBootstrap.onboardingSupportService!,
+      config: config,
+      account: account,
+      handle: peerHandle,
+    );
+    final peerRegistration = await peerBootstrap.onboardingService!
+        .registerHandleWithPhone(
+          phone: account.phone,
+          otp: peerFactor.otp,
+          handle: peerHandle,
+          nickName: 'AWiki Recovery continuity peer',
+        );
+    final registeredPeer = peerRegistration.identity;
+    if (peerRegistration.status != IdentityRegistrationStatus.registered ||
+        registeredPeer == null ||
+        !registeredPeer.authenticated ||
+        registeredPeer.did == ownerDid) {
+      fail('Settings Recovery did not create an independent Direct peer.');
+    }
+    await _activatePeerIdentity(
+      peerBootstrap,
+      identityId: registeredPeer.identityId,
+      expectedDid: registeredPeer.did,
+    );
+    final peerSession = await peerBootstrap.appSessionService!.currentSession();
+    if (peerSession == null ||
+        !peerSession.authenticated ||
+        peerSession.did != registeredPeer.did) {
+      fail('The continuity peer did not activate its exact identity.');
+    }
+
+    final directOutgoing = await messaging.sendText(
+      thread: AppThreadRef.direct(peerSession.did),
+      content: 'direct-before-out ${config.runId} ${_nonce(8)}',
+    );
+    _requireCommittedDirect(
+      directOutgoing,
+      senderDid: ownerDid,
+      receiverDid: peerSession.did,
+      isMine: true,
+    );
+    final peerOutgoingProjection = await _syncAndWaitForAppThreadExactOne(
+      tester: tester,
+      appBootstrap: peerBootstrap,
+      thread: AppThreadRef.direct(ownerDid),
+      messageId: _requiredMessageId(directOutgoing),
+      content: directOutgoing.content,
+      senderDid: ownerDid,
+      receiverDid: peerSession.did,
+      isMine: false,
+    );
+    final directIncoming = await peerBootstrap.messagingService!.sendText(
+      thread: AppThreadRef.direct(ownerDid),
+      content: 'direct-before-in ${config.runId} ${_nonce(8)}',
+    );
+    _requireCommittedDirect(
+      directIncoming,
+      senderDid: peerSession.did,
+      receiverDid: ownerDid,
+      isMine: true,
+    );
+    final ownerIncomingProjection = await _syncAndWaitForAppThreadExactOne(
+      tester: tester,
+      appBootstrap: bootstrap,
+      thread: AppThreadRef.direct(peerSession.did),
+      messageId: _requiredMessageId(directIncoming),
+      content: directIncoming.content,
+      senderDid: peerSession.did,
+      receiverDid: ownerDid,
+      isMine: false,
+    );
+    final directConversationId = _requiredConversationId(
+      ownerIncomingProjection,
+    );
+    final peerDirectConversationId = _requiredConversationId(
+      peerOutgoingProjection,
+    );
+    final peerDirectHistory = await _loadConversationHistory(
+      peerBootstrap,
+      peerDirectConversationId,
+    );
+    _requireExactMessage(
+      peerDirectHistory,
+      expected: directOutgoing,
+      isMine: false,
+      conversationId: peerDirectConversationId,
+    );
+    _requireExactMessage(
+      peerDirectHistory,
+      expected: directIncoming,
+      isMine: true,
+      conversationId: peerDirectConversationId,
+    );
+
+    final group = await groups.createGroup(
+      name: 'Settings Recovery continuity ${_nonce(8)}',
+      slug: 'settings-recovery-${_nonce(10)}',
+      description: 'Settings Handle Recovery continuity',
+      goal: 'Verify stable transport Group continuity',
+      rules: 'E2E only',
+      identity: GroupIdentitySelection.handle(ownerHandle),
+    );
+    await groups.addMember(groupDid: group.groupId, memberRef: peerSession.did);
+    await _waitForPeerGroup(
+      tester: tester,
+      peerBootstrap: peerBootstrap,
+      groupDid: group.groupId,
+    );
+    final groupOutgoing = await messaging.sendText(
+      thread: AppThreadRef.group(group.groupId),
+      content: 'group-before-out ${config.runId} ${_nonce(8)}',
+    );
+    _requireCommittedGroup(
+      groupOutgoing,
+      groupDid: group.groupId,
+      senderDid: ownerDid,
+      isMine: true,
+      conversationId: group.conversationId,
+    );
+    await _waitForGroupMessageExactOne(
+      tester: tester,
+      bootstrap: peerBootstrap,
+      groupDid: group.groupId,
+      messageId: _requiredMessageId(groupOutgoing),
+      content: groupOutgoing.content,
+      senderDid: ownerDid,
+      isMine: false,
+      conversationId: group.conversationId,
+    );
+    final groupIncoming = await peerBootstrap.messagingService!.sendText(
+      thread: AppThreadRef.group(group.groupId),
+      content: 'group-before-in ${config.runId} ${_nonce(8)}',
+    );
+    _requireCommittedGroup(
+      groupIncoming,
+      groupDid: group.groupId,
+      senderDid: peerSession.did,
+      isMine: true,
+      conversationId: group.conversationId,
+    );
+    await _waitForGroupMessageExactOne(
+      tester: tester,
+      bootstrap: bootstrap,
+      groupDid: group.groupId,
+      messageId: _requiredMessageId(groupIncoming),
+      content: groupIncoming.content,
+      senderDid: peerSession.did,
+      isMine: false,
+      conversationId: group.conversationId,
+    );
+
+    final daemonInstall = await _installContinuityDaemon(
+      config: config,
+      daemonConfig: daemonConfig,
+      inventory: inventory,
+      controllerDid: ownerDid,
+      controllerHandle: ownerHandle,
+    );
+    final gatewayScript = await _writeContinuityHermesGateway(daemonConfig);
+    final daemon = await _RunningContinuityDaemon.start(
+      config: config,
+      daemonConfig: daemonConfig,
+      gatewayScript: gatewayScript,
+    );
+    late final AgentSummary runtimeAgent;
+    try {
+      await _waitForContinuityDaemonReady(
+        tester: tester,
+        container: container,
+        daemonDid: daemonInstall.daemonDid,
+      );
+      final runtimeHandle = _uniqueHandle('${config.handlePrefix}runtime');
+      final runtimeRequestId = 'recovery-runtime-${_nonce(12)}';
+      try {
+        await agentControl.createHermesRuntime(
+          daemonAgentDid: daemonInstall.daemonDid,
+          controllerDid: ownerDid,
+          handle: runtimeHandle,
+          displayName: 'Recovery continuity runtime',
+          clientRequestId: runtimeRequestId,
+        );
+      } on TimeoutException {
+        // Final acceptance can time out after the committed control message;
+        // authoritative Inventory and daemon sync below decide the outcome.
+      }
+      runtimeAgent = await _waitForAgent(
+        inventory: inventory,
+        description: 'continuity Runtime Agent',
+        matches: (agent) =>
+            agent.isRuntime &&
+            agent.daemonAgentDid == daemonInstall.daemonDid &&
+            agent.handle == runtimeHandle,
+      );
+      await _waitForRuntimeMessageSyncReady(
+        daemonStateRoot: daemonConfig.stateRoot,
+        runtimeDid: runtimeAgent.agentDid,
+      );
+      final agentConversation = await _waitForRuntimeConversationRoute(
+        tester: tester,
+        bootstrap: bootstrap,
+        runtimeDid: runtimeAgent.agentDid,
+      );
+      final submittedPrompt = await _plainDirectMessaging(messaging)
+          .sendPlainConversationText(
+            conversation: agentConversation,
+            content: 'agent-before ${config.runId} ${_nonce(8)}',
+          );
+      final prompt = await _syncAndWaitForConversationExactOne(
+        tester: tester,
+        bootstrap: bootstrap,
+        conversation: agentConversation,
+        messageId: _requiredMessageId(submittedPrompt),
+        content: submittedPrompt.content,
+        senderDid: ownerDid,
+        receiverDid: runtimeAgent.agentDid,
+        isMine: true,
+      );
+      _requireCommittedDirect(
+        prompt,
+        senderDid: ownerDid,
+        receiverDid: runtimeAgent.agentDid,
+        isMine: true,
+      );
+      final reply = await _waitForAgentReply(
+        tester: tester,
+        bootstrap: bootstrap,
+        runtimeDid: runtimeAgent.agentDid,
+        conversations: conversations,
+        expectedContent: '$_agentReplyPrefix${prompt.content}',
+        existingMessageIds: <String>{_requiredMessageId(prompt)},
+      );
+      final agentConversationId = _requiredConversationId(reply);
+
+      final directHistory = await _loadConversationHistory(
+        bootstrap,
+        directConversationId,
+      );
+      final groupHistory = await groups.listMessages(group.groupId, limit: 100);
+      final agentHistory = await _loadConversationHistory(
+        bootstrap,
+        agentConversationId,
+      );
+      _requireExactMessage(
+        directHistory,
+        expected: directOutgoing,
+        isMine: true,
+        conversationId: directConversationId,
+      );
+      _requireExactMessage(
+        directHistory,
+        expected: directIncoming,
+        isMine: false,
+        conversationId: directConversationId,
+      );
+      _requireExactMessage(
+        groupHistory,
+        expected: groupOutgoing,
+        isMine: true,
+        conversationId: group.conversationId,
+      );
+      _requireExactMessage(
+        groupHistory,
+        expected: groupIncoming,
+        isMine: false,
+        conversationId: group.conversationId,
+      );
+      _requireExactMessage(
+        agentHistory,
+        expected: prompt,
+        isMine: true,
+        conversationId: agentConversationId,
+      );
+      _requireExactMessage(
+        agentHistory,
+        expected: reply,
+        isMine: false,
+        conversationId: agentConversationId,
+      );
+
+      final agentInventory = await inventory.listAgents(includeInactive: true);
+      final agentDids =
+          agentInventory.map((agent) => agent.agentDid).toList(growable: false)
+            ..sort();
+      if (agentDids.toSet().length != agentDids.length ||
+          agentDids.where((did) => did == runtimeAgent.agentDid).length != 1) {
+        fail('Pre-Recovery Agent inventory contained a duplicate.');
+      }
+      final conversationIds = await _waitForContinuityConversationIds(
+        tester: tester,
+        bootstrap: bootstrap,
+        conversations: conversations,
+        ownerDid: ownerDid,
+        requiredIds: <String>{
+          directConversationId,
+          group.conversationId,
+          agentConversationId,
+        },
+      );
+      return _SettingsRecoveryContinuitySeed(
+        registrationRetryAt: peerFactor.retryAt,
+        peerIdentityId: peerSession.identityId,
+        peerDid: peerSession.did,
+        directConversationId: directConversationId,
+        peerDirectConversationId: peerDirectConversationId,
+        directOutgoing: directOutgoing,
+        directIncoming: directIncoming,
+        groupDid: group.groupId,
+        groupConversationId: group.conversationId,
+        groupOutgoing: groupOutgoing,
+        groupIncoming: groupIncoming,
+        daemonDid: daemonInstall.daemonDid,
+        runtimeDid: runtimeAgent.agentDid,
+        runtimeHandle: runtimeAgent.handle!,
+        agentConversationId: agentConversationId,
+        agentPrompt: prompt,
+        agentReply: reply,
+        conversationIds: conversationIds,
+        agentDids: agentDids,
+        directMessageCount: directHistory.length,
+        groupMessageCount: groupHistory.length,
+        agentMessageCount: agentHistory.length,
+      );
+    } finally {
+      await daemon.stop();
+    }
+  } finally {
+    await peerBootstrap.dispose();
+  }
+}
+
+String _requiredMessageId(ChatMessage message) {
+  final value = message.remoteId?.trim() ?? '';
+  if (value.isEmpty) fail('A continuity message had no remote ID.');
+  return value;
+}
+
+String _requiredConversationId(ChatMessage message) {
+  final value = message.conversationId?.trim() ?? '';
+  if (value.isEmpty) fail('A continuity message had no conversation ID.');
+  return value;
+}
+
+void _requireCommittedDirect(
+  ChatMessage message, {
+  required String senderDid,
+  required String receiverDid,
+  required bool isMine,
+}) {
+  if (_requiredMessageId(message).isEmpty ||
+      _requiredConversationId(message).isEmpty ||
+      message.senderDid != senderDid ||
+      message.receiverDid != receiverDid ||
+      message.isMine != isMine ||
+      message.sendState != MessageSendState.sent) {
+    fail('A continuity Direct message was not committed exactly.');
+  }
+}
+
+void _requireCommittedGroup(
+  ChatMessage message, {
+  required String groupDid,
+  required String senderDid,
+  required bool isMine,
+  required String conversationId,
+}) {
+  if (_requiredMessageId(message).isEmpty ||
+      _requiredConversationId(message) != conversationId ||
+      message.senderDid != senderDid ||
+      message.groupId != groupDid ||
+      message.isMine != isMine ||
+      message.sendState != MessageSendState.sent) {
+    fail('A continuity Group message was not committed exactly.');
+  }
+}
+
+void _requireExactMessage(
+  List<ChatMessage> history, {
+  required ChatMessage expected,
+  required bool isMine,
+  required String conversationId,
+}) {
+  final matches = history
+      .where((message) => message.remoteId == expected.remoteId)
+      .toList(growable: false);
+  if (matches.length != 1 ||
+      matches.single.content != expected.content ||
+      matches.single.senderDid != expected.senderDid ||
+      matches.single.isMine != isMine ||
+      matches.single.conversationId != conversationId) {
+    fail('A key continuity message was not exact-one with stable ownership.');
+  }
+}
+
+ChatMessage _requireExactStoredMessage(
+  List<ChatMessage> history, {
+  required String messageId,
+  required String content,
+  required String senderDid,
+  required bool isMine,
+  required String conversationId,
+}) {
+  final matches = history
+      .where((message) => message.remoteId == messageId)
+      .toList(growable: false);
+  if (matches.length != 1 ||
+      matches.single.content != content ||
+      matches.single.senderDid != senderDid ||
+      matches.single.isMine != isMine ||
+      matches.single.conversationId != conversationId) {
+    fail('A persisted continuity message changed or was not exact-one.');
+  }
+  return matches.single;
+}
+
+int _requiredInt(Map<String, Object?> root, String key) {
+  final value = root[key];
+  if (value is! int || value < 0) {
+    throw StateError('Missing non-negative handoff integer $key.');
+  }
+  return value;
+}
+
+List<String> _requiredStringList(Map<String, Object?> root, String key) {
+  final value = root[key];
+  if (value is! List) {
+    throw StateError('Missing handoff list $key.');
+  }
+  final result = value
+      .map((item) => item is String ? item.trim() : '')
+      .toList(growable: false);
+  if (result.any((item) => item.isEmpty) ||
+      result.toSet().length != result.length) {
+    throw StateError('Invalid handoff list $key.');
+  }
+  return result..sort();
+}
+
+bool _sameStrings(Iterable<String> left, Iterable<String> right) {
+  final normalizedLeft = left.toList(growable: false)..sort();
+  final normalizedRight = right.toList(growable: false)..sort();
+  if (normalizedLeft.length != normalizedRight.length) return false;
+  for (var index = 0; index < normalizedLeft.length; index += 1) {
+    if (normalizedLeft[index] != normalizedRight[index]) return false;
+  }
+  return true;
+}
+
+bool _isSingleGenerationAdvance(String previous, String current) {
+  final before = BigInt.tryParse(previous);
+  final after = BigInt.tryParse(current);
+  return before != null && after != null && after == before + BigInt.one;
+}
+
+Future<void> _waitForPeerGroup({
+  required WidgetTester tester,
+  required AppBootstrap peerBootstrap,
+  required String groupDid,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 60));
+  while (DateTime.now().isBefore(deadline)) {
+    await peerBootstrap.messageSyncService!.syncNow(
+      reason: 'settings-recovery-group-member',
+      limit: 100,
+    );
+    final groups = await peerBootstrap.groupApplicationService!.listGroups(
+      limit: 100,
+    );
+    if (groups.items.where((group) => group.groupId == groupDid).length == 1) {
+      return;
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 550));
+  }
+  fail('The continuity peer did not project the original Group once.');
+}
+
+Future<void> _waitForRecoveredContinuityGroup({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required AppBootstrap bootstrap,
+  required String groupDid,
+  required String conversationId,
+  required String previousDid,
+  required String currentDid,
+  required String peerDid,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  Object? lastError;
+  while (DateTime.now().isBefore(deadline)) {
+    try {
+      await container.read(groupProvider.notifier).refresh();
+      final projected = container
+          .read(groupProvider)
+          .groups
+          .where((group) => group.groupId == groupDid)
+          .toList(growable: false);
+      if (projected.length > 1) {
+        fail('Recovery duplicated the original Group projection.');
+      }
+      if (projected.length == 1 &&
+          projected.single.conversationId == conversationId) {
+        final members = await bootstrap.groupApplicationService!.listMembers(
+          groupDid,
+          limit: 100,
+        );
+        if (members.items.where((member) => member.did == currentDid).length ==
+                1 &&
+            members.items
+                .where((member) => member.did == previousDid)
+                .isEmpty &&
+            members.items.where((member) => member.did == peerDid).length ==
+                1) {
+          return;
+        }
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+  }
+  fail(
+    'The recovered Handle-backed transport Group did not converge '
+    '(last_error=${_safeDiagnosticToken(lastError?.runtimeType.toString())}).',
+  );
+}
+
+Future<void> _waitForGroupMessageExactOne({
+  required WidgetTester tester,
+  required AppBootstrap bootstrap,
+  required String groupDid,
+  required String messageId,
+  required String content,
+  required String senderDid,
+  required bool isMine,
+  required String conversationId,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(deadline)) {
+    await bootstrap.messageSyncService!.syncNow(
+      reason: 'settings-recovery-group-message',
+      limit: 100,
+    );
+    final history = await bootstrap.groupApplicationService!.listMessages(
+      groupDid,
+      limit: 100,
+    );
+    final matches = history
+        .where((message) => message.remoteId == messageId)
+        .toList(growable: false);
+    if (matches.length > 1) {
+      fail('A Group message was projected more than once.');
+    }
+    if (matches.length == 1) {
+      final message = matches.single;
+      if (message.content != content ||
+          message.senderDid != senderDid ||
+          message.isMine != isMine ||
+          message.conversationId != conversationId) {
+        fail('A Group message projection changed identity or ownership.');
+      }
+      return;
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 550));
+  }
+  fail('A Group message did not converge exact-one.');
+}
+
+Future<ChatMessage> _syncAndWaitForConversationExactOne({
+  required WidgetTester tester,
+  required AppBootstrap bootstrap,
+  required AppConversationReadRef conversation,
+  required String messageId,
+  required String content,
+  required String senderDid,
+  required String receiverDid,
+  required bool isMine,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(deadline)) {
+    await bootstrap.messageSyncService!.syncNow(
+      reason: 'settings-recovery-conversation-message',
+      limit: 100,
+    );
+    final history = await _loadConversationHistory(
+      bootstrap,
+      conversation.conversationId,
+    );
+    final matches = history
+        .where(
+          (message) =>
+              message.remoteId == messageId && message.content == content,
+        )
+        .toList(growable: false);
+    if (matches.length > 1) {
+      fail('A Direct conversation message was projected more than once.');
+    }
+    if (matches.length == 1) {
+      final message = matches.single;
+      if (message.senderDid != senderDid ||
+          message.receiverDid != receiverDid ||
+          message.isMine != isMine ||
+          message.sendState != MessageSendState.sent ||
+          message.conversationId != conversation.conversationId) {
+        fail('A Direct conversation message changed identity or ownership.');
+      }
+      return message;
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 550));
+  }
+  fail('A Direct conversation message did not converge exact-one.');
+}
+
+Future<ChatMessage> _waitForAgentReply({
+  required WidgetTester tester,
+  required AppBootstrap bootstrap,
+  required String runtimeDid,
+  String? conversationId,
+  ConversationService? conversations,
+  required String expectedContent,
+  required Set<String> existingMessageIds,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 120));
+  while (DateTime.now().isBefore(deadline)) {
+    await bootstrap.messageSyncService!.syncNow(
+      reason: 'settings-recovery-agent-reply',
+      limit: 100,
+    );
+    final history = conversationId == null
+        ? await _loadAllConversationHistory(
+            bootstrap,
+            conversations: conversations,
+          )
+        : await _loadConversationHistory(bootstrap, conversationId);
+    final matches = history
+        .where(
+          (message) =>
+              message.senderDid == runtimeDid &&
+              message.content == expectedContent &&
+              !existingMessageIds.contains(message.remoteId),
+        )
+        .toList(growable: false);
+    if (matches.length > 1) {
+      fail('An Agent reply was projected more than once.');
+    }
+    if (matches.length == 1) {
+      final reply = matches.single;
+      if (reply.isMine ||
+          reply.sendState != MessageSendState.sent ||
+          _requiredMessageId(reply).isEmpty) {
+        fail('The Agent reply had invalid ownership or state.');
+      }
+      return reply;
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+  }
+  fail('The original Agent did not return one deterministic reply.');
+}
+
+Future<List<ChatMessage>> _loadAllConversationHistory(
+  AppBootstrap bootstrap, {
+  ConversationService? conversations,
+}) async {
+  final session = await bootstrap.appSessionService!.currentSession();
+  final effectiveConversations = conversations ?? bootstrap.conversationService;
+  if (session == null || effectiveConversations == null) {
+    fail('Canonical conversation discovery was unavailable.');
+  }
+  final summaries = await effectiveConversations.listConversations(
+    ownerDid: session.did,
+    limit: 100,
+  );
+  final messages = <ChatMessage>[];
+  for (final summary in summaries) {
+    messages.addAll(
+      await _loadConversationHistory(bootstrap, summary.conversationId),
+    );
+  }
+  return messages;
+}
+
+Future<List<ChatMessage>> _loadConversationHistory(
+  AppBootstrap bootstrap,
+  String conversationId,
+) {
+  final messaging = bootstrap.messagingService;
+  if (messaging == null || messaging is! ConversationTimelineMessagingService) {
+    fail('Canonical conversation timeline messaging was unavailable.');
+  }
+  final timeline = messaging as ConversationTimelineMessagingService;
+  return timeline.loadConversationTimeline(
+    AppConversationReadRef.fromConversationId(conversationId),
+    limit: 100,
+  );
+}
+
+Future<List<String>> _waitForContinuityConversationIds({
+  required WidgetTester tester,
+  required AppBootstrap bootstrap,
+  required ConversationService conversations,
+  required String ownerDid,
+  required Set<String> requiredIds,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 60));
+  while (DateTime.now().isBefore(deadline)) {
+    await bootstrap.messageSyncService!.syncNow(
+      reason: 'settings-recovery-conversation-count',
+      limit: 100,
+    );
+    final items = await conversations.listConversations(
+      ownerDid: ownerDid,
+      limit: 100,
+    );
+    final ids = items.map((item) => item.conversationId).toList(growable: false)
+      ..sort();
+    if (ids.toSet().length != ids.length) {
+      fail('Conversation projection contained duplicate IDs.');
+    }
+    if (requiredIds.every(ids.contains)) return ids;
+    await tester.pump(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 550));
+  }
+  fail('The three continuity conversations did not converge.');
+}
+
+class _ContinuityDaemonInstall {
+  const _ContinuityDaemonInstall({required this.daemonDid});
+
+  final String daemonDid;
+}
+
+Future<_ContinuityDaemonInstall> _installContinuityDaemon({
+  required _RemoteRecoveryRunConfig config,
+  required _ContinuityDaemonConfig daemonConfig,
+  required AgentInventoryPort inventory,
+  required String controllerDid,
+  required String controllerHandle,
+}) async {
+  final token = await inventory.issueDaemonToken(
+    controllerDid: controllerDid,
+    controllerHandle: controllerHandle,
+    clientPlatform: Platform.operatingSystem,
+  );
+  final result = await Process.run(
+    daemonConfig.binary,
+    <String>[
+      'install',
+      '--token',
+      token.token,
+      '--base-url',
+      config.baseUrl,
+      '--no-service',
+      '--print-json',
+      '--state-root',
+      daemonConfig.stateRoot,
+    ],
+    environment: _continuityDaemonEnvironment(config),
+  ).timeout(const Duration(minutes: 2));
+  if (result.exitCode != 0) {
+    fail('The continuity daemon install command failed safely.');
+  }
+  final decoded = jsonDecode(result.stdout.toString());
+  final daemonDid = decoded is Map
+      ? decoded['daemon_agent_did']?.toString().trim() ?? ''
+      : '';
+  if (daemonDid.isEmpty) {
+    fail('The continuity daemon install returned no daemon identity.');
+  }
+  return _ContinuityDaemonInstall(daemonDid: daemonDid);
+}
+
+Future<AgentSummary> _waitForAgent({
+  required AgentInventoryPort inventory,
+  required String description,
+  required bool Function(AgentSummary agent) matches,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(deadline)) {
+    final agents = await inventory.listAgents(includeInactive: true);
+    final selected = agents.whereType<AgentSummary>().where(matches).toList();
+    if (selected.length > 1) fail('$description was duplicated.');
+    if (selected.length == 1) return selected.single;
+    await Future<void>.delayed(const Duration(seconds: 1));
+  }
+  fail('Timed out waiting for $description.');
+}
+
+Future<AgentSummary> _waitForContinuityDaemonReady({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String daemonDid,
+}) async {
+  final controller = container.read(agentsProvider.notifier);
+  final deadline = DateTime.now().add(const Duration(seconds: 120));
+  while (DateTime.now().isBefore(deadline)) {
+    await controller.load();
+    controller.select(daemonDid);
+    await controller.refreshDaemonStatus(daemonDid);
+    await tester.pump(const Duration(milliseconds: 250));
+    final state = container.read(agentsProvider);
+    final matches = state.agents
+        .where((agent) => agent.isDaemon && agent.agentDid == daemonDid)
+        .toList(growable: false);
+    if (matches.length > 1) {
+      fail('The continuity daemon was duplicated.');
+    }
+    if (matches.length == 1 && state.canCreateRuntimeAgent(matches.single)) {
+      return matches.single;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 750));
+  }
+  final state = container.read(agentsProvider);
+  fail(
+    'The continuity daemon did not become actionable '
+    '(error=${_safeDiagnosticToken(state.error)}, '
+    'debug=${_safeDiagnosticToken(state.debugLastError)}).',
+  );
+}
+
+Future<void> _waitForRuntimeMessageSyncReady({
+  required String daemonStateRoot,
+  required String runtimeDid,
+}) async {
+  final daemonDbPath = '$daemonStateRoot/daemon.db';
+  final coreDbPath = '$daemonStateRoot/im-core/local-state.sqlite';
+  final deadline = DateTime.now().add(const Duration(seconds: 120));
+  while (DateTime.now().isBefore(deadline)) {
+    try {
+      final daemonDb = await databaseFactoryFfi.openDatabase(
+        daemonDbPath,
+        options: OpenDatabaseOptions(readOnly: true),
+      );
+      String? ownerIdentityId;
+      var completedSyncCount = 0;
+      try {
+        final identities = await daemonDb.query(
+          'agent_device_identity',
+          columns: const <String>['identity_id'],
+          where: 'agent_did = ?',
+          whereArgs: <Object?>[runtimeDid],
+          limit: 2,
+        );
+        if (identities.length == 1) {
+          ownerIdentityId = identities.single['identity_id']?.toString();
+        }
+        final completed = await daemonDb.rawQuery(
+          '''
+        SELECT COUNT(*) AS count
+        FROM audit_log
+        WHERE event_type = 'daemon.realtime.sync.completed'
+          AND agent_did = ?
+        ''',
+          <Object?>[runtimeDid],
+        );
+        completedSyncCount = completed.single['count'] as int? ?? 0;
+      } finally {
+        await daemonDb.close();
+      }
+      if (ownerIdentityId != null && completedSyncCount > 0) {
+        final coreDb = await databaseFactoryFfi.openDatabase(
+          coreDbPath,
+          options: OpenDatabaseOptions(readOnly: true),
+        );
+        try {
+          final states = await coreDb.query(
+            'message_sync_state',
+            columns: const <String>['bootstrap_state', 'last_error_code'],
+            where: 'owner_identity_id = ?',
+            whereArgs: <Object?>[ownerIdentityId],
+            limit: 2,
+          );
+          if (states.length == 1 &&
+              states.single['bootstrap_state'] == 'active' &&
+              states.single['last_error_code'] == null) {
+            await Future<void>.delayed(const Duration(seconds: 2));
+            return;
+          }
+        } finally {
+          await coreDb.close();
+        }
+      }
+    } on DatabaseException catch (error) {
+      final code = error.getResultCode();
+      if (code == null || (code & 0xff) != 5) rethrow;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+  }
+  fail('The Runtime Agent did not establish reliable message sync.');
+}
+
+Future<AppConversationReadRef> _waitForRuntimeConversationRoute({
+  required WidgetTester tester,
+  required AppBootstrap bootstrap,
+  required String runtimeDid,
+}) async {
+  final directory = bootstrap.directoryApplicationService;
+  if (directory == null) {
+    fail('Runtime Agent directory resolution was unavailable.');
+  }
+  final deadline = DateTime.now().add(const Duration(seconds: 60));
+  while (DateTime.now().isBefore(deadline)) {
+    try {
+      final resolved = await directory.resolvePeer(runtimeDid);
+      if (resolved.did == runtimeDid &&
+          resolved.conversationId?.startsWith('dm:peer-scope:v1:') == true) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        return AppConversationReadRef.fromConversationId(
+          resolved.conversationId!,
+        );
+      }
+    } on Object {
+      // Runtime identity publication is eventually consistent.
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+  }
+  fail('The Runtime Agent did not publish one canonical Direct route.');
+}
+
+PlainDirectMessagingService _plainDirectMessaging(MessagingService messaging) {
+  if (messaging is! PlainDirectMessagingService) {
+    fail('AWikiMe does not expose the Runtime Agent default-plain send path.');
+  }
+  return messaging as PlainDirectMessagingService;
+}
+
+Future<File> _writeContinuityHermesGateway(
+  _ContinuityDaemonConfig config,
+) async {
+  final script = File('${config.stateRoot}/recovery_fake_hermes_gateway.py');
+  await script.parent.create(recursive: true);
+  await script.writeAsString('''import json
+import sys
+
+print(json.dumps({"jsonrpc": "2.0", "method": "event", "params": {"type": "gateway.ready", "payload": {"version": "recovery-e2e"}}}), flush=True)
+for line in sys.stdin:
+    request = json.loads(line)
+    method = request.get("method")
+    if method == "session.create":
+        print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": {"session_id": "recovery_e2e", "stored_session_id": "recovery_e2e"}}), flush=True)
+    elif method == "session.resume":
+        print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": {"session_id": "recovery_e2e", "stored_session_id": "recovery_e2e"}}), flush=True)
+    elif method == "prompt.submit":
+        params = request.get("params", {})
+        prompt = str(params.get("text", ""))
+        marker = "\\nuser_message:\\n"
+        user_message = prompt.rsplit(marker, 1)[-1] if marker in prompt else prompt
+        print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": {"final_text": "$_agentReplyPrefix" + user_message}}), flush=True)
+    else:
+        print(json.dumps({"jsonrpc": "2.0", "id": request.get("id"), "error": {"message": "unknown method"}}), flush=True)
+''', flush: true);
+  return script;
+}
+
+Map<String, String> _continuityDaemonEnvironment(
+  _RemoteRecoveryRunConfig config, {
+  File? gatewayScript,
+}) => <String, String>{
+  'AWIKI_DAEMON_SERVICE_BASE_URL': config.baseUrl,
+  'AWIKI_DAEMON_USER_SERVICE_BASE_URL': config.userServiceUrl,
+  'AWIKI_DAEMON_MESSAGE_SERVICE_BASE_URL': config.messageServiceUrl,
+  'AWIKI_DAEMON_DID_DOMAIN': config.didDomain,
+  'AWIKI_DAEMON_ALLOW_PLAIN_CONTROL': '1',
+  if (gatewayScript != null)
+    'AWIKI_HERMES_GATEWAY_CMD': '/usr/bin/env python3 ${gatewayScript.path}',
+};
+
+class _RunningContinuityDaemon {
+  _RunningContinuityDaemon._(
+    this._process,
+    this._stdoutSubscription,
+    this._stderrSubscription,
+  );
+
+  final Process _process;
+  final StreamSubscription<String> _stdoutSubscription;
+  final StreamSubscription<String> _stderrSubscription;
+
+  static Future<_RunningContinuityDaemon> start({
+    required _RemoteRecoveryRunConfig config,
+    required _ContinuityDaemonConfig daemonConfig,
+    required File gatewayScript,
+  }) async {
+    final ready = File(daemonConfig.readyFile);
+    if (ready.existsSync()) await ready.delete();
+    final process = await Process.start(
+      daemonConfig.binary,
+      <String>[
+        'foreground',
+        '--state-root',
+        daemonConfig.stateRoot,
+        '--ready-file',
+        daemonConfig.readyFile,
+        '--max-runtime-ms',
+        '1200000',
+        '--poll-interval-ms',
+        '100',
+      ],
+      environment: _continuityDaemonEnvironment(
+        config,
+        gatewayScript: gatewayScript,
+      ),
+      includeParentEnvironment: true,
+      runInShell: false,
+    );
+    final stdoutSubscription = process.stdout
+        .transform(utf8.decoder)
+        .listen((_) {}, onError: (_) {});
+    final stderrSubscription = process.stderr
+        .transform(utf8.decoder)
+        .listen((_) {}, onError: (_) {});
+    int? exitCode;
+    unawaited(process.exitCode.then((value) => exitCode = value));
+    final deadline = DateTime.now().add(const Duration(seconds: 30));
+    while (!ready.existsSync() && DateTime.now().isBefore(deadline)) {
+      if (exitCode != null) {
+        await stdoutSubscription.cancel();
+        await stderrSubscription.cancel();
+        fail('The continuity daemon exited before becoming ready.');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    if (!ready.existsSync()) {
+      process.kill(ProcessSignal.sigkill);
+      await stdoutSubscription.cancel();
+      await stderrSubscription.cancel();
+      fail('The continuity daemon did not become ready.');
+    }
+    return _RunningContinuityDaemon._(
+      process,
+      stdoutSubscription,
+      stderrSubscription,
+    );
+  }
+
+  Future<void> stop() async {
+    if (!_process.kill(ProcessSignal.sigterm)) {
+      _process.kill(ProcessSignal.sigkill);
+    }
+    try {
+      await _process.exitCode.timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      _process.kill(ProcessSignal.sigkill);
+      await _process.exitCode.timeout(const Duration(seconds: 5));
+    } finally {
+      await _stdoutSubscription.cancel();
+      await _stderrSubscription.cancel();
+    }
+  }
 }
 
 Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
   final config = _RemoteRecoveryRunConfig.load();
   final account = _DedicatedAccount.fromConfig(config);
   final presence = E2eUserPresencePort();
+  final continuityRequired = _invocationExpects(_settingsContinuityCaseId);
   await tester.binding.setSurfaceSize(const Size(1440, 900));
-  _requireFreshRoot(config.appStateRoot);
+  final daemonConfig = continuityRequired
+      ? _requireContinuityDaemonConfig(config)
+      : null;
+  _requireIndependentFreshRoots(<String>[
+    config.appStateRoot,
+    if (continuityRequired) config.peerAppStateRoot,
+    if (daemonConfig != null) daemonConfig.stateRoot,
+  ]);
 
   final bootstrap = await AppBootstrap.create(
-    environment: _environment(config),
+    environment: _environment(
+      config,
+      groupE2eeEnabled: false,
+      agentImEnabled: true,
+    ),
     appStateRoot: config.appStateRoot,
   );
   final onboardingSupport = bootstrap.onboardingSupportService;
@@ -792,6 +2077,16 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
       activatedOldSession.did != oldSession.did) {
     fail('Crash-cut setup did not activate its registered identity.');
   }
+  final ownerRealtime = bootstrap.realtimeApplicationService;
+  if (continuityRequired) {
+    if (ownerRealtime == null) {
+      fail('Crash-cut continuity owner realtime was unavailable.');
+    }
+    await ownerRealtime.start();
+    if (!ownerRealtime.isRunning) {
+      fail('Crash-cut continuity owner realtime did not start.');
+    }
+  }
   final productBinding = ProductAccountBinding.fromSession(oldBinding);
   final oldEpoch = ProductDeviceRegistryEpoch(
     currentDid: oldBinding.currentDid,
@@ -821,7 +2116,6 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
       ],
     ),
   );
-
   final recordingCore = _RecordingHandleRecoveryCorePort(
     bootstrap.handleRecoveryCorePort!,
   );
@@ -859,16 +2153,38 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
           'runtime_busy=${runtime.isBusy}';
     },
   );
-  await _waitForRegistrationRetryBoundary(factor.retryAt);
-  unawaited(
-    Navigator.of(tester.element(find.byType(AppShell))).push<void>(
-      CupertinoPageRoute<void>(
-        builder: (_) => HandleRecoveryPage(
-          initialHandle: oldSession.handle!.trim().toLowerCase(),
-          initialPhone: account.phone,
-        ),
-      ),
-    ),
+  final continuity = continuityRequired
+      ? await _seedSettingsRecoveryContinuity(
+          tester: tester,
+          config: config,
+          account: account,
+          bootstrap: bootstrap,
+          container: appContainer,
+          inventory: appContainer.read(agentInventoryPortProvider),
+          agentControl: appContainer.read(agentControlServiceProvider),
+          conversations: appContainer.read(conversationServiceProvider),
+          ownerSession: activatedOldSession,
+          registrationRetryAt: factor.retryAt,
+          daemonConfig: daemonConfig!,
+        )
+      : null;
+  await _waitForRegistrationRetryBoundary(
+    continuity?.registrationRetryAt ?? factor.retryAt,
+  );
+  appContainer
+      .read(shellDestinationProvider.notifier)
+      .select(ShellDestination.settings);
+  await _pumpUntil(
+    tester,
+    () => find.byType(SettingsPage).evaluate().length == 1,
+    failure: 'Crash-cut setup did not open Settings.',
+  );
+  final recoveryRow = find.byKey(const Key('settings-recover-handle-did-row'));
+  await tester.ensureVisible(recoveryRow);
+  await _tapOne(
+    tester,
+    recoveryRow,
+    failure: 'Settings did not expose Handle DID Recovery.',
   );
   await _pumpUntil(
     tester,
@@ -877,6 +2193,16 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
   );
   final container = ProviderScope.containerOf(
     tester.element(find.byType(HandleRecoveryPage)),
+  );
+  await _enterTextByKey(
+    tester,
+    const Key('handle-recovery-phone-input'),
+    account.phone,
+  );
+  await _tapOne(
+    tester,
+    find.bySemanticsIdentifier('handle-recovery-send-otp'),
+    failure: 'Settings Recovery OTP action was unavailable.',
   );
   await _pumpUntil(
     tester,
@@ -890,6 +2216,12 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
     timeout: const Duration(seconds: 45),
     failure: 'Crash-cut Recovery did not request an operation-bound OTP.',
   );
+  if (recordingCore.requestedLocalIdentityId != oldSession.identityId ||
+      recordingCore.requestedHandle !=
+          oldSession.handle!.trim().toLowerCase() ||
+      recordingCore.requestedPhone != account.phone) {
+    fail('Settings Recovery did not target the exact active local identity.');
+  }
   final operationId = container.read(handleRecoveryProvider).otpOperationId!;
   final otp = await _resolveOtp(
     account: account,
@@ -931,6 +2263,13 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
   if (reset == null ||
       reset.previousDid != oldSession.did ||
       reset.currentDid == oldSession.did ||
+      reset.ownerIdentityId != oldBinding.ownerIdentityId ||
+      reset.accountUserId != oldBinding.accountId ||
+      reset.handle != oldSession.handle!.trim().toLowerCase() ||
+      !_isSingleGenerationAdvance(
+        oldBinding.identityGeneration,
+        reset.bindingGeneration,
+      ) ||
       presence.completions != 1) {
     fail('Crash-cut phase A did not stop after one committed Recovery.');
   }
@@ -950,6 +2289,10 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
     'ownerIdentityId': oldBinding.ownerIdentityId,
     'accountId': oldBinding.accountId,
     'operationId': operationId,
+    'handle': oldSession.handle!.trim().toLowerCase(),
+    'oldGeneration': oldBinding.identityGeneration,
+    'newGeneration': reset.bindingGeneration,
+    if (continuity != null) ...continuity.toHandoffFields(),
   });
 
   // Deliberately do not dispose [bootstrap]. Returning lets the Flutter test
@@ -958,6 +2301,10 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
 
 Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   final config = _RemoteRecoveryRunConfig.load();
+  final continuityRequired = _invocationExpects(_settingsContinuityCaseId);
+  final daemonConfig = continuityRequired
+      ? _requireContinuityDaemonConfig(config)
+      : null;
   final handoffFile = File(config.crashCutHandoffPath);
   if (!handoffFile.existsSync()) {
     fail('Crash-cut phase B found no phase-A handoff.');
@@ -975,15 +2322,27 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   );
 
   final bootstrap = await AppBootstrap.create(
-    environment: _environment(config),
+    environment: _environment(
+      config,
+      groupE2eeEnabled: continuityRequired ? false : null,
+      agentImEnabled: continuityRequired ? true : null,
+    ),
     appStateRoot: config.appStateRoot,
   );
+  AppBootstrap? peerBootstrap;
+  _RunningContinuityDaemon? daemon;
   await tester.binding.setSurfaceSize(const Size(1440, 900));
   addTearDown(() async {
+    await daemon?.stop();
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
+    await peerBootstrap?.dispose();
     await bootstrap.dispose();
     await _deleteDirectory(config.appStateRoot);
+    if (continuityRequired) {
+      await _deleteDirectory(config.peerAppStateRoot);
+      await _deleteDirectory(daemonConfig!.stateRoot);
+    }
     if (handoffFile.existsSync()) await handoffFile.delete();
     await tester.binding.setSurfaceSize(null);
   });
@@ -995,14 +2354,15 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   }
 
   await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+  late ProviderContainer appContainer;
   await _pumpUntil(
     tester,
     () {
       final shell = find.byType(AppShell);
       if (shell.evaluate().length != 1) return false;
-      final container = ProviderScope.containerOf(tester.element(shell));
-      return container.read(sessionProvider).session?.did == newDid &&
-          container.read(appRuntimeProvider).activatedDid == newDid;
+      appContainer = ProviderScope.containerOf(tester.element(shell));
+      return appContainer.read(sessionProvider).session?.did == newDid &&
+          appContainer.read(appRuntimeProvider).activatedDid == newDid;
     },
     timeout: const Duration(seconds: 45),
     failure: 'Crash-cut phase B did not restore the replacement identity.',
@@ -1026,16 +2386,416 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       appBootstrapEpochBarrierMetrics.snapshot()['ready'] != 1) {
     fail('Crash-cut bootstrap barrier did not converge exactly once.');
   }
+  if (_invocationExpects(_crashCutCaseId)) {
+    await E2eCaseAttestationWriter.markPassed(
+      _crashCutCaseId,
+      phases: const <String>[
+        'phase_a_committed_with_old_product_epoch',
+        'phase_a_process_terminated_before_product_reset',
+        'phase_b_reopened_same_state_root',
+        'bootstrap_barrier_reset_before_session_activation',
+        'epoch_bound_registry_cleared_exactly_once',
+        'stable_account_profile_preserved',
+        'replacement_identity_visible_without_old_did',
+      ],
+    );
+  }
+  if (!continuityRequired) return;
+
+  final handle = _required(handoff, 'handle');
+  final oldGeneration = _required(handoff, 'oldGeneration');
+  final newGeneration = _required(handoff, 'newGeneration');
+  final peerIdentityId = _required(handoff, 'peerIdentityId');
+  final peerDid = _required(handoff, 'peerDid');
+  final directConversationId = _required(handoff, 'directConversationId');
+  final peerDirectConversationId = _required(
+    handoff,
+    'peerDirectConversationId',
+  );
+  final groupDid = _required(handoff, 'groupDid');
+  final groupConversationId = _required(handoff, 'groupConversationId');
+  final daemonDid = _required(handoff, 'daemonDid');
+  final runtimeDid = _required(handoff, 'runtimeDid');
+  final runtimeHandle = _required(handoff, 'runtimeHandle');
+  final agentConversationId = _required(handoff, 'agentConversationId');
+  final expectedConversationIds = _requiredStringList(
+    handoff,
+    'conversationIds',
+  );
+  final expectedAgentDids = _requiredStringList(handoff, 'agentDids');
+  final directMessageCount = _requiredInt(handoff, 'directMessageCount');
+  final groupMessageCount = _requiredInt(handoff, 'groupMessageCount');
+  final agentMessageCount = _requiredInt(handoff, 'agentMessageCount');
+
+  if (session == null ||
+      session.identityId != binding.ownerIdentityId ||
+      session.handle?.trim().toLowerCase() != handle ||
+      accountBinding.ownerIdentityId != binding.ownerIdentityId ||
+      accountBinding.accountId != binding.accountId ||
+      accountBinding.currentDid != newDid ||
+      accountBinding.identityGeneration != newGeneration ||
+      !_isSingleGenerationAdvance(oldGeneration, newGeneration) ||
+      localIdentities.length != 1 ||
+      localIdentities.single.identityId != binding.ownerIdentityId ||
+      localIdentities.single.did != newDid) {
+    fail('Settings Recovery did not preserve one exact Handle/account owner.');
+  }
+
+  peerBootstrap = await AppBootstrap.create(
+    environment: _environment(
+      config,
+      groupE2eeEnabled: false,
+      agentImEnabled: true,
+    ),
+    appStateRoot: config.peerAppStateRoot,
+  );
+  await _activatePeerIdentity(
+    peerBootstrap,
+    identityId: peerIdentityId,
+    expectedDid: peerDid,
+  );
+  final peerSession = await peerBootstrap.appSessionService!.currentSession();
+  if (peerSession?.identityId != peerIdentityId ||
+      peerSession?.did != peerDid) {
+    fail('The continuity peer did not reopen its exact identity.');
+  }
+
+  final gatewayScript = await _writeContinuityHermesGateway(daemonConfig!);
+  daemon = await _RunningContinuityDaemon.start(
+    config: config,
+    daemonConfig: daemonConfig,
+    gatewayScript: gatewayScript,
+  );
+  final inventory = appContainer.read(agentInventoryPortProvider);
+  final conversations = appContainer.read(conversationServiceProvider);
+  await _waitForAgent(
+    inventory: inventory,
+    description: 'reopened continuity daemon',
+    matches: (agent) => agent.isDaemon && agent.agentDid == daemonDid,
+  );
+  await _waitForAgent(
+    inventory: inventory,
+    description: 'reopened continuity Runtime Agent',
+    matches: (agent) =>
+        agent.isRuntime &&
+        agent.agentDid == runtimeDid &&
+        agent.daemonAgentDid == daemonDid &&
+        agent.handle == runtimeHandle,
+  );
+  await _waitForRecoveredContinuityGroup(
+    tester: tester,
+    container: appContainer,
+    bootstrap: bootstrap,
+    groupDid: groupDid,
+    conversationId: groupConversationId,
+    previousDid: oldDid,
+    currentDid: newDid,
+    peerDid: peerDid,
+  );
+
+  final recoveredConversationIds = await _waitForContinuityConversationIds(
+    tester: tester,
+    bootstrap: bootstrap,
+    conversations: conversations,
+    ownerDid: newDid,
+    requiredIds: expectedConversationIds.toSet(),
+  );
+  final recoveredAgents = await inventory.listAgents(includeInactive: true);
+  final recoveredAgentDids = recoveredAgents
+      .map((agent) => agent.agentDid)
+      .toList(growable: false);
+  if (!_sameStrings(recoveredConversationIds, expectedConversationIds) ||
+      !_sameStrings(recoveredAgentDids, expectedAgentDids) ||
+      recoveredAgentDids.where((did) => did == runtimeDid).length != 1) {
+    fail('Recovery abnormally changed conversation or Agent inventory counts.');
+  }
+
+  final messaging = bootstrap.messagingService!;
+  final groups = bootstrap.groupApplicationService!;
+  final directHistory = await _loadConversationHistory(
+    bootstrap,
+    directConversationId,
+  );
+  final groupHistory = await groups.listMessages(groupDid, limit: 100);
+  final agentHistory = await _loadConversationHistory(
+    bootstrap,
+    agentConversationId,
+  );
+  _requireExactStoredMessage(
+    directHistory,
+    messageId: _required(handoff, 'directOutgoingId'),
+    content: _required(handoff, 'directOutgoingText'),
+    senderDid: oldDid,
+    isMine: true,
+    conversationId: directConversationId,
+  );
+  _requireExactStoredMessage(
+    directHistory,
+    messageId: _required(handoff, 'directIncomingId'),
+    content: _required(handoff, 'directIncomingText'),
+    senderDid: peerDid,
+    isMine: false,
+    conversationId: directConversationId,
+  );
+  _requireExactStoredMessage(
+    groupHistory,
+    messageId: _required(handoff, 'groupOutgoingId'),
+    content: _required(handoff, 'groupOutgoingText'),
+    senderDid: oldDid,
+    isMine: true,
+    conversationId: groupConversationId,
+  );
+  _requireExactStoredMessage(
+    groupHistory,
+    messageId: _required(handoff, 'groupIncomingId'),
+    content: _required(handoff, 'groupIncomingText'),
+    senderDid: peerDid,
+    isMine: false,
+    conversationId: groupConversationId,
+  );
+  _requireExactStoredMessage(
+    agentHistory,
+    messageId: _required(handoff, 'agentPromptId'),
+    content: _required(handoff, 'agentPromptText'),
+    senderDid: oldDid,
+    isMine: true,
+    conversationId: agentConversationId,
+  );
+  _requireExactStoredMessage(
+    agentHistory,
+    messageId: _required(handoff, 'agentReplyId'),
+    content: _required(handoff, 'agentReplyText'),
+    senderDid: runtimeDid,
+    isMine: false,
+    conversationId: agentConversationId,
+  );
+  if (directHistory.length != directMessageCount ||
+      groupHistory.length != groupMessageCount ||
+      agentHistory.length != agentMessageCount) {
+    fail('Recovery changed a continuity thread message count.');
+  }
+
+  final directOutgoingAfter = await messaging.sendText(
+    thread: AppThreadRef.direct(peerDid),
+    content: 'direct-after-out ${config.runId} ${_nonce(8)}',
+  );
+  _requireCommittedDirect(
+    directOutgoingAfter,
+    senderDid: newDid,
+    receiverDid: peerDid,
+    isMine: true,
+  );
+  final peerOutgoingAfterProjection = await _syncAndWaitForAppThreadExactOne(
+    tester: tester,
+    appBootstrap: peerBootstrap,
+    thread: AppThreadRef.direct(newDid),
+    messageId: _requiredMessageId(directOutgoingAfter),
+    content: directOutgoingAfter.content,
+    senderDid: newDid,
+    receiverDid: peerDid,
+    isMine: false,
+  );
+  final directIncomingAfter = await peerBootstrap.messagingService!.sendText(
+    thread: AppThreadRef.direct(newDid),
+    content: 'direct-after-in ${config.runId} ${_nonce(8)}',
+  );
+  _requireCommittedDirect(
+    directIncomingAfter,
+    senderDid: peerDid,
+    receiverDid: newDid,
+    isMine: true,
+  );
+  if (_requiredConversationId(peerOutgoingAfterProjection) !=
+      peerDirectConversationId) {
+    fail('Recovery changed the peer-side Direct conversation ID.');
+  }
+  final ownerIncomingAfterProjection = await _syncAndWaitForAppThreadExactOne(
+    tester: tester,
+    appBootstrap: bootstrap,
+    thread: AppThreadRef.direct(peerDid),
+    messageId: _requiredMessageId(directIncomingAfter),
+    content: directIncomingAfter.content,
+    senderDid: peerDid,
+    receiverDid: newDid,
+    isMine: false,
+  );
+  if (_requiredConversationId(ownerIncomingAfterProjection) !=
+      directConversationId) {
+    fail('The peer did not continue the original Direct conversation.');
+  }
+  final peerDirectHistoryAfter = await _loadConversationHistory(
+    peerBootstrap,
+    peerDirectConversationId,
+  );
+  _requireExactMessage(
+    peerDirectHistoryAfter,
+    expected: directIncomingAfter,
+    isMine: true,
+    conversationId: peerDirectConversationId,
+  );
+
+  final groupOutgoingAfter = await messaging.sendText(
+    thread: AppThreadRef.group(groupDid),
+    content: 'group-after-out ${config.runId} ${_nonce(8)}',
+  );
+  _requireCommittedGroup(
+    groupOutgoingAfter,
+    groupDid: groupDid,
+    senderDid: newDid,
+    isMine: true,
+    conversationId: groupConversationId,
+  );
+  await _waitForGroupMessageExactOne(
+    tester: tester,
+    bootstrap: peerBootstrap,
+    groupDid: groupDid,
+    messageId: _requiredMessageId(groupOutgoingAfter),
+    content: groupOutgoingAfter.content,
+    senderDid: newDid,
+    isMine: false,
+    conversationId: groupConversationId,
+  );
+  final groupIncomingAfter = await peerBootstrap.messagingService!.sendText(
+    thread: AppThreadRef.group(groupDid),
+    content: 'group-after-in ${config.runId} ${_nonce(8)}',
+  );
+  await _waitForGroupMessageExactOne(
+    tester: tester,
+    bootstrap: bootstrap,
+    groupDid: groupDid,
+    messageId: _requiredMessageId(groupIncomingAfter),
+    content: groupIncomingAfter.content,
+    senderDid: peerDid,
+    isMine: false,
+    conversationId: groupConversationId,
+  );
+
+  final submittedAgentPromptAfter = await _plainDirectMessaging(messaging)
+      .sendPlainConversationText(
+        conversation: AppConversationReadRef.fromConversationId(
+          agentConversationId,
+        ),
+        content: 'agent-after ${config.runId} ${_nonce(8)}',
+      );
+  final agentPromptAfter = await _syncAndWaitForConversationExactOne(
+    tester: tester,
+    bootstrap: bootstrap,
+    conversation: AppConversationReadRef.fromConversationId(
+      agentConversationId,
+    ),
+    messageId: _requiredMessageId(submittedAgentPromptAfter),
+    content: submittedAgentPromptAfter.content,
+    senderDid: newDid,
+    receiverDid: runtimeDid,
+    isMine: true,
+  );
+  _requireCommittedDirect(
+    agentPromptAfter,
+    senderDid: newDid,
+    receiverDid: runtimeDid,
+    isMine: true,
+  );
+  final agentReplyAfter = await _waitForAgentReply(
+    tester: tester,
+    bootstrap: bootstrap,
+    runtimeDid: runtimeDid,
+    conversationId: agentConversationId,
+    expectedContent: '$_agentReplyPrefix${agentPromptAfter.content}',
+    existingMessageIds: agentHistory
+        .map((message) => message.remoteId)
+        .whereType<String>()
+        .toSet(),
+  );
+
+  final finalDirectHistory = await _loadConversationHistory(
+    bootstrap,
+    directConversationId,
+  );
+  final finalGroupHistory = await groups.listMessages(groupDid, limit: 100);
+  final finalAgentHistory = await _loadConversationHistory(
+    bootstrap,
+    agentConversationId,
+  );
+  _requireExactMessage(
+    finalDirectHistory,
+    expected: directOutgoingAfter,
+    isMine: true,
+    conversationId: directConversationId,
+  );
+  _requireExactMessage(
+    finalDirectHistory,
+    expected: directIncomingAfter,
+    isMine: false,
+    conversationId: directConversationId,
+  );
+  _requireExactMessage(
+    finalGroupHistory,
+    expected: groupOutgoingAfter,
+    isMine: true,
+    conversationId: groupConversationId,
+  );
+  _requireExactMessage(
+    finalGroupHistory,
+    expected: groupIncomingAfter,
+    isMine: false,
+    conversationId: groupConversationId,
+  );
+  _requireExactMessage(
+    finalAgentHistory,
+    expected: agentPromptAfter,
+    isMine: true,
+    conversationId: agentConversationId,
+  );
+  _requireExactMessage(
+    finalAgentHistory,
+    expected: agentReplyAfter,
+    isMine: false,
+    conversationId: agentConversationId,
+  );
+  final finalConversationIds = await _waitForContinuityConversationIds(
+    tester: tester,
+    bootstrap: bootstrap,
+    conversations: conversations,
+    ownerDid: newDid,
+    requiredIds: expectedConversationIds.toSet(),
+  );
+  final finalAgentDids = (await inventory.listAgents(
+    includeInactive: true,
+  )).map((agent) => agent.agentDid).toList(growable: false);
+  final keyIds = <String>[
+    _required(handoff, 'directOutgoingId'),
+    _required(handoff, 'directIncomingId'),
+    _required(handoff, 'groupOutgoingId'),
+    _required(handoff, 'groupIncomingId'),
+    _required(handoff, 'agentPromptId'),
+    _required(handoff, 'agentReplyId'),
+    _requiredMessageId(directOutgoingAfter),
+    _requiredMessageId(directIncomingAfter),
+    _requiredMessageId(groupOutgoingAfter),
+    _requiredMessageId(groupIncomingAfter),
+    _requiredMessageId(agentPromptAfter),
+    _requiredMessageId(agentReplyAfter),
+  ];
+  if (finalDirectHistory.length != directMessageCount + 2 ||
+      finalGroupHistory.length != groupMessageCount + 2 ||
+      finalAgentHistory.length != agentMessageCount + 2 ||
+      !_sameStrings(finalConversationIds, expectedConversationIds) ||
+      !_sameStrings(finalAgentDids, expectedAgentDids) ||
+      keyIds.toSet().length != keyIds.length) {
+    fail('Post-Recovery continuity produced duplicate or abnormal growth.');
+  }
+
   await E2eCaseAttestationWriter.markPassed(
-    _crashCutCaseId,
+    _settingsContinuityCaseId,
     phases: const <String>[
-      'phase_a_committed_with_old_product_epoch',
-      'phase_a_process_terminated_before_product_reset',
-      'phase_b_reopened_same_state_root',
-      'bootstrap_barrier_reset_before_session_activation',
-      'epoch_bound_registry_cleared_exactly_once',
-      'stable_account_profile_preserved',
-      'replacement_identity_visible_without_old_did',
+      'settings_recovery_preserved_handle_and_account',
+      'did_generation_advanced_exactly_once',
+      'same_root_restart_preserved_recovery_state',
+      'direct_id_history_ownership_and_bidirectional_send_preserved',
+      'handle_backed_transport_group_id_history_and_send_preserved',
+      'agent_inventory_conversation_history_and_reply_preserved',
+      'conversation_message_and_agent_counts_remained_exact',
+      'all_key_messages_converged_exactly_once',
     ],
   );
 }
@@ -1343,7 +3103,12 @@ void _requireReadyCurrentAdmin(
   }
 }
 
-AwikiEnvironmentConfig _environment(_RemoteRecoveryRunConfig config) {
+AwikiEnvironmentConfig _environment(
+  _RemoteRecoveryRunConfig config, {
+  bool? directE2eeEnabled,
+  bool? groupE2eeEnabled,
+  bool? agentImEnabled,
+}) {
   return AwikiEnvironmentConfig(
     baseUrl: config.baseUrl,
     userServiceUrl: config.userServiceUrl,
@@ -1352,6 +3117,9 @@ AwikiEnvironmentConfig _environment(_RemoteRecoveryRunConfig config) {
     didDomain: config.didDomain,
     anpServiceUrl: config.anpServiceUrl,
     anpServiceDid: config.anpServiceDid,
+    multiDeviceDirectE2eeEnabled: directE2eeEnabled,
+    multiDeviceGroupE2eeEnabled: groupE2eeEnabled,
+    agentImEnabled: agentImEnabled,
   );
 }
 
@@ -1998,7 +3766,12 @@ Future<void> _openAppPeerJoinFromOnboarding(
     () => onboarding.evaluate().length == 1,
     failure: 'The isolated peer App onboarding surface was unavailable.',
   );
+  // A fenced peer reaches onboarding while the auth-revoked dialog route is
+  // still finishing its reverse transition. Wait for that route to settle so
+  // the ordinary Join route is not pushed while the Navigator is locked.
+  await tester.pumpAndSettle();
   unawaited(openDeviceJoinPage(tester.element(onboarding)));
+  await tester.pump();
 }
 
 Future<ProviderContainer> _confirmFencedPeerReturnedToOnboarding(
@@ -2178,12 +3951,18 @@ Future<void> _requireOldAppPrincipalFenced(
   required String targetDid,
 }) async {
   final messaging = peerBootstrap.messagingService;
-  if (messaging == null) {
+  final directory = peerBootstrap.directoryApplicationService;
+  if (messaging == null || directory == null) {
     fail('The old peer App did not expose remote messaging.');
   }
   try {
-    await messaging.sendText(
-      thread: AppThreadRef.direct(targetDid),
+    final resolved = await directory.resolvePeer(targetDid);
+    final conversationId = resolved.conversationId?.trim() ?? '';
+    if (resolved.did != targetDid || conversationId.isEmpty) {
+      fail('The old peer App did not resolve the Recovery target exactly.');
+    }
+    await _plainDirectMessaging(messaging).sendPlainConversationText(
+      conversation: AppConversationReadRef.fromConversationId(conversationId),
       content: 'fence-${_nonce(10)}',
     );
   } on core.AwikiImCoreException catch (error) {
@@ -2297,10 +4076,17 @@ Future<void> _transferManagementToRejoinedPeer({
 
   final deadline = DateTime.now().add(const Duration(seconds: 90));
   while (DateTime.now().isBefore(deadline)) {
-    await peerBootstrap.messageSyncService!.syncNow(
-      reason: 'handle-recovery-registration-root-transfer',
-      limit: 100,
-    );
+    try {
+      await peerBootstrap.messageSyncService!.syncNow(
+        reason: 'handle-recovery-registration-root-transfer',
+        limit: 100,
+      );
+    } on MessageSyncCoreFailure catch (error) {
+      // The App realtime listener may ACK the same committed P5 control while
+      // this explicit E2E reconciliation is in flight. The next bounded read
+      // must still prove the authoritative Registry transition.
+      if (error.code != 'secure_inbox_ack_incomplete') rethrow;
+    }
     final peerRegistry = await peerBootstrap.deviceManagementCorePort!
         .identityDeviceRegistry(expectedDid);
     final adminRegistry = await bootstrap.deviceManagementCorePort!
@@ -2463,7 +4249,80 @@ Future<void> _verifyBidirectionalDirectExactOne({
   }
 }
 
-Future<void> _syncAndWaitForAppThreadExactOne({
+Future<void> _verifyRecoveredTransportGroupContinuity({
+  required ProviderContainer container,
+  required AppBootstrap bootstrap,
+  required String groupDid,
+  required String previousDid,
+  required String currentDid,
+  required String oldMessageId,
+  required String oldMessageText,
+  required String runId,
+}) async {
+  final groups = bootstrap.groupApplicationService;
+  final messaging = bootstrap.messagingService;
+  if (groups == null || messaging == null) {
+    fail('The recovered App did not expose Group messaging services.');
+  }
+  Object? lastError;
+  for (var attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      await container.read(groupProvider.notifier).refresh();
+      final projected = container.read(groupProvider);
+      if (projected.groups.any((group) => group.groupId == groupDid)) {
+        final members = await groups.listMembers(groupDid);
+        final currentMembers = members.items
+            .where((member) => member.did == currentDid)
+            .length;
+        final previousMembers = members.items
+            .where((member) => member.did == previousDid)
+            .length;
+        final history = await groups.listMessages(groupDid, limit: 100);
+        final oldMessages = history
+            .where(
+              (message) =>
+                  message.content == oldMessageText &&
+                  message.senderDid == previousDid,
+            )
+            .toList(growable: false);
+        if (currentMembers == 1 &&
+            previousMembers == 0 &&
+            oldMessages.length == 1 &&
+            oldMessages.single.isMine) {
+          final newText = 'after recovery $runId ${_nonce(8)}';
+          final sent = await messaging.sendText(
+            thread: AppThreadRef.group(groupDid),
+            content: newText,
+          );
+          if (sent.remoteId?.trim().isEmpty != false ||
+              sent.sendState != MessageSendState.sent ||
+              !sent.isMine ||
+              sent.senderDid != currentDid) {
+            fail('The recovered identity did not send in the old Group.');
+          }
+          final converged = await groups.listMessages(groupDid, limit: 100);
+          if (converged.where((message) => message.content == newText).length !=
+              1) {
+            fail(
+              'The post-Recovery Group message did not converge exactly once.',
+            );
+          }
+          return;
+        }
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await Future<void>.delayed(const Duration(seconds: 2));
+  }
+  fail(
+    'The recovered transport Group did not converge '
+    '(old_message_id_present=${oldMessageId.trim().isNotEmpty}, '
+    'last_error=${_safeDiagnosticToken(lastError?.runtimeType.toString())}).',
+  );
+}
+
+Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
   required WidgetTester tester,
   required AppBootstrap appBootstrap,
   required AppThreadRef thread,
@@ -2481,7 +4340,11 @@ Future<void> _syncAndWaitForAppThreadExactOne({
   final deadline = DateTime.now().add(const Duration(seconds: 90));
   while (DateTime.now().isBefore(deadline)) {
     await sync.syncNow(reason: 'handle-recovery-rejoin-e2e', limit: 100);
-    final messages = await messaging.loadHistory(thread, limit: 30);
+    final messages = await _loadExactThreadCandidates(
+      appBootstrap: appBootstrap,
+      thread: thread,
+      messageId: messageId,
+    );
     final matches = messages
         .where(
           (message) =>
@@ -2506,7 +4369,11 @@ Future<void> _syncAndWaitForAppThreadExactOne({
         );
       }
       await Future<void>.delayed(const Duration(milliseconds: 500));
-      final stable = await messaging.loadHistory(thread, limit: 30);
+      final stable = await _loadExactThreadCandidates(
+        appBootstrap: appBootstrap,
+        thread: thread,
+        messageId: messageId,
+      );
       if (stable
               .where(
                 (candidate) =>
@@ -2517,12 +4384,43 @@ Future<void> _syncAndWaitForAppThreadExactOne({
           1) {
         fail('An App thread projection was not exact-one stable.');
       }
-      return;
+      return message;
     }
     await tester.pump(const Duration(milliseconds: 200));
     await Future<void>.delayed(const Duration(milliseconds: 550));
   }
   fail('An App did not converge the exact thread message.');
+}
+
+Future<List<ChatMessage>> _loadExactThreadCandidates({
+  required AppBootstrap appBootstrap,
+  required AppThreadRef thread,
+  required String messageId,
+}) async {
+  final messaging = appBootstrap.messagingService!;
+  final legacy = await messaging.loadHistory(thread, limit: 100);
+  if (legacy.any((message) => message.remoteId == messageId) ||
+      messaging is! ConversationTimelineMessagingService) {
+    return legacy;
+  }
+  final timelineMessaging = messaging as ConversationTimelineMessagingService;
+  final session = await appBootstrap.appSessionService!.currentSession();
+  final conversations = appBootstrap.conversationService;
+  if (session == null || conversations == null) return legacy;
+  final summaries = await conversations.listConversations(
+    ownerDid: session.did,
+    limit: 100,
+  );
+  for (final summary in summaries) {
+    final timeline = await timelineMessaging.loadConversationTimeline(
+      AppConversationReadRef.fromConversationId(summary.conversationId),
+      limit: 100,
+    );
+    if (timeline.any((message) => message.remoteId == messageId)) {
+      return timeline;
+    }
+  }
+  return legacy;
 }
 
 Future<void> _activatePeerIdentity(
@@ -2605,6 +4503,10 @@ class _RemoteRecoveryRunConfig {
     required this.appStateRoot,
     required this.peerAppStateRoot,
     required this.crashCutHandoffPath,
+    required this.daemonBinary,
+    required this.daemonStateRoot,
+    required this.daemonReadyFile,
+    required this.daemonHandle,
   });
 
   final String runId;
@@ -2622,6 +4524,10 @@ class _RemoteRecoveryRunConfig {
   final String appStateRoot;
   final String peerAppStateRoot;
   final String crashCutHandoffPath;
+  final String? daemonBinary;
+  final String? daemonStateRoot;
+  final String? daemonReadyFile;
+  final String? daemonHandle;
 
   static bool exists() => File(_runConfigPath).existsSync();
 
@@ -2642,6 +4548,7 @@ class _RemoteRecoveryRunConfig {
     final app = _map(root, 'app');
     final peerApp = _map(root, 'peerApp');
     final crashCut = _map(root, 'crashCut');
+    final daemon = _optionalMap(root, 'daemon');
     final config = _RemoteRecoveryRunConfig(
       runId: _required(root, 'runId'),
       baseUrl: _required(service, 'baseUrl'),
@@ -2661,6 +4568,10 @@ class _RemoteRecoveryRunConfig {
       appStateRoot: _required(app, 'stateRoot'),
       peerAppStateRoot: _required(peerApp, 'stateRoot'),
       crashCutHandoffPath: _required(crashCut, 'handoffPath'),
+      daemonBinary: _optionalString(daemon, 'binary'),
+      daemonStateRoot: _optionalString(daemon, 'stateRoot'),
+      daemonReadyFile: _optionalString(daemon, 'readyFile'),
+      daemonHandle: _optionalString(daemon, 'handle'),
     );
     if (!config.automatedUserPresence ||
         config.didDomain != 'awiki.info' ||
@@ -2724,12 +4635,24 @@ Map<String, Object?> _map(Map<String, Object?> root, String key) {
   return _stringMap(value);
 }
 
+Map<String, Object?> _optionalMap(Map<String, Object?> root, String key) {
+  final value = root[key];
+  if (value == null) return const <String, Object?>{};
+  if (value is! Map) throw StateError('Invalid run config object $key.');
+  return _stringMap(value);
+}
+
 String _required(Map<String, Object?> root, String key) {
   final value = root[key];
   if (value is! String || value.trim().isEmpty) {
     throw StateError('Missing run config value $key.');
   }
   return value.trim();
+}
+
+String? _optionalString(Map<String, Object?> root, String key) {
+  final value = root[key]?.toString().trim();
+  return value == null || value.isEmpty ? null : value;
 }
 
 bool _requiredBool(Map<String, Object?> root, String key) {

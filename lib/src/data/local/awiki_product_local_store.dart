@@ -32,6 +32,40 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
   Future<void> warmUp() async {}
 
   @override
+  Future<void> deleteOwnerData({
+    required String ownerIdentityId,
+    required String currentDid,
+  }) async {
+    final normalizedOwner = ownerIdentityId.trim();
+    final normalizedDid = currentDid.trim();
+    if (normalizedOwner.isEmpty || normalizedDid.isEmpty) {
+      throw ArgumentError('ownerIdentityId and currentDid must not be empty');
+    }
+    final ownerDids = <String>{normalizedDid};
+    for (final receipt in _deviceRegistryEpochResetReceipts.values) {
+      if (receipt.reference.ownerIdentityId == normalizedOwner) {
+        ownerDids
+          ..add(receipt.reference.previousDid)
+          ..add(receipt.reference.currentDid);
+      }
+    }
+    _overlays.removeWhere((_, value) => ownerDids.contains(value.ownerDid));
+    _drafts.removeWhere((_, value) => ownerDids.contains(value.ownerDid));
+    _preferences.removeWhere((_, value) => ownerDids.contains(value.ownerDid));
+    _agentStates.removeWhere((_, value) => ownerDids.contains(value.ownerDid));
+    _accountIdsByOwnerIdentity.remove(normalizedOwner);
+    _agentInventorySnapshots.remove(normalizedOwner);
+    _agentStatusSnapshots.remove(normalizedOwner);
+    _profileSnapshots.remove(normalizedOwner);
+    _deviceRegistrySnapshots.remove(normalizedOwner);
+    _deviceRegistryEpochs.remove(normalizedOwner);
+    _deviceRegistryEpochResetReceipts.removeWhere(
+      (_, value) => value.reference.ownerIdentityId == normalizedOwner,
+    );
+    _legacyRegistryEpochAdoptionReceipts.remove(normalizedOwner);
+  }
+
+  @override
   Future<ProductConversationOverlay?> loadConversationOverlay({
     required String ownerDid,
     required String threadId,

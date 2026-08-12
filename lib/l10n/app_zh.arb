@@ -507,27 +507,28 @@
   "messageSyncRetryAction": "重试",
   "messageSyncReloadAction": "重新加载",
   "messageSyncReauthenticateAction": "重新登录",
+  "settingsRecoverHandleDid": "恢复 Handle DID",
   "settingsLogout": "退出登录",
   "settingsLogoutSubtitle": "清除本地登录状态并返回登录页",
-  "settingsDeleteCredential": "退出并删除当前凭证",
-  "settingsDeleteCurrentCredential": "删除本地凭证：{credentialName}",
+  "settingsDeleteCredential": "退出并删除当前数据",
+  "settingsDeleteCurrentCredential": "删除当前本地数据：{credentialName}",
   "@settingsDeleteCurrentCredential": {
     "placeholders": {
       "credentialName": {}
     }
   },
-  "settingsDeleteCredentialFallback": "退出并删除当前登录凭证",
+  "settingsDeleteCredentialFallback": "退出并删除当前账号的本地数据",
   "settingsLogoutConfirmTitle": "退出登录",
   "settingsLogoutConfirmContent": "确定要退出当前账号吗？",
-  "settingsDeleteCredentialConfirmTitle": "退出并删除当前凭证",
-  "settingsDeleteCredentialConfirmContent": "退出 {credentialName} 并删除本机凭证",
+  "settingsDeleteCredentialConfirmTitle": "退出并删除当前数据",
+  "settingsDeleteCredentialConfirmContent": "退出 {credentialName}，并永久删除本机保存的凭证、消息、群聊、智能体、草稿、偏好和端到端加密数据",
   "@settingsDeleteCredentialConfirmContent": {
     "placeholders": {
       "credentialName": {}
     }
   },
-  "settingsDeleteCredentialConfirmHint": "不会注销身份或影响其他设备",
-  "settingsDeleteCredentialConfirmAction": "退出并删除",
+  "settingsDeleteCredentialConfirmHint": "不会注销线上身份或影响其他设备；删除的本地历史消息和端到端加密密钥不能通过恢复或加入设备找回。",
+  "settingsDeleteCredentialConfirmAction": "退出并删除数据",
   "quickActionsTitle": "更多操作",
   "quickActionStartConversation": "发起新消息",
   "quickActionCreateGroup": "创建群聊",

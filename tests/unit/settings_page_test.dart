@@ -126,10 +126,10 @@ void main() {
     );
 
     expect(find.text('当前暂无可导出的登录凭证'), findsNothing);
-    expect(find.text('退出并删除当前登录凭证'), findsNothing);
+    expect(find.text('退出并删除当前账号的本地数据'), findsNothing);
 
     await tester.tap(find.text('导出身份凭证'));
-    await tester.tap(find.text('退出并删除当前凭证'));
+    await tester.tap(find.text('退出并删除当前数据'));
     await tester.pump();
 
     expect(gateway.exportCalls, 0);
@@ -240,7 +240,7 @@ void main() {
     expect(avatarRect, const Rect.fromLTWH(20, 87, 58, 58));
     expect(accountRect, const Rect.fromLTWH(0, 208, 390, 61));
     expect(appRect, const Rect.fromLTWH(0, 309, 390, 183));
-    expect(securityRect, const Rect.fromLTWH(0, 532, 390, 183));
+    expect(securityRect, const Rect.fromLTWH(0, 532, 390, 244));
 
     for (final titleKey in <String>[
       'settings-account-section-title',
@@ -309,8 +309,8 @@ void main() {
     );
     expect(find.text('导出身份凭证'), findsOneWidget);
     expect(find.text('退出登录'), findsOneWidget);
-    expect(find.text('退出并删除当前凭证'), findsOneWidget);
-    expect(tester.getRect(find.text('退出并删除当前凭证')).bottom, lessThan(844));
+    expect(find.text('退出并删除当前数据'), findsOneWidget);
+    expect(tester.getRect(find.text('退出并删除当前数据')).bottom, lessThan(844));
     final securitySurface = tester.widget<ColoredBox>(
       find
           .descendant(of: securityFinder, matching: find.byType(ColoredBox))
@@ -390,12 +390,13 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('设置页退出并删除当前凭证会删除本地凭证而不显示未实现错误', (tester) async {
+  testWidgets('设置页退出并删除当前数据会删除本地凭证而不显示未实现错误', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:123',
       credentialName: 'default',
       displayName: 'Alice',
+      localIdentityId: 'identity-alice',
       handle: 'alice',
       jwtToken: 'token-123',
     );
@@ -409,24 +410,31 @@ void main() {
       ),
     );
 
-    expect(find.text('退出并删除当前凭证'), findsOneWidget);
-    expect(find.text('删除本地凭证：default'), findsNothing);
+    expect(find.text('退出并删除当前数据'), findsOneWidget);
+    expect(find.text('删除当前本地数据：default'), findsNothing);
 
-    await tester.ensureVisible(find.text('退出并删除当前凭证'));
-    await tester.tap(find.text('退出并删除当前凭证'));
+    await tester.ensureVisible(find.text('退出并删除当前数据'));
+    await tester.tap(find.text('退出并删除当前数据'));
     await tester.pumpAndSettle();
 
-    expect(find.text('退出 Alice (@alice) 并删除本机凭证'), findsOneWidget);
-    expect(find.textContaining('不会注销线上身份或影响其他设备'), findsOneWidget);
+    expect(
+      find.text('退出 Alice (@alice)，并永久删除本机保存的凭证、消息、群聊、智能体、草稿、偏好和端到端加密数据'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('删除的本地历史消息和端到端加密密钥不能通过恢复或加入设备找回'),
+      findsOneWidget,
+    );
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(SettingsPage)),
     );
 
-    await tester.tap(find.text('退出并删除'));
+    await tester.tap(find.text('退出并删除数据'));
     await tester.pumpAndSettle();
 
     expect(gateway.deleteLocalCredentialCalls, 1);
+    expect(gateway.deleteLocalIdentityDataCalls, 1);
     expect(gateway.logoutCalls, 0);
     expect(container.read(uiFeedbackProvider), isNull);
   });
@@ -468,6 +476,7 @@ void main() {
       did: 'did:test:123',
       credentialName: 'default',
       displayName: 'Alice',
+      localIdentityId: 'identity-alice',
       handle: 'alice',
       jwtToken: 'token-123',
     );
@@ -483,13 +492,14 @@ void main() {
 
     expect(find.byType(SettingsPage), findsOneWidget);
 
-    await tester.ensureVisible(find.text('退出并删除当前凭证'));
-    await tester.tap(find.text('退出并删除当前凭证'));
+    await tester.ensureVisible(find.text('退出并删除当前数据'));
+    await tester.tap(find.text('退出并删除当前数据'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('退出并删除'));
+    await tester.tap(find.text('退出并删除数据'));
     await tester.pumpAndSettle();
 
     expect(gateway.deleteLocalCredentialCalls, 1);
+    expect(gateway.deleteLocalIdentityDataCalls, 1);
     expect(find.byType(SettingsPage), findsOneWidget);
     expect(find.text('设置'), findsOneWidget);
   });

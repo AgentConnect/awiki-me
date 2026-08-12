@@ -1,5 +1,5 @@
-// [INPUT]: Session, lifecycle, realtime, reliable-sync, push, and projection providers.
-// [OUTPUT]: One fenced authenticated runtime plus navigation-ready App state.
+// [INPUT]: Session, lifecycle, realtime, reliable-sync, push, local-store, and projection providers.
+// [OUTPUT]: One fenced authenticated runtime plus navigation-ready App state and exact-owner deletion.
 // [POS]: App-wide orchestration boundary; Core remains the message and identity truth.
 
 import 'dart:async';
@@ -559,6 +559,70 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       await deleteLocalCredential(current);
     } finally {
       state = state.copyWith(isBusy: false);
+    }
+  }
+
+  Future<void> deleteCurrentData() async {
+    final current = ref.read(sessionProvider).session;
+    if (current == null) return;
+    _beginBusyOperation();
+    try {
+      await _deleteCurrentIdentityData(current);
+    } finally {
+      _endBusyOperation();
+    }
+  }
+
+  Future<bool> _deleteCurrentIdentityData(SessionIdentity identity) async {
+    final selector = identity.localIdentitySelector;
+    final ownerIdentityId = identity.localIdentityId?.trim();
+    if (selector.isEmpty ||
+        ownerIdentityId == null ||
+        ownerIdentityId.isEmpty ||
+        _deletingLocalIdentitySelector != null) {
+      return false;
+    }
+    final sessions = ref.read(appSessionServiceProvider);
+    if (sessions is! LocalIdentityDataDeletionSessionService) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.featureNotImplemented());
+      return false;
+    }
+    final deletionSessions =
+        sessions as LocalIdentityDataDeletionSessionService;
+    final productLocalStore = ref.read(productLocalStoreProvider);
+    _deletingLocalIdentitySelector = selector;
+    _isLoggingOut = true;
+    try {
+      _agentTerminalNotificationDeduplicator.clear();
+      final pushSession = _currentRemotePushInstallationSession();
+      _deactivateRemotePushLocally(pushSession);
+      await _disableRemotePushBestEffort(pushSession);
+      await productLocalStore.deleteOwnerData(
+        ownerIdentityId: ownerIdentityId,
+        currentDid: identity.did,
+      );
+      await deletionSessions.deleteLocalIdentityData(selector);
+      if (mounted) {
+        state = state.copyWith(activatedDid: null);
+        _clearAuthenticatedUiState();
+        final credentials = await _localCredentialsFor(ref);
+        if (mounted) {
+          ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
+        }
+      }
+      return true;
+    } catch (error) {
+      if (mounted) {
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.fromError(error));
+      }
+      return false;
+    } finally {
+      _isLoggingOut = false;
+      _deletingLocalIdentitySelector = null;
     }
   }
 

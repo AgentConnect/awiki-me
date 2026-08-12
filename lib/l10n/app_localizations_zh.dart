@@ -1232,21 +1232,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get messageSyncReauthenticateAction => '重新登录';
 
   @override
+  String get settingsRecoverHandleDid => '恢复 Handle DID';
+
+  @override
   String get settingsLogout => '退出登录';
 
   @override
   String get settingsLogoutSubtitle => '清除本地登录状态并返回登录页';
 
   @override
-  String get settingsDeleteCredential => '退出并删除当前凭证';
+  String get settingsDeleteCredential => '退出并删除当前数据';
 
   @override
   String settingsDeleteCurrentCredential(Object credentialName) {
-    return '删除本地凭证：$credentialName';
+    return '删除当前本地数据：$credentialName';
   }
 
   @override
-  String get settingsDeleteCredentialFallback => '退出并删除当前登录凭证';
+  String get settingsDeleteCredentialFallback => '退出并删除当前账号的本地数据';
 
   @override
   String get settingsLogoutConfirmTitle => '退出登录';
@@ -1255,18 +1258,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsLogoutConfirmContent => '确定要退出当前账号吗？';
 
   @override
-  String get settingsDeleteCredentialConfirmTitle => '退出并删除当前凭证';
+  String get settingsDeleteCredentialConfirmTitle => '退出并删除当前数据';
 
   @override
   String settingsDeleteCredentialConfirmContent(Object credentialName) {
-    return '退出 $credentialName 并删除本机凭证';
+    return '退出 $credentialName，并永久删除本机保存的凭证、消息、群聊、智能体、草稿、偏好和端到端加密数据';
   }
 
   @override
-  String get settingsDeleteCredentialConfirmHint => '不会注销身份或影响其他设备';
+  String get settingsDeleteCredentialConfirmHint =>
+      '不会注销线上身份或影响其他设备；删除的本地历史消息和端到端加密密钥不能通过恢复或加入设备找回。';
 
   @override
-  String get settingsDeleteCredentialConfirmAction => '退出并删除';
+  String get settingsDeleteCredentialConfirmAction => '退出并删除数据';
 
   @override
   String get quickActionsTitle => '更多操作';

@@ -16,6 +16,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.d
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
+import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -430,6 +431,57 @@ void main() {
   });
 
   testWidgets(
+    'settings recovery targets the exact current identity and accepts a phone',
+    (tester) async {
+      final core = _FakeHandleRecoveryCore();
+      const session = SessionIdentity(
+        did: 'did:wba:awiki.info:users:alice-old',
+        credentialName: 'alice',
+        displayName: 'Alice',
+        localIdentityId: 'identity-alice',
+        handle: 'alice.awiki.info',
+      );
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const SettingsPage(),
+          session: session,
+          providerOverrides: <Override>[
+            handleRecoveryCorePortProvider.overrideWithValue(core),
+            userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final recoveryRow = find.byKey(
+        const Key('settings-recover-handle-did-row'),
+      );
+      await tester.ensureVisible(recoveryRow);
+      await tester.tap(recoveryRow);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(HandleRecoveryPage), findsOneWidget);
+      expect(
+        find.byKey(const Key('handle-recovery-phone-input')),
+        findsOneWidget,
+      );
+      expect(core.lastLocalIdentityId, isNull);
+
+      await tester.enterText(
+        find.byKey(const Key('handle-recovery-phone-input')),
+        '+8613800138000',
+      );
+      await tester.tap(find.byKey(const Key('handle-recovery-send-otp')));
+      await tester.pumpAndSettle();
+
+      expect(core.lastHandle, 'alice.awiki.info');
+      expect(core.lastPhone, '+8613800138000');
+      expect(core.lastLocalIdentityId, 'identity-alice');
+    },
+  );
+
+  testWidgets(
     'result_absent is shown as still confirming and cannot be discarded',
     (tester) async {
       final operation = _operation(
@@ -617,6 +669,68 @@ void main() {
     expect(container.read(shellDestinationProvider), ShellDestination.messages);
     expect(container.read(sessionProvider).session?.did, recoveredDid);
     expect(gateway.loginCalls, 1);
+  });
+
+  testWidgets('completed activation does not read providers after disposal', (
+    tester,
+  ) async {
+    final activation = Completer<HandleRecoveryProgress>();
+    final core = _FakeHandleRecoveryCore(activateCompleter: activation);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const HandleRecoveryPage(
+          initialHandle: 'alice.awiki.info',
+          initialPhone: '+8613800138000',
+        ),
+        providerOverrides: <Override>[
+          handleRecoveryCorePortProvider.overrideWithValue(core),
+          userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('handle-recovery-otp')),
+        matching: find.byType(CupertinoTextField),
+      ),
+      '123456',
+    );
+    await tester.tap(find.byKey(const Key('handle-recovery-verify')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('handle-recovery-risk-confirmation')),
+    );
+    await tester.drag(
+      find.descendant(
+        of: find.byType(HandleRecoveryPage),
+        matching: find.byType(ListView),
+      ),
+      const Offset(0, -180),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('handle-recovery-risk-confirmation')),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('handle-recovery-activate')),
+    );
+    await tester.tap(find.byKey(const Key('handle-recovery-activate')));
+    await tester.pump();
+    expect(core.activateCalls, 1);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    activation.complete(
+      _operation(
+        lifecycleClass: HandleRecoveryLifecycleClass.applied,
+        commitAttempted: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -1045,6 +1159,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
     this.activateResult,
     this.activateProgressOnError,
     this.activateError,
+    this.activateCompleter,
     this.reconcileResult,
     this.receipt,
     this.statusError,
@@ -1056,6 +1171,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   final HandleRecoveryProgress? activateResult;
   final HandleRecoveryProgress? activateProgressOnError;
   final Object? activateError;
+  final Completer<HandleRecoveryProgress>? activateCompleter;
   final HandleRecoveryProgress? reconcileResult;
   final HandleRecoveryRegistryEpochReset? receipt;
   final Object? statusError;
@@ -1129,6 +1245,11 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
     required bool userPresenceConfirmed,
   }) async {
     activateCalls += 1;
+    final completer = activateCompleter;
+    if (completer != null) {
+      operation = await completer.future;
+      return operation;
+    }
     final progressOnError = activateProgressOnError;
     if (progressOnError != null) operation = progressOnError;
     final error = activateError;

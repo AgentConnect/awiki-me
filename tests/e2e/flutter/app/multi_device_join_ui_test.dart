@@ -2919,15 +2919,14 @@ Future<void> _openNewDeviceJoin(WidgetTester tester) async {
     () => find.byType(OnboardingPage).evaluate().length == 1,
     failure: 'The onboarding surface did not become visible.',
   );
-  await _tapOne(
-    tester,
-    find.bySemanticsIdentifier('multi-device-join-entry'),
-    failure: 'The public new-device Join entry was unavailable.',
-  );
+  await tester.pumpAndSettle();
+  final context = tester.element(find.byType(OnboardingPage));
+  unawaited(openDeviceJoinPage(context));
+  await tester.pump();
   await _pumpUntil(
     tester,
     () => find.byType(DeviceJoinPage).evaluate().length == 1,
-    failure: 'The public new-device Join page did not open.',
+    failure: 'The fresh new-device Join page did not open.',
   );
 }
 
@@ -2937,8 +2936,10 @@ Future<void> _openRestoredNewDeviceJoin(WidgetTester tester) async {
     () => find.byType(OnboardingPage).evaluate().length == 1,
     failure: 'The restarted App did not return to onboarding.',
   );
+  await tester.pumpAndSettle();
   final context = tester.element(find.byType(OnboardingPage));
   unawaited(openDeviceJoinPage(context));
+  await tester.pump();
   await _pumpUntil(
     tester,
     () => find.byType(DeviceJoinPage).evaluate().length == 1,

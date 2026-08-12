@@ -14,6 +14,7 @@ import 'awiki_im_core_runtime.dart';
 class AwikiImCoreIdentityAdapter
     implements
         IdentityCorePort,
+        LocalIdentityDataDeletionPort,
         ExistingHandleContinuationPort,
         LegacyIdentityUpgradePort {
   AwikiImCoreIdentityAdapter({
@@ -146,6 +147,16 @@ class AwikiImCoreIdentityAdapter
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
     final coreInstance = await _runtime.coreInstance();
     final result = await _deleteLocalIdentity(coreInstance, identityIdOrAlias);
+    return _mappers.appSessionFromIdentity(result.deleted);
+  }
+
+  @override
+  Future<AppSession> deleteLocalIdentityData(String identityIdOrAlias) async {
+    final coreInstance = await _runtime.coreInstance();
+    final result = await _withIdentitySelectorFallback(
+      identityIdOrAlias,
+      coreInstance.deleteLocalIdentityData,
+    );
     return _mappers.appSessionFromIdentity(result.deleted);
   }
 

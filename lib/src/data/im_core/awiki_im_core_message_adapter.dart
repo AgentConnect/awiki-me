@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
+import '../../application/config/awiki_environment_config.dart';
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_conversation_read_ref.dart';
 import '../../application/models/app_thread_ref.dart';
@@ -23,7 +24,8 @@ class AwikiImCoreMessageAdapter
         ThreadPatchMessageCorePort,
         ControlThreadPatchMessageCorePort,
         ConversationTimelineMessageCorePort,
-        MessageSyncDiagnosticsCorePort {
+        MessageSyncDiagnosticsCorePort,
+        PlainDirectTextMessageCorePort {
   AwikiImCoreMessageAdapter({
     required AwikiImCoreRuntime runtime,
     AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
@@ -175,7 +177,7 @@ class AwikiImCoreMessageAdapter
   Future<ChatMessage> sendPayload({
     required AppThreadRef thread,
     required Map<String, Object?> payload,
-    bool secure = true,
+    bool secure = false,
     String? idempotencyKey,
   }) async {
     return _runtime.withCurrentClient((client) async {
@@ -201,6 +203,47 @@ class AwikiImCoreMessageAdapter
     required String content,
     String? clientMessageId,
     String? idempotencyKey,
+  }) {
+    return _sendConversationText(
+      conversation: conversation,
+      content: content,
+      security: _securityMode(
+        isDirect: conversation.conversationId.startsWith('dm:'),
+      ),
+      clientMessageId: clientMessageId,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendPlainConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    if (!conversation.conversationId.startsWith('dm:')) {
+      throw ArgumentError.value(
+        conversation.conversationId,
+        'conversation',
+        'default-plain Runtime Agent sends require a Direct conversation',
+      );
+    }
+    return _sendConversationText(
+      conversation: conversation,
+      content: content,
+      security: core.MessageSecurityMode.defaultPlain,
+      clientMessageId: clientMessageId,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<ChatMessage> _sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    required core.MessageSecurityMode security,
+    String? clientMessageId,
+    String? idempotencyKey,
   }) async {
     return _runtime.withCurrentClient((client) async {
       final ownerDid = await _currentOwnerDid(client);
@@ -210,9 +253,7 @@ class AwikiImCoreMessageAdapter
             conversationId: conversation.conversationId,
           ),
           text: content,
-          security: _securityMode(
-            isDirect: conversation.conversationId.startsWith('dm:'),
-          ),
+          security: security,
           clientMessageId: clientMessageId,
           idempotencyKey: idempotencyKey,
         ),
@@ -257,7 +298,7 @@ class AwikiImCoreMessageAdapter
 
   core.MessageSecurityMode _securityMode({
     required bool isDirect,
-    bool secureRequested = true,
+    bool secureRequested = defaultDirectMessageE2eeRequired,
   }) {
     return isDirect && secureRequested && _runtime.multiDeviceDirectE2eeEnabled
         ? core.MessageSecurityMode.secureDirect

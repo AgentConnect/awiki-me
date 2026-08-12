@@ -262,6 +262,7 @@ void main() {
         'HANDLE-RECOVERY-V1-E2E-001',
         'HANDLE-RECOVERY-V1-E2E-002',
         'HANDLE-RECOVERY-V1-E2E-003',
+        'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
       ]);
       expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 20));
       expect(
@@ -770,6 +771,8 @@ void main() {
       otpCode: '123456',
       cliBin: '/tmp/awiki-cli',
       cliSourceRef: sourceRef,
+      daemonBinary: '/tmp/awiki-deamon',
+      daemonHandle: 'recovery-daemon',
     );
 
     test('requires its own gate and protected fixed fixture', () {
@@ -798,6 +801,8 @@ void main() {
       expect(config.phone, 'local-test-phone');
       expect(config.fixedOtp, '123456');
       expect(config.handlePrefix, 'recovery');
+      expect(config.daemonBinary, '/tmp/awiki-deamon');
+      expect(config.daemonHandle, 'recovery-daemon');
     });
 
     test('rejects a missing protected OTP fixture', () {

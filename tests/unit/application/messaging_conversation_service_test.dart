@@ -767,51 +767,54 @@ void main() {
       expect(conversations.single.avatarSeed, 'seed-canonical');
     });
 
-    test('hide writes canonical overlay without reading legacy fields', () async {
-      final conversation = _conversation(
-        'dm:alice:old-did',
-        targetDid: 'did:old-bob',
-        targetPeer: 'bob.anpclaw.com',
-        minutesAgo: 1,
-        conversationId: 'dm:peer-scope:v1:bob',
-      );
-      final store = InMemoryAwikiProductLocalStore();
-      await store.upsertConversationOverlay(
-        ProductConversationOverlay(
+    test(
+      'hide writes canonical overlay without reading legacy fields',
+      () async {
+        final conversation = _conversation(
+          'dm:alice:old-did',
+          targetDid: 'did:old-bob',
+          targetPeer: 'bob.anpclaw.com',
+          minutesAgo: 1,
+          conversationId: 'dm:peer-scope:v1:bob',
+        );
+        final store = InMemoryAwikiProductLocalStore();
+        await store.upsertConversationOverlay(
+          ProductConversationOverlay(
+            ownerDid: 'did:alice',
+            threadId: 'direct-did:did:old-bob',
+            conversationId: 'direct-did:did:old-bob',
+            pinned: true,
+            muted: true,
+            customTitle: 'Legacy title',
+            avatarSeed: 'seed-legacy',
+            updatedAt: DateTime.utc(2026, 5, 23, 8),
+          ),
+        );
+        final service = ImCoreConversationService(
+          conversations: _FakeConversations(
+            items: <ConversationSummary>[conversation],
+          ),
+          localStore: store,
+        );
+
+        await service.hideConversationFromRecents(
           ownerDid: 'did:alice',
-          threadId: 'direct-did:did:old-bob',
-          conversationId: 'direct-did:did:old-bob',
-          pinned: true,
-          muted: true,
-          customTitle: 'Legacy title',
-          avatarSeed: 'seed-legacy',
-          updatedAt: DateTime.utc(2026, 5, 23, 8),
-        ),
-      );
-      final service = ImCoreConversationService(
-        conversations: _FakeConversations(
-          items: <ConversationSummary>[conversation],
-        ),
-        localStore: store,
-      );
+          conversation: conversation,
+          updatedAt: DateTime.utc(2026, 5, 23, 9),
+        );
 
-      await service.hideConversationFromRecents(
-        ownerDid: 'did:alice',
-        conversation: conversation,
-        updatedAt: DateTime.utc(2026, 5, 23, 9),
-      );
-
-      final overlay = await store.loadConversationOverlayByConversationId(
-        ownerDid: 'did:alice',
-        conversationId: 'dm:peer-scope:v1:bob',
-      );
-      expect(overlay?.hidden, isTrue);
-      expect(overlay?.pinned, isFalse);
-      expect(overlay?.muted, isFalse);
-      expect(overlay?.customTitle, isNull);
-      expect(overlay?.avatarSeed, isNull);
-      expect(overlay?.threadId, 'dm:peer-scope:v1:bob');
-    });
+        final overlay = await store.loadConversationOverlayByConversationId(
+          ownerDid: 'did:alice',
+          conversationId: 'dm:peer-scope:v1:bob',
+        );
+        expect(overlay?.hidden, isTrue);
+        expect(overlay?.pinned, isFalse);
+        expect(overlay?.muted, isFalse);
+        expect(overlay?.customTitle, isNull);
+        expect(overlay?.avatarSeed, isNull);
+        expect(overlay?.threadId, 'dm:peer-scope:v1:bob');
+      },
+    );
 
     test(
       'does not hide a newer message after local delete waterline',
@@ -1236,88 +1239,83 @@ void main() {
       },
     );
 
-    test(
-      'hides only the selected canonical runtime conversation',
-      () async {
-        final didRow = _conversation(
-          'dm:did:human:did:agent:runtime',
-          targetDid: 'did:agent:runtime',
-          targetPeer: 'did:agent:runtime',
-          minutesAgo: 2,
-          displayName: 'zhuocheng-test-hermes',
-        );
-        final handleRow = _conversation(
-          'dm:peer-scope:v1:runtime',
-          targetDid: 'did:agent:runtime',
-          targetPeer: 'zhuocheng-test-hermes.anpclaw.com',
-          minutesAgo: 1,
-          displayName: 'zhuocheng-test-hermes.anpclaw.com',
-        );
-        final core = _FakeConversations(
-          items: <ConversationSummary>[didRow, handleRow],
-        );
-        final store = InMemoryAwikiProductLocalStore();
-        final service = ImCoreConversationService(
-          conversations: core,
-          localStore: store,
-          agentInventory: const _FakeAgentInventory(
-            agents: <AgentSummary>[
-              AgentSummary(
-                agentDid: 'did:agent:runtime',
-                kind: AgentKind.runtime,
-                daemonAgentDid: 'did:agent:daemon',
-                runtime: 'hermes',
-                handle: 'zhuocheng-test-hermes',
-                displayName: '改名后的智能体',
-                activeState: 'active',
-                latest: AgentLatestStatus(status: 'ready'),
-              ),
-            ],
-          ),
-        );
-
-        final beforeHide = await service.listConversations(
-          ownerDid: 'did:human',
-        );
-        final peerScoped = beforeHide.singleWhere(
-          (conversation) => conversation.threadId == handleRow.threadId,
-        );
-        await service.hideConversationFromRecents(
-          ownerDid: 'did:human',
-          conversation: peerScoped,
-        );
-        final conversations = await service.listConversations(
-          ownerDid: 'did:human',
-        );
-
-        expect(peerScoped.conversationId, 'dm:peer-scope:v1:runtime');
-        expect(
-          (await store.loadConversationOverlayByConversationId(
-            ownerDid: 'did:human',
-            conversationId: 'dm:peer-scope:v1:runtime',
-          ))?.hidden,
-          isTrue,
-        );
-        for (final key in <String>[
-          'runtime:did:agent:runtime',
-          'direct:did:agent:runtime',
-          'direct-handle:zhuocheng-test-hermes.anpclaw.com',
-          'direct-handle:zhuocheng-test-hermes',
-        ]) {
-          expect(
-            await store.loadConversationOverlay(
-              ownerDid: 'did:human',
-              threadId: key,
+    test('hides only the selected canonical runtime conversation', () async {
+      final didRow = _conversation(
+        'dm:did:human:did:agent:runtime',
+        targetDid: 'did:agent:runtime',
+        targetPeer: 'did:agent:runtime',
+        minutesAgo: 2,
+        displayName: 'zhuocheng-test-hermes',
+      );
+      final handleRow = _conversation(
+        'dm:peer-scope:v1:runtime',
+        targetDid: 'did:agent:runtime',
+        targetPeer: 'zhuocheng-test-hermes.anpclaw.com',
+        minutesAgo: 1,
+        displayName: 'zhuocheng-test-hermes.anpclaw.com',
+      );
+      final core = _FakeConversations(
+        items: <ConversationSummary>[didRow, handleRow],
+      );
+      final store = InMemoryAwikiProductLocalStore();
+      final service = ImCoreConversationService(
+        conversations: core,
+        localStore: store,
+        agentInventory: const _FakeAgentInventory(
+          agents: <AgentSummary>[
+            AgentSummary(
+              agentDid: 'did:agent:runtime',
+              kind: AgentKind.runtime,
+              daemonAgentDid: 'did:agent:daemon',
+              runtime: 'hermes',
+              handle: 'zhuocheng-test-hermes',
+              displayName: '改名后的智能体',
+              activeState: 'active',
+              latest: AgentLatestStatus(status: 'ready'),
             ),
-            isNull,
-            reason: key,
-          );
-        }
-        expect(conversations.map((conversation) => conversation.threadId), [
-          'dm:did:human:did:agent:runtime',
-        ]);
-      },
-    );
+          ],
+        ),
+      );
+
+      final beforeHide = await service.listConversations(ownerDid: 'did:human');
+      final peerScoped = beforeHide.singleWhere(
+        (conversation) => conversation.threadId == handleRow.threadId,
+      );
+      await service.hideConversationFromRecents(
+        ownerDid: 'did:human',
+        conversation: peerScoped,
+      );
+      final conversations = await service.listConversations(
+        ownerDid: 'did:human',
+      );
+
+      expect(peerScoped.conversationId, 'dm:peer-scope:v1:runtime');
+      expect(
+        (await store.loadConversationOverlayByConversationId(
+          ownerDid: 'did:human',
+          conversationId: 'dm:peer-scope:v1:runtime',
+        ))?.hidden,
+        isTrue,
+      );
+      for (final key in <String>[
+        'runtime:did:agent:runtime',
+        'direct:did:agent:runtime',
+        'direct-handle:zhuocheng-test-hermes.anpclaw.com',
+        'direct-handle:zhuocheng-test-hermes',
+      ]) {
+        expect(
+          await store.loadConversationOverlay(
+            ownerDid: 'did:human',
+            threadId: key,
+          ),
+          isNull,
+          reason: key,
+        );
+      }
+      expect(conversations.map((conversation) => conversation.threadId), [
+        'dm:did:human:did:agent:runtime',
+      ]);
+    });
 
     test(
       'does not merge different DIDs that temporarily share one handle',
@@ -1350,10 +1348,7 @@ void main() {
         expect(conversations, hasLength(2));
         expect(
           conversations.map((conversation) => conversation.conversationId),
-          containsAll(<String>[
-            'dm:alice:old-bob',
-            'dm:alice:new-bob',
-          ]),
+          containsAll(<String>['dm:alice:old-bob', 'dm:alice:new-bob']),
         );
       },
     );
@@ -1558,6 +1553,31 @@ void main() {
         expect(messages.retriedIds, ['failed']);
       },
     );
+
+    test(
+      'delegates explicit default-plain Agent text to the optional port',
+      () async {
+        final messages = _FakeMessages();
+        final service = ImCoreMessagingService(messages: messages);
+
+        await service.sendPlainConversationText(
+          conversation: AppConversationReadRef.fromConversationId(
+            'dm:peer-scope:v1:runtime-agent',
+          ),
+          content: 'plain agent prompt',
+          clientMessageId: 'agent-client-1',
+          idempotencyKey: 'agent-op-1',
+        );
+
+        expect(messages.sentPlainConversationContents, ['plain agent prompt']);
+        expect(
+          messages.lastSentConversation?.conversationId,
+          'dm:peer-scope:v1:runtime-agent',
+        );
+        expect(messages.lastClientMessageId, 'agent-client-1');
+        expect(messages.lastIdempotencyKey, 'agent-op-1');
+      },
+    );
   });
 }
 
@@ -1717,9 +1737,14 @@ class _FakeReadableConversations extends _FakeConversations
   }
 }
 
-class _FakeMessages implements MessageCorePort, LocalHistoryMessageCorePort {
+class _FakeMessages
+    implements
+        MessageCorePort,
+        PlainDirectTextMessageCorePort,
+        LocalHistoryMessageCorePort {
   final List<String> sentContents = <String>[];
   final List<String> sentConversationContents = <String>[];
+  final List<String> sentPlainConversationContents = <String>[];
   final List<_HistoryRequest> historyRequests = <_HistoryRequest>[];
   final List<_HistoryRequest> localHistoryRequests = <_HistoryRequest>[];
   final List<String> retriedIds = <String>[];
@@ -1789,6 +1814,20 @@ class _FakeMessages implements MessageCorePort, LocalHistoryMessageCorePort {
     lastClientMessageId = clientMessageId;
     lastIdempotencyKey = idempotencyKey;
     return _message(clientMessageId ?? 'conversation-text');
+  }
+
+  @override
+  Future<ChatMessage> sendPlainConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    sentPlainConversationContents.add(content);
+    lastSentConversation = conversation;
+    lastClientMessageId = clientMessageId;
+    lastIdempotencyKey = idempotencyKey;
+    return _message(clientMessageId ?? 'plain-conversation-text');
   }
 
   @override

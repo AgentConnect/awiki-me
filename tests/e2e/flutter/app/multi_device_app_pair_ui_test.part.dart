@@ -733,9 +733,14 @@ Future<void> _requireRetiredIdentityOnboardingChoice({
     failure: 'The retired identity registration OTP was not accepted.',
   );
   await _enterText(tester, 'e2e-otp-input', account.fixedOtp);
+  final macSubmit = find.byKey(
+    const Key('onboarding-mac-phone-submit-action'),
+  );
   await _tapOne(
     tester,
-    find.bySemanticsIdentifier('e2e-complete-login-button'),
+    macSubmit.evaluate().isNotEmpty
+        ? macSubmit
+        : find.byKey(const Key('onboarding-phone-submit-action')),
     failure: 'The retired identity registration action was unavailable.',
   );
   await _pumpUntil(

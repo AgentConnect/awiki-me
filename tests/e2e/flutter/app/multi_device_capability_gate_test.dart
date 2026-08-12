@@ -1,5 +1,5 @@
 // [INPUT]: Production AppBootstrap/native Core and two isolated temporary App roots.
-// [OUTPUT]: Real product evidence for the default-on multi-device product adapters.
+// [OUTPUT]: Real evidence that E2EE capability stays available while ordinary product policy is plain.
 // [POS]: Local entry E2E; it does not claim remote Join/SAS/Root/Recovery acceptance.
 
 import 'dart:async';
@@ -23,7 +23,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'production bootstrap enables multi-device product capabilities by default',
+    'production bootstrap keeps E2EE available but defaults ordinary messaging to plain',
     (tester) async {
       final appRoot = await Directory.systemTemp.createTemp(
         'awiki_me_multi_device_default_',
@@ -44,7 +44,7 @@ void main() {
           didDomain: 'multi-device-e2e.invalid',
           agentImEnabled: false,
         );
-        _expectProductCapabilitiesEnabled(environment);
+        _expectProductDefaults(environment);
         bootstrap = await AppBootstrap.create(
           environment: environment,
           appStateRoot: appRoot.path,
@@ -133,6 +133,7 @@ void main() {
           'isolated_scope_opened',
           'join_surface_opened_with_production_adapters',
           'multi_device_product_capabilities_enabled',
+          'ordinary_messaging_policy_default_plain',
           'temporary_scope_deleted',
         ],
       );
@@ -140,10 +141,12 @@ void main() {
   );
 }
 
-void _expectProductCapabilitiesEnabled(AwikiEnvironmentConfig environment) {
+void _expectProductDefaults(AwikiEnvironmentConfig environment) {
   expect(environment.multiDeviceDeviceRevokeEnabled, isTrue);
   expect(environment.multiDeviceDirectE2eeEnabled, isTrue);
   expect(environment.multiDeviceGroupE2eeEnabled, isTrue);
+  expect(defaultDirectMessageE2eeRequired, isFalse);
+  expect(defaultGroupCreationE2eeRequired, isFalse);
 }
 
 Future<void> _pumpUntilVisible(

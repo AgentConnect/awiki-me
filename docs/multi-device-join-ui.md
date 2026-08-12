@@ -19,9 +19,10 @@
 `true`；显式 `false` 仅用于应急回滚。它只开放撤销动作；关闭时仍可进入设备页读取权威 Registry。
 
 设备级 Direct 产品路径由编译期开关 `AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED` 控制，
-产品默认 `true`，显式 `false` 仅用于应急回滚。App 只把该值传给
-`AwikiImCoreOpenOptions`，不新增 UI；它与 Join、根密钥传输、永久撤销和 Group E2EE
-开关彼此独立，也不进入跨域协议字段。Handle Recovery 是默认开启的产品基线，最终可用性
+产品默认保留该 capability。该值只传给 `AwikiImCoreOpenOptions`，不决定普通消息的默认
+安全模式；当前 App 没有 E2EE 设置入口，因此人与人 Direct 默认使用 `default-plain`。
+它与 Join、根密钥传输、永久撤销和 Group E2EE 开关彼此独立，也不进入跨域协议字段。
+Handle Recovery 是默认开启的产品基线，最终可用性
 仍由租户 `server-info` 的 phone + SMS OTP 能力声明协商决定。
 
 ## 2. App 状态流

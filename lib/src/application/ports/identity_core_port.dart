@@ -72,6 +72,10 @@ abstract interface class IdentityCorePort {
   });
 }
 
+abstract interface class LocalIdentityDataDeletionPort {
+  Future<AppSession> deleteLocalIdentityData(String identityIdOrAlias);
+}
+
 abstract interface class ExistingHandleContinuationPort {
   Future<DeviceJoinProgress> beginExistingHandleDeviceJoin(
     String continuationId, {

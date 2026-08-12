@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-10.handle-recovery-registration-rejoin",
+  "sourceRevision": "2026-08-12.settings-handle-recovery-continuity",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
@@ -2447,12 +2447,12 @@
     },
     {
       "caseId": "DEVICE-JOIN-E2E-005",
-      "feature": "Joined AWiki Me device deletes its local credential and starts Join again",
+      "feature": "Joined AWiki Me device deletes its current local data and starts Join again",
       "layer": "remote_product_ui_security",
       "preconditions": "DEVICE-JOIN-E2E-004 has completed on two isolated real App processes, the joining App is the current active member, and its completed New Device Join journal belongs to the same local identity and protocol device.",
-      "action": "On the joining App, leave the completed Join page, open Settings, confirm Exit and delete current credential through visible UI, verify the completed local Join journal is retired, submit the same verified Handle from onboarding, then reopen the standalone Join form.",
+      "action": "On the joining App, leave the completed Join page, open Settings, confirm Exit and delete current data through visible UI, verify the completed local Join journal is retired, submit the same verified Handle from onboarding, then reopen the standalone Join form.",
       "exactOracles": [
-        "Deleting the joined credential returns the real App to onboarding without affecting the admin App or remotely revoking either registered device.",
+        "Deleting the current local data returns the real App to onboarding without affecting the admin App or remotely revoking either registered device.",
         "The joining App Core no longer lists the completed New Device Join session that created the deleted local identity.",
         "Submitting the same Handle after completed local retirement shows the explicit Join-or-Handle-Recovery choice instead of handle_recovery.transition_missing.",
         "Opening Join again shows one fresh phone, Handle, OTP, and start-action form with no active Join, activation retry, completed-state projection, or device error."
@@ -2793,17 +2793,17 @@
     },
     {
       "caseId": "MULTI-DEVICE-CAPABILITY-GATE-E2E-001",
-      "feature": "AWiki Me local Join surface and default-on multi-device product capabilities",
+      "feature": "AWiki Me local Join surface with available E2EE capabilities and default-plain product policy",
       "layer": "product_ui",
       "preconditions": "Flutter desktop and debug native IM Core artifacts are available; no backend, OTP, CLI peer, or pre-existing identity is used.",
       "action": "Open one temporary Storage Scope through production AppBootstrap/native Core, verify the default device-management composition, and mount the Join surface inside the production App provider tree without submitting an OTP.",
       "exactOracles": [
         "The launch uses a real Storage Scope ID, and the temporary App root is deleted after native runtime disposal.",
         "With default configuration the production device-management, root-transfer, and group-encryption adapters exist.",
-        "The production provider tree mounts the real Handle/phone/OTP Join form without exposing root transfer before authorized-member eligibility and explicit user presence; revoke and Direct/Group E2EE product capabilities are enabled."
+        "The production provider tree mounts the real Handle/phone/OTP Join form without exposing root transfer before authorized-member eligibility and explicit user presence; revoke and Direct/Group E2EE capabilities are available while ordinary Direct and new Group policy defaults to non-E2EE."
       ],
       "negativeChecks": [
-        "A reused/copied Core root, fake provider tree, backend-dependent oracle, an unavailable Join surface, a disabled default product capability, root-transfer execution from the local form, OTP submission, or any claim that remote Join/SAS/Root/Recovery passed in this local gate fails the case."
+        "A reused/copied Core root, fake provider tree, backend-dependent oracle, an unavailable Join surface, unavailable E2EE capability, E2EE selected by the ordinary default policy, root-transfer execution from the local form, OTP submission, or any claim that remote Join/SAS/Root/Recovery passed in this local gate fails the case."
       ],
       "environment": "no_service",
       "cleanupPolicy": "test_owned_temporary_scope_delete",
@@ -2820,6 +2820,7 @@
           "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:isolated_scope_opened",
           "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_surface_opened_with_production_adapters",
           "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:multi_device_product_capabilities_enabled",
+          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:ordinary_messaging_policy_default_plain",
           "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:temporary_scope_deleted"
         ],
         "exactOracleAssertions": [
@@ -2832,7 +2833,8 @@
           ],
           [
             "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_surface_opened_with_production_adapters",
-            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:multi_device_product_capabilities_enabled"
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:multi_device_product_capabilities_enabled",
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:ordinary_messaging_policy_default_plain"
           ]
         ],
         "negativeCheckAssertions": [
@@ -2840,6 +2842,7 @@
             "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:isolated_scope_opened",
             "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_surface_opened_with_production_adapters",
             "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:multi_device_product_capabilities_enabled",
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:ordinary_messaging_policy_default_plain",
             "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:temporary_scope_deleted"
           ]
         ]
@@ -2913,7 +2916,7 @@
       "caseId": "DEVICE-AGENT-MESSAGE-SYNC-E2E-001",
       "feature": "A joined App sends a default-plain runtime Agent prompt that converges on the other App",
       "layer": "remote_product_ui",
-      "preconditions": "Two isolated App devices share one joined account identity with the production-default Direct E2EE gate disabled; both Apps have converged the same real Codex runtime Agent and the joining App is displaying the normal Agents workspace.",
+      "preconditions": "Two isolated App devices share one joined account identity; AWiki Me ordinary-message policy defaults to plain and this suite additionally disables the Direct E2EE gate; both Apps have converged the same real Codex runtime Agent and the joining App is displaying the normal Agents workspace.",
       "action": "On the joining App, select the existing Codex runtime Agent, open its chat through visible UI, send one exact prompt through the real composer, then observe the exact canonical own-sync message on the admin App.",
       "exactOracles": [
         "The joining App opens the already-converged runtime Agent chat and commits the exact prompt through the visible composer as a sent default-plain Direct message with the account DID and runtime Agent DID.",
@@ -2963,7 +2966,7 @@
       "caseId": "DEVICE-MESSAGE-SYNC-E2E-001",
       "feature": "Direct messages sent on either joined App converge as own-sync on the other App",
       "layer": "remote_product_ui",
-      "preconditions": "Two isolated App devices share one joined account identity with the production-default Direct E2EE gate disabled, and an independent fresh CLI identity is available as the remote peer.",
+      "preconditions": "Two isolated App devices share one joined account identity; AWiki Me ordinary-message policy defaults to plain and this suite additionally disables the Direct E2EE gate; an independent fresh CLI identity is available as the remote peer.",
       "action": "Send one exact Direct text from the admin App to the CLI peer and observe it on the joining App, then send a second exact Direct text from the joining App through the same canonical conversation and observe it on the admin App.",
       "exactOracles": [
         "The admin App commits exactly one sent message with the account DID, peer DID, exact content, canonical message ID, and canonical conversation ID.",
@@ -4104,6 +4107,71 @@
             "HANDLE-RECOVERY-V1-E2E-002:epoch_bound_registry_cleared_exactly_once",
             "HANDLE-RECOVERY-V1-E2E-002:stable_account_profile_preserved",
             "HANDLE-RECOVERY-V1-E2E-002:replacement_identity_visible_without_old_did"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001",
+      "feature": "Settings Handle DID Recovery preserves Direct, transport Group, and Agent continuity across restart",
+      "layer": "remote_product_ui_security",
+      "preconditions": "One fresh signed-in App owner, one independently rooted App peer, one Handle-backed non-E2EE transport Group, and one real daemon plus Runtime Agent exist on audited awiki.info; the deterministic test gateway substitutes only the external LLM reply.",
+      "action": "Seed exact Direct, Group, and Agent prompt/reply history, start Recovery from Settings with the exact local identity, cut after the Core commit, then reopen the same App, peer, and daemon roots and continue all three conversations.",
+      "exactOracles": [
+        "Handle, account, stable owner, conversation IDs, Group DID, Agent DIDs, and Runtime handle remain unchanged while DID/generation advances exactly once and the old DID is absent after same-root restart.",
+        "All pre-Recovery Direct, Handle-backed transport Group, and Agent prompt/reply messages remain exact-one; old outgoing messages remain mine; Direct and Group each continue bidirectionally and the original Agent returns one deterministic reply.",
+        "Conversation and Agent ID sets do not change, each thread grows by exactly its two expected post-Recovery messages, and no key message or Agent is duplicated."
+      ],
+      "negativeChecks": [
+        "A new conversation, Group, or Agent ID, duplicate inventory or message, changed Handle/account, skipped generation, missing history, wrong ownership, one-way messaging, unavailable original Agent, abnormal count growth, different state root, E2EE/DID-only Group claim, fake App/Core/service dependency, secret-bearing evidence, or unaudited host prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:settings_recovery_preserved_handle_and_account",
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:did_generation_advanced_exactly_once",
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:same_root_restart_preserved_recovery_state",
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:direct_id_history_ownership_and_bidirectional_send_preserved",
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:handle_backed_transport_group_id_history_and_send_preserved",
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:agent_inventory_conversation_history_and_reply_preserved",
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:conversation_message_and_agent_counts_remained_exact",
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:all_key_messages_converged_exactly_once"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:settings_recovery_preserved_handle_and_account",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:did_generation_advanced_exactly_once",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:same_root_restart_preserved_recovery_state"
+          ],
+          [
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:direct_id_history_ownership_and_bidirectional_send_preserved",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:handle_backed_transport_group_id_history_and_send_preserved",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:agent_inventory_conversation_history_and_reply_preserved"
+          ],
+          [
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:conversation_message_and_agent_counts_remained_exact",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:all_key_messages_converged_exactly_once"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:settings_recovery_preserved_handle_and_account",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:did_generation_advanced_exactly_once",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:same_root_restart_preserved_recovery_state",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:direct_id_history_ownership_and_bidirectional_send_preserved",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:handle_backed_transport_group_id_history_and_send_preserved",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:agent_inventory_conversation_history_and_reply_preserved",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:conversation_message_and_agent_counts_remained_exact",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:all_key_messages_converged_exactly_once"
           ]
         ]
       }

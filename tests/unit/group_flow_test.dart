@@ -127,6 +127,50 @@ class _DelayedRefreshGroupService extends FakeGroupApplicationService {
   }
 }
 
+class _RecoveryGatedGroupListService extends FakeGroupApplicationService {
+  _RecoveryGatedGroupListService(super.gateway);
+
+  bool recoveryResumed = false;
+
+  @override
+  Future<GroupRebindRecoverySummary> resumeRebindRecovery({int limit = 100}) {
+    recoveryResumed = true;
+    return Future<GroupRebindRecoverySummary>.value(
+      const GroupRebindRecoverySummary(
+        processed: 1,
+        completed: 1,
+        pending: 0,
+        blocked: 0,
+      ),
+    );
+  }
+
+  @override
+  Future<GroupCollectionPage<GroupSummary>> listGroups({
+    int limit = 100,
+    String? cursor,
+  }) {
+    if (!recoveryResumed) {
+      throw StateError('group recovery must run before group.list');
+    }
+    return Future<GroupCollectionPage<GroupSummary>>.value(
+      const GroupCollectionPage<GroupSummary>(
+        items: <GroupSummary>[
+          GroupSummary(
+            conversationId: 'group:recovered',
+            groupId: 'did:wba:awiki.ai:groups:recovered',
+            name: 'Recovered group',
+            description: '',
+            memberCount: 2,
+            lastMessageAt: null,
+          ),
+        ],
+        hasMore: false,
+      ),
+    );
+  }
+}
+
 class _DelayedMemberMutationGroupService extends FakeGroupApplicationService {
   _DelayedMemberMutationGroupService(super.gateway);
 
@@ -690,6 +734,25 @@ void main() {
       container.read(groupMembersProvider(groupDid)).single.displayName,
       '李智诚',
     );
+  });
+
+  test('群列表刷新会先续跑 Handle Recovery 群重绑定', () async {
+    final gateway = FakeAwikiGateway();
+    final groups = _RecoveryGatedGroupListService(gateway);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        ...fakeApplicationServiceOverrides(gateway),
+        groupApplicationServiceProvider.overrideWithValue(groups),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(sessionProvider.notifier).setSession(session);
+
+    await container.read(groupProvider.notifier).refresh();
+
+    expect(groups.recoveryResumed, isTrue);
+    expect(container.read(groupProvider).groups.single.name, 'Recovered group');
+    expect(container.read(groupProvider).recoverySummary?.completed, 1);
   });
 
   test('旧身份群成员 Profile 慢请求不会写入新身份投影', () async {

@@ -148,8 +148,9 @@ requires the replica to be bootstrapped, and updates exactly one active stream.
 The App runner supplies neither an account ID nor a dynamic account allowlist.
 Its closed receipt is fault-injection evidence only, never a message/recovery
 oracle.
-The functional suite keeps the production-default Direct E2EE gate disabled.
-Its ordinary Direct texts therefore use P3 Base on every participant; the test
+AWiki Me's ordinary-message policy defaults to plain; the functional suite also
+disables the Direct E2EE gate as an additional test guard. Its ordinary Direct
+texts therefore use P3 Base on every participant; the test
 fails if multi-device synchronization silently creates a P5 session or upgrades
 the message security level.
 

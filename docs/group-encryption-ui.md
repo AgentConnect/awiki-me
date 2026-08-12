@@ -1,7 +1,8 @@
 # AWiki Me 多设备群加密状态
 
-状态：App 状态投影与 P6 v2 公共 Core 编排已接入，AWiki Me 产品能力默认开启；真实
-`awiki.info` 执行仍受服务端 rollout、账号资格和操作员门禁约束。
+状态：App 状态投影与 P6 v2 公共 Core 编排已接入，能力保留；AWiki Me 当前没有群 E2EE
+设置入口，新建群默认使用非 E2EE。真实 `awiki.info` 执行仍受服务端 rollout、账号资格和
+操作员门禁约束。
 
 整体流程以 Core 仓库的
 [多设备架构](../../awiki-cli-rs2/docs/architecture/multi-device/multi-device-architecter.md)
@@ -23,18 +24,19 @@
 
 ## 安全与启用边界
 
-编译期开关 `AWIKI_MULTI_DEVICE_GROUP_E2EE_ENABLED` 在 AWiki Me 产品中默认 `true`，显式
-`false` 仅用于应急回滚。App 只接收
+编译期开关 `AWIKI_MULTI_DEVICE_GROUP_E2EE_ENABLED` 默认保留 P6 capability，但它不是
+“新建群默认加密”的产品策略。当前没有用户选择入口，新建群不请求 `group-e2ee`，仍创建
+普通 transport-protected 群；已有或未来显式选择的 E2EE 群仍可复用相同 Core 能力。App 只接收
 `ready/preparing/needs-retry/unavailable`、是否可安全发送和是否可重试等无秘密投影，
 不接收或展示 Leaf index、KeyPackage 私钥、epoch secret、Commit/Welcome 明文或 MLS
 数据库内容。群业务成员仍按 DID 展示，不因同一 DID 有多个 Leaf 而出现重复成员。
-开关启用时，App 新建群会明确请求 `group-e2ee` 与附件能力；关闭时保持原有建群请求不变。
+默认建群请求不携带 `group-e2ee`、`e2ee=true` 或由 E2EE 派生的附件要求。
 
 `awiki_im_core` Dart 公共接口通过
 `client.secure.group(groupDid).status()/repair()` 承载 P6 v2 多设备 runtime。修复执行期间
 App 强制投影“正在加入群加密”，不会保留旧的 ready 文案；只有 Core 返回可安全发送后才
-显示“群加密已就绪”。通用 SDK 自身仍保持 fail-closed 默认；AWiki Me 的产品默认值不绕过
-服务端能力校验。
+显示“群加密已就绪”。通用 SDK 自身仍保持 fail-closed 默认；AWiki Me 保留 capability
+不会绕过服务端能力校验，也不会把普通群自动升级为 E2EE 群。
 
 ## 验证
 

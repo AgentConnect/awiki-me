@@ -11,6 +11,7 @@ import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../profile/profile_page.dart';
 import '../devices/devices_page.dart';
+import '../recovery/handle_recovery_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/app_dialog.dart';
 import '../shared/awiki_me_semantic_icon.dart';
@@ -179,6 +180,17 @@ class SettingsPage extends ConsumerWidget {
         key: const Key('settings-session-section'),
         children: <Widget>[
           AppListTile(
+            key: const Key('settings-recover-handle-did-row'),
+            title: l10n.settingsRecoverHandleDid,
+            leading: leading(
+              const _SettingsIcon(icon: CupertinoIcons.arrow_counterclockwise),
+            ),
+            onTap: _canRecoverHandleDid(session)
+                ? () => _openHandleRecovery(context, session!)
+                : null,
+          ),
+          const AppSectionDivider(),
+          AppListTile(
             title: l10n.settingsExportCredential,
             leading: leading(
               const _SettingsIcon(icon: CupertinoIcons.archivebox),
@@ -344,6 +356,16 @@ class SettingsPage extends ConsumerWidget {
           key: const Key('settings-security-group'),
           children: <Widget>[
             _QuietSettingsRow(
+              key: const Key('settings-recover-handle-did-row'),
+              icon: CupertinoIcons.arrow_counterclockwise,
+              iconKey: const Key('settings-recover-handle-did-icon'),
+              title: l10n.settingsRecoverHandleDid,
+              height: optionRowHeight,
+              onTap: _canRecoverHandleDid(session)
+                  ? () => _openHandleRecovery(context, session!)
+                  : null,
+            ),
+            _QuietSettingsRow(
               key: const Key('settings-export-credential-row'),
               icon: CupertinoIcons.arrow_down_to_line,
               iconKey: const Key('settings-export-credential-icon'),
@@ -503,11 +525,30 @@ class SettingsPage extends ConsumerWidget {
         signsOut: true,
         onConfirm: () async {
           Navigator.of(ctx).pop();
-          await runtime.deleteCurrentCredential();
+          await runtime.deleteCurrentData();
           if (!embedded && context.mounted) {
             Navigator.of(context).pop();
           }
         },
+      ),
+    );
+  }
+
+  bool _canRecoverHandleDid(SessionIdentity? identity) {
+    if (identity == null) return false;
+    return (identity.handle?.trim().isNotEmpty ?? false) &&
+        (identity.localIdentityId?.trim().isNotEmpty ?? false);
+  }
+
+  void _openHandleRecovery(BuildContext context, SessionIdentity identity) {
+    AppNavigator.push<void>(
+      context,
+      (_) => HandleRecoveryPage(
+        initialHandle: identity.handle!.trim(),
+        initialPhone: '',
+        autoRequestOtp: false,
+        localIdentityId: identity.localIdentityId!.trim(),
+        allowPhoneInput: true,
       ),
     );
   }

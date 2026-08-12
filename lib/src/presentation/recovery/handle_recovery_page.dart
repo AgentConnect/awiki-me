@@ -23,11 +23,15 @@ class HandleRecoveryPage extends ConsumerStatefulWidget {
     required this.initialHandle,
     required this.initialPhone,
     this.autoRequestOtp = true,
+    this.localIdentityId,
+    this.allowPhoneInput = false,
   });
 
   final String initialHandle;
   final String initialPhone;
   final bool autoRequestOtp;
+  final String? localIdentityId;
+  final bool allowPhoneInput;
 
   @override
   ConsumerState<HandleRecoveryPage> createState() => _HandleRecoveryPageState();
@@ -35,10 +39,15 @@ class HandleRecoveryPage extends ConsumerStatefulWidget {
 
 class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
   final _otpController = TextEditingController();
+  late final TextEditingController _phoneController;
 
   @override
   void initState() {
     super.initState();
+    _phoneController = TextEditingController(text: widget.initialPhone);
+    if (widget.localIdentityId != null) {
+      ref.read(handleRecoveryProvider.notifier).reset();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (widget.autoRequestOtp) await _requestOtp();
     });
@@ -47,6 +56,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
   @override
   void dispose() {
     _otpController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -82,11 +92,21 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                       value: widget.initialHandle,
                     ),
                     const SizedBox(height: 12),
-                    _RecoveryVerifiedValue(
-                      key: const Key('handle-recovery-phone'),
-                      label: context.l10n.handleRecoveryPhone,
-                      value: widget.initialPhone,
-                    ),
+                    if (widget.allowPhoneInput)
+                      AppTextField(
+                        key: const Key('handle-recovery-phone-input'),
+                        controller: _phoneController,
+                        label: context.l10n.handleRecoveryPhone,
+                        placeholder: context.l10n.onboardingPhonePlaceholder,
+                        keyboardType: TextInputType.phone,
+                        semanticsIdentifier: 'handle-recovery-phone-input',
+                      )
+                    else
+                      _RecoveryVerifiedValue(
+                        key: const Key('handle-recovery-phone'),
+                        label: context.l10n.handleRecoveryPhone,
+                        value: widget.initialPhone,
+                      ),
                     const SizedBox(height: 12),
                     AppTextField(
                       key: const Key('handle-recovery-otp'),
@@ -258,7 +278,11 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
   Future<void> _requestOtp() {
     return ref
         .read(handleRecoveryProvider.notifier)
-        .requestOtp(handle: widget.initialHandle, phone: widget.initialPhone);
+        .requestOtp(
+          handle: widget.initialHandle,
+          phone: _phoneController.text,
+          localIdentityId: widget.localIdentityId,
+        );
   }
 
   Future<void> _prepare() async {
@@ -266,7 +290,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
     _otpController.clear();
     await ref
         .read(handleRecoveryProvider.notifier)
-        .prepare(phone: widget.initialPhone, otp: otp);
+        .prepare(phone: _phoneController.text, otp: otp);
   }
 
   Future<void> _activate() async {
@@ -282,6 +306,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
   }
 
   Future<void> _activateRecoveredIdentityIfCompleted() async {
+    if (!mounted) return;
     final progress = ref.read(handleRecoveryProvider).progress;
     if (progress == null || !progress.isCompleted) return;
     if (shouldStopHandleRecoveryBeforeProductReset(

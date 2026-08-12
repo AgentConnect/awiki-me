@@ -507,27 +507,28 @@
   "messageSyncRetryAction": "Retry",
   "messageSyncReloadAction": "Reload",
   "messageSyncReauthenticateAction": "Sign in again",
+  "settingsRecoverHandleDid": "Recover Handle DID",
   "settingsLogout": "Log out",
   "settingsLogoutSubtitle": "Clear local sign-in state and return to the sign-in page",
-  "settingsDeleteCredential": "Sign out and delete current credential",
-  "settingsDeleteCurrentCredential": "Delete local credential: {credentialName}",
+  "settingsDeleteCredential": "Sign out and delete current data",
+  "settingsDeleteCurrentCredential": "Delete current local data: {credentialName}",
   "@settingsDeleteCurrentCredential": {
     "placeholders": {
       "credentialName": {}
     }
   },
-  "settingsDeleteCredentialFallback": "Sign out and delete current signed-in credential",
+  "settingsDeleteCredentialFallback": "Sign out and delete current account data",
   "settingsLogoutConfirmTitle": "Log out",
   "settingsLogoutConfirmContent": "Are you sure you want to log out of the current account?",
-  "settingsDeleteCredentialConfirmTitle": "Sign out and delete current credential",
-  "settingsDeleteCredentialConfirmContent": "Sign out of {credentialName} and delete its credential from this device",
+  "settingsDeleteCredentialConfirmTitle": "Sign out and delete current data",
+  "settingsDeleteCredentialConfirmContent": "Sign out of {credentialName} and permanently delete its credentials, messages, groups, agents, drafts, preferences, and end-to-end encryption data saved on this device",
   "@settingsDeleteCredentialConfirmContent": {
     "placeholders": {
       "credentialName": {}
     }
   },
-  "settingsDeleteCredentialConfirmHint": "This does not delete the identity or affect other devices",
-  "settingsDeleteCredentialConfirmAction": "Sign out and delete",
+  "settingsDeleteCredentialConfirmHint": "This does not delete the online identity or affect other devices. Deleted local history and end-to-end encryption keys cannot be restored by recovery or device join.",
+  "settingsDeleteCredentialConfirmAction": "Sign out and delete data",
   "quickActionsTitle": "More actions",
   "quickActionStartConversation": "New message",
   "quickActionCreateGroup": "Create group chat",

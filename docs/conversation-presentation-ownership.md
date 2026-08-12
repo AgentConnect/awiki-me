@@ -21,7 +21,8 @@
 9. 所有 App 消息同步、timeline window、patch、read 和 send presentation 工作都绑定当前 `SessionEpoch(ownerDid, stableIdentityKey, generation)`；登出、清空会话或 A→B 身份替换必须推进 generation，并在旧 Future 完成前先使其失效。同一身份只刷新 JWT、昵称等可变字段时不推进 generation。
 10. 普通消息 v2 同步对所有已认证账号和有效设备默认开启；App 不维护账号/设备灰度名单。
    `AWIKI_SYNC_V2_READ=false` 仅是全局应急回滚，不能改变 Core owner/cursor 语义，也不影响
-   独立且产品默认开启的 P5/P6 E2EE 开关；显式关闭仅用于应急回滚。
+   独立的 P5/P6 E2EE capability gate。capability 默认可用不等于默认使用加密；当前
+   AWiki Me 普通 Direct 和新建群都选择非 E2EE。
 11. WebSocket 和 Android remote Push 都只是 hint-only sync trigger。两者都只能调度
     `MessageSyncCoordinator`；该协调器是 Core commit、conversation/timeline projection、
     normal message notification 和 Coding Agent notification 去重的唯一 owner。

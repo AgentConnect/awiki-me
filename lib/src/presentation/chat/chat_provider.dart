@@ -3215,14 +3215,15 @@ class ChatThreadsController
     try {
       final messaging = ref.read(messagingServiceProvider);
       final sent = validMentionDrafts.isEmpty
-          ? await messaging
-                .sendConversationText(
-                  conversation: conversationRef,
-                  content: content.trim(),
-                  clientMessageId: clientMessageId,
-                  idempotencyKey: idempotencyKey,
-                )
-                .timeout(_sendTimeout)
+          ? await _sendConversationText(
+              messaging: messaging,
+              conversation: conversation,
+              conversationRef: conversationRef,
+              content: content.trim(),
+              expectedAgentReplyDid: expectedAgentReplyDid,
+              clientMessageId: clientMessageId,
+              idempotencyKey: idempotencyKey,
+            ).timeout(_sendTimeout)
           : await messaging
                 .sendConversationMentionText(
                   conversation: conversationRef,
@@ -3498,14 +3499,15 @@ class ChatThreadsController
                   idempotencyKey: 'retry-$clientMessageId',
                 )
                 .timeout(_sendTimeout)
-          : await messaging
-                .sendConversationText(
-                  conversation: conversationRef,
-                  content: message.content,
-                  clientMessageId: clientMessageId,
-                  idempotencyKey: 'retry-$clientMessageId',
-                )
-                .timeout(_sendTimeout);
+          : await _sendConversationText(
+              messaging: messaging,
+              conversation: conversation,
+              conversationRef: conversationRef,
+              content: message.content,
+              expectedAgentReplyDid: expectedAgentReplyDid,
+              clientMessageId: clientMessageId,
+              idempotencyKey: 'retry-$clientMessageId',
+            ).timeout(_sendTimeout);
       if (!_isCurrentSessionEpoch(sessionEpoch)) {
         return;
       }
@@ -5233,6 +5235,39 @@ class ChatThreadsController
       return remoteId;
     }
     return message.localId.trim();
+  }
+
+  Future<ChatMessage> _sendConversationText({
+    required MessagingService messaging,
+    required ConversationSummary conversation,
+    required AppConversationReadRef conversationRef,
+    required String content,
+    required String? expectedAgentReplyDid,
+    required String clientMessageId,
+    required String idempotencyKey,
+  }) {
+    final isDirectAgent =
+        !conversation.isGroup &&
+        expectedAgentReplyDid?.trim().isNotEmpty == true;
+    if (!isDirectAgent) {
+      return messaging.sendConversationText(
+        conversation: conversationRef,
+        content: content,
+        clientMessageId: clientMessageId,
+        idempotencyKey: idempotencyKey,
+      );
+    }
+    if (messaging is! PlainDirectMessagingService) {
+      throw UnsupportedError(
+        'Messaging service does not expose default-plain Runtime Agent sends.',
+      );
+    }
+    return (messaging as PlainDirectMessagingService).sendPlainConversationText(
+      conversation: conversationRef,
+      content: content,
+      clientMessageId: clientMessageId,
+      idempotencyKey: idempotencyKey,
+    );
   }
 
   void _startAgentProcessingForDeliveredMessage({

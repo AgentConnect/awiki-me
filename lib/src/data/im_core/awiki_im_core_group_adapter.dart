@@ -2,8 +2,9 @@ import 'dart:convert';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
-import '../../application/ports/group_core_port.dart';
+import '../../application/config/awiki_environment_config.dart';
 import '../../application/models/group_collection_page.dart';
+import '../../application/ports/group_core_port.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_identity.dart';
@@ -44,7 +45,7 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
           rules: rules,
           messagePrompt: messagePrompt,
           identity: identity,
-          secureRequired: _runtime.multiDeviceGroupE2eeEnabled,
+          secureRequired: defaultGroupCreationE2eeRequired,
         ),
       ),
     );

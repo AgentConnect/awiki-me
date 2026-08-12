@@ -33,6 +33,8 @@ void main() {
     expect(config.multiDeviceDeviceRevokeEnabled, isTrue);
     expect(config.multiDeviceDirectE2eeEnabled, isTrue);
     expect(config.multiDeviceGroupE2eeEnabled, isTrue);
+    expect(defaultDirectMessageE2eeRequired, isFalse);
+    expect(defaultGroupCreationE2eeRequired, isFalse);
     expect(config.multiDeviceAudience, 'awiki-user-service');
     expect(config.messageSyncV2ReadEnabled, isTrue);
   });

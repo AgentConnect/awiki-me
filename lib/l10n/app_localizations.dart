@@ -2418,6 +2418,12 @@ abstract class AppLocalizations {
   /// **'重新登录'**
   String get messageSyncReauthenticateAction;
 
+  /// No description provided for @settingsRecoverHandleDid.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复 Handle DID'**
+  String get settingsRecoverHandleDid;
+
   /// No description provided for @settingsLogout.
   ///
   /// In zh, this message translates to:
@@ -2433,19 +2439,19 @@ abstract class AppLocalizations {
   /// No description provided for @settingsDeleteCredential.
   ///
   /// In zh, this message translates to:
-  /// **'退出并删除当前凭证'**
+  /// **'退出并删除当前数据'**
   String get settingsDeleteCredential;
 
   /// No description provided for @settingsDeleteCurrentCredential.
   ///
   /// In zh, this message translates to:
-  /// **'删除本地凭证：{credentialName}'**
+  /// **'删除当前本地数据：{credentialName}'**
   String settingsDeleteCurrentCredential(Object credentialName);
 
   /// No description provided for @settingsDeleteCredentialFallback.
   ///
   /// In zh, this message translates to:
-  /// **'退出并删除当前登录凭证'**
+  /// **'退出并删除当前账号的本地数据'**
   String get settingsDeleteCredentialFallback;
 
   /// No description provided for @settingsLogoutConfirmTitle.
@@ -2463,25 +2469,25 @@ abstract class AppLocalizations {
   /// No description provided for @settingsDeleteCredentialConfirmTitle.
   ///
   /// In zh, this message translates to:
-  /// **'退出并删除当前凭证'**
+  /// **'退出并删除当前数据'**
   String get settingsDeleteCredentialConfirmTitle;
 
   /// No description provided for @settingsDeleteCredentialConfirmContent.
   ///
   /// In zh, this message translates to:
-  /// **'退出 {credentialName} 并删除本机凭证'**
+  /// **'退出 {credentialName}，并永久删除本机保存的凭证、消息、群聊、智能体、草稿、偏好和端到端加密数据'**
   String settingsDeleteCredentialConfirmContent(Object credentialName);
 
   /// No description provided for @settingsDeleteCredentialConfirmHint.
   ///
   /// In zh, this message translates to:
-  /// **'不会注销身份或影响其他设备'**
+  /// **'不会注销线上身份或影响其他设备；删除的本地历史消息和端到端加密密钥不能通过恢复或加入设备找回。'**
   String get settingsDeleteCredentialConfirmHint;
 
   /// No description provided for @settingsDeleteCredentialConfirmAction.
   ///
   /// In zh, this message translates to:
-  /// **'退出并删除'**
+  /// **'退出并删除数据'**
   String get settingsDeleteCredentialConfirmAction;
 
   /// No description provided for @quickActionsTitle.

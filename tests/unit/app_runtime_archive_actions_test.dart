@@ -16,15 +16,20 @@ import 'test_support.dart';
 void main() {
   group('AppRuntime archive actions', () {
     late FakeAwikiGateway gateway;
+    late FakeProductLocalStore productLocalStore;
     late ProviderContainer container;
 
     setUp(() {
       gateway = FakeAwikiGateway();
+      productLocalStore = FakeProductLocalStore();
       container = ProviderContainer(
         overrides: <Override>[
           awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
-          ...fakeApplicationServiceOverrides(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            productLocalStore: productLocalStore,
+          ),
           realtimeGatewayProvider.overrideWithValue(FakeRealtimeGateway()),
           notificationFacadeProvider.overrideWithValue(
             FakeNotificationFacade(),
@@ -112,6 +117,83 @@ void main() {
       );
       expect(friendsNavigation.detail, FriendsWorkspaceDetail.overview);
       expect(friendsNavigation.selectedDid, isNull);
+    });
+
+    test('退出并删除当前数据按稳定身份清理 App 和 Core 本地数据', () async {
+      const session = SessionIdentity(
+        did: 'did:wba:awiki.info:users:alice-current',
+        localIdentityId: 'identity-alice',
+        credentialName: 'alice-local',
+        displayName: 'Alice',
+        handle: 'alice.awiki.info',
+        jwtToken: 'token-alice',
+      );
+      gateway.localCredentials = const <SessionIdentity>[session];
+      container.read(sessionProvider.notifier).setSession(session);
+      container.read(sessionProvider.notifier).setLocalCredentials([session]);
+
+      await container.read(appRuntimeProvider.notifier).deleteCurrentData();
+
+      expect(productLocalStore.deleteOwnerDataCalls, 1);
+      expect(productLocalStore.lastDeletedOwnerIdentityId, 'identity-alice');
+      expect(
+        productLocalStore.lastDeletedOwnerDid,
+        'did:wba:awiki.info:users:alice-current',
+      );
+      expect(gateway.lastDeletedLocalCredentialSelector, 'identity-alice');
+      expect(gateway.deleteLocalIdentityDataCalls, 1);
+      expect(container.read(sessionProvider).session, isNull);
+      expect(container.read(sessionProvider).localCredentials, isEmpty);
+      expect(container.read(uiFeedbackProvider), isNull);
+    });
+
+    test('退出并删除当前数据在运行时销毁后仍完成已确认的本地删除', () async {
+      const session = SessionIdentity(
+        did: 'did:wba:awiki.info:users:alice-dispose',
+        localIdentityId: 'identity-alice-dispose',
+        credentialName: 'alice-dispose',
+        displayName: 'Alice',
+        handle: 'alice.awiki.info',
+        jwtToken: 'token-alice',
+      );
+      final deferredStore = _DeferredDeleteProductLocalStore();
+      final isolatedContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            productLocalStore: deferredStore,
+          ),
+          realtimeGatewayProvider.overrideWithValue(FakeRealtimeGateway()),
+          notificationFacadeProvider.overrideWithValue(
+            FakeNotificationFacade(),
+          ),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+      var disposed = false;
+      addTearDown(() {
+        if (!disposed) isolatedContainer.dispose();
+      });
+      gateway.localCredentials = const <SessionIdentity>[session];
+      isolatedContainer.read(sessionProvider.notifier).setSession(session);
+      isolatedContainer.read(sessionProvider.notifier).setLocalCredentials([
+        session,
+      ]);
+
+      final deletion = isolatedContainer
+          .read(appRuntimeProvider.notifier)
+          .deleteCurrentData();
+      await deferredStore.deleteStarted.future;
+      isolatedContainer.dispose();
+      disposed = true;
+      deferredStore.allowDelete.complete();
+
+      await expectLater(deletion, completes);
+      expect(deferredStore.deleteOwnerDataCalls, 1);
+      expect(gateway.deleteLocalIdentityDataCalls, 1);
     });
 
     test('会话 Patch 取消挂起时仍会删除本地凭证', () async {
@@ -266,5 +348,23 @@ class _HangingCancelConversationService extends FakeConversationService {
     required String ownerDid,
   }) {
     return _controller.stream;
+  }
+}
+
+class _DeferredDeleteProductLocalStore extends FakeProductLocalStore {
+  final Completer<void> deleteStarted = Completer<void>();
+  final Completer<void> allowDelete = Completer<void>();
+
+  @override
+  Future<void> deleteOwnerData({
+    required String ownerIdentityId,
+    required String currentDid,
+  }) async {
+    deleteStarted.complete();
+    await allowDelete.future;
+    await super.deleteOwnerData(
+      ownerIdentityId: ownerIdentityId,
+      currentDid: currentDid,
+    );
   }
 }

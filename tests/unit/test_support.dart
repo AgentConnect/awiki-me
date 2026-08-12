@@ -355,6 +355,7 @@ List<Override> fakeApplicationServiceOverrides(
   ConversationService? conversationService,
   AttachmentCacheService? attachmentCacheService,
   AgentControlService? agentControlService,
+  ProductLocalStore? productLocalStore,
 }) {
   final resolvedRealtime = realtimeGateway ?? FakeRealtimeGateway();
   final resolvedMessageSync = messageSyncService ?? FakeMessageSyncService();
@@ -389,7 +390,9 @@ List<Override> fakeApplicationServiceOverrides(
     attachmentCacheServiceProvider.overrideWithValue(
       attachmentCacheService ?? FakeAttachmentCacheService(),
     ),
-    productLocalStoreProvider.overrideWithValue(FakeProductLocalStore()),
+    productLocalStoreProvider.overrideWithValue(
+      productLocalStore ?? FakeProductLocalStore(),
+    ),
     agentInventoryPortProvider.overrideWithValue(FakeAgentInventoryPort()),
     agentControlServiceProvider.overrideWithValue(
       agentControlService ?? FakeAgentControlService(),
@@ -858,6 +861,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int deleteLocalThreadCalls = 0;
   String? lastDeletedLocalThreadId;
   int deleteLocalCredentialCalls = 0;
+  int deleteLocalIdentityDataCalls = 0;
   String? lastDeletedLocalCredentialSelector;
   Object? deleteLocalCredentialError;
   Completer<void>? logoutCompleter;
@@ -1704,7 +1708,7 @@ class FakeDirectoryApplicationService implements DirectoryApplicationService {
 
 class FakeAppSessionService
     with AppSessionTransitionGuard
-    implements AppSessionService {
+    implements AppSessionService, LocalIdentityDataDeletionSessionService {
   FakeAppSessionService(this.gateway);
 
   final FakeAwikiGateway gateway;
@@ -1808,6 +1812,12 @@ class FakeAppSessionService
       jwtToken: null,
     );
     return _appSessionFromLegacy(fallback);
+  }
+
+  @override
+  Future<AppSession> deleteLocalIdentityData(String identityIdOrAlias) async {
+    gateway.deleteLocalIdentityDataCalls += 1;
+    return deleteLocalIdentity(identityIdOrAlias);
   }
 
   @override
@@ -2038,6 +2048,7 @@ class FakeConversationService implements ConversationService {
 class FakeMessagingService
     implements
         MessagingService,
+        PlainDirectMessagingService,
         LocalHistoryMessagingService,
         ConversationTimelineMessagingService {
   FakeMessagingService(this.gateway);
@@ -2049,6 +2060,7 @@ class FakeMessagingService
   int conversationTimelineCalls = 0;
   Completer<void>? conversationTimelineCompleter;
   int sendConversationAttachmentCalls = 0;
+  int sendPlainConversationTextCalls = 0;
   int downloadAttachmentCalls = 0;
   AppThreadRef? lastDownloadedAttachmentThread;
   String? lastDownloadedAttachmentLocalPath;
@@ -2422,6 +2434,22 @@ class FakeMessagingService
       conversation: conversation,
       message: sent,
       clientMessageId: clientMessageId,
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendPlainConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    sendPlainConversationTextCalls += 1;
+    return sendConversationText(
+      conversation: conversation,
+      content: content,
+      clientMessageId: clientMessageId,
+      idempotencyKey: idempotencyKey,
     );
   }
 
@@ -3300,11 +3328,32 @@ class FakeProductLocalStore implements ProductLocalStore {
   final Map<String, LocalAgentState> agentStates = <String, LocalAgentState>{};
   final InMemoryAwikiProductLocalStore _accountDomainStore =
       InMemoryAwikiProductLocalStore();
+  int deleteOwnerDataCalls = 0;
+  String? lastDeletedOwnerIdentityId;
+  String? lastDeletedOwnerDid;
 
   String _key(String ownerDid, String id) => '$ownerDid::$id';
 
   @override
   Future<void> warmUp() async {}
+
+  @override
+  Future<void> deleteOwnerData({
+    required String ownerIdentityId,
+    required String currentDid,
+  }) async {
+    deleteOwnerDataCalls += 1;
+    lastDeletedOwnerIdentityId = ownerIdentityId;
+    lastDeletedOwnerDid = currentDid;
+    overlays.removeWhere((_, value) => value.ownerDid == currentDid);
+    drafts.removeWhere((_, value) => value.ownerDid == currentDid);
+    preferences.removeWhere((_, value) => value.ownerDid == currentDid);
+    agentStates.removeWhere((_, value) => value.ownerDid == currentDid);
+    await _accountDomainStore.deleteOwnerData(
+      ownerIdentityId: ownerIdentityId,
+      currentDid: currentDid,
+    );
+  }
 
   @override
   Future<void> deleteAgentState({

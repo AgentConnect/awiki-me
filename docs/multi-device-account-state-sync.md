@@ -16,9 +16,9 @@ After a deployment enables multi-device support, ordinary message sync and
 account-state reconciliation are default-on for every authenticated account and
 valid device. AWiki Me does not select an account allowlist, device cohort, or
 percentage rollout. `AWIKI_SYNC_V2_READ=false` is reserved for a global
-emergency rollback; the separate Direct/Group E2EE product flags are default-on,
-can be explicitly disabled for emergency rollback, and do not control this plain
-synchronization path.
+emergency rollback. The separate Direct/Group E2EE capability gates remain
+available, while AWiki Me ordinary Direct sends and group creation select the
+non-E2EE path by default; neither policy controls this plain synchronization path.
 
 Operator-only recovery fault injection, cleanup, and OTP tooling remain
 fail-closed. Account State fixture/fault actions authorize each newly created

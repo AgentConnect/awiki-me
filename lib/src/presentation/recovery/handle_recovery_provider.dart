@@ -188,6 +188,10 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
   final HandleRecoveryService _service;
   final SmsOtpCooldownController _otpCooldown;
 
+  void reset() {
+    state = const HandleRecoveryState();
+  }
+
   void setRiskConfirmed(bool value) {
     state = state.copyWith(riskConfirmed: value, clearError: true);
   }

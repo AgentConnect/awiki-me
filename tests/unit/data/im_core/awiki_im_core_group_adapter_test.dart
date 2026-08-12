@@ -1,4 +1,5 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/ports/group_core_port.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_group_adapter.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
@@ -25,7 +26,7 @@ void main() {
     },
   );
 
-  test('group adapter keeps legacy creation unchanged when gate is off', () {
+  test('AWiki Me default group creation stays non-E2EE', () {
     final request = mapCoreCreateGroupRequest(
       name: 'Legacy group',
       slug: 'legacy-group',
@@ -34,7 +35,7 @@ void main() {
       rules: '',
       messagePrompt: null,
       identity: const GroupIdentitySelection.didOnly(),
-      secureRequired: false,
+      secureRequired: defaultGroupCreationE2eeRequired,
     );
 
     expect(request.messageSecurityProfile, isNull);

@@ -5246,11 +5246,15 @@ void main() {
       targetDid: conversation.targetDid,
     );
     gateway.conversations = <ConversationSummary>[staleConversation];
+    final agentMessaging = FakeMessagingService(gateway);
     final sendContainer = ProviderContainer(
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
-        ...fakeApplicationServiceOverrides(gateway),
+        ...fakeApplicationServiceOverrides(
+          gateway,
+          messagingService: agentMessaging,
+        ),
         sessionProvider.overrideWith((ref) {
           final controller = SessionController();
           controller.setSession(
@@ -5287,14 +5291,19 @@ void main() {
     expect(latest.lastMessageAt.isAfter(conversation.lastMessageAt), isTrue);
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
+    expect(agentMessaging.sendPlainConversationTextCalls, 1);
   });
 
   test('普通私聊发送成功后不会显示智能体处理中状态', () async {
+    final humanMessaging = FakeMessagingService(gateway);
     final sendContainer = ProviderContainer(
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
-        ...fakeApplicationServiceOverrides(gateway),
+        ...fakeApplicationServiceOverrides(
+          gateway,
+          messagingService: humanMessaging,
+        ),
         sessionProvider.overrideWith((ref) {
           final controller = SessionController();
           controller.setSession(
@@ -5319,6 +5328,7 @@ void main() {
       chatThreadProvider(_timelineThreadId(conversation)),
     );
     expect(thread.agentPendingTurns, isEmpty);
+    expect(humanMessaging.sendPlainConversationTextCalls, 0);
   });
 
   test('发送给智能体时投递成功后建立等待回执状态但不冒充权威运行', () async {
@@ -7972,6 +7982,7 @@ class _MutableSessionController extends SessionController {
 class _PatchMessagingService
     implements
         MessagingService,
+        PlainDirectMessagingService,
         LocalHistoryMessagingService,
         ThreadPatchMessagingService,
         ConversationTimelineMessagingService {
@@ -8013,6 +8024,7 @@ class _PatchMessagingService
   String? lastConversationTimelineId;
   int sendConversationAttachmentCalls = 0;
   int sendConversationTextCalls = 0;
+  int sendPlainConversationTextCalls = 0;
   int sendConversationMentionTextCalls = 0;
   AppConversationReadRef? lastSendConversation;
   AppConversationReadRef? lastSendAttachmentConversation;
@@ -8315,6 +8327,22 @@ class _PatchMessagingService
       throw error;
     }
     return sent;
+  }
+
+  @override
+  Future<ChatMessage> sendPlainConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    sendPlainConversationTextCalls += 1;
+    return sendConversationText(
+      conversation: conversation,
+      content: content,
+      clientMessageId: clientMessageId,
+      idempotencyKey: idempotencyKey,
+    );
   }
 
   @override

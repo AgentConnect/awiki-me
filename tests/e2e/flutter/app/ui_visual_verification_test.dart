@@ -483,7 +483,7 @@ void main() {
 
       final securityGroup = find.byKey(const Key('settings-security-group'));
       expect(tester.getSize(securityGroup).width, _compactSize.width);
-      expect(tester.getSize(securityGroup).height, 223);
+      expect(tester.getSize(securityGroup).height, 284);
       expect(
         tester.getSize(
           find.byKey(const Key('settings-delete-credential-icon')),
@@ -494,8 +494,8 @@ void main() {
 
       await tester.tap(find.byKey(const Key('settings-delete-credential-row')));
       await _pumpVisualFrames(tester);
-      expect(find.text('退出并删除当前凭证'), findsWidgets);
-      expect(find.text('不会注销身份或影响其他设备'), findsOneWidget);
+      expect(find.text('退出并删除当前数据'), findsWidgets);
+      expect(find.textContaining('不会注销线上身份或影响其他设备'), findsOneWidget);
       await _captureScreenshot(
         tester,
         '22-compact-settings-delete-credential-confirmation',
@@ -1383,7 +1383,7 @@ void _expectCompactSettingsGeometry(WidgetTester tester) {
   expect(security.top, closeTo(617, 0.1));
   expect(security.left, 0);
   expect(security.width, _compactSize.width);
-  expect(security.height, closeTo(223, 0.1));
+  expect(security.height, closeTo(284, 0.1));
   expect(
     tester
         .getSize(find.byKey(const Key('settings-export-credential-row')))

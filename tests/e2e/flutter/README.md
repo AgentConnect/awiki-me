@@ -177,6 +177,15 @@ purposes are rejected. Its E2E-only user-presence decision does not attest
 production LocalAuthentication. See
 [../../../docs/handle-recovery-ui.md](../../../docs/handle-recovery-ui.md).
 
+The same suite also runs
+`HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001` across two Flutter processes on
+the same App root. It starts Recovery from Settings without deleting local
+data, then requires one generation advance and stable Handle/account, Direct
+conversation, Handle-backed non-E2EE transport Group, and Runtime Agent IDs.
+Pre-Recovery history and ownership must remain exact-one; Direct and Group must
+continue in both directions, the same Agent must reply, and conversation,
+message, and Agent counts must grow only by the expected post-Recovery events.
+
 `--case multi-device-app-pair-recovery-registration-rejoin-management-transfer`
 selects one Linux/Xvfb-or-macOS `awiki.info` case from the same real App-pair Recovery
 implementation. The fenced old member re-enters through registration, while

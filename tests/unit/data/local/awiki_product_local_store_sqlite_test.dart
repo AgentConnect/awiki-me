@@ -159,7 +159,113 @@ void main() {
       ),
       isNotNull,
     );
+    await store.close();
   });
+
+  test(
+    'deleteOwnerData purges one recovered owner and preserves another',
+    () async {
+      final store = _store(databaseDir);
+      final now = DateTime.utc(2026, 8, 11);
+      const aliceBinding = ProductAccountBinding(
+        ownerIdentityId: 'owner-alice',
+        accountId: 'account-alice',
+      );
+      const bobBinding = ProductAccountBinding(
+        ownerIdentityId: 'owner-bob',
+        accountId: 'account-bob',
+      );
+      const recovery = ProductDeviceRegistryEpochResetAuthorization(
+        reference: ProductDeviceRegistryEpochResetReference(
+          accountUserId: 'account-alice',
+          ownerIdentityId: 'owner-alice',
+          previousDid: 'did:wba:awiki.info:users:alice-old',
+          currentDid: 'did:wba:awiki.info:users:alice-new',
+          bindingGeneration: '2',
+        ),
+        handle: 'alice.awiki.info',
+        sourceKind: ProductIdentityTransitionSourceKind.initiator,
+        sourceId: 'recovery-alice',
+      );
+
+      await store.upsertConversationOverlay(
+        ProductConversationOverlay(
+          ownerDid: recovery.reference.previousDid,
+          threadId: 'alice-old-thread',
+          conversationId: 'alice-old-thread',
+          updatedAt: now,
+        ),
+      );
+      await store.upsertConversationOverlay(
+        ProductConversationOverlay(
+          ownerDid: 'did:wba:awiki.info:users:bob',
+          threadId: 'bob-thread',
+          conversationId: 'bob-thread',
+          updatedAt: now,
+        ),
+      );
+      await store.replaceAgentInventorySnapshot(
+        ProductAgentInventorySnapshot(
+          binding: aliceBinding,
+          domainVersion: '1',
+          refreshedAt: now,
+          agents: const <ProductAgentInventoryItem>[
+            ProductAgentInventoryItem(
+              agentDid: 'did:agent:alice',
+              activeState: 'active',
+              payloadJson: '{"name":"Alice agent"}',
+            ),
+          ],
+        ),
+      );
+      await store.replaceAgentInventorySnapshot(
+        ProductAgentInventorySnapshot(
+          binding: bobBinding,
+          domainVersion: '1',
+          refreshedAt: now,
+          agents: const <ProductAgentInventoryItem>[
+            ProductAgentInventoryItem(
+              agentDid: 'did:agent:bob',
+              activeState: 'active',
+              payloadJson: '{"name":"Bob agent"}',
+            ),
+          ],
+        ),
+      );
+      await store.applyDeviceRegistryEpochReset(recovery);
+
+      await store.deleteOwnerData(
+        ownerIdentityId: aliceBinding.ownerIdentityId,
+        currentDid: recovery.reference.currentDid,
+      );
+
+      expect(
+        await store.loadConversationOverlay(
+          ownerDid: recovery.reference.previousDid,
+          threadId: 'alice-old-thread',
+        ),
+        isNull,
+      );
+      expect(
+        await store.loadAgentInventorySnapshot(binding: aliceBinding),
+        isNull,
+      );
+      expect(
+        await store.loadConversationOverlay(
+          ownerDid: 'did:wba:awiki.info:users:bob',
+          threadId: 'bob-thread',
+        ),
+        isNotNull,
+      );
+      expect(
+        (await store.loadAgentInventorySnapshot(
+          binding: bobBinding,
+        ))?.agents.single.agentDid,
+        'did:agent:bob',
+      );
+      await store.close();
+    },
+  );
 
   test(
     'retains the legacy Handle Recovery locator table as inert schema',

@@ -241,20 +241,86 @@ void main() {
     },
   );
 
-  test('sendConversationText uses E2EE only when explicitly enabled', () async {
+  test(
+    'ordinary Direct stays plain when the E2EE capability is enabled',
+    () async {
+      final client = _FakeClient(ownerDid: 'did:alice');
+      final adapter = AwikiImCoreMessageAdapter(
+        runtime: _FakeRuntime(client, multiDeviceDirectE2eeEnabled: true),
+      );
+
+      await adapter.sendConversationText(
+        conversation: AppConversationReadRef.fromConversationId(
+          'dm:peer-scope:v1:bob',
+        ),
+        content: 'ordinary hello',
+      );
+
+      expect(
+        client.messages.lastSecurity,
+        core.MessageSecurityMode.defaultPlain,
+      );
+    },
+  );
+
+  test('an explicit payload request can still use Direct E2EE', () async {
     final client = _FakeClient(ownerDid: 'did:alice');
     final adapter = AwikiImCoreMessageAdapter(
       runtime: _FakeRuntime(client, multiDeviceDirectE2eeEnabled: true),
     );
 
-    await adapter.sendConversationText(
-      conversation: AppConversationReadRef.fromConversationId(
-        'dm:peer-scope:v1:bob',
-      ),
-      content: 'secure hello',
+    await adapter.sendPayload(
+      thread: const AppThreadRef.direct('did:bob'),
+      payload: const <String, Object?>{'kind': 'explicit-secure'},
+      secure: true,
     );
 
     expect(client.messages.lastSecurity, core.MessageSecurityMode.secureDirect);
+  });
+
+  test(
+    'sendPlainConversationText bypasses enabled human Direct E2EE',
+    () async {
+      final client = _FakeClient(ownerDid: 'did:alice');
+      final adapter = AwikiImCoreMessageAdapter(
+        runtime: _FakeRuntime(client, multiDeviceDirectE2eeEnabled: true),
+      );
+
+      await adapter.sendPlainConversationText(
+        conversation: AppConversationReadRef.fromConversationId(
+          'dm:peer-scope:v1:runtime-agent',
+        ),
+        content: 'plain agent prompt',
+        clientMessageId: 'agent-client-1',
+        idempotencyKey: 'agent-op-1',
+      );
+
+      expect(
+        client.messages.lastSecurity,
+        core.MessageSecurityMode.defaultPlain,
+      );
+      expect(client.messages.lastClientMessageId, 'agent-client-1');
+      expect(client.messages.lastIdempotencyKey, 'agent-op-1');
+    },
+  );
+
+  test('sendPlainConversationText rejects a Group conversation', () async {
+    final adapter = AwikiImCoreMessageAdapter(
+      runtime: _FakeRuntime(
+        _FakeClient(ownerDid: 'did:alice'),
+        multiDeviceDirectE2eeEnabled: true,
+      ),
+    );
+
+    expect(
+      () => adapter.sendPlainConversationText(
+        conversation: AppConversationReadRef.fromConversationId(
+          'group:did:anp:group:example',
+        ),
+        content: 'not allowed',
+      ),
+      throwsArgumentError,
+    );
   });
 
   test('sendConversationText rejects a different canonical id', () async {
@@ -677,6 +743,22 @@ class _FakeMessageApi implements core.MessageApi {
   core.MessageSecurityMode? lastSecurity;
   String? responseConversationId;
 
+  @override
+  Future<core.SendMessageResult> sendPayload(
+    core.SendPayloadRequest request,
+  ) async {
+    lastSecurity = request.security;
+    lastPayloadJson = request.payloadJson;
+    return core.SendMessageResult(
+      deliveryState: 'sent',
+      message: _messageForOwner(
+        _ownerDid(),
+        id: 'sent-payload',
+        payloadJson: request.payloadJson,
+      ),
+    );
+  }
+
   void emitConversationTimelinePatch(core.ThreadMessageStorePatch patch) {
     _conversationTimelinePatches.add(patch);
   }
@@ -1008,7 +1090,7 @@ class _RetrySpyMessageAdapter extends AwikiImCoreMessageAdapter {
   Future<ChatMessage> sendPayload({
     required AppThreadRef thread,
     required Map<String, Object?> payload,
-    bool secure = true,
+    bool secure = false,
     String? idempotencyKey,
   }) async {
     sentPayloadThread = thread;

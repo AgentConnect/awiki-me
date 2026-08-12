@@ -118,6 +118,7 @@ const List<String> _multiDeviceRemoteRecoveryCaseIds = <String>[
   'HANDLE-RECOVERY-V1-E2E-001',
   'HANDLE-RECOVERY-V1-E2E-002',
   'HANDLE-RECOVERY-V1-E2E-003',
+  'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
 ];
 const List<String> _multiDeviceAppPairRecoveryRegistrationCaseIds = <String>[
   'HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001',
@@ -815,6 +816,7 @@ class DesktopE2eRunner {
     }
     _addRuntimeSecret(recoveryConfig.phone);
     _addRuntimeSecret(recoveryConfig.fixedOtp);
+    _addRuntimeSecret(recoveryConfig.daemonBinary ?? '');
     if (!options.dryRun && !commands.dryRun) {
       suiteDefinition.validateRemoteTargetValues(
         didDomain: recoveryConfig.didDomain,
@@ -824,6 +826,20 @@ class DesktopE2eRunner {
           recoveryConfig.messageServiceUrl,
         ],
       );
+      if (!registrationRejoin) {
+        await commands.requireFile(
+          _requiredConfig(
+            recoveryConfig.daemonBinary,
+            'daemon.binary',
+            fileConfig.path ?? '<missing-config>',
+          ),
+        );
+        _requiredConfig(
+          recoveryConfig.daemonHandle,
+          'daemon.handle',
+          fileConfig.path ?? '<missing-config>',
+        );
+      }
     }
 
     _section('AWiki Desktop remote Handle Recovery V1 E2E $runId');
@@ -869,17 +885,13 @@ class DesktopE2eRunner {
       );
       return;
     }
-    await _timed('Flutter visible Handle Recovery V1 lifecycle', () {
-      return _runFlutterTest(
-        'integration_test/handle_recovery_ui_test.dart',
-        caseIds: const <String>[
-          'HANDLE-RECOVERY-V1-E2E-001',
-          'HANDLE-RECOVERY-V1-E2E-003',
-        ],
-      );
-    });
     if (!options.dryRun && !commands.dryRun) {
       appStateRootDir.createSync(recursive: true);
+      multiDeviceAppJoiningStateRootDir.createSync(recursive: true);
+      if (appPairDaemonStateRootDir.existsSync()) {
+        appPairDaemonStateRootDir.deleteSync(recursive: true);
+      }
+      appPairDaemonStateRootDir.createSync(recursive: true);
     }
     await _timed('Flutter Recovery committed/reset crash-cut phase A', () {
       return _runFlutterArgs(
@@ -894,6 +906,7 @@ class DesktopE2eRunner {
           platform.name,
           ..._caseAttestationDartDefines(const <String>[
             'HANDLE-RECOVERY-V1-E2E-002',
+            'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
           ]),
         ],
         platform: platform,
@@ -917,10 +930,24 @@ class DesktopE2eRunner {
           platform.name,
           ..._caseAttestationDartDefines(const <String>[
             'HANDLE-RECOVERY-V1-E2E-002',
+            'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
           ]),
         ],
         platform: platform,
         timeout: suiteDefinition.timeout,
+      );
+    });
+    if (!options.dryRun && !commands.dryRun) {
+      appStateRootDir.createSync(recursive: true);
+      multiDeviceAppJoiningStateRootDir.createSync(recursive: true);
+    }
+    await _timed('Flutter visible Handle Recovery V1 lifecycle', () {
+      return _runFlutterTest(
+        'integration_test/handle_recovery_ui_test.dart',
+        caseIds: const <String>[
+          'HANDLE-RECOVERY-V1-E2E-001',
+          'HANDLE-RECOVERY-V1-E2E-003',
+        ],
       );
     });
   }
@@ -1431,6 +1458,13 @@ class DesktopE2eRunner {
       'crashCut': <String, Object?>{
         'handoffPath': processRestartHandoffFile.path,
       },
+      if (recoveryConfig.daemonBinary != null)
+        'daemon': <String, Object?>{
+          'binary': recoveryConfig.daemonBinary,
+          'stateRoot': appPairDaemonStateRootDir.path,
+          'readyFile': appPairDaemonReadyFile.path,
+          'handle': recoveryConfig.daemonHandle,
+        },
       'suite': <String, Object?>{
         'manifestRevision': suiteManifest.sourceRevision,
         'tier': suiteDefinition.tier,
@@ -4223,7 +4257,11 @@ class _RemoteMultiDeviceBaseConfig {
 }
 
 class RemoteHandleRecoveryConfig {
-  const RemoteHandleRecoveryConfig._(this._base);
+  const RemoteHandleRecoveryConfig._(
+    this._base, {
+    this.daemonBinary,
+    this.daemonHandle,
+  });
 
   final _RemoteMultiDeviceBaseConfig _base;
 
@@ -4238,6 +4276,8 @@ class RemoteHandleRecoveryConfig {
   String get phone => _base.phone;
   String get fixedOtp => _base.fixedOtp;
   String get handlePrefix => _base.handlePrefix;
+  final String? daemonBinary;
+  final String? daemonHandle;
 
   static RemoteHandleRecoveryConfig from({
     required DesktopE2eFileConfig fileConfig,
@@ -4253,7 +4293,11 @@ class RemoteHandleRecoveryConfig {
         DesktopE2ePlatform.linux,
       },
     );
-    return RemoteHandleRecoveryConfig._(base);
+    return RemoteHandleRecoveryConfig._(
+      base,
+      daemonBinary: fileConfig.daemonBinary,
+      daemonHandle: fileConfig.daemonHandle,
+    );
   }
 }
 

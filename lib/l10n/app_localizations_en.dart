@@ -1300,6 +1300,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get messageSyncReauthenticateAction => 'Sign in again';
 
   @override
+  String get settingsRecoverHandleDid => 'Recover Handle DID';
+
+  @override
   String get settingsLogout => 'Log out';
 
   @override
@@ -1307,17 +1310,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Clear local sign-in state and return to the sign-in page';
 
   @override
-  String get settingsDeleteCredential =>
-      'Sign out and delete current credential';
+  String get settingsDeleteCredential => 'Sign out and delete current data';
 
   @override
   String settingsDeleteCurrentCredential(Object credentialName) {
-    return 'Delete local credential: $credentialName';
+    return 'Delete current local data: $credentialName';
   }
 
   @override
   String get settingsDeleteCredentialFallback =>
-      'Sign out and delete current signed-in credential';
+      'Sign out and delete current account data';
 
   @override
   String get settingsLogoutConfirmTitle => 'Log out';
@@ -1328,19 +1330,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsDeleteCredentialConfirmTitle =>
-      'Sign out and delete current credential';
+      'Sign out and delete current data';
 
   @override
   String settingsDeleteCredentialConfirmContent(Object credentialName) {
-    return 'Sign out of $credentialName and delete its credential from this device';
+    return 'Sign out of $credentialName and permanently delete its credentials, messages, groups, agents, drafts, preferences, and end-to-end encryption data saved on this device';
   }
 
   @override
   String get settingsDeleteCredentialConfirmHint =>
-      'This does not delete the identity or affect other devices';
+      'This does not delete the online identity or affect other devices. Deleted local history and end-to-end encryption keys cannot be restored by recovery or device join.';
 
   @override
-  String get settingsDeleteCredentialConfirmAction => 'Sign out and delete';
+  String get settingsDeleteCredentialConfirmAction =>
+      'Sign out and delete data';
 
   @override
   String get quickActionsTitle => 'More actions';

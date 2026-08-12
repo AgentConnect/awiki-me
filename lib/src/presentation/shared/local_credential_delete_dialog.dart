@@ -26,7 +26,9 @@ class LocalCredentialDeleteDialog extends StatelessWidget {
       message: signsOut
           ? context.l10n.settingsDeleteCredentialConfirmContent(identityLabel)
           : context.l10n.localCredentialDeleteConfirmContent(identityLabel),
-      helperMessage: context.l10n.localCredentialDeleteConfirmHint,
+      helperMessage: signsOut
+          ? context.l10n.settingsDeleteCredentialConfirmHint
+          : context.l10n.localCredentialDeleteConfirmHint,
       compactTitleTextAlign: TextAlign.center,
       compactMessageTextAlign: TextAlign.center,
       compactHorizontalPadding: 24,

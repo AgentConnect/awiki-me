@@ -13,6 +13,11 @@ AWiki Me 的基线能力，不使用 Debug/Release 或平台编译开关；当�
 边界按 purpose 隔离，避免注册冷却阻止专用 Recovery OTP，同时仍分别遵守服务端返回的
 `retry_at`。Recovery 不绑定当前激活身份，也不要求本机曾保存目标 Handle。
 
+已登录用户也可从设置选择“恢复 Handle DID”。该入口要求重新输入手机号并完成同一专用
+Recovery OTP、风险确认和 activate 流程，但必须把当前会话的 exact `localIdentityId` 交给
+Core；恢复前不退出、不删除凭证或本地数据，因此 Direct、Group、Agent 历史和智能体库存继续
+归属于同一 stable owner。恢复完成后同样直接返回消息主界面。
+
 ## 当前协议边界
 
 - 当前 OTP purpose 固定为 `awiki.identity.handle-recovery.v1`。
@@ -21,11 +26,18 @@ AWiki Me 的基线能力，不使用 Debug/Release 或平台编译开关；当�
   精确匹配本地身份，本地不存在时生成新的本地 owner 与身份材料。
 - App 禁止把当前身份、`credentialName` 或 alias 当作恢复目标猜测。Core 返回本次
   operation 的 `ownerIdentityId`，后续 status/activate/resume 才按该 owner/operation 推进。
+- 上述省略 selector 只适用于 fresh onboarding。设置中的已登录恢复必须显式使用当前
+  `localIdentityId`，不得退化为 alias、DID 或新建 owner。
 - OTP 仅作为瞬时输入传给 Core，App 不持久化 OTP、grant、密钥或证明材料。
 - prepare 后 UI 必须展示 Handle 保留、其他设备重新加入、普通本地数据迁移以及
   E2EE/DID-only 限制等不可逆影响；用户明确确认后才允许 activate。
 - 本地已有目标 Handle 时只迁移该身份的普通数据，不切换或覆盖其他身份；本地没有目标
   Handle 时 `localOrdinaryDataWillMigrate=false`，恢复完成后把新身份加入本地身份列表。
+- fresh Recovery 的消息副本仍按 `tail_only` 启动，因此当前版本不会自动恢复 Recovery 前的
+  Direct 历史；这需要后续增加服务端可审计的恢复副本 bootstrap 授权，App 不在本地猜测旧
+  Direct ownership。普通 transport-protected Handle 群则复用现有 `group.rebind_member`：群
+  列表刷新先续跑 Core repair，旧 DID 成员换绑到新 DID，旧 DID 发出的群消息继续显示为本人。
+  DID-only 与 Group E2EE 群仍保持 fail closed。
 - activate 需要 user presence。正式 App 使用平台 LocalAuthentication；自动化 E2E
   只能覆盖测试专用 `UserPresencePort`，不能声称验证了真实系统认证。
 - Core 是唯一恢复状态机。App 只展示粗粒度 phase，并在 Core 标记可恢复时提供精确
@@ -41,6 +53,12 @@ AWiki Me 的基线能力，不使用 Debug/Release 或平台编译开关；当�
 - 旧设备重新打开 Join 页时，若旧授权 Join 的 Registry 读取返回 `device.inactive` 等稳定
   设备失效码，App 将该本地会话视为不可恢复并继续展示 fresh Join；用户提交的新 Join 会
   取代仍在执行的旧会话恢复，迟到的旧读取结果不得覆盖新 Join 状态。
+
+设置中的“退出并删除当前数据”是另一条破坏性路径：用户确认后按 stable owner 删除当前身份
+在 App/Core 本地库中的消息、群、智能体、草稿、偏好、同步状态、E2EE 数据及本地凭证；远端
+Handle 和其他设备不受影响，其他本地身份也不得被删除。删除后的本地历史和密钥不承诺由
+Recovery 或 Join 找回。App 只有在 App overlay 与 Core owner 数据均删除成功后才清除会话并
+返回登录页，避免界面已退出但本地清理尚未完成。
 - 当前 V1 不使用历史的 `awiki.device.recovery.begin.v1` /
   `awiki.device.recovery.finalize.v1`、旧管理设备通知或冷静期取消流程。
 
@@ -59,8 +77,22 @@ fixture 注册与 UI 验证复用同一测试手机号时，用例必须先遵�
 OTP 输入框，并且 Core 恰好收到一次同一 Handle/手机号且不带本地 identity selector。
 最终 oracle 要求：Handle 保留、新的本地 owner 被安装、DID 被替换、Registry 只有一个
 ready current admin，恢复页自动退出到消息主界面，并且旧 DID 不出现在 fresh root 的
-identity projection。该专项支持
+identity projection。用例还创建一个 Handle-backed transport Group 和一条恢复前消息，要求
+恢复后旧成员精确换绑到新 DID、旧消息仍识别为本人，并能在同一老群发送一条新消息。该专项支持
 Linux Flutter desktop runner，也可在 macOS runner 上执行。
+
+`HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001` 专门覆盖已登录用户从设置发起恢复。Phase A
+在同一 stable owner 下建立双向 Direct、Handle-backed 非 E2EE transport Group，以及真实
+daemon/Runtime Agent 的 prompt/reply，再从设置使用 exact `localIdentityId` 完成一次 Recovery，
+并在 Core commit 后制造进程切断。Phase B 用相同 App、peer 和 daemon state root 重启，要求
+Handle/account 不变且 generation 只增加 1；三个 conversation ID、Group DID、Agent DID 和
+Runtime handle 均不变；原消息完整、exact-one，旧 DID 发出的消息仍显示为本人。随后 Direct
+和 Group 双向各发送一条消息，原 Agent 接收一条新 prompt 并返回一条确定性回复；最终
+conversation/Agent ID 集合完全不增长，三个线程只增加各自预期的两条消息。Agent 流程使用真实
+App/Core、daemon、User Service 和 Message Service，测试 gateway 只替代外部 LLM；群断言不
+扩展到当前架构明确 fail-closed 的 MLS/E2EE 或 DID-only 群。Runtime Agent prompt 固定走
+`default-plain` Direct；普通恢复用例显式关闭人与人 Direct E2EE 以验证 transport 连续性，
+registration rejoin/P5 用例则显式开启 Direct E2EE。
 
 同一 suite 的 `HANDLE-RECOVERY-V1-E2E-003` 在 Recovery 前用第二套独立 App root 建立旧 member。
 Recovery 完成后先要求该旧 principal 的远端消息操作被拒绝，并要求旧 App 自动清除会话、

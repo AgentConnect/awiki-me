@@ -8,7 +8,7 @@
    - 不直接拼 message-service wire、读 raw SQLite、写 reliable checkpoint 或持有 DID/E2EE 私钥。
    - `ProductLocalStore` 只保存 App overlay，不建立第二套 durable message truth。
    - tenant 切换必须先释放旧 runtime，并按不可变 Storage Scope 隔离 identity、conversation、cache 与 vault。
-   - 首页只保留统一登录/注册；已验证 Handle 存在时才显示 Join/Recovery 选择。Join grant 只能留在 adapter 内存并由 opaque continuation 单次消费；Recovery 必须丢弃该 grant、发送 purpose 隔离的专用 OTP、省略 selector，并由 Core 按输入 Handle 匹配或新增身份，不能把当前身份、`credentialName`/alias 当作目标猜测。远端 Commit 后的 JWT/PreKey 本地收尾失败必须按 Core 的 `local_transition_pending` 保留同一 operation 精确续跑，不得改写为未准备或重新开始。
+   - 首页只保留统一登录/注册；已验证 Handle 存在时才显示 Join/Recovery 选择。Join grant 只能留在 adapter 内存并由 opaque continuation 单次消费；fresh onboarding Recovery 必须丢弃该 grant、发送 purpose 隔离的专用 OTP、省略 selector，并由 Core 按输入 Handle 匹配或新增身份，不能把当前身份、`credentialName`/alias 当作目标猜测。设置内已登录 Recovery 则必须携带当前 exact `localIdentityId`，且成功前不得退出或删除 owner 数据，以保留 Direct/Group/Agent 连续性。远端 Commit 后的 JWT/PreKey 本地收尾失败必须按 Core 的 `local_transition_pending` 保留同一 operation 精确续跑，不得改写为未准备或重新开始。
    - 设备管理等高风险操作通过 `UserPresencePort` 调用系统认证，设备不支持、用户取消或平台认证失败时必须 fail closed。
    - `system_notification_changed` 仅作为设备域因果失效信号：App 必须独立读取 Core typed Join inbox 并展示全局审批入口，不能等待通用 message sync 成功，也不能从 realtime payload 直接构造请求、自动验证/拒绝/批准。
    - Core reliable sync 必须把 v2 `system.notification` marker 作为 exact-device durable inbox hydration 门禁，在提交该页 cursor 前完成 typed notification 投影；因此 realtime hint 丢失时，前台 catch-up 仍能恢复 Join 请求。
@@ -17,6 +17,7 @@
    - Core diagnostics 中带 `pending` / `scheduled` 的本地 mutation outbox 由 App 消息同步协调器按 Core `nextRetryAt` 串行重试；这属于 application scheduling，不改变 Core 对 outbox、游标和重试状态的事实源所有权。
    - 消息同步的认证拒绝（HTTP 401/403、耗尽重试后的 `1401` 和设备资格 fence）是终止性 `authRevoked`；realtime 进入 reconnecting/disconnected/failed 时必须立即触发 Reliable Sync 认证探测，确认撤权后先隔离会话与投影、返回统一登录页，再显示一次可确认的失效提示，不能停留在“消息连接中断”。普通可重试失败在连续 3 次后才开始提示，并仍按连续失败时长升级为红色提示。Core commit 后的 Join inbox/会话列表投影刷新异常必须单独标记，不能反向改写为“同步失败”。App 安全诊断只记录 stage/category/稳定 code/HTTP status/count/time，不包含异常正文、身份、cursor、token 或 payload。
    - 无业务消息体但携带 Core `sync` hint 的 realtime 事件必须保留为 sync-only `RealtimeUpdate` 并调度 reliable sync；普通 P3 Direct 的兄弟设备 outgoing 投影来自 sender owner 的 `sync.delta` / `sync.thread_after`，不能由 App 构造 plain own-sync 或升级为 P5。App 使用的稳定 conversationId 只是展示/存储路由，普通 Direct 的不可变 wire identity 仍由 Core 保持为 `direct + peer DID`。
+   - AWiki Me 默认创建普通群并以 `default-plain` 发送普通 Direct；P5/P6 capability gate 保持可用，但在产品提供显式用户选择前不得把“能力可用”解释为“默认使用 E2EE”。Runtime Agent prompt 同样固定走 `default-plain`。
    - Agent 页面以 User Service Inventory 为存在性基线，以 IM Core committed control patch 为运行状态/因果失效信号，以 App pending intent 为短期交互层；realtime control 只触发 reliable sync，不能直接成为 Agent UI 真相。typed account binding 存在时，Agent provider 的 cache/load owner 必须是稳定 `owner_identity_id + account_id`，应用权威 Inventory 后标记同一 owner 与当前 session operation 已加载，不能因 Handle/DID key 不一致阻塞 create pending 首帧。权威 Inventory 中的 runtime Agent 在发布到 UI 前通过 Core Directory 投影 canonical Direct route，失败不伪造 Persona，并由后续 Inventory 对账重试。可见 Agent 页面在 App 前台按 30 秒静默重读 Inventory，以补偿失效信号丢失，页面销毁或 App 后台时不发起对账。
    - Agent/Daemon 能力按 App 内置 realm 白名单 fail-closed；仅当 HTTPS backend host 与 DID Host 相同且命中 `awiki.ai`、`agent-connect.cn`、`awiki.info`、`anpclaw.com` 时启用。Skill onboarding 还必须由当前同源 User Service 的 `server-info` 显式声明受支持 V1 和固定 `/cli/onboarding.md`，不能另建域名名单或仅按 realm 猜测发布状态。
    - Daemon 安装命令只签发自动命名意图，不在 App 或 token metadata 中预先写死 `Daemon N`；最终默认名由 User Service 在实际 exchange 的账号级事务内分配，未执行命令不得占号。
@@ -50,10 +51,10 @@
 - [docs/test-quality.md](docs/test-quality.md)：line/branch baseline、mutation proof 与大文件治理入口。
 - [docs/conversation-presentation-ownership.md](docs/conversation-presentation-ownership.md)：conversation-first 显示与 overlay 边界。
 - [docs/identity-secret-storage.md](docs/identity-secret-storage.md)：App root key provider 与 SecretVault 边界。
-- [docs/multi-device-join-ui.md](docs/multi-device-join-ui.md)：默认开启的设备列表、SMS Join、永久撤销与 Direct E2EE 产品能力，以及双端 6 位 SAS、角色选择与 App/Core 秘密边界。
+- [docs/multi-device-join-ui.md](docs/multi-device-join-ui.md)：默认开启的设备列表、SMS Join、永久撤销与可显式使用的 Direct E2EE 能力，以及默认普通消息策略和 App/Core 秘密边界。
 - [docs/multi-device-app-pair-e2e.md](docs/multi-device-app-pair-e2e.md)：单机双隔离 App 的构建、驱动、协调与秘密边界。
 - [docs/root-key-transfer-ui.md](docs/root-key-transfer-ui.md)：默认关闭的管理设备根导入、user-presence、management-ready 投影与控制消息过滤边界。
-- [docs/group-encryption-ui.md](docs/group-encryption-ui.md)：默认开启的本设备群加密准备/重试/就绪投影、显式回滚与 P6 v2 Core 启用门禁。
+- [docs/group-encryption-ui.md](docs/group-encryption-ui.md)：默认普通建群、保留的群加密准备/重试/就绪能力与 P6 v2 Core 启用门禁。
 - [docs/handle-recovery-ui.md](docs/handle-recovery-ui.md)：基线 Manifest Handle Recovery V1、租户能力协商、operation-bound OTP、风险确认、post-commit 同 operation 精确续跑、Core-owned activate/resume 与 DID replacement 边界。
 - [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md)：首发 UUID Storage Scope、稳定 Keychain locator 与 lifecycle 权威契约。
 - [docs/scope-secret-platform.md](docs/scope-secret-platform.md)：typed envelope、平台 provider、channel 隔离与 native/E2E gate。
@@ -78,7 +79,7 @@ dart run tests/e2e/runner.dart --case multi-device-remote-recovery --config <loc
 dart run tests/e2e/runner.dart --case multi-device-app-pair-recovery-registration-rejoin-management-transfer --config <explicit-awiki-info-config.yaml>
 ```
 
-`multi-device` 当前只证明生产 provider 树可挂载本地 Join surface 且产品多设备能力默认开启，不代表远端 Join/SAS/Root/Recovery
+`multi-device` 当前只证明生产 provider 树可挂载本地 Join surface、E2EE capability 可用且普通消息策略默认不使用 E2EE，不代表远端 Join/SAS/Root/Recovery
 通过。`multi-device-remote-join` 是另一个显式激活、fail-closed 的双向真实 Join suite：
 覆盖 App 新设备 + CLI 管理设备、App 管理设备 + CLI 新设备；根导入、永久 revoke 与 MLS
 由各自独立 suite 承担，不属于 Join suite 的通过结论。两个方向均使用独立 native Core root、

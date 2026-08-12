@@ -3,6 +3,12 @@ import 'models/product_local_models.dart';
 abstract interface class ProductLocalStore {
   Future<void> warmUp();
 
+  /// Deletes App-owned data for one stable local identity only.
+  Future<void> deleteOwnerData({
+    required String ownerIdentityId,
+    required String currentDid,
+  });
+
   Future<ProductConversationOverlay?> loadConversationOverlay({
     required String ownerDid,
     required String threadId,

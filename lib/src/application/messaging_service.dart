@@ -33,7 +33,7 @@ abstract interface class MessagingService {
   Future<ChatMessage> sendPayload({
     required AppThreadRef thread,
     required Map<String, Object?> payload,
-    bool secure = true,
+    bool secure = false,
     String? idempotencyKey,
   });
 
@@ -76,6 +76,16 @@ abstract interface class MessagingService {
   });
 
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed);
+}
+
+/// Explicit default-plain Direct text capability for Runtime Agent chats.
+abstract interface class PlainDirectMessagingService {
+  Future<ChatMessage> sendPlainConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  });
 }
 
 abstract interface class AttachmentDownloadCancellationService {
@@ -133,6 +143,7 @@ abstract interface class MessageSyncDiagnosticsService {
 class ImCoreMessagingService
     implements
         MessagingService,
+        PlainDirectMessagingService,
         AttachmentDownloadCancellationService,
         LocalHistoryMessagingService,
         ThreadPatchMessagingService,
@@ -202,7 +213,7 @@ class ImCoreMessagingService
   Future<ChatMessage> sendPayload({
     required AppThreadRef thread,
     required Map<String, Object?> payload,
-    bool secure = true,
+    bool secure = false,
     String? idempotencyKey,
   }) {
     return _messages.sendPayload(
@@ -241,6 +252,28 @@ class ImCoreMessagingService
       clientMessageId: clientMessageId,
       idempotencyKey: idempotencyKey,
     );
+  }
+
+  @override
+  Future<ChatMessage> sendPlainConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    final messages = _messages;
+    if (messages is! PlainDirectTextMessageCorePort) {
+      throw UnsupportedError(
+        'Message core does not expose default-plain Direct text sends.',
+      );
+    }
+    return (messages as PlainDirectTextMessageCorePort)
+        .sendPlainConversationText(
+          conversation: conversation,
+          content: content,
+          clientMessageId: clientMessageId,
+          idempotencyKey: idempotencyKey,
+        );
   }
 
   @override

@@ -121,6 +121,68 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
     if (database != null) await database.close();
   }
 
+  @override
+  Future<void> deleteOwnerData({
+    required String ownerIdentityId,
+    required String currentDid,
+  }) async {
+    final normalizedOwner = ownerIdentityId.trim();
+    final normalizedDid = currentDid.trim();
+    if (normalizedOwner.isEmpty || normalizedDid.isEmpty) {
+      throw ArgumentError('ownerIdentityId and currentDid must not be empty');
+    }
+    await (await _db).transaction((transaction) async {
+      final ownerDids = <String>{normalizedDid};
+      final receiptRows = await transaction.query(
+        'account_device_registry_epoch_reset_receipt',
+        columns: const <String>['previous_did', 'current_did'],
+        where: 'owner_identity_id = ?',
+        whereArgs: <Object?>[normalizedOwner],
+      );
+      for (final row in receiptRows) {
+        for (final column in const <String>['previous_did', 'current_did']) {
+          final did = row[column]?.toString().trim();
+          if (did != null && did.isNotEmpty) ownerDids.add(did);
+        }
+      }
+
+      final tables = await transaction.rawQuery(
+        "SELECT name FROM sqlite_master "
+        "WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+      );
+      for (final row in tables) {
+        final table = row['name']?.toString();
+        if (table == null || table.isEmpty) continue;
+        final columns = await transaction.rawQuery(
+          'PRAGMA table_info(${_quoteSqliteIdentifier(table)})',
+        );
+        final names = columns
+            .map((column) => column['name']?.toString())
+            .whereType<String>()
+            .toSet();
+        if (names.contains('owner_identity_id')) {
+          await transaction.rawDelete(
+            'DELETE FROM ${_quoteSqliteIdentifier(table)} '
+            'WHERE owner_identity_id = ?',
+            <Object?>[normalizedOwner],
+          );
+        } else if (names.contains('owner_did')) {
+          for (final did in ownerDids) {
+            await transaction.rawDelete(
+              'DELETE FROM ${_quoteSqliteIdentifier(table)} WHERE owner_did = ?',
+              <Object?>[did],
+            );
+          }
+        }
+      }
+      await transaction.delete(
+        'handle_recovery_locator',
+        where: 'local_identity_id = ?',
+        whereArgs: <Object?>[normalizedOwner],
+      );
+    });
+  }
+
   /// Atomically rewrites App-owned conversation overlays and drafts using the
   /// Core-owned alias projection. A verified SQLite snapshot is created before
   /// the first mutation; each mapping is journaled in the same transaction as
@@ -1971,6 +2033,9 @@ DateTime _readDate(Object? value) {
   return DateTime.tryParse(value?.toString() ?? '') ??
       DateTime.fromMillisecondsSinceEpoch(0);
 }
+
+String _quoteSqliteIdentifier(String value) =>
+    '"${value.replaceAll('"', '""')}"';
 
 List<ProductConversationAliasMigration> _normalizeAliasMigrations(
   Iterable<ProductConversationAliasMigration> mappings,

@@ -32,7 +32,7 @@ abstract interface class MessageCorePort {
   Future<ChatMessage> sendPayload({
     required AppThreadRef thread,
     required Map<String, Object?> payload,
-    bool secure = true,
+    bool secure = false,
     String? idempotencyKey,
   });
 
@@ -67,6 +67,19 @@ abstract interface class MessageCorePort {
   });
 
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed);
+}
+
+/// Explicit default-plain Direct text path for Runtime Agent conversations.
+///
+/// Runtime Agents consume ordinary Direct text and do not participate in the
+/// human Direct E2EE session selected by [MessageCorePort.sendConversationText].
+abstract interface class PlainDirectTextMessageCorePort {
+  Future<ChatMessage> sendPlainConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  });
 }
 
 /// Optional local-file transfer control kept separate from message operations.

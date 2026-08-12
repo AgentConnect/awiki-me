@@ -150,9 +150,10 @@ class GroupController extends StateNotifier<GroupState> {
     final generation = ++_groupLoadGeneration;
     state = state.copyWith(isLoading: true, isLoadingMoreGroups: false);
     try {
-      final page = await ref
-          .read(groupApplicationServiceProvider)
-          .listGroups(limit: limit);
+      final groups = ref.read(groupApplicationServiceProvider);
+      final recovery = await groups.resumeRebindRecovery(limit: limit);
+      _requireCurrentOwnerOperation(ownerOperation);
+      final page = await groups.listGroups(limit: limit);
       _validatePageCursor(page);
       if (!_isGroupOwnerOperationCurrent(ownerOperation) ||
           generation != _groupLoadGeneration) {
@@ -169,6 +170,7 @@ class GroupController extends StateNotifier<GroupState> {
         groupsNextCursor: page.nextCursor,
         clearGroupsNextCursor: page.nextCursor == null,
         isLoading: false,
+        recoverySummary: _hasRecoveryWork(recovery) ? recovery : null,
       );
     } catch (_) {
       if (_isGroupOwnerOperationCurrent(ownerOperation) &&
@@ -801,6 +803,14 @@ void _validatePageCursor<T>(
       (page.hasMore && nextCursor == previousCursor)) {
     throw StateError('group_page_cursor_invalid');
   }
+}
+
+bool _hasRecoveryWork(GroupRebindRecoverySummary summary) {
+  return summary.processed > 0 ||
+      summary.completed > 0 ||
+      summary.hasPending ||
+      summary.hasBlocked ||
+      summary.items.isNotEmpty;
 }
 
 final groupProvider = StateNotifierProvider<GroupController, GroupState>(
