@@ -29,6 +29,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
+import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/l10n/l10n.dart';
@@ -1871,6 +1872,27 @@ class _JoinCli {
     final message = _data(payload, action: null)['message'];
     if (message is! Map) {
       fail('The independent CLI send returned no canonical message.');
+    }
+    return _required(_stringMap(message), 'id');
+  }
+
+  Future<String> sendGroupText({
+    required String groupDid,
+    required String text,
+  }) async {
+    final payload = await _run(<String>[
+      '--format',
+      'json',
+      'msg',
+      'send',
+      '--group',
+      groupDid,
+      '--text',
+      text,
+    ]);
+    final message = _data(payload, action: null)['message'];
+    if (message is! Map) {
+      fail('The independent CLI Group send returned no canonical message.');
     }
     return _required(_stringMap(message), 'id');
   }

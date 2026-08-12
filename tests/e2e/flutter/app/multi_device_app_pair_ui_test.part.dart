@@ -733,9 +733,7 @@ Future<void> _requireRetiredIdentityOnboardingChoice({
     failure: 'The retired identity registration OTP was not accepted.',
   );
   await _enterText(tester, 'e2e-otp-input', account.fixedOtp);
-  final macSubmit = find.byKey(
-    const Key('onboarding-mac-phone-submit-action'),
-  );
+  final macSubmit = find.byKey(const Key('onboarding-mac-phone-submit-action'));
   await _tapOne(
     tester,
     macSubmit.evaluate().isNotEmpty
@@ -959,6 +957,7 @@ Future<void> _runAppPairAdminFunctional({
     container: container,
     peer: peer,
     accountDid: adminDid,
+    accountHandle: adminHandle,
     peerDid: peerDid,
     conversationId: canonicalConversationId,
     joinedDeviceId: joinedDeviceId,
@@ -3249,6 +3248,7 @@ Future<void> _runAppPairAdminReadAndRecovery({
   required ProviderContainer container,
   required _JoinCli peer,
   required String accountDid,
+  required String accountHandle,
   required String peerDid,
   required String conversationId,
   required String joinedDeviceId,
@@ -3323,6 +3323,97 @@ Future<void> _runAppPairAdminReadAndRecovery({
     failure: 'Duplicate sync regressed the admin App read watermark.',
   );
   await config.coordinator.publish('admin', 'functional_read_converged');
+
+  final groups = bootstrap.groupApplicationService;
+  if (groups == null) {
+    fail('The admin App did not expose its Group application service.');
+  }
+  final groupOwnerHandle = groupHandleForDid(
+    handle: accountHandle,
+    did: accountDid,
+  );
+  if (groupOwnerHandle == null) {
+    fail('The admin App did not expose a domain-qualified Group Handle.');
+  }
+  final group = await groups.createGroup(
+    name: 'Read sync ${_nonce(8)}',
+    slug: 'read-sync-${_nonce(10)}',
+    description: 'App-pair Group read-state convergence',
+    goal: 'Verify sibling Group unread synchronization',
+    rules: 'E2E only',
+    identity: GroupIdentitySelection.handle(groupOwnerHandle),
+  );
+  await groups.addMember(groupDid: group.groupId, memberRef: peerDid);
+  await config.coordinator.publish(
+    'admin',
+    'functional_group_read_ready',
+    data: <String, Object?>{'conversationId': group.conversationId},
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'functional_group_read_observer_ready',
+    timeout: const Duration(minutes: 2),
+  );
+  final groupReadText = _appPairMessage(config.runId, 'group-read-sync');
+  final groupReadMessageId = await peer.sendGroupText(
+    groupDid: group.groupId,
+    text: groupReadText,
+  );
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: group.conversationId,
+    content: groupReadText,
+    messageId: groupReadMessageId,
+    senderDid: peerDid,
+    receiverDid: accountDid,
+    isMine: false,
+  );
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: group.conversationId,
+    matches: (count) => count > 0,
+    failure: 'The admin App did not project the Group message as unread.',
+  );
+  await _expectAppPairConversationUnreadBadge(
+    tester: tester,
+    conversationId: group.conversationId,
+    unreadCount: 1,
+  );
+  await config.coordinator.publish(
+    'admin',
+    'functional_group_read_message_sent',
+    data: <String, Object?>{'messageId': groupReadMessageId},
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'functional_group_read_committed',
+    timeout: const Duration(minutes: 2),
+  );
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: group.conversationId,
+    matches: (count) => count == 0,
+    failure: 'The admin App did not converge the sibling Group read watermark.',
+  );
+  await _expectAppPairConversationUnreadBadge(
+    tester: tester,
+    conversationId: group.conversationId,
+    unreadCount: 0,
+  );
+  await container
+      .read(messageSyncCoordinatorProvider.notifier)
+      .requestSync('e2e_group_read_duplicate_pull', immediate: true);
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: group.conversationId,
+    matches: (count) => count == 0,
+    failure: 'Duplicate sync regressed the admin App Group read watermark.',
+  );
+  await config.coordinator.publish('admin', 'functional_group_read_converged');
 
   await _runAppPairAdminHintLossAndReconnect(
     tester: tester,
@@ -3568,6 +3659,68 @@ Future<void> _runAppPairJoinerReadAndRecovery({
     'functional_read_converged',
     timeout: const Duration(minutes: 2),
   );
+  final groupRead = await config.coordinator.waitFor(
+    'admin',
+    'functional_group_read_ready',
+    timeout: const Duration(minutes: 2),
+  );
+  final groupConversationId = _required(groupRead, 'conversationId');
+  await config.coordinator.publish(
+    'joiner',
+    'functional_group_read_observer_ready',
+  );
+  final groupMessage = await config.coordinator.waitFor(
+    'admin',
+    'functional_group_read_message_sent',
+    timeout: const Duration(minutes: 2),
+  );
+  final groupMessageId = _required(groupMessage, 'messageId');
+  final groupReadText = _appPairMessage(config.runId, 'group-read-sync');
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: groupConversationId,
+    content: groupReadText,
+    messageId: groupMessageId,
+    senderDid: peerDid,
+    receiverDid: accountDid,
+    isMine: false,
+  );
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: groupConversationId,
+    matches: (count) => count > 0,
+    failure: 'The joining App did not project the Group message as unread.',
+  );
+  await _expectAppPairConversationUnreadBadge(
+    tester: tester,
+    conversationId: groupConversationId,
+    unreadCount: 1,
+  );
+  await _openAppPairConversation(
+    tester: tester,
+    conversationId: groupConversationId,
+    content: groupReadText,
+  );
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: groupConversationId,
+    matches: (count) => count == 0,
+    failure: 'The joining App did not commit its visible Group read watermark.',
+  );
+  await _expectAppPairConversationUnreadBadge(
+    tester: tester,
+    conversationId: groupConversationId,
+    unreadCount: 0,
+  );
+  await config.coordinator.publish('joiner', 'functional_group_read_committed');
+  await config.coordinator.waitFor(
+    'admin',
+    'functional_group_read_converged',
+    timeout: const Duration(minutes: 2),
+  );
   await E2eCaseAttestationWriter.markPassed(
     _appPairReadSyncV2CaseId,
     phases: const <String>[
@@ -3575,6 +3728,10 @@ Future<void> _runAppPairJoinerReadAndRecovery({
       'joining_app_visible_read_committed_by_core',
       'admin_app_committed_patch_cleared_unread',
       'duplicate_sync_did_not_regress_read',
+      'group_unread_badge_visible_on_both_apps',
+      'joining_app_group_unread_badge_cleared_after_visible_read',
+      'admin_app_group_unread_badge_cleared_by_committed_patch',
+      'duplicate_sync_did_not_regress_group_read',
     ],
   );
 
@@ -4169,6 +4326,50 @@ Future<void> _openAppPairConversation({
         .isNotEmpty,
     timeout: const Duration(seconds: 60),
     failure: 'The joining App did not render the exact own-sync message.',
+  );
+}
+
+Future<void> _expectAppPairConversationUnreadBadge({
+  required WidgetTester tester,
+  required String conversationId,
+  required int unreadCount,
+}) async {
+  await _tapOne(
+    tester,
+    find.bySemanticsIdentifier('e2e-messages-tab'),
+    failure: 'The App-pair Messages tab was unavailable.',
+  );
+  final row = find.byKey(Key('conversation-row:$conversationId'));
+  await _pumpUntil(
+    tester,
+    () => row.evaluate().length == 1,
+    timeout: const Duration(seconds: 30),
+    failure: 'The App-pair Group conversation row was unavailable.',
+  );
+  final badge = find.descendant(
+    of: row,
+    matching: find.byKey(const Key('conversation-row-unread-badge')),
+  );
+  if (unreadCount == 0) {
+    await _pumpUntil(
+      tester,
+      () => badge.evaluate().isEmpty,
+      timeout: const Duration(seconds: 30),
+      failure: 'The App-pair Group unread badge did not disappear.',
+    );
+    await tester.pump(const Duration(milliseconds: 750));
+    if (badge.evaluate().isNotEmpty) {
+      fail('The App-pair Group unread badge reappeared after clearing.');
+    }
+    return;
+  }
+  final label = unreadCount > 99 ? '99+' : '$unreadCount';
+  final exactLabel = find.descendant(of: badge, matching: find.text(label));
+  await _pumpUntil(
+    tester,
+    () => badge.evaluate().length == 1 && exactLabel.evaluate().length == 1,
+    timeout: const Duration(seconds: 30),
+    failure: 'The App-pair Group unread badge did not show $label.',
   );
 }
 

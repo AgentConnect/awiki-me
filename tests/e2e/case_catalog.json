@@ -3196,17 +3196,19 @@
     },
     {
       "caseId": "DEVICE-MESSAGE-READ-SYNC-E2E-001",
-      "feature": "A read watermark committed on one joined App converges monotonically on its sibling App",
+      "feature": "Direct and Group read watermarks committed on one joined App converge monotonically on its sibling App",
       "layer": "remote_product_ui",
-      "preconditions": "Two independently rooted Apps are authorized for the same account, both have completed sync v2 bootstrap, and an independent CLI peer can send one ordinary Direct message.",
-      "action": "Send one ordinary Direct message from the CLI peer, observe the unread projection on both Apps, open the canonical conversation on the joining App through visible UI, and let normal Core sync/realtime triggers converge the read watermark on the admin App.",
+      "preconditions": "Two independently rooted Apps are authorized for the same account, both have completed sync v2 bootstrap, and an independent CLI peer can send ordinary Direct and Group messages.",
+      "action": "Send one ordinary Direct message and one ordinary Group message from the CLI peer, observe each unread projection on both Apps, open both canonical conversations on the joining App through visible UI, and let normal Core sync/realtime triggers converge both read watermarks on the admin App.",
       "exactOracles": [
-        "Both Apps project the exact incoming ordinary message once and advance the same canonical conversation unread state.",
-        "Opening the joining App conversation commits a Core-owned read watermark without an App-owned checkpoint or direct read-state wire call.",
-        "The admin App accepts the Core committed conversation patch, clears its unread count, and does not regress after reconnect or duplicate sync."
+        "Both Apps project the exact incoming ordinary Direct and Group messages once and advance the respective canonical conversation unread state.",
+        "Opening the joining App Direct conversation commits a Core-owned read watermark without an App-owned checkpoint or direct read-state wire call.",
+        "The admin App accepts the Core committed Direct conversation patch, clears its unread count, and does not regress after reconnect or duplicate sync.",
+        "Opening the joining App Group conversation commits its Core-owned read watermark using the canonical group conversation ID.",
+        "The admin App accepts the Core committed Group conversation patch, clears its unread count, and does not regress after duplicate sync."
       ],
       "negativeChecks": [
-        "A raw App read cursor, direct read-state payload, E2EE or MLS event, lower remote watermark, duplicate message, canonical conversation mismatch, or test-side projection mutation prevents pass attestation."
+        "A raw App read cursor, direct read-state payload, E2EE or MLS event, lower remote watermark, duplicate message, bare Group DID invalidation, canonical conversation mismatch, or test-side projection mutation prevents pass attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
@@ -3223,11 +3225,16 @@
           "DEVICE-MESSAGE-READ-SYNC-E2E-001:ordinary_message_unread_on_both_apps",
           "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_visible_read_committed_by_core",
           "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_committed_patch_cleared_unread",
-          "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_read"
+          "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_read",
+          "DEVICE-MESSAGE-READ-SYNC-E2E-001:group_unread_badge_visible_on_both_apps",
+          "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_group_unread_badge_cleared_after_visible_read",
+          "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_group_unread_badge_cleared_by_committed_patch",
+          "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_group_read"
         ],
         "exactOracleAssertions": [
           [
-            "DEVICE-MESSAGE-READ-SYNC-E2E-001:ordinary_message_unread_on_both_apps"
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:ordinary_message_unread_on_both_apps",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:group_unread_badge_visible_on_both_apps"
           ],
           [
             "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_visible_read_committed_by_core"
@@ -3235,6 +3242,13 @@
           [
             "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_committed_patch_cleared_unread",
             "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_read"
+          ],
+          [
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_group_unread_badge_cleared_after_visible_read"
+          ],
+          [
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_group_unread_badge_cleared_by_committed_patch",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_group_read"
           ]
         ],
         "negativeCheckAssertions": [
@@ -3242,7 +3256,11 @@
             "DEVICE-MESSAGE-READ-SYNC-E2E-001:ordinary_message_unread_on_both_apps",
             "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_visible_read_committed_by_core",
             "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_committed_patch_cleared_unread",
-            "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_read"
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_read",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:group_unread_badge_visible_on_both_apps",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_group_unread_badge_cleared_after_visible_read",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_group_unread_badge_cleared_by_committed_patch",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_group_read"
           ]
         ]
       }
