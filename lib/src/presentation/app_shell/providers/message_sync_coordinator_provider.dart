@@ -714,6 +714,14 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
               disposition: RemotePushSyncDisposition.staleSession,
             );
           }
+          await _reconcileRecentUnreadAgentMessagePresentations(
+            providerPresented: policy.suppressNotificationPresentation,
+          );
+          if (!_isCurrentSync(epoch, sessionFence)) {
+            return const RemotePushSyncReceipt(
+              disposition: RemotePushSyncDisposition.staleSession,
+            );
+          }
         } catch (error) {
           if (!_isCurrentSync(epoch, sessionFence)) {
             return const RemotePushSyncReceipt(
@@ -1253,6 +1261,56 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       } else if (deduplicator.acceptMessageIds(messageIds)) {
         unawaited(_showCommittedMessageNotification(message));
       }
+    }
+  }
+
+  /// Repairs the process-loss window between Core's durable message commit and
+  /// the App receipt claim. The Core-owned conversation timestamp is used as
+  /// the authoritative age input; sender-controlled message time is ignored.
+  ///
+  /// The scan is deliberately bounded and limited to recent unread last
+  /// messages. Every candidate still passes through the same durable claim,
+  /// trust, mute, opt-in, permission, age, and rate-limit policy as a live
+  /// committed message.
+  Future<void> _reconcileRecentUnreadAgentMessagePresentations({
+    required bool providerPresented,
+  }) async {
+    final now = ref.read(agentMessagePresentationClockProvider)().toUtc();
+    final conversations = ref
+        .read(conversationListProvider)
+        .conversations
+        .take(32);
+    for (final conversation in conversations) {
+      final message = conversation.lastMessageSnapshot;
+      final projection = message?.agentMessage;
+      if (conversation.unreadCount <= 0 ||
+          message == null ||
+          message.isMine ||
+          projection is! ValidAgentMessageProjection ||
+          message.conversationId != conversation.conversationId) {
+        continue;
+      }
+      final authoritativeReceivedAt = conversation.lastMessageAt.toUtc();
+      final age = now.difference(authoritativeReceivedAt);
+      if (age.isNegative || age > const Duration(minutes: 15)) {
+        continue;
+      }
+      final logicalMessageId = message.remoteId?.trim().isNotEmpty == true
+          ? message.remoteId!.trim()
+          : message.localId.trim();
+      if (logicalMessageId.isEmpty) {
+        continue;
+      }
+      await _dispatchStructuredAgentMessage(
+        committed: CommittedIncomingMessage(
+          eventId: 'reconciled:$logicalMessageId',
+          logicalMessageId: logicalMessageId,
+          message: message,
+          authoritativeReceivedAt: authoritativeReceivedAt,
+        ),
+        message: projection.message,
+        providerPresented: providerPresented,
+      );
     }
   }
 
