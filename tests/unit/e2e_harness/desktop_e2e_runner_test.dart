@@ -162,6 +162,55 @@ void main() {
     });
 
     test(
+      'temporarily links Linux native-assets to the isolated build',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_flutter_linux_native_assets_',
+        );
+        addTearDown(() => root.deleteSync(recursive: true));
+        final isolation = DesktopFlutterBuildIsolation(
+          root: root,
+          platform: DesktopE2ePlatform.linux,
+          userHome: root.path,
+        );
+
+        final link = isolation.prepareLinuxNativeAssetsCompatibility(
+          dryRun: false,
+        );
+
+        expect(link, isNotNull);
+        expect(
+          link!.targetSync(),
+          '${root.path}/.e2e/flutter-build/linux/linux',
+        );
+        isolation.removeLinuxNativeAssetsCompatibility(link);
+        expect(
+          FileSystemEntity.typeSync(link.path, followLinks: false),
+          FileSystemEntityType.notFound,
+        );
+      },
+    );
+
+    test('never replaces an existing default Linux build directory', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_flutter_linux_native_assets_existing_',
+      );
+      addTearDown(() => root.deleteSync(recursive: true));
+      Directory('${root.path}/build/linux').createSync(recursive: true);
+      final isolation = DesktopFlutterBuildIsolation(
+        root: root,
+        platform: DesktopE2ePlatform.linux,
+        userHome: root.path,
+      );
+
+      expect(
+        () => isolation.prepareLinuxNativeAssetsCompatibility(dryRun: false),
+        throwsA(isA<E2eFailure>()),
+      );
+      expect(Directory('${root.path}/build/linux').existsSync(), isTrue);
+    });
+
+    test(
       'fails closed when legacy Flutter settings bypass XDG isolation',
       () async {
         final root = await Directory.systemTemp.createTemp(

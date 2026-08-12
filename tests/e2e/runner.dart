@@ -2234,21 +2234,31 @@ class DesktopE2eRunner {
           'AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED': '1',
         },
       };
-      if (platform == DesktopE2ePlatform.linux) {
+      final linuxNativeAssetsLink = flutterBuildIsolation
+          .prepareLinuxNativeAssetsCompatibility(
+            dryRun: options.dryRun || commands.dryRun,
+          );
+      try {
+        if (platform == DesktopE2ePlatform.linux) {
+          await commands.run(
+            'xvfb-run',
+            <String>['-a', 'flutter', ...flutterArgs],
+            timeout: timeout,
+            environment: environment,
+          );
+          return;
+        }
         await commands.run(
-          'xvfb-run',
-          <String>['-a', 'flutter', ...flutterArgs],
+          'flutter',
+          flutterArgs,
           timeout: timeout,
           environment: environment,
         );
-        return;
+      } finally {
+        flutterBuildIsolation.removeLinuxNativeAssetsCompatibility(
+          linuxNativeAssetsLink,
+        );
       }
-      await commands.run(
-        'flutter',
-        flutterArgs,
-        timeout: timeout,
-        environment: environment,
-      );
     });
   }
 
@@ -4074,6 +4084,43 @@ class DesktopFlutterBuildIsolation {
   Map<String, String> get environment => <String, String>{
     'XDG_CONFIG_HOME': configDirectory.path,
   };
+
+  Link? prepareLinuxNativeAssetsCompatibility({required bool dryRun}) {
+    if (dryRun || platform != DesktopE2ePlatform.linux) {
+      return null;
+    }
+    final target = Directory('${root.path}/$buildDirectory/linux')
+      ..createSync(recursive: true);
+    final link = Link('${root.path}/build/linux');
+    final type = FileSystemEntity.typeSync(link.path, followLinks: false);
+    if (type != FileSystemEntityType.notFound) {
+      if (type != FileSystemEntityType.link ||
+          link.targetSync() != target.absolute.path) {
+        throw E2eFailure(
+          'Flutter E2E native-assets compatibility refuses to replace '
+          '${link.path}.',
+        );
+      }
+      return link;
+    }
+    link.parent.createSync(recursive: true);
+    link.createSync(target.absolute.path);
+    return link;
+  }
+
+  void removeLinuxNativeAssetsCompatibility(Link? link) {
+    if (link == null ||
+        FileSystemEntity.typeSync(link.path, followLinks: false) !=
+            FileSystemEntityType.link) {
+      return;
+    }
+    final expected = Directory(
+      '${root.path}/$buildDirectory/linux',
+    ).absolute.path;
+    if (link.targetSync() == expected) {
+      link.deleteSync();
+    }
+  }
 
   void prepare({required bool dryRun}) {
     if (dryRun) {
