@@ -485,10 +485,16 @@ class MainActivity : FlutterFragmentActivity() {
 
     private fun resetLocalSecureStorage() {
         val preferenceNames = listOf(
+            "awiki_me_app_state_v1",
+            "awiki_me_scope_secrets_v1",
             "awiki_me_scope_secrets",
             "FlutterSecureStorage",
             "FlutterSecureKeyStorage",
+            "FlutterSecureKeyStorage:awiki_me_app_state_v1",
+            "FlutterSecureKeyStorage:awiki_me_scope_secrets_v1",
             "FlutterSecureStorageConfiguration",
+            "FlutterSecureStorageConfiguration:awiki_me_app_state_v1",
+            "FlutterSecureStorageConfiguration:awiki_me_scope_secrets_v1",
             "FlutterSecureStorageConfiguration:awiki_me_scope_secrets",
             "FlutterSecureStorageConfiguration:FlutterSecureStorage",
         )
