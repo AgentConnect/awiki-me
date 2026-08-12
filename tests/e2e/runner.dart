@@ -763,6 +763,7 @@ class DesktopE2eRunner {
         const <String>['--format', 'json', 'version'],
       );
       if (!options.dryRun && !commands.dryRun) {
+        cliBuildVersionFromVersionJson(version.output);
         final binaryCommit = cliBuildCommitFromVersionJson(version.output);
         if (binaryCommit != joinConfig.cliSourceRef.toLowerCase()) {
           throw E2eFailure(
@@ -1094,6 +1095,7 @@ class DesktopE2eRunner {
           'version',
         ]);
         if (!options.dryRun && !commands.dryRun) {
+          cliBuildVersionFromVersionJson(version.output);
           final binaryCommit = cliBuildCommitFromVersionJson(version.output);
           if (binaryCommit != pairConfig.cliSourceRef) {
             throw E2eFailure(
@@ -1904,6 +1906,7 @@ class DesktopE2eRunner {
       );
     }
     final version = await _cli(const <String>['--format', 'json', 'version']);
+    cliBuildVersionFromVersionJson(version.output);
     final binaryCommit = cliBuildCommitFromVersionJson(version.output);
     if (binaryCommit != peerConfig.cliSourceRef.toLowerCase()) {
       throw E2eFailure(
@@ -3285,6 +3288,38 @@ String cliBuildCommitFromVersionJson(String output) {
     );
   }
   return commit.trim().toLowerCase();
+}
+
+String cliBuildVersionFromVersionJson(String output) {
+  Object? decoded;
+  try {
+    decoded = jsonDecode(output);
+  } on Object {
+    throw E2eFailure('CLI version preflight returned invalid JSON.');
+  }
+  final data = decoded is Map ? decoded['data'] : null;
+  final version = data is Map ? data['version'] : null;
+  if (version is! String || !_isCanonicalNumericVersion(version)) {
+    throw E2eFailure(
+      'CLI version preflight did not report a Core-compatible numeric version.',
+    );
+  }
+  return version;
+}
+
+bool _isCanonicalNumericVersion(String version) {
+  final components = version.split('.');
+  if (components.isEmpty || components.length > 4) return false;
+  return components.every(
+    (component) =>
+        component == '0' ||
+        (component.isNotEmpty &&
+            component.codeUnitAt(0) >= 0x31 &&
+            component.codeUnitAt(0) <= 0x39 &&
+            component.codeUnits
+                .skip(1)
+                .every((unit) => unit >= 0x30 && unit <= 0x39)),
+  );
 }
 
 String _basename(String path) {

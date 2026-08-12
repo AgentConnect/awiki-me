@@ -597,10 +597,12 @@ Required configuration values:
 - `cliPeer.sourceRef`: exact non-zero 40-character commit SHA embedded in the
   selected CLI binary. It does not attest the App's SDK artifact revision.
 
-Before identity or message assertions, the runner executes `awiki-cli version`
-and requires `data.commit` to equal `cliPeer.sourceRef`. `unknown`, all-zero,
-malformed, or mismatched build metadata is a failed provenance preflight rather
-than auditable product evidence.
+Before identity or message assertions, the runner executes `awiki-cli version`,
+requires `data.commit` to equal `cliPeer.sourceRef`, and requires `data.version`
+to use the Core-compatible one-to-four-component numeric form such as
+`1.0.46`. Debug labels such as `e2e-debug`, prerelease suffixes, `unknown`,
+all-zero or malformed commits, and mismatched build metadata fail during
+preflight rather than later as an unactionable CLI initialization error.
 
 Direct-message coverage also requires the App to project a successful send
 result into the selected canonical timeline immediately. Realtime pending/final

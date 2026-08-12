@@ -1653,6 +1653,9 @@ void main() {
   });
 
   testWidgets('macOS 聊天头像打开统一用户信息页', (tester) async {
+    final profiledConversation = conversation.copyWith(
+      peerPersonaId: 'persona:marcus',
+    );
     const peerProfile = UserProfile(
       did: 'did:peer',
       nickName: 'Marcus Chen',
@@ -1662,7 +1665,7 @@ void main() {
       handle: 'marcus',
     );
     final gateway = FakeAwikiGateway()
-      ..conversations = <ConversationSummary>[conversation]
+      ..conversations = <ConversationSummary>[profiledConversation]
       ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history}
       ..publicProfilesByQuery = <String, UserProfile>{'did:peer': peerProfile};
     addTearDown(() {
@@ -1676,6 +1679,11 @@ void main() {
       buildLocalizedTestApp(
         home: const ConversationWorkspacePage(),
         gateway: gateway,
+        session: const SessionIdentity(
+          did: 'did:test:profile-owner',
+          credentialName: 'profile-owner',
+          displayName: 'Profile Owner',
+        ),
         homepageMarkdownLoader: (_) async => null,
         providerOverrides: <Override>[
           conversationListProvider.overrideWith(
@@ -1707,10 +1715,35 @@ void main() {
     expect(find.text('@marcus'), findsNothing);
     expect(find.byKey(const Key('peer-profile-did-value')), findsOneWidget);
     expect(find.text('关注'), findsOneWidget);
+    final queriesAfterFirstOpen = gateway.loadPublicProfileQueries.length;
+    expect(queriesAfterFirstOpen, greaterThanOrEqualTo(1));
+    expect(gateway.loadPublicProfileQueries.last, 'did:peer');
 
     await tester.tap(find.byKey(const Key('peer-profile-back-button')));
     await tester.pumpAndSettle();
     expect(find.text('用户信息'), findsNothing);
+
+    gateway.publicProfilesByQuery['did:peer'] = const UserProfile(
+      did: 'did:peer',
+      nickName: 'Marcus Updated',
+      bio: '融资协作 Agent',
+      tags: <String>['Agent'],
+      profileMarkdown: '# Marcus\n\n负责融资协作。',
+      handle: 'marcus',
+    );
+
+    await tester.tap(find.text('Marcus Chen').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PeerProfilePage), findsOneWidget);
+    expect(find.text('Marcus Updated'), findsWidgets);
+    expect(gateway.loadPublicProfileQueries.length, queriesAfterFirstOpen + 1);
+    expect(gateway.loadPublicProfileQueries.last, 'did:peer');
+
+    await tester.tap(find.byKey(const Key('peer-profile-back-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Marcus Updated'), findsWidgets);
+    expect(find.text('Marcus Chen'), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -4247,6 +4280,7 @@ void main() {
       find.byKey(const Key('desktop-current-identity-dialog')),
       findsOneWidget,
     );
+    expect(find.byKey(const Key('profile-settings-row')), findsNothing);
     expect(find.byKey(const Key('profile-sidebar-summary')), findsNothing);
     expect(find.byKey(const Key('mac-conversation-list-pane')), findsOneWidget);
 
@@ -4490,14 +4524,9 @@ void main() {
     expect(deleteAction, findsNothing);
     expect(find.text('删除会话'), findsOneWidget);
     expect(find.text('从最近列表移除该会话'), findsOneWidget);
-    expect(find.text('同时清空历史消息'), findsOneWidget);
-    expect(find.text('单会话历史清理待 Core 支持'), findsOneWidget);
-    expect(
-      tester
-          .widget<CupertinoCheckbox>(find.byType(CupertinoCheckbox))
-          .onChanged,
-      isNull,
-    );
+    expect(find.text('同时清空历史消息'), findsNothing);
+    expect(find.text('单会话历史清理待 Core 支持'), findsNothing);
+    expect(find.byType(CupertinoCheckbox), findsNothing);
     expect(controller.deletedConversation, isNull);
 
     await tester.tap(find.descendant(of: dialog, matching: find.text('删除')));

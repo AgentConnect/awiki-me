@@ -265,7 +265,7 @@ class AgentsState {
     this.invocationPolicyErrors = const <String, String>{},
     this.statusQueryErrors = const <String, String>{},
     this.debugLastError,
-    this.daemonUpgradeErrors = const <String, String>{},
+    this.daemonUpgradeErrors = const <String, DaemonUpgradeFailureView>{},
     this.daemonUpgradeProgress = const <String, DaemonUpgradeProgress>{},
     this.pendingRuntimeCreations = const <PendingRuntimeCreation>[],
     this.pendingDeletionAgentDids = const <String>{},
@@ -288,7 +288,7 @@ class AgentsState {
   final Map<String, String> invocationPolicyErrors;
   final Map<String, String> statusQueryErrors;
   final String? debugLastError;
-  final Map<String, String> daemonUpgradeErrors;
+  final Map<String, DaemonUpgradeFailureView> daemonUpgradeErrors;
   final Map<String, DaemonUpgradeProgress> daemonUpgradeProgress;
   final List<PendingRuntimeCreation> pendingRuntimeCreations;
   final Set<String> pendingDeletionAgentDids;
@@ -414,7 +414,7 @@ class AgentsState {
     Map<String, String>? invocationPolicyErrors,
     Map<String, String>? statusQueryErrors,
     String? debugLastError,
-    Map<String, String>? daemonUpgradeErrors,
+    Map<String, DaemonUpgradeFailureView>? daemonUpgradeErrors,
     Map<String, DaemonUpgradeProgress>? daemonUpgradeProgress,
     List<PendingRuntimeCreation>? pendingRuntimeCreations,
     Set<String>? pendingDeletionAgentDids,
@@ -1596,9 +1596,11 @@ class AgentsController extends StateNotifier<AgentsState> {
           state.daemonUpgradeProgress,
           daemonDid,
         ),
-        daemonUpgradeErrors: <String, String>{
+        daemonUpgradeErrors: <String, DaemonUpgradeFailureView>{
           ...state.daemonUpgradeErrors,
-          daemonDid: _agentErrorMessage(error),
+          daemonDid: DaemonUpgradeFailureView(
+            messageCode: _agentErrorMessage(error),
+          ),
         },
         error: _agentErrorMessage(error),
       );
@@ -1665,9 +1667,11 @@ class AgentsController extends StateNotifier<AgentsState> {
           state.cancellingDaemonUpgrades,
           daemonDid,
         ),
-        daemonUpgradeErrors: <String, String>{
+        daemonUpgradeErrors: <String, DaemonUpgradeFailureView>{
           ...state.daemonUpgradeErrors,
-          daemonDid: _agentErrorMessage(error),
+          daemonDid: DaemonUpgradeFailureView(
+            messageCode: _agentErrorMessage(error),
+          ),
         },
         error: _agentErrorMessage(error),
       );
@@ -3233,9 +3237,11 @@ class AgentsController extends StateNotifier<AgentsState> {
         state.cancellingDaemonUpgrades,
         daemonDid,
       ),
-      daemonUpgradeErrors: <String, String>{
+      daemonUpgradeErrors: <String, DaemonUpgradeFailureView>{
         ...state.daemonUpgradeErrors,
-        daemonDid: AgentUiMessageCodes.upgradeCancelNoResponse,
+        daemonDid: const DaemonUpgradeFailureView(
+          messageCode: AgentUiMessageCodes.upgradeCancelNoResponse,
+        ),
       },
     );
   }
@@ -3398,7 +3404,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     return state.cancellingDaemonUpgrades;
   }
 
-  Map<String, String> _daemonUpgradeErrorsAfterPayload(
+  Map<String, DaemonUpgradeFailureView> _daemonUpgradeErrorsAfterPayload(
     Map<String, Object?> payload,
     String? daemonDid,
   ) {
@@ -3418,9 +3424,15 @@ class AgentsController extends StateNotifier<AgentsState> {
       if (payloadState == 'failed' ||
           resultStatus == 'not_cancellable' ||
           result['error_code'] != null) {
-        return <String, String>{
+        return <String, DaemonUpgradeFailureView>{
           ...state.daemonUpgradeErrors,
-          daemonDid: _daemonUpgradeCancelFailureMessage(result),
+          daemonDid: DaemonUpgradeFailureView(
+            messageCode: _daemonUpgradeCancelFailureMessage(result),
+            errorCode: _string(result['error_code']),
+            diagnosticSummary:
+                _string(result['diagnostic_summary']) ??
+                _string(result['last_error_summary']),
+          ),
         };
       }
       return state.daemonUpgradeErrors;
@@ -3453,9 +3465,9 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (!failed) {
       return state.daemonUpgradeErrors;
     }
-    return <String, String>{
+    return <String, DaemonUpgradeFailureView>{
       ...state.daemonUpgradeErrors,
-      daemonDid: _daemonUpgradeFailureMessage(result),
+      daemonDid: DaemonUpgradeFailureView.fromResult(result),
     };
   }
 
@@ -4165,7 +4177,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     return retained;
   }
 
-  Map<String, String> _daemonUpgradeErrorsAfterAgents(
+  Map<String, DaemonUpgradeFailureView> _daemonUpgradeErrorsAfterAgents(
     List<AgentSummary> agents,
   ) {
     if (state.daemonUpgradeErrors.isEmpty &&
@@ -4180,11 +4192,13 @@ class AgentsController extends StateNotifier<AgentsState> {
       }
       if (state.pendingDaemonUpgrades.containsKey(daemon.agentDid) &&
           _daemonAgentShowsUpgradeFailed(daemon)) {
-        next = <String, String>{
+        next = <String, DaemonUpgradeFailureView>{
           ...next,
-          daemon.agentDid: _daemonUpgradeFailureMessage(<String, Object?>{
-            'last_error_summary': daemon.latest.lastErrorSummary,
-          }),
+          daemon.agentDid:
+              DaemonUpgradeFailureView.fromResult(<String, Object?>{
+                'error_code': daemon.latest.lastErrorCode,
+                'last_error_summary': daemon.latest.lastErrorSummary,
+              }),
         };
       }
     }
@@ -4566,24 +4580,6 @@ bool _isFinalDaemonUpgradeSuccess(
       resultStatus == 'succeeded';
 }
 
-String _daemonUpgradeFailureMessage(Map<String, Object?> result) {
-  final summary = _string(result['last_error_summary']);
-  if (summary == null) {
-    return AgentUiMessageCodes.upgradeIncomplete;
-  }
-  final normalized = summary.toLowerCase();
-  final looksLikeDownload =
-      normalized.contains('download daemon package') ||
-      normalized.contains('timed out') ||
-      normalized.contains('timeout') ||
-      normalized.contains('network') ||
-      normalized.contains('connection');
-  if (!looksLikeDownload) {
-    return summary;
-  }
-  return AgentUiMessageCodes.upgradeDownloadFailed(summary);
-}
-
 bool _daemonStatusShowsUpgradeResolved(Map<String, Object?> payload) {
   final daemon = _readMap(payload['daemon']);
   if (daemon.isEmpty) {
@@ -4678,10 +4674,6 @@ String _daemonUpgradeCancelFailureMessage(Map<String, Object?> result) {
       _string(result['status']) == 'not_cancellable') {
     return AgentUiMessageCodes.upgradeNotCancellable;
   }
-  final summary = _string(result['last_error_summary']);
-  if (summary != null && summary.trim().isNotEmpty) {
-    return summary;
-  }
   return AgentUiMessageCodes.upgradeCancelFailed;
 }
 
@@ -4715,11 +4707,11 @@ Map<K, V> _withoutMapKeys<K, V>(Map<K, V> input, Set<K> keys) {
   };
 }
 
-Map<String, String> _withoutStringKey(Map<String, String> input, String key) {
+Map<String, V> _withoutStringKey<V>(Map<String, V> input, String key) {
   if (!input.containsKey(key)) {
     return input;
   }
-  return <String, String>{
+  return <String, V>{
     for (final entry in input.entries)
       if (entry.key != key) entry.key: entry.value,
   };
@@ -4738,14 +4730,14 @@ Map<String, DaemonUpgradeProgress> _withoutDaemonUpgradeProgressKey(
   };
 }
 
-Map<String, String> _withoutStringKeysFromMap(
-  Map<String, String> input,
+Map<String, V> _withoutStringKeysFromMap<V>(
+  Map<String, V> input,
   Set<String> keys,
 ) {
   if (keys.isEmpty || !keys.any(input.containsKey)) {
     return input;
   }
-  return <String, String>{
+  return <String, V>{
     for (final entry in input.entries)
       if (!keys.contains(entry.key)) entry.key: entry.value,
   };

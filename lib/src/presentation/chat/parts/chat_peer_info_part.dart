@@ -50,6 +50,14 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         if (!mounted) {
           return;
         }
+        unawaited(
+          ref
+              .read(peerProfileProvider(widget.target.targetDid).notifier)
+              .load(
+                peerPersonaId: widget.target.peerPersonaId,
+                forceRefresh: true,
+              ),
+        );
         unawaited(ref.read(agentsProvider.notifier).ensureLoaded());
       });
     }
@@ -343,7 +351,9 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                   ),
                 if (homepageUrl.isNotEmpty)
                   IdentityProfileMetadataRow(
+                    key: const Key('peer-info-dialog-homepage-row'),
                     label: context.l10n.profileHomepageLabel,
+                    showDivider: false,
                     child: IdentityProfileLinkValue(
                       value: homepageUrl,
                       actionLabel: context.l10n.profileOpenHomepage,

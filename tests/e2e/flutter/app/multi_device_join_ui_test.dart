@@ -1845,11 +1845,19 @@ class _JoinCli {
   Future<void> initialize() async {
     await Directory(workspace).create(recursive: true);
     await Directory(home).create(recursive: true);
-    final version = await _run(const <String>['--format', 'json', 'version']);
+    final version = await _run(const <String>[
+      '--format',
+      'json',
+      'version',
+    ], safeAction: 'cli_version_preflight');
     if (_data(version, action: null)['commit'] != config.cliSourceRef) {
       fail('The CLI binary does not match its audited source commit.');
     }
-    await _run(const <String>['--format', 'json', 'init']);
+    await _run(const <String>[
+      '--format',
+      'json',
+      'init',
+    ], safeAction: 'cli_workspace_init');
     await _run(<String>[
       '--format',
       'json',
@@ -1862,8 +1870,14 @@ class _JoinCli {
       config.didDomain,
       '--display-name',
       'AWiki App Join E2E',
-    ]);
-    await _run(<String>['--format', 'json', 'tenant', 'use', _tenantName]);
+    ], safeAction: 'cli_tenant_create');
+    await _run(<String>[
+      '--format',
+      'json',
+      'tenant',
+      'use',
+      _tenantName,
+    ], safeAction: 'cli_tenant_use');
   }
 
   Future<String> registerReadyAdmin({

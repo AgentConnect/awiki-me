@@ -918,45 +918,79 @@ class _ActionButton extends StatelessWidget {
 }
 
 class _AgentErrorBanner extends StatelessWidget {
-  const _AgentErrorBanner({required this.message, this.onRetry});
+  const _AgentErrorBanner({required this.message, this.detail, this.onRetry});
 
   final String message;
+  final String? detail;
   final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final resolvedMessage = localizeAgentUiMessage(context.l10n, message);
-    final retryButton = onRetry == null
-        ? null
-        : AppPressable(
-            onTap: onRetry,
-            semanticLabel: context.l10n.commonRetry,
-            tooltip: context.l10n.commonRetry,
-            borderRadius: BorderRadius.circular(responsive.radius(8)),
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: responsive.spacing(10),
-                vertical: responsive.spacing(5),
-              ),
-              decoration: BoxDecoration(
-                color: CupertinoColors.white,
-                borderRadius: BorderRadius.circular(responsive.radius(8)),
-              ),
-              child: Text(
-                context.l10n.commonRetry,
-                style: TextStyle(
-                  color: AwikiMeColors.danger,
-                  fontSize: responsive.metaSm,
-                  fontWeight: FontWeight.w400,
-                ),
+    final actions = <Widget>[
+      if (detail case final detail? when detail.trim().isNotEmpty)
+        AppPressable(
+          key: const Key('agent-error-details'),
+          onTap: () => showAwikiMeErrorDetailDialog(
+            context,
+            message: resolvedMessage,
+            detail: detail,
+          ),
+          semanticLabel: context.l10n.commonDetails,
+          tooltip: context.l10n.commonDetails,
+          borderRadius: BorderRadius.circular(responsive.radius(8)),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: responsive.spacing(8),
+              vertical: responsive.spacing(5),
+            ),
+            child: Text(
+              context.l10n.commonDetails,
+              style: TextStyle(
+                color: AwikiMeColors.danger,
+                fontSize: responsive.metaSm,
+                fontWeight: FontWeight.w400,
               ),
             ),
-          );
+          ),
+        ),
+      if (onRetry != null)
+        AppPressable(
+          onTap: onRetry,
+          semanticLabel: context.l10n.commonRetry,
+          tooltip: context.l10n.commonRetry,
+          borderRadius: BorderRadius.circular(responsive.radius(8)),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: responsive.spacing(10),
+              vertical: responsive.spacing(5),
+            ),
+            decoration: BoxDecoration(
+              color: CupertinoColors.white,
+              borderRadius: BorderRadius.circular(responsive.radius(8)),
+            ),
+            child: Text(
+              context.l10n.commonRetry,
+              style: TextStyle(
+                color: AwikiMeColors.danger,
+                fontSize: responsive.metaSm,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+        ),
+    ];
     return AwikiMeErrorNotice(
       message: resolvedMessage,
       compact: true,
-      trailing: retryButton,
+      trailing: actions.isEmpty
+          ? null
+          : Wrap(
+              spacing: responsive.spacing(4),
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: actions,
+            ),
     );
   }
 }

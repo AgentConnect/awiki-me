@@ -921,13 +921,14 @@
   "daemonUpgradeInstalling": "Installing new version",
   "daemonUpgradeRestarting": "Restarting daemon",
   "daemonUpgradeInProgress": "Upgrading",
-  "agentUpgradeIncomplete": "The upgrade did not complete. Check the network and try again.",
-  "agentUpgradeDownloadFailed": "Package download failed. Check the network and try again. {summary}",
-  "@agentUpgradeDownloadFailed": {
-    "placeholders": {
-      "summary": {}
-    }
-  },
+  "agentUpgradeIncomplete": "The upgrade did not complete. Try again later.",
+  "agentUpgradeDownloadFailed": "The download was interrupted. Your progress was saved. Check the network and try again.",
+  "agentUpgradeLegacyDownloadFailed": "The download was interrupted. Check the network and try again, or reinstall the daemon if it continues to fail.",
+  "agentUpgradeIntegrityFailed": "Package verification failed. The package will be downloaded again on retry.",
+  "agentUpgradeExtractFailed": "The package could not be extracted. Try the upgrade again.",
+  "agentUpgradeRestartFailed": "The new version is ready, but the daemon could not restart. Refresh status or reinstall it.",
+  "agentUpgradeInstallFailed": "The daemon upgrade did not complete. Try again, or reinstall it if the problem continues.",
+  "agentUpgradeRequiresReinstall": "The daemon cannot complete this upgrade automatically. Reinstall it.",
   "agentUpgradeNotCancellable": "This upgrade has already reached the restart stage and cannot be cancelled. Refresh status later to confirm the result.",
   "agentUpgradeCancelFailed": "Failed to cancel the upgrade. Refresh status and try again.",
   "agentUpgradeCancelNoResponse": "Cancel request sent, but the daemon has not responded yet. Refresh status to confirm the upgrade result.",

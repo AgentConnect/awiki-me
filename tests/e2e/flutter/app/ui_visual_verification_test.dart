@@ -16,6 +16,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart'
     show CupertinoIcons, CupertinoPageScaffold;
 import 'package:flutter/foundation.dart';
@@ -183,6 +184,8 @@ void main() {
       await _pumpVisualFrames(tester);
       expect(find.text('删除会话'), findsOneWidget);
       expect(find.text('从最近列表移除该会话'), findsOneWidget);
+      expect(find.text('同时清空历史消息'), findsNothing);
+      expect(find.text('单会话历史清理待 Core 支持'), findsNothing);
       await _captureScreenshot(
         tester,
         '24-compact-conversation-delete-confirmation',
@@ -295,6 +298,14 @@ void main() {
       await tester.tap(find.bySemanticsLabel('智能体'));
       await _pumpVisualFrames(tester);
       expect(find.byKey(const Key('agents-expanded-layout')), findsOneWidget);
+      expect(
+        tester
+            .widget<AppIconButton>(
+              find.byKey(const Key('agents-more-actions-button')),
+            )
+            .borderColor,
+        isNull,
+      );
       _expectAgentListStatusOverlay(tester, _daemonDid);
       _expectAgentListStatusOverlay(tester, _runtimeDid);
       await _captureScreenshot(tester, '08-expanded-agents');
@@ -519,6 +530,7 @@ void main() {
         find.byKey(const Key('desktop-current-identity-dialog')),
         findsOneWidget,
       );
+      expect(find.byKey(const Key('profile-settings-row')), findsNothing);
       await _captureScreenshot(tester, '13-expanded-profile');
 
       await tester.tap(find.byKey(const Key('desktop-current-identity-close')));
@@ -528,6 +540,52 @@ void main() {
       await _pumpVisualFrames(tester);
       expect(find.byKey(const Key('mac-settings-list-pane')), findsOneWidget);
       await _captureScreenshot(tester, '14-expanded-settings');
+    } finally {
+      await _resetEnvironment(tester);
+    }
+  });
+
+  testWidgets('display scale ticks switch presets from settings', (
+    tester,
+  ) async {
+    try {
+      await _prepareEnvironment(
+        tester,
+        size: _expandedSize,
+        platform: TargetPlatform.macOS,
+      );
+      await _pumpVisualApp(tester, _createVisualHarness());
+      await tester.tap(find.bySemanticsLabel('设置'));
+      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('mac-settings-list-pane')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('settings-display-row')));
+      await _pumpVisualFrames(tester);
+
+      for (final percent in <int>[90, 100, 110, 120]) {
+        expect(find.byKey(Key('display-scale-tick-$percent')), findsOneWidget);
+      }
+      final sliderRect = tester.getRect(
+        find.byKey(const Key('display-scale-slider')),
+      );
+      await tester.tapAt(
+        Offset(
+          sliderRect.left + 22 + (sliderRect.width - 44) * 0.72,
+          sliderRect.center.dy,
+        ),
+      );
+      await _pumpVisualFrames(tester);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('display-scale-value'))).data,
+        '120%',
+      );
+      await tester.tap(find.byKey(const Key('display-scale-tick-110')));
+      await _pumpVisualFrames(tester);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('display-scale-value'))).data,
+        '110%',
+      );
+      await tester.tap(find.byKey(const Key('display-scale-tick-100')));
+      await _pumpVisualFrames(tester);
     } finally {
       await _resetEnvironment(tester);
     }
@@ -574,7 +632,8 @@ void main() {
         size: _compactSize,
         platform: TargetPlatform.iOS,
       );
-      await _pumpVisualApp(tester, _createVisualHarness());
+      final compactHarness = _createVisualHarness();
+      await _pumpVisualApp(tester, compactHarness);
       await tester.tap(
         find.byKey(const Key('conversation-row:dm:peer-scope:v1:alice')),
       );
@@ -583,7 +642,11 @@ void main() {
       await _pumpVisualFrames(tester);
       await tester.tap(find.byKey(const Key('chat-information-peer-row')));
       await _pumpVisualFrames(tester);
-      expect(find.byKey(const Key('peer-info-identity-card')), findsOneWidget);
+      expect(find.byKey(const Key('peer-profile-scroll')), findsOneWidget);
+      expect(
+        compactHarness.gateway.loadPublicProfileQueries,
+        contains(_humanDid),
+      );
       await _captureScreenshot(tester, '16-compact-peer-profile');
 
       await _prepareEnvironment(
@@ -591,14 +654,19 @@ void main() {
         size: _expandedSize,
         platform: TargetPlatform.macOS,
       );
-      await _pumpVisualApp(tester, _createVisualHarness());
+      final expandedHarness = _createVisualHarness();
+      await _pumpVisualApp(tester, expandedHarness);
       await tester.tap(
         find.byKey(const Key('conversation-row:dm:peer-scope:v1:alice')),
       );
       await _pumpVisualFrames(tester);
       await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
       await _pumpVisualFrames(tester);
-      expect(find.byKey(const Key('peer-info-identity-card')), findsOneWidget);
+      expect(find.byKey(const Key('peer-profile-scroll')), findsOneWidget);
+      expect(
+        expandedHarness.gateway.loadPublicProfileQueries,
+        contains(_humanDid),
+      );
       await _captureScreenshot(tester, '17-expanded-peer-profile');
     } finally {
       await _resetEnvironment(tester);

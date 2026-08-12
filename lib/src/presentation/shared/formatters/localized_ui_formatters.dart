@@ -125,12 +125,6 @@ String localizeAgentListSubtitle(
 }
 
 String localizeAgentUiMessage(AppLocalizations l10n, String message) {
-  if (message.startsWith(AgentUiMessageCodes.upgradeDownloadFailedPrefix)) {
-    final summary = message
-        .substring(AgentUiMessageCodes.upgradeDownloadFailedPrefix.length)
-        .trim();
-    return l10n.agentUpgradeDownloadFailed(summary);
-  }
   return switch (message) {
     AgentUiMessageCodes.loginRequired => l10n.agentErrorLoginRequired,
     AgentUiMessageCodes.handleUnavailable => l10n.agentErrorHandleUnavailable,
@@ -167,6 +161,17 @@ String localizeAgentUiMessage(AppLocalizations l10n, String message) {
     AgentUiMessageCodes.statusRefreshFailed =>
       l10n.agentErrorStatusRefreshFailed,
     AgentUiMessageCodes.upgradeIncomplete => l10n.agentUpgradeIncomplete,
+    AgentUiMessageCodes.upgradeDownloadFailed =>
+      l10n.agentUpgradeDownloadFailed,
+    AgentUiMessageCodes.upgradeLegacyDownloadFailed =>
+      l10n.agentUpgradeLegacyDownloadFailed,
+    AgentUiMessageCodes.upgradeIntegrityFailed =>
+      l10n.agentUpgradeIntegrityFailed,
+    AgentUiMessageCodes.upgradeExtractFailed => l10n.agentUpgradeExtractFailed,
+    AgentUiMessageCodes.upgradeRestartFailed => l10n.agentUpgradeRestartFailed,
+    AgentUiMessageCodes.upgradeInstallFailed => l10n.agentUpgradeInstallFailed,
+    AgentUiMessageCodes.upgradeRequiresReinstall =>
+      l10n.agentUpgradeRequiresReinstall,
     AgentUiMessageCodes.upgradeNotCancellable =>
       l10n.agentUpgradeNotCancellable,
     AgentUiMessageCodes.upgradeCancelFailed => l10n.agentUpgradeCancelFailed,
