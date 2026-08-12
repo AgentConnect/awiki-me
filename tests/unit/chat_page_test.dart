@@ -53,7 +53,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 import 'package:flutter/material.dart'
-    show FontWeight, InlineSpan, SelectableText, SelectionArea, TextSpan;
+    show FontWeight, InlineSpan, SelectionArea, SelectionAreaState, TextSpan;
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -64,6 +64,23 @@ import 'test_support.dart';
 Uint8List _tinyPngBytes() => base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
 );
+
+List<String> _recordClipboardWrites() {
+  final writes = <String>[];
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          final data = call.arguments as Map<Object?, Object?>;
+          writes.add(data['text'] as String);
+        }
+        return null;
+      });
+  addTearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null);
+  });
+  return writes;
+}
 
 Future<void> _openCompactChatPeerInfo(
   WidgetTester tester, {
@@ -629,11 +646,7 @@ void main() {
         outgoingBubbleWidget.decoration! as ShapeDecoration;
     expect(incomingDecoration.color, AwikiMePalette.content);
     expect(outgoingDecoration.color, AwikiMePalette.messageOutgoing);
-    final outgoingText = tester.widget<SelectableText>(
-      find.byWidgetPredicate(
-        (widget) => widget is SelectableText && widget.data == 'outgoing',
-      ),
-    );
+    final outgoingText = tester.widget<Text>(find.text('outgoing'));
     expect(outgoingText.style?.fontSize, 14);
     expect(outgoingText.style?.fontWeight, FontWeight.w400);
     for (final decoration in <ShapeDecoration>[
@@ -4262,13 +4275,20 @@ void main() {
     expect(
       find.ancestor(
         of: find.text('独立的图片说明'),
-        matching: find.byType(SelectableText),
+        matching: find.byType(SelectionArea),
       ),
       findsOneWidget,
     );
     expect(
-      find.ancestor(of: interaction, matching: find.byType(SelectionArea)),
-      findsNothing,
+      tester
+          .widgetList<SelectionContainer>(
+            find.ancestor(
+              of: interaction,
+              matching: find.byType(SelectionContainer),
+            ),
+          )
+          .any((container) => container.delegate == null),
+      isTrue,
     );
 
     await tester.tap(interaction, buttons: kSecondaryMouseButton);
@@ -5701,26 +5721,14 @@ void main() {
     );
     expect(content, findsOneWidget);
     expect(
-      find.descendant(of: content, matching: find.byType(SelectableText)),
+      find.descendant(of: content, matching: find.byType(SelectionArea)),
       findsOneWidget,
     );
     expect(find.text('这是一条可以复制的消息'), findsOneWidget);
   });
 
-  testWidgets('消息右键支持复制全文、全选并保持部分文本选区', (tester) async {
-    String? clipboardText;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
-          if (call.method == 'Clipboard.setData') {
-            final data = call.arguments as Map<Object?, Object?>;
-            clipboardText = data['text'] as String?;
-          }
-          return null;
-        });
-    addTearDown(() {
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(SystemChannels.platform, null);
-    });
+  testWidgets('桌面消息菜单复用原生复制全选并在中间提供复制全部', (tester) async {
+    final clipboardWrites = _recordClipboardWrites();
 
     final conversation = _scrollConversation('dm:text-context-menu');
     const messageText = '部分文本复制应该保持当前选择并且支持复制全文';
@@ -5749,51 +5757,96 @@ void main() {
     final content = find.byKey(
       const Key('chat-message-content:text-context-menu'),
     );
-    final selectable = find.descendant(
+    final selectionArea = find.descendant(
       of: content,
-      matching: find.byType(SelectableText),
+      matching: find.byKey(
+        const Key('chat-message-selection:text-context-menu'),
+      ),
     );
-    final editable = find.descendant(
-      of: content,
-      matching: find.byType(EditableText),
-    );
-    expect(selectable, findsOneWidget);
-    expect(editable, findsOneWidget);
+    expect(selectionArea, findsOneWidget);
 
-    await tester.tap(selectable, buttons: kSecondaryMouseButton);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('复制'));
-    await tester.pumpAndSettle();
-    expect(clipboardText, messageText);
-
-    final editableWidget = tester.widget<EditableText>(editable);
-    const selection = TextSelection(
-      baseOffset: 2,
-      extentOffset: messageText.length - 2,
+    final selectionAreaState = tester.state<SelectionAreaState>(
+      find.descendant(of: selectionArea, matching: find.byType(SelectionArea)),
     );
-    editableWidget.focusNode.requestFocus();
-    editableWidget.controller.selection = selection;
-    tester.widget<SelectableText>(selectable).onSelectionChanged!(
-      selection,
-      SelectionChangedCause.drag,
-    );
+    selectionAreaState.selectableRegion.selectAll();
     await tester.pump();
-
-    await tester.tap(selectable, buttons: kSecondaryMouseButton);
+    await tester.tap(selectionArea, buttons: kSecondaryMouseButton);
     await tester.pumpAndSettle();
-    expect(editableWidget.controller.selection, selection);
+    expect(<String>[
+      for (final text in tester.widgetList<Text>(find.byType(Text)))
+        if (<String>{'复制', '复制全部', '全选'}.contains(text.data)) text.data!,
+    ], containsAllInOrder(<String>['复制', '复制全部', '全选']));
     await tester.tap(find.text('复制'));
     await tester.pumpAndSettle();
-    expect(clipboardText, messageText.substring(2, messageText.length - 2));
+    expect(clipboardWrites.last, messageText);
 
-    await tester.tap(selectable, buttons: kSecondaryMouseButton);
+    clipboardWrites.clear();
+    selectionAreaState.selectableRegion.clearSelection();
+    await tester.pump();
+    await tester.tap(selectionArea, buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('复制全部'));
+    await tester.pumpAndSettle();
+    expect(clipboardWrites, <String>[messageText]);
+
+    await tester.tap(selectionArea, buttons: kSecondaryMouseButton);
     await tester.pumpAndSettle();
     await tester.tap(find.text('全选'));
     await tester.pump();
-    expect(
-      editableWidget.controller.selection,
-      const TextSelection(baseOffset: 0, extentOffset: messageText.length),
+    clipboardWrites.clear();
+    await tester.tap(selectionArea, buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('复制'));
+    await tester.pumpAndSettle();
+    expect(clipboardWrites, <String>[messageText]);
+  });
+
+  testWidgets('Android 消息选择工具栏可全选并使用原生复制', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final clipboardWrites = _recordClipboardWrites();
+    final conversation = _scrollConversation('dm:android-text-selection');
+    const messageText = '移动端长按后可以选择并复制整条消息';
+    final message = ChatMessage(
+      localId: 'android-text-selection',
+      remoteId: 'android-text-selection',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:test:alice',
+      receiverDid: 'did:test:me',
+      content: messageText,
+      createdAt: conversation.lastMessageAt,
+      isMine: false,
+      sendState: MessageSendState.sent,
     );
+
+    await _pumpScrollableChatView(
+      tester,
+      gateway: FakeAwikiGateway(),
+      conversation: conversation,
+      messages: <ChatMessage>[message],
+    );
+
+    final selectionArea = find.byKey(
+      const Key('chat-message-selection:android-text-selection'),
+    );
+    final selectionAreaState = tester.state<SelectionAreaState>(
+      find.descendant(of: selectionArea, matching: find.byType(SelectionArea)),
+    );
+    selectionAreaState.selectableRegion.selectAll(
+      SelectionChangedCause.toolbar,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('复制'), findsOneWidget);
+    expect(find.text('复制全部'), findsOneWidget);
+    expect(find.text('全选'), findsOneWidget);
+
+    await tester.tap(find.text('全选'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('复制'));
+    await tester.pumpAndSettle();
+    expect(clipboardWrites, <String>[messageText]);
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('消息气泡最大宽度随聊天区域宽度自适应', (tester) async {
@@ -5832,6 +5885,7 @@ void main() {
   });
 
   testWidgets('对方文本消息按 Markdown 渲染并保留可选中复制', (tester) async {
+    final clipboardWrites = _recordClipboardWrites();
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -5890,8 +5944,23 @@ void main() {
 
     final body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     expect(body.data, markdown);
-    expect(body.selectable, isTrue);
-    expect(body.contextMenuBuilder, isNotNull);
+    expect(body.selectable, isFalse);
+    expect(
+      find.ancestor(
+        of: find.byType(MarkdownBody),
+        matching: find.byType(SelectionArea),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const Key('chat-message-selection:incoming-markdown')),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('复制全部'));
+    await tester.pumpAndSettle();
+    expect(clipboardWrites, <String>[markdown]);
   });
 
   testWidgets('自己发出的 Markdown 样式文本仍按普通文本显示', (tester) async {
@@ -6043,7 +6112,7 @@ void main() {
 
     var body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     expect(body.data, groupMarkdown);
-    expect(body.selectable, isTrue);
+    expect(body.selectable, isFalse);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -6067,7 +6136,7 @@ void main() {
 
     body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     expect(body.data, agentMarkdown);
-    expect(body.selectable, isTrue);
+    expect(body.selectable, isFalse);
   });
 
   testWidgets('群聊收到带 mention 的 Markdown 消息仍按 Markdown 渲染', (tester) async {
@@ -6156,11 +6225,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
-    expect(body.selectable, isTrue);
+    expect(body.selectable, isFalse);
     expect(
       find.byWidgetPredicate(
         (widget) =>
-            widget is SelectableText &&
+            widget is Text &&
             widget.textSpan != null &&
             _textSpanHasStyledMention(widget.textSpan!, '@艾丽丝'),
       ),
@@ -6351,7 +6420,7 @@ void main() {
     expect(
       find.byWidgetPredicate(
         (widget) =>
-            widget is SelectableText &&
+            widget is Text &&
             widget.textSpan != null &&
             _textSpanHasStyledMention(widget.textSpan!, '@Me'),
       ),
@@ -8874,6 +8943,7 @@ void main() {
   });
 
   testWidgets('附件说明和文件名支持系统原生选中复制', (tester) async {
+    final clipboardWrites = _recordClipboardWrites();
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -8939,6 +9009,52 @@ void main() {
 
     expect(find.text('附件说明'), findsOneWidget);
     expect(find.text('copyable-report.pdf'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const Key('chat-message-selection:selectable-attachment')),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('复制全部'));
+    await tester.pumpAndSettle();
+    expect(clipboardWrites, <String>['附件说明\ncopyable-report.pdf']);
+
+    messagingService.conversationTimelineById[conversation.conversationId] =
+        <ChatMessage>[
+          _messageWithConversation(
+            ChatMessage(
+              localId: 'same-caption-attachment',
+              remoteId: 'same-caption-attachment',
+              threadId: conversation.conversationId,
+              senderDid: conversation.targetDid!,
+              receiverDid: session.did,
+              content: 'same.txt',
+              createdAt: DateTime(2026, 4, 5, 12, 2),
+              isMine: false,
+              sendState: MessageSendState.sent,
+              originalType: 'application/anp-attachment-manifest+json',
+              attachment: const ChatAttachment(
+                attachmentId: 'att-same-caption',
+                filename: 'same.txt',
+                mimeType: 'text/plain',
+                caption: 'same.txt',
+              ),
+            ),
+            conversation,
+          ),
+        ];
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('chat-message-selection:same-caption-attachment')),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('复制全部'));
+    await tester.pumpAndSettle();
+    expect(clipboardWrites.last, 'same.txt\nsame.txt');
   });
 
   testWidgets('查看附件会下载后用本机应用打开文件', (tester) async {
@@ -9376,7 +9492,7 @@ void main() {
 
     final body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     expect(body.data, caption);
-    expect(body.selectable, isTrue);
+    expect(body.selectable, isFalse);
     expect(find.text(filename), findsOneWidget);
   });
 

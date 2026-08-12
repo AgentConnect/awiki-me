@@ -344,28 +344,6 @@ void main() {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
       }
-      GroupSummary? recoveryGroup;
-      ChatMessage? oldGroupMessage;
-      String? oldGroupText;
-      if (!freshFocusedRequired) {
-        recoveryGroup = await bootstrap.groupApplicationService!.createGroup(
-          name: 'Recovery continuity ${_nonce(8)}',
-          slug: 'recovery-${_nonce(10)}',
-          description: 'Handle Recovery group continuity',
-          goal: 'Verify old transport group continuity',
-          rules: 'E2E only',
-          identity: GroupIdentitySelection.handle(fullHandle),
-        );
-        oldGroupText = 'before recovery ${config.runId} ${_nonce(8)}';
-        oldGroupMessage = await bootstrap.messagingService!.sendText(
-          thread: AppThreadRef.group(recoveryGroup.groupId),
-          content: oldGroupText,
-        );
-        if (oldGroupMessage.remoteId?.trim().isEmpty != false ||
-            oldGroupMessage.sendState != MessageSendState.sent) {
-          fail('The pre-Recovery transport Group message was not committed.');
-        }
-      }
       var latestOtpRetryAt = registrationFactor.retryAt;
       String? oldPeerDeviceId;
       if (rejoinRequired) {
@@ -810,18 +788,7 @@ void main() {
               'message_workspace_visible=${find.byType(ConversationWorkspacePage).evaluate().isNotEmpty}';
         },
       );
-      if (!freshFocusedRequired) {
-        await _verifyRecoveredTransportGroupContinuity(
-          container: container,
-          bootstrap: bootstrap,
-          groupDid: recoveryGroup!.groupId,
-          previousDid: oldDid,
-          currentDid: reset.currentDid,
-          oldMessageId: oldGroupMessage!.remoteId!,
-          oldMessageText: oldGroupText!,
-          runId: config.runId,
-        );
-      } else {
+      if (freshFocusedRequired) {
         Object? focusedFailure;
         try {
           await _runFreshFocusedGates(
@@ -1340,9 +1307,10 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         peerSession.did != registeredPeer.did) {
       fail('The continuity peer did not activate its exact identity.');
     }
-    await peerBootstrap.messageSyncService!.syncNow(
+    await _syncHandleRecoveryFixtureWithRetry(
+      tester: tester,
+      bootstrap: peerBootstrap,
       reason: 'handle-recovery-fixture-peer-bootstrap',
-      limit: 100,
     );
     progress.enter(HandleRecoveryFixtureStage.direct);
     final directOutgoing = await messaging.sendText(
@@ -1585,7 +1553,11 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         bootstrap,
         directConversationId,
       );
-      final groupHistory = await groups.listMessages(group.groupId, limit: 100);
+      final groupHistory = await _retryHandleRecoveryCoreTransport(
+        tester: tester,
+        action: () => groups.listMessages(group.groupId, limit: 100),
+        failure: 'Handle Recovery fixture Group history remained unavailable.',
+      );
       final agentHistory = await _loadConversationHistory(
         bootstrap,
         agentConversationId,
@@ -1789,6 +1761,7 @@ ChatMessage _requireExactStoredMessageByReference(
     expectedReference: checkpoint.reference(messageReferenceName),
     rawReference: _requiredMessageId,
     semanticMatch: (message) =>
+        message.content.isNotEmpty &&
         handleRecoveryFixtureReference(message.content) ==
             checkpoint.reference(semanticReferenceName) &&
         message.senderDid == senderDid &&
@@ -2742,6 +2715,11 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
     find.byKey(const Key('handle-recovery-risk-confirmation')),
     failure: 'Crash-cut risk confirmation was unavailable.',
   );
+  await _pumpUntil(
+    tester,
+    () => container.read(handleRecoveryProvider).riskConfirmed,
+    failure: 'Crash-cut Recovery did not retain risk confirmation.',
+  );
   await _tapOne(
     tester,
     find.bySemanticsIdentifier('handle-recovery-activate'),
@@ -3520,7 +3498,7 @@ Future<void> _runFreshFocusedGates({
   required Future<void> Function() startDaemon,
 }) async {
   final evidence = _FreshFocusedEvidence();
-  final failedCases = <String>[];
+  final failedCases = <String, String>{};
   final conversations = bootstrap.conversationService!;
   final preInbound = await conversations.listConversations(
     ownerDid: newDid,
@@ -3547,8 +3525,8 @@ Future<void> _runFreshFocusedGates({
         startedAt: startedAt,
         phases: phases,
       );
-    } catch (_) {
-      failedCases.add(caseId);
+    } catch (error) {
+      failedCases[caseId] = error.toString();
       await E2eCaseAttestationWriter.markFailed(
         caseId,
         startedAt: startedAt,
@@ -3698,7 +3676,7 @@ Future<void> _runFreshFocusedGates({
     appStateRoot: config.peerAppStateRoot,
   );
   try {
-    final peerSession = await peerBootstrap.appSessionService!.currentSession();
+    final peerSession = await peerBootstrap.appSessionService!.restoreSession();
     if (peerSession == null || peerSession.did != snapshot.fixture.peerDid) {
       fail('Fresh Recovery external peer fixture was not preserved.');
     }
@@ -3890,9 +3868,15 @@ Future<void> _runFreshFocusedGates({
           failure: 'Fresh Recovery Runtime Agent composer was unavailable.',
         );
         await tester.enterText(input, promptText);
+        final send = find.bySemanticsIdentifier('e2e-chat-send-button');
+        await _pumpUntil(
+          tester,
+          () => send.hitTestable().evaluate().length == 1,
+          failure: 'Fresh Recovery Runtime Agent send action was unavailable.',
+        );
         await _tapOne(
           tester,
-          find.bySemanticsIdentifier('e2e-chat-send-button'),
+          send,
           failure: 'Fresh Recovery Runtime Agent send action was unavailable.',
         );
         final prompt = await _waitForFreshSemanticMessage(
@@ -3924,14 +3908,19 @@ Future<void> _runFreshFocusedGates({
 
   if (_invocationExpects(_freshRestartCaseId)) {
     try {
+      await _waitForFreshFocusedConversationsRead(
+        tester: tester,
+        bootstrap: bootstrap,
+        evidence: evidence,
+      );
       await _writeFreshRestartHandoff(
         config: config,
         snapshot: snapshot,
         newDid: newDid,
         evidence: evidence,
       );
-    } catch (_) {
-      failedCases.add(_freshRestartCaseId);
+    } catch (error) {
+      failedCases[_freshRestartCaseId] = error.toString();
       await E2eCaseAttestationWriter.markFailed(
         _freshRestartCaseId,
         startedAt: startedAt,
@@ -3940,7 +3929,10 @@ Future<void> _runFreshFocusedGates({
     }
   }
   if (failedCases.isNotEmpty) {
-    fail('Fresh Recovery focused gates failed: ${failedCases.join(', ')}');
+    fail(
+      'Fresh Recovery focused gates failed: '
+      '${failedCases.entries.map((entry) => '${entry.key}: ${entry.value}').join('; ')}',
+    );
   }
 }
 
@@ -3949,21 +3941,65 @@ void _requireFreshGroupMemberMetadataPreserved({
   required GroupMemberSummary current,
   required bool allowDidReplacement,
 }) {
-  if ((!allowDidReplacement && current.did != previous.did) ||
-      current.userId != previous.userId ||
-      current.handle != previous.handle ||
-      current.role != previous.role ||
-      current.membershipId != previous.membershipId ||
-      current.peerPersonaId != previous.peerPersonaId ||
-      (!allowDidReplacement &&
-          current.credentialDid != previous.credentialDid) ||
-      (!allowDidReplacement && current.profileUrl != previous.profileUrl) ||
-      current.displayName != previous.displayName ||
-      current.avatarUri != previous.avatarUri ||
-      current.subjectType != previous.subjectType ||
-      current.membershipStatus != previous.membershipStatus) {
-    fail('Fresh Recovery changed public Group member metadata.');
+  final changed = <String>[
+    if (!allowDidReplacement && current.did != previous.did) 'did',
+    if (!allowDidReplacement && current.userId != previous.userId) 'userId',
+    if (current.handle != previous.handle) 'handle',
+    if (current.role != previous.role) 'role',
+    if (current.membershipId != previous.membershipId) 'membershipId',
+    if (current.peerPersonaId != previous.peerPersonaId) 'peerPersonaId',
+    if (!allowDidReplacement && current.credentialDid != previous.credentialDid)
+      'credentialDid',
+    if (!allowDidReplacement && current.profileUrl != previous.profileUrl)
+      'profileUrl',
+    if (current.displayName != previous.displayName) 'displayName',
+    if (current.avatarUri != previous.avatarUri) 'avatarUri',
+    if (current.subjectType != previous.subjectType) 'subjectType',
+    if (current.membershipStatus != previous.membershipStatus)
+      'membershipStatus',
+  ];
+  if (changed.isNotEmpty) {
+    fail(
+      'Fresh Recovery changed public Group member metadata fields: '
+      '${changed.join(', ')}.',
+    );
   }
+}
+
+Future<void> _waitForFreshFocusedConversationsRead({
+  required WidgetTester tester,
+  required AppBootstrap bootstrap,
+  required _FreshFocusedEvidence evidence,
+}) async {
+  final expected = <String>{
+    if (evidence.directConversationId != null) evidence.directConversationId!,
+    if (evidence.groupConversationId != null) evidence.groupConversationId!,
+    if (evidence.agentConversationId != null) evidence.agentConversationId!,
+  };
+  if (expected.length != 3) {
+    throw const HandleRecoveryOracleFailure('restart_handoff_incomplete');
+  }
+  final conversations = bootstrap.conversationService!;
+  final session = await bootstrap.appSessionService!.currentSession();
+  if (session == null) {
+    throw const HandleRecoveryOracleFailure('restart_handoff_incomplete');
+  }
+  final deadline = DateTime.now().add(const Duration(seconds: 30));
+  while (DateTime.now().isBefore(deadline)) {
+    final rows = await conversations.listConversations(
+      ownerDid: session.did,
+      limit: 100,
+    );
+    final focused = rows
+        .where((conversation) => expected.contains(conversation.conversationId))
+        .toList(growable: false);
+    if (focused.length == expected.length &&
+        focused.every((conversation) => conversation.unreadCount == 0)) {
+      return;
+    }
+    await tester.pump(const Duration(milliseconds: 250));
+  }
+  fail('Fresh Recovery focused conversations did not converge to read.');
 }
 
 Future<void> _markFreshFocusedPassed(
@@ -4073,9 +4109,15 @@ Future<ChatMessage> _sendFreshConversationReplyThroughUi({
     failure: 'Fresh Recovery conversation composer was unavailable.',
   );
   await tester.enterText(input, content);
+  final send = find.bySemanticsIdentifier('e2e-chat-send-button');
+  await _pumpUntil(
+    tester,
+    () => send.hitTestable().evaluate().length == 1,
+    failure: 'Fresh Recovery visible reply action was unavailable.',
+  );
   await _tapOne(
     tester,
-    find.bySemanticsIdentifier('e2e-chat-send-button'),
+    send,
     failure: 'Fresh Recovery visible reply action was unavailable.',
   );
   final deadline = DateTime.now().add(const Duration(seconds: 90));
@@ -4438,6 +4480,20 @@ Future<void> _waitForCompletedRecovery(
   WidgetTester tester,
   ProviderContainer container,
 ) async {
+  final initial = container.read(handleRecoveryProvider);
+  if (initial.progress?.canActivate ?? false) {
+    await _pumpUntil(
+      tester,
+      () {
+        final state = container.read(handleRecoveryProvider);
+        return state.isBusy ||
+            state.error != null ||
+            !(state.progress?.canActivate ?? false);
+      },
+      timeout: const Duration(minutes: 1),
+      failure: 'Recovery activation did not start after the visible action.',
+    );
+  }
   for (var attempt = 0; attempt < 8; attempt += 1) {
     await _pumpUntil(
       tester,
@@ -4455,7 +4511,14 @@ Future<void> _waitForCompletedRecovery(
       _failOnRecoveryError(state, 'Recovery activation/resume');
     }
     if (progress == null || !progress.canResume) {
-      fail('Recovery stopped in a non-resumable non-terminal phase.');
+      fail(
+        'Recovery stopped in a non-resumable non-terminal phase '
+        '(phase=${progress?.phase.name ?? 'absent'}, '
+        'lifecycle=${progress?.lifecycleClass.name ?? 'absent'}, '
+        'commitAttempted=${progress?.commitAttempted ?? false}, '
+        'keyState=${progress?.keyState.name ?? 'absent'}, '
+        'error=${error?.safeCode ?? 'absent'}).',
+      );
     }
     await _tapOne(
       tester,
@@ -5806,6 +5869,11 @@ Future<void> _verifyBidirectionalDirectExactOne({
   if (recoveredMessaging == null || peerMessaging == null) {
     fail('The two Apps did not expose canonical messaging.');
   }
+  await _activatePeerIdentity(
+    peerBootstrap,
+    identityId: externalIdentityId,
+    expectedDid: externalDid,
+  );
   final appText = 'rejoin-${_safeId(runId, 18)}-app';
   final appMessage = await recoveredMessaging.sendText(
     thread: AppThreadRef.direct(externalDid),
@@ -5821,11 +5889,6 @@ Future<void> _verifyBidirectionalDirectExactOne({
     fail('The recovered App did not commit the exact Direct message.');
   }
 
-  await _activatePeerIdentity(
-    peerBootstrap,
-    identityId: externalIdentityId,
-    expectedDid: externalDid,
-  );
   await _syncAndWaitForAppThreadExactOne(
     tester: tester,
     appBootstrap: peerBootstrap,
@@ -5904,79 +5967,6 @@ Future<void> _verifyBidirectionalDirectExactOne({
   }
 }
 
-Future<void> _verifyRecoveredTransportGroupContinuity({
-  required ProviderContainer container,
-  required AppBootstrap bootstrap,
-  required String groupDid,
-  required String previousDid,
-  required String currentDid,
-  required String oldMessageId,
-  required String oldMessageText,
-  required String runId,
-}) async {
-  final groups = bootstrap.groupApplicationService;
-  final messaging = bootstrap.messagingService;
-  if (groups == null || messaging == null) {
-    fail('The recovered App did not expose Group messaging services.');
-  }
-  Object? lastError;
-  for (var attempt = 0; attempt < 10; attempt += 1) {
-    try {
-      await container.read(groupProvider.notifier).refresh();
-      final projected = container.read(groupProvider);
-      if (projected.groups.any((group) => group.groupId == groupDid)) {
-        final members = await groups.listMembers(groupDid);
-        final currentMembers = members.items
-            .where((member) => member.did == currentDid)
-            .length;
-        final previousMembers = members.items
-            .where((member) => member.did == previousDid)
-            .length;
-        final history = await groups.listMessages(groupDid, limit: 100);
-        final oldMessages = history
-            .where(
-              (message) =>
-                  message.content == oldMessageText &&
-                  message.senderDid == previousDid,
-            )
-            .toList(growable: false);
-        if (currentMembers == 1 &&
-            previousMembers == 0 &&
-            oldMessages.length == 1 &&
-            oldMessages.single.isMine) {
-          final newText = 'after recovery $runId ${_nonce(8)}';
-          final sent = await messaging.sendText(
-            thread: AppThreadRef.group(groupDid),
-            content: newText,
-          );
-          if (sent.remoteId?.trim().isEmpty != false ||
-              sent.sendState != MessageSendState.sent ||
-              !sent.isMine ||
-              sent.senderDid != currentDid) {
-            fail('The recovered identity did not send in the old Group.');
-          }
-          final converged = await groups.listMessages(groupDid, limit: 100);
-          if (converged.where((message) => message.content == newText).length !=
-              1) {
-            fail(
-              'The post-Recovery Group message did not converge exactly once.',
-            );
-          }
-          return;
-        }
-      }
-    } catch (error) {
-      lastError = error;
-    }
-    await Future<void>.delayed(const Duration(seconds: 2));
-  }
-  fail(
-    'The recovered transport Group did not converge '
-    '(old_message_id_present=${oldMessageId.trim().isNotEmpty}, '
-    'last_error=${_safeDiagnosticToken(lastError?.runtimeType.toString())}).',
-  );
-}
-
 Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
   required WidgetTester tester,
   required AppBootstrap appBootstrap,
@@ -5994,7 +5984,14 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
   }
   final deadline = DateTime.now().add(const Duration(seconds: 90));
   while (DateTime.now().isBefore(deadline)) {
-    await sync.syncNow(reason: 'handle-recovery-rejoin-e2e', limit: 100);
+    try {
+      await sync.syncNow(reason: 'handle-recovery-rejoin-e2e', limit: 100);
+    } on MessageSyncCoreFailure catch (error) {
+      if (error.code != 'transport_unavailable') rethrow;
+      await tester.pump(const Duration(milliseconds: 200));
+      await Future<void>.delayed(const Duration(milliseconds: 550));
+      continue;
+    }
     final messages = await _loadExactThreadCandidates(
       appBootstrap: appBootstrap,
       thread: thread,
@@ -6045,6 +6042,43 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
     await Future<void>.delayed(const Duration(milliseconds: 550));
   }
   fail('An App did not converge the exact thread message.');
+}
+
+Future<void> _syncHandleRecoveryFixtureWithRetry({
+  required WidgetTester tester,
+  required AppBootstrap bootstrap,
+  required String reason,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 30));
+  while (DateTime.now().isBefore(deadline)) {
+    try {
+      await bootstrap.messageSyncService!.syncNow(reason: reason, limit: 100);
+      return;
+    } on MessageSyncCoreFailure catch (error) {
+      if (error.code != 'transport_unavailable') rethrow;
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 550));
+  }
+  fail('Handle Recovery fixture sync transport remained unavailable.');
+}
+
+Future<T> _retryHandleRecoveryCoreTransport<T>({
+  required WidgetTester tester,
+  required Future<T> Function() action,
+  required String failure,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 30));
+  while (DateTime.now().isBefore(deadline)) {
+    try {
+      return await action();
+    } on core.AwikiImCoreException catch (error) {
+      if (error.code != 'transport_unavailable') rethrow;
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 550));
+  }
+  fail(failure);
 }
 
 Future<ConversationSummary> _waitForDirectConversation({

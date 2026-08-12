@@ -206,7 +206,7 @@ Handle 或 thread 进行猜测合并。snapshot message 自身不再独立推断
 
 内联图片统一使用附件卡片外框；没有 caption 时只省略文本和分隔线，不允许退化为直接叠在聊天背景上的透明裸图。图片解码后的像素宽高必须先按当前屏幕 device pixel ratio 换算为自然逻辑尺寸，在 `compact 300 / desktop 320` 的媒体上限和实际父约束内等比缩小，不得为了占满上限而无条件放大。只有图片最长边小于 `120` 逻辑像素时才允许等比补到最小预览尺寸；极端长宽比继续保留完整内容，并由至少 `44×44` 的媒体外框保证可操作性。尺寸尚未探测完成时使用 `240×180` 的稳定占位。带 caption 的附件宽度由 caption 与媒体各自的自然宽度取较大值，分隔线只跟随最终宽度，不得参与或强制扩大宽度。
 
-图片与 caption 的操作所有权必须分离：桌面端在图片命中区右键打开指针位置菜单，compact 端在图片命中区长按打开 `CompactActionSheet`，两端都只提供复制图片和另存为；单击图片仍沿用原附件预览/打开链路。复制和另存为只能读取 `AttachmentPreviewService` 已解析出的本地预览资源，不允许绕过 core/cache 根据 object URI 直接联网。caption 不进入图片菜单，只由自己的 `SelectionArea` 提供文本选择和复制；图片区域不得处在 caption 的文本选择手势树中。
+图片与文字的操作所有权必须分离：桌面端在图片命中区右键打开指针位置菜单，compact 端在图片命中区长按打开 `CompactActionSheet`，两端都只提供复制图片和另存为；单击图片仍沿用原附件预览/打开链路。复制和另存为只能读取 `AttachmentPreviewService` 已解析出的本地预览资源，不允许绕过 core/cache 根据 object URI 直接联网。每条普通消息气泡使用一个消息级 `SelectionArea` 统一管理纯文本、Mention、跨段 Markdown、附件 caption 和文件名的连续选区；已有有效选区时，复制与全选必须直接复用 Flutter 当前平台的原生 `SelectableRegion` 动作，不在 App 内维护第二份选区。若右键命中内容未形成 Flutter 可复制选区（例如单个 Emoji），菜单仍提供复制，并以整条消息全文作为兼容回退。自定义“复制全部”插在复制与全选之间，直接从 `ChatMessage` 投影稳定全文：普通消息复制原始 `content`，附件消息复制非空 caption 和本地化文件名；不得把 Markdown marker 后的渲染文本、下载进度或操作按钮文案当作全文。图片区域继续由 `SelectionContainer.disabled` 排除，不能进入消息文字选区或文字菜单。
 
 Composer 的附件来源仍统一进入 `AttachmentDraft`：文件选择、拖拽、剪贴板图片和 macOS `/usr/sbin/screencapture -i -x` 交互式截图都只负责暂存，用户点击发送后才调用 canonical attachment send API。截图期间主窗口始终保持可见，不再根据 Shift 或 native 全局 modifier 隐藏 App。App 在启动系统截图前必须通过 native `CGPreflightScreenCaptureAccess` 检查权限，单进程最多调用一次 `CGRequestScreenCaptureAccess`；未授权时禁止继续执行 `screencapture`，避免把只有桌面的错误图片当作有效附件。Debug App 必须使用稳定 Apple Development designated requirement，不能用随构建变化的 ad-hoc CDHash。Emoji 面板只修改当前 `TextEditingValue` 的选区并沿用 draft mention range 转换，不引入新的消息类型。
 

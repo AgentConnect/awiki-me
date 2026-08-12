@@ -119,6 +119,82 @@ void main() {
     );
   });
 
+  test('Fresh Recovery restores the reopened peer before continuity checks', () {
+    final source = File(
+      'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+    ).readAsStringSync();
+    final reopen = source.indexOf(
+      'final peerSession = await peerBootstrap.appSessionService!.restoreSession();',
+    );
+    final preservationCheck = source.indexOf(
+      "fail('Fresh Recovery external peer fixture was not preserved.');",
+      reopen,
+    );
+
+    expect(reopen, greaterThanOrEqualTo(0));
+    expect(preservationCheck, greaterThan(reopen));
+  });
+
+  test('Fresh Recovery waits for animated send actions to become hittable', () {
+    final source = File(
+      'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+    ).readAsStringSync();
+
+    expect(
+      RegExp(
+        r"final send = find\.bySemanticsIdentifier\('e2e-chat-send-button'\);",
+      ).allMatches(source),
+      hasLength(2),
+    );
+    expect(
+      RegExp(
+        r'\(\) => send\.hitTestable\(\)\.evaluate\(\)\.length == 1,',
+      ).allMatches(source),
+      hasLength(2),
+    );
+  });
+
+  test(
+    'Fresh Recovery allows DID-derived userId replacement and read settles',
+    () {
+      final source = File(
+        'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+      ).readAsStringSync();
+
+      expect(
+        source,
+        contains(
+          'if (!allowDidReplacement && current.userId != previous.userId)',
+        ),
+      );
+      expect(source, contains('_waitForFreshFocusedConversationsRead('));
+      expect(
+        source,
+        contains(
+          'focused.every((conversation) => conversation.unreadCount == 0)',
+        ),
+      );
+    },
+  );
+
+  test(
+    'Fresh Recovery retries only transient fixture sync transport failures',
+    () {
+      final source = File(
+        'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('_syncHandleRecoveryFixtureWithRetry('));
+      expect(source, contains('_retryHandleRecoveryCoreTransport('));
+      expect(
+        RegExp(
+          "if \\(error\\.code != 'transport_unavailable'\\) rethrow;",
+        ).allMatches(source),
+        hasLength(3),
+      );
+    },
+  );
+
   group('Handle Recovery crash-cut handoff', () {
     test('contains only opaque transition refs, counts, and checkpoint', () {
       final handoff = _crashCutHandoff();
@@ -492,6 +568,86 @@ void main() {
     final firstSend = source.indexOf('final directOutgoing =');
     expect(bootstrap, greaterThanOrEqualTo(0));
     expect(firstSend, greaterThan(bootstrap));
+  });
+
+  test(
+    'Recovery re-Join activates the external replica before Direct send',
+    () {
+      final source = File(
+        'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+      ).readAsStringSync();
+      final function = source.indexOf(
+        'Future<void> _verifyBidirectionalDirectExactOne(',
+      );
+      final activateExternal = source.indexOf(
+        'identityId: externalIdentityId,',
+        function,
+      );
+      final recoveredSend = source.indexOf(
+        'final appMessage = await recoveredMessaging.sendText(',
+        function,
+      );
+
+      expect(function, greaterThanOrEqualTo(0));
+      expect(activateExternal, greaterThan(function));
+      expect(recoveredSend, greaterThan(activateExternal));
+    },
+  );
+
+  test('crash-cut Recovery waits for retained risk confirmation', () {
+    final source = File(
+      'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+    ).readAsStringSync();
+    final phaseA = source.indexOf('Future<void> _runRecoveryCrashCutPhaseA(');
+    final confirmation = source.indexOf(
+      "failure: 'Crash-cut Recovery did not retain risk confirmation.'",
+      phaseA,
+    );
+    final activation = source.indexOf(
+      "failure: 'Crash-cut activation was unavailable.'",
+      phaseA,
+    );
+
+    expect(phaseA, greaterThanOrEqualTo(0));
+    expect(confirmation, greaterThan(phaseA));
+    expect(activation, greaterThan(confirmation));
+  });
+
+  test('Recovery completion waits for asynchronous activation to start', () {
+    final source = File(
+      'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+    ).readAsStringSync();
+    final helper = source.indexOf('Future<void> _waitForCompletedRecovery(');
+    final activationGate = source.indexOf(
+      "failure: 'Recovery activation did not start after the visible action.'",
+      helper,
+    );
+    final transitionWait = source.indexOf(
+      "failure: 'A Recovery transition did not return control to the UI.'",
+      helper,
+    );
+
+    expect(helper, greaterThanOrEqualTo(0));
+    expect(activationGate, greaterThan(helper));
+    expect(transitionWait, greaterThan(activationGate));
+  });
+
+  test('Recovery history matcher ignores empty-content control messages', () {
+    final source = File(
+      'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+    ).readAsStringSync();
+    final helper = source.indexOf(
+      'ChatMessage _requireExactStoredMessageByReference(',
+    );
+    final emptyGuard = source.indexOf('message.content.isNotEmpty &&', helper);
+    final semanticReference = source.indexOf(
+      'handleRecoveryFixtureReference(message.content)',
+      helper,
+    );
+
+    expect(helper, greaterThanOrEqualTo(0));
+    expect(emptyGuard, greaterThan(helper));
+    expect(semanticReference, greaterThan(emptyGuard));
   });
 }
 

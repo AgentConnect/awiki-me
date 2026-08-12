@@ -1117,6 +1117,208 @@ void main() {
   });
 
   testWidgets(
+    'wide daemon detail header uses remaining width before wrapping actions',
+    (tester) async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon:header-wide',
+            kind: AgentKind.daemon,
+            handle: 'header-wide-daemon',
+            displayName: 'Header Daemon',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'needs_upgrade',
+              platform: 'linux-amd64',
+              needsUpgrade: true,
+              diagnosticsSummary: genericCliCapabilityDiagnostics,
+            ),
+          ),
+        ];
+      tester.view.physicalSize = const Size(1200, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('agents-persistent-detail-header-inline')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('agents-persistent-detail-header-stacked')),
+        findsNothing,
+      );
+      final actionFinders = <Finder>[
+        find.byKey(const Key('agent-action-refresh')),
+        find.byKey(const Key('agent-action-create-runtime')),
+        find.byKey(const Key('agent-action-rename')),
+        find.byKey(const Key('agent-action-upgrade')),
+        find.byKey(const Key('agent-action-delete')),
+      ];
+      final actionCenters = actionFinders.map(tester.getCenter).toList();
+      final firstActionY = actionCenters.first.dy;
+      for (final center in actionCenters.skip(1)) {
+        expect(center.dy, closeTo(firstActionY, 0.5));
+      }
+
+      final headerRect = tester.getRect(
+        find.byKey(const Key('agents-persistent-detail-header')),
+      );
+      final actionsRect = tester.getRect(
+        find.byKey(const Key('agents-persistent-detail-actions')),
+      );
+      final deleteRect = tester.getRect(
+        find.byKey(const Key('agent-action-delete')),
+      );
+      expect(actionsRect.right, closeTo(headerRect.right - 14.8, 1));
+      expect(deleteRect.right, closeTo(actionsRect.right, 1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'medium daemon detail header stacks identity above right-aligned actions',
+    (tester) async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon:header-medium',
+            kind: AgentKind.daemon,
+            handle: 'header-medium-daemon',
+            displayName: 'Header Daemon',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'needs_upgrade',
+              platform: 'linux-amd64',
+              needsUpgrade: true,
+              diagnosticsSummary: genericCliCapabilityDiagnostics,
+            ),
+          ),
+        ];
+      tester.view.physicalSize = const Size(1000, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('agents-persistent-detail-header-stacked')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('agents-persistent-detail-header-inline')),
+        findsNothing,
+      );
+      final identityRect = tester.getRect(find.text('Header Daemon').last);
+      final actionsRect = tester.getRect(
+        find.byKey(const Key('agents-persistent-detail-actions')),
+      );
+      final headerRect = tester.getRect(
+        find.byKey(const Key('agents-persistent-detail-header')),
+      );
+      final deleteRect = tester.getRect(
+        find.byKey(const Key('agent-action-delete')),
+      );
+      expect(actionsRect.top, greaterThan(identityRect.bottom));
+      expect(actionsRect.right, closeTo(headerRect.right - 14.8, 1));
+      expect(deleteRect.right, closeTo(actionsRect.right, 1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'large display scale keeps daemon header actions inside responsive bounds',
+    (tester) async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon:header-scaled',
+            kind: AgentKind.daemon,
+            handle: 'header-scaled-daemon',
+            displayName: 'Scaled Header Daemon',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'needs_upgrade',
+              platform: 'linux-amd64',
+              needsUpgrade: true,
+              diagnosticsSummary: genericCliCapabilityDiagnostics,
+            ),
+          ),
+        ];
+      tester.view.physicalSize = const Size(1200, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          applyDisplayScale: true,
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            initialDisplayScaleProvider.overrideWithValue(1.3),
+            agentControlServiceProvider.overrideWithValue(control),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('agents-persistent-detail-header-stacked')),
+        findsOneWidget,
+      );
+      final headerRect = tester.getRect(
+        find.byKey(const Key('agents-persistent-detail-header')),
+      );
+      for (final key in <Key>[
+        const Key('agent-action-refresh'),
+        const Key('agent-action-create-runtime'),
+        const Key('agent-action-rename'),
+        const Key('agent-action-upgrade'),
+        const Key('agent-action-delete'),
+      ]) {
+        final rect = tester.getRect(find.byKey(key));
+        expect(headerRect.contains(rect.topLeft), isTrue, reason: '$key');
+        expect(headerRect.contains(rect.bottomRight), isTrue, reason: '$key');
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'unrelated pending agent action does not disable daemon actions',
     (tester) async {
       final control = FakeAgentControlService()
