@@ -236,7 +236,8 @@ Linux 用例独立报告真实通过或失败。
 
 `multi-device-app-pair-content-sync` 是内容同步的聚焦入口。它只建立一次账号、双 App、
 真实 member Join、CLI peer、Direct 和 Group，在同一轮中分别 attestation：混合内容
-tail-only、普通群聊同步、附件元数据与 SHA-256、以及 Direct/Group 已读隔离。该入口不启动
+tail-only（补 Group 和 Attachment，普通 Direct 复用既有专项）、普通群聊同步、附件元数据与
+SHA-256、以及 Direct/Group 精确 `0→1→0` 未读隔离。该入口不启动
 Daemon、Agent、Profile、Recovery 或 Registry 流程；业务能力不满足时测试失败并保留报告，
 不由 E2E 用例修改业务实现。
 - App 必须先订阅 committed patch 并完成当前 session generation 的一次 bounded seed，

@@ -200,7 +200,6 @@ void main() {
         token: server.token,
       );
 
-      await client.publish('joiner', 'content_ready');
       await client.publish(
         'admin',
         'content_fixture_ready',
@@ -209,7 +208,6 @@ void main() {
           'directConversationId': 'dm:peer-scope:v1:peer',
           'groupDid': 'did:wba:awiki.info:group:g1',
           'groupConversationId': 'group:did:wba:awiki.info:group:g1',
-          'preDirectMessageId': 'd0',
           'preGroupMessageId': 'g0',
           'preAttachmentMessageId': 'f0',
           'preAttachmentId': 'attachment-0',
@@ -220,20 +218,18 @@ void main() {
         'admin',
         'content_postjoin_sent',
         data: const <String, Object?>{
-          'directMessageId': 'd1',
           'groupMessageId': 'g1',
           'attachmentMessageId': 'f1',
           'attachmentId': 'attachment-1',
         },
       );
-      await client.publish('joiner', 'content_postjoin_visible');
+      await client.publish('joiner', 'content_unread_baseline_ready');
 
       await expectLater(
         client.publish(
           'admin',
           'content_postjoin_sent',
           data: const <String, Object?>{
-            'directMessageId': 'd1',
             'groupMessageId': 'g1',
             'attachmentMessageId': 'f1',
             'attachmentId': 'attachment-1',

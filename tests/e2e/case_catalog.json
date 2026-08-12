@@ -2211,10 +2211,10 @@
       "feature": "Joined-device mixed-content tail boundary",
       "layer": "remote_product_ui",
       "preconditions": "Two isolated AWiki Me Apps share one account only after a real member Join; an independent CLI peer, one Direct, one Group, and one small attachment fixture exist on awiki.info.",
-      "action": "Create unique Direct, Group, and attachment messages before Join, complete one real device Join, perform a reliable pull, then send all three content types after Join.",
+      "action": "Create one unique Group message and one Direct attachment before Join, complete one real device Join, perform a reliable pull, then send one Group message and one Direct attachment after Join; ordinary Direct tail-only remains covered by DEVICE-MESSAGE-TAIL-ONLY-E2E-001.",
       "exactOracles": [
-        "The joining App cannot project the pre-Join Direct, Group, or attachment IDs or bodies, and those items contribute no unread state before or after an explicit reliable pull.",
-        "The same joining App projects each post-Join Direct, Group, and attachment message exactly once, proving that the negative result is a tail boundary rather than a broken sync path."
+        "The joining App cannot project the pre-Join Group or attachment IDs, bodies, or filename, and those items contribute no unread state before or after an explicit reliable pull.",
+        "The same joining App projects the post-Join Group and attachment messages exactly once, proving that the negative result is a tail boundary rather than a broken sync path."
       ],
       "negativeChecks": [
         "Any pre-Join message, attachment reference, filename, or unread contribution on the joining App; a missing post-Join positive control; or a duplicate canonical message prevents attestation."
@@ -2228,16 +2228,16 @@
       "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
-          "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_direct_group_attachment_absent",
+          "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_group_and_attachment_absent",
           "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread",
           "DEVICE-CONTENT-TAIL-ONLY-E2E-001:explicit_pull_preserved_tail_boundary",
-          "DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_direct_group_attachment_visible_once"
+          "DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_group_and_attachment_visible_once"
         ],
         "exactOracleAssertions": [
-          ["DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_direct_group_attachment_absent", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:explicit_pull_preserved_tail_boundary"],
-          ["DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_direct_group_attachment_visible_once"]
+          ["DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_group_and_attachment_absent", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:explicit_pull_preserved_tail_boundary"],
+          ["DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_group_and_attachment_visible_once"]
         ],
-        "negativeCheckAssertions": [["DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_direct_group_attachment_absent", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_direct_group_attachment_visible_once"]]
+        "negativeCheckAssertions": [["DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_group_and_attachment_absent", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_group_and_attachment_visible_once"]]
       }
     },
     {
@@ -2285,7 +2285,7 @@
         "The joining App downloads bytes whose SHA-256 equals the sending fixture."
       ],
       "negativeChecks": [
-        "A second attachment object or message, metadata drift, download failure, or byte-digest mismatch prevents attestation."
+        "A duplicate target attachment message, canonical attachment-reference drift, metadata mismatch, download failure, or byte-digest mismatch prevents attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
@@ -2315,11 +2315,11 @@
       "preconditions": "The two joined Apps are observing one Direct and one Group while an independent CLI peer can send into both conversations.",
       "action": "Create incoming unread messages in both conversations, read Direct first and Group second on the joining App, then repeat reliable sync.",
       "exactOracles": [
-        "Direct and Group unread state appears on both Apps; reading Direct converges to the sibling without clearing Group, then reading Group converges without regressing Direct.",
+        "Direct and Group start at zero unread and advance to exactly one on both Apps; reading Direct converges to zero on the sibling without clearing Group, then reading Group converges to zero without regressing Direct.",
         "A repeated reliable sync preserves zero unread and exact-one canonical message projection."
       ],
       "negativeChecks": [
-        "Cross-conversation unread clearing, a read watermark regression, unread rebound, duplicate messages, or writing App-only evidence prevents attestation."
+        "An incorrect 0-to-1 unread transition, cross-conversation unread clearing, unread-state regression or rebound, duplicate messages, or writing App-only evidence prevents attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",

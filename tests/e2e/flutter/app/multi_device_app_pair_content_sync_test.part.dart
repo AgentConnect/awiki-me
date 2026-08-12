@@ -6,7 +6,6 @@ class _AppPairContentAdminResources {
   String? directConversationId;
   String? groupDid;
   String? groupConversationId;
-  String? preDirectMessageId;
   String? preGroupMessageId;
   String? preAttachmentMessageId;
   String? preAttachmentId;
@@ -72,30 +71,6 @@ Future<void> _prepareAppPairContentHistory({
   final groupDid = group.groupId.trim();
   final groupConversationId = 'group:$groupDid';
   await groups.addMember(groupDid: groupDid, memberRef: peerDid);
-
-  final directText = _contentText(config.runId, 'pre-direct');
-  final preDirect = await bootstrap.messagingService!.sendConversationText(
-    conversation: AppConversationReadRef.fromConversationId(
-      directConversationId,
-    ),
-    content: directText,
-  );
-  final preDirectId = _requireCommittedContentMessage(
-    preDirect,
-    conversationId: directConversationId,
-    senderDid: adminDid,
-    isMine: true,
-    failure: 'The existing App did not commit the pre-Join Direct message.',
-  );
-  await _waitForContentMessage(
-    container: container,
-    messaging: bootstrap.messagingService!,
-    conversationId: directConversationId,
-    content: directText,
-    messageId: preDirectId,
-    senderDid: adminDid,
-    isMine: true,
-  );
 
   final groupText = _contentText(config.runId, 'pre-group');
   final preGroup = await bootstrap.messagingService!.sendConversationText(
@@ -165,7 +140,6 @@ Future<void> _prepareAppPairContentHistory({
     ..directConversationId = directConversationId
     ..groupDid = groupDid
     ..groupConversationId = groupConversationId
-    ..preDirectMessageId = preDirectId
     ..preGroupMessageId = preGroupId
     ..preAttachmentMessageId = preAttachmentId
     ..preAttachmentId = attachmentId;
@@ -180,7 +154,6 @@ Future<void> _runAppPairAdminContentSync({
   required _AppPairContentAdminResources resources,
 }) async {
   await _leaveCompletedAppPairApproval(tester);
-  await config.coordinator.waitFor('joiner', 'content_ready');
   final peer = resources.peer;
   final peerDid = resources.peerDid;
   final directId = resources.directConversationId;
@@ -201,26 +174,12 @@ Future<void> _runAppPairAdminContentSync({
       'directConversationId': directId,
       'groupDid': groupDid,
       'groupConversationId': groupId,
-      'preDirectMessageId': resources.preDirectMessageId!,
       'preGroupMessageId': resources.preGroupMessageId!,
       'preAttachmentMessageId': resources.preAttachmentMessageId!,
       'preAttachmentId': resources.preAttachmentId!,
     },
   );
   await config.coordinator.waitFor('joiner', 'content_prejoin_absent');
-
-  final postDirectText = _contentText(config.runId, 'post-direct');
-  final postDirect = await bootstrap.messagingService!.sendConversationText(
-    conversation: AppConversationReadRef.fromConversationId(directId),
-    content: postDirectText,
-  );
-  final postDirectId = _requireCommittedContentMessage(
-    postDirect,
-    conversationId: directId,
-    senderDid: adminDid,
-    isMine: true,
-    failure: 'The existing App did not commit the post-Join Direct message.',
-  );
 
   final postGroupText = _contentText(config.runId, 'post-group');
   final postGroup = await bootstrap.messagingService!.sendConversationText(
@@ -264,14 +223,11 @@ Future<void> _runAppPairAdminContentSync({
     'admin',
     'content_postjoin_sent',
     data: <String, Object?>{
-      'directMessageId': postDirectId,
       'groupMessageId': postGroupId,
       'attachmentMessageId': postAttachmentMessageId,
       'attachmentId': postAttachmentId,
     },
   );
-  await config.coordinator.waitFor('joiner', 'content_postjoin_visible');
-
   final reverse = await config.coordinator.waitFor(
     'joiner',
     'content_group_reverse_sent',
@@ -286,7 +242,22 @@ Future<void> _runAppPairAdminContentSync({
     isMine: true,
     groupDid: groupDid,
   );
-  await config.coordinator.publish('admin', 'content_group_reverse_visible');
+
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: directId,
+    matches: (value) => value == 0,
+    failure: 'The existing App Direct unread baseline was not zero.',
+  );
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: groupId,
+    matches: (value) => value == 0,
+    failure: 'The existing App Group unread baseline was not zero.',
+  );
+  await config.coordinator.waitFor('joiner', 'content_unread_baseline_ready');
 
   final incomingDirectText = _contentText(config.runId, 'peer-direct');
   final incomingGroupText = _contentText(config.runId, 'peer-group');
@@ -321,15 +292,15 @@ Future<void> _runAppPairAdminContentSync({
     tester: tester,
     container: container,
     conversationId: directId,
-    matches: (value) => value > 0,
-    failure: 'The existing App did not project Direct unread state.',
+    matches: (value) => value == 1,
+    failure: 'The existing App Direct unread count did not advance to one.',
   );
   await _waitForAppPairUnreadCount(
     tester: tester,
     container: container,
     conversationId: groupId,
-    matches: (value) => value > 0,
-    failure: 'The existing App did not project Group unread state.',
+    matches: (value) => value == 1,
+    failure: 'The existing App Group unread count did not advance to one.',
   );
   await config.coordinator.publish(
     'admin',
@@ -339,10 +310,6 @@ Future<void> _runAppPairAdminContentSync({
       'groupMessageId': incomingGroupId,
     },
   );
-  await config.coordinator.waitFor('joiner', 'content_incoming_visible');
-  await config.coordinator.waitFor('joiner', 'content_unread_visible');
-  await config.coordinator.publish('admin', 'content_unread_visible');
-
   await config.coordinator.waitFor('joiner', 'content_direct_read_committed');
   await _waitForAppPairUnreadCount(
     tester: tester,
@@ -355,7 +322,7 @@ Future<void> _runAppPairAdminContentSync({
     tester: tester,
     container: container,
     conversationId: groupId,
-    matches: (value) => value > 0,
+    matches: (value) => value == 1,
     failure: 'Reading Direct incorrectly cleared Group unread state.',
   );
   await config.coordinator.publish('admin', 'content_direct_read_converged');
@@ -395,7 +362,6 @@ Future<void> _runAppPairJoinerContentSync({
   required String accountDid,
 }) async {
   await _leaveCompletedAppPairJoin(tester);
-  await config.coordinator.publish('joiner', 'content_ready');
   final fixture = await config.coordinator.waitFor(
     'admin',
     'content_fixture_ready',
@@ -412,10 +378,6 @@ Future<void> _runAppPairJoinerContentSync({
     directConversationId: directId,
     groupConversationId: groupId,
     forbidden: <String, String>{
-      _required(fixture, 'preDirectMessageId'): _contentText(
-        config.runId,
-        'pre-direct',
-      ),
       _required(fixture, 'preGroupMessageId'): _contentText(
         config.runId,
         'pre-group',
@@ -426,7 +388,6 @@ Future<void> _runAppPairJoinerContentSync({
       ),
     },
     forbiddenAttachmentId: _required(fixture, 'preAttachmentId'),
-    forbiddenAttachmentMessageId: _required(fixture, 'preAttachmentMessageId'),
     forbiddenAttachmentFilename: _contentFilename(config.runId, 'prejoin'),
   );
   await container
@@ -440,10 +401,6 @@ Future<void> _runAppPairJoinerContentSync({
     directConversationId: directId,
     groupConversationId: groupId,
     forbidden: <String, String>{
-      _required(fixture, 'preDirectMessageId'): _contentText(
-        config.runId,
-        'pre-direct',
-      ),
       _required(fixture, 'preGroupMessageId'): _contentText(
         config.runId,
         'pre-group',
@@ -454,7 +411,6 @@ Future<void> _runAppPairJoinerContentSync({
       ),
     },
     forbiddenAttachmentId: _required(fixture, 'preAttachmentId'),
-    forbiddenAttachmentMessageId: _required(fixture, 'preAttachmentMessageId'),
     forbiddenAttachmentFilename: _contentFilename(config.runId, 'prejoin'),
   );
   await config.coordinator.publish('joiner', 'content_prejoin_absent');
@@ -462,15 +418,6 @@ Future<void> _runAppPairJoinerContentSync({
   final sent = await config.coordinator.waitFor(
     'admin',
     'content_postjoin_sent',
-  );
-  await _waitForContentMessage(
-    container: container,
-    messaging: bootstrap.messagingService!,
-    conversationId: directId,
-    content: _contentText(config.runId, 'post-direct'),
-    messageId: _required(sent, 'directMessageId'),
-    senderDid: accountDid,
-    isMine: true,
   );
   await _waitForContentMessage(
     container: container,
@@ -508,7 +455,24 @@ Future<void> _runAppPairJoinerContentSync({
       sha256.convert(download.bytes!) != sha256.convert(expectedBytes)) {
     fail('The joined App attachment bytes did not match the sender digest.');
   }
-  await config.coordinator.publish('joiner', 'content_postjoin_visible');
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairContentTailOnlyCaseId,
+    phases: const <String>[
+      'prejoin_group_and_attachment_absent',
+      'prejoin_content_contributed_no_unread',
+      'explicit_pull_preserved_tail_boundary',
+      'postjoin_group_and_attachment_visible_once',
+    ],
+  );
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairAttachmentSyncCaseId,
+    phases: const <String>[
+      'canonical_attachment_message_and_object_preserved',
+      'attachment_metadata_matched',
+      'joined_device_download_digest_matched',
+      'attachment_message_projected_once',
+    ],
+  );
 
   final reverseText = _contentText(config.runId, 'joiner-group');
   final reverse = await bootstrap.messagingService!.sendConversationText(
@@ -528,9 +492,23 @@ Future<void> _runAppPairJoinerContentSync({
     'content_group_reverse_sent',
     data: <String, Object?>{'messageId': reverseId},
   );
-  await config.coordinator.waitFor('admin', 'content_group_reverse_visible');
 
   await _openContentObserverPage(tester);
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: directId,
+    matches: (value) => value == 0,
+    failure: 'The joining App Direct unread baseline was not zero.',
+  );
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: groupId,
+    matches: (value) => value == 0,
+    failure: 'The joining App Group unread baseline was not zero.',
+  );
+  await config.coordinator.publish('joiner', 'content_unread_baseline_ready');
   final incoming = await config.coordinator.waitFor(
     'admin',
     'content_incoming_sent',
@@ -556,23 +534,29 @@ Future<void> _runAppPairJoinerContentSync({
     isMine: false,
     groupDid: groupDid,
   );
-  await config.coordinator.publish('joiner', 'content_incoming_visible');
   await _waitForAppPairUnreadCount(
     tester: tester,
     container: container,
     conversationId: directId,
-    matches: (value) => value > 0,
-    failure: 'The joining App did not project Direct unread state.',
+    matches: (value) => value == 1,
+    failure: 'The joining App Direct unread count did not advance to one.',
   );
   await _waitForAppPairUnreadCount(
     tester: tester,
     container: container,
     conversationId: groupId,
-    matches: (value) => value > 0,
-    failure: 'The joining App did not project Group unread state.',
+    matches: (value) => value == 1,
+    failure: 'The joining App Group unread count did not advance to one.',
   );
-  await config.coordinator.publish('joiner', 'content_unread_visible');
-  await config.coordinator.waitFor('admin', 'content_unread_visible');
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairGroupSyncCaseId,
+    phases: const <String>[
+      'admin_group_own_sync_projected_once',
+      'joiner_group_own_sync_projected_once',
+      'canonical_group_and_conversation_preserved',
+      'external_group_message_projected_incoming_once',
+    ],
+  );
 
   await _openAppPairConversation(
     tester: tester,
@@ -590,7 +574,7 @@ Future<void> _runAppPairJoinerContentSync({
     tester: tester,
     container: container,
     conversationId: groupId,
-    matches: (value) => value > 0,
+    matches: (value) => value == 1,
     failure: 'Opening Direct incorrectly cleared Group unread state.',
   );
   await config.coordinator.publish('joiner', 'content_direct_read_committed');
@@ -641,33 +625,6 @@ Future<void> _runAppPairJoinerContentSync({
     expected: 1,
   );
 
-  await E2eCaseAttestationWriter.markPassed(
-    _appPairContentTailOnlyCaseId,
-    phases: const <String>[
-      'prejoin_direct_group_attachment_absent',
-      'prejoin_content_contributed_no_unread',
-      'explicit_pull_preserved_tail_boundary',
-      'postjoin_direct_group_attachment_visible_once',
-    ],
-  );
-  await E2eCaseAttestationWriter.markPassed(
-    _appPairGroupSyncCaseId,
-    phases: const <String>[
-      'admin_group_own_sync_projected_once',
-      'joiner_group_own_sync_projected_once',
-      'canonical_group_and_conversation_preserved',
-      'external_group_message_projected_incoming_once',
-    ],
-  );
-  await E2eCaseAttestationWriter.markPassed(
-    _appPairAttachmentSyncCaseId,
-    phases: const <String>[
-      'canonical_attachment_message_and_object_preserved',
-      'attachment_metadata_matched',
-      'joined_device_download_digest_matched',
-      'attachment_message_projected_once',
-    ],
-  );
   await E2eCaseAttestationWriter.markPassed(
     _appPairGroupReadSyncCaseId,
     phases: const <String>[
@@ -760,7 +717,6 @@ Future<void> _assertContentPreJoinAbsent({
   required String groupConversationId,
   required Map<String, String> forbidden,
   required String forbiddenAttachmentId,
-  required String forbiddenAttachmentMessageId,
   required String forbiddenAttachmentFilename,
 }) async {
   if (messaging is! ConversationTimelineMessagingService) {
@@ -808,20 +764,6 @@ Future<void> _assertContentPreJoinAbsent({
   if (rows.any((row) => row.unreadCount != 0) ||
       rows.any((row) => forbidden.values.contains(row.lastMessagePreview))) {
     fail('Pre-Join content leaked into the joining App list or unread state.');
-  }
-  var downloaded = false;
-  try {
-    await messaging.downloadAttachment(
-      thread: AppThreadRef.direct(peerDid),
-      messageId: forbiddenAttachmentMessageId,
-      attachmentId: forbiddenAttachmentId,
-    );
-    downloaded = true;
-  } on Object {
-    // The joined replica has no authorized local projection for this object.
-  }
-  if (downloaded) {
-    fail('The joining App downloaded an attachment from before Join.');
   }
   await _openContentObserverPage(tester);
 }

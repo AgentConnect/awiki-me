@@ -204,10 +204,10 @@ required remote pass evidence.
 
 `--case multi-device-app-pair-content-sync` is the focused two-App content
 entry. It reuses one real member Join and one independent CLI peer to attest
-pre-Join Direct/Group/attachment absence, post-Join Group ownership and
-exact-one projection, attachment download digest, and isolated Direct/Group
-read convergence. It does not run Agent, Profile, Recovery, Registry, or MLS
-flows.
+pre-Join Group/attachment absence (ordinary Direct reuses its existing focused
+case), post-Join Group ownership and exact-one projection, attachment download
+digest, and isolated Direct/Group `0 -> 1 -> 0` unread convergence. It does not
+run Agent, Profile, Recovery, Registry, or MLS flows.
 
 `--case personal-agent` is the durable acceptance entry for Personal Agent
 product behavior. It is a fail-fast real-backend gate: local YAML must provide
