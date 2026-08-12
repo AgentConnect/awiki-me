@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-12.handle-recovery-fresh-state",
+  "sourceRevision": "2026-08-12.handle-recovery-fresh-suite",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",

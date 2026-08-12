@@ -294,6 +294,31 @@ void main() {
         'HANDLE-RECOVERY-V1-E2E-002',
         'HANDLE-RECOVERY-V1-E2E-003',
         'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
+      ]);
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 20));
+      expect(
+        hyphen.e2eCase.testFile,
+        'integration_test/handle_recovery_ui_test.dart',
+      );
+    });
+
+    test('parses Fresh Root Handle Recovery case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi-device-remote-recovery-fresh',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'remote_multi_device_recovery_fresh',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.multiDeviceRemoteRecoveryFresh);
+      expect(underscore.e2eCase, DesktopE2eCase.multiDeviceRemoteRecoveryFresh);
+      expect(hyphen.e2eCase.requiresCliPeer, isFalse);
+      expect(hyphen.e2eCase.scenario, 'multi-device-handle-recovery-fresh-v1');
+      expect(hyphen.e2eCase.caseIds, <String>[
         'HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001',
         'HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001',
         'HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001',
@@ -301,7 +326,7 @@ void main() {
         'HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001',
         'HANDLE-RECOVERY-FRESH-RESTART-E2E-001',
       ]);
-      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 20));
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 45));
       expect(
         hyphen.e2eCase.testFile,
         'integration_test/handle_recovery_ui_test.dart',
@@ -663,6 +688,7 @@ void main() {
             'Unsupported E2E case "unknown". '
                 'Use smoke, multi-device, multi-device-remote-join, '
                 'multi-device-remote-recovery, '
+                'multi-device-remote-recovery-fresh, '
                 'multi-device-app-pair-recovery-registration-rejoin-management-transfer, '
                 'multi-device-app-pair, multi-device-app-pair-functional, '
                 'multi-device-app-pair-content-sync, step4-revoke-mls, full, performance, direct, '

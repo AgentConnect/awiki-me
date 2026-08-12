@@ -374,6 +374,16 @@ class AppTestCatalog {
         'legacy recovery.begin/finalize protocols.',
       )
       ..writeln(
+        '- `multi-device-remote-recovery-fresh` independently runs the six '
+        'Fresh Root business-continuity cases after recovery: current Agent '
+        'Inventory, visible Runtime messaging, Handle-resolved Direct '
+        'inbound, Group membership rebind, Group inbound, and a second '
+        'Flutter process over the same recovered root. It uses the same '
+        'audited remote target, protected OTP fixture, E2E-only user presence, '
+        'and residual ledger as the base Recovery suite, but its result is '
+        'not gated by the base suite\'s crash-cut or old-peer re-Join phases.',
+      )
+      ..writeln(
         '- `multi-device-app-pair` is the one-host/two-process App↔App mode. '
         'It builds two Debug bundles with stable distinct bundle identifiers, '
         'isolated Flutter build directories, and independent native Core '

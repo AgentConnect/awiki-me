@@ -51,6 +51,7 @@ void main() {
           'multi-device',
           'multi-device-remote-join',
           'multi-device-remote-recovery',
+          'multi-device-remote-recovery-fresh',
           'multi-device-app-pair',
           'multi-device-app-pair-functional',
           'step4-revoke-mls',
@@ -80,13 +81,18 @@ void main() {
         'HANDLE-RECOVERY-V1-E2E-002',
         'HANDLE-RECOVERY-V1-E2E-003',
         'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
-        'HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001',
-        'HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001',
-        'HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001',
-        'HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001',
-        'HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001',
-        'HANDLE-RECOVERY-FRESH-RESTART-E2E-001',
       ]);
+      expect(
+        catalog.suiteCaseIds['multi-device-remote-recovery-fresh'],
+        <String>[
+          'HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001',
+          'HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001',
+          'HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001',
+          'HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001',
+          'HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001',
+          'HANDLE-RECOVERY-FRESH-RESTART-E2E-001',
+        ],
+      );
       expect(catalog.suiteCaseIds['multi-device-app-pair'], <String>[
         'DEVICE-JOIN-E2E-004',
         'DEVICE-JOIN-E2E-005',

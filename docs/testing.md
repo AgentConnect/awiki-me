@@ -334,6 +334,17 @@ dart run tests/e2e/runner.dart \
   --config <local-awiki-info-config.yaml>
 ```
 
+Run the six Fresh Root continuity cases independently when validating Agent,
+Direct, Group-rebind/inbound, and cold-process restart behavior:
+
+```bash
+AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
+AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=recovery \
+dart run tests/e2e/runner.dart \
+  --case multi-device-remote-recovery-fresh \
+  --config <local-awiki-info-config.yaml>
+```
+
 This gate uses current purpose `awiki.identity.handle-recovery.v1` and drives
 prepare/risk confirmation/activate/resume through visible Flutter controls.
 After a remote Commit, a typed `local_transition_pending` result keeps the same

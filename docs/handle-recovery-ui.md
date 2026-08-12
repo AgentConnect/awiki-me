@@ -151,7 +151,19 @@ dart run tests/e2e/runner.dart \
   --config <local-awiki-info-config.yaml>
 ```
 
-该 suite 只允许受审计的 `https://awiki.info` 配置。注册和 Recovery 复用 ignored、
+六个 Fresh Root 业务连续性 case（Agent Inventory/消息、Direct inbound、Group rebind/inbound
+以及冷进程重启）使用独立 suite，避免被基础 Recovery 的 crash-cut 或旧 peer re-Join 阶段
+阻断：
+
+```bash
+AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
+AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=recovery \
+dart run tests/e2e/runner.dart \
+  --case multi-device-remote-recovery-fresh \
+  --config <local-awiki-info-config.yaml>
+```
+
+上述两个 suite 都只允许受审计的 `https://awiki.info` 配置。注册和 Recovery 复用 ignored、
 权限受限的 local YAML 中同一个测试手机号和六位固定验证码；仍须先调用真实、精确绑定
 purpose/Handle/operation ID 的短信接口。OTP 只在测试进程内读取并注册到 redactor，不能
 写入 run config、版本控制文件、attestation、诊断或报告。
