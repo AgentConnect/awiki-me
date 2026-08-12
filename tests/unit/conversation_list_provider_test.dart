@@ -1873,6 +1873,130 @@ void main() {
     expect(service.watchCalls, 1);
   });
 
+  test(
+    'committed patches accept sibling read state for direct and group',
+    () async {
+      for (final isGroup in <bool>[false, true]) {
+        final threadId = isGroup ? 'group:read-sync' : 'dm:alice:bob';
+        final unread =
+            _conversation(
+              threadId: threadId,
+              displayName: isGroup ? 'Read sync group' : 'Bob',
+              unreadCount: 1,
+              isGroup: isGroup,
+              groupId: isGroup ? 'read-sync' : null,
+            ).copyWith(
+              lastMessageSnapshot: _messageSnapshot(
+                threadId: threadId,
+                remoteId: 'remote-read-sync',
+                serverSequence: 12,
+              ),
+            );
+        final service = _PatchConversationService(
+          conversations: const <ConversationSummary>[],
+        );
+        final notifications = FakeNotificationFacade();
+        final container = _conversationContainer(
+          service: service,
+          notifications: notifications,
+          ownerDid: 'did:alice',
+        );
+
+        await container
+            .read(conversationListProvider.notifier)
+            .refreshFastLocal();
+        service.emitPatch(
+          ConversationListPatch(
+            kind: ConversationListPatchKind.upsert,
+            ownerDid: 'did:alice',
+            version: 1,
+            unreadTotal: 1,
+            item: unread,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        service.emitPatch(
+          ConversationListPatch(
+            kind: isGroup
+                ? ConversationListPatchKind.reset
+                : ConversationListPatchKind.upsert,
+            ownerDid: 'did:alice',
+            version: 2,
+            unreadTotal: 0,
+            item: isGroup ? null : unread.copyWith(unreadCount: 0),
+            items: isGroup
+                ? <ConversationSummary>[unread.copyWith(unreadCount: 0)]
+                : const <ConversationSummary>[],
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(container.read(conversationListProvider).unreadCount, 0);
+        expect(notifications.lastBadgeCount, 0);
+        container.dispose();
+      }
+    },
+  );
+
+  test(
+    'committed patch keeps a newly synced sibling-read message read',
+    () async {
+      final oldMessageAt = DateTime.utc(2026, 8, 12, 2);
+      final newMessageAt = oldMessageAt.add(const Duration(seconds: 1));
+      final oldRead =
+          _conversation(
+            threadId: 'dm:alice:bob',
+            displayName: 'Bob',
+            lastMessageAt: oldMessageAt,
+          ).copyWith(
+            lastMessageSnapshot: _messageSnapshot(
+              threadId: 'dm:alice:bob',
+              remoteId: 'remote-old-read',
+              serverSequence: 11,
+              createdAt: oldMessageAt,
+            ),
+          );
+      final newSiblingRead = oldRead.copyWith(
+        lastMessagePreview: 'read before this device synced',
+        lastMessageAt: newMessageAt,
+        unreadCount: 0,
+        lastMessageSnapshot: _messageSnapshot(
+          threadId: 'dm:alice:bob',
+          remoteId: 'remote-new-read',
+          serverSequence: 12,
+          createdAt: newMessageAt,
+        ),
+      );
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      await notifier.refreshFastLocal();
+      notifier.upsertConversation(oldRead);
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+          item: newSiblingRead,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(conversationListProvider).unreadCount, 0);
+      expect(notifications.lastBadgeCount, 0);
+    },
+  );
+
   test('badge updates stay ordered across an identity switch', () async {
     final notifications = _BlockingFirstBadgeNotificationFacade();
     final container = _conversationContainer(
@@ -3307,7 +3431,7 @@ void main() {
         _conversation(
           threadId: 'dm:alice:carol',
           displayName: 'Carol repaired',
-          unreadCount: 2,
+          unreadCount: 0,
         ),
       ];
       final service = _PatchConversationService(
@@ -3322,16 +3446,16 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      await container
-          .read(conversationListProvider.notifier)
-          .refreshFastLocal();
+      final notifier = container.read(conversationListProvider.notifier);
+      await notifier.refreshFastLocal();
+      notifier.upsertConversation(repaired.single.copyWith(unreadCount: 2));
 
       service.emitPatch(
         const ConversationListPatch(
           kind: ConversationListPatchKind.repairRequired,
           ownerDid: 'did:alice',
           version: 1,
-          unreadTotal: 2,
+          unreadTotal: 0,
           reason: 'subscriber_lag',
         ),
       );
@@ -3343,7 +3467,8 @@ void main() {
       expect(service.repairCalls, 1);
       expect(conversations, hasLength(1));
       expect(conversations.single.displayName, 'Carol repaired');
-      expect(notifications.lastBadgeCount, 2);
+      expect(conversations.single.unreadCount, 0);
+      expect(notifications.lastBadgeCount, 0);
     },
   );
 

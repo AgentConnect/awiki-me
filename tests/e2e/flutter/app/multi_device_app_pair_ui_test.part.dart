@@ -3573,7 +3573,7 @@ Future<void> _runAppPairJoinerReadAndRecovery({
     phases: const <String>[
       'ordinary_message_unread_on_both_apps',
       'joining_app_visible_read_committed_by_core',
-      'admin_app_read_watermark_converged',
+      'admin_app_committed_patch_cleared_unread',
       'duplicate_sync_did_not_regress_read',
     ],
   );

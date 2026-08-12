@@ -1246,6 +1246,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           keepLocalOnly: false,
         ),
         ownerDid: patch.ownerDid,
+        acceptCommittedReadState: true,
       ),
     );
     final beforeUnread = state.unreadCount;
@@ -1304,7 +1305,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       return;
     }
     _snapshotBootstrapActive = false;
-    _upsertConversation(conversation, source: 'patch_upsert', version: version);
+    _upsertConversation(
+      conversation,
+      source: 'patch_upsert',
+      version: version,
+      acceptCommittedReadState: true,
+    );
   }
 
   void _applyPatchRemove(ConversationListPatch patch) {
@@ -1502,6 +1508,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       keepLocalOnly: false,
       badgeSource: 'patch_repair',
       version: repair.version,
+      acceptCommittedReadState: true,
     );
     if (!_isPatchWorkCurrent(
       ownerDid: ownerDid,
@@ -1774,6 +1781,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     ConversationSummary conversation, {
     String source = 'upsert',
     int? version,
+    bool acceptCommittedReadState = false,
   }) {
     if (_isLocallyHidden(conversation)) {
       return;
@@ -1795,6 +1803,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         local: existing,
       ),
       ownerDid: _currentOwnerDid,
+      acceptCommittedReadState: acceptCommittedReadState,
     );
     final merged = _replaceConversationInPresentationList(
       current: state.conversations,
@@ -2544,6 +2553,7 @@ class _ConversationReadPresentationStore {
         ownerDid: ownerDid,
         hadPreviousLatest: hadLatest,
         mentionUnreadCount: state.displayUnreadMentionCount,
+        acceptCommittedReadState: acceptCommittedReadState,
       );
       state.displayFirstUnreadMentionMessageId =
           state.displayUnreadMentionCount > 0
@@ -2727,9 +2737,10 @@ int _displayUnreadCountForLatestAdvance(
   required String? ownerDid,
   required bool hadPreviousLatest,
   required int mentionUnreadCount,
+  bool acceptCommittedReadState = false,
 }) {
   final providedUnread = _normalizedUnreadCount(conversation);
-  if (providedUnread > 0 || !hadPreviousLatest) {
+  if (acceptCommittedReadState || providedUnread > 0 || !hadPreviousLatest) {
     return providedUnread;
   }
   return _latestMessageIsFromOtherParticipant(conversation, ownerDid: ownerDid)

@@ -3203,7 +3203,7 @@
       "exactOracles": [
         "Both Apps project the exact incoming ordinary message once and advance the same canonical conversation unread state.",
         "Opening the joining App conversation commits a Core-owned read watermark without an App-owned checkpoint or direct read-state wire call.",
-        "The admin App eventually projects the same or higher read watermark and its unread count does not regress after reconnect or duplicate sync."
+        "The admin App accepts the Core committed conversation patch, clears its unread count, and does not regress after reconnect or duplicate sync."
       ],
       "negativeChecks": [
         "A raw App read cursor, direct read-state payload, E2EE or MLS event, lower remote watermark, duplicate message, canonical conversation mismatch, or test-side projection mutation prevents pass attestation."
@@ -3222,7 +3222,7 @@
         "assertionIds": [
           "DEVICE-MESSAGE-READ-SYNC-E2E-001:ordinary_message_unread_on_both_apps",
           "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_visible_read_committed_by_core",
-          "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_read_watermark_converged",
+          "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_committed_patch_cleared_unread",
           "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_read"
         ],
         "exactOracleAssertions": [
@@ -3233,7 +3233,7 @@
             "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_visible_read_committed_by_core"
           ],
           [
-            "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_read_watermark_converged",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_committed_patch_cleared_unread",
             "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_read"
           ]
         ],
@@ -3241,7 +3241,7 @@
           [
             "DEVICE-MESSAGE-READ-SYNC-E2E-001:ordinary_message_unread_on_both_apps",
             "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_visible_read_committed_by_core",
-            "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_read_watermark_converged",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_committed_patch_cleared_unread",
             "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_read"
           ]
         ]
