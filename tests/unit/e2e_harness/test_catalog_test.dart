@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(117));
+      expect(catalog.cases, hasLength(118));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -43,6 +43,7 @@ void main() {
           'ANDROID-DEVICE-JOIN-E2E-001',
           'IOS-DEVICE-JOIN-E2E-001',
           'WINDOWS-DEVICE-JOIN-E2E-001',
+          'WINDOWS-ATTACHMENT-LONG-PATH-E2E-001',
           'ANDROID-PUSH-PRODUCT-E2E-001',
           'ANDROID-PUSH-NATIVE-E2E-001',
         ]),
@@ -150,6 +151,10 @@ void main() {
         'planned',
       );
       expect(
+        catalog.caseById['WINDOWS-ATTACHMENT-LONG-PATH-E2E-001']!.catalogStatus,
+        'planned',
+      );
+      expect(
         catalog.caseById['ANDROID-PUSH-PRODUCT-E2E-001']!.catalogStatus,
         'planned',
       );
@@ -163,6 +168,10 @@ void main() {
       expect(executableCaseIds, isNot(contains('ANDROID-DEVICE-JOIN-E2E-001')));
       expect(executableCaseIds, isNot(contains('IOS-DEVICE-JOIN-E2E-001')));
       expect(executableCaseIds, isNot(contains('WINDOWS-DEVICE-JOIN-E2E-001')));
+      expect(
+        executableCaseIds,
+        isNot(contains('WINDOWS-ATTACHMENT-LONG-PATH-E2E-001')),
+      );
       expect(
         executableCaseIds,
         isNot(contains('ANDROID-PUSH-PRODUCT-E2E-001')),

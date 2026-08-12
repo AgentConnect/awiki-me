@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-12.native-device-join-capability-matrix",
+  "sourceRevision": "2026-08-12.windows-attachment-long-path",
   "suites": {
     "smoke": {
       "tier": "product_ui",

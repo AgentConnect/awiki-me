@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-12.native-device-join-capability-matrix",
+  "sourceRevision": "2026-08-12.windows-attachment-long-path",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
@@ -141,6 +141,30 @@
       ],
       "owner": "awiki-me-identity+awiki-cli-rs2",
       "implementationPath": "tests/e2e/planned/multi_device_future_cases.md",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "WINDOWS-ATTACHMENT-LONG-PATH-E2E-001",
+      "feature": "Windows attachment preview publishes beyond MAX_PATH",
+      "layer": "native_product_ui",
+      "preconditions": "A real Windows x64 AWiki Me build uses a storage-scope root and group attachment identity whose deterministic download staging path plus .awiki-part exceeds 260 UTF-16 code units; the system LongPathsEnabled policy is not a test prerequisite.",
+      "action": "Open the remote group attachment from the chat UI, let Core resume or download it to the deterministic staging file, atomically publish it, open the preview, restart the App, and open the cached attachment again.",
+      "exactOracles": [
+        "Core verifies the object and atomically replaces the long .awiki-part path without io_error or Windows os error 3, and AWiki Me opens the exact attachment bytes.",
+        "After restart the committed cache file remains available and the App reopens it without another remote download."
+      ],
+      "negativeChecks": [
+        "Shortening the test path below 260 code units, enabling LongPathsEnabled as a prerequisite, using memory-only download, manually copying the file, non-Windows or mock-native execution, accepting a partial file, or manual observation without case attestation cannot pass."
+      ],
+      "environment": "windows_x64_remote",
+      "cleanupPolicy": "remove_isolated_attachment_cache_and_app_state",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-attachments+awiki-cli-rs2",
+      "implementationPath": "tests/e2e/planned/windows_attachment_future_cases.md",
       "evidenceType": "case_attestation",
       "catalogStatus": "planned"
     },
