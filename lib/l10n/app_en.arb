@@ -1459,6 +1459,8 @@
   "handleRecoveryRiskConfirm": "I understand these effects",
   "handleRecoveryActivate": "Confirm and recover",
   "handleRecoveryResume": "Resume recovery",
+  "handleRecoveryEnterMessages": "Continue to messages",
+  "handleRecoverySessionActivationFailed": "Identity recovery is complete, but the local session is not active. Retry entering messages; do not start a new recovery.",
   "handleRecoveryPresenceReason": "Confirm Handle identity recovery",
   "handleRecoveryRiskRequired": "Confirm that you understand the recovery effects first.",
   "handleRecoveryFailed": "Recovery failed. Try again later.",

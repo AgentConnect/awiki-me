@@ -4056,7 +4056,7 @@
       "preconditions": "The audited awiki.info target advertises Handle Recovery V4; an old local identity has a durable Product Registry epoch and stable account Profile; phase A and phase B use the same isolated App/native Core state root.",
       "action": "Phase A completes one visible, risk-confirmed Recovery with an E2E-only fail-closed cut before recovered-identity activation, then terminates without disposing the AppBootstrap. Phase B launches a new Flutter process over the same state root and restores the session.",
       "exactOracles": [
-        "Phase A records a committed Core receipt while the Product Registry still holds the exact old DID/generation and the App session still projects the old DID.",
+        "Phase A quiesces the old App session before the Core commit and records a committed receipt while the Product Registry still holds the exact old DID/generation.",
         "Phase B cannot publish the replacement authenticated session until the bootstrap epoch barrier applies the authorized reset; the old Registry snapshot is cleared exactly once and the new DID/generation is current.",
         "Stable account Profile data survives the epoch reset, the old DID is absent from local identity projection, and the E2E barrier metric records one ready application."
       ],
@@ -4076,6 +4076,7 @@
       "assertionContract": {
         "assertionIds": [
           "HANDLE-RECOVERY-V1-E2E-002:phase_a_committed_with_old_product_epoch",
+          "HANDLE-RECOVERY-V1-E2E-002:phase_a_old_runtime_quiesced_before_recovery_commit",
           "HANDLE-RECOVERY-V1-E2E-002:phase_a_process_terminated_before_product_reset",
           "HANDLE-RECOVERY-V1-E2E-002:phase_b_reopened_same_state_root",
           "HANDLE-RECOVERY-V1-E2E-002:bootstrap_barrier_reset_before_session_activation",
@@ -4086,6 +4087,7 @@
         "exactOracleAssertions": [
           [
             "HANDLE-RECOVERY-V1-E2E-002:phase_a_committed_with_old_product_epoch",
+            "HANDLE-RECOVERY-V1-E2E-002:phase_a_old_runtime_quiesced_before_recovery_commit",
             "HANDLE-RECOVERY-V1-E2E-002:phase_a_process_terminated_before_product_reset"
           ],
           [
@@ -4101,6 +4103,7 @@
         "negativeCheckAssertions": [
           [
             "HANDLE-RECOVERY-V1-E2E-002:phase_a_committed_with_old_product_epoch",
+            "HANDLE-RECOVERY-V1-E2E-002:phase_a_old_runtime_quiesced_before_recovery_commit",
             "HANDLE-RECOVERY-V1-E2E-002:phase_a_process_terminated_before_product_reset",
             "HANDLE-RECOVERY-V1-E2E-002:phase_b_reopened_same_state_root",
             "HANDLE-RECOVERY-V1-E2E-002:bootstrap_barrier_reset_before_session_activation",

@@ -1,5 +1,6 @@
 // [INPUT]: Verified onboarding Handle/phone, a dedicated Recovery OTP, and UI intent.
-// [OUTPUT]: Risk-gated Recovery presentation that opens Messages after activation.
+// [OUTPUT]: Risk-gated Recovery presentation that quiesces the old session and
+// opens Messages only after replacement-session activation.
 // [POS]: App-only V4.0 surface; Core owns credentials, keys, proof, and state transitions.
 
 import 'package:flutter/cupertino.dart';
@@ -11,6 +12,7 @@ import '../../l10n/l10n.dart';
 import '../../app/e2e_semantics.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/navigation_provider.dart';
+import '../app_shell/providers/session_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sms_otp_cooldown_provider.dart';
@@ -40,6 +42,8 @@ class HandleRecoveryPage extends ConsumerStatefulWidget {
 class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
   final _otpController = TextEditingController();
   late final TextEditingController _phoneController;
+  bool _isActivatingRecoveredIdentity = false;
+  bool _sessionActivationFailed = false;
 
   @override
   void initState() {
@@ -192,17 +196,38 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                         ),
                       ],
                       const SizedBox(height: 14),
-                      AppPrimaryButton(
-                        key: const Key('handle-recovery-activate'),
-                        label: context.l10n.handleRecoveryActivate,
-                        semanticsIdentifier: 'handle-recovery-activate',
-                        onPressed:
-                            state.isBusy ||
-                                !state.riskConfirmed ||
-                                !progress.canActivate
-                            ? null
-                            : _activate,
-                      ),
+                      if (progress.isCompleted)
+                        AppPrimaryButton(
+                          key: const Key('handle-recovery-enter-messages'),
+                          label: context.l10n.handleRecoveryEnterMessages,
+                          semanticsIdentifier: 'handle-recovery-enter-messages',
+                          onPressed:
+                              state.isBusy || _isActivatingRecoveredIdentity
+                              ? null
+                              : _activateRecoveredIdentityIfCompleted,
+                        )
+                      else
+                        AppPrimaryButton(
+                          key: const Key('handle-recovery-activate'),
+                          label: context.l10n.handleRecoveryActivate,
+                          semanticsIdentifier: 'handle-recovery-activate',
+                          onPressed:
+                              state.isBusy ||
+                                  !state.riskConfirmed ||
+                                  !progress.canActivate
+                              ? null
+                              : _activate,
+                        ),
+                      if (_sessionActivationFailed) ...<Widget>[
+                        const SizedBox(height: 10),
+                        Text(
+                          context.l10n.handleRecoverySessionActivationFailed,
+                          key: const Key(
+                            'handle-recovery-session-activation-failed',
+                          ),
+                          style: TextStyle(color: context.awikiTheme.danger),
+                        ),
+                      ],
                       if (progress.canResume) ...<Widget>[
                         const SizedBox(height: 10),
                         AppSecondaryButton(
@@ -294,9 +319,24 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
   }
 
   Future<void> _activate() async {
+    final presenceReason = context.l10n.handleRecoveryPresenceReason;
+    final previousSession = ref.read(sessionProvider).session;
+    final previousIdentityId = previousSession?.localIdentityId?.trim();
+    if (previousSession != null) {
+      await ref.read(appRuntimeProvider.notifier).prepareIdentityActivation();
+    }
     await ref
         .read(handleRecoveryProvider.notifier)
-        .activate(presenceReason: context.l10n.handleRecoveryPresenceReason);
+        .activate(presenceReason: presenceReason);
+    if (!mounted) return;
+    final progress = ref.read(handleRecoveryProvider).progress;
+    if (previousIdentityId != null &&
+        previousIdentityId.isNotEmpty &&
+        progress?.commitAttempted != true) {
+      await ref
+          .read(appRuntimeProvider.notifier)
+          .loginWithLocalCredentialAndConfirm(previousIdentityId);
+    }
     await _activateRecoveredIdentityIfCompleted();
   }
 
@@ -306,7 +346,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
   }
 
   Future<void> _activateRecoveredIdentityIfCompleted() async {
-    if (!mounted) return;
+    if (!mounted || _isActivatingRecoveredIdentity) return;
     final progress = ref.read(handleRecoveryProvider).progress;
     if (progress == null || !progress.isCompleted) return;
     if (shouldStopHandleRecoveryBeforeProductReset(
@@ -317,14 +357,28 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
     )) {
       return;
     }
-    await ref
-        .read(appRuntimeProvider.notifier)
-        .loginWithLocalCredential(progress.ownerIdentityId);
-    if (!mounted) return;
-    ref
-        .read(shellDestinationProvider.notifier)
-        .select(ShellDestination.messages);
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    setState(() {
+      _isActivatingRecoveredIdentity = true;
+      _sessionActivationFailed = false;
+    });
+    try {
+      final activated = await ref
+          .read(appRuntimeProvider.notifier)
+          .loginWithLocalCredentialAndConfirm(progress.ownerIdentityId);
+      if (!mounted) return;
+      if (!activated) {
+        setState(() => _sessionActivationFailed = true);
+        return;
+      }
+      ref
+          .read(shellDestinationProvider.notifier)
+          .select(ShellDestination.messages);
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } finally {
+      if (mounted) {
+        setState(() => _isActivatingRecoveredIdentity = false);
+      }
+    }
   }
 }
 

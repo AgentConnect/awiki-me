@@ -6108,6 +6108,18 @@ abstract class AppLocalizations {
   /// **'继续恢复'**
   String get handleRecoveryResume;
 
+  /// No description provided for @handleRecoveryEnterMessages.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续进入消息'**
+  String get handleRecoveryEnterMessages;
+
+  /// No description provided for @handleRecoverySessionActivationFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份恢复已经完成，但本机会话尚未激活。请重试进入消息，不要重新发起恢复。'**
+  String get handleRecoverySessionActivationFailed;
+
   /// No description provided for @handleRecoveryPresenceReason.
   ///
   /// In zh, this message translates to:

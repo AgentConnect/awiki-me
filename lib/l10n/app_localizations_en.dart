@@ -3449,6 +3449,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get handleRecoveryResume => 'Resume recovery';
 
   @override
+  String get handleRecoveryEnterMessages => 'Continue to messages';
+
+  @override
+  String get handleRecoverySessionActivationFailed =>
+      'Identity recovery is complete, but the local session is not active. Retry entering messages; do not start a new recovery.';
+
+  @override
   String get handleRecoveryPresenceReason => 'Confirm Handle identity recovery';
 
   @override

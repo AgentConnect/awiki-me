@@ -1,5 +1,6 @@
 // [INPUT]: Session, lifecycle, realtime, reliable-sync, push, local-store, and projection providers.
-// [OUTPUT]: One fenced authenticated runtime plus navigation-ready App state and exact-owner deletion.
+// [OUTPUT]: One fenced authenticated runtime, confirmed activation results,
+// navigation-ready App state, and exact-owner deletion.
 // [POS]: App-wide orchestration boundary; Core remains the message and identity truth.
 
 import 'dart:async';
@@ -361,6 +362,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   Future<void> loginWithLocalCredential(String credentialName) async {
+    await loginWithLocalCredentialAndConfirm(credentialName);
+  }
+
+  /// Activates one local identity and reports whether the authenticated App
+  /// projection committed. Recovery uses this result as a navigation gate.
+  Future<bool> loginWithLocalCredentialAndConfirm(String credentialName) async {
     final currentSession = ref.read(sessionProvider).session;
     if (currentSession != null) {
       ref.read(sessionProvider.notifier).upsertLocalCredential(currentSession);
@@ -373,7 +380,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     AppSessionLease? restoredLease;
     final sessions = ref.read(appSessionServiceProvider);
     final transition = sessions.beginSessionTransition();
-    await _runBusy(
+    final loginCompleted = await _runBusy(
       () async {
         session = await sessions.loginWithIdentity(
           credentialName,
@@ -386,7 +393,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       shouldReportFailure: () => sessions.isLatestSessionTransition(transition),
     );
     final committed = session;
-    if (committed == null) {
+    if (!loginCompleted || committed == null) {
       final predecessor = restoredLease;
       if (predecessor != null) {
         await _runBusy(
@@ -394,12 +401,20 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           enforceTimeout: false,
         );
       }
-      return;
+      return false;
     }
-    await _runBusy(
+    final activationCompleted = await _runBusy(
       () => activateCommittedSession(committed),
       enforceTimeout: false,
     );
+    if (!activationCompleted || !mounted) {
+      return false;
+    }
+    final active = ref.read(sessionProvider).session;
+    return active != null &&
+        active.localIdentityId == committed.identityId &&
+        active.did == committed.did &&
+        state.activatedDid == committed.did;
   }
 
   Future<void> activateCommittedSession(
@@ -1957,7 +1972,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     return lookupAppLocalizations(effective.locale);
   }
 
-  Future<void> _runBusy(
+  Future<bool> _runBusy(
     Future<void> Function() action, {
     bool enforceTimeout = true,
     Future<void> Function()? onFailure,
@@ -1967,26 +1982,30 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     try {
       final operation = action();
       await (enforceTimeout ? operation.timeout(_requestTimeout) : operation);
+      return true;
     } on TimeoutException {
       await onFailure?.call();
       if (shouldReportFailure?.call() == false) {
-        return;
+        return false;
       }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.requestTimeoutRetry());
+      return false;
     } on AppSessionTransitionSuperseded {
       await onFailure?.call();
+      return false;
     } catch (error) {
       await onFailure?.call();
       if (shouldReportFailure?.call() == false) {
-        return;
+        return false;
       }
       final message = AppMessage.fromError(error);
       ref.read(uiFeedbackProvider.notifier).showError(message);
       if (message == AppMessage.sessionExpiredRelogin()) {
         await logout();
       }
+      return false;
     } finally {
       _endBusyOperation();
     }

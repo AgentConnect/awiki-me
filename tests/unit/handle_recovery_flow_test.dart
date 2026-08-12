@@ -580,12 +580,24 @@ void main() {
   testWidgets('completed Recovery opens the authenticated message workspace', (
     tester,
   ) async {
+    const previousSession = SessionIdentity(
+      did: 'did:wba:awiki.info:users:alice-old',
+      localIdentityId: 'identity-alice',
+      credentialName: 'identity-alice',
+      displayName: 'Alice',
+      handle: 'alice.awiki.info',
+    );
     const recoveredDid = 'did:wba:awiki.info:users:alice-new';
+    late ProviderContainer container;
+    var oldSessionWasQuiesced = false;
     final core = _FakeHandleRecoveryCore(
       activateResult: _operation(
         lifecycleClass: HandleRecoveryLifecycleClass.applied,
         commitAttempted: true,
       ),
+      beforeActivate: () {
+        oldSessionWasQuiesced = container.read(sessionProvider).session == null;
+      },
     );
     final gateway = FakeAwikiGateway()
       ..localCredentials = const <SessionIdentity>[
@@ -608,6 +620,7 @@ void main() {
       buildLocalizedTestApp(
         home: const AppShell(),
         gateway: gateway,
+        session: previousSession,
         providerOverrides: <Override>[
           handleRecoveryCorePortProvider.overrideWithValue(core),
           userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
@@ -616,7 +629,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final container = ProviderScope.containerOf(
+    container = ProviderScope.containerOf(
       tester.element(find.byType(AppShell)),
     );
     container
@@ -669,7 +682,125 @@ void main() {
     expect(container.read(shellDestinationProvider), ShellDestination.messages);
     expect(container.read(sessionProvider).session?.did, recoveredDid);
     expect(gateway.loginCalls, 1);
+    expect(oldSessionWasQuiesced, isTrue);
   });
+
+  testWidgets(
+    'completed Recovery stays visible until local session activation succeeds',
+    (tester) async {
+      const recoveredDid = 'did:wba:awiki.info:users:alice-new';
+      final core = _FakeHandleRecoveryCore(
+        activateResult: _operation(
+          lifecycleClass: HandleRecoveryLifecycleClass.applied,
+          commitAttempted: true,
+        ),
+      );
+      final gateway = _FailOnceLoginGateway()
+        ..localCredentials = const <SessionIdentity>[
+          SessionIdentity(
+            did: recoveredDid,
+            localIdentityId: 'identity-alice',
+            credentialName: 'identity-alice',
+            displayName: 'Alice',
+            handle: 'alice.awiki.info',
+          ),
+        ]
+        ..loginResult = const SessionIdentity(
+          did: recoveredDid,
+          localIdentityId: 'identity-alice',
+          credentialName: 'identity-alice',
+          displayName: 'Alice',
+          handle: 'alice.awiki.info',
+        );
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          locale: const Locale('zh'),
+          home: const AppShell(),
+          gateway: gateway,
+          providerOverrides: <Override>[
+            handleRecoveryCorePortProvider.overrideWithValue(core),
+            userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(AppShell)),
+      );
+      container
+          .read(shellDestinationProvider.notifier)
+          .select(ShellDestination.settings);
+      unawaited(
+        Navigator.of(tester.element(find.byType(AppShell))).push<void>(
+          CupertinoPageRoute<void>(
+            builder: (_) => const HandleRecoveryPage(
+              initialHandle: 'alice.awiki.info',
+              initialPhone: '+8613800138000',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('handle-recovery-otp')),
+          matching: find.byType(CupertinoTextField),
+        ),
+        '123456',
+      );
+      await tester.tap(find.byKey(const Key('handle-recovery-verify')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const Key('handle-recovery-risk-confirmation')),
+      );
+      await tester.drag(
+        find.descendant(
+          of: find.byType(HandleRecoveryPage),
+          matching: find.byType(ListView),
+        ),
+        const Offset(0, -180),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('handle-recovery-risk-confirmation')),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const Key('handle-recovery-activate')),
+      );
+      await tester.tap(find.byKey(const Key('handle-recovery-activate')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(HandleRecoveryPage), findsOneWidget);
+      expect(container.read(sessionProvider).session, isNull);
+      expect(
+        container.read(shellDestinationProvider),
+        ShellDestination.settings,
+      );
+      expect(
+        find.byKey(const Key('handle-recovery-session-activation-failed')),
+        findsOneWidget,
+      );
+      final retry = find.byKey(const Key('handle-recovery-enter-messages'));
+      expect(retry, findsOneWidget);
+
+      await tester.ensureVisible(retry);
+      await tester.tap(retry);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(HandleRecoveryPage), findsNothing);
+      expect(find.byType(ConversationWorkspacePage), findsOneWidget);
+      expect(container.read(sessionProvider).session?.did, recoveredDid);
+      expect(
+        container.read(shellDestinationProvider),
+        ShellDestination.messages,
+      );
+      expect(gateway.loginAttempts, 2);
+      await tester.pump(const Duration(seconds: 9));
+    },
+  );
 
   testWidgets('completed activation does not read providers after disposal', (
     tester,
@@ -1058,6 +1189,21 @@ void main() {
   });
 }
 
+class _FailOnceLoginGateway extends FakeAwikiGateway {
+  int loginAttempts = 0;
+
+  @override
+  Future<SessionIdentity> loginWithLocalCredential(
+    String credentialName,
+  ) async {
+    loginAttempts += 1;
+    if (loginAttempts == 1) {
+      throw StateError('recovered_local_session_activation_failed');
+    }
+    return super.loginWithLocalCredential(credentialName);
+  }
+}
+
 const _productBinding = ProductAccountBinding(
   ownerIdentityId: 'identity-alice',
   accountId: 'account-1',
@@ -1164,6 +1310,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
     this.receipt,
     this.statusError,
     this.reconcileError,
+    this.beforeActivate,
   }) : operation = operation ?? _operation();
 
   HandleRecoveryProgress operation;
@@ -1176,6 +1323,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   final HandleRecoveryRegistryEpochReset? receipt;
   final Object? statusError;
   final Object? reconcileError;
+  final FutureOr<void> Function()? beforeActivate;
   HandleRecoveryOwner? lastOwner;
   String? lastHandle;
   String? lastLocalIdentityId;
@@ -1245,6 +1393,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
     required bool userPresenceConfirmed,
   }) async {
     activateCalls += 1;
+    await beforeActivate?.call();
     final completer = activateCompleter;
     if (completer != null) {
       operation = await completer.future;

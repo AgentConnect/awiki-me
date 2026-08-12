@@ -299,6 +299,7 @@ void main() {
         timeout: const Duration(seconds: 45),
         failure: 'The registration OTP action did not become enabled.',
       );
+      final registrationFeedbackBefore = container.read(uiFeedbackProvider)?.id;
       await _tapOne(
         tester,
         find.bySemanticsIdentifier('e2e-send-otp-button'),
@@ -307,8 +308,18 @@ void main() {
       await _pumpUntil(
         tester,
         () {
-          _failOnDangerousUiFeedback(container, 'Registration OTP request');
           final state = container.read(onboardingProvider);
+          final feedback = container.read(uiFeedbackProvider);
+          if (!state.isBusy &&
+              feedback?.id != registrationFeedbackBefore &&
+              feedback?.message.id == 'otpRateLimited') {
+            return true;
+          }
+          _failOnDangerousUiFeedback(
+            container,
+            'Registration OTP request',
+            existingEventId: registrationFeedbackBefore,
+          );
           return !state.isBusy &&
               state.otpTargetFullHandle == fullHandle &&
               state.otpTargetPhone != null;
@@ -331,6 +342,26 @@ void main() {
           ].join(',');
         },
       );
+      final registrationRateLimitFeedback = container.read(uiFeedbackProvider);
+      if (registrationRateLimitFeedback?.message.id == 'otpRateLimited') {
+        await _retryRegistrationOtpAfterRateLimit(tester, container);
+        await _pumpUntil(
+          tester,
+          () {
+            _failOnDangerousUiFeedback(
+              container,
+              'Registration OTP retry',
+              existingEventId: registrationRateLimitFeedback!.id,
+            );
+            final state = container.read(onboardingProvider);
+            return !state.isBusy &&
+                state.otpTargetFullHandle == fullHandle &&
+                state.otpTargetPhone != null;
+          },
+          timeout: const Duration(seconds: 45),
+          failure: 'The UI did not bind the retried registration OTP.',
+        );
+      }
       final onboardingOtp = await _resolveOtp(
         account: account,
         purpose: _registrationPurpose,
@@ -399,6 +430,23 @@ void main() {
           'Recovery did not reuse the verified Handle and phone as read-only context.',
         );
       }
+      var recoveryOtpRateLimitRetries = 0;
+      await _pumpUntil(
+        tester,
+        () {
+          final state = container.read(handleRecoveryProvider);
+          return !state.isBusy &&
+              ((state.otpRequested && state.otpOperationId != null) ||
+                  state.error == HandleRecoveryUiError.rateLimited);
+        },
+        timeout: const Duration(seconds: 45),
+        failure: 'The UI did not accept an operation-bound Recovery OTP.',
+      );
+      if (container.read(handleRecoveryProvider).error ==
+          HandleRecoveryUiError.rateLimited) {
+        recoveryOtpRateLimitRetries = 1;
+        await _retryRecoveryOtpAfterRateLimit(tester, container);
+      }
       await _pumpUntil(
         tester,
         () {
@@ -418,12 +466,13 @@ void main() {
       final operationId = container
           .read(handleRecoveryProvider)
           .otpOperationId!;
-      if (recordingRecoveryCore.requestOtpCalls != 1 ||
+      if (recordingRecoveryCore.requestOtpCalls !=
+              1 + recoveryOtpRateLimitRetries ||
           recordingRecoveryCore.requestedHandle != fullHandle ||
           recordingRecoveryCore.requestedPhone != account.phone ||
           recordingRecoveryCore.requestedLocalIdentityId != null) {
         fail(
-          'Recovery did not submit the exact verified context once without a local selector.',
+          'Recovery did not submit the exact verified context without a local selector.',
         );
       }
       final recoveryOtpRetryAt = recordingRecoveryCore.requestedRetryAt;
@@ -732,6 +781,7 @@ void main() {
             'irreversible_risks_confirmed_through_ui',
             'recovery_completed_through_ui_resume',
             'recovery_opened_message_workspace',
+            'recovery_navigation_followed_confirmed_session_activation',
             'new_local_owner_handle_and_replacement_did_verified',
             'old_did_absent_from_fresh_local_projection',
             'old_transport_group_rebound_to_recovered_did',
@@ -2279,8 +2329,12 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
       .loadDeviceRegistrySnapshot(binding: productBinding);
   if (!(preResetEpoch?.matches(oldEpoch) ?? false) ||
       preResetSnapshot?.devices.length != 1 ||
-      appContainer.read(sessionProvider).session?.did != oldSession.did) {
-    fail('Product state advanced before the deliberate crash cut.');
+      appContainer.read(sessionProvider).session != null ||
+      appContainer.read(appRuntimeProvider).activatedDid != null) {
+    fail(
+      'Product state advanced or the old App session remained active before '
+      'the deliberate crash cut.',
+    );
   }
   await _writeCrashCutHandoff(config.crashCutHandoffPath, <String, Object?>{
     'schemaVersion': 1,
@@ -2391,6 +2445,7 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       _crashCutCaseId,
       phases: const <String>[
         'phase_a_committed_with_old_product_epoch',
+        'phase_a_old_runtime_quiesced_before_recovery_commit',
         'phase_a_process_terminated_before_product_reset',
         'phase_b_reopened_same_state_root',
         'bootstrap_barrier_reset_before_session_activation',
@@ -3393,6 +3448,62 @@ Future<void> _waitForPhoneGlobalRecoveryCooldown(
     timeout: const Duration(seconds: 5),
     failure:
         'The registration OTP cooldown did not release before Recovery OTP.',
+  );
+}
+
+Future<void> _retryRecoveryOtpAfterRateLimit(
+  WidgetTester tester,
+  ProviderContainer container,
+) async {
+  final retryAt = container.read(handleRecoverySmsOtpCooldownProvider).retryAt;
+  if (retryAt == null) {
+    fail('The Recovery OTP rate limit omitted its retry receipt.');
+  }
+  final delay = remoteHandleRecoveryPhoneCooldownDelay(
+    retryAt: retryAt,
+    now: DateTime.now().toUtc(),
+  );
+  if (delay > Duration.zero) {
+    await Future<void>.delayed(delay);
+  }
+  await _pumpUntil(
+    tester,
+    () => container.read(handleRecoverySmsOtpCooldownProvider).canSend,
+    timeout: const Duration(seconds: 5),
+    failure: 'The Recovery OTP rate limit did not release at retryAt.',
+  );
+  await _tapOne(
+    tester,
+    find.bySemanticsIdentifier('handle-recovery-send-otp'),
+    failure: 'The Recovery OTP retry action was unavailable.',
+  );
+}
+
+Future<void> _retryRegistrationOtpAfterRateLimit(
+  WidgetTester tester,
+  ProviderContainer container,
+) async {
+  final retryAt = container.read(smsOtpCooldownProvider).retryAt;
+  if (retryAt == null) {
+    fail('The registration OTP rate limit omitted its retry receipt.');
+  }
+  final delay = remoteHandleRecoveryPhoneCooldownDelay(
+    retryAt: retryAt,
+    now: DateTime.now().toUtc(),
+  );
+  if (delay > Duration.zero) {
+    await Future<void>.delayed(delay);
+  }
+  await _pumpUntil(
+    tester,
+    () => container.read(smsOtpCooldownProvider).canSend,
+    timeout: const Duration(seconds: 5),
+    failure: 'The registration OTP rate limit did not release at retryAt.',
+  );
+  await _tapOne(
+    tester,
+    find.bySemanticsIdentifier('e2e-send-otp-button'),
+    failure: 'The registration OTP retry action was unavailable.',
   );
 }
 
@@ -4399,7 +4510,12 @@ Future<List<ChatMessage>> _loadExactThreadCandidates({
 }) async {
   final messaging = appBootstrap.messagingService!;
   final legacy = await messaging.loadHistory(thread, limit: 100);
-  if (legacy.any((message) => message.remoteId == messageId) ||
+  final canonicalLegacyMatch = legacy.any(
+    (message) =>
+        message.remoteId == messageId &&
+        (message.conversationId?.trim().isNotEmpty ?? false),
+  );
+  if (canonicalLegacyMatch ||
       messaging is! ConversationTimelineMessagingService) {
     return legacy;
   }

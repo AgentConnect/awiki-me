@@ -3246,6 +3246,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get handleRecoveryResume => '继续恢复';
 
   @override
+  String get handleRecoveryEnterMessages => '继续进入消息';
+
+  @override
+  String get handleRecoverySessionActivationFailed =>
+      '身份恢复已经完成，但本机会话尚未激活。请重试进入消息，不要重新发起恢复。';
+
+  @override
   String get handleRecoveryPresenceReason => '确认恢复 Handle 身份';
 
   @override
