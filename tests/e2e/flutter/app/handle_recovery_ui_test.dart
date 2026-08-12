@@ -1872,7 +1872,12 @@ Future<void> _waitForRecoveredContinuityGroup({
       }
       if (projected.length == 1 &&
           projected.single.conversationId == conversationId) {
-        final group = projected.single;
+        final group = await bootstrap.groupApplicationService!.getGroup(
+          groupDid,
+        );
+        if (group.conversationId != conversationId) {
+          fail('Recovery changed the original Group conversation ID.');
+        }
         final members = await bootstrap.groupApplicationService!.listMembers(
           groupDid,
           limit: 100,
@@ -3117,6 +3122,8 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     peerDid: peerDid,
     checkpoint: checkpoint,
   );
+  final recoveredGroupSnapshot = await bootstrap.groupApplicationService!
+      .getGroup(groupDid);
 
   final groupConversation = await _waitForFixtureConversation(
     tester: tester,
@@ -3262,11 +3269,11 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       'direct_incoming_semantic': directIncomingBefore.content,
       'direct_read_message': _requiredMessageId(directIncomingBefore),
       'group_conversation': groupConversationId,
-      'group_display_name': recoveredGroup.displayName,
-      'group_description': recoveredGroup.description,
-      'group_role': _checkpointOptional(recoveredGroup.myRole),
+      'group_display_name': recoveredGroupSnapshot.displayName,
+      'group_description': recoveredGroupSnapshot.description,
+      'group_role': _checkpointOptional(recoveredGroupSnapshot.myRole),
       'group_membership_status': _checkpointOptional(
-        recoveredGroup.membershipStatus,
+        recoveredGroupSnapshot.membershipStatus,
       ),
       'group_owner_role': recoveredGroupOwner.role,
       'group_owner_membership_status':
@@ -3608,11 +3615,19 @@ Future<void> _runFreshFocusedGates({
     limit: 100,
   );
   if (preInbound.any(
-    (conversation) =>
-        conversation.targetDid == snapshot.fixture.peerDid ||
-        conversation.targetDid == snapshot.fixture.runtimeDid,
+    (conversation) => conversation.targetDid == snapshot.fixture.peerDid,
   )) {
-    fail('Fresh Recovery restored an old ordinary Direct/Agent conversation.');
+    fail('Fresh Recovery restored an old ordinary Direct conversation.');
+  }
+  if (preInbound.any(
+    (conversation) =>
+        conversation.targetDid == snapshot.fixture.runtimeDid &&
+        (conversation.lastMessageSnapshot != null ||
+            conversation.lastMessagePreview.trim().isNotEmpty ||
+            conversation.unreadCount != 0 ||
+            conversation.unreadMentionCount != 0),
+  )) {
+    fail('Fresh Recovery restored old Agent message history.');
   }
 
   Future<void> runCase(
