@@ -13,6 +13,7 @@ import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/ports/agent_notification_preference_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_message_v1.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
+import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/services/notification_facade.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/agent_urgent_opt_in_provider.dart';
@@ -152,6 +153,132 @@ void main() {
 
       expect(foreground.notifications.urgentCueCalls, 0);
       expect(foreground.container.read(agentUrgentOverlayProvider), isNull);
+    },
+  );
+
+  test(
+    'startup repairs a recent unread Agent message missed after Core commit',
+    () async {
+      final message = _chatMessage(
+        projection: const ValidAgentMessageProjection(
+          AgentMessageV1(
+            eventId: 'evt_agent_restart_repair_1',
+            taskName: 'Production worker recovery',
+            kind: AgentMessageKind.alert,
+            level: AgentMessageLevel.urgent,
+            summary: 'Check the production worker',
+            detail: null,
+            action: AgentMessageAction.openConversation,
+          ),
+        ),
+      );
+      final harness = await _Harness.create(
+        initialConversations: <ConversationSummary>[
+          ConversationSummary(
+            conversationId: _conversationId,
+            threadId: _conversationId,
+            displayName: 'Build Agent',
+            lastMessagePreview: 'Check the production worker',
+            lastMessageAt: _now,
+            unreadCount: 1,
+            isGroup: false,
+            lastMessageSnapshot: message,
+          ),
+        ],
+      );
+      addTearDown(harness.dispose);
+      await harness.enableUrgent();
+      harness.foreground();
+      harness.sync.deltaResult = const MessageSyncOutcome(
+        status: MessageSyncStatus.idle,
+        eventsApplied: 0,
+        pagesFetched: 1,
+      );
+
+      await harness.run();
+
+      expect(harness.notifications.urgentCueCalls, 1);
+      expect(
+        harness.container.read(agentUrgentOverlayProvider)?.message.eventId,
+        'evt_agent_restart_repair_1',
+      );
+      expect(harness.receiptLedgerJson, contains('presentedApp'));
+
+      await harness.run();
+
+      expect(harness.notifications.urgentCueCalls, 1);
+    },
+  );
+
+  test(
+    'startup repair ignores stale, read, and ordinary last messages',
+    () async {
+      final urgent = _chatMessage(
+        projection: const ValidAgentMessageProjection(
+          AgentMessageV1(
+            eventId: 'evt_agent_restart_stale_1',
+            taskName: 'Production worker recovery',
+            kind: AgentMessageKind.alert,
+            level: AgentMessageLevel.urgent,
+            summary: 'Check the production worker',
+            detail: null,
+            action: AgentMessageAction.openConversation,
+          ),
+        ),
+      );
+      final ordinary = urgent.copyWith(agentMessage: null, content: 'ordinary');
+      final harness = await _Harness.create(
+        initialConversations: <ConversationSummary>[
+          ConversationSummary(
+            conversationId: _conversationId,
+            threadId: _conversationId,
+            displayName: 'Build Agent',
+            lastMessagePreview: 'stale',
+            lastMessageAt: _now.subtract(const Duration(minutes: 16)),
+            unreadCount: 1,
+            isGroup: false,
+            lastMessageSnapshot: urgent,
+          ),
+          ConversationSummary(
+            conversationId: 'dm:peer-scope:v1:read',
+            threadId: 'dm:peer-scope:v1:read',
+            displayName: 'Read Agent',
+            lastMessagePreview: 'read',
+            lastMessageAt: _now,
+            unreadCount: 0,
+            isGroup: false,
+            lastMessageSnapshot: urgent.copyWith(
+              conversationId: 'dm:peer-scope:v1:read',
+            ),
+          ),
+          ConversationSummary(
+            conversationId: 'dm:peer-scope:v1:ordinary',
+            threadId: 'dm:peer-scope:v1:ordinary',
+            displayName: 'Ordinary peer',
+            lastMessagePreview: 'ordinary',
+            lastMessageAt: _now,
+            unreadCount: 1,
+            isGroup: false,
+            lastMessageSnapshot: ordinary.copyWith(
+              conversationId: 'dm:peer-scope:v1:ordinary',
+            ),
+          ),
+        ],
+      );
+      addTearDown(harness.dispose);
+      await harness.enableUrgent();
+      harness.foreground();
+      harness.sync.deltaResult = const MessageSyncOutcome(
+        status: MessageSyncStatus.idle,
+        eventsApplied: 0,
+        pagesFetched: 1,
+      );
+
+      await harness.run();
+
+      expect(harness.notifications.urgentCueCalls, 0);
+      expect(harness.container.read(agentUrgentOverlayProvider), isNull);
+      expect(harness.receiptLedgerJson, isEmpty);
     },
   );
 
@@ -386,6 +513,8 @@ final class _Harness {
     FakeProductLocalStore? localStore,
     FakeMessageSyncService? messageSync,
     String activeState = 'active',
+    List<ConversationSummary> initialConversations =
+        const <ConversationSummary>[],
   }) async {
     final store = localStore ?? FakeProductLocalStore();
     await store.replaceAgentInventorySnapshot(
@@ -408,6 +537,7 @@ final class _Harness {
       ),
     );
     final gateway = FakeAwikiGateway();
+    gateway.conversations = initialConversations;
     final sync = messageSync ?? FakeMessageSyncService();
     final facade = notifications ?? FakeNotificationFacade();
     final session = _session();
