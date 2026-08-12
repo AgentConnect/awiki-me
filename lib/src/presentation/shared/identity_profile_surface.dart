@@ -444,10 +444,12 @@ class IdentityProfileMetadataRow extends StatelessWidget {
     super.key,
     required this.label,
     required this.child,
+    this.showDivider = true,
   });
 
   final String label;
   final Widget child;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
@@ -487,7 +489,7 @@ class IdentityProfileMetadataRow extends StatelessWidget {
             ),
           ),
         ),
-        Container(height: 1, color: theme.border),
+        if (showDivider) Container(height: 1, color: theme.border),
       ],
     );
   }

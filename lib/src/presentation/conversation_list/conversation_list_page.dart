@@ -744,8 +744,6 @@ class _ConversationDeleteDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final theme = context.awikiTheme;
     return AppConfirmationDialog(
       title: context.l10n.conversationsDeleteTitle,
       message: context.l10n.conversationsDeleteContent,
@@ -753,59 +751,6 @@ class _ConversationDeleteDialog extends StatelessWidget {
       destructive: true,
       onCancel: onCancel,
       onConfirm: onConfirm,
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          color: theme.subtleSurface,
-          borderRadius: BorderRadius.circular(responsive.radius(12)),
-        ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: responsive.spacing(10),
-            vertical: responsive.spacing(8),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              Semantics(
-                enabled: false,
-                label: context.l10n.conversationsDeleteClearHistory,
-                child: const CupertinoCheckbox(
-                  key: Key('conversation-delete-clear-history'),
-                  value: false,
-                  onChanged: null,
-                ),
-              ),
-              SizedBox(width: responsive.spacing(8)),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      context.l10n.conversationsDeleteClearHistory,
-                      style: TextStyle(
-                        color: theme.secondaryText,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                        height: 1.25,
-                      ),
-                    ),
-                    SizedBox(height: responsive.spacing(2)),
-                    Text(
-                      context.l10n.conversationsDeleteClearHistoryUnavailable,
-                      style: TextStyle(
-                        color: theme.tertiaryText,
-                        fontSize: 11,
-                        height: 1.25,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

@@ -246,23 +246,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                     ),
                     if (homepageUrl.isNotEmpty)
                       IdentityProfileMetadataRow(
+                        key: const Key('profile-homepage-metadata-row'),
                         label: context.l10n.profileHomepageLabel,
+                        showDivider: false,
                         child: IdentityProfileLinkValue(
                           value: homepageUrl,
                           actionLabel: context.l10n.profileOpenHomepage,
                           onTap: () => _openHomepage(homepageUrl),
                         ),
                       ),
-                    SelectionContainer.disabled(
-                      child: _ProfileNavigationRow(
-                        key: const Key('profile-settings-row'),
-                        icon: CupertinoIcons.gear,
-                        title: context.l10n.settingsTitle,
-                        subtitle: context.l10n.profileSettingsSubtitle,
-                        neutral: true,
-                        onTap: () => _openSettings(context),
-                      ),
-                    ),
                   ],
                 ],
               ),
@@ -1211,95 +1203,6 @@ class _ProfileStat extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ProfileNavigationRow extends StatelessWidget {
-  const _ProfileNavigationRow({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.neutral = false,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-  final bool neutral;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final theme = context.awikiTheme;
-    final iconColor = neutral ? theme.secondaryText : AwikiMePalette.actionBlue;
-    final iconBackground = neutral
-        ? theme.subtleSurface
-        : AwikiMePalette.actionBlueSoft;
-    return AppPressable(
-      onTap: onTap,
-      semanticLabel: title,
-      borderRadius: BorderRadius.circular(responsive.radius(12)),
-      child: Container(
-        constraints: BoxConstraints(minHeight: responsive.displayScaled(82)),
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: theme.border)),
-        ),
-        child: Row(
-          children: <Widget>[
-            Container(
-              width: responsive.displayScaled(48),
-              height: responsive.displayScaled(48),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: iconBackground,
-                borderRadius: BorderRadius.circular(responsive.radius(13)),
-              ),
-              child: Icon(icon, size: responsive.iconMd, color: iconColor),
-            ),
-            SizedBox(width: responsive.displayScaled(18)),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: theme.title,
-                      fontSize: responsive.bodyMd,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                  if (subtitle.trim().isNotEmpty) ...<Widget>[
-                    SizedBox(height: responsive.spacing(4)),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: theme.secondaryText,
-                        fontSize: responsive.metaSm,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            SizedBox(width: responsive.spacing(12)),
-            Icon(
-              CupertinoIcons.chevron_right,
-              size: responsive.iconSm,
-              color: theme.tertiaryText,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

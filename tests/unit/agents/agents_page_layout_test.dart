@@ -468,6 +468,7 @@ void main() {
     expect(menuButton, findsOneWidget);
     expect(refreshButton, findsOneWidget);
     expect(find.byTooltip('刷新智能体列表'), findsOneWidget);
+    expect(tester.widget<AppIconButton>(menuButton).borderColor, isNull);
     expect(
       find.descendant(
         of: menuButton,
