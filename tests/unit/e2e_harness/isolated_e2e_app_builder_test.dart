@@ -19,6 +19,7 @@ void main() {
       '--work-root=${root.path}/work/joiner',
       '--artifact-root=${root.path}/artifacts',
       '--bundle-id=ai.awiki.awikime.dev.e2e.pair.joiner',
+      '--platform=macos',
       '--flutter-bin=/opt/flutter/bin/flutter',
       '--dart-define=AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=joiner',
       '--dry-run',
@@ -56,6 +57,35 @@ void main() {
     );
   });
 
+  test('Linux build plan creates a relocatable isolated desktop bundle', () {
+    final project = Directory('/tmp/awiki-app-pair-builder-test/project');
+    final root = Directory('${project.path}/.e2e/pair');
+    final request = IsolatedE2eAppBuildRequest.parse(<String>[
+      '--name=admin',
+      '--target=integration_test/multi_device_app_pair_test.dart',
+      '--state-root=${root.path}/state/admin',
+      '--work-root=${root.path}/work/admin',
+      '--artifact-root=${root.path}/artifacts',
+      '--bundle-id=ai.awiki.awikime.dev.e2e.pair.admin',
+      '--platform=linux',
+      '--dart-define=AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=admin',
+      '--dry-run',
+    ], projectRoot: project);
+
+    final plan = request.toPlan();
+
+    expect(request.platform, IsolatedE2eAppPlatform.linux);
+    expect(plan.sourceApp.path, '${project.path}/build/linux/x64/debug/bundle');
+    expect(plan.flutterBuildDirectorySetting, 'build');
+    expect(plan.artifactApp.path, '${root.path}/artifacts/AWikiMe-admin-linux');
+    expect(plan.executable.path, endsWith('/AWikiMe-admin-linux/awiki_me'));
+    expect(plan.flutterArguments, containsAll(<String>['build', 'linux']));
+    expect(
+      plan.flutterArguments,
+      contains('--dart-define=AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=admin'),
+    );
+  });
+
   test('runtime state changes do not invalidate a role build', () {
     IsolatedE2eAppBuildPlan planFor(String runId) {
       final project = Directory('/tmp/awiki-app-pair-builder-test/project');
@@ -66,6 +96,7 @@ void main() {
         '--work-root=${project.path}/.e2e/build-cache/admin',
         '--artifact-root=${project.path}/.e2e/$runId/artifacts',
         '--bundle-id=ai.awiki.awikime.dev.e2e.pair.admin',
+        '--platform=macos',
         '--dart-define=AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=admin',
         '--dry-run',
       ], projectRoot: project).toPlan();

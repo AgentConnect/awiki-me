@@ -1062,11 +1062,11 @@ class DesktopE2eRunner {
     _line('service base: ${pairConfig.serviceBaseUrl}');
 
     await _timed('Checking App-pair tooling and source', () async {
-      if (pairConfig.platform != DesktopE2ePlatform.macos) {
-        throw E2eFailure('The App-pair E2E currently supports only macOS.');
-      }
       await commands.requireExecutable(flutterBin);
       await commands.requireExecutable('dart');
+      if (pairConfig.platform == DesktopE2ePlatform.linux) {
+        await commands.requireExecutable('xvfb-run');
+      }
       await commands.requireFile('tool/build_isolated_e2e_app.dart');
       await commands.requireFile(_multiDeviceAppPairTarget);
       await commands.requireFile('test_driver/integration_test.dart');
@@ -1154,11 +1154,13 @@ class DesktopE2eRunner {
             role: 'admin',
             bundleId: 'ai.awiki.awikime.dev.e2e.pair.admin',
             flutterBin: flutterBin,
+            platform: pairConfig.platform,
           );
           final joinerArtifact = await _buildAppPairRole(
             role: 'joiner',
             bundleId: 'ai.awiki.awikime.dev.e2e.pair.joiner',
             flutterBin: flutterBin,
+            platform: pairConfig.platform,
           );
           if (adminArtifact.bundleId == joinerArtifact.bundleId ||
               adminArtifact.executable.path == joinerArtifact.executable.path ||
@@ -1194,16 +1196,19 @@ class DesktopE2eRunner {
             role: 'admin',
             artifact: adminArtifact,
             environment: productEnvironment,
+            platform: pairConfig.platform,
           );
           joinerApp = await _RunningIsolatedApp.start(
             role: 'joiner',
             artifact: joinerArtifact,
             environment: productEnvironment,
+            platform: pairConfig.platform,
           );
           await _driveAppPair(
             adminApp: adminApp,
             joinerApp: joinerApp,
             flutterBin: flutterBin,
+            platform: pairConfig.platform,
             timeout: suiteDefinition.timeout,
           );
         } finally {
@@ -1324,6 +1329,7 @@ class DesktopE2eRunner {
     required String role,
     required String bundleId,
     required String flutterBin,
+    required DesktopE2ePlatform platform,
   }) async {
     final roleWorkRoot = Directory('${appPairBuildRootDir.path}/$role');
     final result = await commands.captureResult('dart', <String>[
@@ -1334,6 +1340,7 @@ class DesktopE2eRunner {
       '--work-root=${roleWorkRoot.path}',
       '--artifact-root=${appPairArtifactRootDir.path}',
       '--bundle-id=$bundleId',
+      '--platform=${platform.name}',
       '--flutter-bin=$flutterBin',
       '--dart-define=AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=$role',
     ], timeout: const Duration(minutes: 12));
@@ -1344,10 +1351,11 @@ class DesktopE2eRunner {
     required _RunningIsolatedApp adminApp,
     required _RunningIsolatedApp joinerApp,
     required String flutterBin,
+    required DesktopE2ePlatform platform,
     required Duration timeout,
   }) async {
     final locale = desktopE2eUtf8Locale(
-      platform: DesktopE2ePlatform.macos,
+      platform: platform,
       lang: Platform.environment['LANG'],
       lcAll: Platform.environment['LC_ALL'],
     );
@@ -1360,6 +1368,7 @@ class DesktopE2eRunner {
         '${appPairBuildRootDir.path}/admin/flutter-config',
       ),
       locale: locale,
+      platform: platform,
       redactor: redactor,
     );
     _RunningAppPairDriver? joinerDriver;
@@ -1373,6 +1382,7 @@ class DesktopE2eRunner {
           '${appPairBuildRootDir.path}/joiner/flutter-config',
         ),
         locale: locale,
+        platform: platform,
         redactor: redactor,
       );
       final exits = <Future<MapEntry<String, int>>>[
@@ -3677,13 +3687,25 @@ class _RunningIsolatedApp {
     required String role,
     required _IsolatedAppArtifact artifact,
     required Map<String, String> environment,
+    required DesktopE2ePlatform platform,
   }) async {
     if (artifact.role != role) {
       throw E2eFailure('The isolated App role does not match its artifact.');
     }
+    final executable = platform == DesktopE2ePlatform.linux
+        ? 'xvfb-run'
+        : artifact.executable.path;
+    final arguments = platform == DesktopE2ePlatform.linux
+        ? <String>[
+            '-a',
+            '--server-args=-screen 0 1280x720x24 -nolisten tcp',
+            artifact.executable.path,
+            '--enable-vm-service=0',
+          ]
+        : const <String>['--enable-vm-service=0'];
     final process = await Process.start(
-      artifact.executable.path,
-      const <String>['--enable-vm-service=0'],
+      executable,
+      arguments,
       environment: environment,
       includeParentEnvironment: true,
       runInShell: false,
@@ -3779,24 +3801,37 @@ class _RunningAppPairDriver {
     required Directory root,
     required Directory flutterConfigDirectory,
     required String locale,
+    required DesktopE2ePlatform platform,
     required DesktopSecretRedactor redactor,
   }) async {
     if (!appPairRoles.contains(role)) {
       throw E2eFailure('The App-pair driver role is invalid.');
     }
+    final flutterArguments = <String>[
+      'drive',
+      '--use-existing-app=$vmServiceUri',
+      '--driver=test_driver/integration_test.dart',
+      '--target=$_multiDeviceAppPairTarget',
+      '-d',
+      platform.name,
+      '--no-build',
+      '--no-pub',
+      '--no-keep-app-running',
+    ];
+    final executable = platform == DesktopE2ePlatform.linux
+        ? 'xvfb-run'
+        : flutterBin;
+    final arguments = platform == DesktopE2ePlatform.linux
+        ? <String>[
+            '-a',
+            '--server-args=-screen 0 1280x720x24 -nolisten tcp',
+            flutterBin,
+            ...flutterArguments,
+          ]
+        : flutterArguments;
     final process = await Process.start(
-      flutterBin,
-      <String>[
-        'drive',
-        '--use-existing-app=$vmServiceUri',
-        '--driver=test_driver/integration_test.dart',
-        '--target=$_multiDeviceAppPairTarget',
-        '-d',
-        'macos',
-        '--no-build',
-        '--no-pub',
-        '--no-keep-app-running',
-      ],
+      executable,
+      arguments,
       workingDirectory: root.path,
       environment: <String, String>{
         'LANG': locale,
@@ -4170,8 +4205,8 @@ Options:
                                covers the opaque registration continuation
                                through P5.
                                multi-device-app-pair builds and drives two
-                               isolated real macOS App processes on one host;
-                               it currently runs only the remote member Join
+                               isolated real App processes on Linux/Xvfb or
+                               macOS; it currently runs only the remote member Join
                                flow with an E2E-only unattended user-presence
                                decision.
                                multi-device-app-pair-functional reuses the two
@@ -4392,6 +4427,10 @@ class RemoteMultiDeviceAppPairConfig {
     final base = _RemoteMultiDeviceBaseConfig.from(
       fileConfig: fileConfig,
       environment: environment,
+      supportedPlatforms: const <DesktopE2ePlatform>{
+        DesktopE2ePlatform.macos,
+        DesktopE2ePlatform.linux,
+      },
     );
     if (functional && contentSync) {
       throw E2eFailure('App-pair functional and content-sync modes conflict.');

@@ -137,9 +137,9 @@ case。
 与账号状态同步对所有账号和有效设备默认开启。`AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED`
 也只是防止自动化误触发真实 Join/user-presence 的测试执行门禁，不控制产品能力。
 
-`DEVICE-JOIN-E2E-004` 由 `multi-device-app-pair` suite 承载。它在同一台 macOS 上构建并
-并发驱动两个真实 AWiki Me Debug bundle；两端拥有不同的稳定 bundle ID、Flutter build
-root 和 native Core state root。测试只通过加入端 UI、管理端全局 Join 审批入口、真实
+`DEVICE-JOIN-E2E-004` 由 `multi-device-app-pair` suite 承载。它在 Linux/Xvfb 或 macOS
+上构建并并发驱动两个真实 AWiki Me Debug bundle；两端拥有不同的 App identity、产物和
+native Core state root。测试只通过加入端 UI、管理端全局 Join 审批入口、真实
 realtime/Core 投影和一次 E2E-only user-presence 决定推进产品状态，不直接调用 inbox hydration、
 `requestSync()` 或 `refreshJoinInbox()`。跨进程 coordinator 仅在 loopback 内交换阶段
 checkpoint，并在内存中返回 SAS 是否匹配；SAS 不进入配置、日志、报告或 attestation。
@@ -371,22 +371,23 @@ AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
 AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=apppair \
 dart run tests/e2e/runner.dart \
   --case multi-device-app-pair \
-  --config <local-awiki-info-macos-config.yaml>
+  --config <local-awiki-info-linux-or-macos-config.yaml>
 ```
 
 Unlike `multi-device-remote-join`, the YAML for this mode does not require a CLI
 binary or source revision. `tool/build_isolated_e2e_app.dart` owns reusable
 Debug App construction, while the runner owns the ephemeral loopback
-coordinator, two direct App launches, two concurrent existing-App drivers, and
-cleanup. Failed driver output is bounded to 80 lines and redacted in memory
+coordinator, two direct App launches on macOS or Xvfb launches on Linux, two
+concurrent existing-App drivers, and cleanup. Failed driver output is bounded to 80 lines and redacted in memory
 before it can enter diagnostics; raw driver output is neither streamed nor
 persisted. See
 [multi-device-app-pair-e2e.md](multi-device-app-pair-e2e.md).
 
-Admin and Joiner use stable, separate build caches under
-`.e2e/build-cache/multi-device-app-pair/`. A rerun therefore preserves
-Flutter/Xcode intermediates and performs only the required incremental
-recompile. Run config and case-attestation values are launch-time environment
+Admin and Joiner use stable work roots under
+`.e2e/build-cache/multi-device-app-pair/`. macOS uses separate role build
+caches; Linux builds the roles sequentially through Flutter's standard
+`build/linux` cache, then copies each role bundle before building the next.
+A rerun therefore performs only the required incremental recompile. Run config and case-attestation values are launch-time environment
 inputs rather than run-specific Dart defines. Identity state, E2E credential
 storage, reports, and copied App bundles remain isolated under the current run
 directory; production Keychain state is not reused.
@@ -405,7 +406,9 @@ For the smaller content-only matrix, use
 `--case multi-device-app-pair-content-sync`. It requires the audited CLI
 binary/source revision but no Debug Daemon or Account State operator. One Join
 shares the Direct, Group, attachment, and read/unread actions while four case
-attestations remain independent.
+attestations remain independent. On a Linux host this case must execute with a
+`platform: linux` config under Xvfb; a macOS-shaped dry-run is not pass
+evidence.
 
 The macOS runner is not the service host. Account State test actions therefore
 require `AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE=ali` and the exact reviewed

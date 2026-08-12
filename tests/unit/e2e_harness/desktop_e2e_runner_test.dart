@@ -984,6 +984,25 @@ void main() {
       expect(config.functional, isFalse);
     });
 
+    test('supports isolated App-pair execution on Linux/Xvfb', () {
+      final config = RemoteMultiDeviceAppPairConfig.from(
+        fileConfig: const DesktopE2eFileConfig(
+          path: '/tmp/e2e.local.yaml',
+          platform: DesktopE2ePlatform.linux,
+          serviceBaseUrl: 'https://awiki.info',
+          didDomain: 'awiki.info',
+          otpPhone: 'local-test-phone',
+          otpCode: '123456',
+        ),
+        environment: const <String, String>{
+          'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
+        },
+      );
+
+      expect(config.platform, DesktopE2ePlatform.linux);
+      expect(config.serviceBaseUrl, 'https://awiki.info');
+    });
+
     test('functional mode requires audited CLI and daemon inputs', () {
       const functionalConfig = DesktopE2eFileConfig(
         path: '/tmp/e2e.local.yaml',

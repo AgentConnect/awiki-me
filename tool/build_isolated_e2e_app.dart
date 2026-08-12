@@ -1,9 +1,30 @@
 // [INPUT]: One E2E target, isolated runtime/artifact roots, a reusable role build root, bundle identity, and stable Dart defines.
-// [OUTPUT]: A signed Debug macOS App bundle plus a machine-readable artifact manifest.
+// [OUTPUT]: An isolated Debug macOS or Linux App bundle plus a machine-readable artifact manifest.
 // [POS]: Reusable incremental build boundary for E2E modes that need concurrently runnable App processes.
 
 import 'dart:convert';
 import 'dart:io';
+
+enum IsolatedE2eAppPlatform {
+  macos,
+  linux;
+
+  static IsolatedE2eAppPlatform parse(String value) => switch (value) {
+    'macos' => IsolatedE2eAppPlatform.macos,
+    'linux' => IsolatedE2eAppPlatform.linux,
+    _ => throw const IsolatedE2eAppBuildException(
+      'The isolated App platform must be macos or linux.',
+    ),
+  };
+
+  static IsolatedE2eAppPlatform fromHost() {
+    if (Platform.isMacOS) return IsolatedE2eAppPlatform.macos;
+    if (Platform.isLinux) return IsolatedE2eAppPlatform.linux;
+    throw const IsolatedE2eAppBuildException(
+      'Isolated E2E App builds require macOS or Linux.',
+    );
+  }
+}
 
 Future<void> main(List<String> args) async {
   try {
@@ -28,6 +49,7 @@ class IsolatedE2eAppBuildRequest {
     required this.workRoot,
     required this.artifactRoot,
     required this.bundleId,
+    required this.platform,
     required this.flutterBin,
     required this.dartDefines,
     required this.dryRun,
@@ -40,6 +62,7 @@ class IsolatedE2eAppBuildRequest {
   final Directory workRoot;
   final Directory artifactRoot;
   final String bundleId;
+  final IsolatedE2eAppPlatform platform;
   final String flutterBin;
   final List<String> dartDefines;
   final bool dryRun;
@@ -70,6 +93,7 @@ class IsolatedE2eAppBuildRequest {
         'work-root',
         'artifact-root',
         'bundle-id',
+        'platform',
         'flutter-bin',
         'dart-define',
       }.contains(key)) {
@@ -110,6 +134,15 @@ class IsolatedE2eAppBuildRequest {
         'The bundle identifier is invalid.',
       );
     }
+    final platformValues = values['platform'] ?? const <String>[];
+    if (platformValues.length > 1) {
+      throw const IsolatedE2eAppBuildException(
+        'At most one --platform value is allowed.',
+      );
+    }
+    final platform = platformValues.isEmpty
+        ? IsolatedE2eAppPlatform.fromHost()
+        : IsolatedE2eAppPlatform.parse(platformValues.single);
     final flutterValues = values['flutter-bin'] ?? const <String>[];
     if (flutterValues.length > 1) {
       throw const IsolatedE2eAppBuildException(
@@ -166,6 +199,7 @@ class IsolatedE2eAppBuildRequest {
       workRoot: workRoot,
       artifactRoot: artifactRoot,
       bundleId: bundleId,
+      platform: platform,
       flutterBin: flutterBin,
       dartDefines: dartDefines,
       dryRun: dryRun,
@@ -173,13 +207,27 @@ class IsolatedE2eAppBuildRequest {
   }
 
   IsolatedE2eAppBuildPlan toPlan() {
-    final buildDirectory = Directory('${workRoot.path}/flutter-build');
+    final buildDirectory = platform == IsolatedE2eAppPlatform.linux
+        ? Directory('${projectRoot.path}/build')
+        : Directory('${workRoot.path}/flutter-build');
     final flutterConfigDirectory = Directory('${workRoot.path}/flutter-config');
     final overrideConfig = File('${workRoot.path}/AppPair.xcconfig');
-    final sourceApp = Directory(
-      '${buildDirectory.path}/macos/Build/Products/Debug/AWikiMe.app',
-    );
-    final artifactApp = Directory('${artifactRoot.path}/AWikiMe-$name.app');
+    final sourceApp = switch (platform) {
+      IsolatedE2eAppPlatform.macos => Directory(
+        '${buildDirectory.path}/macos/Build/Products/Debug/AWikiMe.app',
+      ),
+      IsolatedE2eAppPlatform.linux => Directory(
+        '${buildDirectory.path}/linux/x64/debug/bundle',
+      ),
+    };
+    final artifactApp = switch (platform) {
+      IsolatedE2eAppPlatform.macos => Directory(
+        '${artifactRoot.path}/AWikiMe-$name.app',
+      ),
+      IsolatedE2eAppPlatform.linux => Directory(
+        '${artifactRoot.path}/AWikiMe-$name-linux',
+      ),
+    };
     return IsolatedE2eAppBuildPlan(
       buildDirectory: buildDirectory,
       flutterBuildDirectorySetting: buildDirectory.path.substring(
@@ -190,11 +238,15 @@ class IsolatedE2eAppBuildRequest {
       overrideConfig: overrideConfig,
       sourceApp: sourceApp,
       artifactApp: artifactApp,
-      executable: File('${artifactApp.path}/Contents/MacOS/AWikiMe'),
+      executable: File(
+        platform == IsolatedE2eAppPlatform.macos
+            ? '${artifactApp.path}/Contents/MacOS/AWikiMe'
+            : '${artifactApp.path}/awiki_me',
+      ),
       manifest: File('${artifactRoot.path}/$name.json'),
       flutterArguments: <String>[
         'build',
-        'macos',
+        platform.name,
         '--debug',
         '--no-pub',
         '--target=$target',
@@ -269,9 +321,13 @@ class IsolatedE2eAppBuilder {
   Future<IsolatedE2eAppArtifact> build(
     IsolatedE2eAppBuildRequest request,
   ) async {
-    if (!Platform.isMacOS && !request.dryRun) {
+    final hostMatches = switch (request.platform) {
+      IsolatedE2eAppPlatform.macos => Platform.isMacOS,
+      IsolatedE2eAppPlatform.linux => Platform.isLinux,
+    };
+    if (!hostMatches && !request.dryRun) {
       throw const IsolatedE2eAppBuildException(
-        'Isolated E2E App builds currently require macOS.',
+        'The isolated E2E App platform must match the build host.',
       );
     }
     final plan = request.toPlan();
@@ -296,15 +352,20 @@ class IsolatedE2eAppBuilder {
     plan.flutterSettingsFile.writeAsStringSync(
       jsonEncode(<String, Object?>{
         'build-dir': plan.flutterBuildDirectorySetting,
-        'enable-macos-desktop': true,
+        if (request.platform == IsolatedE2eAppPlatform.macos)
+          'enable-macos-desktop': true,
+        if (request.platform == IsolatedE2eAppPlatform.linux)
+          'enable-linux-desktop': true,
       }),
       flush: true,
     );
-    plan.overrideConfig.writeAsStringSync(
-      'AWIKI_MACOS_DEV_BUNDLE_ID = ${request.bundleId}\n'
-      'AWIKI_APP_DISPLAY_NAME = AWikiMe E2E ${request.name}\n',
-      flush: true,
-    );
+    if (request.platform == IsolatedE2eAppPlatform.macos) {
+      plan.overrideConfig.writeAsStringSync(
+        'AWIKI_MACOS_DEV_BUNDLE_ID = ${request.bundleId}\n'
+        'AWIKI_APP_DISPLAY_NAME = AWikiMe E2E ${request.name}\n',
+        flush: true,
+      );
+    }
 
     final build = await Process.run(
       request.flutterBin,
@@ -312,10 +373,15 @@ class IsolatedE2eAppBuilder {
       workingDirectory: request.projectRoot.path,
       environment: <String, String>{
         ...Platform.environment,
-        'LANG': 'en_US.UTF-8',
-        'LC_ALL': 'en_US.UTF-8',
+        'LANG': request.platform == IsolatedE2eAppPlatform.macos
+            ? 'en_US.UTF-8'
+            : 'C.UTF-8',
+        'LC_ALL': request.platform == IsolatedE2eAppPlatform.macos
+            ? 'en_US.UTF-8'
+            : 'C.UTF-8',
         'XDG_CONFIG_HOME': plan.flutterConfigDirectory.path,
-        'XCODE_XCCONFIG_FILE': plan.overrideConfig.path,
+        if (request.platform == IsolatedE2eAppPlatform.macos)
+          'XCODE_XCCONFIG_FILE': plan.overrideConfig.path,
       },
       runInShell: false,
     );
@@ -328,46 +394,54 @@ class IsolatedE2eAppBuilder {
     if (plan.artifactApp.existsSync()) {
       plan.artifactApp.deleteSync(recursive: true);
     }
-    final copy = await Process.run('/usr/bin/ditto', <String>[
-      plan.sourceApp.path,
-      plan.artifactApp.path,
-    ]);
+    final copy = request.platform == IsolatedE2eAppPlatform.macos
+        ? await Process.run('/usr/bin/ditto', <String>[
+            plan.sourceApp.path,
+            plan.artifactApp.path,
+          ])
+        : await Process.run('/bin/cp', <String>[
+            '-a',
+            plan.sourceApp.path,
+            plan.artifactApp.path,
+          ]);
     if (copy.exitCode != 0 || !plan.executable.existsSync()) {
       throw IsolatedE2eAppBuildException(
         'The isolated App artifact copy failed for ${request.name}.',
       );
     }
-    final bundle = await Process.run('/usr/libexec/PlistBuddy', <String>[
-      '-c',
-      'Print :CFBundleIdentifier',
-      '${plan.artifactApp.path}/Contents/Info.plist',
-    ]);
-    if (bundle.exitCode != 0 ||
-        bundle.stdout.toString().trim() != request.bundleId) {
-      throw const IsolatedE2eAppBuildException(
-        'The isolated App bundle identifier did not match the request.',
-      );
-    }
-    final signature = await Process.run('/usr/bin/codesign', <String>[
-      '--verify',
-      '--deep',
-      '--strict',
-      plan.artifactApp.path,
-    ]);
-    if (signature.exitCode != 0) {
-      throw const IsolatedE2eAppBuildException(
-        'The isolated App signature verification failed.',
-      );
-    }
-    final architectures = await Process.run('/usr/bin/lipo', <String>[
-      '-archs',
-      plan.executable.path,
-    ]);
-    if (architectures.exitCode != 0 ||
-        architectures.stdout.toString().trim() != 'x86_64') {
-      throw const IsolatedE2eAppBuildException(
-        'The isolated Debug App must contain only x86_64 on this host.',
-      );
+    if (request.platform == IsolatedE2eAppPlatform.macos) {
+      final bundle = await Process.run('/usr/libexec/PlistBuddy', <String>[
+        '-c',
+        'Print :CFBundleIdentifier',
+        '${plan.artifactApp.path}/Contents/Info.plist',
+      ]);
+      if (bundle.exitCode != 0 ||
+          bundle.stdout.toString().trim() != request.bundleId) {
+        throw const IsolatedE2eAppBuildException(
+          'The isolated App bundle identifier did not match the request.',
+        );
+      }
+      final signature = await Process.run('/usr/bin/codesign', <String>[
+        '--verify',
+        '--deep',
+        '--strict',
+        plan.artifactApp.path,
+      ]);
+      if (signature.exitCode != 0) {
+        throw const IsolatedE2eAppBuildException(
+          'The isolated App signature verification failed.',
+        );
+      }
+      final architectures = await Process.run('/usr/bin/lipo', <String>[
+        '-archs',
+        plan.executable.path,
+      ]);
+      if (architectures.exitCode != 0 ||
+          architectures.stdout.toString().trim() != 'x86_64') {
+        throw const IsolatedE2eAppBuildException(
+          'The isolated Debug App must contain only x86_64 on this host.',
+        );
+      }
     }
     plan.manifest.writeAsStringSync(
       const JsonEncoder.withIndent('  ').convert(artifact.toJson()),

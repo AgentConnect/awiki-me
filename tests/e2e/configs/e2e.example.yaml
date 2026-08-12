@@ -1,6 +1,8 @@
 # Copy this file to an ignored *.local.yaml and fill in remote awiki.info
 # account-pool values. The config is local secret storage; the services are not.
 
+# Use `linux` on a Linux host so desktop E2E runs under Xvfb; use `macos` on
+# macOS. Do not substitute a macOS-shaped dry-run for a real Linux execution.
 platform: macos
 
 service:

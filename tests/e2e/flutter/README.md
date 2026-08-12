@@ -208,6 +208,8 @@ pre-Join Group/attachment absence (ordinary Direct reuses its existing focused
 case), post-Join Group ownership and exact-one projection, attachment download
 digest, and isolated Direct/Group `0 -> 1 -> 0` unread convergence. It does not
 run Agent, Profile, Recovery, Registry, or MLS flows.
+On Linux, both product Apps and their existing-App drivers run in isolated
+Xvfb displays; Linux execution is a real remote E2E run, not a macOS dry-run.
 
 `--case personal-agent` is the durable acceptance entry for Personal Agent
 product behavior. It is a fail-fast real-backend gate: local YAML must provide

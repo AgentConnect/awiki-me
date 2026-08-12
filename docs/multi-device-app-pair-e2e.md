@@ -1,8 +1,8 @@
 # One-host App↔App E2E mode
 
-The App-pair harness is the reusable macOS E2E boundary for scenarios that need
-two independently runnable AWiki Me processes on one computer. It exposes two
-separate suites:
+The App-pair harness is the reusable Linux/Xvfb and macOS E2E boundary for
+scenarios that need two independently runnable AWiki Me processes on one
+computer. It exposes focused member-Join, functional, and content-sync suites:
 
 - `multi-device-app-pair`: security acceptance for `DEVICE-JOIN-E2E-004`,
   including one real macOS LocalAuthentication decision;
@@ -15,18 +15,23 @@ The two roles are product processes, not two widget trees in one test process:
 
 | Boundary | Admin App | Joining App |
 | --- | --- | --- |
-| Bundle ID | `ai.awiki.awikime.dev.e2e.pair.admin` | `ai.awiki.awikime.dev.e2e.pair.joiner` |
-| Flutter build directory | stable role cache under `.e2e/build-cache/` | separate stable role cache under `.e2e/build-cache/` |
-| App bundle | `AWikiMe-admin.app` | `AWikiMe-joiner.app` |
+| Artifact identity | macOS bundle ID or Linux manifest role `admin` | macOS bundle ID or Linux manifest role `joiner` |
+| Flutter build directory | macOS stable role cache; Linux standard shared build cache used sequentially | macOS separate stable role cache; Linux standard shared build cache used sequentially |
+| App bundle | `AWikiMe-admin.app` or `AWikiMe-admin-linux/` | `AWikiMe-joiner.app` or `AWikiMe-joiner-linux/` |
 | App/native Core state | fresh admin Storage Scope | fresh joiner Storage Scope |
+| Simulated desktop | Linux-only isolated Xvfb display | Linux-only separate Xvfb display |
 | Flutter driver | attaches to the admin VM service | attaches to the joiner VM service |
 
-The runner builds the roles sequentially, launches both bundles directly, then
-attaches two `flutter drive --use-existing-app` processes concurrently. The
-stable, distinct bundle IDs keep the operating-system application identities
-separate. Stable per-role build roots may reuse only compiler intermediates;
+The runner builds the roles sequentially, launches both bundles directly on
+macOS or under separate Xvfb displays on Linux, then attaches two
+`flutter drive --use-existing-app` processes concurrently. Stable per-role
+macOS build roots and the sequential Linux build preserve role-specific Dart
+defines before each artifact is copied; the two runtime artifacts and state
+roots remain separate. Build roots may reuse only compiler intermediates;
 per-run state roots and E2E scope-secret repositories prevent either role from
 reusing another run's product data or credential material.
+The Linux GTK runner is explicitly non-unique, so both processes may coexist
+even though Linux does not use the macOS bundle-ID mechanism.
 
 ## Coordination boundary
 
@@ -62,20 +67,23 @@ before surfacing that bounded diagnostic.
 
 `tool/build_isolated_e2e_app.dart` is the generic build boundary. It accepts an
 `integration_test/*_test.dart` target, isolated state/work/artifact roots, a
-bundle ID, and repeated Dart defines. It always makes a Debug macOS build with
-`--no-pub`; each work root owns its Flutter XDG settings and build directory.
+platform, an App identity, and repeated Dart defines. It makes a Debug macOS or
+Linux build with `--no-pub`; each work root owns its Flutter XDG settings.
 The App-pair runner keeps one stable work root per role under
-`.e2e/build-cache/multi-device-app-pair/`, so later runs reuse Flutter,
-CocoaPods, Swift, and Xcode intermediates. Only the fixed E2E gate and role are
-compile-time inputs. Run config, attestation paths, scenario IDs, and run IDs
-are supplied to the launched processes, so a new run does not invalidate the
-role build. Runtime state, E2E credential storage, and copied App artifacts
-remain per-run, and the Admin and Joiner retain distinct bundle IDs. All three
-roots must be non-overlapping descendants of the repository so the Flutter
-relative build-dir contract and cleanup boundary remain auditable.
-On the current Intel development host it rejects any executable that is not
-x86_64-only. The output is one JSON artifact manifest containing the copied App
-and executable paths.
+`.e2e/build-cache/multi-device-app-pair/`. macOS keeps separate role build
+directories. Linux uses Flutter's standard `build/linux` directory
+sequentially because Linux native build hooks resolve compiler configuration
+from that location, then copies each completed role bundle to its isolated
+artifact directory before building the next role. Only the fixed E2E gate and
+role are compile-time inputs. Run config, attestation paths, scenario IDs, and
+run IDs are supplied to the launched processes, so a new run does not
+invalidate the role build. Runtime state, E2E credential storage, and copied
+App artifacts remain per-run, and the Admin and Joiner retain distinct
+identities. All three roots must be non-overlapping descendants of the
+repository so the cleanup boundary remains auditable. macOS still requires the
+signed x86_64 Debug bundle; Linux does not claim macOS signing or
+LocalAuthentication evidence. The output is one JSON artifact manifest
+containing the copied App and executable paths.
 
 The App-pair runner is the supported caller today. Future E2E modes may reuse
 the builder, but must define their own orchestration, isolation oracle, secret
@@ -92,8 +100,28 @@ AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
 AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=apppair \
 dart run tests/e2e/runner.dart \
   --case multi-device-app-pair \
-  --config <local-awiki-info-macos-config.yaml>
+  --config <local-awiki-info-linux-or-macos-config.yaml>
 ```
+
+On Linux the config must set `platform: linux`, `xvfb-run` must be available,
+and the runner starts both Apps plus both existing-App drivers in Xvfb. If the
+Linux native SQLite dependency is not already cached, set
+`AWIKI_SQLITE3_SOURCE_DIR` to a directory containing `sqlite3.c` so CMake does
+not depend on an unbounded external download.
+
+### Linux execution record: 2026-08-12
+
+Real run `20260812143326-hl9zjcr1by` built and launched two isolated Linux App
+bundles under Xvfb and drove both against `awiki.info`. Tail-only Group and
+attachment boundaries, attachment download/digest, and bidirectional Group
+message ownership/exact-one projection passed. The read-state case reached the
+final Group-read propagation step after Direct read convergence succeeded, but
+the Admin App Group unread count did not converge from one to zero within 90
+seconds. The run failed with `The sibling Group read did not converge to the
+existing App.` This is recorded as a product synchronization failure; the E2E
+environment and test remain unchanged, and no business-code workaround was
+added. The redacted local evidence is under
+`.e2e/multi-device-app-pair-content-sync/20260812143326-hl9zjcr1by/reports/`.
 
 The ignored local YAML contains the authorized test phone and six-digit fixed
 code. The real purpose-bound SMS request must still succeed; HTTP 429 uses the
@@ -103,8 +131,10 @@ The Joining App follows the production unified onboarding path: it verifies
 the existing Handle, chooses “Join device”, and consumes the opaque
 continuation; the suite does not depend on a standalone onboarding Join entry.
 
-The operator must complete the real macOS user-presence prompt in the admin
-App. `--prepare-only` validates prerequisites but intentionally does not build
+The E2E-only user-presence decision is unattended on Linux and does not attest
+production LocalAuthentication. A macOS-only security assertion must still use
+the real macOS implementation in its dedicated gate. `--prepare-only`
+validates prerequisites but intentionally does not build
 the pair, because the compiled targets require the ephemeral coordinator of an
 executing run. Flutter is resolved from `PATH` by default; a host whose Flutter
 SDK is not on `PATH` can set `AWIKI_E2E_FLUTTER_BIN` to the absolute executable.
@@ -116,7 +146,7 @@ embedded in that binary, and an x86_64 Debug `daemon.binary` plus a Daemon
 Handle. It injects an always-confirming `UserPresencePort` only through the
 compiled integration-test provider override. Production code and the security
 suite remain fail-closed and continue to use `LocalAuthUserPresencePort`.
-Because the runner executes on macOS while `awiki.info` is managed on Ali, its
+Because the runner executes outside the managed `awiki.info` service host, its
 Account State fixture/fail-once action accepts only the reviewed
 `ssh ali -- sudo -n /usr/bin/env ...` argv. That argv runs the immutable
 `/opt/awiki/services/user-service/current` script, sets
