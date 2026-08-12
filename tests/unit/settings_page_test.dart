@@ -15,6 +15,7 @@ import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -51,6 +52,28 @@ void main() {
 
       expect(find.byType(DisplaySettingsPage), findsOneWidget);
       expect(find.byKey(const Key('display-scale-slider')), findsOneWidget);
+      expect(find.byKey(const Key('display-scale-ticks')), findsOneWidget);
+      for (final percent in <int>[80, 90, 100, 110, 120, 130]) {
+        expect(find.byKey(Key('display-scale-tick-$percent')), findsOneWidget);
+      }
+      final sliderRect = tester.getRect(
+        find.byKey(const Key('display-scale-slider')),
+      );
+      for (var index = 0; index < AwikiDisplayScale.levels.length; index++) {
+        final percent = (AwikiDisplayScale.levels[index] * 100).round();
+        final expectedCenterX =
+            sliderRect.left +
+            22 +
+            index *
+                (sliderRect.width - 44) /
+                (AwikiDisplayScale.levels.length - 1);
+        expect(
+          tester
+              .getCenter(find.byKey(Key('display-scale-tick-mark-$percent')))
+              .dx,
+          closeTo(expectedCenterX, 0.01),
+        );
+      }
       expect(find.text('100%'), findsWidgets);
       expect(
         MediaQuery.textScalerOf(
@@ -63,6 +86,31 @@ void main() {
       final container = ProviderScope.containerOf(
         tester.element(find.byType(DisplaySettingsPage)),
       );
+      await tester.tapAt(
+        Offset(
+          sliderRect.left + 22 + (sliderRect.width - 44) * 0.72,
+          sliderRect.center.dy,
+        ),
+      );
+      await tester.pump();
+      expect(container.read(displayScaleProvider), closeTo(1.2, 0.0001));
+
+      for (final percent in <int>[90, 100, 110, 120]) {
+        await tester.tap(find.byKey(Key('display-scale-tick-$percent')));
+        await tester.pump();
+        expect(
+          container.read(displayScaleProvider),
+          closeTo(percent / 100, 0.0001),
+        );
+        expect(
+          tester
+              .widget<AppPressable>(
+                find.byKey(Key('display-scale-tick-$percent')),
+              )
+              .selected,
+          isTrue,
+        );
+      }
       container.read(displayScaleProvider.notifier).setScale(1.3);
       await tester.pump();
       expect(find.text('130%'), findsWidgets);

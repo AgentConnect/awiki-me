@@ -97,38 +97,17 @@ class DisplaySettingsPage extends ConsumerWidget {
                                 ],
                               ),
                               const SizedBox(height: 14),
-                              CupertinoSlider(
-                                key: const Key('display-scale-slider'),
-                                min: 0,
-                                max: (AwikiDisplayScale.levels.length - 1)
-                                    .toDouble(),
-                                divisions: AwikiDisplayScale.levels.length - 1,
-                                value: levelIndex.toDouble(),
-                                onChanged: (value) => ref
+                              _DiscreteDisplayScaleSlider(
+                                levelIndex: levelIndex,
+                                onSelected: ref
                                     .read(displayScaleProvider.notifier)
-                                    .setScale(
-                                      AwikiDisplayScale.levels[value.round()],
-                                    ),
+                                    .setScale,
                               ),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: <Widget>[
-                                  Text(
-                                    '80%',
-                                    style: TextStyle(
-                                      color: theme.tertiaryText,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  Text(
-                                    '130%',
-                                    style: TextStyle(
-                                      color: theme.tertiaryText,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
+                              _DisplayScaleTicks(
+                                selectedScale: scale,
+                                onSelected: ref
+                                    .read(displayScaleProvider.notifier)
+                                    .setScale,
                               ),
                             ],
                           ),
@@ -165,6 +144,138 @@ class DisplaySettingsPage extends ConsumerWidget {
                     ],
                   ),
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DiscreteDisplayScaleSlider extends StatelessWidget {
+  const _DiscreteDisplayScaleSlider({
+    required this.levelIndex,
+    required this.onSelected,
+  });
+
+  final int levelIndex;
+  final ValueChanged<double> onSelected;
+
+  void _selectNearest(double localX, double width) {
+    final trackWidth = width - _displayScaleTickTouchWidth;
+    final normalized = trackWidth <= 0
+        ? 0.0
+        : ((localX - _displayScaleTickTouchWidth / 2) / trackWidth).clamp(
+            0.0,
+            1.0,
+          );
+    final index = (normalized * (AwikiDisplayScale.levels.length - 1)).round();
+    onSelected(AwikiDisplayScale.levels[index]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => GestureDetector(
+        key: const Key('display-scale-slider-tap-target'),
+        behavior: HitTestBehavior.opaque,
+        onTapUp: (details) =>
+            _selectNearest(details.localPosition.dx, constraints.maxWidth),
+        child: CupertinoSlider(
+          key: const Key('display-scale-slider'),
+          min: 0,
+          max: (AwikiDisplayScale.levels.length - 1).toDouble(),
+          divisions: AwikiDisplayScale.levels.length - 1,
+          value: levelIndex.toDouble(),
+          onChanged: (value) =>
+              onSelected(AwikiDisplayScale.levels[value.round()]),
+        ),
+      ),
+    );
+  }
+}
+
+const double _displayScaleTickTouchWidth = 44;
+
+class _DisplayScaleTicks extends StatelessWidget {
+  const _DisplayScaleTicks({
+    required this.selectedScale,
+    required this.onSelected,
+  });
+
+  final double selectedScale;
+  final ValueChanged<double> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return Row(
+      key: const Key('display-scale-ticks'),
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: <Widget>[
+        for (final level in AwikiDisplayScale.levels)
+          SizedBox(
+            width: _displayScaleTickTouchWidth,
+            child: _DisplayScaleTick(
+              level: level,
+              selected: AwikiDisplayScale.nearestLevel(selectedScale) == level,
+              selectedColor: AwikiMePalette.actionBlue,
+              unselectedColor: theme.tertiaryText,
+              onTap: () => onSelected(level),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _DisplayScaleTick extends StatelessWidget {
+  const _DisplayScaleTick({
+    required this.level,
+    required this.selected,
+    required this.selectedColor,
+    required this.unselectedColor,
+    required this.onTap,
+  });
+
+  final double level;
+  final bool selected;
+  final Color selectedColor;
+  final Color unselectedColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = (level * 100).round();
+    final color = selected ? selectedColor : unselectedColor;
+    return AppPressable(
+      key: Key('display-scale-tick-$percent'),
+      onTap: onTap,
+      semanticLabel: '$percent%',
+      selected: selected,
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        height: 44,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: <Widget>[
+            Container(
+              key: Key('display-scale-tick-mark-$percent'),
+              width: selected ? 2 : 1,
+              height: selected ? 7 : 5,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '$percent%',
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],

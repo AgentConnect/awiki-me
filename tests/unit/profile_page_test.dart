@@ -7,6 +7,7 @@ import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/profile/profile_page.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/compact_nested_navigator_back_scope.dart';
+import 'package:awiki_me/src/presentation/shared/identity_profile_surface.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart' show JSONMessageCodec;
@@ -161,6 +162,44 @@ void main() {
       8,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('宽屏我的资料卡不显示设置入口', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const profile = UserProfile(
+      did: 'did:test:expanded-profile',
+      nickName: 'Expanded Alice',
+      bio: '',
+      tags: <String>[],
+      handle: 'expanded-alice',
+      profileMarkdown: '',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ProfilePage(),
+        gateway: FakeAwikiGateway()..myProfile = profile,
+        profile: profile,
+        homepageMarkdownLoader: (_) async => null,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('profile-identity-card')), findsOneWidget);
+    expect(find.byKey(const Key('profile-settings-row')), findsNothing);
+    expect(find.text('账号、设备与应用偏好'), findsNothing);
+    expect(
+      tester
+          .widget<IdentityProfileMetadataRow>(
+            find.byKey(const Key('profile-homepage-metadata-row')),
+          )
+          .showDivider,
+      isFalse,
+    );
   });
 
   testWidgets('个人资料页点击编辑后可提交昵称简介和标签', (tester) async {
