@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/app_update_manifest.dart';
@@ -114,5 +116,40 @@ void main() {
         'updatePermissionRequired',
       );
     });
+
+    test('后台版本检查在 provider 销毁后不会写入状态', () async {
+      final pendingService = _PendingUpdateService();
+      final pendingContainer = ProviderContainer(
+        overrides: <Override>[
+          updateServiceProvider.overrideWithValue(pendingService),
+        ],
+      );
+      final initialize = pendingContainer
+          .read(appUpdateProvider.notifier)
+          .initialize();
+      await pendingService.checkStarted.future;
+
+      pendingContainer.dispose();
+      pendingService.complete();
+
+      await expectLater(initialize, completes);
+    });
   });
+}
+
+class _PendingUpdateService extends FakeUpdateService {
+  final Completer<void> checkStarted = Completer<void>();
+  final Completer<AppUpdateCheckResult> _result =
+      Completer<AppUpdateCheckResult>();
+
+  @override
+  Future<AppUpdateCheckResult> checkForUpdates({required bool force}) {
+    checkForUpdatesCalls += 1;
+    checkStarted.complete();
+    return _result.future;
+  }
+
+  void complete() {
+    _result.complete(AppUpdateCheckResult(currentVersion: currentVersion));
+  }
 }

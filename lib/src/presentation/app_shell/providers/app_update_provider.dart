@@ -86,14 +86,17 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
       final currentVersion = await ref
           .read(updateServiceProvider)
           .getCurrentVersion();
+      if (!mounted) return;
       state = state.copyWith(currentVersion: currentVersion);
     } catch (error) {
+      if (!mounted) return;
       state = state.copyWith(
         status: AppUpdateStatus.error,
         errorMessage: error.toString(),
       );
       return;
     }
+    if (!mounted) return;
     await checkForUpdates(force: false, silent: true);
   }
 
@@ -101,6 +104,7 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
     required bool force,
     bool silent = false,
   }) async {
+    if (!mounted) return;
     if (!silent) {
       state = state.copyWith(
         status: AppUpdateStatus.checking,
@@ -111,6 +115,7 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
       final result = await ref
           .read(updateServiceProvider)
           .checkForUpdates(force: force);
+      if (!mounted) return;
       state = state.copyWith(
         currentVersion: result.currentVersion,
         latestManifest: result.latestManifest,
@@ -125,6 +130,7 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
             .showInfo(AppMessage.updateAlreadyLatest());
       }
     } catch (error) {
+      if (!mounted) return;
       state = state.copyWith(
         status: AppUpdateStatus.error,
         errorMessage: error.toString(),
