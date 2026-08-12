@@ -324,6 +324,29 @@ delete(scopeId)
 返回`already_exists`，不得覆盖。plugin missing、ACL denied、decode error不得切换到
 另一backend或生成新key。
 
+Android 平台允许一次受限的物理 backend 升级，但不得改变上述逻辑 locator。仅当候选
+明确从已发布的 `flutter_secure_storage` 9.2.4 backend 升级到 10.x namespaced backend 时，
+provider 可以对调用方给出的精确 `scope/<uuid>` account 执行以下迁移：
+
+```text
+read namespaced target
+  -> 若存在：严格 decode/校验后返回
+  -> 若缺失：从冻结的 v9 preference name + key prefix 读取同一 account
+    -> 严格 decode/校验 scope/envelope
+    -> 写入独立 storageNamespace target
+    -> 从 target 读回并逐字节验证
+    -> 返回 target；首个兼容版本保留加密 legacy account
+```
+
+迁移必须跨 repository instance 进程级串行、幂等、`resetOnError=false`，且不得枚举或
+复制其他 account。source 读取、target 写入或 read-back 任一步失败都必须保留 source 并
+fail closed；不得生成新 root、清空 preferences、删除 legacy account/KeyStore alias、触发
+账号恢复或回退明文。v10 target 一旦存在即为唯一优先读写事实；保留的 v9 密文只是首个
+兼容版本的恢复副本，不参与合并或回写。旧 account、全局 KeyStore/key-storage 只允许在
+用户明确执行完整本地数据删除时清理，或由未来另一个有独立冷启动持久性证据的版本迁移。
+已经因旧的非隔离 v10
+自动迁移而丢失解密密钥的数据不属于可猜测恢复范围，仍按 corrupt/unavailable fail closed。
+
 平台实现、安全选项和测试边界见
 [Scope Secret Platform Provider](scope-secret-platform.md)。
 
@@ -457,6 +480,10 @@ Production不读取或迁移：
 - `awiki.ai`/`tenant-default` locator；
 - `.root_key_b64`/`.device_id` split items；
 - `<namespace>.secrets_v1` bundle。
+
+这里的禁止项不包含上一节限定的 Android 9.2.4 同一 production scope account 到 v10
+namespaced physical backend 的原位迁移；该迁移不接受域名/tenant namespace，也不改变
+service/account/envelope/vault context。
 
 预发布数据只由developer-only dry-run + explicit archive/reset工具处理。Root rotation
 使用同account内的CAS/journal/reseal/verify流程；backup使用单独加密recovery package；

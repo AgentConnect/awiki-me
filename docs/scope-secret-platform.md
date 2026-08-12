@@ -53,14 +53,36 @@ runtime consumer取得 copy 后应尽快交给 im-core并覆盖可写 buffer，�
   失败时直接 fail closed；不会复用普通 preferences 的 generic upsert 或 legacy fallback。
 - iOS 使用 `first_unlock_this_device`、`synchronizable=false`，Debug/Profile 与 Release bundle
   identity 分离。
-- Android 使用 Keystore-backed encrypted shared preferences，`resetOnError=false`，Debug/
-  Profile 使用 `.dev` application ID suffix。
+- Android v10 target 使用独立 `storageNamespace` 的 Keystore-backed storage，
+  `resetOnError=false`、`migrateWithBackup=true`，Debug/Profile 使用 `.dev` application ID
+  suffix。Scope secret 与普通 App key-value storage 必须使用不同 namespace，使 data、
+  config marker、wrapped-key preferences 和 KeyStore alias 全部隔离。
 - Web 和未支持平台返回 `scope_secret_platform_unsupported`，不降级到明文文件。
 
 Flutter secure storage 在 iOS/Android 未提供系统级原子 CAS。当前实现使用进程级共享串行器，
 其安全前提是一个 application identity 同时只有一个 AWiki Me writer process。多进程 writer
 如未来成为需求，必须先增加平台原生 CAS/锁，不得把当前机制宣称为跨进程原子操作。macOS
 同样通过单一 App writer 和 native serial queue消除进程内 TOCTOU。
+
+### Android 9.2.4 到 10.x 的一次性迁移
+
+旧版 Scope secret 使用 `awiki_me_scope_secrets` EncryptedSharedPreferences 和
+`awiki_scope_` key prefix；普通 App state 使用 `FlutterSecureStorage` 与默认 prefix。
+两者的数据文件不同，但旧 plugin 的 wrapped-key preferences/KeyStore alias 不完整隔离，
+因此禁止让两个实例依次执行 v10 的通用自动算法迁移。
+
+升级实现必须将两个 consumer 分别迁入固定且互不相同的 `storageNamespace`。每个精确 key
+执行 target-first 双读；只有 source 成功解密、Scope envelope 校验通过、target 写入并
+read-back 完全一致后，才采用 target。首个兼容版本不自动删除 source key，因为 plugin
+普通写入的即时 read-back 不能替代跨进程/强杀后的持久性证据。迁移跨两个 consumer共用
+同一进程级串行器。不删除旧 account/全局 key material，不扫描未知 key，不把解密失败当作 missing，也不使用
+`resetOnError`、本地数据恢复或新 secret provision 兜底。
+
+App 单元测试必须覆盖 App state 与 Scope secret 的不同 target namespace、冻结的 v9 source
+options、target-first、成功迁移、read-back 不一致、source/target 异常、source 保留、并发串行、
+exclusive create/CAS/delete。Android 真实升级门必须从 9.2.4 artifact 预置同一 scope root 与
+非 secret session sentinel，覆盖安装候选后验证 DID/vault root/sentinel 保持一致，并在强杀
+冷启动后复验；没有这项设备证据时只能标记 `UNVERIFIED`。
 
 ## E2E file provider
 

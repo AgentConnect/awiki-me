@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../storage/awiki_storage_roots.dart';
+import '../storage/android_secure_storage_value_migrator.dart';
 
 abstract class AppKeyValueStore {
   Future<String?> read({required String key});
@@ -19,12 +20,15 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
   SecureAppKeyValueStore({
     FlutterSecureStorage? secureStorage,
     MacOsKeychainStorage? macOsKeychainStorage,
+    bool? isAndroid,
   }) : _secureStorage = secureStorage ?? _defaultSecureStorage(),
        _macOsKeychainStorage =
-           macOsKeychainStorage ?? const MacOsKeychainStorage();
+           macOsKeychainStorage ?? const MacOsKeychainStorage(),
+       _isAndroid = isAndroid ?? Platform.isAndroid;
 
   final FlutterSecureStorage _secureStorage;
   final MacOsKeychainStorage _macOsKeychainStorage;
+  final bool _isAndroid;
 
   static const FlutterSecureStorage _defaultStorage = FlutterSecureStorage();
 
@@ -32,15 +36,38 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
     // Legacy fallback for values written by flutter_secure_storage before the
     // app added its own macOS Keychain bridge. New macOS writes go through
     // MacOsKeychainStorage so the Keychain ACL can trust the current executable.
-    mOptions: MacOsOptions(useDataProtectionKeyChain: false),
+    mOptions: MacOsOptions(usesDataProtectionKeychain: false),
   );
 
-  static const AndroidOptions _androidOptions = AndroidOptions(
+  static const AndroidOptions _androidTargetOptions = AndroidOptions(
     resetOnError: false,
+    migrateWithBackup: true,
+    storageNamespace: 'awiki_me_app_state_v1',
+  );
+
+  static const AndroidOptions _androidLegacyOptions = AndroidOptions(
+    resetOnError: false,
+    migrateOnAlgorithmChange: false,
+    migrateWithBackup: false,
+    // Required only to decrypt the frozen flutter_secure_storage 9.2.4 source.
+    // ignore: deprecated_member_use
+    keyCipherAlgorithm: KeyCipherAlgorithm.RSA_ECB_PKCS1Padding,
+    // ignore: deprecated_member_use
+    storageCipherAlgorithm: StorageCipherAlgorithm.AES_CBC_PKCS7Padding,
+    // ignore: deprecated_member_use
     sharedPreferencesName: 'FlutterSecureStorage',
     preferencesKeyPrefix:
         'VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIHNlY3VyZSBzdG9yYWdlCg',
   );
+
+  AndroidSecureStorageValueMigrator get _androidMigrator =>
+      AndroidSecureStorageValueMigrator(
+        storage: _secureStorage,
+        targetOptions: _androidTargetOptions,
+        legacyOptions: _androidLegacyOptions,
+        verificationFailure: () =>
+            StateError('app_secure_storage_migration_verify_failed'),
+      );
 
   static FlutterSecureStorage _defaultSecureStorage() {
     if (Platform.isMacOS) {
@@ -51,6 +78,9 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
 
   @override
   Future<String?> read({required String key}) async {
+    if (_isAndroid) {
+      return _androidMigrator.readAndMigrate(key: key);
+    }
     if (Platform.isMacOS) {
       final nativeValue = await _readMacOsNativeValue(key);
       if (nativeValue != null) {
@@ -58,7 +88,7 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
       }
       final legacyValue = await _secureStorage.read(
         key: key,
-        aOptions: _androidOptions,
+        aOptions: _androidLegacyOptions,
       );
       if (legacyValue != null) {
         final migrated = await _migrateLegacyMacOsValue(
@@ -71,7 +101,7 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
       }
       return legacyValue;
     }
-    return _secureStorage.read(key: key, aOptions: _androidOptions);
+    return _secureStorage.read(key: key, aOptions: _androidTargetOptions);
   }
 
   Future<String?> _readMacOsNativeValue(String key) async {
@@ -98,7 +128,7 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
 
   Future<void> _deleteLegacyMacOsValue(String key) async {
     try {
-      await _secureStorage.delete(key: key, aOptions: _androidOptions);
+      await _secureStorage.delete(key: key, aOptions: _androidLegacyOptions);
     } on Object {
       // Best-effort legacy cleanup. The native item already exists, so future
       // reads should not need to touch the legacy Keychain service.
@@ -107,6 +137,10 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
 
   @override
   Future<void> write({required String key, required String value}) async {
+    if (_isAndroid) {
+      await _androidMigrator.writeVerified(key: key, value: value);
+      return;
+    }
     if (Platform.isMacOS) {
       try {
         await _macOsKeychainStorage.write(key: key, value: value);
@@ -115,7 +149,7 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
         await _secureStorage.write(
           key: key,
           value: value,
-          aOptions: _androidOptions,
+          aOptions: _androidLegacyOptions,
         );
         return;
       }
@@ -123,27 +157,31 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
     await _secureStorage.write(
       key: key,
       value: value,
-      aOptions: _androidOptions,
+      aOptions: _androidTargetOptions,
     );
   }
 
   @override
   Future<void> delete({required String key}) async {
+    if (_isAndroid) {
+      await _androidMigrator.deleteBoth(key: key);
+      return;
+    }
     if (Platform.isMacOS) {
       try {
         await _macOsKeychainStorage.delete(key: key);
       } on MissingPluginException {
-        await _secureStorage.delete(key: key, aOptions: _androidOptions);
+        await _secureStorage.delete(key: key, aOptions: _androidLegacyOptions);
         return;
       }
       try {
-        await _secureStorage.delete(key: key, aOptions: _androidOptions);
+        await _secureStorage.delete(key: key, aOptions: _androidLegacyOptions);
       } on Object {
         // Best-effort legacy cleanup; the native Keychain item is already gone.
       }
       return;
     }
-    await _secureStorage.delete(key: key, aOptions: _androidOptions);
+    await _secureStorage.delete(key: key, aOptions: _androidTargetOptions);
   }
 }
 
