@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-12.android-device-join-native-capability",
+  "sourceRevision": "2026-08-12.native-device-join-capability-matrix",
   "suites": {
     "smoke": {
       "tier": "product_ui",

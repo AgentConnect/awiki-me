@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(115));
+      expect(catalog.cases, hasLength(117));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -41,6 +41,8 @@ void main() {
           'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
           'IDENTITY-DELETE-E2E-001',
           'ANDROID-DEVICE-JOIN-E2E-001',
+          'IOS-DEVICE-JOIN-E2E-001',
+          'WINDOWS-DEVICE-JOIN-E2E-001',
           'ANDROID-PUSH-PRODUCT-E2E-001',
           'ANDROID-PUSH-NATIVE-E2E-001',
         ]),
@@ -140,6 +142,14 @@ void main() {
         'planned',
       );
       expect(
+        catalog.caseById['IOS-DEVICE-JOIN-E2E-001']!.catalogStatus,
+        'planned',
+      );
+      expect(
+        catalog.caseById['WINDOWS-DEVICE-JOIN-E2E-001']!.catalogStatus,
+        'planned',
+      );
+      expect(
         catalog.caseById['ANDROID-PUSH-PRODUCT-E2E-001']!.catalogStatus,
         'planned',
       );
@@ -151,6 +161,8 @@ void main() {
         (caseIds) => caseIds,
       );
       expect(executableCaseIds, isNot(contains('ANDROID-DEVICE-JOIN-E2E-001')));
+      expect(executableCaseIds, isNot(contains('IOS-DEVICE-JOIN-E2E-001')));
+      expect(executableCaseIds, isNot(contains('WINDOWS-DEVICE-JOIN-E2E-001')));
       expect(
         executableCaseIds,
         isNot(contains('ANDROID-PUSH-PRODUCT-E2E-001')),
