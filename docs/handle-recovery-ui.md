@@ -112,10 +112,13 @@ identity、Direct 双向历史/read、Group 双向历史/read/双成员 metadata
 run-unique semantic fingerprint，不能由 `set`、`any` 或首条命中吞掉重复。Fresh Root 的合同
 已固定，实际 focused fixture 接线属于后续 Fresh case 拆分，不得把合同单测解释为远端产品通过。
 
-兼容性限制：现有 crash-cut Phase B 仍需用旧 handoff 中的 full DID/内部 route ID 重新打开同一
-App、peer 和 daemon root。消息正文已经改为不可逆 content reference，但旧 route 字段尚未全部
-迁移为脱敏定位；该文件保持权限 `0600`、只存在于 ignored 运行目录，并作为测试基础设施债继续
-跟踪。新增 focused case 只能消费公共 secret-free fixture checkpoint，不能扩散旧 handoff 形状。
+crash-cut handoff 本身也使用严格 schema，只保存 Recovery transition 的 `sha256:` 引用、预期
+数量、`recovery_commit_durable` 阶段和可选 fixture checkpoint，不保存 owner/account/operation、
+full DID、generation、Handle、conversation/Group/Agent/message ID 或正文。Phase B 先从同一 Core
+root 的本地 identity inventory 和只读 Recovery operation/epoch receipt 恢复 transition 原值，
+逐项匹配脱敏引用；再从 App、peer、Group、Agent 与 conversation/message 公开投影中按引用做 raw
+exact-one 解析。缺失引用可以在有界窗口等待收敛，重复引用或语义错配立即失败，不能选第一条继续。
+handoff 文件仍只存在于 ignored 运行目录并保持权限 `0600`。
 
 同一 suite 的 `HANDLE-RECOVERY-V1-E2E-003` 在 Recovery 前用第二套独立 App root 建立旧 member。
 Recovery 完成后先要求该旧 principal 的远端消息操作被拒绝，并要求旧 App 自动清除会话、

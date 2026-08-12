@@ -46,6 +46,7 @@ void main() {
           'external_group_member': 'did:member',
           'transport_group': 'did:group',
           'runtime_agent': 'did:runtime',
+          'runtime_handle': 'runtime.example',
         },
         expectedCounts: const <String, int>{
           'admin_identities': 1,
@@ -57,7 +58,7 @@ void main() {
         },
       );
 
-      expect(checkpoint.references, hasLength(6));
+      expect(checkpoint.references, hasLength(7));
       expect(checkpoint.expectedCounts.values, everyElement(1));
     });
 
@@ -118,6 +119,108 @@ void main() {
     );
   });
 
+  group('Handle Recovery crash-cut handoff', () {
+    test('contains only opaque transition refs, counts, and checkpoint', () {
+      final handoff = _crashCutHandoff();
+      final encoded = jsonEncode(handoff.toJson());
+
+      for (final raw in <String>[
+        'fixture-run-42',
+        'did:awiki:old',
+        'did:awiki:new',
+        'owner-identity',
+        'account-user',
+        'operation-42',
+        'recovery.example',
+      ]) {
+        expect(encoded, isNot(contains(raw)));
+      }
+      expect(encoded, isNot(contains('/tmp/')));
+      expect(encoded, isNot(contains('message body')));
+      handoff.requireRunId('fixture-run-42');
+      handoff.requireTransitionReference('current_identity', 'did:awiki:new');
+
+      final restored = HandleRecoveryCrashCutHandoff.fromJson(
+        _copyJson(handoff.toJson()),
+      );
+      expect(restored.fixtureCheckpoint, isNotNull);
+      restored.fixtureCheckpoint!.requireReplayOf(_localCheckpoint());
+    });
+
+    test('rejects raw identities, missing fields, and run drift', () {
+      final base = _copyJson(_crashCutHandoff().toJson());
+      final rawIdentity = _copyJson(base);
+      (rawIdentity['transitionReferences']!
+              as Map<String, Object?>)['current_identity'] =
+          'did:awiki:new';
+      expect(
+        () => HandleRecoveryCrashCutHandoff.fromJson(rawIdentity),
+        throwsFormatException,
+      );
+
+      final missing = _copyJson(base);
+      (missing['transitionReferences']! as Map<String, Object?>).remove(
+        'operation',
+      );
+      expect(
+        () => HandleRecoveryCrashCutHandoff.fromJson(missing),
+        throwsFormatException,
+      );
+
+      final restored = HandleRecoveryCrashCutHandoff.fromJson(base);
+      expect(
+        () => restored.requireRunId('another-run'),
+        _oracleFailure('handoff_run_reference_mismatch'),
+      );
+    });
+
+    test('base crash-cut case round trips without a business fixture', () {
+      final withFixture = _crashCutHandoff();
+      final handoff = HandleRecoveryCrashCutHandoff.fromRaw(
+        runId: 'fixture-run-42',
+        rawTransitionReferences: const <String, String>{
+          'owner_identity': 'owner-identity',
+          'account': 'account-user',
+          'handle': 'recovery.example',
+          'previous_identity': 'did:awiki:old',
+          'current_identity': 'did:awiki:new',
+          'operation': 'operation-42',
+          'previous_generation': '41',
+          'current_generation': '42',
+        },
+        expectedCounts: withFixture.expectedCounts,
+      );
+
+      final restored = HandleRecoveryCrashCutHandoff.fromJson(
+        _copyJson(handoff.toJson()),
+      );
+      expect(restored.fixtureCheckpoint, isNull);
+      restored.requireRunId('fixture-run-42');
+    });
+
+    test('App crash-cut writer cannot fall back to legacy raw fields', () {
+      final source = File(
+        'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+      ).readAsStringSync();
+      expect(source, contains('HandleRecoveryCrashCutHandoff.fromRaw('));
+      expect(source, isNot(contains('toHandoffFields')));
+      for (final legacyField in <String>[
+        "'oldDid': oldSession.did",
+        "'newDid': reset.currentDid",
+        "'ownerIdentityId': oldBinding.ownerIdentityId",
+        "'accountId': oldBinding.accountId",
+        "'operationId': operationId",
+        "'peerDid': peerDid",
+        "'directConversationId': directConversationId",
+        "'groupDid': groupDid",
+        "'daemonDid': daemonDid",
+        "'runtimeDid': runtimeDid",
+      ]) {
+        expect(source, isNot(contains(legacyField)), reason: legacyField);
+      }
+    });
+  });
+
   group('Handle Recovery shared oracles', () {
     test('exact-one counts raw canonical and semantic matches separately', () {
       final items = <_Item>[
@@ -149,6 +252,45 @@ void main() {
         _oracleFailure('canonical_semantic_reference_mismatch'),
       );
     });
+
+    test(
+      'opaque reference resolution rejects missing and duplicate values',
+      () {
+        final expected = handleRecoveryFixtureReference('m-1');
+        final items = <_Item>[
+          const _Item(id: 'm-1', semantic: 'run-a'),
+          const _Item(id: 'm-2', semantic: 'run-b'),
+        ];
+        expect(
+          requireHandleRecoveryReferenceExactOne<_Item>(
+            rawItems: items,
+            expectedReference: expected,
+            rawReference: (item) => item.id,
+            semanticMatch: (item) => item.semantic == 'run-a',
+          ),
+          same(items.first),
+        );
+        expect(
+          () => requireHandleRecoveryReferenceExactOne<_Item>(
+            rawItems: const <_Item>[
+              _Item(id: 'm-1', semantic: 'run-a'),
+              _Item(id: 'm-1', semantic: 'run-a'),
+            ],
+            expectedReference: expected,
+            rawReference: (item) => item.id,
+          ),
+          _oracleFailure('fixture_reference_duplicated'),
+        );
+        expect(
+          () => requireHandleRecoveryReferenceExactOne<_Item>(
+            rawItems: items,
+            expectedReference: handleRecoveryFixtureReference('missing'),
+            rawReference: (item) => item.id,
+          ),
+          _oracleFailure('fixture_reference_not_found'),
+        );
+      },
+    );
 
     test('generation, read, account-state, and stale checks fail closed', () {
       requireHandleRecoveryGenerationAdvance(previous: '41', current: '42');
@@ -285,18 +427,49 @@ Map<String, String> _localRawReferences() => <String, String>{
   'external_group_member': 'did:awiki:peer',
   'transport_group': 'did:awiki:group',
   'runtime_agent': 'did:awiki:runtime',
+  'runtime_handle': 'runtime.example',
   'direct_conversation': 'direct-conversation',
+  'peer_direct_conversation': 'peer-direct-conversation',
   'direct_outgoing_message': 'direct-outgoing-message',
+  'direct_outgoing_semantic': 'direct outgoing message body',
   'direct_incoming_message': 'direct-incoming-message',
+  'direct_incoming_semantic': 'direct incoming message body',
   'direct_read_message': 'direct-incoming-message',
   'group_conversation': 'group-conversation',
   'group_outgoing_message': 'group-outgoing-message',
+  'group_outgoing_semantic': 'group outgoing message body',
   'group_incoming_message': 'group-incoming-message',
+  'group_incoming_semantic': 'group incoming message body',
   'group_read_message': 'group-incoming-message',
   'agent_conversation': 'agent-conversation',
   'agent_prompt_message': 'agent-prompt-message',
+  'agent_prompt_semantic': 'agent prompt message body',
   'agent_reply_message': 'agent-reply-message',
+  'agent_reply_semantic': 'agent reply message body',
+  'conversation_inventory': '["agent","direct","group"]',
+  'agent_inventory': '["daemon","runtime"]',
 };
+
+HandleRecoveryCrashCutHandoff _crashCutHandoff() {
+  return HandleRecoveryCrashCutHandoff.fromRaw(
+    runId: 'fixture-run-42',
+    rawTransitionReferences: const <String, String>{
+      'owner_identity': 'owner-identity',
+      'account': 'account-user',
+      'handle': 'recovery.example',
+      'previous_identity': 'did:awiki:old',
+      'current_identity': 'did:awiki:new',
+      'operation': 'operation-42',
+      'previous_generation': '41',
+      'current_generation': '42',
+    },
+    expectedCounts: const <String, int>{
+      'local_identities': 1,
+      'pre_reset_registry_devices': 1,
+    },
+    fixtureCheckpoint: _localCheckpoint(),
+  );
+}
 
 Map<String, Object?> _copyJson(Map<String, Object?> value) {
   return (jsonDecode(jsonEncode(value)) as Map).cast<String, Object?>();

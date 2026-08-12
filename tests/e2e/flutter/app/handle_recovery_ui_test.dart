@@ -33,10 +33,12 @@ import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
+import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
+import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
@@ -881,10 +883,10 @@ class _ContinuityDaemonConfig {
   final String handle;
 }
 
-class _HandleRecoveryLocalDataFixture {
-  const _HandleRecoveryLocalDataFixture({
+class _HandleRecoveryBusinessFixture {
+  const _HandleRecoveryBusinessFixture({
+    required this.kind,
     required this.registrationRetryAt,
-    required this.peerIdentityId,
     required this.peerDid,
     required this.directConversationId,
     required this.peerDirectConversationId,
@@ -908,8 +910,8 @@ class _HandleRecoveryLocalDataFixture {
     required this.agentMessageCount,
   });
 
+  final HandleRecoveryFixtureKind kind;
   final DateTime registrationRetryAt;
-  final String peerIdentityId;
   final String peerDid;
   final String directConversationId;
   final String peerDirectConversationId;
@@ -937,86 +939,66 @@ class _HandleRecoveryLocalDataFixture {
     required String runId,
     required String stableOwnerIdentityId,
   }) {
+    final commonReferences = <String, String>{
+      'admin_identity': stableOwnerIdentityId,
+      'daemon_agent': daemonDid,
+      'direct_peer': peerDid,
+      'external_group_member': peerDid,
+      'transport_group': groupDid,
+      'runtime_agent': runtimeDid,
+      'runtime_handle': runtimeHandle,
+    };
+    final commonCounts = <String, int>{
+      'admin_identities': 1,
+      'daemon_agents': 1,
+      'direct_peers': 1,
+      'external_group_members': 1,
+      'transport_groups': 1,
+      'runtime_agents': 1,
+    };
     return HandleRecoveryFixtureCheckpoint.fromRaw(
       caseId: caseId,
-      kind: HandleRecoveryFixtureKind.localData,
+      kind: kind,
       stage: HandleRecoveryFixtureStage.checkpointReady,
       runId: runId,
-      rawReferences: <String, String>{
-        'admin_identity': stableOwnerIdentityId,
-        'daemon_agent': daemonDid,
-        'direct_peer': peerDid,
-        'external_group_member': peerDid,
-        'transport_group': groupDid,
-        'runtime_agent': runtimeDid,
-        'direct_conversation': directConversationId,
-        'direct_outgoing_message': _requiredMessageId(directOutgoing),
-        'direct_incoming_message': _requiredMessageId(directIncoming),
-        'direct_read_message': _requiredMessageId(directIncoming),
-        'group_conversation': groupConversationId,
-        'group_outgoing_message': _requiredMessageId(groupOutgoing),
-        'group_incoming_message': _requiredMessageId(groupIncoming),
-        'group_read_message': _requiredMessageId(groupIncoming),
-        'agent_conversation': agentConversationId,
-        'agent_prompt_message': _requiredMessageId(agentPrompt),
-        'agent_reply_message': _requiredMessageId(agentReply),
-      },
-      expectedCounts: <String, int>{
-        'admin_identities': 1,
-        'daemon_agents': 1,
-        'direct_peers': 1,
-        'external_group_members': 1,
-        'transport_groups': 1,
-        'runtime_agents': 1,
-        'direct_messages': directMessageCount,
-        'group_messages': groupMessageCount,
-        'group_members': groupMemberCount,
-        'agent_messages': agentMessageCount,
-        'agent_inventory_items': agentDids.length,
-        'conversations': conversationIds.length,
-      },
+      rawReferences: kind == HandleRecoveryFixtureKind.freshRoot
+          ? commonReferences
+          : <String, String>{
+              ...commonReferences,
+              'direct_conversation': directConversationId,
+              'peer_direct_conversation': peerDirectConversationId,
+              'direct_outgoing_message': _requiredMessageId(directOutgoing),
+              'direct_outgoing_semantic': directOutgoing.content,
+              'direct_incoming_message': _requiredMessageId(directIncoming),
+              'direct_incoming_semantic': directIncoming.content,
+              'direct_read_message': _requiredMessageId(directIncoming),
+              'group_conversation': groupConversationId,
+              'group_outgoing_message': _requiredMessageId(groupOutgoing),
+              'group_outgoing_semantic': groupOutgoing.content,
+              'group_incoming_message': _requiredMessageId(groupIncoming),
+              'group_incoming_semantic': groupIncoming.content,
+              'group_read_message': _requiredMessageId(groupIncoming),
+              'agent_conversation': agentConversationId,
+              'agent_prompt_message': _requiredMessageId(agentPrompt),
+              'agent_prompt_semantic': agentPrompt.content,
+              'agent_reply_message': _requiredMessageId(agentReply),
+              'agent_reply_semantic': agentReply.content,
+              'conversation_inventory': jsonEncode(conversationIds),
+              'agent_inventory': jsonEncode(agentDids),
+            },
+      expectedCounts: kind == HandleRecoveryFixtureKind.freshRoot
+          ? commonCounts
+          : <String, int>{
+              ...commonCounts,
+              'direct_messages': directMessageCount,
+              'group_messages': groupMessageCount,
+              'group_members': groupMemberCount,
+              'agent_messages': agentMessageCount,
+              'agent_inventory_items': agentDids.length,
+              'conversations': conversationIds.length,
+            },
     );
   }
-
-  Map<String, Object?> toHandoffFields() => <String, Object?>{
-    'peerIdentityId': peerIdentityId,
-    'peerDid': peerDid,
-    'directConversationId': directConversationId,
-    'peerDirectConversationId': peerDirectConversationId,
-    'directOutgoingId': _requiredMessageId(directOutgoing),
-    'directOutgoingContentRef': handleRecoveryFixtureReference(
-      directOutgoing.content,
-    ),
-    'directIncomingId': _requiredMessageId(directIncoming),
-    'directIncomingContentRef': handleRecoveryFixtureReference(
-      directIncoming.content,
-    ),
-    'groupDid': groupDid,
-    'groupConversationId': groupConversationId,
-    'groupOutgoingId': _requiredMessageId(groupOutgoing),
-    'groupOutgoingContentRef': handleRecoveryFixtureReference(
-      groupOutgoing.content,
-    ),
-    'groupIncomingId': _requiredMessageId(groupIncoming),
-    'groupIncomingContentRef': handleRecoveryFixtureReference(
-      groupIncoming.content,
-    ),
-    'daemonDid': daemonDid,
-    'runtimeDid': runtimeDid,
-    'runtimeHandle': runtimeHandle,
-    'agentConversationId': agentConversationId,
-    'agentPromptId': _requiredMessageId(agentPrompt),
-    'agentPromptContentRef': handleRecoveryFixtureReference(
-      agentPrompt.content,
-    ),
-    'agentReplyId': _requiredMessageId(agentReply),
-    'agentReplyContentRef': handleRecoveryFixtureReference(agentReply.content),
-    'conversationIds': conversationIds,
-    'agentDids': agentDids,
-    'directMessageCount': directMessageCount,
-    'groupMessageCount': groupMessageCount,
-    'agentMessageCount': agentMessageCount,
-  };
 }
 
 _ContinuityDaemonConfig _requireContinuityDaemonConfig(
@@ -1041,7 +1023,7 @@ _ContinuityDaemonConfig _requireContinuityDaemonConfig(
   );
 }
 
-Future<_HandleRecoveryLocalDataFixture> _seedHandleRecoveryLocalDataFixture({
+Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
   required WidgetTester tester,
   required _RemoteRecoveryRunConfig config,
   required _DedicatedAccount account,
@@ -1054,6 +1036,7 @@ Future<_HandleRecoveryLocalDataFixture> _seedHandleRecoveryLocalDataFixture({
   required DateTime registrationRetryAt,
   required _ContinuityDaemonConfig daemonConfig,
   required HandleRecoveryFixtureProgress progress,
+  required HandleRecoveryFixtureKind kind,
 }) async {
   final ownerDid = ownerSession.did;
   final ownerHandle = ownerSession.handle?.trim().toLowerCase() ?? '';
@@ -1402,9 +1385,9 @@ Future<_HandleRecoveryLocalDataFixture> _seedHandleRecoveryLocalDataFixture({
         },
       );
       progress.advance(HandleRecoveryFixtureStage.checkpointReady);
-      return _HandleRecoveryLocalDataFixture(
+      return _HandleRecoveryBusinessFixture(
+        kind: kind,
         registrationRetryAt: peerFactor.retryAt,
-        peerIdentityId: peerSession.identityId,
         peerDid: peerSession.did,
         directConversationId: directConversationId,
         peerDirectConversationId: peerDirectConversationId,
@@ -1531,46 +1514,26 @@ void _requireExactMessage(
   );
 }
 
-ChatMessage _requireExactStoredMessage(
+ChatMessage _requireExactStoredMessageByReference(
   List<ChatMessage> history, {
-  required String messageId,
-  required String contentReference,
+  required HandleRecoveryFixtureCheckpoint checkpoint,
+  required String messageReferenceName,
+  required String semanticReferenceName,
   required String senderDid,
   required bool isMine,
   required String conversationId,
 }) {
-  return requireHandleRecoveryExactOne<ChatMessage>(
+  return requireHandleRecoveryReferenceExactOne<ChatMessage>(
     rawItems: history,
-    canonicalMatch: (message) => message.remoteId == messageId,
+    expectedReference: checkpoint.reference(messageReferenceName),
+    rawReference: _requiredMessageId,
     semanticMatch: (message) =>
-        handleRecoveryFixtureReference(message.content) == contentReference &&
+        handleRecoveryFixtureReference(message.content) ==
+            checkpoint.reference(semanticReferenceName) &&
         message.senderDid == senderDid &&
         message.isMine == isMine &&
         message.conversationId == conversationId,
   );
-}
-
-int _requiredInt(Map<String, Object?> root, String key) {
-  final value = root[key];
-  if (value is! int || value < 0) {
-    throw StateError('Missing non-negative handoff integer $key.');
-  }
-  return value;
-}
-
-List<String> _requiredStringList(Map<String, Object?> root, String key) {
-  final value = root[key];
-  if (value is! List) {
-    throw StateError('Missing handoff list $key.');
-  }
-  final result = value
-      .map((item) => item is String ? item.trim() : '')
-      .toList(growable: false);
-  if (result.any((item) => item.isEmpty) ||
-      result.toSet().length != result.length) {
-    throw StateError('Invalid handoff list $key.');
-  }
-  return result..sort();
 }
 
 bool _sameStrings(Iterable<String> left, Iterable<String> right) {
@@ -1924,6 +1887,90 @@ Future<AgentSummary> _waitForAgent({
     await Future<void>.delayed(const Duration(seconds: 1));
   }
   fail('Timed out waiting for $description.');
+}
+
+Future<AgentSummary> _waitForFixtureAgent({
+  required WidgetTester tester,
+  required AgentInventoryPort inventory,
+  required String expectedReference,
+  required String description,
+  required bool Function(AgentSummary agent) semanticMatch,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(deadline)) {
+    final agents = (await inventory.listAgents(
+      includeInactive: true,
+    )).whereType<AgentSummary>().toList(growable: false);
+    try {
+      return requireHandleRecoveryReferenceExactOne<AgentSummary>(
+        rawItems: agents,
+        expectedReference: expectedReference,
+        rawReference: (agent) => agent.agentDid,
+        semanticMatch: semanticMatch,
+      );
+    } on HandleRecoveryOracleFailure catch (error) {
+      if (error.code != 'fixture_reference_not_found') rethrow;
+      await tester.pump(const Duration(milliseconds: 200));
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+    }
+  }
+  fail('Timed out waiting for $description by fixture reference.');
+}
+
+Future<GroupSummary> _waitForFixtureGroup({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String expectedReference,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(deadline)) {
+    await container.read(groupProvider.notifier).refresh();
+    final groups = container.read(groupProvider).groups;
+    try {
+      return requireHandleRecoveryReferenceExactOne<GroupSummary>(
+        rawItems: groups,
+        expectedReference: expectedReference,
+        rawReference: (group) => group.groupId,
+      );
+    } on HandleRecoveryOracleFailure catch (error) {
+      if (error.code != 'fixture_reference_not_found') rethrow;
+      await tester.pump(const Duration(milliseconds: 200));
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+    }
+  }
+  fail('Timed out waiting for the fixture Group reference.');
+}
+
+Future<ConversationSummary> _waitForFixtureConversation({
+  required WidgetTester tester,
+  required AppBootstrap bootstrap,
+  required ConversationService conversations,
+  required String ownerDid,
+  required String expectedReference,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(deadline)) {
+    await bootstrap.messageSyncService!.syncNow(
+      reason: 'settings-recovery-fixture-reference',
+      limit: 100,
+    );
+    final items = await conversations.listConversations(
+      ownerDid: ownerDid,
+      limit: 100,
+    );
+    try {
+      return requireHandleRecoveryReferenceExactOne<ConversationSummary>(
+        rawItems: items,
+        expectedReference: expectedReference,
+        rawReference: (conversation) => conversation.conversationId,
+      );
+    } on HandleRecoveryOracleFailure catch (error) {
+      if (error.code != 'fixture_reference_not_found') rethrow;
+      await tester.pump(const Duration(milliseconds: 200));
+      await Future<void>.delayed(const Duration(milliseconds: 550));
+    }
+  }
+  fail('Timed out waiting for a fixture conversation reference.');
 }
 
 Future<AgentSummary> _waitForContinuityDaemonReady({
@@ -2323,10 +2370,10 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
   );
   final fixtureProgress = HandleRecoveryFixtureProgress();
   final continuity = continuityRequired
-      ? await runHandleRecoveryFixtureStage<_HandleRecoveryLocalDataFixture>(
+      ? await runHandleRecoveryFixtureStage<_HandleRecoveryBusinessFixture>(
           caseId: _settingsContinuityCaseId,
           progress: fixtureProgress,
-          action: () => _seedHandleRecoveryLocalDataFixture(
+          action: () => _seedHandleRecoveryBusinessFixture(
             tester: tester,
             config: config,
             account: account,
@@ -2339,6 +2386,7 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
             registrationRetryAt: factor.retryAt,
             daemonConfig: daemonConfig!,
             progress: fixtureProgress,
+            kind: HandleRecoveryFixtureKind.localData,
           ),
           recordFailure: ({required caseId, required stage, required code}) =>
               E2eFailureObservationWriter.recordFirst(
@@ -2467,26 +2515,30 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
       'the deliberate crash cut.',
     );
   }
-  await _writeCrashCutHandoff(config.crashCutHandoffPath, <String, Object?>{
-    'schemaVersion': 1,
-    'oldDid': oldSession.did,
-    'newDid': reset.currentDid,
-    'ownerIdentityId': oldBinding.ownerIdentityId,
-    'accountId': oldBinding.accountId,
-    'operationId': operationId,
-    'handle': oldSession.handle!.trim().toLowerCase(),
-    'oldGeneration': oldBinding.identityGeneration,
-    'newGeneration': reset.bindingGeneration,
-    if (continuity != null)
-      'fixtureCheckpoint': continuity
-          .checkpoint(
-            caseId: _settingsContinuityCaseId,
-            runId: config.runId,
-            stableOwnerIdentityId: oldBinding.ownerIdentityId,
-          )
-          .toJson(),
-    if (continuity != null) ...continuity.toHandoffFields(),
-  });
+  final fixtureCheckpoint = continuity?.checkpoint(
+    caseId: _settingsContinuityCaseId,
+    runId: config.runId,
+    stableOwnerIdentityId: oldBinding.ownerIdentityId,
+  );
+  final handoff = HandleRecoveryCrashCutHandoff.fromRaw(
+    runId: config.runId,
+    rawTransitionReferences: <String, String>{
+      'owner_identity': oldBinding.ownerIdentityId,
+      'account': oldBinding.accountId,
+      'handle': oldSession.handle!.trim().toLowerCase(),
+      'previous_identity': oldSession.did,
+      'current_identity': reset.currentDid,
+      'operation': operationId,
+      'previous_generation': oldBinding.identityGeneration,
+      'current_generation': reset.bindingGeneration,
+    },
+    expectedCounts: <String, int>{
+      'local_identities': 1,
+      'pre_reset_registry_devices': preResetSnapshot!.devices.length,
+    },
+    fixtureCheckpoint: fixtureCheckpoint,
+  );
+  await _writeCrashCutHandoff(config.crashCutHandoffPath, handoff);
 
   // Deliberately do not dispose [bootstrap]. Returning lets the Flutter test
   // process terminate with the Core commit durable and Product reset pending.
@@ -2503,29 +2555,17 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     fail('Crash-cut phase B found no phase-A handoff.');
   }
   final decoded = jsonDecode(handoffFile.readAsStringSync());
-  if (decoded is! Map || decoded['schemaVersion'] != 1) {
+  if (decoded is! Map) {
     fail('Crash-cut handoff was invalid.');
   }
-  final handoff = _stringMap(decoded);
-  HandleRecoveryFixtureCheckpoint? fixtureCheckpoint;
-  if (continuityRequired) {
-    final rawCheckpoint = decoded['fixtureCheckpoint'];
-    if (rawCheckpoint is! Map) {
-      fail('Crash-cut phase B found no Local Data fixture checkpoint.');
-    }
-    fixtureCheckpoint = HandleRecoveryFixtureCheckpoint.fromJson(
-      <String, Object?>{
-        for (final entry in rawCheckpoint.entries)
-          entry.key.toString(): entry.value,
-      },
-    );
+  final handoff = HandleRecoveryCrashCutHandoff.fromJson(<String, Object?>{
+    for (final entry in decoded.entries) entry.key.toString(): entry.value,
+  });
+  handoff.requireRunId(config.runId);
+  final fixtureCheckpoint = handoff.fixtureCheckpoint;
+  if (continuityRequired != (fixtureCheckpoint != null)) {
+    fail('Crash-cut fixture checkpoint did not match the invoked case.');
   }
-  final oldDid = _required(handoff, 'oldDid');
-  final newDid = _required(handoff, 'newDid');
-  final binding = ProductAccountBinding(
-    ownerIdentityId: _required(handoff, 'ownerIdentityId'),
-    accountId: _required(handoff, 'accountId'),
-  );
 
   final bootstrap = await AppBootstrap.create(
     environment: _environment(
@@ -2552,11 +2592,62 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     if (handoffFile.existsSync()) await handoffFile.delete();
     await tester.binding.setSurfaceSize(null);
   });
+  final preBootstrapIdentities = await bootstrap.appSessionService!
+      .listLocalIdentities();
+  final ownerIdentity = requireHandleRecoveryReferenceExactOne<AppSession>(
+    rawItems: preBootstrapIdentities,
+    expectedReference: handoff.transitionReferences['owner_identity']!,
+    rawReference: (identity) => identity.identityId,
+  );
+  handoff.requireTransitionReference('current_identity', ownerIdentity.did);
+  final handle = ownerIdentity.handle?.trim().toLowerCase() ?? '';
+  handoff.requireTransitionReference('handle', handle);
+  final operations = await bootstrap.handleRecoveryCorePort!.listOperations(
+    HandleRecoveryOwner(
+      localIdentityId: ownerIdentity.identityId,
+      handle: handle,
+    ),
+  );
+  final committedRecovery =
+      requireHandleRecoveryReferenceExactOne<HandleRecoveryProgress>(
+        rawItems: operations,
+        expectedReference: handoff.transitionReferences['operation']!,
+        rawReference: (operation) => operation.operationId,
+      );
+  final reset = committedRecovery.registryEpochReset;
+  if (!committedRecovery.isCompleted || reset == null) {
+    fail('Crash-cut phase B could not resolve the committed Recovery receipt.');
+  }
+  final binding = ProductAccountBinding(
+    ownerIdentityId: reset.ownerIdentityId,
+    accountId: reset.accountUserId,
+  );
+  final oldDid = reset.previousDid;
+  final newDid = reset.currentDid;
+  final newGeneration = reset.bindingGeneration;
+  handoff.requireTransitionReference('owner_identity', reset.ownerIdentityId);
+  handoff.requireTransitionReference('account', reset.accountUserId);
+  handoff.requireTransitionReference('handle', reset.handle);
+  handoff.requireTransitionReference('previous_identity', oldDid);
+  handoff.requireTransitionReference('current_identity', newDid);
+  handoff.requireTransitionReference('current_generation', newGeneration);
   final before = await bootstrap.productLocalStore!.loadDeviceRegistrySnapshot(
     binding: binding,
   );
-  if (before?.epoch.currentDid != oldDid) {
+  final oldGeneration = before?.epoch.bindingGeneration;
+  if (before?.epoch.currentDid != oldDid || oldGeneration == null) {
     fail('Crash-cut phase B did not begin with the old Product epoch.');
+  }
+  handoff.requireTransitionReference('previous_generation', oldGeneration);
+  requireHandleRecoveryGenerationAdvance(
+    previous: oldGeneration,
+    current: newGeneration,
+  );
+  if (preBootstrapIdentities.length !=
+          handoff.expectedCounts['local_identities'] ||
+      before!.devices.length !=
+          handoff.expectedCounts['pre_reset_registry_devices']) {
+    fail('Crash-cut phase B changed a pre-bootstrap expected count.');
   }
 
   await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
@@ -2609,30 +2700,7 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   }
   if (!continuityRequired) return;
 
-  final handle = _required(handoff, 'handle');
-  final oldGeneration = _required(handoff, 'oldGeneration');
-  final newGeneration = _required(handoff, 'newGeneration');
-  final peerIdentityId = _required(handoff, 'peerIdentityId');
-  final peerDid = _required(handoff, 'peerDid');
-  final directConversationId = _required(handoff, 'directConversationId');
-  final peerDirectConversationId = _required(
-    handoff,
-    'peerDirectConversationId',
-  );
-  final groupDid = _required(handoff, 'groupDid');
-  final groupConversationId = _required(handoff, 'groupConversationId');
-  final daemonDid = _required(handoff, 'daemonDid');
-  final runtimeDid = _required(handoff, 'runtimeDid');
-  final runtimeHandle = _required(handoff, 'runtimeHandle');
-  final agentConversationId = _required(handoff, 'agentConversationId');
-  final expectedConversationIds = _requiredStringList(
-    handoff,
-    'conversationIds',
-  );
-  final expectedAgentDids = _requiredStringList(handoff, 'agentDids');
-  final directMessageCount = _requiredInt(handoff, 'directMessageCount');
-  final groupMessageCount = _requiredInt(handoff, 'groupMessageCount');
-  final agentMessageCount = _requiredInt(handoff, 'agentMessageCount');
+  final checkpoint = fixtureCheckpoint!;
 
   if (session == null ||
       session.identityId != binding.ownerIdentityId ||
@@ -2641,7 +2709,6 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       accountBinding.accountId != binding.accountId ||
       accountBinding.currentDid != newDid ||
       accountBinding.identityGeneration != newGeneration ||
-      !_isSingleGenerationAdvance(oldGeneration, newGeneration) ||
       localIdentities.length != 1 ||
       localIdentities.single.identityId != binding.ownerIdentityId ||
       localIdentities.single.did != newDid) {
@@ -2656,16 +2723,24 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     ),
     appStateRoot: config.peerAppStateRoot,
   );
+  final peerIdentities = await peerBootstrap.appSessionService!
+      .listLocalIdentities();
+  final peerIdentity = requireHandleRecoveryReferenceExactOne<AppSession>(
+    rawItems: peerIdentities,
+    expectedReference: checkpoint.reference('direct_peer'),
+    rawReference: (identity) => identity.did,
+  );
   await _activatePeerIdentity(
     peerBootstrap,
-    identityId: peerIdentityId,
-    expectedDid: peerDid,
+    identityId: peerIdentity.identityId,
+    expectedDid: peerIdentity.did,
   );
   final peerSession = await peerBootstrap.appSessionService!.currentSession();
-  if (peerSession?.identityId != peerIdentityId ||
-      peerSession?.did != peerDid) {
+  if (peerSession?.identityId != peerIdentity.identityId ||
+      peerSession?.did != peerIdentity.did) {
     fail('The continuity peer did not reopen its exact identity.');
   }
+  final peerDid = peerIdentity.did;
 
   final gatewayScript = await _writeContinuityHermesGateway(daemonConfig!);
   daemon = await _RunningContinuityDaemon.start(
@@ -2675,20 +2750,60 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   );
   final inventory = appContainer.read(agentInventoryPortProvider);
   final conversations = appContainer.read(conversationServiceProvider);
-  await _waitForAgent(
+  final daemonAgent = await _waitForFixtureAgent(
+    tester: tester,
     inventory: inventory,
+    expectedReference: checkpoint.reference('daemon_agent'),
     description: 'reopened continuity daemon',
-    matches: (agent) => agent.isDaemon && agent.agentDid == daemonDid,
+    semanticMatch: (agent) => agent.isDaemon,
   );
-  await _waitForAgent(
+  final runtimeAgent = await _waitForFixtureAgent(
+    tester: tester,
     inventory: inventory,
+    expectedReference: checkpoint.reference('runtime_agent'),
     description: 'reopened continuity Runtime Agent',
-    matches: (agent) =>
-        agent.isRuntime &&
-        agent.agentDid == runtimeDid &&
-        agent.daemonAgentDid == daemonDid &&
-        agent.handle == runtimeHandle,
+    semanticMatch: (agent) =>
+        agent.isRuntime && agent.daemonAgentDid == daemonAgent.agentDid,
   );
+  final runtimeHandle = runtimeAgent.handle?.trim() ?? '';
+  checkpoint.requireReference('runtime_handle', runtimeHandle);
+  final recoveredGroup = await _waitForFixtureGroup(
+    tester: tester,
+    container: appContainer,
+    expectedReference: checkpoint.reference('transport_group'),
+  );
+  checkpoint.requireReference(
+    'group_conversation',
+    recoveredGroup.conversationId,
+  );
+  final directConversation = await _waitForFixtureConversation(
+    tester: tester,
+    bootstrap: bootstrap,
+    conversations: conversations,
+    ownerDid: newDid,
+    expectedReference: checkpoint.reference('direct_conversation'),
+  );
+  final agentConversation = await _waitForFixtureConversation(
+    tester: tester,
+    bootstrap: bootstrap,
+    conversations: conversations,
+    ownerDid: newDid,
+    expectedReference: checkpoint.reference('agent_conversation'),
+  );
+  final peerDirectConversation = await _waitForFixtureConversation(
+    tester: tester,
+    bootstrap: peerBootstrap,
+    conversations: peerBootstrap.conversationService!,
+    ownerDid: peerDid,
+    expectedReference: checkpoint.reference('peer_direct_conversation'),
+  );
+  final daemonDid = daemonAgent.agentDid;
+  final runtimeDid = runtimeAgent.agentDid;
+  final groupDid = recoveredGroup.groupId;
+  final groupConversationId = recoveredGroup.conversationId;
+  final directConversationId = directConversation.conversationId;
+  final peerDirectConversationId = peerDirectConversation.conversationId;
+  final agentConversationId = agentConversation.conversationId;
   await _waitForRecoveredContinuityGroup(
     tester: tester,
     container: appContainer,
@@ -2705,14 +2820,28 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     bootstrap: bootstrap,
     conversations: conversations,
     ownerDid: newDid,
-    requiredIds: expectedConversationIds.toSet(),
+    requiredIds: <String>{
+      directConversationId,
+      groupConversationId,
+      agentConversationId,
+    },
   );
   final recoveredAgents = await inventory.listAgents(includeInactive: true);
-  final recoveredAgentDids = recoveredAgents
-      .map((agent) => agent.agentDid)
-      .toList(growable: false);
-  if (!_sameStrings(recoveredConversationIds, expectedConversationIds) ||
-      !_sameStrings(recoveredAgentDids, expectedAgentDids) ||
+  final recoveredAgentDids =
+      recoveredAgents.map((agent) => agent.agentDid).toList(growable: false)
+        ..sort();
+  checkpoint.requireReference(
+    'conversation_inventory',
+    jsonEncode(recoveredConversationIds),
+  );
+  checkpoint.requireReference(
+    'agent_inventory',
+    jsonEncode(recoveredAgentDids),
+  );
+  if (recoveredConversationIds.length !=
+          checkpoint.expectedCount('conversations') ||
+      recoveredAgentDids.length !=
+          checkpoint.expectedCount('agent_inventory_items') ||
       recoveredAgentDids.where((did) => did == runtimeDid).length != 1) {
     fail('Recovery abnormally changed conversation or Agent inventory counts.');
   }
@@ -2729,6 +2858,60 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     agentConversationId,
   );
   final recoveredGroupMembers = await groups.listMembers(groupDid, limit: 100);
+  final directOutgoingBefore = _requireExactStoredMessageByReference(
+    directHistory,
+    checkpoint: checkpoint,
+    messageReferenceName: 'direct_outgoing_message',
+    semanticReferenceName: 'direct_outgoing_semantic',
+    senderDid: oldDid,
+    isMine: true,
+    conversationId: directConversationId,
+  );
+  final directIncomingBefore = _requireExactStoredMessageByReference(
+    directHistory,
+    checkpoint: checkpoint,
+    messageReferenceName: 'direct_incoming_message',
+    semanticReferenceName: 'direct_incoming_semantic',
+    senderDid: peerDid,
+    isMine: false,
+    conversationId: directConversationId,
+  );
+  final groupOutgoingBefore = _requireExactStoredMessageByReference(
+    groupHistory,
+    checkpoint: checkpoint,
+    messageReferenceName: 'group_outgoing_message',
+    semanticReferenceName: 'group_outgoing_semantic',
+    senderDid: oldDid,
+    isMine: true,
+    conversationId: groupConversationId,
+  );
+  final groupIncomingBefore = _requireExactStoredMessageByReference(
+    groupHistory,
+    checkpoint: checkpoint,
+    messageReferenceName: 'group_incoming_message',
+    semanticReferenceName: 'group_incoming_semantic',
+    senderDid: peerDid,
+    isMine: false,
+    conversationId: groupConversationId,
+  );
+  final agentPromptBefore = _requireExactStoredMessageByReference(
+    agentHistory,
+    checkpoint: checkpoint,
+    messageReferenceName: 'agent_prompt_message',
+    semanticReferenceName: 'agent_prompt_semantic',
+    senderDid: oldDid,
+    isMine: true,
+    conversationId: agentConversationId,
+  );
+  final agentReplyBefore = _requireExactStoredMessageByReference(
+    agentHistory,
+    checkpoint: checkpoint,
+    messageReferenceName: 'agent_reply_message',
+    semanticReferenceName: 'agent_reply_semantic',
+    senderDid: runtimeDid,
+    isMine: false,
+    conversationId: agentConversationId,
+  );
   final observedCheckpoint = HandleRecoveryFixtureCheckpoint.fromRaw(
     caseId: _settingsContinuityCaseId,
     kind: HandleRecoveryFixtureKind.localData,
@@ -2741,17 +2924,27 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       'external_group_member': peerDid,
       'transport_group': groupDid,
       'runtime_agent': runtimeDid,
+      'runtime_handle': runtimeHandle,
       'direct_conversation': directConversationId,
-      'direct_outgoing_message': _required(handoff, 'directOutgoingId'),
-      'direct_incoming_message': _required(handoff, 'directIncomingId'),
-      'direct_read_message': _required(handoff, 'directIncomingId'),
+      'peer_direct_conversation': peerDirectConversationId,
+      'direct_outgoing_message': _requiredMessageId(directOutgoingBefore),
+      'direct_outgoing_semantic': directOutgoingBefore.content,
+      'direct_incoming_message': _requiredMessageId(directIncomingBefore),
+      'direct_incoming_semantic': directIncomingBefore.content,
+      'direct_read_message': _requiredMessageId(directIncomingBefore),
       'group_conversation': groupConversationId,
-      'group_outgoing_message': _required(handoff, 'groupOutgoingId'),
-      'group_incoming_message': _required(handoff, 'groupIncomingId'),
-      'group_read_message': _required(handoff, 'groupIncomingId'),
+      'group_outgoing_message': _requiredMessageId(groupOutgoingBefore),
+      'group_outgoing_semantic': groupOutgoingBefore.content,
+      'group_incoming_message': _requiredMessageId(groupIncomingBefore),
+      'group_incoming_semantic': groupIncomingBefore.content,
+      'group_read_message': _requiredMessageId(groupIncomingBefore),
       'agent_conversation': agentConversationId,
-      'agent_prompt_message': _required(handoff, 'agentPromptId'),
-      'agent_reply_message': _required(handoff, 'agentReplyId'),
+      'agent_prompt_message': _requiredMessageId(agentPromptBefore),
+      'agent_prompt_semantic': agentPromptBefore.content,
+      'agent_reply_message': _requiredMessageId(agentReplyBefore),
+      'agent_reply_semantic': agentReplyBefore.content,
+      'conversation_inventory': jsonEncode(recoveredConversationIds),
+      'agent_inventory': jsonEncode(recoveredAgentDids),
     },
     expectedCounts: <String, int>{
       'admin_identities': localIdentities.length,
@@ -2772,55 +2965,10 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       'conversations': recoveredConversationIds.length,
     },
   );
-  observedCheckpoint.requireReplayOf(fixtureCheckpoint!);
-  _requireExactStoredMessage(
-    directHistory,
-    messageId: _required(handoff, 'directOutgoingId'),
-    contentReference: _required(handoff, 'directOutgoingContentRef'),
-    senderDid: oldDid,
-    isMine: true,
-    conversationId: directConversationId,
-  );
-  _requireExactStoredMessage(
-    directHistory,
-    messageId: _required(handoff, 'directIncomingId'),
-    contentReference: _required(handoff, 'directIncomingContentRef'),
-    senderDid: peerDid,
-    isMine: false,
-    conversationId: directConversationId,
-  );
-  _requireExactStoredMessage(
-    groupHistory,
-    messageId: _required(handoff, 'groupOutgoingId'),
-    contentReference: _required(handoff, 'groupOutgoingContentRef'),
-    senderDid: oldDid,
-    isMine: true,
-    conversationId: groupConversationId,
-  );
-  _requireExactStoredMessage(
-    groupHistory,
-    messageId: _required(handoff, 'groupIncomingId'),
-    contentReference: _required(handoff, 'groupIncomingContentRef'),
-    senderDid: peerDid,
-    isMine: false,
-    conversationId: groupConversationId,
-  );
-  _requireExactStoredMessage(
-    agentHistory,
-    messageId: _required(handoff, 'agentPromptId'),
-    contentReference: _required(handoff, 'agentPromptContentRef'),
-    senderDid: oldDid,
-    isMine: true,
-    conversationId: agentConversationId,
-  );
-  _requireExactStoredMessage(
-    agentHistory,
-    messageId: _required(handoff, 'agentReplyId'),
-    contentReference: _required(handoff, 'agentReplyContentRef'),
-    senderDid: runtimeDid,
-    isMine: false,
-    conversationId: agentConversationId,
-  );
+  observedCheckpoint.requireReplayOf(checkpoint);
+  final directMessageCount = checkpoint.expectedCount('direct_messages');
+  final groupMessageCount = checkpoint.expectedCount('group_messages');
+  final agentMessageCount = checkpoint.expectedCount('agent_messages');
   if (directHistory.length != directMessageCount ||
       groupHistory.length != groupMessageCount ||
       agentHistory.length != agentMessageCount) {
@@ -3009,18 +3157,18 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     bootstrap: bootstrap,
     conversations: conversations,
     ownerDid: newDid,
-    requiredIds: expectedConversationIds.toSet(),
+    requiredIds: recoveredConversationIds.toSet(),
   );
   final finalAgentDids = (await inventory.listAgents(
     includeInactive: true,
   )).map((agent) => agent.agentDid).toList(growable: false);
   final keyIds = <String>[
-    _required(handoff, 'directOutgoingId'),
-    _required(handoff, 'directIncomingId'),
-    _required(handoff, 'groupOutgoingId'),
-    _required(handoff, 'groupIncomingId'),
-    _required(handoff, 'agentPromptId'),
-    _required(handoff, 'agentReplyId'),
+    _requiredMessageId(directOutgoingBefore),
+    _requiredMessageId(directIncomingBefore),
+    _requiredMessageId(groupOutgoingBefore),
+    _requiredMessageId(groupIncomingBefore),
+    _requiredMessageId(agentPromptBefore),
+    _requiredMessageId(agentReplyBefore),
     _requiredMessageId(directOutgoingAfter),
     _requiredMessageId(directIncomingAfter),
     _requiredMessageId(groupOutgoingAfter),
@@ -3031,8 +3179,8 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   if (finalDirectHistory.length != directMessageCount + 2 ||
       finalGroupHistory.length != groupMessageCount + 2 ||
       finalAgentHistory.length != agentMessageCount + 2 ||
-      !_sameStrings(finalConversationIds, expectedConversationIds) ||
-      !_sameStrings(finalAgentDids, expectedAgentDids) ||
+      !_sameStrings(finalConversationIds, recoveredConversationIds) ||
+      !_sameStrings(finalAgentDids, recoveredAgentDids) ||
       keyIds.toSet().length != keyIds.length) {
     fail('Post-Recovery continuity produced duplicate or abnormal growth.');
   }
@@ -3054,12 +3202,12 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
 
 Future<void> _writeCrashCutHandoff(
   String path,
-  Map<String, Object?> payload,
+  HandleRecoveryCrashCutHandoff handoff,
 ) async {
   final file = File(path);
   await file.parent.create(recursive: true);
   final temporary = File('$path.tmp');
-  await temporary.writeAsString(jsonEncode(payload), flush: true);
+  await temporary.writeAsString(jsonEncode(handoff.toJson()), flush: true);
   await temporary.rename(path);
   if (!Platform.isWindows) {
     await Process.run('chmod', <String>['600', path]);

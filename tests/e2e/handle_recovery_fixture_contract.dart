@@ -44,6 +44,134 @@ String handleRecoveryFixtureReference(String rawValue) {
   return 'sha256:${sha256.convert(utf8.encode(rawValue))}';
 }
 
+class HandleRecoveryCrashCutHandoff {
+  HandleRecoveryCrashCutHandoff._({
+    required this.stage,
+    required this.runRef,
+    required Map<String, String> transitionReferences,
+    required Map<String, int> expectedCounts,
+    required this.fixtureCheckpoint,
+  }) : transitionReferences = Map<String, String>.unmodifiable(
+         transitionReferences,
+       ),
+       expectedCounts = Map<String, int>.unmodifiable(expectedCounts);
+
+  factory HandleRecoveryCrashCutHandoff.fromRaw({
+    required String runId,
+    required Map<String, String> rawTransitionReferences,
+    required Map<String, int> expectedCounts,
+    HandleRecoveryFixtureCheckpoint? fixtureCheckpoint,
+  }) {
+    return HandleRecoveryCrashCutHandoff.fromJson(<String, Object?>{
+      'schemaVersion': 1,
+      'stage': 'recovery_commit_durable',
+      'runRef': handleRecoveryFixtureReference(runId),
+      'transitionReferences': <String, Object?>{
+        for (final entry in rawTransitionReferences.entries)
+          entry.key: handleRecoveryFixtureReference(entry.value),
+      },
+      'expectedCounts': <String, Object?>{
+        for (final entry in expectedCounts.entries) entry.key: entry.value,
+      },
+      'fixtureCheckpoint': fixtureCheckpoint?.toJson(),
+    });
+  }
+
+  factory HandleRecoveryCrashCutHandoff.fromJson(Map<String, Object?> json) {
+    _requireExactKeys(json, const <String>{
+      'schemaVersion',
+      'stage',
+      'runRef',
+      'transitionReferences',
+      'expectedCounts',
+      'fixtureCheckpoint',
+    });
+    if (json['schemaVersion'] != 1 ||
+        json['stage'] != 'recovery_commit_durable') {
+      throw const FormatException('crash-cut handoff schema or stage invalid');
+    }
+    final runRef = _requiredOpaqueReference(json, 'runRef');
+    final transitionReferences = _stringMap(json, 'transitionReferences');
+    final expectedCounts = _intMap(json, 'expectedCounts');
+    if (!_sameStrings(
+      transitionReferences.keys,
+      _crashCutTransitionReferences,
+    )) {
+      throw const FormatException(
+        'crash-cut transition reference shape is not exact',
+      );
+    }
+    if (!_sameStrings(expectedCounts.keys, _crashCutExpectedCounts)) {
+      throw const FormatException(
+        'crash-cut expected count shape is not exact',
+      );
+    }
+    for (final entry in transitionReferences.entries) {
+      _requireSafeFieldName(entry.key, kind: 'transition reference');
+      _requireOpaqueReference(entry.value, field: entry.key);
+    }
+    for (final entry in expectedCounts.entries) {
+      _requireSafeFieldName(entry.key, kind: 'count');
+      if (entry.value < 0) {
+        throw FormatException('crash-cut count ${entry.key} is negative');
+      }
+    }
+    final rawFixture = json['fixtureCheckpoint'];
+    HandleRecoveryFixtureCheckpoint? fixtureCheckpoint;
+    if (rawFixture != null) {
+      if (rawFixture is! Map) {
+        throw const FormatException(
+          'fixtureCheckpoint must be an object or null',
+        );
+      }
+      fixtureCheckpoint = HandleRecoveryFixtureCheckpoint.fromJson(
+        <String, Object?>{
+          for (final entry in rawFixture.entries)
+            entry.key.toString(): entry.value,
+        },
+      );
+    }
+    return HandleRecoveryCrashCutHandoff._(
+      stage: 'recovery_commit_durable',
+      runRef: runRef,
+      transitionReferences: transitionReferences,
+      expectedCounts: expectedCounts,
+      fixtureCheckpoint: fixtureCheckpoint,
+    );
+  }
+
+  final String stage;
+  final String runRef;
+  final Map<String, String> transitionReferences;
+  final Map<String, int> expectedCounts;
+  final HandleRecoveryFixtureCheckpoint? fixtureCheckpoint;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'schemaVersion': 1,
+    'stage': stage,
+    'runRef': runRef,
+    'transitionReferences': transitionReferences,
+    'expectedCounts': expectedCounts,
+    'fixtureCheckpoint': fixtureCheckpoint?.toJson(),
+  };
+
+  void requireRunId(String runId) {
+    if (runRef != handleRecoveryFixtureReference(runId)) {
+      throw const HandleRecoveryOracleFailure('handoff_run_reference_mismatch');
+    }
+  }
+
+  void requireTransitionReference(String name, String rawValue) {
+    final expected = transitionReferences[name];
+    if (expected == null ||
+        expected != handleRecoveryFixtureReference(rawValue)) {
+      throw const HandleRecoveryOracleFailure(
+        'handoff_transition_reference_mismatch',
+      );
+    }
+  }
+}
+
 class HandleRecoveryFixtureCheckpoint {
   HandleRecoveryFixtureCheckpoint._({
     required this.caseId,
@@ -159,6 +287,28 @@ class HandleRecoveryFixtureCheckpoint {
     'expectedCounts': expectedCounts,
   };
 
+  String reference(String name) {
+    final value = references[name];
+    if (value == null) {
+      throw const HandleRecoveryOracleFailure('fixture_reference_missing');
+    }
+    return value;
+  }
+
+  int expectedCount(String name) {
+    final value = expectedCounts[name];
+    if (value == null) {
+      throw const HandleRecoveryOracleFailure('fixture_count_missing');
+    }
+    return value;
+  }
+
+  void requireReference(String name, String rawValue) {
+    if (reference(name) != handleRecoveryFixtureReference(rawValue)) {
+      throw const HandleRecoveryOracleFailure('fixture_reference_mismatch');
+    }
+  }
+
   Future<void> write(File file) async {
     await file.parent.create(recursive: true);
     final temporary = File('${file.path}.tmp');
@@ -214,6 +364,41 @@ T requireHandleRecoveryExactOne<T>({
     );
   }
   return items[canonicalIndexes.single];
+}
+
+T requireHandleRecoveryReferenceExactOne<T>({
+  required Iterable<T> rawItems,
+  required String expectedReference,
+  required String Function(T item) rawReference,
+  bool Function(T item)? semanticMatch,
+}) {
+  final items = rawItems.toList(growable: false);
+  final referenceIndexes = <int>[];
+  final semanticIndexes = <int>[];
+  for (var index = 0; index < items.length; index += 1) {
+    final item = items[index];
+    if (handleRecoveryFixtureReference(rawReference(item)) ==
+        expectedReference) {
+      referenceIndexes.add(index);
+    }
+    if (semanticMatch == null || semanticMatch(item)) {
+      semanticIndexes.add(index);
+    }
+  }
+  if (referenceIndexes.isEmpty) {
+    throw const HandleRecoveryOracleFailure('fixture_reference_not_found');
+  }
+  if (referenceIndexes.length > 1) {
+    throw const HandleRecoveryOracleFailure('fixture_reference_duplicated');
+  }
+  if (semanticMatch != null &&
+      (semanticIndexes.length != 1 ||
+          semanticIndexes.single != referenceIndexes.single)) {
+    throw const HandleRecoveryOracleFailure(
+      'fixture_reference_semantic_mismatch',
+    );
+  }
+  return items[referenceIndexes.single];
 }
 
 void requireHandleRecoveryGenerationAdvance({
@@ -356,21 +541,31 @@ const Set<String> _freshRootReferences = <String>{
   'external_group_member',
   'transport_group',
   'runtime_agent',
+  'runtime_handle',
 };
 
 const Set<String> _localDataReferences = <String>{
   ..._freshRootReferences,
   'direct_conversation',
+  'peer_direct_conversation',
   'direct_outgoing_message',
+  'direct_outgoing_semantic',
   'direct_incoming_message',
+  'direct_incoming_semantic',
   'direct_read_message',
   'group_conversation',
   'group_outgoing_message',
+  'group_outgoing_semantic',
   'group_incoming_message',
+  'group_incoming_semantic',
   'group_read_message',
   'agent_conversation',
   'agent_prompt_message',
+  'agent_prompt_semantic',
   'agent_reply_message',
+  'agent_reply_semantic',
+  'conversation_inventory',
+  'agent_inventory',
 };
 
 const Set<String> _freshRootCounts = <String>{
@@ -390,6 +585,22 @@ const Set<String> _localDataCounts = <String>{
   'agent_messages',
   'agent_inventory_items',
   'conversations',
+};
+
+const Set<String> _crashCutTransitionReferences = <String>{
+  'owner_identity',
+  'account',
+  'handle',
+  'previous_identity',
+  'current_identity',
+  'operation',
+  'previous_generation',
+  'current_generation',
+};
+
+const Set<String> _crashCutExpectedCounts = <String>{
+  'local_identities',
+  'pre_reset_registry_devices',
 };
 
 void _requireFixtureShape({
