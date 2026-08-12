@@ -66,6 +66,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonCopy => '复制';
 
   @override
+  String get commonCopyAll => '复制全部';
+
+  @override
   String get commonCopied => '已复制';
 
   @override
@@ -278,6 +281,10 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get registrationVerificationUnavailable =>
       '这个验证码已过期或已被使用，请重新发送验证码后再试。';
+
+  @override
+  String get registrationRecoveryStateInvalid =>
+      '当前 Handle 的身份状态需要服务器处理，请联系支持后重试。';
 
   @override
   String get tenantSwitcherLabel => '管理租户';

@@ -374,6 +374,9 @@ class _AgentPersistentDetailHeader extends StatelessWidget {
   final AgentVisualStatus visualStatus;
   final List<Widget> actions;
 
+  static const double _inlineMinWidth = 900;
+  static const double _identityMaxWidth = 360;
+
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
@@ -391,37 +394,58 @@ class _AgentPersistentDetailHeader extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final stackActions = constraints.maxWidth < 720;
+          final stackActions =
+              constraints.maxWidth < responsive.displayScaled(_inlineMinWidth);
           final identity = _AgentDetailIdentity(
             title: title,
             agent: agent,
             runtimeDisplay: runtimeDisplay,
             visualStatus: visualStatus,
           );
-          final actionWrap = SelectionContainer.disabled(
-            child: Wrap(
-              alignment: WrapAlignment.end,
-              spacing: responsive.spacing(6),
-              runSpacing: responsive.spacing(6),
-              children: actions,
+          final actionWrap = KeyedSubtree(
+            key: const Key('agents-persistent-detail-actions'),
+            child: SelectionContainer.disabled(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  runAlignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: responsive.spacing(6),
+                  runSpacing: responsive.spacing(6),
+                  children: actions,
+                ),
+              ),
             ),
           );
           if (stackActions) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                identity,
-                SizedBox(height: responsive.spacing(8)),
-                actionWrap,
-              ],
+            return KeyedSubtree(
+              key: const Key('agents-persistent-detail-header-stacked'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Align(alignment: Alignment.centerLeft, child: identity),
+                  SizedBox(height: responsive.spacing(8)),
+                  actionWrap,
+                ],
+              ),
             );
           }
-          return Row(
-            children: <Widget>[
-              Expanded(child: identity),
-              SizedBox(width: responsive.spacing(14)),
-              Flexible(child: actionWrap),
-            ],
+          return KeyedSubtree(
+            key: const Key('agents-persistent-detail-header-inline'),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: responsive.displayScaled(_identityMaxWidth),
+                  ),
+                  child: identity,
+                ),
+                SizedBox(width: responsive.spacing(14)),
+                Expanded(child: actionWrap),
+              ],
+            ),
           );
         },
       ),

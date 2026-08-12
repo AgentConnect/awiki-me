@@ -101,6 +101,9 @@ class AppMessage {
   factory AppMessage.registrationVerificationUnavailable() =>
       const AppMessage._('registrationVerificationUnavailable');
 
+  factory AppMessage.registrationRecoveryStateInvalid() =>
+      const AppMessage._('registrationRecoveryStateInvalid');
+
   factory AppMessage.handleRecoveryUnavailable() =>
       const AppMessage._('handleRecoveryUnavailable');
 
@@ -243,6 +246,8 @@ class AppMessage {
         return AppMessage.registrationVerificationInvalid();
       case 'identity.registration_verification_unavailable':
         return AppMessage.registrationVerificationUnavailable();
+      case 'identity.registration_recovery_state_invalid':
+        return AppMessage.registrationRecoveryStateInvalid();
     }
     final raw = normalizeAppError(error);
     if (raw.isEmpty) {
@@ -447,6 +452,8 @@ class AppMessage {
         return l10n.registrationVerificationInvalid;
       case 'registrationVerificationUnavailable':
         return l10n.registrationVerificationUnavailable;
+      case 'registrationRecoveryStateInvalid':
+        return l10n.registrationRecoveryStateInvalid;
       case 'handleRecoveryUnavailable':
         return l10n.handleRecoveryUnavailable;
       case 'sessionExpiredRelogin':
@@ -580,6 +587,8 @@ class AppMessage {
         return 'Activation email sent. Please check your inbox.';
       case 'registrationMethodUnavailable':
         return 'This server does not support the selected registration method.';
+      case 'registrationRecoveryStateInvalid':
+        return "This Handle's identity state needs server-side attention. Contact support before trying again.";
       case 'handleRecoveryUnavailable':
         return 'Safe Handle Recovery is not available. No identity state was changed.';
       case 'didNotFoundOrRevoked':

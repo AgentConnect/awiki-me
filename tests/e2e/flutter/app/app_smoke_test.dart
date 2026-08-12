@@ -636,6 +636,17 @@ void main() {
         ..['did:test:smoke-peer.awiki.ai'] = smokePeerProfile
         ..['smoke-peer.awiki.ai'] = smokePeerProfile;
       final picker = test_support.FakeAttachmentPickerService();
+      String? clipboardText;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            final data = call.arguments as Map<Object?, Object?>;
+            clipboardText = data['text'] as String?;
+          }
+          return null;
+        },
+      );
 
       try {
         await tester.pumpWidget(
@@ -747,9 +758,15 @@ void main() {
         await tester.tap(sentEmoji, buttons: kSecondaryMouseButton);
         await _pumpSmokeFrame(tester);
         expect(find.text('复制'), findsOneWidget);
+        expect(find.text('复制全部'), findsOneWidget);
         expect(find.text('全选'), findsOneWidget);
-        await tester.tap(find.text('复制'));
+        expect(<String>[
+          for (final text in tester.widgetList<Text>(find.byType(Text)))
+            if (<String>{'复制', '复制全部', '全选'}.contains(text.data)) text.data!,
+        ], containsAllInOrder(<String>['复制', '复制全部', '全选']));
+        await tester.tap(find.text('复制全部'));
         await _pumpSmokeFrame(tester);
+        expect(clipboardText, '😀');
         final screenshotButton = find.byKey(
           const Key('chat-screenshot-button'),
         );
@@ -809,6 +826,10 @@ void main() {
         expect(find.text('Smoke Peer Nickname'), findsWidgets);
         expect(find.text('smoke-peer.awiki.ai'), findsNothing);
       } finally {
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        );
         await tester.binding.setSurfaceSize(null);
       }
     },

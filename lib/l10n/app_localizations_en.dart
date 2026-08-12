@@ -66,6 +66,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonCopy => 'Copy';
 
   @override
+  String get commonCopyAll => 'Copy all';
+
+  @override
   String get commonCopied => 'Copied';
 
   @override
@@ -290,6 +293,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get registrationVerificationUnavailable =>
       'This verification code has expired or has already been used. Send a new code and try again.';
+
+  @override
+  String get registrationRecoveryStateInvalid =>
+      'This Handle\'s identity state needs server-side attention. Contact support before trying again.';
 
   @override
   String get tenantSwitcherLabel => 'Manage tenants';

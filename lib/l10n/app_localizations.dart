@@ -212,6 +212,12 @@ abstract class AppLocalizations {
   /// **'复制'**
   String get commonCopy;
 
+  /// No description provided for @commonCopyAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制全部'**
+  String get commonCopyAll;
+
   /// No description provided for @commonCopied.
   ///
   /// In zh, this message translates to:
@@ -607,6 +613,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'这个验证码已过期或已被使用，请重新发送验证码后再试。'**
   String get registrationVerificationUnavailable;
+
+  /// No description provided for @registrationRecoveryStateInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前 Handle 的身份状态需要服务器处理，请联系支持后重试。'**
+  String get registrationRecoveryStateInvalid;
 
   /// No description provided for @tenantSwitcherLabel.
   ///

@@ -73,6 +73,28 @@ void main() {
     },
   );
 
+  test('maps invalid registration recovery state to support guidance', () {
+    final message = AppMessage.fromError(
+      const core.AwikiImCoreException(
+        code: 'service_error',
+        message: 'diagnostic text may change',
+        statusCode: 409,
+        serviceDataJson:
+            '{"awiki_code":"identity.registration_recovery_state_invalid","retryable":false}',
+      ),
+    );
+
+    expect(message, AppMessage.registrationRecoveryStateInvalid());
+    expect(
+      message.resolve(AppLocalizationsZh()),
+      '当前 Handle 的身份状态需要服务器处理，请联系支持后重试。',
+    );
+    expect(
+      message.resolve(AppLocalizationsEn()),
+      "This Handle's identity state needs server-side attention. Contact support before trying again.",
+    );
+  });
+
   test('maps im-core transport unavailable errors to friendly network copy', () {
     final message = AppMessage.fromError(
       const core.AwikiImCoreException(

@@ -1202,7 +1202,7 @@ class _MessageBubble extends StatelessWidget {
       fontWeight: FontWeight.w400,
       height: 1.45,
     );
-    final child = message.attachment == null
+    final messageContent = message.attachment == null
         ? _MessageTextContent(
             text: message.content,
             mentions: message.mentions,
@@ -1222,6 +1222,11 @@ class _MessageBubble extends StatelessWidget {
             onSaveImage: onSaveImage,
             isDownloading: isDownloading,
           );
+    final child = _MessageSelectableContent(
+      key: Key('chat-message-selection:${message.localId}'),
+      text: _copyableMessageText(context, message),
+      child: messageContent,
+    );
     final bubble = Column(
       crossAxisAlignment: isMine
           ? CrossAxisAlignment.end
@@ -1369,7 +1374,7 @@ class _MessageBubble extends StatelessWidget {
       fontWeight: FontWeight.w400,
       height: 1.45,
     );
-    final content = attachment == null
+    final messageContent = attachment == null
         ? _MessageTextContent(
             text: message.content,
             mentions: message.mentions,
@@ -1389,6 +1394,11 @@ class _MessageBubble extends StatelessWidget {
             onSaveImage: onSaveImage,
             isDownloading: isDownloading,
           );
+    final content = _MessageSelectableContent(
+      key: Key('chat-message-selection:${message.localId}'),
+      text: _copyableMessageText(context, message),
+      child: messageContent,
+    );
     final bubbleColor = attachment != null
         ? theme.surface
         : isMine
@@ -2771,55 +2781,38 @@ class _MessageTextContent extends StatelessWidget {
           : <String, MarkdownElementBuilder>{
               _awikiMentionTag: _AwikiMarkdownMentionBuilder(),
             };
-      return _MessageSelectableContent(
-        text: text,
-        builder: (onSelectionChanged, contextMenuBuilder) => MarkdownBody(
-          data: validMentions.isEmpty
-              ? text
-              : _textWithMarkdownMentionMarkers(
-                  text,
-                  validMentions,
-                  mentionPresentation,
-                ),
-          selectable: true,
-          shrinkWrap: true,
-          styleSheet: _chatMarkdownStyleSheet(context, style),
-          inlineSyntaxes: validMentions.isEmpty
-              ? null
-              : <md.InlineSyntax>[_AwikiMarkdownMentionSyntax()],
-          builders: mentionBuilders ?? const <String, MarkdownElementBuilder>{},
-          onSelectionChanged: (_, selection, cause) =>
-              onSelectionChanged(selection, cause),
-          contextMenuBuilder: contextMenuBuilder,
-        ),
+      return MarkdownBody(
+        data: validMentions.isEmpty
+            ? text
+            : _textWithMarkdownMentionMarkers(
+                text,
+                validMentions,
+                mentionPresentation,
+              ),
+        selectable: false,
+        shrinkWrap: true,
+        styleSheet: _chatMarkdownStyleSheet(context, style),
+        inlineSyntaxes: validMentions.isEmpty
+            ? null
+            : <md.InlineSyntax>[_AwikiMarkdownMentionSyntax()],
+        builders: mentionBuilders ?? const <String, MarkdownElementBuilder>{},
       );
     }
     if (validMentions.isNotEmpty) {
-      return _MessageSelectableContent(
-        text: text,
-        builder: (onSelectionChanged, contextMenuBuilder) =>
-            SelectableText.rich(
-              TextSpan(
-                style: style,
-                children: _mentionTextSpans(context, validMentions),
-              ),
-              onSelectionChanged: onSelectionChanged,
-              contextMenuBuilder: contextMenuBuilder,
-              textWidthBasis: TextWidthBasis.parent,
-              textHeightBehavior: _messageTextHeightBehavior,
-            ),
-      );
-    }
-    return _MessageSelectableContent(
-      text: text,
-      builder: (onSelectionChanged, contextMenuBuilder) => SelectableText(
-        text,
-        style: style,
-        onSelectionChanged: onSelectionChanged,
-        contextMenuBuilder: contextMenuBuilder,
+      return Text.rich(
+        TextSpan(
+          style: style,
+          children: _mentionTextSpans(context, validMentions),
+        ),
         textWidthBasis: TextWidthBasis.parent,
         textHeightBehavior: _messageTextHeightBehavior,
-      ),
+      );
+    }
+    return Text(
+      text,
+      style: style,
+      textWidthBasis: TextWidthBasis.parent,
+      textHeightBehavior: _messageTextHeightBehavior,
     );
   }
 
@@ -2860,87 +2853,81 @@ const _messageTextHeightBehavior = TextHeightBehavior(
   applyHeightToLastDescent: false,
 );
 
-typedef _MessageSelectableContentBuilder =
-    Widget Function(
-      void Function(TextSelection, SelectionChangedCause?) onSelectionChanged,
-      Widget Function(BuildContext, EditableTextState) contextMenuBuilder,
-    );
-
-class _MessageSelectableContent extends StatefulWidget {
-  const _MessageSelectableContent({required this.text, required this.builder});
-
-  final String text;
-  final _MessageSelectableContentBuilder builder;
-
-  @override
-  State<_MessageSelectableContent> createState() =>
-      _MessageSelectableContentState();
+String _copyableMessageText(BuildContext context, ChatMessage message) {
+  final attachment = message.attachment;
+  if (attachment == null) {
+    return message.content;
+  }
+  final caption = attachment.caption?.trim() ?? '';
+  final filename = localizeAttachmentName(context.l10n, attachment).trim();
+  return <String>[
+    if (caption.isNotEmpty) caption,
+    if (filename.isNotEmpty) filename,
+  ].join('\n');
 }
 
-class _MessageSelectableContentState extends State<_MessageSelectableContent> {
-  TextSelection _selection = const TextSelection.collapsed(offset: 0);
-  TextSelection? _selectionBeforeSecondaryTap;
-  bool _hasSecondaryTapSnapshot = false;
+class _MessageSelectableContent extends StatelessWidget {
+  const _MessageSelectableContent({
+    super.key,
+    required this.text,
+    required this.child,
+  });
 
-  void _handlePointerDown(PointerDownEvent event) {
-    if (event.buttons == kSecondaryMouseButton) {
-      _selectionBeforeSecondaryTap = _selection;
-      _hasSecondaryTapSnapshot = true;
-      return;
-    }
-    _selectionBeforeSecondaryTap = null;
-    _hasSecondaryTapSnapshot = false;
+  final String text;
+  final Widget child;
+
+  Future<void> _copyAll(SelectableRegionState selectableRegionState) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    selectableRegionState.hideToolbar(false);
   }
 
-  void _handleSelectionChanged(
-    TextSelection selection,
-    SelectionChangedCause? _,
-  ) {
-    _selection = selection;
-  }
-
-  TextSelection get _selectionForCopy => _hasSecondaryTapSnapshot
-      ? _selectionBeforeSecondaryTap ?? const TextSelection.collapsed(offset: 0)
-      : _selection;
-
-  Future<void> _copy(EditableTextState editableTextState) async {
-    final selection = _selectionForCopy;
-    final selectableText = editableTextState.textEditingValue.text;
-    final selectedText = selection.isValid && !selection.isCollapsed
-        ? selectableText.substring(selection.start, selection.end)
-        : widget.text;
-    await Clipboard.setData(ClipboardData(text: selectedText));
-    editableTextState.hideToolbar();
-    _hasSecondaryTapSnapshot = false;
-  }
-
-  Widget _buildContextMenu(
+  List<ContextMenuButtonItem> _contextMenuItems(
     BuildContext context,
-    EditableTextState editableTextState,
+    SelectableRegionState selectableRegionState,
   ) {
-    return AdaptiveTextSelectionToolbar.buttonItems(
-      anchors: editableTextState.contextMenuAnchors,
-      buttonItems: <ContextMenuButtonItem>[
+    final items = List<ContextMenuButtonItem>.of(
+      selectableRegionState.contextMenuButtonItems,
+    );
+    var copyIndex = items.indexWhere(
+      (item) => item.type == ContextMenuButtonType.copy,
+    );
+    if (copyIndex < 0) {
+      final selectAllIndex = items.indexWhere(
+        (item) => item.type == ContextMenuButtonType.selectAll,
+      );
+      copyIndex = selectAllIndex >= 0 ? selectAllIndex : 0;
+      items.insert(
+        copyIndex,
         ContextMenuButtonItem(
           type: ContextMenuButtonType.copy,
-          onPressed: () => _copy(editableTextState),
+          onPressed: () => _copyAll(selectableRegionState),
         ),
-        ContextMenuButtonItem(
-          type: ContextMenuButtonType.selectAll,
-          onPressed: () {
-            _hasSecondaryTapSnapshot = false;
-            editableTextState.selectAll(SelectionChangedCause.toolbar);
-          },
-        ),
-      ],
+      );
+    }
+    final selectAllIndex = items.indexWhere(
+      (item) => item.type == ContextMenuButtonType.selectAll,
     );
+    final insertionIndex = selectAllIndex >= 0 ? selectAllIndex : copyIndex + 1;
+    items.insert(
+      insertionIndex,
+      ContextMenuButtonItem(
+        label: context.l10n.commonCopyAll,
+        onPressed: () => _copyAll(selectableRegionState),
+      ),
+    );
+    return items;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      onPointerDown: _handlePointerDown,
-      child: widget.builder(_handleSelectionChanged, _buildContextMenu),
+    return SelectionArea(
+      contextMenuBuilder: (context, selectableRegionState) {
+        return AdaptiveTextSelectionToolbar.buttonItems(
+          anchors: selectableRegionState.contextMenuAnchors,
+          buttonItems: _contextMenuItems(context, selectableRegionState),
+        );
+      },
+      child: child,
     );
   }
 }
