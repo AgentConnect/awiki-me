@@ -2450,7 +2450,7 @@ void main() {
       'downloading',
     );
     expect(
-      state.daemonUpgradeErrors['did:agent:daemon'],
+      state.daemonUpgradeErrors['did:agent:daemon']?.messageCode,
       AgentUiMessageCodes.upgradeCancelNoResponse,
     );
   });
@@ -2584,7 +2584,7 @@ void main() {
     },
   );
 
-  test('daemon upgrade failure keeps readable daemon-scoped error', () async {
+  test('daemon upgrade failure keeps safe structured diagnostics', () async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
         AgentSummary(
@@ -2617,22 +2617,24 @@ void main() {
       'result': <String, Object?>{
         'command': 'daemon.upgrade',
         'daemon_agent_did': 'did:agent:daemon',
-        'error_code': 'upgrade_failed',
+        'error_code': 'upgrade_download_failed',
+        'failed_stage': 'downloading',
+        'retryable': true,
         'last_error_summary':
+            'daemon package download was interrupted after retries',
+        'diagnostic_summary':
             'download daemon package https://anpclaw.com/daemon/releases/0.1.39/awiki-deamon-darwin-arm64.tar.gz: request timed out',
       },
     });
 
     var state = container.read(agentsProvider);
     expect(state.pendingDaemonUpgrades, isEmpty);
-    expect(
-      state.daemonUpgradeErrors['did:agent:daemon'],
-      startsWith(AgentUiMessageCodes.upgradeDownloadFailedPrefix),
-    );
-    expect(
-      state.daemonUpgradeErrors['did:agent:daemon'],
-      contains('request timed out'),
-    );
+    final failure = state.daemonUpgradeErrors['did:agent:daemon'];
+    expect(failure?.messageCode, AgentUiMessageCodes.upgradeDownloadFailed);
+    expect(failure?.errorCode, 'upgrade_download_failed');
+    expect(failure?.failedStage, 'downloading');
+    expect(failure?.retryable, isTrue);
+    expect(failure?.diagnosticSummary, contains('request timed out'));
     expect(state.agents.single.latest.status, 'failed');
 
     container.read(agentsProvider.notifier).applyControlPayload(
@@ -2651,6 +2653,49 @@ void main() {
 
     state = container.read(agentsProvider);
     expect(state.daemonUpgradeErrors, isEmpty);
+  });
+
+  test('legacy daemon download failure maps to safe public message', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'needs_upgrade',
+            needsUpgrade: true,
+          ),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    container.read(agentsProvider.notifier).applyControlPayload(<
+      String,
+      Object?
+    >{
+      'schema': AgentControlPayloads.statusSchema,
+      'state': 'failed',
+      'daemon_agent_did': 'did:agent:daemon',
+      'result': <String, Object?>{
+        'command': 'daemon.upgrade',
+        'error_code': 'upgrade_failed',
+        'last_error_summary':
+            'download daemon package https://anpclaw.com/private: request timed out',
+      },
+    });
+
+    final failure = container
+        .read(agentsProvider)
+        .daemonUpgradeErrors['did:agent:daemon'];
+    expect(
+      failure?.messageCode,
+      AgentUiMessageCodes.upgradeLegacyDownloadFailed,
+    );
+    expect(failure?.diagnosticSummary, contains('request timed out'));
   });
 
   test(

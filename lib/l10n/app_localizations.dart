@@ -3951,14 +3951,50 @@ abstract class AppLocalizations {
   /// No description provided for @agentUpgradeIncomplete.
   ///
   /// In zh, this message translates to:
-  /// **'升级没有完成，请检查网络后重试。'**
+  /// **'升级没有完成，请稍后重试。'**
   String get agentUpgradeIncomplete;
 
   /// No description provided for @agentUpgradeDownloadFailed.
   ///
   /// In zh, this message translates to:
-  /// **'安装包下载失败，请检查网络后重试。{summary}'**
-  String agentUpgradeDownloadFailed(Object summary);
+  /// **'下载中断，已保留当前进度。请检查网络后重试。'**
+  String get agentUpgradeDownloadFailed;
+
+  /// No description provided for @agentUpgradeLegacyDownloadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'下载中断，请检查网络后重试；若仍失败请重新安装 Daemon。'**
+  String get agentUpgradeLegacyDownloadFailed;
+
+  /// No description provided for @agentUpgradeIntegrityFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装包校验失败，重试时将重新下载安装包。'**
+  String get agentUpgradeIntegrityFailed;
+
+  /// No description provided for @agentUpgradeExtractFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装包无法解压，请重试升级。'**
+  String get agentUpgradeExtractFailed;
+
+  /// No description provided for @agentUpgradeRestartFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'新版本已准备好，但 Daemon 重启失败。请刷新状态或重新安装。'**
+  String get agentUpgradeRestartFailed;
+
+  /// No description provided for @agentUpgradeInstallFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon 升级未完成，请重试；若仍失败请重新安装。'**
+  String get agentUpgradeInstallFailed;
+
+  /// No description provided for @agentUpgradeRequiresReinstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon 无法自动完成升级，请重新安装。'**
+  String get agentUpgradeRequiresReinstall;
 
   /// No description provided for @agentUpgradeNotCancellable.
   ///

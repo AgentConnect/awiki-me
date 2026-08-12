@@ -39,6 +39,7 @@ import 'agent_rename_dialog.dart';
 import 'agent_runtime_display.dart';
 import 'agent_status_indicator.dart';
 import 'agent_visual_status.dart';
+import 'agent_ui_messages.dart';
 import 'agents_provider.dart';
 import 'personal_agent_feature_visibility.dart';
 import 'skill_onboarding_provider.dart';

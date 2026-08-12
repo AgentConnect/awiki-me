@@ -2172,12 +2172,35 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentUpgradeIncomplete =>
-      'The upgrade did not complete. Check the network and try again.';
+      'The upgrade did not complete. Try again later.';
 
   @override
-  String agentUpgradeDownloadFailed(Object summary) {
-    return 'Package download failed. Check the network and try again. $summary';
-  }
+  String get agentUpgradeDownloadFailed =>
+      'The download was interrupted. Your progress was saved. Check the network and try again.';
+
+  @override
+  String get agentUpgradeLegacyDownloadFailed =>
+      'The download was interrupted. Check the network and try again, or reinstall the daemon if it continues to fail.';
+
+  @override
+  String get agentUpgradeIntegrityFailed =>
+      'Package verification failed. The package will be downloaded again on retry.';
+
+  @override
+  String get agentUpgradeExtractFailed =>
+      'The package could not be extracted. Try the upgrade again.';
+
+  @override
+  String get agentUpgradeRestartFailed =>
+      'The new version is ready, but the daemon could not restart. Refresh status or reinstall it.';
+
+  @override
+  String get agentUpgradeInstallFailed =>
+      'The daemon upgrade did not complete. Try again, or reinstall it if the problem continues.';
+
+  @override
+  String get agentUpgradeRequiresReinstall =>
+      'The daemon cannot complete this upgrade automatically. Reinstall it.';
 
   @override
   String get agentUpgradeNotCancellable =>

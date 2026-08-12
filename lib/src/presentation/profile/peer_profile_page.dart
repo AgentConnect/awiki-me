@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -64,6 +66,21 @@ class PeerProfilePage extends ConsumerStatefulWidget {
 
 class _PeerProfilePageState extends ConsumerState<PeerProfilePage> {
   _PeerProfileExpandedSection? _expandedSection;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(
+        ref
+            .read(peerProfileProvider(widget.did).notifier)
+            .load(peerPersonaId: widget.peerPersonaId, forceRefresh: true),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

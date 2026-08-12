@@ -86,7 +86,7 @@ class _AgentDetailPane extends StatelessWidget {
     final statusQueryError = agent.isDaemon
         ? state.statusQueryErrors[agent.agentDid]
         : null;
-    final upgradeError = agent.isDaemon
+    final upgradeFailure = agent.isDaemon
         ? state.daemonUpgradeErrors[agent.agentDid]
         : null;
     final upgradeProgress = agent.isDaemon
@@ -209,8 +209,21 @@ class _AgentDetailPane extends StatelessWidget {
           _AgentErrorBanner(message: statusQueryError),
           SizedBox(height: responsive.spacing(10)),
         ],
-        if (upgradeError != null) ...<Widget>[
-          _AgentErrorBanner(message: upgradeError),
+        if (upgradeFailure != null) ...<Widget>[
+          _AgentErrorBanner(
+            message: upgradeFailure.messageCode,
+            detail: _redactDiagnosticValue(
+              upgradeFailure.diagnosticSummary,
+              key: 'diagnostic_summary',
+            ),
+            onRetry:
+                upgradeFailure.retryable != false &&
+                    daemonCanUpgrade &&
+                    !isUpgradeSending &&
+                    !isUpgrading
+                ? () => onUpgrade(agent)
+                : null,
+          ),
           SizedBox(height: responsive.spacing(10)),
         ],
         if (isUpgrading && upgradeProgress != null) ...<Widget>[
