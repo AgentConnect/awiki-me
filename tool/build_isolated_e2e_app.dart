@@ -5,6 +5,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'ensure_linux_im_core.dart';
+
 enum IsolatedE2eAppPlatform {
   macos,
   linux;
@@ -408,6 +410,18 @@ class IsolatedE2eAppBuilder {
       throw IsolatedE2eAppBuildException(
         'The isolated App artifact copy failed for ${request.name}.',
       );
+    }
+    if (request.platform == IsolatedE2eAppPlatform.linux) {
+      final layout = await LinuxImCoreLayout.resolve(request.projectRoot);
+      final bundledCore = File(
+        '${plan.artifactApp.path}/lib/libawiki_im_core.so',
+      );
+      if (!bundledCore.existsSync() ||
+          await fileSha256(bundledCore) != await fileSha256(layout.artifact)) {
+        throw const IsolatedE2eAppBuildException(
+          'The isolated Linux App contains a stale IM Core shared library.',
+        );
+      }
     }
     if (request.platform == IsolatedE2eAppPlatform.macos) {
       final bundle = await Process.run('/usr/libexec/PlistBuddy', <String>[

@@ -10,6 +10,7 @@ import 'app_pair_protocol.dart';
 import 'case_attestation.dart';
 import 'performance_contract.dart';
 import 'remote_multi_device_join_contract.dart';
+import '../../tool/ensure_linux_im_core.dart';
 
 const String _defaultDesktopE2eConfigPath = 'tests/e2e/configs/e2e.local.yaml';
 const String _desktopE2eSuiteManifestPath = 'tests/e2e/suite_manifest.json';
@@ -1067,6 +1068,10 @@ class DesktopE2eRunner {
       await commands.requireExecutable('dart');
       if (pairConfig.platform == DesktopE2ePlatform.linux) {
         await commands.requireExecutable('xvfb-run');
+        await commands.requireFile('tool/ensure_linux_im_core.dart');
+        if (!options.dryRun && !commands.dryRun && !options.prepareOnly) {
+          await LinuxImCoreArtifactGuard(projectRoot: root).ensure();
+        }
       }
       await commands.requireFile('tool/build_isolated_e2e_app.dart');
       await commands.requireFile(_multiDeviceAppPairTarget);
