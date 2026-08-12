@@ -101,6 +101,22 @@ App/Core、daemon、User Service 和 Message Service，测试 gateway 只替代�
 `default-plain` Direct；普通恢复用例显式关闭人与人 Direct E2EE 以验证 transport 连续性，
 registration rejoin/P5 用例则显式开启 Direct E2EE。
 
+恢复 E2E 的公共 fixture 合同位于
+`tests/e2e/handle_recovery_fixture_contract.dart`。它分别定义 Fresh Root 与 Local Data 的固定
+资源形状；ready checkpoint 只允许 `sha256:` 脱敏引用、非负期望计数、fixture kind 和阶段，
+严格拒绝额外字段、full identity、路径、消息正文及 secret 类字段。Local Data Phase A 依次建立
+identity、Direct 双向历史/read、Group 双向历史/read/双成员 metadata、真实 Daemon/Runtime
+及 prompt/reply；Phase B 在发送新消息前用相同 run reference 和 observed count 重建 checkpoint，
+任何 ID 替换或资源数增长都会 fail closed。准备失败按最后完成的阶段写入当前 case 自己的
+`failureObservation`；公共 exact-one oracle 同时在 raw collection 上统计 canonical ID 和
+run-unique semantic fingerprint，不能由 `set`、`any` 或首条命中吞掉重复。Fresh Root 的合同
+已固定，实际 focused fixture 接线属于后续 Fresh case 拆分，不得把合同单测解释为远端产品通过。
+
+兼容性限制：现有 crash-cut Phase B 仍需用旧 handoff 中的 full DID/内部 route ID 重新打开同一
+App、peer 和 daemon root。消息正文已经改为不可逆 content reference，但旧 route 字段尚未全部
+迁移为脱敏定位；该文件保持权限 `0600`、只存在于 ignored 运行目录，并作为测试基础设施债继续
+跟踪。新增 focused case 只能消费公共 secret-free fixture checkpoint，不能扩散旧 handoff 形状。
+
 同一 suite 的 `HANDLE-RECOVERY-V1-E2E-003` 在 Recovery 前用第二套独立 App root 建立旧 member。
 Recovery 完成后先要求该旧 principal 的远端消息操作被拒绝，并要求旧 App 自动清除会话、
 显示一次失效确认并回到统一登录页，再使用 fresh ordinary Join

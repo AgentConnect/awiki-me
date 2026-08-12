@@ -23,6 +23,7 @@ import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
+import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
@@ -63,6 +64,7 @@ import 'package:yaml/yaml.dart';
 
 import '../../case_attestation.dart';
 import '../../e2e_user_presence_port.dart';
+import '../../handle_recovery_fixture_contract.dart';
 import '../../remote_multi_device_join_contract.dart';
 
 const String _caseId = 'HANDLE-RECOVERY-V1-E2E-001';
@@ -879,8 +881,8 @@ class _ContinuityDaemonConfig {
   final String handle;
 }
 
-class _SettingsRecoveryContinuitySeed {
-  const _SettingsRecoveryContinuitySeed({
+class _HandleRecoveryLocalDataFixture {
+  const _HandleRecoveryLocalDataFixture({
     required this.registrationRetryAt,
     required this.peerIdentityId,
     required this.peerDid,
@@ -902,6 +904,7 @@ class _SettingsRecoveryContinuitySeed {
     required this.agentDids,
     required this.directMessageCount,
     required this.groupMessageCount,
+    required this.groupMemberCount,
     required this.agentMessageCount,
   });
 
@@ -926,7 +929,54 @@ class _SettingsRecoveryContinuitySeed {
   final List<String> agentDids;
   final int directMessageCount;
   final int groupMessageCount;
+  final int groupMemberCount;
   final int agentMessageCount;
+
+  HandleRecoveryFixtureCheckpoint checkpoint({
+    required String caseId,
+    required String runId,
+    required String stableOwnerIdentityId,
+  }) {
+    return HandleRecoveryFixtureCheckpoint.fromRaw(
+      caseId: caseId,
+      kind: HandleRecoveryFixtureKind.localData,
+      stage: HandleRecoveryFixtureStage.checkpointReady,
+      runId: runId,
+      rawReferences: <String, String>{
+        'admin_identity': stableOwnerIdentityId,
+        'daemon_agent': daemonDid,
+        'direct_peer': peerDid,
+        'external_group_member': peerDid,
+        'transport_group': groupDid,
+        'runtime_agent': runtimeDid,
+        'direct_conversation': directConversationId,
+        'direct_outgoing_message': _requiredMessageId(directOutgoing),
+        'direct_incoming_message': _requiredMessageId(directIncoming),
+        'direct_read_message': _requiredMessageId(directIncoming),
+        'group_conversation': groupConversationId,
+        'group_outgoing_message': _requiredMessageId(groupOutgoing),
+        'group_incoming_message': _requiredMessageId(groupIncoming),
+        'group_read_message': _requiredMessageId(groupIncoming),
+        'agent_conversation': agentConversationId,
+        'agent_prompt_message': _requiredMessageId(agentPrompt),
+        'agent_reply_message': _requiredMessageId(agentReply),
+      },
+      expectedCounts: <String, int>{
+        'admin_identities': 1,
+        'daemon_agents': 1,
+        'direct_peers': 1,
+        'external_group_members': 1,
+        'transport_groups': 1,
+        'runtime_agents': 1,
+        'direct_messages': directMessageCount,
+        'group_messages': groupMessageCount,
+        'group_members': groupMemberCount,
+        'agent_messages': agentMessageCount,
+        'agent_inventory_items': agentDids.length,
+        'conversations': conversationIds.length,
+      },
+    );
+  }
 
   Map<String, Object?> toHandoffFields() => <String, Object?>{
     'peerIdentityId': peerIdentityId,
@@ -934,23 +984,33 @@ class _SettingsRecoveryContinuitySeed {
     'directConversationId': directConversationId,
     'peerDirectConversationId': peerDirectConversationId,
     'directOutgoingId': _requiredMessageId(directOutgoing),
-    'directOutgoingText': directOutgoing.content,
+    'directOutgoingContentRef': handleRecoveryFixtureReference(
+      directOutgoing.content,
+    ),
     'directIncomingId': _requiredMessageId(directIncoming),
-    'directIncomingText': directIncoming.content,
+    'directIncomingContentRef': handleRecoveryFixtureReference(
+      directIncoming.content,
+    ),
     'groupDid': groupDid,
     'groupConversationId': groupConversationId,
     'groupOutgoingId': _requiredMessageId(groupOutgoing),
-    'groupOutgoingText': groupOutgoing.content,
+    'groupOutgoingContentRef': handleRecoveryFixtureReference(
+      groupOutgoing.content,
+    ),
     'groupIncomingId': _requiredMessageId(groupIncoming),
-    'groupIncomingText': groupIncoming.content,
+    'groupIncomingContentRef': handleRecoveryFixtureReference(
+      groupIncoming.content,
+    ),
     'daemonDid': daemonDid,
     'runtimeDid': runtimeDid,
     'runtimeHandle': runtimeHandle,
     'agentConversationId': agentConversationId,
     'agentPromptId': _requiredMessageId(agentPrompt),
-    'agentPromptText': agentPrompt.content,
+    'agentPromptContentRef': handleRecoveryFixtureReference(
+      agentPrompt.content,
+    ),
     'agentReplyId': _requiredMessageId(agentReply),
-    'agentReplyText': agentReply.content,
+    'agentReplyContentRef': handleRecoveryFixtureReference(agentReply.content),
     'conversationIds': conversationIds,
     'agentDids': agentDids,
     'directMessageCount': directMessageCount,
@@ -981,7 +1041,7 @@ _ContinuityDaemonConfig _requireContinuityDaemonConfig(
   );
 }
 
-Future<_SettingsRecoveryContinuitySeed> _seedSettingsRecoveryContinuity({
+Future<_HandleRecoveryLocalDataFixture> _seedHandleRecoveryLocalDataFixture({
   required WidgetTester tester,
   required _RemoteRecoveryRunConfig config,
   required _DedicatedAccount account,
@@ -993,6 +1053,7 @@ Future<_SettingsRecoveryContinuitySeed> _seedSettingsRecoveryContinuity({
   required AppSession ownerSession,
   required DateTime registrationRetryAt,
   required _ContinuityDaemonConfig daemonConfig,
+  required HandleRecoveryFixtureProgress progress,
 }) async {
   final ownerDid = ownerSession.did;
   final ownerHandle = ownerSession.handle?.trim().toLowerCase() ?? '';
@@ -1048,6 +1109,7 @@ Future<_SettingsRecoveryContinuitySeed> _seedSettingsRecoveryContinuity({
         peerSession.did != registeredPeer.did) {
       fail('The continuity peer did not activate its exact identity.');
     }
+    progress.advance(HandleRecoveryFixtureStage.identityReady);
 
     final directOutgoing = await messaging.sendText(
       thread: AppThreadRef.direct(peerSession.did),
@@ -1111,6 +1173,12 @@ Future<_SettingsRecoveryContinuitySeed> _seedSettingsRecoveryContinuity({
       isMine: true,
       conversationId: peerDirectConversationId,
     );
+    await _markRecoveryFixtureRead(
+      conversations: conversations,
+      conversationId: directConversationId,
+      message: ownerIncomingProjection,
+    );
+    progress.advance(HandleRecoveryFixtureStage.directReady);
 
     final group = await groups.createGroup(
       name: 'Settings Recovery continuity ${_nonce(8)}',
@@ -1158,7 +1226,7 @@ Future<_SettingsRecoveryContinuitySeed> _seedSettingsRecoveryContinuity({
       isMine: true,
       conversationId: group.conversationId,
     );
-    await _waitForGroupMessageExactOne(
+    final ownerGroupIncomingProjection = await _waitForGroupMessageExactOne(
       tester: tester,
       bootstrap: bootstrap,
       groupDid: group.groupId,
@@ -1168,6 +1236,22 @@ Future<_SettingsRecoveryContinuitySeed> _seedSettingsRecoveryContinuity({
       isMine: false,
       conversationId: group.conversationId,
     );
+    await _markRecoveryFixtureRead(
+      conversations: conversations,
+      conversationId: group.conversationId,
+      message: ownerGroupIncomingProjection,
+    );
+    final groupMembers = await groups.listMembers(group.groupId, limit: 100);
+    if (groupMembers.items.length != 2 ||
+        groupMembers.items.where((member) => member.did == ownerDid).length !=
+            1 ||
+        groupMembers.items
+                .where((member) => member.did == peerSession.did)
+                .length !=
+            1) {
+      fail('The Local Data fixture did not retain exact Group metadata.');
+    }
+    progress.advance(HandleRecoveryFixtureStage.groupReady);
 
     final daemonInstall = await _installContinuityDaemon(
       config: config,
@@ -1290,6 +1374,7 @@ Future<_SettingsRecoveryContinuitySeed> _seedSettingsRecoveryContinuity({
         isMine: true,
         conversationId: agentConversationId,
       );
+      progress.advance(HandleRecoveryFixtureStage.agentReady);
       _requireExactMessage(
         agentHistory,
         expected: reply,
@@ -1316,7 +1401,8 @@ Future<_SettingsRecoveryContinuitySeed> _seedSettingsRecoveryContinuity({
           agentConversationId,
         },
       );
-      return _SettingsRecoveryContinuitySeed(
+      progress.advance(HandleRecoveryFixtureStage.checkpointReady);
+      return _HandleRecoveryLocalDataFixture(
         registrationRetryAt: peerFactor.retryAt,
         peerIdentityId: peerSession.identityId,
         peerDid: peerSession.did,
@@ -1338,6 +1424,7 @@ Future<_SettingsRecoveryContinuitySeed> _seedSettingsRecoveryContinuity({
         agentDids: agentDids,
         directMessageCount: directHistory.length,
         groupMessageCount: groupHistory.length,
+        groupMemberCount: groupMembers.items.length,
         agentMessageCount: agentHistory.length,
       );
     } finally {
@@ -1358,6 +1445,40 @@ String _requiredConversationId(ChatMessage message) {
   final value = message.conversationId?.trim() ?? '';
   if (value.isEmpty) fail('A continuity message had no conversation ID.');
   return value;
+}
+
+Future<void> _markRecoveryFixtureRead({
+  required ConversationService conversations,
+  required String conversationId,
+  required ChatMessage message,
+}) async {
+  final messageId = _requiredMessageId(message);
+  final threadSequence = message.serverSequence?.toString();
+  if (threadSequence == null) {
+    fail('A Local Data read fixture had no public thread sequence.');
+  }
+  final result = await conversations.markConversationRead(
+    AppConversationReadRef.fromConversationId(conversationId),
+    watermark: AppThreadReadWatermark(
+      lastReadMessageId: messageId,
+      lastReadThreadSeq: threadSequence,
+      readAt: DateTime.now().toUtc(),
+    ),
+  );
+  final effective = result.effectiveWatermark;
+  if (!result.remoteAcknowledged ||
+      result.partial ||
+      result.fallbackUsed ||
+      result.pendingRemoteAck ||
+      effective?.lastReadMessageId != messageId ||
+      effective?.lastReadThreadSeq != threadSequence) {
+    fail('A Local Data read fixture was not acknowledged exactly.');
+  }
+  requireHandleRecoveryReadWatermark(
+    previousThreadSequence: threadSequence,
+    currentThreadSequence: effective!.lastReadThreadSeq!,
+    expectedThreadSequence: threadSequence,
+  );
 }
 
 void _requireCommittedDirect(
@@ -1399,37 +1520,34 @@ void _requireExactMessage(
   required bool isMine,
   required String conversationId,
 }) {
-  final matches = history
-      .where((message) => message.remoteId == expected.remoteId)
-      .toList(growable: false);
-  if (matches.length != 1 ||
-      matches.single.content != expected.content ||
-      matches.single.senderDid != expected.senderDid ||
-      matches.single.isMine != isMine ||
-      matches.single.conversationId != conversationId) {
-    fail('A key continuity message was not exact-one with stable ownership.');
-  }
+  requireHandleRecoveryExactOne<ChatMessage>(
+    rawItems: history,
+    canonicalMatch: (message) => message.remoteId == expected.remoteId,
+    semanticMatch: (message) =>
+        message.content == expected.content &&
+        message.senderDid == expected.senderDid &&
+        message.isMine == isMine &&
+        message.conversationId == conversationId,
+  );
 }
 
 ChatMessage _requireExactStoredMessage(
   List<ChatMessage> history, {
   required String messageId,
-  required String content,
+  required String contentReference,
   required String senderDid,
   required bool isMine,
   required String conversationId,
 }) {
-  final matches = history
-      .where((message) => message.remoteId == messageId)
-      .toList(growable: false);
-  if (matches.length != 1 ||
-      matches.single.content != content ||
-      matches.single.senderDid != senderDid ||
-      matches.single.isMine != isMine ||
-      matches.single.conversationId != conversationId) {
-    fail('A persisted continuity message changed or was not exact-one.');
-  }
-  return matches.single;
+  return requireHandleRecoveryExactOne<ChatMessage>(
+    rawItems: history,
+    canonicalMatch: (message) => message.remoteId == messageId,
+    semanticMatch: (message) =>
+        handleRecoveryFixtureReference(message.content) == contentReference &&
+        message.senderDid == senderDid &&
+        message.isMine == isMine &&
+        message.conversationId == conversationId,
+  );
 }
 
 int _requiredInt(Map<String, Object?> root, String key) {
@@ -1545,7 +1663,7 @@ Future<void> _waitForRecoveredContinuityGroup({
   );
 }
 
-Future<void> _waitForGroupMessageExactOne({
+Future<ChatMessage> _waitForGroupMessageExactOne({
   required WidgetTester tester,
   required AppBootstrap bootstrap,
   required String groupDid,
@@ -1579,7 +1697,7 @@ Future<void> _waitForGroupMessageExactOne({
           message.conversationId != conversationId) {
         fail('A Group message projection changed identity or ownership.');
       }
-      return;
+      return message;
     }
     await tester.pump(const Duration(milliseconds: 200));
     await Future<void>.delayed(const Duration(milliseconds: 550));
@@ -2203,19 +2321,32 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
           'runtime_busy=${runtime.isBusy}';
     },
   );
+  final fixtureProgress = HandleRecoveryFixtureProgress();
   final continuity = continuityRequired
-      ? await _seedSettingsRecoveryContinuity(
-          tester: tester,
-          config: config,
-          account: account,
-          bootstrap: bootstrap,
-          container: appContainer,
-          inventory: appContainer.read(agentInventoryPortProvider),
-          agentControl: appContainer.read(agentControlServiceProvider),
-          conversations: appContainer.read(conversationServiceProvider),
-          ownerSession: activatedOldSession,
-          registrationRetryAt: factor.retryAt,
-          daemonConfig: daemonConfig!,
+      ? await runHandleRecoveryFixtureStage<_HandleRecoveryLocalDataFixture>(
+          caseId: _settingsContinuityCaseId,
+          progress: fixtureProgress,
+          action: () => _seedHandleRecoveryLocalDataFixture(
+            tester: tester,
+            config: config,
+            account: account,
+            bootstrap: bootstrap,
+            container: appContainer,
+            inventory: appContainer.read(agentInventoryPortProvider),
+            agentControl: appContainer.read(agentControlServiceProvider),
+            conversations: appContainer.read(conversationServiceProvider),
+            ownerSession: activatedOldSession,
+            registrationRetryAt: factor.retryAt,
+            daemonConfig: daemonConfig!,
+            progress: fixtureProgress,
+          ),
+          recordFailure: ({required caseId, required stage, required code}) =>
+              E2eFailureObservationWriter.recordFirst(
+                layer: 'app_projection',
+                status: 'fatal',
+                code: code,
+                caseId: caseId,
+              ),
         )
       : null;
   await _waitForRegistrationRetryBoundary(
@@ -2346,6 +2477,14 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
     'handle': oldSession.handle!.trim().toLowerCase(),
     'oldGeneration': oldBinding.identityGeneration,
     'newGeneration': reset.bindingGeneration,
+    if (continuity != null)
+      'fixtureCheckpoint': continuity
+          .checkpoint(
+            caseId: _settingsContinuityCaseId,
+            runId: config.runId,
+            stableOwnerIdentityId: oldBinding.ownerIdentityId,
+          )
+          .toJson(),
     if (continuity != null) ...continuity.toHandoffFields(),
   });
 
@@ -2368,6 +2507,19 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     fail('Crash-cut handoff was invalid.');
   }
   final handoff = _stringMap(decoded);
+  HandleRecoveryFixtureCheckpoint? fixtureCheckpoint;
+  if (continuityRequired) {
+    final rawCheckpoint = decoded['fixtureCheckpoint'];
+    if (rawCheckpoint is! Map) {
+      fail('Crash-cut phase B found no Local Data fixture checkpoint.');
+    }
+    fixtureCheckpoint = HandleRecoveryFixtureCheckpoint.fromJson(
+      <String, Object?>{
+        for (final entry in rawCheckpoint.entries)
+          entry.key.toString(): entry.value,
+      },
+    );
+  }
   final oldDid = _required(handoff, 'oldDid');
   final newDid = _required(handoff, 'newDid');
   final binding = ProductAccountBinding(
@@ -2576,10 +2728,55 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     bootstrap,
     agentConversationId,
   );
+  final recoveredGroupMembers = await groups.listMembers(groupDid, limit: 100);
+  final observedCheckpoint = HandleRecoveryFixtureCheckpoint.fromRaw(
+    caseId: _settingsContinuityCaseId,
+    kind: HandleRecoveryFixtureKind.localData,
+    stage: HandleRecoveryFixtureStage.checkpointReady,
+    runId: config.runId,
+    rawReferences: <String, String>{
+      'admin_identity': binding.ownerIdentityId,
+      'daemon_agent': daemonDid,
+      'direct_peer': peerDid,
+      'external_group_member': peerDid,
+      'transport_group': groupDid,
+      'runtime_agent': runtimeDid,
+      'direct_conversation': directConversationId,
+      'direct_outgoing_message': _required(handoff, 'directOutgoingId'),
+      'direct_incoming_message': _required(handoff, 'directIncomingId'),
+      'direct_read_message': _required(handoff, 'directIncomingId'),
+      'group_conversation': groupConversationId,
+      'group_outgoing_message': _required(handoff, 'groupOutgoingId'),
+      'group_incoming_message': _required(handoff, 'groupIncomingId'),
+      'group_read_message': _required(handoff, 'groupIncomingId'),
+      'agent_conversation': agentConversationId,
+      'agent_prompt_message': _required(handoff, 'agentPromptId'),
+      'agent_reply_message': _required(handoff, 'agentReplyId'),
+    },
+    expectedCounts: <String, int>{
+      'admin_identities': localIdentities.length,
+      'daemon_agents': recoveredAgents.where((agent) => agent.isDaemon).length,
+      'direct_peers': peerSession == null ? 0 : 1,
+      'external_group_members': recoveredGroupMembers.items
+          .where((member) => member.did == peerDid)
+          .length,
+      'transport_groups': 1,
+      'runtime_agents': recoveredAgents
+          .where((agent) => agent.isRuntime)
+          .length,
+      'direct_messages': directHistory.length,
+      'group_messages': groupHistory.length,
+      'group_members': recoveredGroupMembers.items.length,
+      'agent_messages': agentHistory.length,
+      'agent_inventory_items': recoveredAgentDids.length,
+      'conversations': recoveredConversationIds.length,
+    },
+  );
+  observedCheckpoint.requireReplayOf(fixtureCheckpoint!);
   _requireExactStoredMessage(
     directHistory,
     messageId: _required(handoff, 'directOutgoingId'),
-    content: _required(handoff, 'directOutgoingText'),
+    contentReference: _required(handoff, 'directOutgoingContentRef'),
     senderDid: oldDid,
     isMine: true,
     conversationId: directConversationId,
@@ -2587,7 +2784,7 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   _requireExactStoredMessage(
     directHistory,
     messageId: _required(handoff, 'directIncomingId'),
-    content: _required(handoff, 'directIncomingText'),
+    contentReference: _required(handoff, 'directIncomingContentRef'),
     senderDid: peerDid,
     isMine: false,
     conversationId: directConversationId,
@@ -2595,7 +2792,7 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   _requireExactStoredMessage(
     groupHistory,
     messageId: _required(handoff, 'groupOutgoingId'),
-    content: _required(handoff, 'groupOutgoingText'),
+    contentReference: _required(handoff, 'groupOutgoingContentRef'),
     senderDid: oldDid,
     isMine: true,
     conversationId: groupConversationId,
@@ -2603,7 +2800,7 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   _requireExactStoredMessage(
     groupHistory,
     messageId: _required(handoff, 'groupIncomingId'),
-    content: _required(handoff, 'groupIncomingText'),
+    contentReference: _required(handoff, 'groupIncomingContentRef'),
     senderDid: peerDid,
     isMine: false,
     conversationId: groupConversationId,
@@ -2611,7 +2808,7 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   _requireExactStoredMessage(
     agentHistory,
     messageId: _required(handoff, 'agentPromptId'),
-    content: _required(handoff, 'agentPromptText'),
+    contentReference: _required(handoff, 'agentPromptContentRef'),
     senderDid: oldDid,
     isMine: true,
     conversationId: agentConversationId,
@@ -2619,7 +2816,7 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   _requireExactStoredMessage(
     agentHistory,
     messageId: _required(handoff, 'agentReplyId'),
-    content: _required(handoff, 'agentReplyText'),
+    contentReference: _required(handoff, 'agentReplyContentRef'),
     senderDid: runtimeDid,
     isMine: false,
     conversationId: agentConversationId,
