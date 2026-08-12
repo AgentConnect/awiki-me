@@ -438,6 +438,18 @@ void main() {
       _oracleFailure('fixture_stage_regressed'),
     );
   });
+
+  test('Direct fixture establishes the new-replica tail before send', () {
+    final source = File(
+      'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+    ).readAsStringSync();
+    final bootstrap = source.indexOf(
+      "reason: 'handle-recovery-fixture-peer-bootstrap'",
+    );
+    final firstSend = source.indexOf('final directOutgoing =');
+    expect(bootstrap, greaterThanOrEqualTo(0));
+    expect(firstSend, greaterThan(bootstrap));
+  });
 }
 
 HandleRecoveryFixtureCheckpoint _localCheckpoint({
