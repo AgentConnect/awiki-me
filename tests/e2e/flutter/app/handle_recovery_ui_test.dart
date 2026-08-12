@@ -1088,6 +1088,9 @@ class _HandleRecoveryBusinessFixture {
     required this.directIncoming,
     required this.groupDid,
     required this.groupConversationId,
+    required this.group,
+    required this.groupOwner,
+    required this.groupPeer,
     required this.groupOutgoing,
     required this.groupIncoming,
     required this.daemonDid,
@@ -1113,6 +1116,9 @@ class _HandleRecoveryBusinessFixture {
   final ChatMessage directIncoming;
   final String groupDid;
   final String groupConversationId;
+  final GroupSummary group;
+  final GroupMemberSummary groupOwner;
+  final GroupMemberSummary groupPeer;
   final ChatMessage groupOutgoing;
   final ChatMessage groupIncoming;
   final String daemonDid;
@@ -1167,6 +1173,16 @@ class _HandleRecoveryBusinessFixture {
               'direct_incoming_semantic': directIncoming.content,
               'direct_read_message': _requiredMessageId(directIncoming),
               'group_conversation': groupConversationId,
+              'group_display_name': group.displayName,
+              'group_description': group.description,
+              'group_role': _checkpointOptional(group.myRole),
+              'group_membership_status': _checkpointOptional(
+                group.membershipStatus,
+              ),
+              'group_owner_role': groupOwner.role,
+              'group_owner_membership_status': groupOwner.membershipStatus.name,
+              'group_peer_role': groupPeer.role,
+              'group_peer_membership_status': groupPeer.membershipStatus.name,
               'group_outgoing_message': _requiredMessageId(groupOutgoing),
               'group_outgoing_semantic': groupOutgoing.content,
               'group_incoming_message': _requiredMessageId(groupIncoming),
@@ -1453,14 +1469,27 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
       conversationId: group.conversationId,
       message: ownerGroupIncomingProjection,
     );
+    final groupBeforeRecovery = await groups.getGroup(group.groupId);
     final groupMembers = await groups.listMembers(group.groupId, limit: 100);
+    final groupOwner = requireHandleRecoveryExactOne<GroupMemberSummary>(
+      rawItems: groupMembers.items,
+      canonicalMatch: (member) => member.did == ownerDid,
+      semanticMatch: (member) =>
+          member.did == ownerDid &&
+          member.membershipStatus == GroupMemberMembershipStatus.active,
+    );
+    final groupPeer = requireHandleRecoveryExactOne<GroupMemberSummary>(
+      rawItems: groupMembers.items,
+      canonicalMatch: (member) => member.did == peerSession.did,
+      semanticMatch: (member) =>
+          member.did == peerSession.did &&
+          member.membershipStatus == GroupMemberMembershipStatus.active,
+    );
     if (groupMembers.items.length != 2 ||
-        groupMembers.items.where((member) => member.did == ownerDid).length !=
-            1 ||
-        groupMembers.items
-                .where((member) => member.did == peerSession.did)
-                .length !=
-            1) {
+        groupBeforeRecovery.memberCount != groupMembers.items.length ||
+        groupBeforeRecovery.membershipStatus?.trim().toLowerCase() !=
+            'active' ||
+        groupBeforeRecovery.myRole?.trim().isEmpty != false) {
       fail('The Local Data fixture did not retain exact Group metadata.');
     }
     progress.enter(HandleRecoveryFixtureStage.daemon);
@@ -1628,6 +1657,9 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         directIncoming: directIncoming,
         groupDid: group.groupId,
         groupConversationId: group.conversationId,
+        group: groupBeforeRecovery,
+        groupOwner: groupOwner,
+        groupPeer: groupPeer,
         groupOutgoing: groupOutgoing,
         groupIncoming: groupIncoming,
         daemonDid: daemonInstall.daemonDid,
@@ -1649,6 +1681,11 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
   } finally {
     await peerBootstrap.dispose();
   }
+}
+
+String _checkpointOptional(String? value) {
+  final normalized = value?.trim() ?? '';
+  return normalized.isEmpty ? '<absent>' : normalized;
 }
 
 String _requiredMessageId(ChatMessage message) {
@@ -1818,6 +1855,7 @@ Future<void> _waitForRecoveredContinuityGroup({
   required String previousDid,
   required String currentDid,
   required String peerDid,
+  required HandleRecoveryFixtureCheckpoint checkpoint,
 }) async {
   final deadline = DateTime.now().add(const Duration(seconds: 90));
   Object? lastError;
@@ -1834,17 +1872,42 @@ Future<void> _waitForRecoveredContinuityGroup({
       }
       if (projected.length == 1 &&
           projected.single.conversationId == conversationId) {
+        final group = projected.single;
         final members = await bootstrap.groupApplicationService!.listMembers(
           groupDid,
           limit: 100,
         );
-        if (members.items.where((member) => member.did == currentDid).length ==
-                1 &&
+        final ownerMatches = members.items
+            .where((member) => member.did == currentDid)
+            .toList(growable: false);
+        final peerMatches = members.items
+            .where((member) => member.did == peerDid)
+            .toList(growable: false);
+        if (ownerMatches.length == 1 &&
             members.items
                 .where((member) => member.did == previousDid)
                 .isEmpty &&
-            members.items.where((member) => member.did == peerDid).length ==
-                1) {
+            peerMatches.length == 1 &&
+            members.items.length == checkpoint.expectedCount('group_members') &&
+            group.memberCount == checkpoint.expectedCount('group_members')) {
+          checkpoint
+            ..requireReference('group_display_name', group.displayName)
+            ..requireReference('group_description', group.description)
+            ..requireReference('group_role', _checkpointOptional(group.myRole))
+            ..requireReference(
+              'group_membership_status',
+              _checkpointOptional(group.membershipStatus),
+            )
+            ..requireReference('group_owner_role', ownerMatches.single.role)
+            ..requireReference(
+              'group_owner_membership_status',
+              ownerMatches.single.membershipStatus.name,
+            )
+            ..requireReference('group_peer_role', peerMatches.single.role)
+            ..requireReference(
+              'group_peer_membership_status',
+              peerMatches.single.membershipStatus.name,
+            );
           return;
         }
       }
@@ -3052,7 +3115,20 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     previousDid: oldDid,
     currentDid: newDid,
     peerDid: peerDid,
+    checkpoint: checkpoint,
   );
+
+  final groupConversation = await _waitForFixtureConversation(
+    tester: tester,
+    bootstrap: bootstrap,
+    conversations: conversations,
+    ownerDid: newDid,
+    expectedReference: checkpoint.reference('group_conversation'),
+  );
+  if (directConversation.unreadCount != 0 ||
+      groupConversation.unreadCount != 0) {
+    fail('Local Data read state regressed after same-root restart.');
+  }
 
   final recoveredConversationIds = await _waitForContinuityConversationIds(
     tester: tester,
@@ -3097,6 +3173,20 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     agentConversationId,
   );
   final recoveredGroupMembers = await groups.listMembers(groupDid, limit: 100);
+  final recoveredGroupOwner = requireHandleRecoveryExactOne<GroupMemberSummary>(
+    rawItems: recoveredGroupMembers.items,
+    canonicalMatch: (member) => member.did == newDid,
+    semanticMatch: (member) =>
+        member.did == newDid &&
+        member.membershipStatus == GroupMemberMembershipStatus.active,
+  );
+  final recoveredGroupPeer = requireHandleRecoveryExactOne<GroupMemberSummary>(
+    rawItems: recoveredGroupMembers.items,
+    canonicalMatch: (member) => member.did == peerDid,
+    semanticMatch: (member) =>
+        member.did == peerDid &&
+        member.membershipStatus == GroupMemberMembershipStatus.active,
+  );
   final directOutgoingBefore = _requireExactStoredMessageByReference(
     directHistory,
     checkpoint: checkpoint,
@@ -3172,6 +3262,17 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       'direct_incoming_semantic': directIncomingBefore.content,
       'direct_read_message': _requiredMessageId(directIncomingBefore),
       'group_conversation': groupConversationId,
+      'group_display_name': recoveredGroup.displayName,
+      'group_description': recoveredGroup.description,
+      'group_role': _checkpointOptional(recoveredGroup.myRole),
+      'group_membership_status': _checkpointOptional(
+        recoveredGroup.membershipStatus,
+      ),
+      'group_owner_role': recoveredGroupOwner.role,
+      'group_owner_membership_status':
+          recoveredGroupOwner.membershipStatus.name,
+      'group_peer_role': recoveredGroupPeer.role,
+      'group_peer_membership_status': recoveredGroupPeer.membershipStatus.name,
       'group_outgoing_message': _requiredMessageId(groupOutgoingBefore),
       'group_outgoing_semantic': groupOutgoingBefore.content,
       'group_incoming_message': _requiredMessageId(groupIncomingBefore),
@@ -3430,8 +3531,10 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       'settings_recovery_preserved_handle_and_account',
       'did_generation_advanced_exactly_once',
       'same_root_restart_preserved_recovery_state',
+      'direct_and_group_read_state_preserved_after_restart',
       'direct_id_history_ownership_and_bidirectional_send_preserved',
       'handle_backed_transport_group_id_history_and_send_preserved',
+      'group_profile_role_status_count_and_members_preserved',
       'agent_inventory_conversation_history_and_reply_preserved',
       'conversation_message_and_agent_counts_remained_exact',
       'all_key_messages_converged_exactly_once',

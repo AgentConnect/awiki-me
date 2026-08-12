@@ -576,6 +576,14 @@ const Set<String> _freshRootReferences = <String>{
 
 const Set<String> _localDataReferences = <String>{
   ..._freshRootReferences,
+  'group_display_name',
+  'group_description',
+  'group_role',
+  'group_membership_status',
+  'group_owner_role',
+  'group_owner_membership_status',
+  'group_peer_role',
+  'group_peer_membership_status',
   'direct_conversation',
   'peer_direct_conversation',
   'direct_outgoing_message',

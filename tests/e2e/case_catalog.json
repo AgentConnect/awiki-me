@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-12.windows-attachment-long-path",
+  "sourceRevision": "2026-08-12.recovery-local-data-and-windows-attachment-long-path",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
@@ -4623,8 +4623,8 @@
       "preconditions": "One fresh signed-in App owner, one independently rooted App peer, one Handle-backed non-E2EE transport Group, and one real daemon plus Runtime Agent exist on audited awiki.info; the deterministic test gateway substitutes only the external LLM reply.",
       "action": "Seed exact Direct, Group, and Agent prompt/reply history, start Recovery from Settings with the exact local identity, cut after the Core commit, then reopen the same App, peer, and daemon roots and continue all three conversations.",
       "exactOracles": [
-        "Handle, account, stable owner, conversation IDs, Group DID, Agent DIDs, and Runtime handle remain unchanged while DID/generation advances exactly once and the old DID is absent after same-root restart.",
-        "All pre-Recovery Direct, Handle-backed transport Group, and Agent prompt/reply messages remain exact-one; old outgoing messages remain mine; Direct and Group each continue bidirectionally and the original Agent returns one deterministic reply.",
+        "Handle, account, stable owner, conversation IDs, Group DID, Agent DIDs, and Runtime handle remain unchanged while DID/generation advances exactly once and the old DID is absent after same-root restart; Direct and Group read state remains cleared after that restart.",
+        "All pre-Recovery Direct, Handle-backed transport Group, and Agent prompt/reply messages remain exact-one; old outgoing messages remain mine; Group profile, role, membership status, member count, and owner/peer member metadata remain unchanged with the old DID absent and replacement DID exact-one; Direct and Group each continue bidirectionally and the original Agent returns one deterministic reply.",
         "Conversation and Agent ID sets do not change, each thread grows by exactly its two expected post-Recovery messages, and no key message or Agent is duplicated."
       ],
       "negativeChecks": [
@@ -4645,8 +4645,10 @@
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:settings_recovery_preserved_handle_and_account",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:did_generation_advanced_exactly_once",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:same_root_restart_preserved_recovery_state",
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:direct_and_group_read_state_preserved_after_restart",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:direct_id_history_ownership_and_bidirectional_send_preserved",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:handle_backed_transport_group_id_history_and_send_preserved",
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:group_profile_role_status_count_and_members_preserved",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:agent_inventory_conversation_history_and_reply_preserved",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:conversation_message_and_agent_counts_remained_exact",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:all_key_messages_converged_exactly_once"
@@ -4655,11 +4657,13 @@
           [
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:settings_recovery_preserved_handle_and_account",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:did_generation_advanced_exactly_once",
-            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:same_root_restart_preserved_recovery_state"
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:same_root_restart_preserved_recovery_state",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:direct_and_group_read_state_preserved_after_restart"
           ],
           [
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:direct_id_history_ownership_and_bidirectional_send_preserved",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:handle_backed_transport_group_id_history_and_send_preserved",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:group_profile_role_status_count_and_members_preserved",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:agent_inventory_conversation_history_and_reply_preserved"
           ],
           [
@@ -4672,8 +4676,10 @@
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:settings_recovery_preserved_handle_and_account",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:did_generation_advanced_exactly_once",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:same_root_restart_preserved_recovery_state",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:direct_and_group_read_state_preserved_after_restart",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:direct_id_history_ownership_and_bidirectional_send_preserved",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:handle_backed_transport_group_id_history_and_send_preserved",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:group_profile_role_status_count_and_members_preserved",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:agent_inventory_conversation_history_and_reply_preserved",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:conversation_message_and_agent_counts_remained_exact",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:all_key_messages_converged_exactly_once"

@@ -76,6 +76,7 @@ dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-a
 dart run tests/e2e/runner.dart --case multi-device-app-pair --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-app-pair-functional --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-remote-recovery --config <local-awiki-info-config.yaml>
+dart run tests/e2e/runner.dart --case handle-recovery-local-data --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-app-pair-recovery-registration-rejoin-management-transfer --config <explicit-awiki-info-config.yaml>
 ```
 
@@ -99,6 +100,10 @@ Join 加入新 DID，两套 App 的 Registry 与 session 收敛，再与第二�
 双向完成 Direct exact-one，并验证 rejoined sibling own-sync。
 Join 与 Recovery 专项均可在 Linux Flutter desktop runner 或 macOS runner 执行；完整双 App
 Join/re-Join、revoke 与 MLS 矩阵属于第二阶段，不能由本阶段结论外推。
+`handle-recovery-local-data` 只运行现有 Settings Recovery continuity case，保留同一
+App/Core root，并用 secret-free checkpoint 对 Direct/Group/Agent 历史与 ID、Group
+profile/role/status/count、read state、恢复后双向消息和同-root 新进程做 exact-one 验收；
+它不复制 fixture，也不执行基础 onboarding Recovery 或旧 peer re-Join。
 Join 专项还包含 `DEVICE-JOIN-MESSAGE-CORE-E2E-001`：复用已 Join 的 App、同账号 CLI
 sibling 和独立 CLI peer，验证 Direct、own-sync、App offline 后同 root 恢复、可见 read
 提交以及 Core-directed sync 回到 idle；不得用双 App functional suite 冒充。

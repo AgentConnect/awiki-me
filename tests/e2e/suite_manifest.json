@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-12.windows-attachment-long-path",
+  "sourceRevision": "2026-08-12.recovery-local-data-and-windows-attachment-long-path",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -98,7 +98,36 @@
       "caseIds": [
         "HANDLE-RECOVERY-V1-E2E-001",
         "HANDLE-RECOVERY-V1-E2E-002",
-        "HANDLE-RECOVERY-V1-E2E-003",
+        "HANDLE-RECOVERY-V1-E2E-003"
+      ]
+    },
+    "handle-recovery-local-data": {
+      "tier": "remote_product_ui_security",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 30,
+      "timeoutMinutes": 45,
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "handle_recovery_operation",
+        "direct_message",
+        "isolated_app_state",
+        "groups",
+        "group_messages",
+        "agent_inventory",
+        "runtime_agents"
+      ],
+      "caseIds": [
         "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001"
       ]
     },

@@ -37,6 +37,7 @@ const String _multiDeviceRemoteRecoveryScenario =
     'multi-device-handle-recovery-v1';
 const String _multiDeviceRemoteRecoveryFreshScenario =
     'multi-device-handle-recovery-fresh-v1';
+const String _handleRecoveryLocalDataScenario = 'handle-recovery-local-data-v1';
 const String _multiDeviceAppPairRecoveryRegistrationScenario =
     'multi-device-app-pair-recovery-registration-rejoin-management-transfer';
 const String _multiDeviceRemoteRecoveryRunConfigPath =
@@ -123,6 +124,8 @@ const List<String> _multiDeviceRemoteRecoveryCaseIds = <String>[
   'HANDLE-RECOVERY-V1-E2E-001',
   'HANDLE-RECOVERY-V1-E2E-002',
   'HANDLE-RECOVERY-V1-E2E-003',
+];
+const List<String> _handleRecoveryLocalDataCaseIds = <String>[
   'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
 ];
 const List<String> _handleRecoveryFreshCaseIds = <String>[
@@ -534,6 +537,7 @@ class DesktopE2eRunner {
     }
     if (!options.dryRun &&
         (options.e2eCase == DesktopE2eCase.multiDeviceRemoteRecovery ||
+            options.e2eCase == DesktopE2eCase.handleRecoveryLocalData ||
             options.e2eCase == DesktopE2eCase.multiDeviceRemoteRecoveryFresh ||
             options.e2eCase ==
                 DesktopE2eCase.multiDeviceAppPairRecoveryRegistration)) {
@@ -570,6 +574,8 @@ class DesktopE2eRunner {
         case DesktopE2eCase.multiDeviceRemoteJoin:
           await _runRemoteMultiDeviceJoin();
         case DesktopE2eCase.multiDeviceRemoteRecovery:
+          await _runRemoteHandleRecovery();
+        case DesktopE2eCase.handleRecoveryLocalData:
           await _runRemoteHandleRecovery();
         case DesktopE2eCase.multiDeviceRemoteRecoveryFresh:
           await _runRemoteHandleRecovery();
@@ -831,6 +837,8 @@ class DesktopE2eRunner {
         DesktopE2eCase.multiDeviceAppPairRecoveryRegistration;
     final freshOnly =
         options.e2eCase == DesktopE2eCase.multiDeviceRemoteRecoveryFresh;
+    final localDataOnly =
+        options.e2eCase == DesktopE2eCase.handleRecoveryLocalData;
     final recoveryConfig = RemoteHandleRecoveryConfig.from(
       fileConfig: fileConfig,
       environment: Platform.environment,
@@ -856,7 +864,7 @@ class DesktopE2eRunner {
           recoveryConfig.messageServiceUrl,
         ],
       );
-      if (!registrationRejoin) {
+      if (freshOnly || localDataOnly) {
         await commands.requireFile(
           _requiredConfig(
             recoveryConfig.daemonBinary,
@@ -918,10 +926,12 @@ class DesktopE2eRunner {
     if (!options.dryRun && !commands.dryRun) {
       appStateRootDir.createSync(recursive: true);
       multiDeviceAppJoiningStateRootDir.createSync(recursive: true);
-      if (appPairDaemonStateRootDir.existsSync()) {
-        appPairDaemonStateRootDir.deleteSync(recursive: true);
+      if (freshOnly || localDataOnly) {
+        if (appPairDaemonStateRootDir.existsSync()) {
+          appPairDaemonStateRootDir.deleteSync(recursive: true);
+        }
+        appPairDaemonStateRootDir.createSync(recursive: true);
       }
-      appPairDaemonStateRootDir.createSync(recursive: true);
     }
     if (freshOnly) {
       await _runFreshRemoteHandleRecovery();
@@ -938,9 +948,9 @@ class DesktopE2eRunner {
           'integration_test/handle_recovery_ui_test.dart',
           '-d',
           platform.name,
-          ..._caseAttestationDartDefines(const <String>[
-            'HANDLE-RECOVERY-V1-E2E-002',
-            'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
+          ..._caseAttestationDartDefines(<String>[
+            if (!localDataOnly) 'HANDLE-RECOVERY-V1-E2E-002',
+            if (localDataOnly) 'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
           ]),
         ],
         platform: platform,
@@ -962,15 +972,16 @@ class DesktopE2eRunner {
           'integration_test/handle_recovery_ui_test.dart',
           '-d',
           platform.name,
-          ..._caseAttestationDartDefines(const <String>[
-            'HANDLE-RECOVERY-V1-E2E-002',
-            'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
+          ..._caseAttestationDartDefines(<String>[
+            if (!localDataOnly) 'HANDLE-RECOVERY-V1-E2E-002',
+            if (localDataOnly) 'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
           ]),
         ],
         platform: platform,
         timeout: suiteDefinition.timeout,
       );
     });
+    if (localDataOnly) return;
     if (!options.dryRun && !commands.dryRun) {
       appStateRootDir.createSync(recursive: true);
       multiDeviceAppJoiningStateRootDir.createSync(recursive: true);
@@ -4206,6 +4217,7 @@ Usage:
   dart run tests/e2e/runner.dart --case multi-device-remote-join
   dart run tests/e2e/runner.dart --case multi-device-remote-recovery
   dart run tests/e2e/runner.dart --case multi-device-remote-recovery-fresh
+  dart run tests/e2e/runner.dart --case handle-recovery-local-data
   dart run tests/e2e/runner.dart --case multi-device-app-pair-recovery-registration-rejoin-management-transfer
   dart run tests/e2e/runner.dart --case multi-device-app-pair
   dart run tests/e2e/runner.dart --case multi-device-app-pair-functional
@@ -4224,7 +4236,7 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|step4-revoke-mls|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
+  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|step4-revoke-mls|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
                                unattended real App/CLI message-driven
@@ -4239,6 +4251,9 @@ Options:
                                multi-device-remote-recovery-fresh runs only
                                the six Fresh Root business-continuity cases
                                and their cold-process restart verification.
+                               handle-recovery-local-data runs only the
+                               Settings Recovery continuity case over the
+                               preserved App/Core root.
                                multi-device-app-pair-recovery-registration-
                                rejoin-management-transfer runs on Linux/Xvfb
                                or macOS with an explicit awiki.info config and
@@ -5474,6 +5489,7 @@ enum DesktopE2eCase {
   multiDevice(_multiDeviceCapabilityGateCaseIds),
   multiDeviceRemoteJoin(_multiDeviceRemoteJoinCaseIds),
   multiDeviceRemoteRecovery(_multiDeviceRemoteRecoveryCaseIds),
+  handleRecoveryLocalData(_handleRecoveryLocalDataCaseIds),
   multiDeviceRemoteRecoveryFresh(_handleRecoveryFreshCaseIds),
   multiDeviceAppPairRecoveryRegistration(
     _multiDeviceAppPairRecoveryRegistrationCaseIds,
@@ -5508,6 +5524,8 @@ enum DesktopE2eCase {
       DesktopE2eCase.multiDeviceRemoteJoin =>
         'integration_test/multi_device_join_ui_test.dart',
       DesktopE2eCase.multiDeviceRemoteRecovery =>
+        'integration_test/handle_recovery_ui_test.dart',
+      DesktopE2eCase.handleRecoveryLocalData =>
         'integration_test/handle_recovery_ui_test.dart',
       DesktopE2eCase.multiDeviceRemoteRecoveryFresh =>
         'integration_test/handle_recovery_ui_test.dart',
@@ -5558,6 +5576,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         'multi-device-remote-recovery',
+      DesktopE2eCase.handleRecoveryLocalData => 'handle-recovery-local-data',
       DesktopE2eCase.multiDeviceRemoteRecoveryFresh =>
         'multi-device-remote-recovery-fresh',
       DesktopE2eCase.multiDeviceAppPairRecoveryRegistration =>
@@ -5576,6 +5595,7 @@ enum DesktopE2eCase {
       this != DesktopE2eCase.smoke &&
       this != DesktopE2eCase.multiDevice &&
       this != DesktopE2eCase.multiDeviceRemoteRecovery &&
+      this != DesktopE2eCase.handleRecoveryLocalData &&
       this != DesktopE2eCase.multiDeviceRemoteRecoveryFresh &&
       this != DesktopE2eCase.multiDeviceAppPairRecoveryRegistration &&
       this != DesktopE2eCase.multiDeviceAppPair;
@@ -5591,6 +5611,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         'multi-device-remote-recovery',
+      DesktopE2eCase.handleRecoveryLocalData => 'handle-recovery-local-data',
       DesktopE2eCase.multiDeviceRemoteRecoveryFresh =>
         'multi-device-remote-recovery-fresh',
       DesktopE2eCase.multiDeviceAppPairRecoveryRegistration =>
@@ -5619,6 +5640,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.identitySwitch => const Duration(minutes: 10),
       DesktopE2eCase.multiDeviceRemoteJoin => const Duration(minutes: 22),
       DesktopE2eCase.multiDeviceRemoteRecovery => const Duration(minutes: 20),
+      DesktopE2eCase.handleRecoveryLocalData => const Duration(minutes: 45),
       DesktopE2eCase.multiDeviceRemoteRecoveryFresh => const Duration(
         minutes: 45,
       ),
@@ -5647,6 +5669,8 @@ enum DesktopE2eCase {
       DesktopE2eCase.multiDeviceRemoteJoin => _multiDeviceRemoteJoinScenario,
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         _multiDeviceRemoteRecoveryScenario,
+      DesktopE2eCase.handleRecoveryLocalData =>
+        _handleRecoveryLocalDataScenario,
       DesktopE2eCase.multiDeviceRemoteRecoveryFresh =>
         _multiDeviceRemoteRecoveryFreshScenario,
       DesktopE2eCase.multiDeviceAppPairRecoveryRegistration =>
@@ -5669,6 +5693,8 @@ enum DesktopE2eCase {
       DesktopE2eCase.multiDeviceRemoteJoin =>
         _multiDeviceRemoteJoinRunConfigPath,
       DesktopE2eCase.multiDeviceRemoteRecovery =>
+        _multiDeviceRemoteRecoveryRunConfigPath,
+      DesktopE2eCase.handleRecoveryLocalData =>
         _multiDeviceRemoteRecoveryRunConfigPath,
       DesktopE2eCase.multiDeviceRemoteRecoveryFresh =>
         _multiDeviceRemoteRecoveryRunConfigPath,
@@ -5705,6 +5731,10 @@ enum DesktopE2eCase {
       'remote-multi-device-recovery-fresh' ||
       'remote_multi_device_recovery_fresh' =>
         DesktopE2eCase.multiDeviceRemoteRecoveryFresh,
+      'handle-recovery-local-data' ||
+      'handle_recovery_local_data' ||
+      'local-data-recovery' ||
+      'local_data_recovery' => DesktopE2eCase.handleRecoveryLocalData,
       'multi-device-app-pair-recovery-registration-rejoin-management-transfer' ||
       'multi_device_app_pair_recovery_registration_rejoin_management_transfer' =>
         DesktopE2eCase.multiDeviceAppPairRecoveryRegistration,

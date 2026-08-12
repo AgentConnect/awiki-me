@@ -293,13 +293,39 @@ void main() {
         'HANDLE-RECOVERY-V1-E2E-001',
         'HANDLE-RECOVERY-V1-E2E-002',
         'HANDLE-RECOVERY-V1-E2E-003',
-        'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
       ]);
       expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 20));
       expect(
         hyphen.e2eCase.testFile,
         'integration_test/handle_recovery_ui_test.dart',
       );
+    });
+
+    test('parses Local Data Handle Recovery case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'handle-recovery-local-data',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'handle_recovery_local_data',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.handleRecoveryLocalData);
+      expect(underscore.e2eCase, DesktopE2eCase.handleRecoveryLocalData);
+      expect(hyphen.e2eCase.requiresCliPeer, isFalse);
+      expect(hyphen.e2eCase.scenario, 'handle-recovery-local-data-v1');
+      expect(hyphen.e2eCase.caseIds, <String>[
+        'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
+      ]);
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 45));
+      expect(
+        hyphen.e2eCase.testFile,
+        'integration_test/handle_recovery_ui_test.dart',
+      );
+      expect(hyphen.e2eCase.reportScope, 'handle-recovery-local-data');
     });
 
     test('parses Fresh Root Handle Recovery case aliases', () {

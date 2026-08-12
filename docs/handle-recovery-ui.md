@@ -163,6 +163,22 @@ dart run tests/e2e/runner.dart \
   --config <local-awiki-info-config.yaml>
 ```
 
+保留本地数据的 Settings Recovery 使用单 case 薄 selector，复用既有 crash A/B、同一
+App/Core root、peer root 与 daemon root，不执行基础 onboarding Recovery 或旧 peer re-Join：
+
+```bash
+AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
+AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=recovery \
+dart run tests/e2e/runner.dart \
+  --case handle-recovery-local-data \
+  --config <local-awiki-info-config.yaml>
+```
+
+该 case 要求 Direct、Handle-backed Group 与原 Runtime Agent 的 ID/历史保留，恢复后消息
+继续追加；Group profile、role、membership status、member count 和 owner/peer 成员元数据
+保持，old DID 缺失且 replacement DID exact-one；Direct/Group 已读状态经同-root 新进程不
+回退。
+
 上述两个 suite 都只允许受审计的 `https://awiki.info` 配置。注册和 Recovery 复用 ignored、
 权限受限的 local YAML 中同一个测试手机号和六位固定验证码；仍须先调用真实、精确绑定
 purpose/Handle/operation ID 的短信接口。OTP 只在测试进程内读取并注册到 redactor，不能

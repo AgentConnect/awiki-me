@@ -346,6 +346,23 @@ dart run tests/e2e/runner.dart \
   --config <local-awiki-info-config.yaml>
 ```
 
+Run the existing Local Data continuity case independently over the preserved
+App/Core root:
+
+```bash
+AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
+AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=recovery \
+dart run tests/e2e/runner.dart \
+  --case handle-recovery-local-data \
+  --config <local-awiki-info-config.yaml>
+```
+
+This selector reuses the Settings Recovery crash A/B lifecycle and the same
+App/Core, peer, and daemon roots. It runs only
+`HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001`; the base selector does not need
+to run onboarding Recovery or old-peer re-Join to attest Local Data business
+continuity.
+
 This gate uses current purpose `awiki.identity.handle-recovery.v1` and drives
 prepare/risk confirmation/activate/resume through visible Flutter controls.
 After a remote Commit, a typed `local_transition_pending` result keeps the same

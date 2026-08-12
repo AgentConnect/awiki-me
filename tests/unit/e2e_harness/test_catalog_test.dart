@@ -56,6 +56,7 @@ void main() {
           'multi-device-remote-join',
           'multi-device-remote-recovery',
           'multi-device-remote-recovery-fresh',
+          'handle-recovery-local-data',
           'multi-device-app-pair',
           'multi-device-app-pair-functional',
           'step4-revoke-mls',
@@ -84,6 +85,8 @@ void main() {
         'HANDLE-RECOVERY-V1-E2E-001',
         'HANDLE-RECOVERY-V1-E2E-002',
         'HANDLE-RECOVERY-V1-E2E-003',
+      ]);
+      expect(catalog.suiteCaseIds['handle-recovery-local-data'], <String>[
         'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
       ]);
       expect(

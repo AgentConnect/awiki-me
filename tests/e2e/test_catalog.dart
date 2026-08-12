@@ -384,6 +384,13 @@ class AppTestCatalog {
         'not gated by the base suite\'s crash-cut or old-peer re-Join phases.',
       )
       ..writeln(
+        '- `handle-recovery-local-data` independently runs the existing '
+        'Settings Recovery continuity case over one preserved App/Core root. '
+        'It verifies Direct, Group, Agent, read-state, membership metadata, '
+        'exact-count, and same-root restart continuity without executing the '
+        'base Recovery UI or old-peer re-Join cases.',
+      )
+      ..writeln(
         '- `multi-device-app-pair` is the one-host/two-process App↔App mode. '
         'It builds two Debug bundles with stable distinct bundle identifiers, '
         'isolated Flutter build directories, and independent native Core '
