@@ -90,8 +90,29 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
   final SessionEpoch? _ownerEpoch;
   int _loadGeneration = 0;
   int _actionGeneration = 0;
+  Future<void>? _activeLoad;
+  String? _peerPersonaId;
 
-  Future<void> load() async {
+  Future<void> load({String? peerPersonaId, bool forceRefresh = false}) {
+    final normalizedPersonaId = peerPersonaId?.trim() ?? '';
+    if (normalizedPersonaId.isNotEmpty) {
+      _peerPersonaId ??= normalizedPersonaId;
+    }
+    final activeLoad = _activeLoad;
+    if (activeLoad != null) {
+      return activeLoad;
+    }
+    late final Future<void> load;
+    load = _load(forceRefresh: forceRefresh).whenComplete(() {
+      if (identical(_activeLoad, load)) {
+        _activeLoad = null;
+      }
+    });
+    _activeLoad = load;
+    return load;
+  }
+
+  Future<void> _load({required bool forceRefresh}) async {
     final operation = _PeerProfileOperation(
       epoch: _ownerEpoch,
       generation: ++_loadGeneration,
@@ -102,11 +123,13 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
     state = state.copyWith(isLoading: true, clearError: true);
     final UserProfile profile;
     try {
-      profile = await ref.read(
-        peerPublicProfileProvider(
-          PeerPublicProfileRequest(did: did, epoch: operation.epoch),
-        ).future,
+      final request = PeerPublicProfileRequest(
+        did: did,
+        epoch: operation.epoch,
       );
+      profile = await (forceRefresh
+          ? ref.refresh(peerPublicProfileProvider(request).future)
+          : ref.read(peerPublicProfileProvider(request).future));
     } catch (error) {
       if (!_isLoadOperationCurrent(operation)) {
         return;
@@ -123,6 +146,7 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
         .updateFromRemote(
           ownerDid: ownerDid,
           profile: profile,
+          peerPersonaId: _peerPersonaId,
           expectedEpoch: operation.epoch,
         );
     state = state.copyWith(profile: profile, clearError: true);
