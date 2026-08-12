@@ -2059,12 +2059,29 @@ class AppLocalizationsZh extends AppLocalizations {
   String get daemonUpgradeInProgress => '正在升级';
 
   @override
-  String get agentUpgradeIncomplete => '升级没有完成，请检查网络后重试。';
+  String get agentUpgradeIncomplete => '升级没有完成，请稍后重试。';
 
   @override
-  String agentUpgradeDownloadFailed(Object summary) {
-    return '安装包下载失败，请检查网络后重试。$summary';
-  }
+  String get agentUpgradeDownloadFailed => '下载中断，已保留当前进度。请检查网络后重试。';
+
+  @override
+  String get agentUpgradeLegacyDownloadFailed =>
+      '下载中断，请检查网络后重试；若仍失败请重新安装 Daemon。';
+
+  @override
+  String get agentUpgradeIntegrityFailed => '安装包校验失败，重试时将重新下载安装包。';
+
+  @override
+  String get agentUpgradeExtractFailed => '安装包无法解压，请重试升级。';
+
+  @override
+  String get agentUpgradeRestartFailed => '新版本已准备好，但 Daemon 重启失败。请刷新状态或重新安装。';
+
+  @override
+  String get agentUpgradeInstallFailed => 'Daemon 升级未完成，请重试；若仍失败请重新安装。';
+
+  @override
+  String get agentUpgradeRequiresReinstall => 'Daemon 无法自动完成升级，请重新安装。';
 
   @override
   String get agentUpgradeNotCancellable => '当前升级已经进入重启阶段，无法取消。请稍后刷新状态确认结果。';

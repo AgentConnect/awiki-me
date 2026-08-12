@@ -1016,6 +1016,77 @@ void main() {
     },
   );
 
+  testWidgets(
+    'daemon upgrade failure hides diagnostics until details are requested',
+    (tester) async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon:upgrade-error',
+            kind: AgentKind.daemon,
+            displayName: '升级测试 Daemon',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'needs_upgrade',
+              needsUpgrade: true,
+            ),
+          ),
+        ];
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      final context = tester.element(find.byType(AgentsWorkspacePage));
+      final container = ProviderScope.containerOf(context);
+
+      container.read(agentsProvider.notifier).applyControlPayload(<
+        String,
+        Object?
+      >{
+        'schema': AgentControlPayloads.statusSchema,
+        'state': 'failed',
+        'daemon_agent_did': 'did:agent:daemon:upgrade-error',
+        'result': <String, Object?>{
+          'command': 'daemon.upgrade',
+          'status': 'failed',
+          'error_code': 'upgrade_download_failed',
+          'failed_stage': 'downloading',
+          'retryable': true,
+          'last_error_summary':
+              'daemon package download was interrupted after retries',
+          'diagnostic_summary':
+              'download https://anpclaw.com/private/package.tar.gz: request timed out',
+        },
+      });
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('下载中断，已保留当前进度'), findsOneWidget);
+      expect(find.textContaining('https://anpclaw.com'), findsNothing);
+      expect(find.textContaining('request timed out'), findsNothing);
+      expect(find.text('重试'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('agent-error-details')));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('request timed out'), findsOneWidget);
+      expect(find.textContaining('https://anpclaw.com'), findsOneWidget);
+    },
+  );
+
   testWidgets('minimum expanded workspace keeps agent actions in bounds', (
     tester,
   ) async {

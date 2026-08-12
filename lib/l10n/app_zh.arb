@@ -921,13 +921,14 @@
   "daemonUpgradeInstalling": "正在安装新版本",
   "daemonUpgradeRestarting": "正在重启 Daemon",
   "daemonUpgradeInProgress": "正在升级",
-  "agentUpgradeIncomplete": "升级没有完成，请检查网络后重试。",
-  "agentUpgradeDownloadFailed": "安装包下载失败，请检查网络后重试。{summary}",
-  "@agentUpgradeDownloadFailed": {
-    "placeholders": {
-      "summary": {}
-    }
-  },
+  "agentUpgradeIncomplete": "升级没有完成，请稍后重试。",
+  "agentUpgradeDownloadFailed": "下载中断，已保留当前进度。请检查网络后重试。",
+  "agentUpgradeLegacyDownloadFailed": "下载中断，请检查网络后重试；若仍失败请重新安装 Daemon。",
+  "agentUpgradeIntegrityFailed": "安装包校验失败，重试时将重新下载安装包。",
+  "agentUpgradeExtractFailed": "安装包无法解压，请重试升级。",
+  "agentUpgradeRestartFailed": "新版本已准备好，但 Daemon 重启失败。请刷新状态或重新安装。",
+  "agentUpgradeInstallFailed": "Daemon 升级未完成，请重试；若仍失败请重新安装。",
+  "agentUpgradeRequiresReinstall": "Daemon 无法自动完成升级，请重新安装。",
   "agentUpgradeNotCancellable": "当前升级已经进入重启阶段，无法取消。请稍后刷新状态确认结果。",
   "agentUpgradeCancelFailed": "取消升级失败，请刷新状态后重试。",
   "agentUpgradeCancelNoResponse": "取消请求已发送，但 Daemon 暂未响应。请刷新状态确认升级结果。",

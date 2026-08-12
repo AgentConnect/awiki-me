@@ -7,6 +7,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_terminal_notification.dart';
+import 'package:awiki_me/src/presentation/agents/agent_ui_messages.dart';
 
 Future<void> main(List<String> args) async {
   try {
@@ -35,6 +36,7 @@ Future<Map<String, Object?>> _run(List<String> args) async {
     'personal-agent-bootstrap' => await _personalAgentBootstrap(options),
     'submit-task' => _submitTask(options),
     'parse-status' => await _parseStatus(options),
+    'parse-upgrade-failure' => await _parseUpgradeFailure(options),
     'parse-terminal-notification' => await _parseTerminalNotification(options),
     'classify-payload' => await _classifyPayload(options),
     'parse-inventory' => await _parseInventory(options),
@@ -228,6 +230,35 @@ Future<Map<String, Object?>> _parseStatus(Map<String, String> options) async {
   };
 }
 
+Future<Map<String, Object?>> _parseUpgradeFailure(
+  Map<String, String> options,
+) async {
+  final payloadJson = await _readPayloadJson(options);
+  final decoded = jsonDecode(payloadJson);
+  if (decoded is! Map) {
+    throw const _UsageException(
+      'upgrade failure payload must be a JSON object',
+    );
+  }
+  final payload = _objectMap(decoded);
+  final rawResult = payload['result'];
+  if (rawResult is! Map) {
+    throw const _UsageException('upgrade failure result must be a JSON object');
+  }
+  final result = _objectMap(rawResult);
+  final failure = DaemonUpgradeFailureView.fromResult(result);
+  return <String, Object?>{
+    'is_control': AgentControlPayloads.isControl(payloadJson),
+    'is_status': AgentControlPayloads.isStatus(payloadJson),
+    'renderable': !AgentControlPayloads.isControl(payloadJson),
+    'message_code': failure.messageCode,
+    'error_code': failure.errorCode,
+    'failed_stage': failure.failedStage,
+    'retryable': failure.retryable,
+    'has_diagnostic': failure.diagnosticSummary != null,
+  };
+}
+
 Future<Map<String, Object?>> _classifyPayload(
   Map<String, String> options,
 ) async {
@@ -373,6 +404,7 @@ const _usageLines = <String>[
   '  personal-agent-bootstrap --controller-did DID --daemon-agent-did DID --app-instance-id ID --verification-method DID#daemon-key-1 --public-key-multibase KEY --private-key-pem-file PATH --recipient-key-id DID#key-3 --recipient-public-key-b64u KEY [--runtime-registration-token TOKEN] [--run-id ID]',
   '  submit-task --runtime-agent-did DID --text TEXT [--command-id ID] [--task-id ID] [--conversation-id ID]',
   '  parse-status (--json JSON | --json-file PATH | --stdin)',
+  '  parse-upgrade-failure (--json JSON | --json-file PATH | --stdin)',
   '  parse-terminal-notification (--json JSON | --json-file PATH | --stdin) [--repeat COUNT] [--arrival-order status-only|message-first|status-first]',
   '  classify-payload (--json JSON | --json-file PATH | --stdin)',
   '  parse-inventory (--json JSON | --json-file PATH | --stdin)',

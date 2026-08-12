@@ -990,7 +990,7 @@ class _AgentListTile extends StatelessWidget {
     required this.cancellingDaemonUpgrades,
     required this.selected,
     required this.onTap,
-    this.daemonUpgradeErrors = const <String, String>{},
+    this.daemonUpgradeErrors = const <String, DaemonUpgradeFailureView>{},
     this.daemonUpgradeProgress = const <String, DaemonUpgradeProgress>{},
     this.statusQueryErrors = const <String, String>{},
     this.depth = 0,
@@ -1005,7 +1005,7 @@ class _AgentListTile extends StatelessWidget {
   final Set<String> pendingAgentDids;
   final Map<String, PendingDaemonUpgrade> pendingDaemonUpgrades;
   final Map<String, PendingDaemonUpgradeCancel> cancellingDaemonUpgrades;
-  final Map<String, String> daemonUpgradeErrors;
+  final Map<String, DaemonUpgradeFailureView> daemonUpgradeErrors;
   final Map<String, DaemonUpgradeProgress> daemonUpgradeProgress;
   final Map<String, String> statusQueryErrors;
   final bool selected;
@@ -1023,7 +1023,7 @@ class _AgentListTile extends StatelessWidget {
     final theme = context.awikiTheme;
     final isChild = depth > 0;
     final title = localizeAgentTitle(context.l10n, agent);
-    final daemonUpgradeError = daemonUpgradeErrors[agent.agentDid];
+    final daemonUpgradeFailure = daemonUpgradeErrors[agent.agentDid];
     final daemonUpgradeProgress = this.daemonUpgradeProgress[agent.agentDid];
     final visualStatus = pendingRuntimeCreation == null
         ? AgentVisualStatus.fromAgent(
@@ -1033,7 +1033,7 @@ class _AgentListTile extends StatelessWidget {
             isPendingUpgrade: pendingDaemonUpgrades.containsKey(agent.agentDid),
             hasUpgradeError: pendingDaemonUpgrades.containsKey(agent.agentDid)
                 ? false
-                : daemonUpgradeError != null,
+                : daemonUpgradeFailure != null,
             hasStatusQueryError:
                 agent.isDaemon && statusQueryErrors.containsKey(agent.agentDid),
           )
@@ -1152,7 +1152,8 @@ class _AgentListTile extends StatelessWidget {
                                     isCancelling: cancellingDaemonUpgrades
                                         .containsKey(agent.agentDid),
                                     upgradeProgress: daemonUpgradeProgress,
-                                    upgradeError: daemonUpgradeError,
+                                    upgradeError:
+                                        daemonUpgradeFailure?.messageCode,
                                     isDeleting: isDeleting,
                                     pendingRuntimeCreation:
                                         pendingRuntimeCreation,
