@@ -2,7 +2,8 @@
 //          fixture counts, observed canonical collections, and version/read
 //          transitions.
 // [OUTPUT]: A strict secret-free checkpoint plus fail-closed reusable oracles
-//           for Fresh Root and Local Data recovery cases.
+//           and active-stage failure attribution for Fresh Root and Local Data
+//           recovery cases.
 // [POS]: Test-harness-only contract. It must never become a Product/Core state
 //        store and must never persist credentials, full identities, paths, or
 //        message bodies.
@@ -25,10 +26,13 @@ enum HandleRecoveryFixtureKind {
 
 enum HandleRecoveryFixtureStage {
   setup('setup'),
-  identityReady('identity_ready'),
-  directReady('direct_ready'),
-  groupReady('group_ready'),
-  agentReady('agent_ready'),
+  identity('identity'),
+  direct('direct'),
+  group('group'),
+  daemon('daemon'),
+  runtime('runtime'),
+  agentMessage('agent_message'),
+  checkpoint('checkpoint'),
   checkpointReady('checkpoint_ready');
 
   const HandleRecoveryFixtureStage(this.wireName);
@@ -508,7 +512,7 @@ class HandleRecoveryFixtureProgress {
 
   HandleRecoveryFixtureStage get stage => _stage;
 
-  void advance(HandleRecoveryFixtureStage next) {
+  void enter(HandleRecoveryFixtureStage next) {
     if (next.index < _stage.index) {
       throw const HandleRecoveryOracleFailure('fixture_stage_regressed');
     }

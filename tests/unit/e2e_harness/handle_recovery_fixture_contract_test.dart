@@ -365,8 +365,8 @@ void main() {
           caseId: 'HANDLE-RECOVERY-LOCAL-DIRECT-CONTINUITY-E2E-001',
           progress: progress,
           action: () async {
-            progress.advance(HandleRecoveryFixtureStage.identityReady);
-            progress.advance(HandleRecoveryFixtureStage.directReady);
+            progress.enter(HandleRecoveryFixtureStage.identity);
+            progress.enter(HandleRecoveryFixtureStage.direct);
             throw StateError('remote detail is not persisted');
           },
           recordFailure:
@@ -377,8 +377,51 @@ void main() {
         throwsStateError,
       );
       expect(observations, <String>[
-        'HANDLE-RECOVERY-LOCAL-DIRECT-CONTINUITY-E2E-001|direct_ready|'
-            'recovery_fixture_direct_ready_failed',
+        'HANDLE-RECOVERY-LOCAL-DIRECT-CONTINUITY-E2E-001|direct|'
+            'recovery_fixture_direct_failed',
+      ]);
+    },
+  );
+
+  test(
+    'fixture active stages expose a closed stable failure code set',
+    () async {
+      const activeStages = <HandleRecoveryFixtureStage>[
+        HandleRecoveryFixtureStage.identity,
+        HandleRecoveryFixtureStage.direct,
+        HandleRecoveryFixtureStage.group,
+        HandleRecoveryFixtureStage.daemon,
+        HandleRecoveryFixtureStage.runtime,
+        HandleRecoveryFixtureStage.agentMessage,
+        HandleRecoveryFixtureStage.checkpoint,
+      ];
+      final observations = <String>[];
+      for (final stage in activeStages) {
+        final progress = HandleRecoveryFixtureProgress();
+        await expectLater(
+          () => runHandleRecoveryFixtureStage<void>(
+            caseId: 'HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001',
+            progress: progress,
+            action: () async {
+              progress.enter(stage);
+              throw StateError('remote detail is not persisted');
+            },
+            recordFailure:
+                ({required caseId, required stage, required code}) async {
+                  observations.add('$stage|$code');
+                },
+          ),
+          throwsStateError,
+        );
+      }
+      expect(observations, <String>[
+        'identity|recovery_fixture_identity_failed',
+        'direct|recovery_fixture_direct_failed',
+        'group|recovery_fixture_group_failed',
+        'daemon|recovery_fixture_daemon_failed',
+        'runtime|recovery_fixture_runtime_failed',
+        'agent_message|recovery_fixture_agent_message_failed',
+        'checkpoint|recovery_fixture_checkpoint_failed',
       ]);
     },
   );
@@ -431,10 +474,10 @@ void main() {
 
   test('fixture stage tracking cannot move backwards', () {
     final progress = HandleRecoveryFixtureProgress(
-      initial: HandleRecoveryFixtureStage.groupReady,
+      initial: HandleRecoveryFixtureStage.group,
     );
     expect(
-      () => progress.advance(HandleRecoveryFixtureStage.directReady),
+      () => progress.enter(HandleRecoveryFixtureStage.direct),
       _oracleFailure('fixture_stage_regressed'),
     );
   });

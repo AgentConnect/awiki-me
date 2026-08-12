@@ -3,7 +3,9 @@
 //          AppBootstrap/native Core root, and an E2E-only user-presence decision.
 // [OUTPUT]: Secret-free proof that Recovery replaces the DID once, exactly
 //           resumes post-commit local transition, preserves Direct/transport
-//           Group/Agent continuity, and fences an old App principal.
+//           Group/Agent continuity, attributes fixture failure to the active
+//           identity/Direct/Group/Daemon/Runtime/Agent/checkpoint stage, and
+//           fences an old App principal.
 // [POS]: Remote product UI acceptance; setup creates only the remote fixture,
 //        while the tested onboarding or Settings Recovery is UI-driven.
 
@@ -1294,6 +1296,7 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
     fail('Settings Recovery continuity dependencies were unavailable.');
   }
 
+  progress.enter(HandleRecoveryFixtureStage.identity);
   final peerBootstrap = await AppBootstrap.create(
     environment: _environment(
       config,
@@ -1336,8 +1339,7 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         peerSession.did != registeredPeer.did) {
       fail('The continuity peer did not activate its exact identity.');
     }
-    progress.advance(HandleRecoveryFixtureStage.identityReady);
-
+    progress.enter(HandleRecoveryFixtureStage.direct);
     final directOutgoing = await messaging.sendText(
       thread: AppThreadRef.direct(peerSession.did),
       content: 'direct-before-out ${config.runId} ${_nonce(8)}',
@@ -1416,8 +1418,7 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
       conversationId: directConversationId,
       message: ownerIncomingProjection,
     );
-    progress.advance(HandleRecoveryFixtureStage.directReady);
-
+    progress.enter(HandleRecoveryFixtureStage.group);
     final group = await groups.createGroup(
       name: 'Settings Recovery continuity ${_nonce(8)}',
       slug: 'settings-recovery-${_nonce(10)}',
@@ -1489,8 +1490,7 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
             1) {
       fail('The Local Data fixture did not retain exact Group metadata.');
     }
-    progress.advance(HandleRecoveryFixtureStage.groupReady);
-
+    progress.enter(HandleRecoveryFixtureStage.daemon);
     final daemonInstall = await _installContinuityDaemon(
       config: config,
       daemonConfig: daemonConfig,
@@ -1511,6 +1511,7 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         container: container,
         daemonDid: daemonInstall.daemonDid,
       );
+      progress.enter(HandleRecoveryFixtureStage.runtime);
       final runtimeHandle = _uniqueHandle('${config.handlePrefix}runtime');
       final runtimeRequestId = 'recovery-runtime-${_nonce(12)}';
       try {
@@ -1542,6 +1543,7 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         bootstrap: bootstrap,
         runtimeDid: runtimeAgent.agentDid,
       );
+      progress.enter(HandleRecoveryFixtureStage.agentMessage);
       final submittedPrompt = await _plainDirectMessaging(messaging)
           .sendPlainConversationText(
             conversation: agentConversation,
@@ -1573,6 +1575,7 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
       );
       final agentConversationId = _requiredConversationId(reply);
 
+      progress.enter(HandleRecoveryFixtureStage.checkpoint);
       final directHistory = await _loadConversationHistory(
         bootstrap,
         directConversationId,
@@ -1612,7 +1615,6 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         isMine: true,
         conversationId: agentConversationId,
       );
-      progress.advance(HandleRecoveryFixtureStage.agentReady);
       _requireExactMessage(
         agentHistory,
         expected: reply,
@@ -1639,7 +1641,6 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
           agentConversationId,
         },
       );
-      progress.advance(HandleRecoveryFixtureStage.checkpointReady);
       return _HandleRecoveryBusinessFixture(
         kind: kind,
         registrationRetryAt: peerFactor.retryAt,
