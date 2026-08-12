@@ -452,6 +452,30 @@ class E2eCaseAttestationWriter {
     required List<String> phases,
     DateTime? startedAt,
   }) async {
+    await _mark(caseId, status: 'passed', phases: phases, startedAt: startedAt);
+  }
+
+  /// Records a stable, payload-free focused-case failure so sibling cases can
+  /// continue and retain their own final status in a shared remote scenario.
+  static Future<void> markFailed(
+    String caseId, {
+    required String phase,
+    DateTime? startedAt,
+  }) async {
+    await _mark(
+      caseId,
+      status: 'failed',
+      phases: <String>[phase],
+      startedAt: startedAt,
+    );
+  }
+
+  static Future<void> _mark(
+    String caseId, {
+    required String status,
+    required List<String> phases,
+    DateTime? startedAt,
+  }) async {
     final path = e2eInvocationValue(
       e2eCaseAttestationPathDefine,
       compiledValue: const String.fromEnvironment(e2eCaseAttestationPathDefine),
@@ -519,7 +543,7 @@ class E2eCaseAttestationWriter {
     final now = DateTime.now().toUtc();
     final result = E2eCaseAttestationResult(
       caseId: caseId,
-      status: 'passed',
+      status: status,
       startedAt: (startedAt ?? now).toUtc().toIso8601String(),
       finishedAt: now.toIso8601String(),
       phases: normalizedPhases,

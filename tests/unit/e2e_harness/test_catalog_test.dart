@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(108));
+      expect(catalog.cases, hasLength(114));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -80,6 +80,11 @@ void main() {
         'HANDLE-RECOVERY-V1-E2E-002',
         'HANDLE-RECOVERY-V1-E2E-003',
         'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
+        'HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001',
+        'HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001',
+        'HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001',
+        'HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001',
+        'HANDLE-RECOVERY-FRESH-RESTART-E2E-001',
       ]);
       expect(catalog.suiteCaseIds['multi-device-app-pair'], <String>[
         'DEVICE-JOIN-E2E-004',

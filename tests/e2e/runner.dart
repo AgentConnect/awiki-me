@@ -121,6 +121,14 @@ const List<String> _multiDeviceRemoteRecoveryCaseIds = <String>[
   'HANDLE-RECOVERY-V1-E2E-002',
   'HANDLE-RECOVERY-V1-E2E-003',
   'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
+  ..._handleRecoveryFreshCaseIds,
+];
+const List<String> _handleRecoveryFreshCaseIds = <String>[
+  'HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001',
+  'HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001',
+  'HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001',
+  'HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001',
+  'HANDLE-RECOVERY-FRESH-RESTART-E2E-001',
 ];
 const List<String> _multiDeviceAppPairRecoveryRegistrationCaseIds = <String>[
   'HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001',
@@ -963,6 +971,48 @@ class DesktopE2eRunner {
         ],
       );
     });
+    if (!options.dryRun && !commands.dryRun) {
+      appStateRootDir.createSync(recursive: true);
+      multiDeviceAppJoiningStateRootDir.createSync(recursive: true);
+      if (appPairDaemonStateRootDir.existsSync()) {
+        appPairDaemonStateRootDir.deleteSync(recursive: true);
+      }
+      appPairDaemonStateRootDir.createSync(recursive: true);
+    }
+    Object? freshFailure;
+    try {
+      await _timed('Flutter Fresh Root business continuity lifecycle', () {
+        return _runFlutterTest(
+          'integration_test/handle_recovery_ui_test.dart',
+          caseIds: _handleRecoveryFreshCaseIds,
+        );
+      });
+    } catch (error) {
+      freshFailure = error;
+    }
+    try {
+      await _timed('Flutter Fresh Root cold restart verification', () {
+        return _runFlutterArgs(
+          <String>[
+            'test',
+            '--dart-define=AWIKI_E2E=true',
+            '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
+            '--dart-define=AWIKI_HANDLE_RECOVERY_E2E_PHASE=fresh_restart',
+            'integration_test/handle_recovery_ui_test.dart',
+            '-d',
+            platform.name,
+            ..._caseAttestationDartDefines(const <String>[
+              'HANDLE-RECOVERY-FRESH-RESTART-E2E-001',
+            ]),
+          ],
+          platform: platform,
+          timeout: suiteDefinition.timeout,
+        );
+      });
+    } catch (error) {
+      freshFailure ??= error;
+    }
+    if (freshFailure != null) throw freshFailure;
   }
 
   Future<void> _runRemoteMultiDeviceAppPair() async {

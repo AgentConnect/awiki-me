@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-12.multi-device-content-sync",
+  "sourceRevision": "2026-08-12.handle-recovery-fresh-state",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -75,8 +75,8 @@
         "release"
       ],
       "owner": "awiki-me-identity",
-      "estimatedMinutes": 25,
-      "timeoutMinutes": 30,
+      "estimatedMinutes": 40,
+      "timeoutMinutes": 45,
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
       "allowedHosts": [
         "awiki.info"
@@ -99,7 +99,12 @@
         "HANDLE-RECOVERY-V1-E2E-001",
         "HANDLE-RECOVERY-V1-E2E-002",
         "HANDLE-RECOVERY-V1-E2E-003",
-        "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001"
+        "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001",
+        "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001",
+        "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001",
+        "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001",
+        "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001",
+        "HANDLE-RECOVERY-FRESH-RESTART-E2E-001"
       ]
     },
     "multi-device-app-pair-recovery-registration-rejoin-management-transfer": {

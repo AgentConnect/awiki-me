@@ -15,6 +15,7 @@ import 'dart:math';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
+import 'package:awiki_me/src/app/e2e_semantics.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/agent/agent_control_service.dart';
@@ -38,18 +39,23 @@ import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
+import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/l10n/l10n.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/account_state_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
+import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
@@ -76,6 +82,25 @@ const String _settingsContinuityCaseId =
 const String _rejoinCaseId = 'HANDLE-RECOVERY-V1-E2E-003';
 const String _registrationRejoinCaseId =
     'HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001';
+const String _freshAgentInventoryCaseId =
+    'HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001';
+const String _freshAgentMessageCaseId =
+    'HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001';
+const String _freshDirectInboundCaseId =
+    'HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001';
+const String _freshGroupRebindCaseId =
+    'HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001';
+const String _freshGroupInboundCaseId =
+    'HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001';
+const String _freshRestartCaseId = 'HANDLE-RECOVERY-FRESH-RESTART-E2E-001';
+const List<String> _freshFocusedCaseIds = <String>[
+  _freshAgentInventoryCaseId,
+  _freshAgentMessageCaseId,
+  _freshDirectInboundCaseId,
+  _freshGroupRebindCaseId,
+  _freshGroupInboundCaseId,
+  _freshRestartCaseId,
+];
 const String _e2ePhase = String.fromEnvironment(
   'AWIKI_HANDLE_RECOVERY_E2E_PHASE',
 );
@@ -104,11 +129,14 @@ void main() {
       final registrationRejoinRequired = _invocationExpects(
         _registrationRejoinCaseId,
       );
+      final freshFocusedRequired = _freshFocusedCaseIds.any(_invocationExpects);
       final rejoinRequired =
           _invocationExpects(_rejoinCaseId) || registrationRejoinRequired;
       final httpClient = http.Client();
       AppBootstrap? bootstrap;
       AppBootstrap? peerBootstrap;
+      _RunningContinuityDaemon? freshDaemon;
+      var retainFreshRoots = false;
       await tester.binding.setSurfaceSize(const Size(1440, 900));
       _requireFreshRoot(config.appStateRoot);
       if (rejoinRequired) {
@@ -121,10 +149,15 @@ void main() {
         httpClient.close();
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
+        await freshDaemon?.stop();
         await bootstrap?.dispose();
         await peerBootstrap?.dispose();
-        await _deleteDirectory(config.appStateRoot);
-        await _deleteDirectory(config.peerAppStateRoot);
+        if (!retainFreshRoots) {
+          await _deleteDirectory(config.appStateRoot);
+          await _deleteDirectory(config.peerAppStateRoot);
+          final daemonRoot = config.daemonStateRoot;
+          if (daemonRoot != null) await _deleteDirectory(daemonRoot);
+        }
         await tester.binding.setSurfaceSize(null);
       });
 
@@ -133,6 +166,7 @@ void main() {
           config,
           directE2eeEnabled: registrationRejoinRequired,
           groupE2eeEnabled: false,
+          agentImEnabled: freshFocusedRequired,
         ),
         appStateRoot: config.appStateRoot,
       );
@@ -166,23 +200,114 @@ void main() {
       final initialRegistry = await bootstrap.deviceManagementCorePort!
           .identityDeviceRegistry(oldDid);
       _requireReadyCurrentAdmin(initialRegistry, expectedDid: oldDid);
-      final recoveryGroup = await bootstrap.groupApplicationService!
-          .createGroup(
-            name: 'Recovery continuity ${_nonce(8)}',
-            slug: 'recovery-${_nonce(10)}',
-            description: 'Handle Recovery group continuity',
-            goal: 'Verify old transport group continuity',
-            rules: 'E2E only',
-            identity: GroupIdentitySelection.handle(fullHandle),
-          );
-      final oldGroupText = 'before recovery ${config.runId} ${_nonce(8)}';
-      final oldGroupMessage = await bootstrap.messagingService!.sendText(
-        thread: AppThreadRef.group(recoveryGroup.groupId),
-        content: oldGroupText,
-      );
-      if (oldGroupMessage.remoteId?.trim().isEmpty != false ||
-          oldGroupMessage.sendState != MessageSendState.sent) {
-        fail('The pre-Recovery transport Group message was not committed.');
+      _FreshRecoveryFixtureSnapshot? freshSnapshot;
+      if (freshFocusedRequired) {
+        await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+        await _pumpUntil(
+          tester,
+          () => find.byType(AppShell).evaluate().length == 1,
+          timeout: const Duration(seconds: 45),
+          failure: 'Fresh Recovery setup did not open the authenticated App.',
+        );
+        final setupContainer = ProviderScope.containerOf(
+          tester.element(find.byType(AppShell)),
+        );
+        final progress = HandleRecoveryFixtureProgress();
+        final daemonConfig = _requireContinuityDaemonConfig(config);
+        final fixture = await runHandleRecoveryFixtureStage(
+          caseId: _freshAgentInventoryCaseId,
+          progress: progress,
+          action: () => _seedHandleRecoveryBusinessFixture(
+            tester: tester,
+            config: config,
+            account: account,
+            bootstrap: bootstrap!,
+            container: setupContainer,
+            inventory: setupContainer.read(agentInventoryPortProvider),
+            agentControl: setupContainer.read(agentControlServiceProvider),
+            conversations: setupContainer.read(conversationServiceProvider),
+            ownerSession: oldSession,
+            registrationRetryAt: registrationFactor.retryAt,
+            daemonConfig: daemonConfig,
+            progress: progress,
+            kind: HandleRecoveryFixtureKind.freshRoot,
+          ),
+          recordFailure: ({required caseId, required stage, required code}) =>
+              E2eFailureObservationWriter.recordFirst(
+                layer: 'app_projection',
+                status: 'fatal',
+                code: code,
+                caseId: caseId,
+              ),
+        );
+        final agents = await setupContainer
+            .read(agentInventoryPortProvider)
+            .listAgents(includeInactive: true);
+        final daemon = requireHandleRecoveryExactOne<AgentSummary>(
+          rawItems: agents,
+          canonicalMatch: (agent) => agent.agentDid == fixture.daemonDid,
+          semanticMatch: (agent) => agent.isDaemon,
+        );
+        final runtime = requireHandleRecoveryExactOne<AgentSummary>(
+          rawItems: agents,
+          canonicalMatch: (agent) => agent.agentDid == fixture.runtimeDid,
+          semanticMatch: (agent) =>
+              agent.isRuntime &&
+              agent.daemonAgentDid == fixture.daemonDid &&
+              agent.handle == fixture.runtimeHandle,
+        );
+        final group = await _waitForFixtureGroup(
+          tester: tester,
+          container: setupContainer,
+          expectedReference: handleRecoveryFixtureReference(fixture.groupDid),
+        );
+        final members = await bootstrap.groupApplicationService!.listMembers(
+          fixture.groupDid,
+          limit: 100,
+        );
+        final accountState = await _requestFreshAccountState(
+          tester: tester,
+          container: setupContainer,
+          reason: 'fresh-recovery-fixture-ready',
+        );
+        final checkpoint = fixture.checkpoint(
+          caseId: _freshAgentInventoryCaseId,
+          runId: config.runId,
+          stableOwnerIdentityId: oldSession.identityId,
+        );
+        freshSnapshot = _FreshRecoveryFixtureSnapshot(
+          fixture: fixture,
+          checkpoint: checkpoint,
+          daemon: daemon,
+          runtime: runtime,
+          group: group,
+          members: members.items,
+          accountStateVersions: accountState.domainVersions,
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      }
+      GroupSummary? recoveryGroup;
+      ChatMessage? oldGroupMessage;
+      String? oldGroupText;
+      if (!freshFocusedRequired) {
+        recoveryGroup = await bootstrap.groupApplicationService!.createGroup(
+          name: 'Recovery continuity ${_nonce(8)}',
+          slug: 'recovery-${_nonce(10)}',
+          description: 'Handle Recovery group continuity',
+          goal: 'Verify old transport group continuity',
+          rules: 'E2E only',
+          identity: GroupIdentitySelection.handle(fullHandle),
+        );
+        oldGroupText = 'before recovery ${config.runId} ${_nonce(8)}';
+        oldGroupMessage = await bootstrap.messagingService!.sendText(
+          thread: AppThreadRef.group(recoveryGroup.groupId),
+          content: oldGroupText,
+        );
+        if (oldGroupMessage.remoteId?.trim().isEmpty != false ||
+            oldGroupMessage.sendState != MessageSendState.sent) {
+          fail('The pre-Recovery transport Group message was not committed.');
+        }
       }
       var latestOtpRetryAt = registrationFactor.retryAt;
       String? oldPeerDeviceId;
@@ -248,6 +373,7 @@ void main() {
           config,
           directE2eeEnabled: registrationRejoinRequired,
           groupE2eeEnabled: false,
+          agentImEnabled: freshFocusedRequired,
         ),
         appStateRoot: config.appStateRoot,
       );
@@ -627,16 +753,45 @@ void main() {
               'message_workspace_visible=${find.byType(ConversationWorkspacePage).evaluate().isNotEmpty}';
         },
       );
-      await _verifyRecoveredTransportGroupContinuity(
-        container: container,
-        bootstrap: bootstrap,
-        groupDid: recoveryGroup.groupId,
-        previousDid: oldDid,
-        currentDid: reset.currentDid,
-        oldMessageId: oldGroupMessage.remoteId!,
-        oldMessageText: oldGroupText,
-        runId: config.runId,
-      );
+      if (!freshFocusedRequired) {
+        await _verifyRecoveredTransportGroupContinuity(
+          container: container,
+          bootstrap: bootstrap,
+          groupDid: recoveryGroup!.groupId,
+          previousDid: oldDid,
+          currentDid: reset.currentDid,
+          oldMessageId: oldGroupMessage!.remoteId!,
+          oldMessageText: oldGroupText!,
+          runId: config.runId,
+        );
+      } else {
+        Object? focusedFailure;
+        try {
+          await _runFreshFocusedGates(
+            tester: tester,
+            config: config,
+            bootstrap: bootstrap,
+            container: container,
+            snapshot: freshSnapshot!,
+            oldDid: oldDid,
+            newDid: reset.currentDid,
+            startedAt: startedAt,
+            startDaemon: () async {
+              freshDaemon ??= await _RunningContinuityDaemon.start(
+                config: config,
+                daemonConfig: _requireContinuityDaemonConfig(config),
+                gatewayScript: await _writeContinuityHermesGateway(
+                  _requireContinuityDaemonConfig(config),
+                ),
+              );
+            },
+          );
+        } catch (error) {
+          focusedFailure = error;
+        }
+        retainFreshRoots = _invocationExpects(_freshRestartCaseId);
+        if (focusedFailure != null) throw focusedFailure;
+      }
 
       if (rejoinRequired) {
         if (peerBootstrap == null || oldPeerDeviceId == null) {
@@ -832,10 +987,15 @@ void main() {
         !_RemoteRecoveryRunConfig.exists() ||
         (!_invocationExpects(_caseId) &&
             !_invocationExpects(_rejoinCaseId) &&
-            !_invocationExpects(_registrationRejoinCaseId)),
+            !_invocationExpects(_registrationRejoinCaseId) &&
+            !_freshFocusedCaseIds.any(_invocationExpects)),
     timeout: Timeout(
       Duration(
-        minutes: _invocationExpects(_registrationRejoinCaseId) ? 25 : 20,
+        minutes: _invocationExpects(_registrationRejoinCaseId)
+            ? 25
+            : _freshFocusedCaseIds.any(_invocationExpects)
+            ? 35
+            : 20,
       ),
     ),
   );
@@ -866,6 +1026,16 @@ void main() {
     timeout: Timeout(
       Duration(minutes: _invocationExpects(_settingsContinuityCaseId) ? 15 : 8),
     ),
+  );
+
+  testWidgets(
+    'Fresh Handle Recovery survives a cold App process restart',
+    _runFreshRecoveryRestart,
+    skip:
+        _e2ePhase != 'fresh_restart' ||
+        !_RemoteRecoveryRunConfig.exists() ||
+        !_invocationExpects(_freshRestartCaseId),
+    timeout: const Timeout(Duration(minutes: 12)),
   );
 }
 
@@ -999,6 +1169,26 @@ class _HandleRecoveryBusinessFixture {
             },
     );
   }
+}
+
+class _FreshRecoveryFixtureSnapshot {
+  const _FreshRecoveryFixtureSnapshot({
+    required this.fixture,
+    required this.checkpoint,
+    required this.daemon,
+    required this.runtime,
+    required this.group,
+    required this.members,
+    required this.accountStateVersions,
+  });
+
+  final _HandleRecoveryBusinessFixture fixture;
+  final HandleRecoveryFixtureCheckpoint checkpoint;
+  final AgentSummary daemon;
+  final AgentSummary runtime;
+  final GroupSummary group;
+  final List<GroupMemberSummary> members;
+  final Map<ProductAccountDomain, String> accountStateVersions;
 }
 
 _ContinuityDaemonConfig _requireContinuityDaemonConfig(
@@ -3198,6 +3388,910 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       'all_key_messages_converged_exactly_once',
     ],
   );
+}
+
+class _FreshFocusedEvidence {
+  String? directConversationId;
+  String? directInboundMessageId;
+  String? directReplyMessageId;
+  String? groupConversationId;
+  String? groupInboundMessageId;
+  String? groupReplyMessageId;
+  String? agentConversationId;
+  String? agentPromptMessageId;
+  String? agentReplyMessageId;
+}
+
+Future<AccountStateSyncCoordinatorState> _requestFreshAccountState({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String reason,
+}) async {
+  final previous = container
+      .read(accountStateSyncCoordinatorProvider)
+      .lastCompletedAt;
+  await container
+      .read(accountStateSyncCoordinatorProvider.notifier)
+      .request(reason, force: true);
+  await _pumpUntil(
+    tester,
+    () {
+      final state = container.read(accountStateSyncCoordinatorProvider);
+      return !state.isSyncing &&
+          state.pendingReason == null &&
+          state.lastCompletedAt != null &&
+          state.lastCompletedAt != previous;
+    },
+    timeout: const Duration(seconds: 45),
+    failure: 'Fresh Recovery Account State did not quiesce.',
+  );
+  final state = container.read(accountStateSyncCoordinatorProvider);
+  if (state.status != AccountStateSyncCoordinatorStatus.ready ||
+      state.domainErrors.isNotEmpty ||
+      state.domainVersions.length != ProductAccountDomain.values.length ||
+      state.domainVersions.values.any(
+        (version) => !RegExp(r'^(0|[1-9][0-9]*)$').hasMatch(version),
+      )) {
+    fail('Fresh Recovery Account State did not converge in all four domains.');
+  }
+  return state;
+}
+
+Future<void> _runFreshFocusedGates({
+  required WidgetTester tester,
+  required _RemoteRecoveryRunConfig config,
+  required AppBootstrap bootstrap,
+  required ProviderContainer container,
+  required _FreshRecoveryFixtureSnapshot snapshot,
+  required String oldDid,
+  required String newDid,
+  required DateTime startedAt,
+  required Future<void> Function() startDaemon,
+}) async {
+  final evidence = _FreshFocusedEvidence();
+  final failedCases = <String>[];
+  final conversations = bootstrap.conversationService!;
+  final preInbound = await conversations.listConversations(
+    ownerDid: newDid,
+    limit: 100,
+  );
+  if (preInbound.any(
+    (conversation) =>
+        conversation.targetDid == snapshot.fixture.peerDid ||
+        conversation.targetDid == snapshot.fixture.runtimeDid,
+  )) {
+    fail('Fresh Recovery restored an old ordinary Direct/Agent conversation.');
+  }
+
+  Future<void> runCase(
+    String caseId,
+    List<String> phases,
+    Future<void> Function() action,
+  ) async {
+    if (!_invocationExpects(caseId)) return;
+    try {
+      await action();
+      await _markFreshFocusedPassed(
+        caseId,
+        startedAt: startedAt,
+        phases: phases,
+      );
+    } catch (_) {
+      failedCases.add(caseId);
+      await E2eCaseAttestationWriter.markFailed(
+        caseId,
+        startedAt: startedAt,
+        phase: 'focused_gate_failed',
+      );
+    }
+  }
+
+  await startDaemon();
+  await _waitForContinuityDaemonReady(
+    tester: tester,
+    container: container,
+    daemonDid: snapshot.fixture.daemonDid,
+  );
+  await runCase(
+    _freshAgentInventoryCaseId,
+    const <String>[
+      'fresh_root_had_no_old_local_identity_or_ordinary_conversation',
+      'four_account_state_domains_converged_without_version_regression',
+      'daemon_inventory_metadata_and_status_version_preserved_exactly_once',
+      'runtime_inventory_metadata_and_parent_preserved_exactly_once',
+      'registry_kept_only_the_replacement_identity',
+    ],
+    () async {
+      final state = await _requestFreshAccountState(
+        tester: tester,
+        container: container,
+        reason: 'fresh-agent-inventory',
+      );
+      requireHandleRecoveryAccountStateVersions(
+        previous: <String, String>{
+          for (final entry in snapshot.accountStateVersions.entries)
+            entry.key.storageValue: entry.value,
+        },
+        current: <String, String>{
+          for (final entry in state.domainVersions.entries)
+            entry.key.storageValue: entry.value,
+        },
+        advancedDomains: const <String>{},
+      );
+      final inventory = container.read(agentInventoryPortProvider);
+      final daemon = await _waitForFixtureAgent(
+        tester: tester,
+        inventory: inventory,
+        expectedReference: snapshot.checkpoint.reference('daemon_agent'),
+        description: 'Fresh Recovery Daemon Agent',
+        semanticMatch: (agent) =>
+            agent.isDaemon &&
+            agent.handle == snapshot.daemon.handle &&
+            agent.displayName == snapshot.daemon.displayName &&
+            agent.activeState == snapshot.daemon.activeState &&
+            agent.latest.version == snapshot.daemon.latest.version,
+      );
+      await _waitForFixtureAgent(
+        tester: tester,
+        inventory: inventory,
+        expectedReference: snapshot.checkpoint.reference('runtime_agent'),
+        description: 'Fresh Recovery Runtime Agent',
+        semanticMatch: (agent) =>
+            agent.isRuntime &&
+            agent.handle == snapshot.runtime.handle &&
+            agent.displayName == snapshot.runtime.displayName &&
+            agent.activeState == snapshot.runtime.activeState &&
+            agent.daemonAgentDid == daemon.agentDid,
+      );
+      final registry = await bootstrap.deviceManagementCorePort!
+          .identityDeviceRegistry(newDid);
+      _requireReadyCurrentAdmin(registry, expectedDid: newDid);
+      if ((await bootstrap.appSessionService!.listLocalIdentities()).any(
+        (identity) => identity.did == oldDid,
+      )) {
+        fail('Fresh Recovery retained the previous DID locally.');
+      }
+    },
+  );
+
+  await runCase(
+    _freshGroupRebindCaseId,
+    const <String>[
+      'group_identity_profile_role_status_and_count_preserved',
+      'old_member_replaced_by_recovery_did_without_duplicate',
+      'joined_at_and_stale_generation_product_oracles_available',
+    ],
+    () async {
+      final group = await _waitForFixtureGroup(
+        tester: tester,
+        container: container,
+        expectedReference: snapshot.checkpoint.reference('transport_group'),
+      );
+      final members = await bootstrap.groupApplicationService!.listMembers(
+        group.groupId,
+        limit: 100,
+      );
+      if (group.conversationId != snapshot.group.conversationId ||
+          group.displayName != snapshot.group.displayName ||
+          group.description != snapshot.group.description ||
+          group.myRole != snapshot.group.myRole ||
+          group.membershipStatus != snapshot.group.membershipStatus ||
+          group.memberCount != snapshot.group.memberCount ||
+          members.items.length != snapshot.members.length ||
+          members.items.where((member) => member.did == newDid).length != 1 ||
+          members.items.any((member) => member.did == oldDid) ||
+          members.items.map((member) => member.did).toSet().length !=
+              members.items.length) {
+        fail('Fresh Recovery Group rebind changed canonical metadata.');
+      }
+      // The public product DTO currently has no joined_at and the Fresh test
+      // has no reviewed stale-generation writer that avoids copying old root.
+      // Keep this case explicitly failed until both product oracles exist.
+      throw const HandleRecoveryOracleFailure(
+        'fresh_group_rebind_testability_incomplete',
+      );
+    },
+  );
+
+  final peerBootstrap = await AppBootstrap.create(
+    environment: _environment(
+      config,
+      groupE2eeEnabled: false,
+      agentImEnabled: true,
+    ),
+    appStateRoot: config.peerAppStateRoot,
+  );
+  try {
+    final peerSession = await peerBootstrap.appSessionService!.currentSession();
+    if (peerSession == null || peerSession.did != snapshot.fixture.peerDid) {
+      fail('Fresh Recovery external peer fixture was not preserved.');
+    }
+    final recoveredSession = await bootstrap.appSessionService!
+        .currentSession();
+    final recoveredHandle = recoveredSession?.handle?.trim().toLowerCase();
+    if (recoveredHandle == null) {
+      fail('Fresh Recovery current Handle was unavailable.');
+    }
+    final resolved = await peerBootstrap.directoryApplicationService!
+        .lookupHandle(recoveredHandle);
+    if (resolved.did != newDid || resolved.did == oldDid) {
+      fail('The external peer did not re-resolve the Handle to the new DID.');
+    }
+
+    await runCase(
+      _freshDirectInboundCaseId,
+      const <String>[
+        'external_peer_resolved_handle_to_replacement_did',
+        'old_did_direct_send_was_fenced',
+        'inbound_created_one_canonical_direct_without_manual_prerequisite',
+        'preview_and_unread_rendered_before_open',
+        'inbound_and_visible_ui_reply_converged_exactly_once',
+      ],
+      () async {
+        final inbound = await peerBootstrap.messagingService!.sendText(
+          thread: AppThreadRef.direct(resolved.did),
+          content: 'fresh-direct-in ${config.runId} ${_nonce(8)}',
+        );
+        final projection = await _syncAndWaitForAppThreadExactOne(
+          tester: tester,
+          appBootstrap: bootstrap,
+          thread: AppThreadRef.direct(peerSession.did),
+          messageId: _requiredMessageId(inbound),
+          content: inbound.content,
+          senderDid: peerSession.did,
+          receiverDid: newDid,
+          isMine: false,
+        );
+        final conversationId = _requiredConversationId(projection);
+        evidence
+          ..directConversationId = conversationId
+          ..directInboundMessageId = _requiredMessageId(projection);
+        await _requireFreshInboundRowAndOpen(
+          tester: tester,
+          container: container,
+          conversationId: conversationId,
+          content: inbound.content,
+        );
+        final reply = await _sendFreshConversationReplyThroughUi(
+          tester: tester,
+          bootstrap: bootstrap,
+          conversationId: conversationId,
+          senderDid: newDid,
+          receiverDid: peerSession.did,
+          content: 'fresh-direct-out ${config.runId} ${_nonce(8)}',
+        );
+        evidence.directReplyMessageId = _requiredMessageId(reply);
+        await _syncAndWaitForAppThreadExactOne(
+          tester: tester,
+          appBootstrap: peerBootstrap,
+          thread: AppThreadRef.direct(newDid),
+          messageId: _requiredMessageId(reply),
+          content: reply.content,
+          senderDid: newDid,
+          receiverDid: peerSession.did,
+          isMine: false,
+        );
+        var oldDidRejected = false;
+        try {
+          await peerBootstrap.messagingService!.sendText(
+            thread: AppThreadRef.direct(oldDid),
+            content: 'fresh-old-did-negative ${config.runId}',
+          );
+        } catch (_) {
+          oldDidRejected = true;
+        }
+        if (!oldDidRejected) {
+          fail('The external peer could still send to the old DID.');
+        }
+      },
+    );
+
+    await runCase(
+      _freshGroupInboundCaseId,
+      const <String>[
+        'external_member_sent_after_rebind_without_local_group_history_copy',
+        'group_conversation_group_did_and_wire_thread_remained_canonical',
+        'preview_and_unread_rendered_before_open',
+        'inbound_and_visible_ui_reply_converged_exactly_once',
+      ],
+      () async {
+        final inbound = await peerBootstrap.messagingService!.sendText(
+          thread: AppThreadRef.group(snapshot.fixture.groupDid),
+          content: 'fresh-group-in ${config.runId} ${_nonce(8)}',
+        );
+        final projection = await _waitForGroupMessageExactOne(
+          tester: tester,
+          bootstrap: bootstrap,
+          groupDid: snapshot.fixture.groupDid,
+          messageId: _requiredMessageId(inbound),
+          content: inbound.content,
+          senderDid: peerSession.did,
+          isMine: false,
+          conversationId: snapshot.fixture.groupConversationId,
+        );
+        evidence
+          ..groupConversationId = _requiredConversationId(projection)
+          ..groupInboundMessageId = _requiredMessageId(projection);
+        await _requireFreshInboundRowAndOpen(
+          tester: tester,
+          container: container,
+          conversationId: snapshot.fixture.groupConversationId,
+          content: inbound.content,
+        );
+        final reply = await _sendFreshConversationReplyThroughUi(
+          tester: tester,
+          bootstrap: bootstrap,
+          conversationId: snapshot.fixture.groupConversationId,
+          senderDid: newDid,
+          groupDid: snapshot.fixture.groupDid,
+          content: 'fresh-group-out ${config.runId} ${_nonce(8)}',
+        );
+        evidence.groupReplyMessageId = _requiredMessageId(reply);
+        await _waitForGroupMessageExactOne(
+          tester: tester,
+          bootstrap: peerBootstrap,
+          groupDid: snapshot.fixture.groupDid,
+          messageId: _requiredMessageId(reply),
+          content: reply.content,
+          senderDid: newDid,
+          isMine: false,
+          conversationId: snapshot.fixture.groupConversationId,
+        );
+      },
+    );
+
+    await runCase(
+      _freshAgentMessageCaseId,
+      const <String>[
+        'original_runtime_selected_from_visible_agents_ui',
+        'prompt_sent_through_visible_composer_without_manual_conversation',
+        'runtime_received_replacement_controller_and_replied',
+        'prompt_and_reply_converged_exactly_once',
+      ],
+      () async {
+        await container.read(agentsProvider.notifier).ensureLoaded();
+        await _tapOne(
+          tester,
+          find.bySemanticsIdentifier('e2e-agents-tab'),
+          failure: 'Fresh Recovery Agents tab was unavailable.',
+        );
+        await _pumpUntil(
+          tester,
+          () => find.byType(AgentsWorkspacePage).evaluate().length == 1,
+          failure: 'Fresh Recovery Agents workspace did not open.',
+        );
+        final runtime = await _waitForFixtureAgent(
+          tester: tester,
+          inventory: container.read(agentInventoryPortProvider),
+          expectedReference: snapshot.checkpoint.reference('runtime_agent'),
+          description: 'Fresh Recovery Runtime Agent message target',
+          semanticMatch: (agent) =>
+              agent.isRuntime &&
+              agent.daemonAgentDid == snapshot.fixture.daemonDid,
+        );
+        container.read(agentsProvider.notifier).select(runtime.agentDid);
+        await tester.pump(const Duration(milliseconds: 200));
+        await _tapOne(
+          tester,
+          find.text(
+            tester.element(find.byType(AgentsWorkspacePage)).l10n.agentOpenChat,
+          ),
+          failure: 'Fresh Recovery Runtime Agent chat action was unavailable.',
+        );
+        final promptText = 'fresh-agent ${config.runId} ${_nonce(8)}';
+        final input = find.bySemanticsIdentifier('e2e-chat-input');
+        await _pumpUntil(
+          tester,
+          () => input.evaluate().length == 1,
+          failure: 'Fresh Recovery Runtime Agent composer was unavailable.',
+        );
+        await tester.enterText(input, promptText);
+        await _tapOne(
+          tester,
+          find.bySemanticsIdentifier('e2e-chat-send-button'),
+          failure: 'Fresh Recovery Runtime Agent send action was unavailable.',
+        );
+        final prompt = await _waitForFreshSemanticMessage(
+          tester: tester,
+          bootstrap: bootstrap,
+          ownerDid: newDid,
+          targetDid: runtime.agentDid,
+          content: promptText,
+          senderDid: newDid,
+          isMine: true,
+        );
+        final reply = await _waitForAgentReply(
+          tester: tester,
+          bootstrap: bootstrap,
+          runtimeDid: runtime.agentDid,
+          conversationId: _requiredConversationId(prompt),
+          expectedContent: '$_agentReplyPrefix${prompt.content}',
+          existingMessageIds: <String>{_requiredMessageId(prompt)},
+        );
+        evidence
+          ..agentConversationId = _requiredConversationId(prompt)
+          ..agentPromptMessageId = _requiredMessageId(prompt)
+          ..agentReplyMessageId = _requiredMessageId(reply);
+      },
+    );
+  } finally {
+    await peerBootstrap.dispose();
+  }
+
+  if (_invocationExpects(_freshRestartCaseId)) {
+    try {
+      await _writeFreshRestartHandoff(
+        config: config,
+        snapshot: snapshot,
+        newDid: newDid,
+        evidence: evidence,
+      );
+    } catch (_) {
+      failedCases.add(_freshRestartCaseId);
+      await E2eCaseAttestationWriter.markFailed(
+        _freshRestartCaseId,
+        startedAt: startedAt,
+        phase: 'restart_handoff_incomplete',
+      );
+    }
+  }
+  if (failedCases.isNotEmpty) {
+    fail('Fresh Recovery focused gates failed: ${failedCases.join(', ')}');
+  }
+}
+
+Future<void> _markFreshFocusedPassed(
+  String caseId, {
+  required DateTime startedAt,
+  required List<String> phases,
+}) => switch (caseId) {
+  _freshAgentInventoryCaseId => E2eCaseAttestationWriter.markPassed(
+    _freshAgentInventoryCaseId,
+    startedAt: startedAt,
+    phases: phases,
+  ),
+  _freshAgentMessageCaseId => E2eCaseAttestationWriter.markPassed(
+    _freshAgentMessageCaseId,
+    startedAt: startedAt,
+    phases: phases,
+  ),
+  _freshDirectInboundCaseId => E2eCaseAttestationWriter.markPassed(
+    _freshDirectInboundCaseId,
+    startedAt: startedAt,
+    phases: phases,
+  ),
+  _freshGroupRebindCaseId => E2eCaseAttestationWriter.markPassed(
+    _freshGroupRebindCaseId,
+    startedAt: startedAt,
+    phases: phases,
+  ),
+  _freshGroupInboundCaseId => E2eCaseAttestationWriter.markPassed(
+    _freshGroupInboundCaseId,
+    startedAt: startedAt,
+    phases: phases,
+  ),
+  _ => throw StateError('Unsupported Fresh Recovery focused case.'),
+};
+
+Future<void> _requireFreshInboundRowAndOpen({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String conversationId,
+  required String content,
+}) async {
+  await _tapOne(
+    tester,
+    find.bySemanticsIdentifier('e2e-messages-tab'),
+    failure: 'Fresh Recovery Messages tab was unavailable.',
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      final matches = container
+          .read(conversationListProvider)
+          .conversations
+          .where((item) => item.conversationId == conversationId)
+          .toList(growable: false);
+      if (matches.length > 1) {
+        fail('Fresh Recovery projected a duplicate conversation row.');
+      }
+      return matches.length == 1 &&
+          matches.single.lastMessagePreview == content &&
+          matches.single.unreadCount > 0 &&
+          find
+                  .byKey(Key('conversation-row:$conversationId'))
+                  .evaluate()
+                  .length ==
+              1;
+    },
+    timeout: const Duration(seconds: 60),
+    failure: 'Fresh Recovery inbound preview/unread did not converge.',
+  );
+  final row = find.byKey(Key('conversation-row:$conversationId'));
+  final unread = find.descendant(
+    of: row,
+    matching: find.byKey(const Key('conversation-row-unread-badge')),
+  );
+  if (unread.evaluate().length != 1) {
+    fail('Fresh Recovery inbound row did not render one unread badge.');
+  }
+  await _tapOne(
+    tester,
+    row,
+    failure: 'Fresh Recovery exact inbound conversation did not open.',
+  );
+  await _pumpUntil(
+    tester,
+    () => find
+        .bySemanticsIdentifier(e2eMessageIdentifier(content))
+        .evaluate()
+        .isNotEmpty,
+    timeout: const Duration(seconds: 60),
+    failure: 'Fresh Recovery inbound message was not visibly rendered.',
+  );
+}
+
+Future<ChatMessage> _sendFreshConversationReplyThroughUi({
+  required WidgetTester tester,
+  required AppBootstrap bootstrap,
+  required String conversationId,
+  required String senderDid,
+  String? receiverDid,
+  String? groupDid,
+  required String content,
+}) async {
+  final input = find.bySemanticsIdentifier('e2e-chat-input');
+  await _pumpUntil(
+    tester,
+    () => input.evaluate().length == 1,
+    failure: 'Fresh Recovery conversation composer was unavailable.',
+  );
+  await tester.enterText(input, content);
+  await _tapOne(
+    tester,
+    find.bySemanticsIdentifier('e2e-chat-send-button'),
+    failure: 'Fresh Recovery visible reply action was unavailable.',
+  );
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(deadline)) {
+    await bootstrap.messageSyncService!.syncNow(
+      reason: 'fresh-recovery-visible-reply',
+      limit: 100,
+    );
+    final history = await _loadConversationHistory(bootstrap, conversationId);
+    final matches = history
+        .where(
+          (message) =>
+              message.content == content &&
+              message.senderDid == senderDid &&
+              message.isMine &&
+              (receiverDid == null || message.receiverDid == receiverDid) &&
+              (groupDid == null || message.groupId == groupDid),
+        )
+        .toList(growable: false);
+    if (matches.length > 1) {
+      fail('Fresh Recovery visible reply was duplicated.');
+    }
+    if (matches.length == 1 &&
+        matches.single.sendState == MessageSendState.sent) {
+      return matches.single;
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 550));
+  }
+  fail('Fresh Recovery visible reply did not commit exactly once.');
+}
+
+Future<ChatMessage> _waitForFreshSemanticMessage({
+  required WidgetTester tester,
+  required AppBootstrap bootstrap,
+  required String ownerDid,
+  required String targetDid,
+  required String content,
+  required String senderDid,
+  required bool isMine,
+}) async {
+  final conversations = bootstrap.conversationService!;
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(deadline)) {
+    await bootstrap.messageSyncService!.syncNow(
+      reason: 'fresh-recovery-agent-message',
+      limit: 100,
+    );
+    final candidates = (await conversations.listConversations(
+      ownerDid: ownerDid,
+      limit: 100,
+    )).where((item) => item.targetDid == targetDid).toList(growable: false);
+    if (candidates.length > 1) {
+      fail('Fresh Recovery created duplicate Agent conversations.');
+    }
+    if (candidates.length == 1) {
+      final history = await _loadConversationHistory(
+        bootstrap,
+        candidates.single.conversationId,
+      );
+      final matches = history
+          .where(
+            (message) =>
+                message.content == content &&
+                message.senderDid == senderDid &&
+                message.isMine == isMine,
+          )
+          .toList(growable: false);
+      if (matches.length > 1) {
+        fail('Fresh Recovery Agent semantic message was duplicated.');
+      }
+      if (matches.length == 1) return matches.single;
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 550));
+  }
+  fail('Fresh Recovery Agent message did not converge.');
+}
+
+Future<void> _writeFreshRestartHandoff({
+  required _RemoteRecoveryRunConfig config,
+  required _FreshRecoveryFixtureSnapshot snapshot,
+  required String newDid,
+  required _FreshFocusedEvidence evidence,
+}) async {
+  final rawReferences = <String, String?>{
+    'current_identity': newDid,
+    'daemon_agent': snapshot.fixture.daemonDid,
+    'runtime_agent': snapshot.fixture.runtimeDid,
+    'transport_group': snapshot.fixture.groupDid,
+    'direct_conversation': evidence.directConversationId,
+    'direct_inbound_message': evidence.directInboundMessageId,
+    'direct_reply_message': evidence.directReplyMessageId,
+    'group_conversation': evidence.groupConversationId,
+    'group_inbound_message': evidence.groupInboundMessageId,
+    'group_reply_message': evidence.groupReplyMessageId,
+    'agent_conversation': evidence.agentConversationId,
+    'agent_prompt_message': evidence.agentPromptMessageId,
+    'agent_reply_message': evidence.agentReplyMessageId,
+  };
+  if (rawReferences.values.any((value) => value?.trim().isEmpty != false)) {
+    throw const HandleRecoveryOracleFailure('restart_handoff_incomplete');
+  }
+  final payload = <String, Object?>{
+    'schemaVersion': 1,
+    'stage': 'fresh_business_ready',
+    'runRef': handleRecoveryFixtureReference(config.runId),
+    'references': <String, String>{
+      for (final entry in rawReferences.entries)
+        entry.key: handleRecoveryFixtureReference(entry.value!),
+    },
+    'expectedCounts': <String, int>{
+      'local_identities': 1,
+      'focused_conversations': 3,
+      'fixture_agents': snapshot.fixture.agentDids.length,
+    },
+  };
+  final file = File(config.crashCutHandoffPath);
+  await file.parent.create(recursive: true);
+  final temporary = File('${file.path}.tmp');
+  await temporary.writeAsString(jsonEncode(payload), flush: true);
+  await temporary.rename(file.path);
+  if (!Platform.isWindows) {
+    await Process.run('chmod', <String>['600', file.path]);
+  }
+}
+
+Future<void> _runFreshRecoveryRestart(WidgetTester tester) async {
+  final startedAt = DateTime.now().toUtc();
+  final config = _RemoteRecoveryRunConfig.load();
+  final handoffFile = File(config.crashCutHandoffPath);
+  if (!handoffFile.existsSync()) {
+    await E2eCaseAttestationWriter.markFailed(
+      _freshRestartCaseId,
+      startedAt: startedAt,
+      phase: 'restart_handoff_missing',
+    );
+    fail('Fresh Recovery restart handoff was missing.');
+  }
+  final decoded = jsonDecode(handoffFile.readAsStringSync());
+  if (decoded is! Map ||
+      decoded['schemaVersion'] != 1 ||
+      decoded['stage'] != 'fresh_business_ready' ||
+      decoded['runRef'] != handleRecoveryFixtureReference(config.runId)) {
+    fail('Fresh Recovery restart handoff was invalid.');
+  }
+  final references = _freshStringMap(decoded, 'references');
+  final expectedCounts = _freshIntMap(decoded, 'expectedCounts');
+  const expectedReferenceNames = <String>{
+    'current_identity',
+    'daemon_agent',
+    'runtime_agent',
+    'transport_group',
+    'direct_conversation',
+    'direct_inbound_message',
+    'direct_reply_message',
+    'group_conversation',
+    'group_inbound_message',
+    'group_reply_message',
+    'agent_conversation',
+    'agent_prompt_message',
+    'agent_reply_message',
+  };
+  if (!_sameStrings(references.keys, expectedReferenceNames) ||
+      !_sameStrings(expectedCounts.keys, const <String>{
+        'local_identities',
+        'focused_conversations',
+        'fixture_agents',
+      })) {
+    fail('Fresh Recovery restart handoff shape was not exact.');
+  }
+  final bootstrap = await AppBootstrap.create(
+    environment: _environment(
+      config,
+      groupE2eeEnabled: false,
+      agentImEnabled: true,
+    ),
+    appStateRoot: config.appStateRoot,
+  );
+  await tester.binding.setSurfaceSize(const Size(1440, 900));
+  addTearDown(() async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await bootstrap.dispose();
+    await _deleteDirectory(config.appStateRoot);
+    await _deleteDirectory(config.peerAppStateRoot);
+    if (config.daemonStateRoot != null) {
+      await _deleteDirectory(config.daemonStateRoot!);
+    }
+    if (handoffFile.existsSync()) await handoffFile.delete();
+    await tester.binding.setSurfaceSize(null);
+  });
+  await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+  late ProviderContainer container;
+  await _pumpUntil(
+    tester,
+    () {
+      final shell = find.byType(AppShell);
+      if (shell.evaluate().length != 1) return false;
+      container = ProviderScope.containerOf(tester.element(shell));
+      final session = container.read(sessionProvider).session;
+      return session != null &&
+          handleRecoveryFixtureReference(session.did) ==
+              references['current_identity'];
+    },
+    timeout: const Duration(seconds: 60),
+    failure: 'Fresh Recovery cold restart did not restore current identity.',
+  );
+  final state = await _requestFreshAccountState(
+    tester: tester,
+    container: container,
+    reason: 'fresh-recovery-cold-restart',
+  );
+  if (state.domainVersions.length != ProductAccountDomain.values.length) {
+    fail('Fresh Recovery restart lost an Account State domain.');
+  }
+  final session = await bootstrap.appSessionService!.currentSession();
+  final identities = await bootstrap.appSessionService!.listLocalIdentities();
+  if (session == null ||
+      identities.length != expectedCounts['local_identities'] ||
+      identities.where((item) => item.did == session.did).length != 1) {
+    fail('Fresh Recovery restart local identity inventory was not exact.');
+  }
+  final conversations = await bootstrap.conversationService!.listConversations(
+    ownerDid: session.did,
+    limit: 100,
+  );
+  final focusedConversationRefs = <String>{
+    references['direct_conversation']!,
+    references['group_conversation']!,
+    references['agent_conversation']!,
+  };
+  final focused = conversations
+      .where(
+        (item) => focusedConversationRefs.contains(
+          handleRecoveryFixtureReference(item.conversationId),
+        ),
+      )
+      .toList(growable: false);
+  if (focused.length != expectedCounts['focused_conversations'] ||
+      focused.map((item) => item.conversationId).toSet().length !=
+          focused.length ||
+      focused.any((item) => item.unreadCount != 0)) {
+    fail('Fresh Recovery restart duplicated a conversation or regressed read.');
+  }
+  final expectedMessageRefs = <String>{
+    references['direct_inbound_message']!,
+    references['direct_reply_message']!,
+    references['group_inbound_message']!,
+    references['group_reply_message']!,
+    references['agent_prompt_message']!,
+    references['agent_reply_message']!,
+  };
+  final observedMessageRefs = <String>[];
+  for (final conversation in focused) {
+    final history = await _loadConversationHistory(
+      bootstrap,
+      conversation.conversationId,
+    );
+    observedMessageRefs.addAll(
+      history.map(
+        (message) =>
+            handleRecoveryFixtureReference(_requiredMessageId(message)),
+      ),
+    );
+  }
+  for (final expected in expectedMessageRefs) {
+    if (observedMessageRefs.where((value) => value == expected).length != 1) {
+      fail('Fresh Recovery restart did not preserve a key message exact-one.');
+    }
+  }
+  final agents = await container
+      .read(agentInventoryPortProvider)
+      .listAgents(includeInactive: true);
+  if (agents.length != expectedCounts['fixture_agents'] ||
+      agents.map((agent) => agent.agentDid).toSet().length != agents.length) {
+    fail('Fresh Recovery restart changed Agent inventory cardinality.');
+  }
+  for (final key in const <String>['daemon_agent', 'runtime_agent']) {
+    if (agents
+            .where(
+              (agent) =>
+                  handleRecoveryFixtureReference(agent.agentDid) ==
+                  references[key],
+            )
+            .length !=
+        1) {
+      fail('Fresh Recovery restart lost a fixture Agent exact-one.');
+    }
+  }
+  final groups = bootstrap.groupApplicationService!;
+  final groupCandidates = await groups.listGroups(limit: 100);
+  if (groupCandidates.items
+          .where(
+            (group) =>
+                handleRecoveryFixtureReference(group.groupId) ==
+                references['transport_group'],
+          )
+          .length !=
+      1) {
+    fail('Fresh Recovery restart lost the canonical Group exact-one.');
+  }
+  final registry = await bootstrap.deviceManagementCorePort!
+      .identityDeviceRegistry(session.did);
+  _requireReadyCurrentAdmin(registry, expectedDid: session.did);
+  await E2eCaseAttestationWriter.markPassed(
+    _freshRestartCaseId,
+    startedAt: startedAt,
+    phases: const <String>[
+      'same_fresh_recovery_root_reopened_in_new_flutter_process',
+      'current_identity_and_four_account_state_domains_persisted',
+      'direct_group_and_agent_conversations_remained_exactly_once',
+      'six_post_recovery_messages_remained_exactly_once',
+      'read_state_did_not_regress',
+      'group_agent_inventory_and_registry_did_not_duplicate_or_revert',
+    ],
+  );
+}
+
+Map<String, String> _freshStringMap(Map<dynamic, dynamic> root, String key) {
+  final value = root[key];
+  if (value is! Map ||
+      value.keys.any((item) => item is! String) ||
+      value.values.any((item) => item is! String)) {
+    throw FormatException('$key must be a string map');
+  }
+  return <String, String>{
+    for (final entry in value.entries)
+      entry.key.toString(): entry.value.toString(),
+  };
+}
+
+Map<String, int> _freshIntMap(Map<dynamic, dynamic> root, String key) {
+  final value = root[key];
+  if (value is! Map ||
+      value.keys.any((item) => item is! String) ||
+      value.values.any((item) => item is! int)) {
+    throw FormatException('$key must be an integer map');
+  }
+  return <String, int>{
+    for (final entry in value.entries) entry.key.toString(): entry.value as int,
+  };
 }
 
 Future<void> _writeCrashCutHandoff(
