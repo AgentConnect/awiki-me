@@ -1294,7 +1294,7 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
       receiverDid: peerSession.did,
       isMine: true,
     );
-    final peerOutgoingProjection = await _syncAndWaitForAppThreadExactOne(
+    await _syncAndWaitForAppThreadExactOne(
       tester: tester,
       appBootstrap: peerBootstrap,
       thread: AppThreadRef.direct(ownerDid),
@@ -1324,12 +1324,23 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
       receiverDid: ownerDid,
       isMine: false,
     );
-    final directConversationId = _requiredConversationId(
-      ownerIncomingProjection,
+    final directConversation = await _waitForDirectConversation(
+      tester: tester,
+      bootstrap: bootstrap,
+      ownerDid: ownerDid,
+      peerDid: peerSession.did,
+      content: directIncoming.content,
+      unreadCount: 1,
     );
-    final peerDirectConversationId = _requiredConversationId(
-      peerOutgoingProjection,
+    final peerDirectConversation = await _waitForDirectConversation(
+      tester: tester,
+      bootstrap: peerBootstrap,
+      ownerDid: peerSession.did,
+      peerDid: ownerDid,
+      content: directIncoming.content,
     );
+    final directConversationId = directConversation.conversationId;
+    final peerDirectConversationId = peerDirectConversation.conversationId;
     final peerDirectHistory = await _loadConversationHistory(
       peerBootstrap,
       peerDirectConversationId,
@@ -3559,7 +3570,7 @@ Future<void> _runFreshFocusedGates({
     const <String>[
       'group_identity_profile_role_status_and_count_preserved',
       'old_member_replaced_by_recovery_did_without_duplicate',
-      'joined_at_and_stale_generation_product_oracles_available',
+      'public_product_projection_rebind_converged_exactly_once',
     ],
     () async {
       final group = await _waitForFixtureGroup(
@@ -3571,9 +3582,30 @@ Future<void> _runFreshFocusedGates({
         group.groupId,
         limit: 100,
       );
+      final previousOwner = requireHandleRecoveryExactOne<GroupMemberSummary>(
+        rawItems: snapshot.members,
+        canonicalMatch: (member) => member.did == oldDid,
+        semanticMatch: (member) => member.did == oldDid,
+      );
+      final recoveredOwner = requireHandleRecoveryExactOne<GroupMemberSummary>(
+        rawItems: members.items,
+        canonicalMatch: (member) => member.did == newDid,
+        semanticMatch: (member) => member.did == newDid,
+      );
+      final previousPeer = requireHandleRecoveryExactOne<GroupMemberSummary>(
+        rawItems: snapshot.members,
+        canonicalMatch: (member) => member.did == snapshot.fixture.peerDid,
+        semanticMatch: (member) => member.did == snapshot.fixture.peerDid,
+      );
+      final recoveredPeer = requireHandleRecoveryExactOne<GroupMemberSummary>(
+        rawItems: members.items,
+        canonicalMatch: (member) => member.did == snapshot.fixture.peerDid,
+        semanticMatch: (member) => member.did == snapshot.fixture.peerDid,
+      );
       if (group.conversationId != snapshot.group.conversationId ||
           group.displayName != snapshot.group.displayName ||
           group.description != snapshot.group.description ||
+          group.avatarUri != snapshot.group.avatarUri ||
           group.myRole != snapshot.group.myRole ||
           group.membershipStatus != snapshot.group.membershipStatus ||
           group.memberCount != snapshot.group.memberCount ||
@@ -3584,11 +3616,15 @@ Future<void> _runFreshFocusedGates({
               members.items.length) {
         fail('Fresh Recovery Group rebind changed canonical metadata.');
       }
-      // The public product DTO currently has no joined_at and the Fresh test
-      // has no reviewed stale-generation writer that avoids copying old root.
-      // Keep this case explicitly failed until both product oracles exist.
-      throw const HandleRecoveryOracleFailure(
-        'fresh_group_rebind_testability_incomplete',
+      _requireFreshGroupMemberMetadataPreserved(
+        previous: previousOwner,
+        current: recoveredOwner,
+        allowDidReplacement: true,
+      );
+      _requireFreshGroupMemberMetadataPreserved(
+        previous: previousPeer,
+        current: recoveredPeer,
+        allowDidReplacement: false,
       );
     },
   );
@@ -3642,7 +3678,15 @@ Future<void> _runFreshFocusedGates({
           receiverDid: newDid,
           isMine: false,
         );
-        final conversationId = _requiredConversationId(projection);
+        final conversation = await _waitForDirectConversation(
+          tester: tester,
+          bootstrap: bootstrap,
+          ownerDid: newDid,
+          peerDid: peerSession.did,
+          content: inbound.content,
+          unreadCount: 1,
+        );
+        final conversationId = conversation.conversationId;
         evidence
           ..directConversationId = conversationId
           ..directInboundMessageId = _requiredMessageId(projection);
@@ -3837,6 +3881,28 @@ Future<void> _runFreshFocusedGates({
   }
   if (failedCases.isNotEmpty) {
     fail('Fresh Recovery focused gates failed: ${failedCases.join(', ')}');
+  }
+}
+
+void _requireFreshGroupMemberMetadataPreserved({
+  required GroupMemberSummary previous,
+  required GroupMemberSummary current,
+  required bool allowDidReplacement,
+}) {
+  if ((!allowDidReplacement && current.did != previous.did) ||
+      current.userId != previous.userId ||
+      current.handle != previous.handle ||
+      current.role != previous.role ||
+      current.membershipId != previous.membershipId ||
+      current.peerPersonaId != previous.peerPersonaId ||
+      (!allowDidReplacement &&
+          current.credentialDid != previous.credentialDid) ||
+      (!allowDidReplacement && current.profileUrl != previous.profileUrl) ||
+      current.displayName != previous.displayName ||
+      current.avatarUri != previous.avatarUri ||
+      current.subjectType != previous.subjectType ||
+      current.membershipStatus != previous.membershipStatus) {
+    fail('Fresh Recovery changed public Group member metadata.');
   }
 }
 
@@ -5940,6 +6006,61 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
     await Future<void>.delayed(const Duration(milliseconds: 550));
   }
   fail('An App did not converge the exact thread message.');
+}
+
+Future<ConversationSummary> _waitForDirectConversation({
+  required WidgetTester tester,
+  required AppBootstrap bootstrap,
+  required String ownerDid,
+  required String peerDid,
+  required String content,
+  int? unreadCount,
+}) async {
+  final conversations = bootstrap.conversationService;
+  final sync = bootstrap.messageSyncService;
+  if (conversations == null || sync == null) {
+    fail('Handle Recovery fixture lacked canonical conversation sync.');
+  }
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(deadline)) {
+    await sync.syncNow(reason: 'fresh-recovery-direct-inbound', limit: 100);
+    final items = await conversations.listConversations(
+      ownerDid: ownerDid,
+      limit: 100,
+    );
+    try {
+      final selected = requireHandleRecoveryExactOne<ConversationSummary>(
+        rawItems: items,
+        canonicalMatch: (conversation) =>
+            !conversation.isGroup && conversation.targetDid == peerDid,
+        semanticMatch: (conversation) =>
+            !conversation.isGroup &&
+            conversation.lastMessagePreview == content &&
+            (unreadCount == null || conversation.unreadCount == unreadCount),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      final stable = await conversations.listConversations(
+        ownerDid: ownerDid,
+        limit: 100,
+      );
+      requireHandleRecoveryExactOne<ConversationSummary>(
+        rawItems: stable,
+        canonicalMatch: (conversation) =>
+            conversation.conversationId == selected.conversationId,
+        semanticMatch: (conversation) =>
+            !conversation.isGroup &&
+            conversation.targetDid == peerDid &&
+            conversation.lastMessagePreview == content &&
+            (unreadCount == null || conversation.unreadCount == unreadCount),
+      );
+      return selected;
+    } on HandleRecoveryOracleFailure catch (error) {
+      if (error.code != 'canonical_exact_one_failed') rethrow;
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 550));
+  }
+  fail('Handle Recovery fixture did not project one exact Direct row.');
 }
 
 Future<List<ChatMessage>> _loadExactThreadCandidates({

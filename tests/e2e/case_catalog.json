@@ -4266,15 +4266,15 @@
     },
     {
       "caseId": "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001",
-      "feature": "Fresh Handle Recovery atomically rebinds the Handle-backed Group member generation",
+      "feature": "Fresh Handle Recovery projects the rebound Handle-backed Group membership",
       "layer": "remote_product_ui_security",
-      "preconditions": "The setup account owns one Handle-backed transport Group with one independent external member and canonical member metadata.",
-      "action": "Complete Fresh Recovery and inspect the high-level App Group projection and roster, then exercise a reviewed stale-generation write control.",
+      "preconditions": "The setup account owns one Handle-backed transport Group with one independent external member and canonical member metadata; the release evidence set separately requires the System remote-recovery P4 atomicity case.",
+      "action": "Complete Fresh Recovery and inspect the high-level App Group projection and roster without copying the setup root or issuing a lower-layer rebind from the App test.",
       "exactOracles": [
-        "Group identity, conversation, profile, role, status, joined_at, and count remain stable; exactly one replacement-DID member exists, the old DID and duplicates are absent, and a stale-generation write is rejected."
+        "The App product projection keeps the original Group DID, conversation ID, display profile, role, membership status, and member count; exactly one replacement-DID member exists while the old DID and duplicate members are absent. The release-level joined_at and stale-generation atomicity oracle remains owned by the required System remote-recovery case and cannot be inferred from this App attestation."
       ],
       "negativeChecks": [
-        "Changed Group or conversation ID, missing profile/member metadata, retained old DID, duplicate member, accepted stale generation, a fake lower-layer mutation, copied old root, or claiming joined_at/stale coverage without public product observability prevents pass attestation."
+        "Changed Group or conversation ID, missing profile/member metadata, retained old DID, duplicate member, a fake lower-layer mutation, copied old root, or treating this App pass as proof of joined_at/stale-generation behavior without the exact System case prevents the composite release conclusion."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
@@ -4282,22 +4282,22 @@
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "planned",
+      "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
           "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:group_identity_profile_role_status_and_count_preserved",
           "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:old_member_replaced_by_recovery_did_without_duplicate",
-          "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:joined_at_and_stale_generation_product_oracles_available"
+          "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:public_product_projection_rebind_converged_exactly_once"
         ],
         "exactOracleAssertions": [[
           "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:group_identity_profile_role_status_and_count_preserved",
           "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:old_member_replaced_by_recovery_did_without_duplicate",
-          "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:joined_at_and_stale_generation_product_oracles_available"
+          "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:public_product_projection_rebind_converged_exactly_once"
         ]],
         "negativeCheckAssertions": [[
           "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:group_identity_profile_role_status_and_count_preserved",
           "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:old_member_replaced_by_recovery_did_without_duplicate",
-          "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:joined_at_and_stale_generation_product_oracles_available"
+          "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:public_product_projection_rebind_converged_exactly_once"
         ]]
       }
     },
