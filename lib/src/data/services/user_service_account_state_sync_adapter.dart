@@ -31,7 +31,8 @@ class UserServiceAccountStateSyncAdapter
     );
   }
 
-  static const String accountStateEndpoint = '/user-service/v1/account-state/rpc';
+  static const String accountStateEndpoint =
+      '/user-service/v1/account-state/rpc';
   static const String deviceAuthEndpoint = '/user-service/v1/did-auth/rpc';
   static const String profileEndpoint = '/user-service/v1/me/rpc';
 
@@ -317,7 +318,12 @@ AccountStateAgentInventoryEntry _parseAgentInventoryEntry(
   }, context);
   return AccountStateAgentInventoryEntry(
     agentDid: _requiredString(value, 'agent_did', context),
-    agentKind: _requiredString(value, 'agent_kind', context),
+    agentKind: _requiredClosedString(
+      value,
+      'agent_kind',
+      context,
+      const <String>{'daemon', 'runtime', 'skill'},
+    ),
     daemonAgentDid: _nullableString(value, 'daemon_agent_did', context),
     controllerFullHandle: _requiredString(
       value,
@@ -434,6 +440,19 @@ String _requiredString(Map<String, Object?> value, String key, String context) {
   final item = value[key];
   if (item is! String || item.isEmpty || item.trim() != item) {
     throw FormatException('$context.$key must be a non-empty string');
+  }
+  return item;
+}
+
+String _requiredClosedString(
+  Map<String, Object?> value,
+  String key,
+  String context,
+  Set<String> allowed,
+) {
+  final item = _requiredString(value, key, context);
+  if (!allowed.contains(item)) {
+    throw FormatException('$context.$key is not supported');
   }
   return item;
 }

@@ -400,7 +400,9 @@ final class _Harness {
           ProductAgentInventoryItem(
             agentDid: _senderDid,
             activeState: activeState,
-            payloadJson: '{}',
+            payloadJson:
+                '{"agent_kind":"skill","display_name":"Skill Agent",'
+                '"controller_full_handle":"chenzh10.agent-connect.cn"}',
           ),
         ],
       ),

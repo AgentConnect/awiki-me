@@ -75,7 +75,7 @@ Provider acceptance、outbox `done`、Debug build、fake notification facade、W
 ### 5.1 角色
 
 - 用户：AWiki Me 当前账号 owner，控制通知权限、紧急呼叫开关和会话 mute。
-- 可信 Agent：sender DID 精确存在于当前账号、当前 SessionEpoch 的 active Agent inventory。
+- 可信 Agent：sender DID 精确存在于当前账号、当前 SessionEpoch 的 active Agent inventory。受控 Skill Agent 使用同一 User Service Account State inventory 事实；App 的 Daemon/Runtime 管理页面可以过滤 `skill`，但不得从安全策略使用的原始本地 inventory 中删除它。
 - 普通发送方：经过消息协议认证，但不满足当前 active Agent trust gate。
 - AWiki Skill/CLI：负责显式授权、固定 identity/target、输入校验、dry-run 和发送结果表达。
 - AWiki Me：负责 validated card、presentation policy、receipt、native submission 和 canonical route。
