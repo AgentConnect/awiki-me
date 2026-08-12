@@ -75,54 +75,28 @@ class AgentMessageCard extends StatelessWidget {
             Container(
               color: const Color(0xFF151612),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-              child: Stack(
-                alignment: Alignment.center,
-                clipBehavior: Clip.none,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  Positioned(
-                    left: -16,
-                    top: -9,
-                    child: Image.asset(
-                      'assets/icons/agent_urgent_hazard_left.png',
-                      width: 44,
-                      height: 20,
-                      filterQuality: FilterQuality.high,
+                  const ExcludeSemantics(
+                    child: Icon(
+                      CupertinoIcons.exclamationmark_triangle,
+                      color: Color(0xFFFFB400),
+                      size: 20,
                     ),
                   ),
-                  Positioned(
-                    right: -16,
-                    top: -9,
-                    child: Image.asset(
-                      'assets/icons/agent_urgent_hazard_right.png',
-                      width: 68,
-                      height: 20,
-                      filterQuality: FilterQuality.high,
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFFFB400),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      const ExcludeSemantics(
-                        child: Icon(
-                          CupertinoIcons.exclamationmark_triangle,
-                          color: Color(0xFFFFB400),
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 9),
-                      Flexible(
-                        child: Text(
-                          label,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFFFFB400),
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
@@ -175,7 +149,7 @@ class AgentMessageCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: urgentCall ? const Color(0xFFFFB400) : accent,
-                    fontSize: 13,
+                    fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -207,8 +181,8 @@ class AgentMessageCard extends StatelessWidget {
                         message.summary,
                         style: TextStyle(
                           color: titleColor,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                           height: 1.3,
                         ),
                       ),
@@ -222,50 +196,16 @@ class AgentMessageCard extends StatelessWidget {
                     style: TextStyle(color: secondaryColor, height: 1.35),
                   ),
                 ],
-                const SizedBox(height: 11),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Container(
-                          constraints: const BoxConstraints(minHeight: 28),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: urgentCall
-                                  ? const Color(0xFFED3333)
-                                  : accent,
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            copy.eventNumber,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: urgentCall
-                                  ? const Color(0xFFED3333)
-                                  : accent,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
+                if (timeLabel case final value?) ...<Widget>[
+                  const SizedBox(height: 11),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      value,
+                      style: TextStyle(color: secondaryColor, fontSize: 14),
                     ),
-                    if (timeLabel case final value?) ...<Widget>[
-                      const SizedBox(width: 8),
-                      Text(
-                        value,
-                        style: TextStyle(color: secondaryColor, fontSize: 11),
-                      ),
-                    ],
-                  ],
-                ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -345,7 +285,7 @@ class AgentUrgentCalloutOverlay extends StatelessWidget {
                                 copy.back,
                                 style: const TextStyle(
                                   color: Color(0xFFF1E8D7),
-                                  fontSize: 16,
+                                  fontSize: 14,
                                 ),
                               ),
                             ],
@@ -369,8 +309,8 @@ class AgentUrgentCalloutOverlay extends StatelessWidget {
                               copy.urgentCall,
                               style: const TextStyle(
                                 color: Color(0xFFFFB400),
-                                fontSize: 24,
-                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -391,7 +331,7 @@ class AgentUrgentCalloutOverlay extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Color(0xFFFFB400),
-                          fontSize: 17,
+                          fontSize: 14,
                           fontWeight: FontWeight.w500,
                           height: 1.3,
                         ),
@@ -402,8 +342,8 @@ class AgentUrgentCalloutOverlay extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Color(0xFFF8F7F2),
-                          fontSize: 21,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                           height: 1.35,
                         ),
                       ),
@@ -414,7 +354,7 @@ class AgentUrgentCalloutOverlay extends StatelessWidget {
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: Color(0xFFE5DED2),
-                            fontSize: 16,
+                            fontSize: 14,
                             height: 1.4,
                           ),
                         ),
@@ -425,7 +365,7 @@ class AgentUrgentCalloutOverlay extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Color(0xFFB8AD9A),
-                          fontSize: 13,
+                          fontSize: 14,
                           height: 1.35,
                         ),
                       ),
@@ -435,7 +375,7 @@ class AgentUrgentCalloutOverlay extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Color(0xFFB8AD9A),
-                          fontSize: 13,
+                          fontSize: 14,
                         ),
                       ),
                       SizedBox(height: 25 * scale),
@@ -466,7 +406,7 @@ class AgentUrgentCalloutOverlay extends StatelessWidget {
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   color: Color(0xFFD8CBB7),
-                                  fontSize: 13,
+                                  fontSize: 14,
                                 ),
                               ),
                             ),
@@ -488,7 +428,7 @@ class AgentUrgentCalloutOverlay extends StatelessWidget {
                           _UrgentRoundAction(
                             buttonKey: const Key('agent-urgent-act'),
                             color: const Color(0xFF098DDA),
-                            icon: CupertinoIcons.arrow_right,
+                            icon: CupertinoIcons.check_mark,
                             label: copy.act,
                             onPressed: onAct,
                           ),
@@ -588,7 +528,7 @@ class _AgentIdentityRings extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFFFFFFFF),
-                    fontSize: 25,
+                    fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -649,7 +589,7 @@ class _UrgentRoundAction extends StatelessWidget {
         const SizedBox(height: 11),
         Text(
           label,
-          style: const TextStyle(color: Color(0xFFF1E8D7), fontSize: 16),
+          style: const TextStyle(color: Color(0xFFF1E8D7), fontSize: 14),
         ),
       ],
     );
@@ -663,7 +603,6 @@ final class AgentMessageCardCopy {
     required this.alert,
     required this.urgent,
     required this.urgentCall,
-    required this.eventNumber,
   });
 
   final String message;
@@ -671,7 +610,6 @@ final class AgentMessageCardCopy {
   final String alert;
   final String urgent;
   final String urgentCall;
-  final String eventNumber;
 }
 
 final class AgentUrgentCalloutCopy {

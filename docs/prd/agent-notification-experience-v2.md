@@ -457,6 +457,17 @@ UI 实现前必须生成并由用户选择以下恰好三套方向：
 
 normal card 保持轻量，urgent 在卡片顶部增加高对比“紧急呼叫”条和呼吸边框。优点是识别最强；代价是视觉侵入最高。
 
+### 16.4 已批准方向与视觉冻结
+
+用户已选择并批准 `Callout Strip`。生产实现遵循以下冻结约束：
+
+- 通知内容字号统一为 14；身份头像首字母属于图形元素，不受该正文规则限制；
+- 每张 Coding Agent 通知都显示必填 `task_name`；
+- 紧急聊天卡保持简约，不使用警戒斜纹，不显示事件编号；
+- App 内全屏紧急态显示可信 sender label 与任务名称；设计样例 sender label 为 `Skill Agent`，生产值只能来自可信 Agent inventory/profile，不得由 payload 自报；
+- “立即处理”使用打勾图标，动作仍进入 canonical conversation；
+- 全屏态仅为前台 App 内 overlay，不是 VoIP，不使用 Android full-screen intent，不唤醒屏幕。
+
 三套方向都必须包含：
 
 - `message`、`task_result`、`alert normal`、`alert urgent`；
@@ -467,7 +478,7 @@ normal card 保持轻量，urgent 在卡片顶部增加高对比“紧急呼叫�
 - 设置页的 opt-in、mute、permission denied/allowed；
 - 动态字体、屏幕阅读器、色彩非唯一编码和 Reduce Motion。
 
-用户选择前不得编码卡片视觉或动效；可以先实现与视觉无关的 schema、Core classifier 和 typed domain contract。
+本节前三套方向用于保留设计决策记录；后续实现与验收以 16.4 的已批准冻结为准。
 
 ## 17. Acceptance Matrix
 

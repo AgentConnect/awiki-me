@@ -58,7 +58,7 @@ void main() {
             children: <Widget>[
               AgentUrgentCalloutOverlay(
                 message: _urgentMessage,
-                senderLabel: 'Hermes UI',
+                senderLabel: 'Skill Agent',
                 copy: AgentUrgentCalloutCopy(
                   urgentCall: '紧急呼叫',
                   back: '返回',
@@ -109,7 +109,6 @@ void main() {
                   alert: '告警',
                   urgent: '紧急',
                   urgentCall: '紧急呼叫',
-                  eventNumber: '事件编号：INC-2026-0811-0916',
                 ),
                 onOpenConversation: null,
               ),
@@ -125,6 +124,7 @@ void main() {
       );
       expect(find.byKey(const Key('agent-message-task-name')), findsOne);
       expect(find.text('AWiki Me 生产发布'), findsOne);
+      expect(find.textContaining('事件编号'), findsNothing);
       expect(tester.takeException(), isNull);
       await _capture(tester, '03-urgent-timeline-card');
     } finally {

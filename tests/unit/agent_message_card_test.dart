@@ -1,6 +1,6 @@
 import 'package:awiki_me/src/domain/entities/agent/agent_message_v1.dart';
 import 'package:awiki_me/src/presentation/chat/parts/agent_message_card.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -19,7 +19,6 @@ void main() {
     alert: '告警',
     urgent: '紧急',
     urgentCall: '紧急呼叫',
-    eventNumber: '事件编号：evt_task_20260811_001',
   );
   const overlayCopy = AgentUrgentCalloutCopy(
     urgentCall: '紧急呼叫',
@@ -52,7 +51,7 @@ void main() {
                 ),
                 AgentUrgentCalloutOverlay(
                   message: message,
-                  senderLabel: 'Agent',
+                  senderLabel: 'Skill Agent',
                   copy: overlayCopy,
                   metaLabel: '刚刚 · 8月11日 09:16',
                   onIgnore: () => ignored = true,
@@ -67,7 +66,15 @@ void main() {
       expect(find.byKey(const Key('agent-message-task-name')), findsOneWidget);
       expect(find.byKey(const Key('agent-urgent-task-name')), findsOneWidget);
       expect(find.text('生产发布检查'), findsNWidgets(2));
-      expect(find.text('Agent'), findsOneWidget);
+      expect(find.text('Skill Agent'), findsOneWidget);
+      expect(find.textContaining('事件编号'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('agent-urgent-act')),
+          matching: find.byIcon(CupertinoIcons.check_mark),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('不会建立语音通话'), findsOneWidget);
       expect(
         tester

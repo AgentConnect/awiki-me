@@ -240,7 +240,7 @@ void main() {
     expect(avatarRect, const Rect.fromLTWH(20, 87, 58, 58));
     expect(accountRect, const Rect.fromLTWH(0, 208, 390, 61));
     expect(appRect, const Rect.fromLTWH(0, 309, 390, 244));
-    expect(securityRect, const Rect.fromLTWH(0, 593, 390, 183));
+    expect(securityRect, const Rect.fromLTWH(0, 593, 390, 244));
 
     for (final titleKey in <String>[
       'settings-account-section-title',
