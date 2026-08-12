@@ -1,6 +1,7 @@
 // [INPUT]: Audited awiki.info endpoints, one protected fixed test SMS account,
-//          server-issued SMS retry boundaries, a fresh production
-//          AppBootstrap/native Core root, and an E2E-only user-presence decision.
+//          server-issued SMS retry boundaries, fresh production
+//          AppBootstrap/native Core roots with primed replica sync tails, and
+//          an E2E-only user-presence decision.
 // [OUTPUT]: Secret-free proof that Recovery replaces the DID once, exactly
 //           resumes post-commit local transition, preserves Direct/transport
 //           Group/Agent continuity, and fences an old App principal.
@@ -1336,6 +1337,10 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         peerSession.did != registeredPeer.did) {
       fail('The continuity peer did not activate its exact identity.');
     }
+    await peerBootstrap.messageSyncService!.syncNow(
+      reason: 'handle-recovery-fixture-peer-bootstrap',
+      limit: 100,
+    );
     progress.advance(HandleRecoveryFixtureStage.identityReady);
 
     final directOutgoing = await messaging.sendText(

@@ -1087,6 +1087,37 @@ void main() {
   group('CLI build provenance', () {
     const commit = 'abcdefabcdefabcdefabcdefabcdefabcdefabcd';
 
+    test('accepts only Core-compatible numeric build versions', () {
+      for (final version in <String>['0', '1.0', '1.0.46', '1.2.3.4']) {
+        expect(
+          cliBuildVersionFromVersionJson(
+            jsonEncode(<String, Object?>{
+              'ok': true,
+              'data': <String, Object?>{'version': version},
+            }),
+          ),
+          version,
+        );
+      }
+      for (final version in <String>[
+        'e2e-debug',
+        '1.0.46-beta.1',
+        '01.0',
+        '1.2.3.4.5',
+      ]) {
+        expect(
+          () => cliBuildVersionFromVersionJson(
+            jsonEncode(<String, Object?>{
+              'ok': true,
+              'data': <String, Object?>{'version': version},
+            }),
+          ),
+          throwsA(isA<E2eFailure>()),
+          reason: version,
+        );
+      }
+    });
+
     test('reads the embedded commit from version JSON', () {
       expect(
         cliBuildCommitFromVersionJson(
