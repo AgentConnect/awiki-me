@@ -69,6 +69,7 @@ const String _accountStateOperatorCommandEnv =
 const String _accountStateFailpointEnableEnv =
     'AWIKI_ACCOUNT_STATE_TEST_FAILPOINTS_ENABLED';
 const String _remoteTargetManifestEnv = 'AWIKI_SYSTEM_TEST_TARGET_MANIFEST';
+const String _awikiCliRustRepoEnv = 'AWIKI_CLI_RUST_REPO';
 const String _defaultRemoteTargetManifestPath =
     '../awiki-system-test/suites/remote-test-targets.json';
 const Set<String> _accountStateRequiredTargetCapabilities = <String>{
@@ -388,6 +389,7 @@ class DesktopE2eRunner {
     fileConfig = DesktopE2eFileConfig.load(
       root: root,
       path: options.configPath,
+      environment: Platform.environment,
     );
     _addRuntimeSecret(fileConfig.path ?? '');
     _addRuntimeSecret(fileConfig.otpPhone ?? '');
@@ -5091,6 +5093,7 @@ class DesktopE2eFileConfig {
   static DesktopE2eFileConfig load({
     required Directory root,
     required String path,
+    Map<String, String> environment = const <String, String>{},
   }) {
     final file = File(_resolvePath(root, path));
     if (!file.existsSync()) {
@@ -5123,7 +5126,17 @@ class DesktopE2eFileConfig {
     final appHandle = _stringAt(appUser, 'handle');
     final secondaryAppHandle = _stringAt(secondaryAppUser, 'handle');
     final cliHandle = _stringAt(cliUser, 'handle');
-    final cliBin = _stringAt(cliPeer, 'binary');
+    final configuredRustRepo = _stringAt(daemon, 'rustRepo');
+    final environmentRustRepo = environment[_awikiCliRustRepoEnv]?.trim();
+    final rustRepo = environmentRustRepo?.isNotEmpty == true
+        ? environmentRustRepo!
+        : configuredRustRepo ?? '../awiki-cli-rs2';
+    final cliBin = environmentRustRepo?.isNotEmpty == true
+        ? '$rustRepo/target/debug/awiki-cli'
+        : _stringAt(cliPeer, 'binary') ?? '$rustRepo/target/debug/awiki-cli';
+    final daemonBinary = environmentRustRepo?.isNotEmpty == true
+        ? '$rustRepo/target/debug/awiki-deamon'
+        : _stringAt(daemon, 'binary') ?? '$rustRepo/target/debug/awiki-deamon';
     final platformValue = _stringAt(raw, 'platform');
 
     return DesktopE2eFileConfig(
@@ -5139,8 +5152,8 @@ class DesktopE2eFileConfig {
       didDomain: didDomain,
       anpServiceUrl: _stringAt(service, 'anpServiceUrl'),
       anpServiceDid: _stringAt(service, 'anpServiceDid'),
-      daemonRustRepo: _stringAt(daemon, 'rustRepo'),
-      daemonBinary: _resolveOptionalPath(root, _stringAt(daemon, 'binary')),
+      daemonRustRepo: rustRepo,
+      daemonBinary: _resolvePath(root, daemonBinary),
       daemonStateRoot: _resolveOptionalPath(
         root,
         _stringAt(daemon, 'stateRoot'),
@@ -5172,7 +5185,7 @@ class DesktopE2eFileConfig {
       appHandle: appHandle,
       secondaryAppHandle: secondaryAppHandle,
       cliHandle: cliHandle,
-      cliBin: cliBin == null ? null : _resolvePath(root, cliBin),
+      cliBin: _resolvePath(root, cliBin),
       cliSourceRef: _stringAt(cliPeer, 'sourceRef'),
       performance: DesktopPerformanceConfig.fromYaml(performance),
     );

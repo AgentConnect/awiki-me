@@ -363,6 +363,12 @@ App/Core, peer, and daemon roots. It runs only
 to run onboarding Recovery or old-peer re-Join to attest Local Data business
 continuity.
 
+`cliPeer.binary`, `daemon.rustRepo`, and `daemon.binary` may be omitted from the
+local YAML. The runner then uses the sibling `../awiki-cli-rs2` checkout and its
+`target/debug/awiki-cli` and `target/debug/awiki-deamon` artifacts. Set
+`AWIKI_CLI_RUST_REPO` to override that checkout; both binary paths are derived
+from the override.
+
 This gate uses current purpose `awiki.identity.handle-recovery.v1` and drives
 prepare/risk confirmation/activate/resume through visible Flutter controls.
 After a remote Commit, a typed `local_transition_pending` result keeps the same

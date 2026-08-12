@@ -1317,6 +1317,82 @@ void main() {
   });
 
   group('DesktopE2eFileConfig', () {
+    test(
+      'defaults CLI and daemon binaries to the sibling Rust checkout',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_desktop_default_rust_repo_test_',
+        );
+        addTearDown(() async {
+          if (await root.exists()) {
+            await root.delete(recursive: true);
+          }
+        });
+        File('${root.path}/e2e.local.yaml').writeAsStringSync('''
+platform: linux
+cliPeer:
+  sourceRef: 1111111111111111111111111111111111111111
+daemon:
+  handle: recovery-daemon-e2e
+''');
+
+        final config = DesktopE2eFileConfig.load(
+          root: root,
+          path: 'e2e.local.yaml',
+        );
+
+        expect(config.daemonRustRepo, '../awiki-cli-rs2');
+        expect(
+          config.cliBin,
+          '${root.path}/../awiki-cli-rs2/target/debug/awiki-cli',
+        );
+        expect(
+          config.daemonBinary,
+          '${root.path}/../awiki-cli-rs2/target/debug/awiki-deamon',
+        );
+      },
+    );
+
+    test(
+      'Rust checkout environment overrides explicit YAML binary paths',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_desktop_override_rust_repo_test_',
+        );
+        addTearDown(() async {
+          if (await root.exists()) {
+            await root.delete(recursive: true);
+          }
+        });
+        File('${root.path}/e2e.local.yaml').writeAsStringSync('''
+platform: linux
+cliPeer:
+  binary: /ignored/awiki-cli
+daemon:
+  rustRepo: /ignored/awiki-cli-rs2
+  binary: /ignored/awiki-deamon
+''');
+
+        final config = DesktopE2eFileConfig.load(
+          root: root,
+          path: 'e2e.local.yaml',
+          environment: const <String, String>{
+            'AWIKI_CLI_RUST_REPO': '/worktrees/awiki-cli-rs2',
+          },
+        );
+
+        expect(config.daemonRustRepo, '/worktrees/awiki-cli-rs2');
+        expect(
+          config.cliBin,
+          '/worktrees/awiki-cli-rs2/target/debug/awiki-cli',
+        );
+        expect(
+          config.daemonBinary,
+          '/worktrees/awiki-cli-rs2/target/debug/awiki-deamon',
+        );
+      },
+    );
+
     test('loads minimal local YAML config', () async {
       final root = await Directory.systemTemp.createTemp(
         'awiki_desktop_config_test_',
