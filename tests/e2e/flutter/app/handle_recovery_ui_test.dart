@@ -115,6 +115,17 @@ const Key _recoveryPeerAppKey = Key('recovery-peer-app');
 const Duration _remoteTimeout = Duration(seconds: 30);
 const String _agentReplyPrefix = 'RECOVERY_AGENT_REPLY:';
 
+Future<void> _recordAppProjectionFixtureFailure({
+  required String caseId,
+  required String stage,
+  required String code,
+}) => E2eFailureObservationWriter.recordFirst(
+  layer: 'app_projection',
+  status: 'fatal',
+  code: code,
+  caseId: caseId,
+);
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -138,13 +149,21 @@ void main() {
       _RunningContinuityDaemon? freshDaemon;
       var retainFreshRoots = false;
       await tester.binding.setSurfaceSize(const Size(1440, 900));
-      _requireFreshRoot(config.appStateRoot);
-      if (rejoinRequired) {
-        _requireIndependentFreshRoots(<String>[
-          config.appStateRoot,
-          config.peerAppStateRoot,
-        ]);
-      }
+      await runHandleRecoveryFixtureBoundary<void>(
+        record: freshFocusedRequired,
+        caseId: _freshAgentInventoryCaseId,
+        stage: 'fresh_root_precondition',
+        action: () async {
+          _requireFreshRoot(config.appStateRoot);
+          if (rejoinRequired) {
+            _requireIndependentFreshRoots(<String>[
+              config.appStateRoot,
+              config.peerAppStateRoot,
+            ]);
+          }
+        },
+        recordFailure: _recordAppProjectionFixtureFailure,
+      );
       addTearDown(() async {
         httpClient.close();
         await tester.pumpWidget(const SizedBox.shrink());
@@ -161,45 +180,86 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      bootstrap = await AppBootstrap.create(
-        environment: _environment(
-          config,
-          directE2eeEnabled: registrationRejoinRequired,
-          groupE2eeEnabled: false,
-          agentImEnabled: freshFocusedRequired,
+      bootstrap = await runHandleRecoveryFixtureBoundary<AppBootstrap>(
+        record: freshFocusedRequired,
+        caseId: _freshAgentInventoryCaseId,
+        stage: 'app_bootstrap',
+        action: () => AppBootstrap.create(
+          environment: _environment(
+            config,
+            directE2eeEnabled: registrationRejoinRequired,
+            groupE2eeEnabled: false,
+            agentImEnabled: freshFocusedRequired,
+          ),
+          appStateRoot: config.appStateRoot,
         ),
-        appStateRoot: config.appStateRoot,
+        recordFailure: _recordAppProjectionFixtureFailure,
       );
       final bareHandle = _uniqueHandle(config.handlePrefix);
-      final onboardingSupport = bootstrap.onboardingSupportService;
-      if (onboardingSupport == null) {
-        fail('The production onboarding support service was unavailable.');
-      }
-      final registrationFactor = await _requestAndResolveRegistrationOtp(
-        onboardingSupport: onboardingSupport,
-        config: config,
-        account: account,
-        handle: bareHandle,
+      final onboardingSupport = await runHandleRecoveryFixtureBoundary(
+        record: freshFocusedRequired,
+        caseId: _freshAgentInventoryCaseId,
+        stage: 'onboarding_support',
+        action: () async {
+          final service = bootstrap!.onboardingSupportService;
+          if (service == null) {
+            fail('The production onboarding support service was unavailable.');
+          }
+          return service;
+        },
+        recordFailure: _recordAppProjectionFixtureFailure,
       );
-      final registration = await bootstrap.onboardingService!
-          .registerHandleWithPhone(
-            phone: account.phone,
-            otp: registrationFactor.otp,
-            handle: bareHandle,
-            nickName: 'AWiki Handle Recovery E2E',
-          );
-      final oldSession = registration.identity;
-      if (registration.status != IdentityRegistrationStatus.registered ||
-          oldSession == null ||
-          !oldSession.authenticated ||
-          oldSession.handle == null) {
-        fail('The Recovery fixture did not create one authenticated identity.');
-      }
+      final registrationFactor = await runHandleRecoveryFixtureBoundary(
+        record: freshFocusedRequired,
+        caseId: _freshAgentInventoryCaseId,
+        stage: 'registration_otp',
+        action: () => _requestAndResolveRegistrationOtp(
+          onboardingSupport: onboardingSupport,
+          config: config,
+          account: account,
+          handle: bareHandle,
+        ),
+        recordFailure: _recordAppProjectionFixtureFailure,
+      );
+      final registration = await runHandleRecoveryFixtureBoundary(
+        record: freshFocusedRequired,
+        caseId: _freshAgentInventoryCaseId,
+        stage: 'identity_registration',
+        action: () async {
+          final result = await bootstrap!.onboardingService!
+              .registerHandleWithPhone(
+                phone: account.phone,
+                otp: registrationFactor.otp,
+                handle: bareHandle,
+                nickName: 'AWiki Handle Recovery E2E',
+              );
+          final identity = result.identity;
+          if (result.status != IdentityRegistrationStatus.registered ||
+              identity == null ||
+              !identity.authenticated ||
+              identity.handle == null) {
+            fail(
+              'The Recovery fixture did not create one authenticated identity.',
+            );
+          }
+          return result;
+        },
+        recordFailure: _recordAppProjectionFixtureFailure,
+      );
+      final oldSession = registration.identity!;
       final oldDid = oldSession.did;
       final fullHandle = oldSession.handle!.trim().toLowerCase();
-      final initialRegistry = await bootstrap.deviceManagementCorePort!
-          .identityDeviceRegistry(oldDid);
-      _requireReadyCurrentAdmin(initialRegistry, expectedDid: oldDid);
+      await runHandleRecoveryFixtureBoundary<void>(
+        record: freshFocusedRequired,
+        caseId: _freshAgentInventoryCaseId,
+        stage: 'registry_precondition',
+        action: () async {
+          final initialRegistry = await bootstrap!.deviceManagementCorePort!
+              .identityDeviceRegistry(oldDid);
+          _requireReadyCurrentAdmin(initialRegistry, expectedDid: oldDid);
+        },
+        recordFailure: _recordAppProjectionFixtureFailure,
+      );
       _FreshRecoveryFixtureSnapshot? freshSnapshot;
       if (freshFocusedRequired) {
         await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
@@ -232,13 +292,7 @@ void main() {
             progress: progress,
             kind: HandleRecoveryFixtureKind.freshRoot,
           ),
-          recordFailure: ({required caseId, required stage, required code}) =>
-              E2eFailureObservationWriter.recordFirst(
-                layer: 'app_projection',
-                status: 'fatal',
-                code: code,
-                caseId: caseId,
-              ),
+          recordFailure: _recordAppProjectionFixtureFailure,
         );
         final agents = await setupContainer
             .read(agentInventoryPortProvider)

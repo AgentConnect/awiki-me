@@ -168,5 +168,11 @@ dart run tests/e2e/runner.dart \
 purpose/Handle/operation ID 的短信接口。OTP 只在测试进程内读取并注册到 redactor，不能
 写入 run config、版本控制文件、attestation、诊断或报告。
 
+Fresh suite 的共享准备边界（fresh root、App bootstrap、onboarding support、registration
+OTP、identity registration、ready-admin Registry）失败时，会把第一个失败写成
+`HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001` 所属的 secret-free
+`failure_observation.json`，并使用稳定 stage code；其余未执行 case 保持 `not_run`，不会因
+fixture 失败被误记为 passed。
+
 缺少专用账号、固定 OTP 配置、远端 capability 或短信请求成功时，只能报告未执行/失败，
 不能把编译通过当作远端 Recovery 已通过。

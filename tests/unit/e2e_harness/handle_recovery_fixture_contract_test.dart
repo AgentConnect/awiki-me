@@ -383,6 +383,52 @@ void main() {
     },
   );
 
+  test('shared fixture boundaries record only enabled exact stages', () async {
+    final observations = <String>[];
+    Future<void> recordFailure({
+      required String caseId,
+      required String stage,
+      required String code,
+    }) async {
+      observations.add('$caseId|$stage|$code');
+    }
+
+    await expectLater(
+      () => runHandleRecoveryFixtureBoundary<void>(
+        record: true,
+        caseId: 'HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001',
+        stage: 'registration_otp',
+        action: () => throw StateError('remote detail is not persisted'),
+        recordFailure: recordFailure,
+      ),
+      throwsStateError,
+    );
+    await expectLater(
+      () => runHandleRecoveryFixtureBoundary<void>(
+        record: false,
+        caseId: 'HANDLE-RECOVERY-V1-E2E-001',
+        stage: 'registration_otp',
+        action: () => throw StateError('base case remains independently owned'),
+        recordFailure: recordFailure,
+      ),
+      throwsStateError,
+    );
+    expect(observations, <String>[
+      'HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001|registration_otp|'
+          'recovery_fixture_registration_otp_failed',
+    ]);
+    await expectLater(
+      () => runHandleRecoveryFixtureBoundary<void>(
+        record: true,
+        caseId: 'HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001',
+        stage: 'Registration OTP',
+        action: () async {},
+        recordFailure: recordFailure,
+      ),
+      throwsFormatException,
+    );
+  });
+
   test('fixture stage tracking cannot move backwards', () {
     final progress = HandleRecoveryFixtureProgress(
       initial: HandleRecoveryFixtureStage.groupReady,

@@ -534,6 +534,32 @@ Future<T> runHandleRecoveryFixtureStage<T>({
   }
 }
 
+Future<T> runHandleRecoveryFixtureBoundary<T>({
+  required bool record,
+  required String caseId,
+  required String stage,
+  required Future<T> Function() action,
+  required HandleRecoveryFixtureFailureRecorder recordFailure,
+}) async {
+  if (!RegExp(r'^[a-z][a-z0-9_]*$').hasMatch(stage)) {
+    throw const FormatException(
+      'fixture boundary stage must be a stable snake_case identifier',
+    );
+  }
+  try {
+    return await action();
+  } catch (_) {
+    if (record) {
+      await recordFailure(
+        caseId: caseId,
+        stage: stage,
+        code: 'recovery_fixture_${stage}_failed',
+      );
+    }
+    rethrow;
+  }
+}
+
 const Set<String> _freshRootReferences = <String>{
   'admin_identity',
   'daemon_agent',
