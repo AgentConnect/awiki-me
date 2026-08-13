@@ -1,6 +1,7 @@
 import 'chat_attachment.dart';
 import 'chat_mention.dart';
 import 'agent/agent_control_payloads.dart';
+import 'agent/agent_message_v1.dart';
 import 'group_system_event.dart';
 import 'message_reply_reference.dart';
 
@@ -27,6 +28,7 @@ class ChatMessage {
     this.originalType = 'text',
     this.attachment,
     this.payloadJson,
+    this.agentMessage,
     this.mentions = const <ChatMessageMention>[],
   });
 
@@ -49,6 +51,7 @@ class ChatMessage {
   final MessageSendState sendState;
   final ChatAttachment? attachment;
   final String? payloadJson;
+  final AgentMessageProjection? agentMessage;
   final List<ChatMessageMention> mentions;
 
   bool get hasValidMentions =>
@@ -66,14 +69,19 @@ class ChatMessage {
   bool get isGroupSystemEvent => groupSystemEvent != null;
 
   bool get isAgentControlPayload =>
-      !isGroupSystemEvent && AgentControlPayloads.isControl(payloadJson);
+      agentMessage == null &&
+      !isGroupSystemEvent &&
+      AgentControlPayloads.isControl(payloadJson);
 
   String? get replyToMessageId =>
       MessageReplyReference.tryParse(payloadJson)?.sourceMessageId;
 
   bool get hasRenderableContent =>
       !isAgentControlPayload &&
-      (isGroupSystemEvent || hasDisplayableText || attachment != null);
+      (agentMessage != null ||
+          isGroupSystemEvent ||
+          hasDisplayableText ||
+          attachment != null);
 
   bool get isTextMessage {
     final type = originalType.trim().toLowerCase();
@@ -87,6 +95,13 @@ class ChatMessage {
   bool get isAttachmentMessage => attachment != null;
 
   String get previewText {
+    final structured = agentMessage;
+    if (structured is ValidAgentMessageProjection) {
+      return structured.message.summary;
+    }
+    if (structured is InvalidAgentMessageProjection) {
+      return '';
+    }
     if (isGroupSystemEvent) {
       return groupSystemEvent?.type ?? '';
     }
@@ -117,7 +132,8 @@ class ChatMessage {
     MessageSendState? sendState,
     String? senderName,
     ChatAttachment? attachment,
-    String? payloadJson,
+    Object? payloadJson = _chatMessageUnset,
+    Object? agentMessage = _chatMessageUnset,
     List<ChatMessageMention>? mentions,
   }) {
     return ChatMessage(
@@ -148,7 +164,10 @@ class ChatMessage {
       isEncrypted: isEncrypted,
       originalType: originalType ?? this.originalType,
       attachment: attachment ?? this.attachment,
-      payloadJson: payloadJson ?? this.payloadJson,
+      payloadJson: _resolveNullableString(payloadJson, this.payloadJson),
+      agentMessage: identical(agentMessage, _chatMessageUnset)
+          ? this.agentMessage
+          : agentMessage as AgentMessageProjection?,
       mentions: mentions ?? this.mentions,
     );
   }

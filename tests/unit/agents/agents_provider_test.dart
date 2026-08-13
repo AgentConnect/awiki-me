@@ -218,6 +218,61 @@ void main() {
   );
 
   test(
+    'account-state Skill inventory stays out of Daemon management topology',
+    () async {
+      final container = _container(
+        FakeAgentControlService(),
+        session: const SessionIdentity(
+          did: 'did:human:current',
+          credentialName: 'identity-current',
+          displayName: 'Current',
+          handle: 'current.awiki.info',
+          accountBinding: SessionAccountBinding(
+            ownerIdentityId: 'owner-1',
+            accountId: 'account-1',
+            currentDid: 'did:human:current',
+            protocolDeviceId: 'device-1',
+            identityGeneration: '1',
+            deviceAuthGeneration: '1',
+          ),
+        ),
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+
+      await controller.applyAccountStateSnapshots(
+        inventory: ProductAgentInventorySnapshot(
+          binding: const ProductAccountBinding(
+            ownerIdentityId: 'owner-1',
+            accountId: 'account-1',
+          ),
+          domainVersion: '8',
+          refreshedAt: DateTime.utc(2026, 8, 12),
+          agents: const <ProductAgentInventoryItem>[
+            ProductAgentInventoryItem(
+              agentDid: 'did:agent:skill',
+              activeState: 'active',
+              payloadJson:
+                  '{"agent_kind":"skill","display_name":"Skill Agent"}',
+            ),
+            ProductAgentInventoryItem(
+              agentDid: 'did:agent:daemon',
+              activeState: 'active',
+              payloadJson: '{"agent_kind":"daemon","display_name":"Daemon"}',
+            ),
+          ],
+        ),
+        isSessionCurrent: () => true,
+      );
+
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        <String>['did:agent:daemon'],
+      );
+    },
+  );
+
+  test(
     'account-state snapshot clears local create only after canonical route projection',
     () async {
       final control = FakeAgentControlService();

@@ -37,7 +37,7 @@ void main() {
       'websocket_hint': 'websocket_hint',
       'after_mutation': 'after_mutation',
       'manual_refresh': 'manual_refresh',
-      'remote_push': 'remote_push',
+      'remote_push': 'websocket_hint',
       'realtime_future_hint': 'websocket_hint',
       'unknown_internal_trigger': 'manual_refresh',
     };

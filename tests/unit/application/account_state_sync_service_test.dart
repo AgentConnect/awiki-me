@@ -45,6 +45,32 @@ void main() {
   });
 
   test(
+    'reconcile persists active Skill inventory for presentation trust',
+    () async {
+      final remote = _Remote(includeSkill: true);
+      final store = InMemoryAwikiProductLocalStore();
+
+      await AccountStateSyncService(remote: remote, local: store).reconcile(
+        binding: binding,
+        expectedCurrentDid: did,
+        expectedIdentityGeneration: '1',
+        sessionGeneration: 7,
+        isSessionCurrent: (_, generation) => generation == 7,
+      );
+
+      final inventory = await store.loadAgentInventorySnapshot(
+        binding: binding,
+      );
+      final skill = inventory!.agents.singleWhere(
+        (agent) => agent.agentDid == 'did:agent:skill',
+      );
+      expect(skill.activeState, 'active');
+      expect(skill.payloadJson, contains('"agent_kind":"skill"'));
+      expect(skill.payloadJson, contains('"display_name":"Skill Agent"'));
+    },
+  );
+
+  test(
     'Registry epoch mismatch blocks before remote sync until exact source receipt',
     () async {
       const oldDid = 'did:wba:example.test:alice-old';
@@ -386,6 +412,7 @@ class _Remote implements AccountStateSyncPort {
     this.failStatus = false,
     this.emptyInventory = false,
     this.advanceProfileAtM2 = false,
+    this.includeSkill = false,
     this.onInventoryLoaded,
     String? inventorySnapshotVersion,
   }) : inventorySnapshotVersion = inventorySnapshotVersion ?? version;
@@ -396,6 +423,7 @@ class _Remote implements AccountStateSyncPort {
   final bool failStatus;
   final bool emptyInventory;
   final bool advanceProfileAtM2;
+  final bool includeSkill;
   final void Function()? onInventoryLoaded;
   final String inventorySnapshotVersion;
   int manifestCalls = 0;
@@ -441,6 +469,17 @@ class _Remote implements AccountStateSyncPort {
                 invocationPolicy: const <String, Object?>{},
                 inventoryVersion: inventorySnapshotVersion,
               ),
+              if (includeSkill)
+                AccountStateAgentInventoryEntry(
+                  agentDid: 'did:agent:skill',
+                  agentKind: 'skill',
+                  controllerFullHandle: 'chenzh10.agent-connect.cn',
+                  displayName: 'Skill Agent',
+                  profileSummary: const <String, Object?>{},
+                  activeState: 'active',
+                  invocationPolicy: const <String, Object?>{},
+                  inventoryVersion: inventorySnapshotVersion,
+                ),
             ],
     );
   }

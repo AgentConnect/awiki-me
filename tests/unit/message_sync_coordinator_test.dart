@@ -334,6 +334,48 @@ void main() {
     expect(sync.syncReasons, <String>['remote_push']);
   });
 
+  test(
+    'remote Push fail-opens when refresh is null and the epoch is current',
+    () async {
+      final sync = FakeMessageSyncService();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        appSessions: _NullRefreshSessionService(),
+      );
+      addTearDown(container.dispose);
+
+      final receipt = await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync();
+
+      expect(receipt.disposition, RemotePushSyncDisposition.succeeded);
+      expect(receipt.canAcknowledge, isTrue);
+      expect(sync.syncReasons, <String>['remote_push']);
+    },
+  );
+
+  test(
+    'remote Push fail-opens when refresh throws and the epoch is current',
+    () async {
+      final sync = FakeMessageSyncService();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        appSessions: _ThrowingRefreshSessionService(),
+      );
+      addTearDown(container.dispose);
+
+      final receipt = await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync();
+
+      expect(receipt.disposition, RemotePushSyncDisposition.succeeded);
+      expect(receipt.canAcknowledge, isTrue);
+      expect(sync.syncReasons, <String>['remote_push']);
+    },
+  );
+
   test('remote Push returns stale when the barrier changes epoch', () async {
     final barrier = _RemotePushBarrierSessionService(_appSession('next'));
     final sync = FakeMessageSyncService();
@@ -2207,6 +2249,24 @@ AppSession _appSession(String identity) => AppSession(
   localAlias: identity == 'me' ? 'default' : identity,
   authenticated: true,
 );
+
+class _NullRefreshSessionService implements AppSessionService {
+  @override
+  Future<AppSession?> refreshSession() async => null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _ThrowingRefreshSessionService implements AppSessionService {
+  @override
+  Future<AppSession?> refreshSession() {
+    throw StateError('refresh_failed');
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 class _RemotePushBarrierSessionService implements AppSessionService {
   _RemotePushBarrierSessionService(this.result)

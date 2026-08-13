@@ -4729,6 +4729,9 @@ final class _NoopRemotePushClient implements RemotePushClient {
 
   @override
   Future<RemotePushRegistration?> initialize() async => null;
+
+  @override
+  Future<void> pullPendingEvents() async {}
 }
 
 final class _RecordingRemotePushClient implements RemotePushClient {
@@ -4781,6 +4784,9 @@ final class _RecordingRemotePushClient implements RemotePushClient {
 
   @override
   Future<RemotePushRegistration?> initialize() async => null;
+
+  @override
+  Future<void> pullPendingEvents() async {}
 }
 
 final class _RecordingRemotePushSyncPort implements RemotePushSyncPort {

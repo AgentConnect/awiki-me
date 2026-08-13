@@ -382,6 +382,9 @@ RemotePushRegistration _registration(String providerDeviceId) =>
       provider: 'aliyun_emas',
       providerDeviceId: providerDeviceId,
       platform: 'android',
+      clientProduct: 'awiki-me',
+      clientVersion: '0.1.22+32',
+      capabilities: const <String>['awiki.agent.message.v1'],
       appId: 'app-key',
     );
 
@@ -411,6 +414,9 @@ final class _FakeRemotePushClient implements RemotePushClient {
     initializeCount += 1;
     return registrationValue;
   }
+
+  @override
+  Future<void> pullPendingEvents() async {}
 }
 
 final class _FakePushInstallationPort implements PushInstallationPort {
@@ -444,6 +450,9 @@ final class _FakePushInstallationPort implements PushInstallationPort {
         providerDeviceId: registration.providerDeviceId,
         platform: registration.platform,
         status: 'active',
+        clientProduct: registration.clientProduct,
+        clientVersion: registration.clientVersion,
+        capabilities: registration.capabilities,
         logicalDeviceId: registration.logicalDeviceId,
         appId: registration.appId,
       );
@@ -465,6 +474,9 @@ final class _FakePushInstallationPort implements PushInstallationPort {
         providerDeviceId: 'disabled-device',
         platform: 'android',
         status: 'disabled',
+        clientProduct: 'awiki-me',
+        clientVersion: '0.1.22+32',
+        capabilities: const <String>['awiki.agent.message.v1'],
       );
     });
   }

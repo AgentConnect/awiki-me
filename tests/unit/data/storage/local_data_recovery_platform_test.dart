@@ -82,9 +82,15 @@ void main() {
     expect(source, contains('ai.awiki.awikime/android_local_data_recovery'));
     expect(source, contains('"resetLocalSecureStorage"'));
     for (final preferenceName in <String>[
+      'awiki_me_app_state_v1',
+      'awiki_me_scope_secrets_v1',
       'awiki_me_scope_secrets',
       'FlutterSecureStorage',
       'FlutterSecureKeyStorage',
+      'FlutterSecureKeyStorage:awiki_me_app_state_v1',
+      'FlutterSecureKeyStorage:awiki_me_scope_secrets_v1',
+      'FlutterSecureStorageConfiguration:awiki_me_app_state_v1',
+      'FlutterSecureStorageConfiguration:awiki_me_scope_secrets_v1',
       'FlutterSecureStorageConfiguration:awiki_me_scope_secrets',
     ]) {
       expect(source, contains('"$preferenceName"'));

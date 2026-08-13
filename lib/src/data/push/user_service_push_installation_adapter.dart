@@ -1,3 +1,5 @@
+import '../../application/models/agent_notification_preference.dart';
+import '../../application/ports/agent_notification_preference_port.dart';
 import '../../application/models/push_installation.dart';
 import '../../application/ports/push_installation_port.dart';
 import '../../domain/services/remote_push_client.dart';
@@ -6,7 +8,8 @@ import 'package:flutter/foundation.dart';
 import '../services/authenticated_user_service_rpc_client.dart';
 import '../services/awiki_onboarding_utility_client.dart';
 
-final class UserServicePushInstallationAdapter implements PushInstallationPort {
+final class UserServicePushInstallationAdapter
+    implements PushInstallationPort, AgentNotificationPreferencePort {
   UserServicePushInstallationAdapter({
     required String userServiceUrl,
     AwikiOnboardingUtilityHttpClient? client,
@@ -41,6 +44,9 @@ final class UserServicePushInstallationAdapter implements PushInstallationPort {
         if (registration.logicalDeviceId != null)
           'logical_device_id': registration.logicalDeviceId,
         if (registration.appId != null) 'app_id': registration.appId,
+        'client_product': registration.clientProduct,
+        'client_version': registration.clientVersion,
+        'capabilities': registration.capabilities,
       },
     );
     final installation = _parseInstallation(result, 'upsert_installation');
@@ -57,6 +63,21 @@ final class UserServicePushInstallationAdapter implements PushInstallationPort {
       'logical_device_id',
     );
     _expectBoundValue(installation.appId, registration.appId, 'app_id');
+    _expectBoundValue(
+      installation.clientProduct,
+      registration.clientProduct,
+      'client_product',
+    );
+    _expectBoundValue(
+      installation.clientVersion,
+      registration.clientVersion,
+      'client_version',
+    );
+    _expectBoundValue(
+      installation.capabilities,
+      registration.capabilities,
+      'capabilities',
+    );
     _expectBoundValue(installation.status, 'active', 'status');
     return installation;
   }
@@ -75,6 +96,46 @@ final class UserServicePushInstallationAdapter implements PushInstallationPort {
     );
     _expectBoundValue(installation.status, 'disabled', 'status');
     return installation;
+  }
+
+  @override
+  Future<AgentNotificationPreference> getAgentNotificationPreference() async {
+    final result = await _rpcCall(
+      method: 'get_agent_notification_preference',
+      params: const <String, Object?>{'schema': _agentMessageSchema},
+    );
+    return _parseAgentNotificationPreference(
+      result,
+      'get_agent_notification_preference',
+      allowUnset: true,
+    );
+  }
+
+  @override
+  Future<AgentNotificationPreference> setAgentNotificationPreference({
+    required AgentNotificationUrgentPreference urgent,
+  }) async {
+    if (urgent == AgentNotificationUrgentPreference.unset) {
+      throw ArgumentError.value(urgent, 'urgent', 'unset cannot be persisted');
+    }
+    final result = await _rpcCall(
+      method: 'set_agent_notification_preference',
+      params: <String, Object?>{
+        'schema': _agentMessageSchema,
+        'urgent': urgent.name,
+      },
+    );
+    final preference = _parseAgentNotificationPreference(
+      result,
+      'set_agent_notification_preference',
+      allowUnset: false,
+    );
+    if (preference.urgent != urgent) {
+      throw const FormatException(
+        'set_agent_notification_preference.urgent mismatch',
+      );
+    }
+    return preference;
   }
 
   Future<Map<String, Object?>> _rpcCall({
@@ -133,7 +194,57 @@ PushInstallation _parseInstallation(
       operation,
     ),
     appId: _nullableResponseString(installation, 'app_id', operation),
+    clientProduct: _requiredResponseString(
+      installation,
+      'client_product',
+      operation,
+    ),
+    clientVersion: _requiredResponseString(
+      installation,
+      'client_version',
+      operation,
+    ),
+    capabilities: _requiredResponseCapabilities(installation, operation),
     status: _requiredResponseString(installation, 'status', operation),
+  );
+}
+
+const String _agentMessageSchema = 'awiki.agent.message.v1';
+
+AgentNotificationPreference _parseAgentNotificationPreference(
+  Map<String, Object?> result,
+  String operation, {
+  required bool allowUnset,
+}) {
+  if (result.length != 3) {
+    throw FormatException('$operation response must be closed');
+  }
+  final schema = _requiredResponseString(result, 'schema', operation);
+  if (schema != _agentMessageSchema) {
+    throw FormatException('$operation.schema mismatch');
+  }
+  final urgentValue = _requiredResponseString(result, 'urgent', operation);
+  final urgent = switch (urgentValue) {
+    'enabled' => AgentNotificationUrgentPreference.enabled,
+    'disabled' => AgentNotificationUrgentPreference.disabled,
+    'unset' when allowUnset => AgentNotificationUrgentPreference.unset,
+    _ => throw FormatException('$operation.urgent is invalid'),
+  };
+  final updatedAtValue = result['updated_at'];
+  DateTime? updatedAt;
+  if (updatedAtValue != null) {
+    if (updatedAtValue is! String || updatedAtValue.trim() != updatedAtValue) {
+      throw FormatException('$operation.updated_at is invalid');
+    }
+    updatedAt = DateTime.tryParse(updatedAtValue)?.toUtc();
+    if (updatedAt == null) {
+      throw FormatException('$operation.updated_at is invalid');
+    }
+  }
+  return AgentNotificationPreference(
+    schema: schema,
+    urgent: urgent,
+    updatedAt: updatedAt,
   );
 }
 
@@ -169,6 +280,17 @@ String? _nullableResponseString(
     );
   }
   return item;
+}
+
+List<String> _requiredResponseCapabilities(
+  Map<String, Object?> value,
+  String operation,
+) {
+  final raw = value['capabilities'];
+  if (raw is! List || raw.length != 1 || raw.single != _agentMessageSchema) {
+    throw FormatException('$operation.installation.capabilities is invalid');
+  }
+  return const <String>[_agentMessageSchema];
 }
 
 void _expectBoundValue(Object? actual, Object? expected, String field) {

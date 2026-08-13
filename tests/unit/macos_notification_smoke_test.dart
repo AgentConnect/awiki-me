@@ -4,24 +4,27 @@ import 'package:awiki_me/src/domain/services/notification_facade.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('debug macOS smoke gate sends one AWiki Me system notification', () async {
-    final notification = _RecordingNotificationFacade();
+  test(
+    'debug macOS smoke gate sends one AWiki Me system notification',
+    () async {
+      final notification = _RecordingNotificationFacade();
 
-    await runMacosNotificationSmoke(
-      notificationFacade: notification,
-      enabled: true,
-      isMacOS: true,
-      isReleaseMode: false,
-      delay: Duration.zero,
-    );
+      await runMacosNotificationSmoke(
+        notificationFacade: notification,
+        enabled: true,
+        isMacOS: true,
+        isReleaseMode: false,
+        delay: Duration.zero,
+      );
 
-    expect(notification.systemNotifications, <({String title, String body})>[
-      (
-        title: 'AWiki Me · Coding Agent 已完成',
-        body: 'macOS 通知探针已完成；下一步验证真实终态消息。',
-      ),
-    ]);
-  });
+      expect(notification.systemNotifications, <({String title, String body})>[
+        (
+          title: 'AWiki Me · Coding Agent 已完成',
+          body: 'macOS 通知探针已完成；下一步验证真实终态消息。',
+        ),
+      ]);
+    },
+  );
 
   test('release build never runs the macOS notification smoke probe', () async {
     final notification = _RecordingNotificationFacade();
@@ -50,6 +53,23 @@ class _RecordingNotificationFacade implements NotificationFacade {
   }) async {
     systemNotifications.add((title: title, body: body));
   }
+
+  @override
+  Future<StructuredNotificationSubmission> showStructuredNotification(
+    StructuredNotification notification,
+  ) async => StructuredNotificationSubmission.submitted;
+
+  @override
+  Future<StructuredNotificationEligibility>
+  structuredNotificationEligibility() async =>
+      StructuredNotificationEligibility.allowed;
+
+  @override
+  Future<StructuredUrgentCueResult> playStructuredUrgentCue() async =>
+      StructuredUrgentCueResult.played;
+
+  @override
+  Future<void> stopStructuredUrgentCue() async {}
 
   @override
   Future<void> updateBadgeCount(int count) async {}

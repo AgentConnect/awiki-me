@@ -251,6 +251,9 @@ String _registrationFingerprint(RemotePushRegistration registration) {
     registration.provider,
     registration.providerDeviceId,
     registration.platform,
+    registration.clientProduct,
+    registration.clientVersion,
+    ...registration.capabilities,
     registration.appId ?? '',
     registration.logicalDeviceId ?? '',
   ];

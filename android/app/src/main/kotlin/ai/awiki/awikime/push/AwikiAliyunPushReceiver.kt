@@ -2,6 +2,8 @@ package ai.awiki.awikime.push
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
+import ai.awiki.awikime.AliveBackgroundSyncScheduler
 import com.alibaba.sdk.android.push.MessageReceiver
 import com.alibaba.sdk.android.push.notification.CPushMessage
 
@@ -10,6 +12,7 @@ class AwikiAliyunPushReceiver : MessageReceiver() {
         context: Context,
         extraMap: MutableMap<String, String>?,
     ): Boolean {
+        logTransportGate(BackgroundUrgentTransportDiagnostics.fromNoticeCallback(extraMap))
         return RemotePushPresentationState.shouldShowNotification(extraMap)
     }
 
@@ -19,7 +22,6 @@ class AwikiAliyunPushReceiver : MessageReceiver() {
         summary: String?,
         extraMap: MutableMap<String, String>?,
     ) {
-        NotificationScreenWakeController.wakeIfNeeded(context)
         emit(
             context,
             "notification_received",
@@ -51,17 +53,17 @@ class AwikiAliyunPushReceiver : MessageReceiver() {
     }
 
     override fun onMessage(context: Context, message: CPushMessage) {
+        logTransportGate(BackgroundUrgentTransportDiagnostics.fromMessageCallback())
         emit(
             context,
             "message_received",
-            mapOf(
-                "title" to message.title,
-                "content" to message.content,
-                "msgId" to message.messageId,
-                "appId" to message.appId,
-                "traceInfo" to message.traceInfo,
-            ),
+            mapOf("msgId" to message.messageId),
         )
+        try {
+            AliveBackgroundSyncScheduler.enqueue(context)
+        } catch (error: RuntimeException) {
+            Log.w("AWikiRemotePush", "alive_background_sync enqueue failed", error)
+        }
     }
 
     override fun onNotificationOpened(
@@ -111,5 +113,16 @@ class AwikiAliyunPushReceiver : MessageReceiver() {
 
     private fun emit(context: Context, kind: String, payload: Map<String, Any?>) {
         RemotePushEventBridge.emit(context, kind, payload)
+    }
+
+    private fun logTransportGate(diagnostic: BackgroundUrgentTransportDiagnostic) {
+        // Keep this native-only and low-cardinality.  Do not include a provider
+        // payload, marker ID, identity, title, content, or ticket in logs.
+        Log.i(
+            "AWikiRemotePush",
+            "background_urgent_transport_gate callback=${diagnostic.verdict.callback} " +
+                "blocker=${diagnostic.verdict.blocker} " +
+                "probe=${diagnostic.isolatedProbeMarkerPresent}",
+        )
     }
 }

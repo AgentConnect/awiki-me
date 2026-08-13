@@ -17,6 +17,8 @@ import java.util.UUID
 
 object RemotePushEventBridge {
     private const val CHANNEL_NAME = "ai.awiki.awikime/remote_push_events"
+    private const val LEGACY_MESSAGE_CHANNEL_ID = "awiki_me_messages"
+    private const val STRUCTURED_NORMAL_MESSAGE_CHANNEL_ID = "awiki_me_messages_v2"
     private const val PREFERENCES_NAME = "awiki_remote_push_events"
     private const val EVENTS_KEY = "pending_events"
     private const val MAX_PENDING_EVENTS = 32
@@ -38,6 +40,15 @@ object RemotePushEventBridge {
     private var initializationCoordinator: RemotePushInitializationCoordinator? = null
     @Volatile
     private var channel: MethodChannel? = null
+    private val silentResult = object : MethodChannel.Result {
+        override fun success(result: Any?) = Unit
+
+        override fun error(code: String, message: String?, details: Any?) = Unit
+
+        override fun notImplemented() = Unit
+    }
+
+    fun isAttached(): Boolean = channel != null
 
     fun attach(context: Context, messenger: BinaryMessenger) {
         val applicationContext = context.applicationContext
@@ -168,10 +179,25 @@ object RemotePushEventBridge {
             )
             return
         }
+        val structuredNormal = id == STRUCTURED_NORMAL_MESSAGE_CHANNEL_ID
+        if (!structuredNormal && id != LEGACY_MESSAGE_CHANNEL_ID) {
+            result.success(
+                mapOf("code" to "10001", "errorMsg" to "unsupported channel id"),
+            )
+            return
+        }
+        val importance = if (structuredNormal) {
+            NotificationManager.IMPORTANCE_DEFAULT
+        } else {
+            NotificationManager.IMPORTANCE_MAX
+        }
         val manager = context.getSystemService(NotificationManager::class.java)
-        val channel = NotificationChannel(id, name, NotificationManager.IMPORTANCE_MAX).apply {
+        val channel = NotificationChannel(id, name, importance).apply {
             this.description = description
-            enableVibration(true)
+            enableVibration(!structuredNormal)
+            if (structuredNormal) {
+                setSound(null, null)
+            }
             setShowBadge(true)
         }
         manager.createNotificationChannel(channel)
@@ -195,21 +221,37 @@ object RemotePushEventBridge {
         persist(applicationContext, event)
         val activeChannel = channel
         if (activeChannel == null) {
+            Log.i("AWikiRemotePush", "emit kind=$kind channel=detached")
             return
         }
+        Log.i("AWikiRemotePush", "emit kind=$kind channel=attached")
         mainHandler.post {
             activeChannel.invokeMethod(
                 "onRemotePushEvents",
                 listOf(event),
-                object : MethodChannel.Result {
-                    override fun success(result: Any?) = Unit
-
-                    override fun error(code: String, message: String?, details: Any?) = Unit
-
-                    override fun notImplemented() = Unit
-                },
+                silentResult,
             )
         }
+    }
+
+    fun replayPending(context: Context): Int {
+        val events = load(context.applicationContext)
+        val activeChannel = channel
+        if (activeChannel == null) {
+            Log.i("AWikiRemotePush", "replay pending=${events.size} channel=detached")
+            return events.size
+        }
+        if (events.isEmpty()) {
+            return 0
+        }
+        mainHandler.post {
+            activeChannel.invokeMethod(
+                "onRemotePushEvents",
+                events,
+                silentResult,
+            )
+        }
+        return events.size
     }
 
     @Synchronized

@@ -23,6 +23,7 @@ import '../domain/entities/device_management.dart';
 import '../presentation/app_shell/app_shell.dart';
 import '../presentation/app_shell/providers/app_lifecycle_provider.dart';
 import '../presentation/app_shell/providers/session_provider.dart';
+import '../presentation/app_shell/providers/agent_urgent_overlay_provider.dart';
 import '../presentation/agents/agents_provider.dart';
 import '../presentation/chat/chat_provider.dart';
 import '../presentation/recovery/handle_recovery_provider.dart';
@@ -74,6 +75,10 @@ class AwikiMeApp extends StatelessWidget {
         if (bootstrap.remotePushInstallationCoordinator != null)
           remotePushInstallationCoordinatorProvider.overrideWithValue(
             bootstrap.remotePushInstallationCoordinator,
+          ),
+        if (bootstrap.agentNotificationPreferencePort != null)
+          agentNotificationPreferencePortProvider.overrideWithValue(
+            bootstrap.agentNotificationPreferencePort,
           ),
         if (bootstrap.storageScopeLayout != null)
           remotePushStorageScopeIdProvider.overrideWithValue(
@@ -442,7 +447,12 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
                   child: material.Theme(
                     data: appTheme.materialTheme,
                     child: AppOrientationScope(
-                      child: child ?? const SizedBox.shrink(),
+                      child: Stack(
+                        children: <Widget>[
+                          child ?? const SizedBox.shrink(),
+                          const AgentUrgentOverlayHost(),
+                        ],
+                      ),
                     ),
                   ),
                 ),

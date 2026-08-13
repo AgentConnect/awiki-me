@@ -780,6 +780,12 @@ class AgentsController extends StateNotifier<AgentsState> {
         item.agentDid: _accountStateJsonMap(item.payloadJson),
     };
     final topology = inventory.agents
+        .where((item) {
+          final agentKind = _accountStateJsonMap(
+            item.payloadJson,
+          )['agent_kind'];
+          return agentKind == 'daemon' || agentKind == 'runtime';
+        })
         .map((item) {
           final payload = _accountStateJsonMap(item.payloadJson);
           final statusPayload = statusByDid[item.agentDid];

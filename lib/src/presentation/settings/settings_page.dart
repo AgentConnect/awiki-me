@@ -4,10 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_locale.dart';
 import '../../app/app_router.dart';
+import '../../app/app_services.dart';
 import '../../domain/entities/session_identity.dart';
+import '../../domain/services/notification_facade.dart';
 import '../../l10n/l10n.dart';
-import '../app_shell/providers/app_update_provider.dart';
+import '../app_shell/providers/agent_urgent_opt_in_provider.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
+import '../app_shell/providers/app_update_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../profile/profile_page.dart';
 import '../devices/devices_page.dart';
@@ -21,8 +24,8 @@ import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
-import 'language_selection_page.dart';
 import 'display_settings_page.dart';
+import 'language_selection_page.dart';
 import '../shared/display_scale.dart';
 import '../shared/local_credential_delete_dialog.dart';
 
@@ -38,6 +41,14 @@ class SettingsPage extends ConsumerWidget {
   final VoidCallback? onBack;
   final VoidCallback? onProfileTap;
 
+  void _openFullScreenAccessSettings(WidgetRef ref) {
+    final facade = ref.read(notificationFacadeProvider);
+    if (facade is AliveBackgroundUrgentNotificationFacade) {
+      (facade as AliveBackgroundUrgentNotificationFacade)
+          .openAliveBackgroundFullScreenSettings();
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
@@ -46,6 +57,7 @@ class SettingsPage extends ConsumerWidget {
     final updateState = ref.watch(appUpdateProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
     final displayScale = ref.watch(displayScaleProvider);
+    final urgentOptIn = ref.watch(agentUrgentOptInProvider);
     final isDesktopPlatform =
         defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.windows;
@@ -150,6 +162,36 @@ class SettingsPage extends ConsumerWidget {
               (_) => const LanguageSelectionPage(),
             ),
           ),
+          if (session != null) ...<Widget>[
+            const AppSectionDivider(),
+            AppListTile(
+              key: const Key('settings-agent-urgent-opt-in-row'),
+              title: l10n.settingsAgentUrgentCalls,
+              subtitle: l10n.settingsAgentUrgentCallsSubtitle,
+              leading: leading(const _SettingsIcon(icon: CupertinoIcons.bell)),
+              trailing: CupertinoSwitch(
+                key: const Key('settings-agent-urgent-opt-in-switch'),
+                value: urgentOptIn.enabled,
+                onChanged: urgentOptIn.canChange
+                    ? ref.read(agentUrgentOptInProvider.notifier).setEnabled
+                    : null,
+              ),
+            ),
+            if (defaultTargetPlatform == TargetPlatform.android) ...<Widget>[
+              const AppSectionDivider(),
+              AppListTile(
+                key: const Key('settings-agent-full-screen-access-row'),
+                title: l10n.settingsAgentFullScreenAccess,
+                subtitle: l10n.settingsAgentFullScreenAccessSubtitle,
+                leading: leading(
+                  const _SettingsIcon(
+                    icon: CupertinoIcons.rectangle_expand_vertical,
+                  ),
+                ),
+                onTap: () => _openFullScreenAccessSettings(ref),
+              ),
+            ],
+          ],
           if (isDesktopPlatform) ...<Widget>[
             const AppSectionDivider(),
             AppListTile(
@@ -332,6 +374,29 @@ class SettingsPage extends ConsumerWidget {
                 (_) => const LanguageSelectionPage(),
               ),
             ),
+            if (session != null)
+              _QuietSettingsRow(
+                key: const Key('settings-agent-urgent-opt-in-row'),
+                icon: CupertinoIcons.bell,
+                title: l10n.settingsAgentUrgentCalls,
+                height: optionRowHeight,
+                trailing: CupertinoSwitch(
+                  key: const Key('settings-agent-urgent-opt-in-switch'),
+                  value: urgentOptIn.enabled,
+                  onChanged: urgentOptIn.canChange
+                      ? ref.read(agentUrgentOptInProvider.notifier).setEnabled
+                      : null,
+                ),
+              ),
+            if (session != null &&
+                defaultTargetPlatform == TargetPlatform.android)
+              _QuietSettingsRow(
+                key: const Key('settings-agent-full-screen-access-row'),
+                icon: CupertinoIcons.rectangle_expand_vertical,
+                title: l10n.settingsAgentFullScreenAccess,
+                height: optionRowHeight,
+                onTap: () => _openFullScreenAccessSettings(ref),
+              ),
             if (isDesktopPlatform)
               _QuietSettingsRow(
                 key: const Key('settings-display-row'),
@@ -722,6 +787,7 @@ class _QuietSettingsRow extends StatelessWidget {
     required this.height,
     this.iconKey,
     this.trailingText,
+    this.trailing,
     this.onTap,
     this.destructive = false,
   });
@@ -731,6 +797,7 @@ class _QuietSettingsRow extends StatelessWidget {
   final String title;
   final double height;
   final String? trailingText;
+  final Widget? trailing;
   final VoidCallback? onTap;
   final bool destructive;
 
@@ -782,6 +849,7 @@ class _QuietSettingsRow extends StatelessWidget {
                   style: TextStyle(color: theme.secondaryText, fontSize: 12),
                 ),
               ),
+            if (trailing != null) trailing!,
             if (onTap != null) ...<Widget>[
               SizedBox(width: responsive.spacing(5)),
               Icon(

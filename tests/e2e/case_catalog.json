@@ -1327,6 +1327,30 @@
       "catalogStatus": "planned"
     },
     {
+      "caseId": "ANDROID-SECURE-STORAGE-UPGRADE-E2E-001",
+      "feature": "Android 9.2.4 to 10.x secure-storage overwrite upgrade preserves identity and session state",
+      "layer": "native_product_ui",
+      "preconditions": "A dedicated Android test profile has the attested AWiki Me 9.2.4-backed artifact, a candidate artifact, one isolated non-production identity, and approval for overwrite installation without clearing App data.",
+      "action": "Use the 9.2.4 artifact to provision one Storage Scope and non-secret App-state sentinel, force-stop it, overwrite with the candidate, launch twice, force-stop between launches, and inspect only redacted migration and identity evidence.",
+      "exactOracles": [
+        "The candidate opens the same Storage Scope and DID/vault root, reads the same non-secret App-state sentinel, and does not enter registration or local-data recovery.",
+        "Scope secret and App state land in different fixed v10 storageNamespace targets; the encrypted v9 source keys remain untouched during the first compatibility release, while target-first reads make only v10 authoritative.",
+        "A second cold start reads target-first without reopening the v9 source and preserves the same identity/session projection."
+      ],
+      "negativeChecks": [
+        "Cleared App data, uninstall/reinstall, a new root key, phone/OTP recovery, resetOnError, plaintext export, target/source namespace collision, automatic source deletion, or a host-only fake cannot pass."
+      ],
+      "environment": "android_published_upgrade",
+      "cleanupPolicy": "dedicated_profile_explicit_cleanup_after_attestation",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-storage",
+      "implementationPath": "tests/e2e/planned/android_secure_storage_v10_upgrade_future_case.md",
+      "evidenceType": "case_attestation+artifact_provenance+non_secret_state_sentinels",
+      "catalogStatus": "planned"
+    },
+    {
       "caseId": "IDENTITY-SWITCH-E2E-001",
       "feature": "Bidirectional local identity switch message recovery",
       "layer": "product_application",

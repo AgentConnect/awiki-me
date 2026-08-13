@@ -2,7 +2,7 @@
 
 AWiki Me currently integrates the Android Aliyun EMAS Push transport. This
 slice initializes the official Android SDK, obtains the EMAS DeviceId, creates
-the message notification channel, normalizes native callbacks, and persists up
+the legacy and structured-normal notification channels, normalizes native callbacks, and persists up
 to 32 minimal sync/open events while the Flutter engine is unavailable.
 
 The equivalent iOS transport is documented in
@@ -93,11 +93,16 @@ AWikiRemotePush: EMAS DeviceId: ...
 ```
 
 Use that DeviceId in the EMAS console to send an Android `NOTICE`. Configure
-the notification channel as:
+the legacy notification channel as:
 
 ```text
 awiki_me_messages
 ```
+
+Message Service routes exact public `awiki.agent.message.v1` notices to
+`awiki_me_messages_v2`. AWiki Me pre-creates that channel with default
+importance, no sound, and no vibration; the provider request also uses
+`AndroidNotifyType=NONE`. Requested `urgent` never changes the provider class.
 
 The debug log records callback kinds without logging notification payloads.
 Notification-open callbacks are stored natively when Flutter is unavailable
@@ -108,12 +113,10 @@ Events remain queued under a stable delivery ID until the tenant-aware
 coordinator completes Core sync and any required routing, then explicitly
 acknowledges successful handling.
 
-When a core-channel notification callback arrives while the device is
-non-interactive, the Android receiver takes a three-second screen wake lock so
-the lock screen can present the high-importance notification. It does not use a
-full-screen intent: chat messages are not calls or alarms, and Android reserves
-that intrusive presentation for urgent time-sensitive use cases. Device and
-channel lock-screen settings remain authoritative.
+Provider notification callbacks never request a screen wake lock. The existing
+explicit legacy local-notification wake bridge remains separate, but the
+structured Agent flow cannot call it and never uses a full-screen intent. Device
+notification, lock-screen, DND, and channel settings remain authoritative.
 
 ## Authenticated installation lifecycle
 
@@ -155,12 +158,14 @@ the same `MessageSyncCoordinator` Core sync used by other reliable triggers.
 Only Core-committed messages may update the conversation list, timeline,
 unread state, or navigation.
 
-For Push-triggered sync, EMAS `NOTICE` is the sole Android presentation owner.
-AWiki Me suppresses its normal message-system-notification path for the entire
-coalesced sync, including queued work and automatic retry. Projection, normal
-message deduplication, and Coding Agent terminal deduplication still run. This
-keeps foreground delivery silent and prevents a WebSocket plus Push race from
-creating a second App-owned notification.
+When the App is not foreground, EMAS `NOTICE` is the sole Android presentation
+owner for exact structured Agent messages. A WebSocket/Core-first commit writes
+a terminal `deferredProvider` receipt and never submits an App-owned native
+notification or cue; provider-first and simultaneous arrival converge on the
+same ownership. In the foreground, the native hook suppresses the provider
+notice and the App may apply its local urgent gates, one bounded cue, and the
+App-internal callout. Projection and canonical message deduplication still run
+in every order.
 
 The App acknowledges native delivery IDs only after Core sync succeeds, local
 conversation/Join/timeline refresh completes, and any notification-open routing

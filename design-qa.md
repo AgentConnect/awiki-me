@@ -75,6 +75,31 @@ final result: passed
 
 ---
 
+## Agent notification source alignment (2026-08-11)
+
+- Exact Ardot references: `/Users/howard/.codex/visualizations/2026/08/11/019feec6-6b2e-7660-9ad7-69b52be43c4f/awiki-notify-reference/screenshot-2_36-20260811_125201447.png` and `/Users/howard/.codex/visualizations/2026/08/11/019feec6-6b2e-7660-9ad7-69b52be43c4f/awiki-notify-reference/screenshot-2_37-20260811_125201447.png`.
+- Implementation captures: `docs/prd/agent-notification-experience-v2-screenshots/03-urgent-timeline-card.png` and `docs/prd/agent-notification-experience-v2-screenshots/04-urgent-fullscreen.png`. Both source and implementation use a `390 x 844 @1x` viewport. The verified state is an `alert + urgent` event from `Hermes UI` while another conversation is open.
+- Combined comparison inputs: `/Users/howard/.codex/visualizations/2026/08/11/019feec6-6b2e-7660-9ad7-69b52be43c4f/awiki-notify-comparison/card-side-by-side.png` and `/Users/howard/.codex/visualizations/2026/08/11/019feec6-6b2e-7660-9ad7-69b52be43c4f/awiki-notify-comparison/fullscreen-side-by-side.png`.
+- Timeline: the structured card bypasses ordinary chat-bubble chrome and directly renders the source black/yellow warning header, source-derived hazard strips, red outline, summary/detail, event chip, and `09:16` time at the available 310 px card width.
+- Overlay: source-aligned full-screen dark surface, centered urgent identity state, static rings, trusted Agent label, summary/detail/meta, bounded-cue pill, and two 72 px actions. It remains App-internal and has no native full-screen intent, screen wake, DND bypass, or VoIP behavior.
+- Accessibility: controls use Cupertino icons and semantic buttons; text can wrap, the overlay scrolls for larger text or smaller heights, and there is no motion.
+
+### Comparison history
+
+- First comparison P1: the structured card was still wrapped in ordinary bubble decoration and padding. The timeline branch now renders the card directly while retaining the canonical sender/avatar/time shell.
+- First comparison P2: CJK and Cupertino glyphs appeared as test-font boxes. The visual fixture now loads a complete CJK font and the Cupertino icon font, and regenerated captures show the intended glyphs.
+- Second comparison P2: the urgent card lacked the Ardot hazard strips and trailing time. It now uses the measured source-derived raster strips and the message timestamp formatter.
+- Approved deviation: the full-screen implementation adds `紧急通知，不会建立语音通话` because the frozen product contract requires an explicit non-VoIP disclosure. It does not alter the primary hierarchy or actions.
+
+### Final check
+
+- The second same-viewport, same-state combined comparison found no remaining P0, P1, or P2 mismatch in hierarchy, crop, card boundary, header treatment, copy wrapping, event identity, timestamp, rings, or action placement.
+- Local capture verifies Flutter layout and glyph rendering. Physical-device typography, real sound/haptic behavior, notification permission surfaces, and background/killed presentation remain **UNVERIFIED** because no device action was authorized.
+
+final result: passed
+
+---
+
 ## Skill Agent 可读名称入口（2026-08-10）
 
 - “连接 Skill Agent”弹窗先展示最多 40 字符的“Agent 名称”输入框，再生成一次性安装指令；默认值为 `Skill Agent`，用户可在 Token 签发前修改。

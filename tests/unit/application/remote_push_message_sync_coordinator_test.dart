@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:awiki_me/src/application/alive_urgent_click_binding_store.dart';
 import 'package:awiki_me/src/application/models/remote_push_sync_receipt.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/ports/remote_push_sync_port.dart';
@@ -282,7 +283,9 @@ void main() {
 
     expect(sync.callCount, 0);
     expect(refreshCount, 0);
-    expect(client.acknowledged, isEmpty);
+    expect(client.acknowledged, <List<String>>[
+      <String>['removed'],
+    ]);
   });
 
   test('successful sync acknowledges exactly its captured batch', () async {
@@ -348,6 +351,81 @@ void main() {
     },
   );
 
+  test('replaying a retained delivery id drains again', () async {
+    final pending = _event('replay');
+    final client = _FakeRemotePushClient();
+    final sync = _FakeRemotePushSyncPort(
+      receipts: <RemotePushSyncReceipt>[
+        const RemotePushSyncReceipt(
+          disposition: RemotePushSyncDisposition.staleSession,
+        ),
+        RemotePushSyncReceipt(
+          disposition: RemotePushSyncDisposition.succeeded,
+          committedIncomingMessages: <CommittedIncomingMessage>[
+            _committed(logicalId: 'logical-replay'),
+          ],
+        ),
+      ],
+    );
+    final coordinator = _coordinator(
+      client: client,
+      sync: sync,
+      navigation: _FakeRemotePushNavigationPort(),
+    );
+    addTearDown(() async {
+      await coordinator.dispose();
+      await client.dispose();
+    });
+    coordinator.start();
+    await coordinator.activateSession(_alice);
+
+    client.emit(pending);
+    await sync.waitForCalls(1);
+    await _flushEvents();
+    expect(client.acknowledged, isEmpty);
+    expect(sync.callCount, 1);
+
+    client.emit(pending);
+    await sync.waitForCalls(2);
+    await _flushEvents();
+
+    expect(sync.callCount, 2);
+    expect(client.acknowledged, <List<String>>[
+      <String>['replay'],
+    ]);
+  });
+
+  test(
+    'app-owned MESSAGE does not ack a successful empty commit',
+    () async {
+      final pending = _event('empty-hint');
+      final client = _FakeRemotePushClient(pending: <RemotePushEvent>[pending]);
+      final sync = _FakeRemotePushSyncPort(
+        receipts: const <RemotePushSyncReceipt>[
+          RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.succeeded,
+          ),
+        ],
+      );
+      final coordinator = _coordinator(
+        client: client,
+        sync: sync,
+        navigation: _FakeRemotePushNavigationPort(),
+      );
+      addTearDown(() async {
+        await coordinator.dispose();
+        await client.dispose();
+      });
+      coordinator.start();
+      await coordinator.activateSession(_alice);
+      await _flushEvents();
+
+      expect(sync.callCount, 1);
+      expect(client.acknowledged, isEmpty);
+      expect(client.pendingEvents, <RemotePushEvent>[pending]);
+    },
+  );
+
   test('thrown sync retains pending event without a busy retry', () async {
     final pending = _event('thrown');
     final client = _FakeRemotePushClient(pending: <RemotePushEvent>[pending]);
@@ -404,12 +482,15 @@ void main() {
       final pending = _event('resume-retry');
       final client = _FakeRemotePushClient(pending: <RemotePushEvent>[pending]);
       final sync = _FakeRemotePushSyncPort(
-        receipts: const <RemotePushSyncReceipt>[
-          RemotePushSyncReceipt(
+        receipts: <RemotePushSyncReceipt>[
+          const RemotePushSyncReceipt(
             disposition: RemotePushSyncDisposition.retryableFailure,
           ),
           RemotePushSyncReceipt(
             disposition: RemotePushSyncDisposition.succeeded,
+            committedIncomingMessages: <CommittedIncomingMessage>[
+              _committed(logicalId: 'logical-resume'),
+            ],
           ),
         ],
       );
@@ -581,12 +662,15 @@ void main() {
     () async {
       final client = _FakeRemotePushClient();
       final sync = _FakeRemotePushSyncPort(
-        receipts: const <RemotePushSyncReceipt>[
-          RemotePushSyncReceipt(
+        receipts: <RemotePushSyncReceipt>[
+          const RemotePushSyncReceipt(
             disposition: RemotePushSyncDisposition.retryableFailure,
           ),
           RemotePushSyncReceipt(
             disposition: RemotePushSyncDisposition.succeeded,
+            committedIncomingMessages: <CommittedIncomingMessage>[
+              _committed(logicalId: 'logical-refresh'),
+            ],
           ),
         ],
       );
@@ -640,8 +724,11 @@ void main() {
       final sync = _SequencedRemotePushSyncPort(<Future<RemotePushSyncReceipt>>[
         firstGate.future,
         Future<RemotePushSyncReceipt>.value(
-          const RemotePushSyncReceipt(
+          RemotePushSyncReceipt(
             disposition: RemotePushSyncDisposition.succeeded,
+            committedIncomingMessages: <CommittedIncomingMessage>[
+              _committed(logicalId: 'logical-second'),
+            ],
           ),
         ),
       ]);
@@ -651,6 +738,9 @@ void main() {
         sync: sync,
         navigation: navigation,
         refreshInstallation: (_) async {},
+        aliveUrgentClickBindings: AliveUrgentClickBindingStore(
+          now: () => DateTime.utc(2026, 7, 30),
+        ),
       );
       addTearDown(() async {
         await coordinator.dispose();
@@ -663,8 +753,11 @@ void main() {
       client.emit(_event('second-concurrent'));
       await _flushEvents();
       firstGate.complete(
-        const RemotePushSyncReceipt(
+        RemotePushSyncReceipt(
           disposition: RemotePushSyncDisposition.succeeded,
+          committedIncomingMessages: <CommittedIncomingMessage>[
+            _committed(logicalId: 'logical-first'),
+          ],
         ),
       );
       await activation;
@@ -1008,6 +1101,255 @@ void main() {
       expect(navigation.calls, <String>['list:${_alice.storageScopeId.value}']);
     },
   );
+
+  test(
+    'prior Core commit binding routes an alive click after an idle sync',
+    () async {
+      final client = _FakeRemotePushClient();
+      final sync = _FakeRemotePushSyncPort(
+        receipts: const <RemotePushSyncReceipt>[
+          RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.succeeded,
+          ),
+        ],
+      );
+      final navigation = _FakeRemotePushNavigationPort();
+      final bindings = AliveUrgentClickBindingStore(
+        now: () => DateTime.utc(2026, 7, 30),
+      );
+      const expiry = 1800000000;
+      final mid = remotePushOpaqueMessageReference('prior-logical-id');
+      bindings.bind(
+        context: _alice,
+        opaqueMessageReference: mid,
+        conversationId: 'conversation-prior-commit',
+        expiresAtEpochSeconds: expiry,
+      );
+      final coordinator = _coordinator(
+        client: client,
+        sync: sync,
+        navigation: navigation,
+        bindings: bindings,
+      );
+      addTearDown(() async {
+        await coordinator.dispose();
+        bindings.dispose();
+        await client.dispose();
+      });
+      coordinator.start();
+      await coordinator.activateSession(_alice);
+
+      client.emit(
+        _event(
+          'opened-prior-commit',
+          kind: RemotePushEventKind.notificationOpened,
+          mid: mid,
+          exp: expiry,
+        ),
+      );
+      await sync.waitForCalls(1);
+      await _flushEvents();
+
+      expect(navigation.calls, <String>[
+        'list:${_alice.storageScopeId.value}',
+        'open:${_alice.storageScopeId.value}:conversation-prior-commit',
+      ]);
+
+      client.emit(
+        _event(
+          'opened-prior-commit-replay',
+          kind: RemotePushEventKind.notificationOpened,
+          mid: mid,
+          exp: expiry,
+        ),
+      );
+      await sync.waitForCalls(2);
+      await _flushEvents();
+      expect(
+        navigation.calls.where((call) => call.startsWith('open:')).length,
+        1,
+      );
+    },
+  );
+
+  test(
+    'forged expired wrong-session and restarted bindings never route',
+    () async {
+      final clock = _MutableClock(DateTime.utc(2026, 7, 30));
+      const expiry = 1800000000;
+      final validMid = remotePushOpaqueMessageReference('prior-logical-id');
+
+      Future<void> expectNoRoute({
+        required String label,
+        required RemotePushSessionContext bindingContext,
+        required RemotePushSessionContext activeContext,
+        required String eventMid,
+        required int eventExpiry,
+        bool installBinding = true,
+      }) async {
+        final client = _FakeRemotePushClient();
+        final bindings = AliveUrgentClickBindingStore(now: clock.call);
+        if (installBinding) {
+          bindings.bind(
+            context: bindingContext,
+            opaqueMessageReference: validMid,
+            conversationId: 'conversation-sensitive',
+            expiresAtEpochSeconds: expiry,
+          );
+        }
+        final navigation = _FakeRemotePushNavigationPort();
+        final coordinator = RemotePushMessageSyncCoordinator(
+          client: client,
+          sync: _FakeRemotePushSyncPort(),
+          navigation: navigation,
+          refreshInstallation: (_) async {},
+          aliveUrgentClickBindings: bindings,
+          now: clock.call,
+        );
+        coordinator.start();
+        await coordinator.activateSession(activeContext);
+        client.emit(
+          _event(
+            'unsafe-binding-$label',
+            kind: RemotePushEventKind.notificationOpened,
+            mid: eventMid,
+            exp: eventExpiry,
+          ),
+        );
+        await _flushEvents();
+        expect(
+          navigation.calls.where((call) => call.startsWith('open:')),
+          isEmpty,
+          reason: label,
+        );
+        await coordinator.dispose();
+        bindings.dispose();
+        await client.dispose();
+      }
+
+      await expectNoRoute(
+        label: 'forged',
+        bindingContext: _alice,
+        activeContext: _alice,
+        eventMid: 'message_AAAAAAAAAAAAAAAAAAAAAAAA',
+        eventExpiry: expiry,
+      );
+      await expectNoRoute(
+        label: 'wrong-session',
+        bindingContext: _alice,
+        activeContext: _bob,
+        eventMid: validMid,
+        eventExpiry: expiry,
+      );
+      await expectNoRoute(
+        label: 'restart',
+        bindingContext: _alice,
+        activeContext: _alice,
+        eventMid: validMid,
+        eventExpiry: expiry,
+        installBinding: false,
+      );
+
+      final expiredClient = _FakeRemotePushClient();
+      final expiredBindings = AliveUrgentClickBindingStore(now: clock.call);
+      expiredBindings.bind(
+        context: _alice,
+        opaqueMessageReference: validMid,
+        conversationId: 'conversation-expired',
+        expiresAtEpochSeconds: expiry,
+      );
+      clock.value = DateTime.fromMillisecondsSinceEpoch(
+        expiry * Duration.millisecondsPerSecond,
+        isUtc: true,
+      );
+      final expiredNavigation = _FakeRemotePushNavigationPort();
+      final expiredCoordinator = RemotePushMessageSyncCoordinator(
+        client: expiredClient,
+        sync: _FakeRemotePushSyncPort(),
+        navigation: expiredNavigation,
+        refreshInstallation: (_) async {},
+        aliveUrgentClickBindings: expiredBindings,
+        now: clock.call,
+      );
+      expiredCoordinator.start();
+      await expiredCoordinator.activateSession(_alice);
+      expiredClient.emit(
+        _event(
+          'unsafe-binding-expired',
+          kind: RemotePushEventKind.notificationOpened,
+          mid: validMid,
+          exp: expiry,
+        ),
+      );
+      await _flushEvents();
+      expect(
+        expiredNavigation.calls.where((call) => call.startsWith('open:')),
+        isEmpty,
+      );
+      await expiredCoordinator.dispose();
+      expiredBindings.dispose();
+      await expiredClient.dispose();
+    },
+  );
+
+  test('native cancel or timeout removal consumes binding without sync', () async {
+    final client = _FakeRemotePushClient();
+    final sync = _FakeRemotePushSyncPort();
+    final navigation = _FakeRemotePushNavigationPort();
+    final bindings = AliveUrgentClickBindingStore(
+      now: () => DateTime.utc(2026, 7, 30),
+    );
+    const expiry = 1800000000;
+    final mid = remotePushOpaqueMessageReference('cancelled-logical-id');
+    bindings.bind(
+      context: _alice,
+      opaqueMessageReference: mid,
+      conversationId: 'conversation-cancelled',
+      expiresAtEpochSeconds: expiry,
+    );
+    final coordinator = _coordinator(
+      client: client,
+      sync: sync,
+      navigation: navigation,
+      bindings: bindings,
+    );
+    addTearDown(() async {
+      await coordinator.dispose();
+      bindings.dispose();
+      await client.dispose();
+    });
+    coordinator.start();
+    await coordinator.activateSession(_alice);
+
+    client.emit(
+      _event(
+        'removed-cancelled',
+        kind: RemotePushEventKind.notificationRemoved,
+        mid: mid,
+        exp: expiry,
+      ),
+    );
+    await _flushEvents();
+    expect(sync.callCount, 0);
+    expect(client.acknowledged, <List<String>>[
+      <String>['removed-cancelled'],
+    ]);
+
+    client.emit(
+      _event(
+        'opened-after-cancel',
+        kind: RemotePushEventKind.notificationOpened,
+        mid: mid,
+        exp: expiry,
+      ),
+    );
+    await sync.waitForCalls(1);
+    await _flushEvents();
+    expect(
+      navigation.calls.where((call) => call.startsWith('open:')),
+      isEmpty,
+    );
+  });
 }
 
 RemotePushMessageSyncCoordinator _coordinator({
@@ -1015,14 +1357,28 @@ RemotePushMessageSyncCoordinator _coordinator({
   required _FakeRemotePushSyncPort sync,
   required _FakeRemotePushNavigationPort navigation,
   Future<void> Function(RemotePushSessionContext context)? refreshInstallation,
+  AliveUrgentClickBindingStore? bindings,
 }) {
   return RemotePushMessageSyncCoordinator(
     client: client,
     sync: sync,
     navigation: navigation,
     refreshInstallation: refreshInstallation ?? (_) async {},
+    aliveUrgentClickBindings:
+        bindings ??
+        AliveUrgentClickBindingStore(
+          now: () => DateTime.utc(2026, 7, 30),
+        ),
     now: () => DateTime.utc(2026, 7, 30),
   );
+}
+
+final class _MutableClock {
+  _MutableClock(this.value);
+
+  DateTime value;
+
+  DateTime call() => value;
 }
 
 final _alice = RemotePushSessionContext(
@@ -1140,6 +1496,9 @@ final class _FakeRemotePushClient
   Future<RemotePushRegistration?> initialize() async => null;
 
   @override
+  Future<void> pullPendingEvents() async {}
+
+  @override
   Future<void> setActiveNotificationTargetReference(
     String? targetReference,
   ) async {
@@ -1152,12 +1511,20 @@ final class _FakeRemotePushClient
 
 final class _FakeRemotePushSyncPort implements RemotePushSyncPort {
   _FakeRemotePushSyncPort({
-    List<RemotePushSyncReceipt> receipts = const <RemotePushSyncReceipt>[
-      RemotePushSyncReceipt(disposition: RemotePushSyncDisposition.succeeded),
-    ],
+    List<RemotePushSyncReceipt>? receipts,
     this.error,
     this.gate,
-  }) : _receipts = List<RemotePushSyncReceipt>.of(receipts);
+  }) : _receipts = List<RemotePushSyncReceipt>.of(
+         receipts ??
+             <RemotePushSyncReceipt>[
+               RemotePushSyncReceipt(
+                 disposition: RemotePushSyncDisposition.succeeded,
+                 committedIncomingMessages: <CommittedIncomingMessage>[
+                   _committed(logicalId: 'logical-default'),
+                 ],
+               ),
+             ],
+       );
 
   final List<RemotePushSyncReceipt> _receipts;
   Object? error;

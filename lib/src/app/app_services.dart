@@ -14,6 +14,7 @@ import '../application/attachment_open_service.dart';
 import '../application/attachment_preview_service.dart';
 import '../application/account_state_sync_request_bus.dart';
 import '../application/account_state_sync_service.dart';
+import '../application/alive_urgent_click_binding_store.dart';
 import '../application/app_session_service.dart';
 import '../application/agent/agent_control_service.dart';
 import '../application/agent/agent_control_status_store.dart';
@@ -28,6 +29,7 @@ import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
+import '../application/ports/agent_notification_preference_port.dart';
 import '../application/ports/account_state_sync_port.dart';
 import '../application/ports/device_management_core_port.dart';
 import '../application/ports/group_encryption_core_port.dart';
@@ -281,8 +283,18 @@ final appPresentationServiceProvider = Provider<AppPresentationService>(
 
 final remotePushClientProvider = Provider<RemotePushClient?>((ref) => null);
 
+final aliveUrgentClickBindingStoreProvider =
+    Provider<AliveUrgentClickBindingStore>((ref) {
+      final store = AliveUrgentClickBindingStore();
+      ref.onDispose(store.dispose);
+      return store;
+    });
+
 final remotePushInstallationCoordinatorProvider =
     Provider<RemotePushInstallationCoordinator?>((ref) => null);
+
+final agentNotificationPreferencePortProvider =
+    Provider<AgentNotificationPreferencePort?>((ref) => null);
 
 final remotePushStorageScopeIdProvider = Provider<StorageScopeId?>(
   (ref) => null,

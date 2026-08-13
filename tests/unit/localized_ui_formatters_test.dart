@@ -1,5 +1,6 @@
 import 'package:awiki_me/l10n/app_localizations_en.dart';
 import 'package:awiki_me/l10n/app_localizations_zh.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_message_v1.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
@@ -30,6 +31,55 @@ void main() {
 
     expect(localizeMessagePreview(zh, message), '附件：report.pdf');
     expect(localizeMessagePreview(en, message), 'Attachment: report.pdf');
+  });
+
+  test('typed Agent preview precedes raw-shaped message fields', () {
+    ChatMessage message(AgentMessageProjection projection) => ChatMessage(
+      localId: 'agent-message',
+      threadId: 'dm:agent',
+      senderDid: 'did:agent',
+      content: 'SHOULD_NOT_RENDER',
+      originalType: 'agent_message',
+      payloadJson: '{"private":"SHOULD_NOT_RENDER_RAW"}',
+      createdAt: DateTime(2026, 8, 11),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      agentMessage: projection,
+    );
+
+    expect(
+      localizeMessagePreview(
+        zh,
+        message(
+          const ValidAgentMessageProjection(
+            AgentMessageV1(
+              eventId: 'event-1',
+              taskName: 'Release verification',
+              kind: AgentMessageKind.message,
+              level: AgentMessageLevel.normal,
+              summary: 'Validated summary',
+              detail: null,
+              action: AgentMessageAction.openConversation,
+            ),
+          ),
+        ),
+      ),
+      'Validated summary',
+    );
+    expect(
+      localizeMessagePreview(
+        zh,
+        message(const InvalidAgentMessageProjection()),
+      ),
+      '这条 Agent 消息无法安全显示。',
+    );
+    expect(
+      localizeMessagePreview(
+        en,
+        message(const InvalidAgentMessageProjection()),
+      ),
+      'This Agent message cannot be displayed safely.',
+    );
   });
 
   test('empty attachment filename uses localized fallback', () {

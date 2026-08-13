@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'app_lifecycle_provider.dart';
 
 import '../../../app/app_services.dart';
 import '../../../application/ports/remote_push_sync_port.dart';
@@ -37,6 +40,9 @@ final remotePushMessageSyncCoordinatorProvider =
         client: client,
         sync: ref.read(remotePushSyncPortProvider),
         navigation: ref.read(remotePushNavigationPortProvider),
+        aliveUrgentClickBindings: ref.read(
+          aliveUrgentClickBindingStoreProvider,
+        ),
         refreshInstallation: (context) async {
           try {
             await _refreshRemotePushInstallation(ref, context);
@@ -47,6 +53,12 @@ final remotePushMessageSyncCoordinatorProvider =
           }
         },
       )..start();
+      ref.listen<AppLifecycleState>(appLifecycleProvider, (previous, next) {
+        if (next == AppLifecycleState.hidden ||
+            next == AppLifecycleState.paused) {
+          unawaited(coordinator.pullPendingAndDrain());
+        }
+      });
       ref.onDispose(() {
         unawaited(coordinator.dispose());
       });

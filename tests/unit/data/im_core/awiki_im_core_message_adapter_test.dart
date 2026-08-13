@@ -7,17 +7,171 @@ import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/message_sync_diagnostics.dart';
+import 'package:awiki_me/src/data/im_core/awiki_im_core_message_sync_adapter.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_config.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_message_adapter.dart';
+import 'package:awiki_me/src/data/im_core/awiki_im_core_mappers.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_paths.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_runtime.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_secret_storage.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_message_v1.dart'
+    as app_agent;
 import 'package:flutter_test/flutter_test.dart';
 
 const _testScopeValue = '44444444-4444-4444-8444-444444444444';
 
 void main() {
+  test('typed valid Agent projection maps without raw payload or text', () {
+    final mapped = const AwikiImCoreMappers().chatMessageFromCore(
+      _messageForOwner('did:alice').copyWithAgentMessageForTest(
+        const core.AgentMessageProjection(
+          state: core.AgentMessageProjectionState.valid,
+          message: core.AgentMessageV1(
+            schema: 'awiki.agent.message.v1',
+            eventId: 'evt_task_20260811_001',
+            taskName: 'Production release review',
+            kind: core.AgentMessageKind.alert,
+            requestedLevel: core.AgentMessageRequestedLevel.urgent,
+            summary: 'Review needed',
+            detail: 'Open the task.',
+            action: core.AgentMessageAction.openConversation,
+          ),
+        ),
+      ),
+      ownerDid: 'did:alice',
+    );
+    expect(mapped.content, isEmpty);
+    expect(mapped.payloadJson, isNull);
+    expect(mapped.originalType, 'agent_message');
+    expect(mapped.agentMessage, isA<app_agent.ValidAgentMessageProjection>());
+    expect(
+      (mapped.agentMessage! as app_agent.ValidAgentMessageProjection)
+          .message
+          .taskName,
+      'Production release review',
+    );
+    expect(mapped.previewText, 'Review needed');
+  });
+
+  test('closed invalid projection for missing taskName stays content-free', () {
+    // Core deliberately does not expose an invalid reason or raw body. A
+    // missing task_name reaches the App only as this closed invalid state.
+    final mapped = const AwikiImCoreMappers().chatMessageFromCore(
+      _messageForOwner('did:alice').copyWithAgentMessageForTest(
+        const core.AgentMessageProjection(
+          state: core.AgentMessageProjectionState.invalid,
+        ),
+      ),
+      ownerDid: 'did:alice',
+    );
+    expect(mapped.content, isEmpty);
+    expect(mapped.payloadJson, isNull);
+    expect(mapped.originalType, 'agent_message');
+    expect(mapped.agentMessage, isA<app_agent.InvalidAgentMessageProjection>());
+    expect(mapped.hasRenderableContent, isTrue);
+  });
+
+  test('valid-without-message Core projection fails closed as invalid', () {
+    final mapped = const AwikiImCoreMappers().chatMessageFromCore(
+      _messageForOwner('did:alice').copyWithAgentMessageForTest(
+        const core.AgentMessageProjection(
+          state: core.AgentMessageProjectionState.valid,
+        ),
+      ),
+      ownerDid: 'did:alice',
+    );
+
+    expect(mapped.content, isEmpty);
+    expect(mapped.payloadJson, isNull);
+    expect(mapped.agentMessage, isA<app_agent.InvalidAgentMessageProjection>());
+  });
+
+  test('snapshot consumes only the typed Core Agent projection', () {
+    const projection = core.AgentMessageProjection(
+      state: core.AgentMessageProjectionState.valid,
+      message: core.AgentMessageV1(
+        schema: 'awiki.agent.message.v1',
+        eventId: 'evt_task_20260811_snapshot',
+        taskName: 'Snapshot verification',
+        kind: core.AgentMessageKind.taskResult,
+        requestedLevel: core.AgentMessageRequestedLevel.normal,
+        summary: 'Snapshot result',
+        detail: null,
+        action: core.AgentMessageAction.openConversation,
+      ),
+    );
+    final mapped = const AwikiImCoreMappers().chatMessageFromSnapshot(
+      const core.ConversationSnapshotMessage(
+        id: 'message-snapshot',
+        threadKind: 'thread',
+        threadId: 'dm:peer-scope:v1:bob',
+        direction: 'incoming',
+        sender: 'did:bob',
+        receiver: 'did:alice',
+        body: core.ConversationSnapshotMessageBody(
+          text: 'SHOULD_NOT_RENDER',
+          payloadJson: '{"private":"SHOULD_NOT_RENDER_RAW"}',
+          agentMessage: projection,
+        ),
+        sentAt: '2026-08-11T12:00:00Z',
+        serverSequence: 2,
+        contentType: 'application/json',
+      ),
+      ownerDid: 'did:alice',
+      conversationId: 'dm:peer-scope:v1:bob',
+    );
+
+    expect(mapped.content, isEmpty);
+    expect(mapped.payloadJson, isNull);
+    expect(mapped.originalType, 'agent_message');
+    expect(mapped.previewText, 'Snapshot result');
+    expect(mapped.agentMessage, isA<app_agent.ValidAgentMessageProjection>());
+    expect(
+      (mapped.agentMessage! as app_agent.ValidAgentMessageProjection)
+          .message
+          .taskName,
+      'Snapshot verification',
+    );
+  });
+
+  test(
+    'message sync preserves only strict Core authoritative receive time',
+    () async {
+      final client = _FakeClient(ownerDid: 'did:alice');
+      final adapter = AwikiImCoreMessageSyncAdapter(
+        runtime: _FakeRuntime(client),
+        syncV2ReadEnabled: true,
+      );
+
+      client.messages.syncNowOutcome = _syncOutcomeWithAuthoritativeTime(
+        '2026-08-11T12:00:00Z',
+      );
+      final valid = await adapter.syncNow(reason: 'test');
+      expect(
+        valid.committedIncomingMessages.single.authoritativeReceivedAt,
+        DateTime.utc(2026, 8, 11, 12),
+      );
+
+      client.messages.syncNowOutcome = _syncOutcomeWithAuthoritativeTime(
+        '2026-08-11T12:00:00',
+      );
+      final missingZone = await adapter.syncNow(reason: 'test');
+      expect(
+        missingZone.committedIncomingMessages.single.authoritativeReceivedAt,
+        isNull,
+      );
+
+      client.messages.syncNowOutcome = _syncOutcomeWithAuthoritativeTime(
+        'not-a-timestamp',
+      );
+      final malformed = await adapter.syncNow(reason: 'test');
+      expect(
+        malformed.committedIncomingMessages.single.authoritativeReceivedAt,
+        isNull,
+      );
+    },
+  );
   test(
     'loadLocalHistory forwards limit and reuses owner did per client',
     () async {
@@ -742,6 +896,18 @@ class _FakeMessageApi implements core.MessageApi {
   String? lastIdempotencyKey;
   core.MessageSecurityMode? lastSecurity;
   String? responseConversationId;
+  core.MessageSyncOutcome syncNowOutcome = const core.MessageSyncOutcome(
+    status: core.MessageSyncStatus.idle,
+    eventsApplied: 0,
+    pagesFetched: 0,
+    messagesHydrated: 0,
+    duplicatesSkipped: 0,
+  );
+
+  @override
+  Future<core.MessageSyncOutcome> syncNow(
+    core.MessageSyncRequest request,
+  ) async => syncNowOutcome;
 
   @override
   Future<core.SendMessageResult> sendPayload(
@@ -1044,6 +1210,49 @@ core.Message _messageForOwner(
       contentType: contentType,
     ),
   );
+}
+
+core.MessageSyncOutcome _syncOutcomeWithAuthoritativeTime(String? value) {
+  return core.MessageSyncOutcome(
+    status: core.MessageSyncStatus.changed,
+    eventsApplied: 1,
+    pagesFetched: 1,
+    messagesHydrated: 1,
+    duplicatesSkipped: 0,
+    committedIncomingMessages: <core.CommittedIncomingMessage>[
+      core.CommittedIncomingMessage(
+        eventId: 'event-1',
+        logicalMessageId: 'message-1',
+        source: core.CommittedMessageSource.liveDelta,
+        direction: core.MessageDirection.incoming,
+        authoritativeReceivedAt: value,
+        message: _messageForOwner('did:alice', id: 'message-1'),
+      ),
+    ],
+  );
+}
+
+extension on core.Message {
+  core.Message copyWithAgentMessageForTest(
+    core.AgentMessageProjection projection,
+  ) {
+    return core.Message(
+      id: id,
+      conversationId: conversationId,
+      senderPeerPersonaId: senderPeerPersonaId,
+      senderDidSnapshot: senderDidSnapshot,
+      threadKind: threadKind,
+      threadId: threadId,
+      direction: direction,
+      sender: sender,
+      receiver: receiver,
+      group: this.group,
+      body: core.MessageBodyView(agentMessage: projection),
+      sentAt: sentAt,
+      receivedAt: receivedAt,
+      metadata: metadata,
+    );
+  }
 }
 
 core.ConversationIdentity _conversationIdentity([

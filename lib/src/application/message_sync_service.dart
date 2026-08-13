@@ -105,7 +105,9 @@ String _coreMessageSyncReason(String reason) {
     'websocket_reconnect' || 'realtime_reconnected' => 'websocket_reconnect',
     'foreground_reconcile' || 'foreground_catch_up' => 'foreground_reconcile',
     'manual_refresh' => 'manual_refresh',
-    'remote_push' => 'remote_push',
+    // Core's closed reason set does not include remote_push. A MESSAGE dirty
+    // hint is the same class of work as a realtime websocket hint.
+    'remote_push' => 'websocket_hint',
     'after_mutation' => 'after_mutation',
     'websocket_hint' ||
     'realtime_agent_control' ||

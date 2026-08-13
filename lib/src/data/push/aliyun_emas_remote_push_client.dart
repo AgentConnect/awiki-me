@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../domain/entities/remote_push_event.dart';
 import '../../domain/services/notification_channels.dart';
@@ -8,6 +9,8 @@ import '../../domain/services/remote_push_client.dart';
 import 'aliyun_emas_platform.dart';
 
 const String aliyunEmasPushProvider = 'aliyun_emas';
+const String awikiMeClientProduct = 'awiki-me';
+const String awikiAgentMessageV1Capability = 'awiki.agent.message.v1';
 const String _aliyunEmasSuccessCode = '10000';
 const int _maxPendingEvents = 32;
 const Duration _maxPendingEventAge = Duration(hours: 24);
@@ -46,10 +49,13 @@ class AliyunEmasRemotePushClient
   AliyunEmasRemotePushClient({
     AliyunEmasPlatform? platform,
     this.clientPlatform = 'android',
+    Future<PackageInfo> Function()? packageInfoLoader,
   }) : assert(clientPlatform == 'android' || clientPlatform == 'ios'),
-       _platform = platform ?? PluginAliyunEmasPlatform();
+       _platform = platform ?? PluginAliyunEmasPlatform(),
+       _packageInfoLoader = packageInfoLoader ?? PackageInfo.fromPlatform;
 
   final AliyunEmasPlatform _platform;
+  final Future<PackageInfo> Function() _packageInfoLoader;
   final String clientPlatform;
   final StreamController<RemotePushEvent> _events =
       StreamController<RemotePushEvent>.broadcast();
@@ -92,6 +98,14 @@ class AliyunEmasRemotePushClient
     return _initialization ??= _initializeAndResetAfterFailure();
   }
 
+  @override
+  Future<void> pullPendingEvents() async {
+    if (_disposed) {
+      throw StateError('Remote push client is disposed');
+    }
+    await _acceptPlatformEvents(await _platform.loadPendingEvents());
+  }
+
   Future<RemotePushRegistration?> _initializeAndResetAfterFailure() async {
     try {
       return await _initialize();
@@ -117,6 +131,15 @@ class AliyunEmasRemotePushClient
       ),
       alsoAccept: const <String>{'10005'},
     );
+    _requireSuccess(
+      'create_structured_normal_notification_channel',
+      await _platform.createNotificationChannel(
+        id: awikiStructuredNormalNotificationChannelId,
+        name: awikiStructuredNormalNotificationChannelName,
+        description: awikiStructuredNormalNotificationChannelDescription,
+      ),
+      alsoAccept: const <String>{'10005'},
+    );
     _requireSuccess('initialize', await _platform.initialize());
     final deviceId = (await _platform.getDeviceId()).trim();
     if (deviceId.isEmpty) {
@@ -126,10 +149,14 @@ class AliyunEmasRemotePushClient
       );
     }
     final appId = await _loadAndroidAppId();
+    final clientVersion = await _loadClientVersion();
     return _registration = RemotePushRegistration(
       provider: aliyunEmasPushProvider,
       providerDeviceId: deviceId,
       platform: clientPlatform,
+      clientProduct: awikiMeClientProduct,
+      clientVersion: clientVersion,
+      capabilities: const <String>[awikiAgentMessageV1Capability],
       appId: appId,
     );
   }
@@ -144,7 +171,16 @@ class AliyunEmasRemotePushClient
         _removeExpiredPendingEvents();
         final alreadyPending = _pendingEvents.containsKey(event.deliveryId);
         _retainPendingEvent(event);
-        if (!alreadyPending) _events.add(event);
+        debugPrint(
+          '[AWikiRemotePush] dart '
+          '${alreadyPending ? 'alreadyPending' : 'firstSeen'} '
+          '${event.kind.wireName}',
+        );
+        // Replays of a retained delivery must re-enter the coordinator so a
+        // failed drain can run again inside the WorkManager window.
+        if (!_events.isClosed) {
+          _events.add(event);
+        }
       } on FormatException catch (error) {
         debugPrint('[awiki_me][remote-push][invalid-event] $error');
       }
@@ -152,15 +188,38 @@ class AliyunEmasRemotePushClient
   }
 
   Future<void> _refreshRegistration() async {
+    final current = _registration;
     final deviceId = (await _platform.getDeviceId()).trim();
     if (deviceId.isEmpty) return;
-    final appId = _registration?.appId ?? await _loadAndroidAppId();
+    final appId = current?.appId ?? await _loadAndroidAppId();
+    final clientVersion = current?.clientVersion ?? await _loadClientVersion();
     _registration = RemotePushRegistration(
       provider: aliyunEmasPushProvider,
       providerDeviceId: deviceId,
       platform: clientPlatform,
+      clientProduct: current?.clientProduct ?? awikiMeClientProduct,
+      clientVersion: clientVersion,
+      capabilities:
+          current?.capabilities ??
+          const <String>[awikiAgentMessageV1Capability],
       appId: appId,
     );
+  }
+
+  Future<String> _loadClientVersion() async {
+    final packageInfo = await _packageInfoLoader();
+    final version = packageInfo.version.trim();
+    final build = packageInfo.buildNumber.trim();
+    final value = build.isEmpty || version.endsWith('+$build')
+        ? version
+        : '$version+$build';
+    if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$').hasMatch(value)) {
+      throw const RemotePushInitializationException(
+        operation: 'get_client_version',
+        code: 'invalid_client_version',
+      );
+    }
+    return value;
   }
 
   Future<String?> _loadAndroidAppId() async {

@@ -7,26 +7,38 @@ import 'package:flutter/widgets.dart';
 
 import '../../../app/app_services.dart';
 import '../../../app/app_locale.dart';
+import '../../../application/agent_message_presentation_store.dart';
+import '../../../application/alive_urgent_click_binding_store.dart';
+import '../../../application/app_presentation_service.dart';
 import '../../../application/messaging_service.dart';
 import '../../../application/models/app_session.dart';
 import '../../../application/models/message_sync_diagnostics.dart';
+import '../../../application/models/product_local_models.dart';
 import '../../../application/models/remote_push_sync_receipt.dart';
 import '../../../application/ports/message_sync_core_port.dart';
 import '../../../application/ports/remote_push_sync_port.dart';
+import '../../../application/remote_push_message_reference.dart';
 import '../../../application/tenant/app_tenant.dart';
 import '../../../core/performance_logger.dart';
+import '../../../domain/entities/agent/agent_message_v1.dart';
 import '../../../domain/entities/chat_message.dart';
 import '../../../domain/entities/notification_target.dart';
+import '../../../domain/services/notification_facade.dart';
 import '../../../l10n/app_message.dart';
 import '../../agents/agents_provider.dart';
 import '../../conversation_list/conversation_peer_classifier.dart';
 import '../../profile/peer_display_profile_provider.dart';
+import '../../shared/formatters/display_formatters.dart';
 import '../../shared/formatters/localized_ui_formatters.dart';
 import '../../conversation_list/conversation_provider.dart';
 import '../../devices/devices_provider.dart';
 import 'agent_terminal_notification_provider.dart';
+import 'agent_message_presentation_policy.dart';
+import 'agent_urgent_opt_in_provider.dart';
+import 'agent_urgent_overlay_provider.dart';
 import 'app_lifecycle_provider.dart';
 import 'ordinary_message_presentation_policy.dart';
+import 'selected_conversation_provider.dart';
 import 'session_provider.dart';
 
 const bool _messageSyncCoordinatorTraceEnabled = bool.fromEnvironment(
@@ -242,6 +254,9 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     this.failureBackoff = const Duration(seconds: 8),
     this.failureSurfaceDelay = const Duration(seconds: 30),
   }) : _sessionEpoch = ref.read(sessionProvider).activeEpoch,
+       _aliveUrgentClickBindings = ref.read(
+         aliveUrgentClickBindingStoreProvider,
+       ),
        super(const MessageSyncCoordinatorState()) {
     _sessionSubscription = ref.listen<SessionState>(
       sessionProvider,
@@ -253,6 +268,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   final Duration minInterval;
   final Duration failureBackoff;
   final Duration failureSurfaceDelay;
+  final AliveUrgentClickBindingStore _aliveUrgentClickBindings;
 
   late final ProviderSubscription<SessionState> _sessionSubscription;
   SessionEpoch? _sessionEpoch;
@@ -291,6 +307,9 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     _lastFailedAt = null;
     _notifiedCommittedEventIds.clear();
     _notifiedCommittedMessageIds.clear();
+    _aliveUrgentClickBindings.clear();
+    unawaited(ref.read(notificationFacadeProvider).stopStructuredUrgentCue());
+    ref.read(agentUrgentOverlayProvider.notifier).clear();
     state = const MessageSyncCoordinatorState();
   }
 
@@ -298,7 +317,9 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     return _requestSync(
       reason,
       immediate: immediate,
-      policy: _MessageSyncRequestPolicy(),
+      policy: _MessageSyncRequestPolicy(
+        timelineOnlyCommittedMessages: reason == 'startup',
+      ),
       remotePushRequest: false,
     ).then<void>((_) {});
   }
@@ -318,22 +339,34 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       final refreshed = await ref
           .read(appSessionServiceProvider)
           .refreshSession();
-      if (refreshed == null || !_isCurrentEpoch(epoch)) {
+      if (!_isCurrentEpoch(epoch)) {
         return const RemotePushSyncReceipt(
           disposition: RemotePushSyncDisposition.staleSession,
         );
       }
-      final updated = ref
-          .read(sessionProvider.notifier)
-          .updateSessionMetadataIfCurrent(refreshed.toLegacySessionIdentity());
-      if (!updated || !_isCurrentEpoch(epoch)) {
+      if (refreshed == null) {
+        debugPrint(
+          '[AWikiRemotePush] refreshSession null; fail-open current epoch',
+        );
+      } else {
+        final updated = ref
+            .read(sessionProvider.notifier)
+            .updateSessionMetadataIfCurrent(refreshed.toLegacySessionIdentity());
+        if (!updated || !_isCurrentEpoch(epoch)) {
+          return const RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.staleSession,
+          );
+        }
+      }
+    } on Object catch (error) {
+      if (!_isCurrentEpoch(epoch)) {
         return const RemotePushSyncReceipt(
           disposition: RemotePushSyncDisposition.staleSession,
         );
       }
-    } on Object {
-      return const RemotePushSyncReceipt(
-        disposition: RemotePushSyncDisposition.staleSession,
+      debugPrint(
+        '[AWikiRemotePush] refreshSession failed; fail-open '
+        '${error.runtimeType}',
       );
     }
     return _requestSync(
@@ -404,6 +437,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
               policy.suppressNotificationPresentation,
           suppressTransientFailurePresentation:
               policy.suppressTransientFailurePresentation,
+          timelineOnlyCommittedMessages: policy.timelineOnlyCommittedMessages,
         );
         if (remotePushRequest) {
           _messageSyncTrace(
@@ -424,6 +458,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
               active.policy.suppressNotificationPresentation,
           suppressTransientFailurePresentation:
               active.policy.suppressTransientFailurePresentation,
+          timelineOnlyCommittedMessages:
+              sameActiveRun && active.policy.timelineOnlyCommittedMessages,
         );
       }
       final queuedFuture = _queueAfterActive(
@@ -533,6 +569,9 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
               active.policy.suppressNotificationPresentation,
           suppressTransientFailurePresentation:
               active.policy.suppressTransientFailurePresentation,
+          timelineOnlyCommittedMessages:
+              !active.presentationFinalized &&
+              active.policy.timelineOnlyCommittedMessages,
         );
       }
       _queueAfterActive(
@@ -632,8 +671,12 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
             category: _categoryForOutcomeCode(failureCode),
             code: failureCode,
           );
-          return const RemotePushSyncReceipt(
+          debugPrint(
+            '[AWikiRemotePush] remote_push core retryable code=$failureCode',
+          );
+          return RemotePushSyncReceipt(
             disposition: RemotePushSyncDisposition.retryableFailure,
+            errorCode: failureCode,
           );
         }
         if (result.status == MessageSyncStatus.authRevoked) {
@@ -685,9 +728,11 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
 
         try {
           activeSync.presentationFinalized = true;
-          _dispatchCommittedIncomingNotifications(
+          var committed = result.committedIncomingMessages;
+          await _dispatchCommittedIncomingNotifications(
             result,
             suppressPresentation: policy.suppressNotificationPresentation,
+            timelineOnly: policy.timelineOnlyCommittedMessages,
           );
           await ref.read(devicesProvider.notifier).refreshJoinInbox();
           if (!_isCurrentSync(epoch, sessionFence)) {
@@ -703,6 +748,49 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
               disposition: RemotePushSyncDisposition.staleSession,
             );
           }
+          if (reason == 'remote_push' &&
+              !policy.suppressNotificationPresentation &&
+              !policy.timelineOnlyCommittedMessages) {
+            final recovered = _recentLocalUrgentAgentMessages(
+              already: committed,
+            );
+            if (recovered.isNotEmpty) {
+              debugPrint(
+                '[AWikiRemotePush] remote_push recovered local urgent '
+                '${recovered.length}',
+              );
+              await _dispatchCommittedIncomingNotifications(
+                MessageSyncOutcome(
+                  status: MessageSyncStatus.changed,
+                  eventsApplied: recovered.length,
+                  pagesFetched: 0,
+                  committedIncomingMessages: recovered,
+                ),
+                suppressPresentation: false,
+                timelineOnly: false,
+              );
+              committed = <CommittedIncomingMessage>[
+                ...committed,
+                ...recovered,
+              ];
+            }
+          }
+          if (reason == 'remote_push') {
+            debugPrint(
+              '[AWikiRemotePush] remote_push sync '
+              'status=${result.status.name} applied=${result.eventsApplied} '
+              'dup=${result.duplicatesSkipped} '
+              'committed=${committed.length} '
+              'warnings=${result.warnings.length}',
+            );
+          }
+          return RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.succeeded,
+            committedIncomingMessages: committed,
+            eventsApplied: result.eventsApplied,
+            duplicatesSkipped: result.duplicatesSkipped,
+            lastStatus: result.status.name,
+          );
         } catch (error) {
           if (!_isCurrentSync(epoch, sessionFence)) {
             return const RemotePushSyncReceipt(
@@ -714,6 +802,9 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         return RemotePushSyncReceipt(
           disposition: RemotePushSyncDisposition.succeeded,
           committedIncomingMessages: result.committedIncomingMessages,
+          eventsApplied: result.eventsApplied,
+          duplicatesSkipped: result.duplicatesSkipped,
+          lastStatus: result.status.name,
         );
       } catch (error) {
         _messageSyncTrace(
@@ -779,8 +870,14 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
             code: failure.code,
             httpStatus: failure.httpStatus,
           );
-          return const RemotePushSyncReceipt(
+          debugPrint(
+            '[AWikiRemotePush] remote_push thrown retryable '
+            'stage=${failure.stage.name} category=${failure.category.name} '
+            'code=${failure.code} error=${error.runtimeType}',
+          );
+          return RemotePushSyncReceipt(
             disposition: RemotePushSyncDisposition.retryableFailure,
+            errorCode: failure.code,
           );
         }
       } finally {
@@ -855,6 +952,9 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     _cancelFailureSurfaceTimer();
     _notifiedCommittedEventIds.clear();
     _notifiedCommittedMessageIds.clear();
+    _aliveUrgentClickBindings.clear();
+    unawaited(ref.read(notificationFacadeProvider).stopStructuredUrgentCue());
+    ref.read(agentUrgentOverlayProvider.notifier).clear();
     _cancelPendingTimerAndCompleteWaiters();
     _completeQueuedWaiters(_queuedAfterActive);
     _queuedAfterActive = null;
@@ -895,6 +995,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       suppressNotificationPresentation: policy.suppressNotificationPresentation,
       suppressTransientFailurePresentation:
           policy.suppressTransientFailurePresentation,
+      timelineOnlyCommittedMessages: policy.timelineOnlyCommittedMessages,
     );
     if (waiter != null) {
       queued.waiters.add(waiter);
@@ -950,6 +1051,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
               policy.suppressNotificationPresentation,
           suppressTransientFailurePresentation:
               policy.suppressTransientFailurePresentation,
+          timelineOnlyCommittedMessages: policy.timelineOnlyCommittedMessages,
         );
       }
     }
@@ -1173,10 +1275,62 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     _coreDirectedRetryEpoch = null;
   }
 
-  void _dispatchCommittedIncomingNotifications(
+  List<CommittedIncomingMessage> _recentLocalUrgentAgentMessages({
+    required List<CommittedIncomingMessage> already,
+  }) {
+    final now = ref.read(agentMessagePresentationClockProvider)().toUtc();
+    final cutoff = now.subtract(const Duration(minutes: 5));
+    final seen = <String>{
+      for (final committed in already) ...<String>[
+        committed.eventId,
+        committed.logicalMessageId,
+      ],
+    };
+    final recovered = <CommittedIncomingMessage>[];
+    for (final conversation in ref.read(conversationListProvider).conversations) {
+      if (conversation.unreadCount <= 0) continue;
+      final snapshot = conversation.lastMessageSnapshot;
+      if (snapshot == null || snapshot.isMine) continue;
+      final projection = snapshot.agentMessage;
+      if (projection is! ValidAgentMessageProjection) continue;
+      final message = projection.message;
+      if (message.level != AgentMessageLevel.urgent) continue;
+      final stamped = conversation.lastMessageAt.toUtc().isAfter(
+        snapshot.createdAt.toUtc(),
+      )
+          ? conversation.lastMessageAt.toUtc()
+          : snapshot.createdAt.toUtc();
+      if (stamped.isBefore(cutoff)) continue;
+      final logicalMessageId =
+          (snapshot.remoteId?.trim().isNotEmpty ?? false)
+          ? snapshot.remoteId!.trim()
+          : snapshot.localId.trim();
+      if (logicalMessageId.isEmpty ||
+          message.eventId.isEmpty ||
+          seen.contains(message.eventId) ||
+          seen.contains(logicalMessageId)) {
+        continue;
+      }
+      seen
+        ..add(message.eventId)
+        ..add(logicalMessageId);
+      recovered.add(
+        CommittedIncomingMessage(
+          eventId: message.eventId,
+          logicalMessageId: logicalMessageId,
+          message: snapshot,
+          authoritativeReceivedAt: stamped,
+        ),
+      );
+    }
+    return recovered;
+  }
+
+  Future<void> _dispatchCommittedIncomingNotifications(
     MessageSyncOutcome outcome, {
     required bool suppressPresentation,
-  }) {
+    required bool timelineOnly,
+  }) async {
     if (!ref.read(messageSyncV2ReadEnabledProvider) ||
         outcome.status != MessageSyncStatus.changed) {
       return;
@@ -1185,6 +1339,36 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       final eventId = committed.eventId.trim();
       final logicalMessageId = committed.logicalMessageId.trim();
       final message = committed.message;
+      if (timelineOnly) {
+        if (eventId.isNotEmpty && logicalMessageId.isNotEmpty) {
+          _rememberNotificationIdentity(
+            eventId: eventId,
+            logicalMessageId: logicalMessageId,
+          );
+        }
+        ref.read(agentTerminalNotificationDeduplicatorProvider).acceptMessageIds(
+          <String?>[
+            logicalMessageId,
+            message.remoteId,
+            message.localId,
+          ],
+        );
+        continue;
+      }
+      final agentMessage = message.agentMessage;
+      if (agentMessage is ValidAgentMessageProjection) {
+        await _dispatchStructuredAgentMessage(
+          committed: committed,
+          message: agentMessage.message,
+          providerPresented: suppressPresentation,
+        );
+        continue;
+      }
+      if (agentMessage is InvalidAgentMessageProjection) {
+        // Core has already committed the generic timeline placeholder. An
+        // invalid exact-schema projection must never reach a native surface.
+        continue;
+      }
       if (eventId.isEmpty ||
           logicalMessageId.isEmpty ||
           message.isMine ||
@@ -1228,6 +1412,549 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         unawaited(_showCommittedMessageNotification(message));
       }
     }
+  }
+
+  Future<void> _dispatchStructuredAgentMessage({
+    required CommittedIncomingMessage committed,
+    required AgentMessageV1 message,
+    required bool providerPresented,
+  }) async {
+    final chatMessage = committed.message;
+    final senderDid = chatMessage.senderDid;
+    final conversationId = chatMessage.conversationId?.trim() ?? '';
+    if (chatMessage.isMine ||
+        senderDid.isEmpty ||
+        conversationId.isEmpty ||
+        message.eventId.isEmpty) {
+      return;
+    }
+    final fence = _AgentMessagePresentationFence.capture(ref);
+    if (fence == null || !fence.matches(ref)) {
+      return;
+    }
+    final store = ref.read(agentMessagePresentationStoreProvider);
+    final now = ref.read(agentMessagePresentationClockProvider)().toUtc();
+    final AgentMessagePresentationClaim claim;
+    try {
+      claim = await store.claim(
+        owner: fence.owner,
+        eventId: message.eventId,
+        senderDid: senderDid,
+        now: now,
+      );
+    } on Object {
+      return;
+    }
+    if (!fence.matches(ref) || claim.isCollision) {
+      return;
+    }
+    final receipt = claim.receipt;
+    if (receipt == null || (!claim.isNew && receipt.isTerminal)) {
+      return;
+    }
+
+    if (providerPresented) {
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.providerPresented,
+      );
+      return;
+    }
+
+    final lifecycle = ref.read(appLifecycleProvider);
+    final AppPresentationState? nativePresentation;
+    if (lifecycle == AppLifecycleState.resumed) {
+      try {
+        nativePresentation = await ref
+            .read(appPresentationServiceProvider)
+            .currentState();
+      } on Object {
+        if (!fence.matches(ref)) return;
+        return;
+      }
+      if (!fence.matches(ref)) return;
+    } else {
+      nativePresentation = null;
+    }
+    var isForeground =
+        lifecycle == AppLifecycleState.resumed &&
+        (nativePresentation?.isForeground ?? true);
+
+    // A non-terminal receipt can only survive a crash/detach between claim and
+    // disposition. The alive-background contract never replays such a claim
+    // after a later sync or process start.
+    if (!claim.isNew) {
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.suppressedProcessDetached,
+      );
+      return;
+    }
+
+    final localStore = ref.read(productLocalStoreProvider);
+    final ProductConversationOverlay? overlay;
+    try {
+      overlay = await localStore.loadConversationOverlayByConversationId(
+        ownerDid: fence.epoch.ownerDid,
+        conversationId: conversationId,
+      );
+    } on Object {
+      if (!fence.matches(ref)) return;
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.suppressedMuted,
+      );
+      return;
+    }
+    if (!fence.matches(ref)) return;
+    if (overlay?.muted == true) {
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.suppressedMuted,
+      );
+      return;
+    }
+
+    var senderTrusted = false;
+    try {
+      final inventory = await localStore.loadAgentInventorySnapshot(
+        binding: fence.productBinding,
+      );
+      if (!fence.matches(ref)) return;
+      senderTrusted =
+          inventory != null &&
+          inventory.binding.ownerIdentityId ==
+              fence.productBinding.ownerIdentityId &&
+          inventory.binding.accountId == fence.productBinding.accountId &&
+          inventory.agents.any(
+            (agent) =>
+                agent.agentDid == senderDid && agent.activeState == 'active',
+          );
+    } on Object {
+      if (!fence.matches(ref)) return;
+      senderTrusted = false;
+    }
+
+    var urgentOptIn = false;
+    try {
+      final preferences = ref.read(agentNotificationPreferencePortProvider);
+      urgentOptIn =
+          preferences != null &&
+          (await preferences.getAgentNotificationPreference()).urgentEnabled;
+    } on Object {
+      urgentOptIn = false;
+    }
+    if (!fence.matches(ref)) return;
+
+    AgentMessageUrgentPresentationCounts counts;
+    try {
+      counts = await store.recentUrgentPresentationCounts(
+        owner: fence.owner,
+        senderDid: senderDid,
+        since: now.subtract(const Duration(minutes: 15)),
+        now: now,
+      );
+    } on Object {
+      counts = const AgentMessageUrgentPresentationCounts(
+        senderCount: 3,
+        accountCount: 6,
+      );
+    }
+    if (!fence.matches(ref)) return;
+
+    var decision = AgentMessagePresentationPolicy().decide(
+      message: message,
+      acceptedAt: committed.authoritativeReceivedAt,
+      now: now,
+      senderIsTrustedForCurrentSession: senderTrusted,
+      urgentOptIn: urgentOptIn,
+      conversationMuted: false,
+      // Permission is applied below only when a native surface or urgent cue
+      // is actually eligible. A normal foreground message remains silent.
+      platformPresentationAllowed: true,
+      isForeground: isForeground,
+      senderUrgentCountInWindow: counts.senderCount,
+      accountUrgentCountInWindow: counts.accountCount,
+    );
+
+    if (_isTerminalPolicySuppression(decision.disposition)) {
+      await _finishStructuredDecision(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        decision: decision,
+      );
+      return;
+    }
+
+    if (decision.disposition ==
+        AgentMessagePresentationDisposition.normalNotification) {
+      // Structured normal remains provider-owned NOTICE. An urgent MESSAGE
+      // that fails App policy becomes quiet rather than being promoted from a
+      // raw transport hint.
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.downgradedNormal,
+      );
+      return;
+    }
+
+    final notificationFacade = ref.read(notificationFacadeProvider);
+    final aliveBackgroundFacade =
+        notificationFacade is AliveBackgroundUrgentNotificationFacade
+        ? notificationFacade as AliveBackgroundUrgentNotificationFacade
+        : null;
+    AliveBackgroundNotificationState? aliveBackgroundState;
+    if (aliveBackgroundFacade != null) {
+      try {
+        aliveBackgroundState = await aliveBackgroundFacade
+            .aliveBackgroundNotificationState();
+      } on Object {
+        aliveBackgroundState =
+            const AliveBackgroundNotificationState.unavailable();
+      }
+      if (!fence.matches(ref)) return;
+      final currentLifecycle = ref.read(appLifecycleProvider);
+      final nativeState = aliveBackgroundState;
+      if (nativeState.platformSupported) {
+        final nativeForeground = nativeState.nativeActivityResumed;
+        if (currentLifecycle == AppLifecycleState.resumed && nativeForeground) {
+          isForeground = true;
+          decision = AgentMessagePresentationDecision.urgent(
+            foreground: true,
+            isUrgentCall: message.kind == AgentMessageKind.alert,
+          );
+        } else if (currentLifecycle == AppLifecycleState.detached ||
+            (currentLifecycle == AppLifecycleState.resumed) !=
+                nativeForeground) {
+          await _markStructuredDisposition(
+            fence: fence,
+            store: store,
+            eventId: message.eventId,
+            disposition:
+                AgentMessageReceiptDisposition.suppressedLifecycleUnknown,
+          );
+          return;
+        } else {
+          isForeground = false;
+        }
+      }
+    }
+
+    if (isForeground && decision.shouldUseUrgentCue) {
+      final StructuredNotificationEligibility eligibility;
+      try {
+        eligibility = await notificationFacade
+            .structuredNotificationEligibility();
+      } on Object {
+        if (!fence.matches(ref)) return;
+        decision =
+            const AgentMessagePresentationDecision.suppressedPermission();
+        await _finishStructuredDecision(
+          fence: fence,
+          store: store,
+          eventId: message.eventId,
+          decision: decision,
+        );
+        return;
+      }
+      if (!fence.matches(ref)) return;
+      if (eligibility != StructuredNotificationEligibility.allowed) {
+        decision =
+            const AgentMessagePresentationDecision.suppressedPermission();
+      }
+    }
+
+    if (decision.disposition ==
+        AgentMessagePresentationDisposition.suppressedPermission) {
+      await _finishStructuredDecision(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        decision: decision,
+      );
+      return;
+    }
+    if (decision.disposition ==
+        AgentMessagePresentationDisposition.silentForeground) {
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: AgentMessageReceiptDisposition.suppressedForeground,
+      );
+      return;
+    }
+
+    final senderLabel = _structuredSenderLabel(chatMessage);
+    final isCurrentConversation =
+        isForeground &&
+        ref.read(selectedConversationProvider) == conversationId;
+
+    if (decision.disposition ==
+            AgentMessagePresentationDisposition.urgentForegroundCue ||
+        decision.disposition ==
+            AgentMessagePresentationDisposition.urgentForegroundCallout) {
+      // Persist cue-issued before either sound or overlay. A process loss
+      // after this point must suppress replay rather than double-ring.
+      final issued = await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition:
+            decision.disposition ==
+                AgentMessagePresentationDisposition.urgentForegroundCallout
+            ? AgentMessageReceiptDisposition.presentedForegroundOverlay
+            : AgentMessageReceiptDisposition.presentedForegroundCue,
+      );
+      if (!issued || !fence.matches(ref)) {
+        return;
+      }
+      if (decision.disposition ==
+              AgentMessagePresentationDisposition.urgentForegroundCallout &&
+          !isCurrentConversation &&
+          fence.matches(ref)) {
+        final overlayFence = AgentUrgentOverlaySessionFence.capture(
+          ref.read(sessionProvider),
+        );
+        if (overlayFence == null ||
+            !ref
+                .read(agentUrgentOverlayProvider.notifier)
+                .tryShow(
+                  AgentUrgentOverlayState(
+                    fence: overlayFence,
+                    navigationContext: RemotePushSessionContext(
+                      storageScopeId: fence.storageScopeId,
+                      ownerDid: fence.epoch.ownerDid,
+                      generation: fence.epoch.generation,
+                    ),
+                    conversationId: conversationId,
+                    senderLabel: senderLabel,
+                    message: message,
+                    authoritativeReceivedAt: committed.authoritativeReceivedAt,
+                  ),
+                )) {
+          // One authoritative callout already owns the UI. Do not ring for a
+          // second full-screen event that cannot be displayed.
+          return;
+        }
+      }
+      await notificationFacade.playStructuredUrgentCue();
+      if (!fence.matches(ref)) return;
+      return;
+    }
+
+    if (decision.disposition ==
+        AgentMessagePresentationDisposition.urgentNotification) {
+      if (aliveBackgroundFacade == null ||
+          aliveBackgroundState == null ||
+          !aliveBackgroundState.platformSupported ||
+          !aliveBackgroundState.flutterChannelAttached) {
+        await _markStructuredDisposition(
+          fence: fence,
+          store: store,
+          eventId: message.eventId,
+          disposition: AgentMessageReceiptDisposition.suppressedProcessDetached,
+        );
+        return;
+      }
+      if (aliveBackgroundState.nativeActivityResumed ||
+          ref.read(appLifecycleProvider) == AppLifecycleState.resumed) {
+        await _markStructuredDisposition(
+          fence: fence,
+          store: store,
+          eventId: message.eventId,
+          disposition:
+              AgentMessageReceiptDisposition.suppressedLifecycleUnknown,
+        );
+        return;
+      }
+      if (!aliveBackgroundState.notificationsAllowed) {
+        await _markStructuredDisposition(
+          fence: fence,
+          store: store,
+          eventId: message.eventId,
+          disposition: AgentMessageReceiptDisposition.suppressedPermission,
+        );
+        return;
+      }
+      if (aliveBackgroundState.channelState ==
+              AliveBackgroundNotificationChannelState.blocked ||
+          aliveBackgroundState.channelState ==
+              AliveBackgroundNotificationChannelState.unavailable) {
+        await _markStructuredDisposition(
+          fence: fence,
+          store: store,
+          eventId: message.eventId,
+          disposition: AgentMessageReceiptDisposition.suppressedChannel,
+        );
+        return;
+      }
+      if (!fence.matches(ref) ||
+          ref.read(appLifecycleProvider) == AppLifecycleState.resumed) {
+        await _markStructuredDisposition(
+          fence: fence,
+          store: store,
+          eventId: message.eventId,
+          disposition:
+              AgentMessageReceiptDisposition.suppressedLifecycleUnknown,
+        );
+        return;
+      }
+      final opaqueMessageReference = remotePushOpaqueMessageReference(
+        committed.logicalMessageId,
+      );
+      final expiresAtEpochSeconds =
+          now
+              .add(const Duration(seconds: 30))
+              .millisecondsSinceEpoch ~/
+          Duration.millisecondsPerSecond;
+      final navigationContext = RemotePushSessionContext(
+        storageScopeId: fence.storageScopeId,
+        ownerDid: fence.epoch.ownerDid,
+        generation: fence.epoch.generation,
+      );
+      final clickBindings = _aliveUrgentClickBindings;
+      clickBindings.bind(
+        context: navigationContext,
+        opaqueMessageReference: opaqueMessageReference,
+        conversationId: conversationId,
+        expiresAtEpochSeconds: expiresAtEpochSeconds,
+      );
+      final submission = await aliveBackgroundFacade
+          .showAliveBackgroundUrgentNotification(
+            AliveBackgroundUrgentNotification(
+              nativeId: receipt.nativeId,
+              agentLabel: senderLabel,
+              taskName: message.taskName,
+              summary: message.summary,
+              opaqueMessageReference: opaqueMessageReference,
+              expiresAtEpochSeconds: expiresAtEpochSeconds,
+            ),
+          );
+      if (!fence.matches(ref)) {
+        clickBindings.clearForSession(navigationContext);
+        await aliveBackgroundFacade.cancelAliveBackgroundUrgentNotification(
+          receipt.nativeId,
+        );
+        return;
+      }
+      final disposition = switch (submission) {
+        AliveBackgroundNotificationSubmission.fullScreenRequested =>
+          AgentMessageReceiptDisposition.presentedBackgroundFsiRequested,
+        AliveBackgroundNotificationSubmission.fallbackSubmitted =>
+          AgentMessageReceiptDisposition.presentedBackgroundFallback,
+        AliveBackgroundNotificationSubmission.suppressedPermission =>
+          AgentMessageReceiptDisposition.suppressedPermission,
+        AliveBackgroundNotificationSubmission.suppressedChannel =>
+          AgentMessageReceiptDisposition.suppressedChannel,
+        AliveBackgroundNotificationSubmission.suppressedDetached =>
+          AgentMessageReceiptDisposition.suppressedProcessDetached,
+        _ => AgentMessageReceiptDisposition.suppressedLifecycleUnknown,
+      };
+      if (submission !=
+              AliveBackgroundNotificationSubmission.fullScreenRequested &&
+          submission !=
+              AliveBackgroundNotificationSubmission.fallbackSubmitted) {
+        clickBindings.clearForSession(navigationContext);
+      }
+      await _markStructuredDisposition(
+        fence: fence,
+        store: store,
+        eventId: message.eventId,
+        disposition: disposition,
+      );
+      return;
+    }
+
+    await _finishStructuredDecision(
+      fence: fence,
+      store: store,
+      eventId: message.eventId,
+      decision: decision,
+    );
+  }
+
+  Future<void> _finishStructuredDecision({
+    required _AgentMessagePresentationFence fence,
+    required AgentMessagePresentationStore store,
+    required String eventId,
+    required AgentMessagePresentationDecision decision,
+  }) async {
+    final disposition = switch (decision.disposition) {
+      AgentMessagePresentationDisposition.suppressedMuted =>
+        AgentMessageReceiptDisposition.suppressedMuted,
+      AgentMessagePresentationDisposition.silentForeground =>
+        AgentMessageReceiptDisposition.suppressedForeground,
+      AgentMessagePresentationDisposition.suppressedUntrusted =>
+        AgentMessageReceiptDisposition.suppressedUntrusted,
+      AgentMessagePresentationDisposition.suppressedOptOut =>
+        AgentMessageReceiptDisposition.suppressedOptOut,
+      AgentMessagePresentationDisposition.suppressedExpired =>
+        AgentMessageReceiptDisposition.suppressedExpired,
+      AgentMessagePresentationDisposition.suppressedRateLimited =>
+        AgentMessageReceiptDisposition.suppressedRateLimited,
+      AgentMessagePresentationDisposition.suppressedPermission =>
+        AgentMessageReceiptDisposition.suppressedPermission,
+      _ => AgentMessageReceiptDisposition.downgradedNormal,
+    };
+    await _markStructuredDisposition(
+      fence: fence,
+      store: store,
+      eventId: eventId,
+      disposition: disposition,
+    );
+  }
+
+  bool _isTerminalPolicySuppression(
+    AgentMessagePresentationDisposition disposition,
+  ) =>
+      disposition == AgentMessagePresentationDisposition.suppressedMuted ||
+      disposition == AgentMessagePresentationDisposition.suppressedUntrusted ||
+      disposition == AgentMessagePresentationDisposition.suppressedOptOut ||
+      disposition == AgentMessagePresentationDisposition.suppressedExpired ||
+      disposition ==
+          AgentMessagePresentationDisposition.suppressedRateLimited ||
+      disposition == AgentMessagePresentationDisposition.suppressedPermission;
+
+  Future<bool> _markStructuredDisposition({
+    required _AgentMessagePresentationFence fence,
+    required AgentMessagePresentationStore store,
+    required String eventId,
+    required AgentMessageReceiptDisposition disposition,
+  }) async {
+    if (!fence.matches(ref)) return false;
+    try {
+      await store.markDisposition(
+        owner: fence.owner,
+        eventId: eventId,
+        disposition: disposition,
+        now: ref.read(agentMessagePresentationClockProvider)().toUtc(),
+      );
+    } on Object {
+      return false;
+    }
+    return fence.matches(ref);
+  }
+
+  String _structuredSenderLabel(ChatMessage message) {
+    final title = DidDisplayFormatter.compactDisplayName(
+      displayName: message.senderName ?? '',
+      fallbackDid: message.senderDid,
+    ).trim();
+    return title.isNotEmpty
+        ? title
+        : AppMessage.newMessageArrived().resolveForFallback();
   }
 
   void _rememberNotificationIdentity({
@@ -1426,6 +2153,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   @override
   void dispose() {
     _disposed = true;
+    _aliveUrgentClickBindings.clear();
     _sessionSubscription.close();
     _cancelPendingTimerAndCompleteWaiters();
     _cancelCoreDirectedRetry();
@@ -1506,6 +2234,98 @@ class MessageSyncCoordinatorFailure implements Exception {
   String toString() => code;
 }
 
+/// Full App-owned presentation fence. Durable Agent-message operations are
+/// allowed only while the selected session, bound account/device generation,
+/// current DID and tenant storage scope all remain exact.
+final class _AgentMessagePresentationFence {
+  const _AgentMessagePresentationFence._({
+    required this.epoch,
+    required this.ownerIdentityId,
+    required this.accountId,
+    required this.currentDid,
+    required this.protocolDeviceId,
+    required this.identityGeneration,
+    required this.deviceAuthGeneration,
+    required this.storageScopeId,
+    required this.owner,
+    required this.productBinding,
+  });
+
+  static _AgentMessagePresentationFence? capture(Ref ref) {
+    final state = ref.read(sessionProvider);
+    final epoch = state.activeEpoch;
+    final session = state.session;
+    final binding = session?.accountBinding;
+    if (epoch == null ||
+        session == null ||
+        binding == null ||
+        !_exactNonEmpty(binding.ownerIdentityId) ||
+        !_exactNonEmpty(binding.accountId) ||
+        !_exactNonEmpty(binding.currentDid) ||
+        !_exactNonEmpty(binding.protocolDeviceId) ||
+        !_exactNonEmpty(binding.identityGeneration) ||
+        !_exactNonEmpty(binding.deviceAuthGeneration) ||
+        session.localIdentityId != binding.ownerIdentityId ||
+        binding.protocolDeviceId == 'default' ||
+        !_canonicalPositive(binding.identityGeneration) ||
+        !_canonicalPositive(binding.deviceAuthGeneration) ||
+        binding.currentDid != session.did) {
+      return null;
+    }
+    final AgentMessagePresentationOwnerScope owner;
+    try {
+      owner = AgentMessagePresentationOwnerScope(
+        ownerIdentityId: binding.ownerIdentityId,
+        accountId: binding.accountId,
+      );
+    } on ArgumentError {
+      return null;
+    }
+    return _AgentMessagePresentationFence._(
+      epoch: epoch,
+      ownerIdentityId: binding.ownerIdentityId,
+      accountId: binding.accountId,
+      currentDid: binding.currentDid,
+      protocolDeviceId: binding.protocolDeviceId,
+      identityGeneration: binding.identityGeneration,
+      deviceAuthGeneration: binding.deviceAuthGeneration,
+      storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
+      owner: owner,
+      productBinding: ProductAccountBinding.fromSession(binding),
+    );
+  }
+
+  final SessionEpoch epoch;
+  final String ownerIdentityId;
+  final String accountId;
+  final String currentDid;
+  final String protocolDeviceId;
+  final String identityGeneration;
+  final String deviceAuthGeneration;
+  final StorageScopeId storageScopeId;
+  final AgentMessagePresentationOwnerScope owner;
+  final ProductAccountBinding productBinding;
+
+  bool matches(Ref ref) {
+    final current = capture(ref);
+    return current != null &&
+        current.epoch == epoch &&
+        current.ownerIdentityId == ownerIdentityId &&
+        current.accountId == accountId &&
+        current.currentDid == currentDid &&
+        current.protocolDeviceId == protocolDeviceId &&
+        current.identityGeneration == identityGeneration &&
+        current.deviceAuthGeneration == deviceAuthGeneration &&
+        current.storageScopeId == storageScopeId;
+  }
+
+  static bool _exactNonEmpty(String value) =>
+      value.isNotEmpty && value.trim() == value;
+
+  static bool _canonicalPositive(String value) =>
+      RegExp(r'^[1-9][0-9]*$').hasMatch(value);
+}
+
 class _MessageSyncSessionFence {
   const _MessageSyncSessionFence({
     required this.generation,
@@ -1582,14 +2402,17 @@ class _MessageSyncRequestPolicy {
   _MessageSyncRequestPolicy({
     this.suppressNotificationPresentation = false,
     this.suppressTransientFailurePresentation = false,
+    this.timelineOnlyCommittedMessages = false,
   });
 
   bool suppressNotificationPresentation;
   bool suppressTransientFailurePresentation;
+  bool timelineOnlyCommittedMessages;
 
   void merge({
     required bool suppressNotificationPresentation,
     required bool suppressTransientFailurePresentation,
+    required bool timelineOnlyCommittedMessages,
   }) {
     this.suppressNotificationPresentation =
         this.suppressNotificationPresentation ||
@@ -1597,11 +2420,14 @@ class _MessageSyncRequestPolicy {
     this.suppressTransientFailurePresentation =
         this.suppressTransientFailurePresentation ||
         suppressTransientFailurePresentation;
+    this.timelineOnlyCommittedMessages =
+        this.timelineOnlyCommittedMessages || timelineOnlyCommittedMessages;
   }
 
   _MessageSyncRequestPolicy copy() => _MessageSyncRequestPolicy(
     suppressNotificationPresentation: suppressNotificationPresentation,
     suppressTransientFailurePresentation: suppressTransientFailurePresentation,
+    timelineOnlyCommittedMessages: timelineOnlyCommittedMessages,
   );
 }
 

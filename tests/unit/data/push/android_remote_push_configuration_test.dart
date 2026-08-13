@@ -65,15 +65,44 @@ void main() {
       final scopeStore = File(
         'lib/src/data/storage/platform_scope_secret_repository.dart',
       ).readAsStringSync();
+      final appStateStore = File(
+        'lib/src/data/services/app_key_value_store.dart',
+      ).readAsStringSync();
 
       expect(manifest, contains('android:allowBackup="false"'));
       expect(
         pubspec,
         contains(
-          RegExp(r'^  flutter_secure_storage: 9\.2\.4$', multiLine: true),
+          RegExp(r'^  flutter_secure_storage: \^10\.3\.1$', multiLine: true),
         ),
       );
-      expect(scopeStore, isNot(contains('migrateWithBackup')));
+      expect(
+        appStateStore,
+        contains("storageNamespace: 'awiki_me_app_state_v1'"),
+      );
+      expect(
+        scopeStore,
+        contains("storageNamespace: 'awiki_me_scope_secrets_v1'"),
+      );
+      expect(appStateStore, contains('resetOnError: false'));
+      expect(scopeStore, contains('resetOnError: false'));
+      expect(
+        scopeStore,
+        contains(
+          'resetOnError: false,\n'
+          '    migrateWithBackup: true,\n'
+          "    storageNamespace: 'awiki_me_scope_secrets_v1'",
+        ),
+      );
+      expect(
+        scopeStore,
+        contains(
+          'migrateOnAlgorithmChange: false,\n'
+          '    migrateWithBackup: false,\n'
+          '    // ignore: deprecated_member_use\n'
+          "    sharedPreferencesName: 'awiki_me_scope_secrets'",
+        ),
+      );
     });
 
     test(
@@ -94,46 +123,133 @@ void main() {
       },
     );
 
-    test('wakes a non-interactive device briefly when a notice arrives', () {
-      final manifest = File(
-        'android/app/src/main/AndroidManifest.xml',
-      ).readAsStringSync();
-      final receiver = File(
-        'android/app/src/main/kotlin/ai/awiki/awikime/push/'
-        'AwikiAliyunPushReceiver.kt',
-      ).readAsStringSync();
-      final wakeController = File(
-        'android/app/src/main/kotlin/ai/awiki/awikime/push/'
-        'NotificationScreenWakeController.kt',
-      );
+    test(
+      'wakes Flutter after MESSAGE through expedited WorkManager, not a receiver FGS',
+      () {
+        final manifest = File(
+          'android/app/src/main/AndroidManifest.xml',
+        ).readAsStringSync();
+        final gradle = File('android/app/build.gradle').readAsStringSync();
+        final receiver = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+          'AwikiAliyunPushReceiver.kt',
+        ).readAsStringSync();
+        final scheduler = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/'
+          'AliveBackgroundSyncScheduler.kt',
+        ).readAsStringSync();
+        final worker = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/'
+          'AliveBackgroundSyncWorker.kt',
+        ).readAsStringSync();
+        final bridge = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+          'RemotePushEventBridge.kt',
+        ).readAsStringSync();
 
-      expect(
-        manifest,
-        contains('android.permission.WAKE_LOCK'),
-        reason: 'screen wake requires the platform wake-lock permission',
-      );
-      expect(wakeController.existsSync(), isTrue);
-      if (!wakeController.existsSync()) return;
-      final controllerSource = wakeController.readAsStringSync();
-      expect(
-        receiver,
-        contains('NotificationScreenWakeController.wakeIfNeeded'),
-      );
-      final inAppCallback = RegExp(
-        r'onNotificationReceivedInApp\(([\s\S]*?)\n    \}',
-      ).firstMatch(receiver)?.group(1);
-      expect(inAppCallback, isNotNull);
-      expect(
-        inAppCallback,
-        isNot(contains('NotificationScreenWakeController.wakeIfNeeded')),
-        reason: 'an in-app callback does not prove visible notification UI',
-      );
-      expect(controllerSource, contains('areNotificationsEnabled'));
-      expect(controllerSource, contains('getNotificationChannel'));
-      expect(controllerSource, contains('powerManager.isInteractive'));
-      expect(controllerSource, contains('ACQUIRE_CAUSES_WAKEUP'));
-      expect(controllerSource, contains('wakeLock.acquire(WAKE_DURATION_MS)'));
-    });
+        expect(gradle, contains('androidx.work:work-runtime-ktx:2.10.0'));
+        expect(
+          manifest,
+          contains('android.permission.FOREGROUND_SERVICE_DATA_SYNC'),
+        );
+        expect(
+          manifest,
+          contains('androidx.work.impl.foreground.SystemForegroundService'),
+        );
+        expect(manifest, contains('android:foregroundServiceType="dataSync"'));
+        expect(receiver, contains('AliveBackgroundSyncScheduler.enqueue'));
+        expect(receiver, isNot(contains('startForegroundService')));
+        expect(scheduler, contains('setExpedited'));
+        expect(worker, contains('FOREGROUND_SERVICE_TYPE_DATA_SYNC'));
+        expect(worker, contains('RemotePushEventBridge.replayPending'));
+        expect(worker, contains('lifecycleChannel.appIsInactive'));
+        expect(worker, contains('Looper.getMainLooper()'));
+        expect(worker, contains('Handler(Looper.getMainLooper())'));
+        expect(bridge, contains('fun replayPending'));
+      },
+    );
+
+    test(
+      'keeps screen wake explicit and never auto-wakes provider notices',
+      () {
+        final manifest = File(
+          'android/app/src/main/AndroidManifest.xml',
+        ).readAsStringSync();
+        final receiver = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+          'AwikiAliyunPushReceiver.kt',
+        ).readAsStringSync();
+        final wakeController = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+          'NotificationScreenWakeController.kt',
+        );
+        final bridge = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+          'RemotePushEventBridge.kt',
+        ).readAsStringSync();
+
+        expect(
+          manifest,
+          contains('android.permission.WAKE_LOCK'),
+          reason: 'screen wake requires the platform wake-lock permission',
+        );
+        expect(wakeController.existsSync(), isTrue);
+        if (!wakeController.existsSync()) return;
+        final controllerSource = wakeController.readAsStringSync();
+        expect(
+          receiver,
+          isNot(contains('NotificationScreenWakeController.wakeIfNeeded')),
+          reason: 'provider NOTICE callbacks must never wake the screen',
+        );
+        expect(bridge, contains('"wakeNotificationScreen"'));
+        expect(
+          bridge,
+          contains('NotificationScreenWakeController.wakeIfNeeded'),
+        );
+        final inAppCallback = RegExp(
+          r'onNotificationReceivedInApp\(([\s\S]*?)\n    \}',
+        ).firstMatch(receiver)?.group(1);
+        expect(inAppCallback, isNotNull);
+        expect(
+          inAppCallback,
+          isNot(contains('NotificationScreenWakeController.wakeIfNeeded')),
+          reason: 'an in-app callback does not prove visible notification UI',
+        );
+        expect(controllerSource, contains('areNotificationsEnabled'));
+        expect(controllerSource, contains('getNotificationChannel'));
+        expect(controllerSource, contains('powerManager.isInteractive'));
+        expect(controllerSource, contains('ACQUIRE_CAUSES_WAKEUP'));
+        expect(
+          controllerSource,
+          contains('wakeLock.acquire(WAKE_DURATION_MS)'),
+        );
+      },
+    );
+
+    test(
+      'pre-creates the structured provider channel as normal and silent',
+      () {
+        final bridge = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+          'RemotePushEventBridge.kt',
+        ).readAsStringSync();
+        final client = File(
+          'lib/src/data/push/aliyun_emas_remote_push_client.dart',
+        ).readAsStringSync();
+
+        expect(bridge, contains('STRUCTURED_NORMAL_MESSAGE_CHANNEL_ID'));
+        expect(bridge, contains('"awiki_me_messages_v2"'));
+        expect(bridge, contains('NotificationManager.IMPORTANCE_DEFAULT'));
+        expect(bridge, contains('enableVibration(!structuredNormal)'));
+        expect(bridge, contains('setSound(null, null)'));
+        expect(bridge, contains('unsupported channel id'));
+        expect(client, contains('awikiStructuredNormalNotificationChannelId'));
+        expect(
+          client,
+          contains('create_structured_normal_notification_channel'),
+        );
+      },
+    );
 
     test('keeps native EMAS registration idempotent after SDK auto-retry', () {
       final bridge = File(
@@ -178,7 +294,8 @@ void main() {
       expect(bridge, contains('acknowledgePendingEvents'));
       expect(bridge, contains('onRemotePushEvents'));
       expect(activity, contains('RemotePushEventBridge.attach'));
-      expect(activity, contains('RemotePushEventBridge.detach'));
+      expect(activity, contains('shouldDestroyEngineWithHost(): Boolean = false'));
+      expect(activity, isNot(contains('RemotePushEventBridge.detach')));
     });
 
     test(
@@ -280,6 +397,74 @@ void main() {
       expect(bridge, isNot(contains('put("title"')));
       expect(bridge, isNot(contains('put("content"')));
       expect(bridge, isNot(contains('put("openUrl"')));
+    });
+
+    test('live MESSAGE bridge forwards only an opaque provider id', () {
+      final receiver = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+        'AwikiAliyunPushReceiver.kt',
+      ).readAsStringSync();
+      final onMessage = receiver.substring(
+        receiver.indexOf('override fun onMessage'),
+        receiver.indexOf('override fun onNotificationOpened'),
+      );
+
+      expect(onMessage, contains('mapOf("msgId" to message.messageId)'));
+      expect(onMessage, isNot(contains('message.title')));
+      expect(onMessage, isNot(contains('message.content')));
+      expect(onMessage, isNot(contains('message.appId')));
+      expect(onMessage, isNot(contains('message.traceInfo')));
+    });
+
+    test('alive urgent click emits opaque opened reference without route', () {
+      final controller = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/'
+        'AliveBackgroundUrgentNotificationController.kt',
+      ).readAsStringSync();
+      final opener = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/'
+        'AliveBackgroundUrgentOpenReceiver.kt',
+      ).readAsStringSync();
+
+      expect(controller, contains('opaque_message_reference'));
+      expect(controller, isNot(contains('SELECT_NOTIFICATION')));
+      expect(controller, isNot(contains('NotificationTarget')));
+      expect(opener, contains('"notification_opened"'));
+      expect(opener, contains('"mid" to opaqueReference'));
+      expect(opener, isNot(contains('conversationId')));
+      expect(opener, isNot(contains('ownerDid')));
+      expect(opener, isNot(contains('"payload"')));
+    });
+
+    test('different urgent IDs replace through the controller stop path', () {
+      final source = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/'
+        'AliveBackgroundUrgentNotificationController.kt',
+      ).readAsStringSync();
+      final replacement = source.substring(
+        source.indexOf('AliveBackgroundUrgentContract.replacementNativeId('),
+        source.indexOf('activeContent = content'),
+      );
+
+      expect(replacement, contains('cancel('));
+      expect(
+        replacement,
+        contains('AliveBackgroundUrgentStopReason.REPLACED'),
+      );
+      expect(
+        replacement,
+        isNot(contains('NotificationManagerCompat.from(context).cancel')),
+      );
+      expect(
+        source.indexOf('AliveBackgroundUrgentStopReason.REPLACED'),
+        lessThan(source.indexOf('activeNativeId = nativeId')),
+      );
+      expect(
+        source.indexOf('activeNativeId = nativeId'),
+        lessThan(
+          source.indexOf('NotificationManagerCompat.from(context).notify'),
+        ),
+      );
     });
   });
 }

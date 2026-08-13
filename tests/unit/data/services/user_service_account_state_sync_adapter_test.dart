@@ -71,6 +71,36 @@ void main() {
   });
 
   test(
+    'accepts controlled skill entries in the closed inventory schema',
+    () async {
+      final adapter = _adapterForResult(<String, Object?>{
+        'account_id': 'account-1',
+        'inventory_version': '9',
+        'agents': <Object?>[_agentInventoryEntry(agentKind: 'skill')],
+      });
+
+      final snapshot = await adapter.loadAgentInventory();
+
+      expect(snapshot.agents.single.agentKind, 'skill');
+      expect(snapshot.agents.single.activeState, 'active');
+      expect(
+        snapshot.agents.single.agentDid,
+        'did:wba:example.test:agent:skill',
+      );
+    },
+  );
+
+  test('rejects unknown inventory kinds instead of promoting trust', () async {
+    final adapter = _adapterForResult(<String, Object?>{
+      'account_id': 'account-1',
+      'inventory_version': '9',
+      'agents': <Object?>[_agentInventoryEntry(agentKind: 'future-kind')],
+    });
+
+    await expectLater(adapter.loadAgentInventory(), throwsFormatException);
+  });
+
+  test(
     'production-style Registry loader preserves u64 max as String',
     () async {
       final adapter =
@@ -158,6 +188,43 @@ void main() {
     );
   });
 }
+
+UserServiceAccountStateSyncAdapter _adapterForResult(
+  Map<String, Object?> result,
+) {
+  final utility = AwikiOnboardingUtilityHttpClient(
+    baseUrl: 'https://example.test',
+    httpClient: _RpcHttpClient(result: result),
+  );
+  return UserServiceAccountStateSyncAdapter(
+    userServiceUrl: 'https://example.test',
+    client: utility,
+    authenticatedClient: AuthenticatedUserServiceRpcClient(
+      client: utility,
+      sessions: AuthSessionCoordinator(sessions: _Sessions()),
+    ),
+  );
+}
+
+Map<String, Object?> _agentInventoryEntry({required String agentKind}) =>
+    <String, Object?>{
+      'agent_did': 'did:wba:example.test:agent:skill',
+      'agent_kind': agentKind,
+      'daemon_agent_did': null,
+      'controller_full_handle': 'alice.example.test',
+      'runtime': null,
+      'handle': 'skill-agent.example.test',
+      'display_name': 'Skill Agent',
+      'profile_summary': <String, Object?>{},
+      'active_state': 'active',
+      'invocation_policy': <String, Object?>{
+        'schema': 'awiki.agent_invocation_policy.v1',
+        'active_mode': 'whitelist',
+        'whitelist_handles': <String>[],
+        'blacklist_handles': <String>[],
+      },
+      'inventory_version': '9',
+    };
 
 class _RpcHttpClient extends http.BaseClient {
   _RpcHttpClient({this.extraManifestKey = false, this.result});

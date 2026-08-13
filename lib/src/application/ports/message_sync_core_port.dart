@@ -63,11 +63,13 @@ class CommittedIncomingMessage {
     required this.eventId,
     required this.logicalMessageId,
     required this.message,
+    this.authoritativeReceivedAt,
   });
 
   final String eventId;
   final String logicalMessageId;
   final ChatMessage message;
+  final DateTime? authoritativeReceivedAt;
 }
 
 class MessageSyncOutcome {
