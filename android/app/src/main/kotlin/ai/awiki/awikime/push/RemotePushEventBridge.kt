@@ -40,6 +40,15 @@ object RemotePushEventBridge {
     private var initializationCoordinator: RemotePushInitializationCoordinator? = null
     @Volatile
     private var channel: MethodChannel? = null
+    private val silentResult = object : MethodChannel.Result {
+        override fun success(result: Any?) = Unit
+
+        override fun error(code: String, message: String?, details: Any?) = Unit
+
+        override fun notImplemented() = Unit
+    }
+
+    fun isAttached(): Boolean = channel != null
 
     fun attach(context: Context, messenger: BinaryMessenger) {
         val applicationContext = context.applicationContext
@@ -212,21 +221,37 @@ object RemotePushEventBridge {
         persist(applicationContext, event)
         val activeChannel = channel
         if (activeChannel == null) {
+            Log.i("AWikiRemotePush", "emit kind=$kind channel=detached")
             return
         }
+        Log.i("AWikiRemotePush", "emit kind=$kind channel=attached")
         mainHandler.post {
             activeChannel.invokeMethod(
                 "onRemotePushEvents",
                 listOf(event),
-                object : MethodChannel.Result {
-                    override fun success(result: Any?) = Unit
-
-                    override fun error(code: String, message: String?, details: Any?) = Unit
-
-                    override fun notImplemented() = Unit
-                },
+                silentResult,
             )
         }
+    }
+
+    fun replayPending(context: Context): Int {
+        val events = load(context.applicationContext)
+        val activeChannel = channel
+        if (activeChannel == null) {
+            Log.i("AWikiRemotePush", "replay pending=${events.size} channel=detached")
+            return events.size
+        }
+        if (events.isEmpty()) {
+            return 0
+        }
+        mainHandler.post {
+            activeChannel.invokeMethod(
+                "onRemotePushEvents",
+                events,
+                silentResult,
+            )
+        }
+        return events.size
     }
 
     @Synchronized

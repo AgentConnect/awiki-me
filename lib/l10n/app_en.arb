@@ -446,6 +446,8 @@
   "settingsPushNotification": "Push notifications",
   "settingsAgentUrgentCalls": "Urgent Agent calls",
   "settingsAgentUrgentCallsSubtitle": "Allow trusted Agents to use one short sound and vibration. Off by default.",
+  "settingsAgentFullScreenAccess": "Full-screen urgent alerts",
+  "settingsAgentFullScreenAccessSubtitle": "Open Android 14 settings to allow full-screen urgent task alerts.",
   "settingsCurrentVersion": "Current version",
   "settingsCurrentVersionValue": "Current version: {version}",
   "@settingsCurrentVersionValue": {

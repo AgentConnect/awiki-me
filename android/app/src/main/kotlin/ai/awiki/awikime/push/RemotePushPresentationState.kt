@@ -66,5 +66,8 @@ object RemotePushPresentationState {
         return policy.shouldShowNotification(extraMap)
     }
 
+    @Synchronized
+    fun isActivityResumed(): Boolean = policy.activityResumed
+
     private val activeTargetReferencePattern = Regex("^target_[A-Za-z0-9_-]{24}$")
 }

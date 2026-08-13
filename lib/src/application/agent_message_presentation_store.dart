@@ -172,7 +172,7 @@ final class AgentMessagePresentationStore {
     var senderCount = 0;
     var accountCount = 0;
     for (final receipt in receipts) {
-      if (receipt.disposition != AgentMessageReceiptDisposition.presentedApp ||
+      if (!receipt.disposition.countsTowardUrgentRateLimit ||
           receipt.at.isBefore(normalizedSince)) {
         continue;
       }
@@ -318,10 +318,33 @@ enum AgentMessageReceiptDisposition {
   claimed,
   suppressedForeground,
   suppressedMuted,
+  suppressedUntrusted,
+  suppressedOptOut,
+  suppressedExpired,
+  suppressedRateLimited,
+  suppressedPermission,
+  suppressedChannel,
+  suppressedLifecycleUnknown,
+  suppressedProcessDetached,
+  suppressedCollision,
   presentedApp,
+  presentedForegroundOverlay,
+  presentedForegroundCue,
+  presentedBackgroundFsiRequested,
+  presentedBackgroundFallback,
   providerPresented,
   deferredProvider,
   downgradedNormal,
+}
+
+extension AgentMessageReceiptDispositionPolicy
+    on AgentMessageReceiptDisposition {
+  bool get countsTowardUrgentRateLimit =>
+      this == AgentMessageReceiptDisposition.presentedApp ||
+      this == AgentMessageReceiptDisposition.presentedForegroundOverlay ||
+      this == AgentMessageReceiptDisposition.presentedForegroundCue ||
+      this == AgentMessageReceiptDisposition.presentedBackgroundFsiRequested ||
+      this == AgentMessageReceiptDisposition.presentedBackgroundFallback;
 }
 
 final class AgentMessagePresentationReceipt {

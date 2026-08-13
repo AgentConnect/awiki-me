@@ -414,6 +414,9 @@ final class _FakeRemotePushClient implements RemotePushClient {
     initializeCount += 1;
     return registrationValue;
   }
+
+  @override
+  Future<void> pullPendingEvents() async {}
 }
 
 final class _FakePushInstallationPort implements PushInstallationPort {

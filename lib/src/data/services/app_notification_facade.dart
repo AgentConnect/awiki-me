@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path/path.dart' as p;
 
@@ -13,19 +12,26 @@ import '../../domain/services/notification_facade.dart';
 import '../../domain/services/notification_channels.dart';
 import 'mac_menu_bar_status_service.dart';
 import 'notification_screen_wake.dart';
+import 'platform_structured_urgent_cue.dart';
+import 'platform_alive_background_urgent_notification.dart';
 
-class AppNotificationFacade implements NotificationFacade {
+class AppNotificationFacade
+    implements NotificationFacade, AliveBackgroundUrgentNotificationFacade {
   AppNotificationFacade._(
     FlutterLocalNotificationsPlugin plugin,
     MacMenuBarStatusService menuBarStatus,
     DesktopShellService desktopShell,
     NotificationScreenWake screenWake,
+    PlatformStructuredUrgentCue urgentCue,
+    PlatformAliveBackgroundUrgentNotification aliveBackgroundUrgent,
   ) : _plugin = plugin,
       _menuBarStatus = menuBarStatus,
       _desktopShell = desktopShell,
       _screenWake = screenWake,
       _structuredSubmit = plugin.show,
-      _urgentCue = _defaultUrgentCue,
+      _urgentCue = urgentCue.play,
+      _urgentCueStop = urgentCue.stop,
+      _aliveBackgroundUrgent = aliveBackgroundUrgent,
       _structuredEligibility = _StructuredNotificationEligibilityQuery(
         plugin,
       ).call;
@@ -33,15 +39,20 @@ class AppNotificationFacade implements NotificationFacade {
   AppNotificationFacade.forTesting({
     required StructuredNotificationSubmit structuredSubmit,
     required Future<void> Function() urgentCue,
+    Future<void> Function()? urgentCueStop,
     required Future<StructuredNotificationEligibility> Function()
     structuredEligibility,
     NotificationScreenWake? screenWake,
+    PlatformAliveBackgroundUrgentNotification? aliveBackgroundUrgent,
   }) : _plugin = FlutterLocalNotificationsPlugin(),
        _menuBarStatus = MacMenuBarStatusService(isMacOS: () => false),
        _desktopShell = const NoopDesktopShellService(),
        _screenWake = screenWake ?? _NoopNotificationScreenWake(),
        _structuredSubmit = structuredSubmit,
        _urgentCue = urgentCue,
+       _urgentCueStop = urgentCueStop ?? _noopUrgentCueStop,
+       _aliveBackgroundUrgent =
+           aliveBackgroundUrgent ?? PlatformAliveBackgroundUrgentNotification(),
        _structuredEligibility = structuredEligibility {
     _initialization = Future<void>.value();
   }
@@ -52,6 +63,8 @@ class AppNotificationFacade implements NotificationFacade {
   final NotificationScreenWake _screenWake;
   final StructuredNotificationSubmit _structuredSubmit;
   final Future<void> Function() _urgentCue;
+  final Future<void> Function() _urgentCueStop;
+  final PlatformAliveBackgroundUrgentNotification _aliveBackgroundUrgent;
   final Future<StructuredNotificationEligibility> Function()
   _structuredEligibility;
   final StreamController<NotificationActivation> _activations =
@@ -64,11 +77,14 @@ class AppNotificationFacade implements NotificationFacade {
   static Future<AppNotificationFacade> create({
     DesktopShellService? desktopShell,
   }) async {
+    final urgentCue = PlatformStructuredUrgentCue();
     final facade = AppNotificationFacade._(
       FlutterLocalNotificationsPlugin(),
       MacMenuBarStatusService(),
       desktopShell ?? const NoopDesktopShellService(),
       PlatformNotificationScreenWake(),
+      urgentCue,
+      PlatformAliveBackgroundUrgentNotification(),
     );
     facade._initializeInBackground();
     return facade;
@@ -276,6 +292,33 @@ class AppNotificationFacade implements NotificationFacade {
   }
 
   @override
+  Future<void> stopStructuredUrgentCue() async {
+    try {
+      await _urgentCueStop();
+    } on Object {
+      debugPrint('[awiki_me][structured-urgent-cue-stop][failed]');
+    }
+  }
+
+  @override
+  Future<AliveBackgroundNotificationState> aliveBackgroundNotificationState() =>
+      _aliveBackgroundUrgent.currentState();
+
+  @override
+  Future<AliveBackgroundNotificationSubmission>
+  showAliveBackgroundUrgentNotification(
+    AliveBackgroundUrgentNotification notification,
+  ) => _aliveBackgroundUrgent.submit(notification);
+
+  @override
+  Future<void> cancelAliveBackgroundUrgentNotification(int nativeId) =>
+      _aliveBackgroundUrgent.cancel(nativeId);
+
+  @override
+  Future<bool> openAliveBackgroundFullScreenSettings() =>
+      _aliveBackgroundUrgent.openFullScreenSettings();
+
+  @override
   Future<void> updateBadgeCount(int count) async {
     final normalizedCount = max(0, count);
     if (_lastBadgeCount == normalizedCount) {
@@ -300,6 +343,7 @@ class AppNotificationFacade implements NotificationFacade {
       return;
     }
     _disposed = true;
+    await stopStructuredUrgentCue();
     await _initialization;
     if (Platform.isWindows) {
       _plugin
@@ -321,10 +365,7 @@ typedef StructuredNotificationSubmit =
       String? payload,
     });
 
-Future<void> _defaultUrgentCue() async {
-  await SystemSound.play(SystemSoundType.alert);
-  await HapticFeedback.mediumImpact();
-}
+Future<void> _noopUrgentCueStop() async {}
 
 final class _StructuredNotificationEligibilityQuery {
   const _StructuredNotificationEligibilityQuery(this.plugin);

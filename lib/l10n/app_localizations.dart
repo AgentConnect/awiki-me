@@ -2232,6 +2232,18 @@ abstract class AppLocalizations {
   /// **'允许可信 Agent 使用一次短促声音和振动，默认关闭。'**
   String get settingsAgentUrgentCallsSubtitle;
 
+  /// No description provided for @settingsAgentFullScreenAccess.
+  ///
+  /// In zh, this message translates to:
+  /// **'全屏紧急提醒'**
+  String get settingsAgentFullScreenAccess;
+
+  /// No description provided for @settingsAgentFullScreenAccessSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开 Android 14 设置，允许紧急任务使用全屏提醒。'**
+  String get settingsAgentFullScreenAccessSubtitle;
+
   /// No description provided for @settingsCurrentVersion.
   ///
   /// In zh, this message translates to:

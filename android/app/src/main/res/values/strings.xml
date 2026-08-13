@@ -1,3 +1,15 @@
 <resources>
     <string name="app_name">AWiki Me</string>
+    <string name="alive_urgent_channel_name">Urgent Skill Agent tasks</string>
+    <string name="alive_urgent_channel_description">High-priority alerts for urgent Skill Agent tasks</string>
+    <string name="alive_urgent_back">‹ Back</string>
+    <string name="alive_urgent_title">⚠ Urgent callout</string>
+    <string name="alive_urgent_skill_agent">Skill Agent</string>
+    <string name="alive_urgent_not_voice_call">This is a task alert, not a voice call</string>
+    <string name="alive_urgent_cue_stops">Sound and vibration stop within 30 seconds</string>
+    <string name="alive_urgent_ignore">Ignore</string>
+    <string name="alive_urgent_act_now">Act now</string>
+    <string name="alive_sync_keepalive_channel_name">Background sync</string>
+    <string name="alive_sync_keepalive_channel_description">Keeps a short background sync alive after a silent push hint</string>
+    <string name="alive_sync_keepalive_text">Syncing messages</string>
 </resources>

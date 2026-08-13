@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:flutter/foundation.dart';
+
 import '../domain/entities/remote_push_event.dart';
 import '../domain/services/remote_push_client.dart';
 import 'models/remote_push_sync_receipt.dart';
+import 'alive_urgent_click_binding_store.dart';
 import 'ports/message_sync_core_port.dart';
 import 'ports/remote_push_sync_port.dart';
 import 'remote_push_message_reference.dart';
@@ -17,17 +20,20 @@ class RemotePushMessageSyncCoordinator {
     required RemotePushSyncPort sync,
     required RemotePushNavigationPort navigation,
     required RemotePushInstallationRefresh refreshInstallation,
+    required AliveUrgentClickBindingStore aliveUrgentClickBindings,
     DateTime Function()? now,
   }) : _client = client,
        _sync = sync,
        _navigation = navigation,
        _refreshInstallation = refreshInstallation,
+       _aliveUrgentClickBindings = aliveUrgentClickBindings,
        _now = now ?? DateTime.now;
 
   final RemotePushClient _client;
   final RemotePushSyncPort _sync;
   final RemotePushNavigationPort _navigation;
   final RemotePushInstallationRefresh _refreshInstallation;
+  final AliveUrgentClickBindingStore _aliveUrgentClickBindings;
   final DateTime Function() _now;
   final LinkedHashMap<String, RemotePushEvent> _queuedEvents =
       LinkedHashMap<String, RemotePushEvent>();
@@ -45,9 +51,24 @@ class RemotePushMessageSyncCoordinator {
     _subscription = _client.events.listen(_onEvent);
   }
 
+  Future<void> pullPendingAndDrain() {
+    if (_disposed) {
+      throw StateError('Remote Push message sync coordinator is disposed');
+    }
+    return _serialize(() async {
+      await _client.pullPendingEvents();
+      _mergePendingEvents();
+      await _drainOneBatch();
+    });
+  }
+
   Future<void> activateSession(RemotePushSessionContext context) {
     if (_disposed) {
       throw StateError('Remote Push message sync coordinator is disposed');
+    }
+    final previous = _activeSession;
+    if (previous != null && !previous.matches(context)) {
+      _aliveUrgentClickBindings.clearForSession(previous);
     }
     _activeSession = context;
     _mergePendingEvents();
@@ -56,6 +77,7 @@ class RemotePushMessageSyncCoordinator {
 
   void deactivateSession(RemotePushSessionContext context) {
     if (context.matches(_activeSession)) {
+      _aliveUrgentClickBindings.clearForSession(context);
       _activeSession = null;
       unawaited(
         _serialize(() async {
@@ -110,17 +132,21 @@ class RemotePushMessageSyncCoordinator {
       case RemotePushEventKind.notificationReceived:
       case RemotePushEventKind.notificationReceivedInApp:
       case RemotePushEventKind.notificationOpened:
+      case RemotePushEventKind.notificationRemoved:
         _queuedEvents[event.deliveryId] = event;
         if (_activeSession != null) {
+          debugPrint(
+            '[AWikiRemotePush] dart queued ${event.kind.wireName}',
+          );
           unawaited(_serialize(_drainOneBatch));
+        } else {
+          debugPrint('[AWikiRemotePush] dart queued without session');
         }
       case RemotePushEventKind.registrationChanged:
         final context = _activeSession;
         if (context != null) {
           unawaited(_serialize(() => _refreshAndDrain(context)));
         }
-      case RemotePushEventKind.notificationRemoved:
-        return;
     }
   }
 
@@ -131,9 +157,9 @@ class RemotePushMessageSyncCoordinator {
         case RemotePushEventKind.notificationReceived:
         case RemotePushEventKind.notificationReceivedInApp:
         case RemotePushEventKind.notificationOpened:
+        case RemotePushEventKind.notificationRemoved:
           _queuedEvents[event.deliveryId] = event;
         case RemotePushEventKind.registrationChanged:
-        case RemotePushEventKind.notificationRemoved:
           break;
       }
     }
@@ -169,20 +195,56 @@ class RemotePushMessageSyncCoordinator {
     final deliveryIds = batch
         .map((event) => event.deliveryId)
         .toList(growable: false);
+    for (final removed in batch.where(
+      (event) => event.kind == RemotePushEventKind.notificationRemoved,
+    )) {
+      _discardRemovedBinding(context, removed);
+    }
+    final syncBatch = batch
+        .where((event) => event.kind != RemotePushEventKind.notificationRemoved)
+        .toList(growable: false);
+    if (syncBatch.isEmpty) {
+      await _acknowledgeBatch(context, deliveryIds);
+      return;
+    }
 
     final RemotePushSyncReceipt receipt;
     try {
       receipt = await _sync.requestRemotePushSync(
-        presentation: _presentationDisposition(batch),
+        presentation: _presentationDisposition(syncBatch),
       );
     } on Object {
+      debugPrint('[AWikiRemotePush] dart drain sync failed');
       return;
     }
+    debugPrint(
+      '[AWikiRemotePush] dart drain sync ok events=${syncBatch.length} '
+      'disposition=${receipt.disposition.name} '
+      'committed=${receipt.committedIncomingMessages.length} '
+      'applied=${receipt.eventsApplied} '
+      'dup=${receipt.duplicatesSkipped} '
+      'status=${receipt.lastStatus ?? '-'} '
+      'error=${receipt.errorCode ?? '-'} '
+      'current=${_isCurrent(context)} '
+      'canAck=${receipt.canAcknowledge}',
+    );
     if (!_isCurrent(context) || !receipt.canAcknowledge) return;
+    if (receipt.committedIncomingMessages.isEmpty &&
+        _presentationDisposition(syncBatch) ==
+            RemotePushPresentationDisposition.appPresentationRequired) {
+      debugPrint(
+        '[AWikiRemotePush] dart drain skip ack empty committed',
+      );
+      return;
+    }
 
-    final openedEvent = _lastOpenedEvent(batch);
+    final openedEvent = _lastOpenedEvent(syncBatch);
     if (openedEvent != null) {
-      final conversationId = _resolveConversationId(openedEvent, receipt);
+      final conversationId = _resolveConversationId(
+        context,
+        openedEvent,
+        receipt,
+      );
       try {
         await _navigation.showConversationList(context);
       } on Object {
@@ -199,6 +261,13 @@ class RemotePushMessageSyncCoordinator {
       }
     }
 
+    await _acknowledgeBatch(context, deliveryIds);
+  }
+
+  Future<void> _acknowledgeBatch(
+    RemotePushSessionContext context,
+    List<String> deliveryIds,
+  ) async {
     if (!_isCurrent(context)) return;
     try {
       await _client.acknowledgePendingEvents(deliveryIds);
@@ -209,6 +278,19 @@ class RemotePushMessageSyncCoordinator {
       _queuedEvents.remove(deliveryId);
     }
     if (!_isCurrent(context)) return;
+  }
+
+  void _discardRemovedBinding(
+    RemotePushSessionContext context,
+    RemotePushEvent event,
+  ) {
+    final removed = _opaqueReferenceAndExpiry(event);
+    if (removed == null) return;
+    _aliveUrgentClickBindings.discard(
+      context: context,
+      opaqueMessageReference: removed.reference,
+      expiresAtEpochSeconds: removed.expiresAtEpochSeconds,
+    );
   }
 
   bool _eventTargetsSession(
@@ -257,24 +339,46 @@ class RemotePushMessageSyncCoordinator {
   }
 
   String? _resolveConversationId(
+    RemotePushSessionContext context,
     RemotePushEvent event,
     RemotePushSyncReceipt receipt,
   ) {
-    final opaqueReference = _openedOpaqueReference(event);
-    if (opaqueReference == null) return null;
+    final opened = _openedOpaqueReference(event);
+    if (opened == null) return null;
     for (final committed in receipt.committedIncomingMessages) {
-      if (!_matchesCommittedMessage(opaqueReference, committed)) continue;
+      if (!_matchesCommittedMessage(opened.reference, committed)) continue;
       final conversationId = committed.message.conversationId;
       if (conversationId != null &&
           conversationId.isNotEmpty &&
           conversationId.trim() == conversationId) {
+        _aliveUrgentClickBindings.discard(
+          context: context,
+          opaqueMessageReference: opened.reference,
+          expiresAtEpochSeconds: opened.expiresAtEpochSeconds,
+        );
         return conversationId;
       }
     }
-    return null;
+    return _aliveUrgentClickBindings.consume(
+      context: context,
+      opaqueMessageReference: opened.reference,
+      expiresAtEpochSeconds: opened.expiresAtEpochSeconds,
+    );
   }
 
-  String? _openedOpaqueReference(RemotePushEvent event) {
+  ({String reference, int expiresAtEpochSeconds})? _openedOpaqueReference(
+    RemotePushEvent event,
+  ) {
+    final opened = _opaqueReferenceAndExpiry(event);
+    if (opened == null || opened.expiresAtEpochSeconds <= _nowSeconds()) {
+      return null;
+    }
+    return opened;
+  }
+
+  ({String reference, int expiresAtEpochSeconds})? _opaqueReferenceAndExpiry(
+    RemotePushEvent event,
+  ) {
     final extraMap = event.payload['extraMap'];
     if (extraMap is! Map) return null;
     final mid = extraMap['mid'];
@@ -283,14 +387,13 @@ class RemotePushMessageSyncCoordinator {
     final rawExpiry = extraMap['exp'];
     if (rawExpiry == null) return null;
     final expirySeconds = _parseExpirySeconds(rawExpiry);
-    if (expirySeconds == null ||
-        expirySeconds <=
-            _now().toUtc().millisecondsSinceEpoch ~/
-                Duration.millisecondsPerSecond) {
-      return null;
-    }
-    return mid;
+    if (expirySeconds == null) return null;
+    return (reference: mid, expiresAtEpochSeconds: expirySeconds);
   }
+
+  int _nowSeconds() =>
+      _now().toUtc().millisecondsSinceEpoch ~/
+      Duration.millisecondsPerSecond;
 
   bool _matchesCommittedMessage(
     String opaqueReference,
@@ -347,6 +450,7 @@ class RemotePushMessageSyncCoordinator {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    _aliveUrgentClickBindings.clear();
     _activeSession = null;
     final subscription = _subscription;
     _subscription = null;

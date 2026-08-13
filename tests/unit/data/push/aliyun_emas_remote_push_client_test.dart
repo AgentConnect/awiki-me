@@ -130,6 +130,27 @@ void main() {
       await client.dispose();
     });
 
+    test('replays a retained delivery id back onto the event stream', () async {
+      final platform = _FakeAliyunEmasPlatform();
+      final client = AliyunEmasRemotePushClient(platform: platform);
+      final received = <RemotePushEvent>[];
+      final subscription = client.events.listen(received.add);
+
+      await client.initialize();
+      final event = _event('message_received', messageId: 'hint');
+      await platform.emit(<Object?>[event]);
+      await platform.emit(<Object?>[event]);
+
+      expect(received, hasLength(2));
+      expect(
+        received.map((item) => item.deliveryId).toSet(),
+        <String>{'delivery-hint'},
+      );
+      expect(client.pendingEvents, hasLength(1));
+      await subscription.cancel();
+      await client.dispose();
+    });
+
     test('bounds replay events and removes live notification text', () async {
       final platform = _FakeAliyunEmasPlatform();
       final client = AliyunEmasRemotePushClient(platform: platform);
@@ -226,7 +247,7 @@ void main() {
       },
     );
 
-    test('does not re-emit unacknowledged native events on retry', () async {
+    test('re-emits unacknowledged native events on initialize retry', () async {
       final platform = _FakeAliyunEmasPlatform(
         initializeResults: <Map<dynamic, dynamic>>[
           <dynamic, dynamic>{'code': 'network_error'},
@@ -246,8 +267,11 @@ void main() {
       );
       await client.initialize();
 
-      expect(received, hasLength(1));
-      expect(received.single.payload['msgId'], 'queued');
+      expect(received, hasLength(2));
+      expect(
+        received.map((event) => event.payload['msgId']).toSet(),
+        <String>{'queued'},
+      );
       expect(client.pendingEvents, hasLength(1));
       await subscription.cancel();
       await client.dispose();

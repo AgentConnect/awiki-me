@@ -12,6 +12,7 @@ import ai.awiki.awikime.push.RemotePushEventBridge
 import ai.awiki.awikime.push.RemotePushPresentationState
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
@@ -20,12 +21,15 @@ import java.util.UUID
 
 class MainActivity : FlutterFragmentActivity() {
     companion object {
+        const val CACHED_ENGINE_ID = "awiki-main-engine"
         private const val DOCUMENT_CHANNEL = "ai.awiki.awikime/document_picker"
         private const val ATTACHMENT_CHANNEL = "ai.awiki.awikime/attachment_picker"
         private const val ATTACHMENT_VIEWER_CHANNEL = "ai.awiki.awikime/attachment_viewer"
         private const val UPDATE_CHANNEL = "ai.awiki.awikime/app_update"
         private const val LOCAL_DATA_RECOVERY_CHANNEL =
             "ai.awiki.awikime/android_local_data_recovery"
+        private const val STRUCTURED_URGENT_CUE_CHANNEL =
+            "ai.awiki.awikime/structured_urgent_cue"
         private const val REQUEST_SAVE_ZIP = 2001
         private const val REQUEST_PICK_ZIP = 2002
         private const val REQUEST_PICK_ATTACHMENT = 2003
@@ -36,13 +40,19 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingSaveResult: MethodChannel.Result? = null
     private var pendingPickResult: MethodChannel.Result? = null
     private var pendingSaveMimeType: String = "application/octet-stream"
+    private val structuredUrgentCue by lazy {
+        StructuredUrgentCueController(applicationContext)
+    }
 
     override fun onResume() {
         super.onResume()
         RemotePushPresentationState.setActivityResumed(true)
+        AliveBackgroundUrgentNotificationController.cancelActive(applicationContext)
+        AliveBackgroundSyncScheduler.cancel(applicationContext)
     }
 
     override fun onPause() {
+        structuredUrgentCue.stop()
         RemotePushPresentationState.setActivityResumed(false)
         RemotePushPresentationState.setWindowFocused(false)
         super.onPause()
@@ -63,10 +73,21 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    override fun provideFlutterEngine(context: Context): FlutterEngine? {
+        return FlutterEngineCache.getInstance().get(CACHED_ENGINE_ID)
+    }
+
+    override fun shouldDestroyEngineWithHost(): Boolean = false
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        FlutterEngineCache.getInstance().put(CACHED_ENGINE_ID, flutterEngine)
 
         RemotePushEventBridge.attach(this, flutterEngine.dartExecutor.binaryMessenger)
+        AliveBackgroundUrgentNotificationController.attach(
+            applicationContext,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DOCUMENT_CHANNEL)
             .setMethodCallHandler { call: MethodCall, result: MethodChannel.Result ->
@@ -131,10 +152,29 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            STRUCTURED_URGENT_CUE_CHANNEL,
+        ).setMethodCallHandler { call: MethodCall, result: MethodChannel.Result ->
+            when (call.method) {
+                "start" -> {
+                    val args = call.arguments as? Map<*, *> ?: emptyMap<Any?, Any?>()
+                    val requestedDuration = (args["max_duration_ms"] as? Number)?.toLong()
+                        ?: StructuredUrgentCueController.DEFAULT_DURATION_MILLIS
+                    result.success(structuredUrgentCue.start(requestedDuration))
+                }
+                "stop" -> {
+                    structuredUrgentCue.stop()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
-        RemotePushEventBridge.detach()
+        structuredUrgentCue.stop()
         super.cleanUpFlutterEngine(flutterEngine)
     }
 

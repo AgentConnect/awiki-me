@@ -9,7 +9,7 @@ const String awikiStructuredNormalNotificationChannelName = 'Agent messages';
 const String awikiStructuredNormalNotificationChannelDescription =
     'AWiki Me structured Agent messages';
 
-const String awikiStructuredUrgentNotificationChannelId = 'awiki_me_urgent_v1';
+const String awikiStructuredUrgentNotificationChannelId = 'awiki_me_urgent_v2';
 const String awikiStructuredUrgentNotificationChannelName = 'Urgent calls';
 const String awikiStructuredUrgentNotificationChannelDescription =
     'AWiki Me urgent Agent calls';

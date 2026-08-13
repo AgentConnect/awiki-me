@@ -14,6 +14,7 @@ import '../application/attachment_open_service.dart';
 import '../application/attachment_preview_service.dart';
 import '../application/account_state_sync_request_bus.dart';
 import '../application/account_state_sync_service.dart';
+import '../application/alive_urgent_click_binding_store.dart';
 import '../application/app_session_service.dart';
 import '../application/agent/agent_control_service.dart';
 import '../application/agent/agent_control_status_store.dart';
@@ -281,6 +282,13 @@ final appPresentationServiceProvider = Provider<AppPresentationService>(
 );
 
 final remotePushClientProvider = Provider<RemotePushClient?>((ref) => null);
+
+final aliveUrgentClickBindingStoreProvider =
+    Provider<AliveUrgentClickBindingStore>((ref) {
+      final store = AliveUrgentClickBindingStore();
+      ref.onDispose(store.dispose);
+      return store;
+    });
 
 final remotePushInstallationCoordinatorProvider =
     Provider<RemotePushInstallationCoordinator?>((ref) => null);

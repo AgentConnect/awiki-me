@@ -124,6 +124,52 @@ void main() {
     );
 
     test(
+      'wakes Flutter after MESSAGE through expedited WorkManager, not a receiver FGS',
+      () {
+        final manifest = File(
+          'android/app/src/main/AndroidManifest.xml',
+        ).readAsStringSync();
+        final gradle = File('android/app/build.gradle').readAsStringSync();
+        final receiver = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+          'AwikiAliyunPushReceiver.kt',
+        ).readAsStringSync();
+        final scheduler = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/'
+          'AliveBackgroundSyncScheduler.kt',
+        ).readAsStringSync();
+        final worker = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/'
+          'AliveBackgroundSyncWorker.kt',
+        ).readAsStringSync();
+        final bridge = File(
+          'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+          'RemotePushEventBridge.kt',
+        ).readAsStringSync();
+
+        expect(gradle, contains('androidx.work:work-runtime-ktx:2.10.0'));
+        expect(
+          manifest,
+          contains('android.permission.FOREGROUND_SERVICE_DATA_SYNC'),
+        );
+        expect(
+          manifest,
+          contains('androidx.work.impl.foreground.SystemForegroundService'),
+        );
+        expect(manifest, contains('android:foregroundServiceType="dataSync"'));
+        expect(receiver, contains('AliveBackgroundSyncScheduler.enqueue'));
+        expect(receiver, isNot(contains('startForegroundService')));
+        expect(scheduler, contains('setExpedited'));
+        expect(worker, contains('FOREGROUND_SERVICE_TYPE_DATA_SYNC'));
+        expect(worker, contains('RemotePushEventBridge.replayPending'));
+        expect(worker, contains('lifecycleChannel.appIsInactive'));
+        expect(worker, contains('Looper.getMainLooper()'));
+        expect(worker, contains('Handler(Looper.getMainLooper())'));
+        expect(bridge, contains('fun replayPending'));
+      },
+    );
+
+    test(
       'keeps screen wake explicit and never auto-wakes provider notices',
       () {
         final manifest = File(
@@ -248,7 +294,8 @@ void main() {
       expect(bridge, contains('acknowledgePendingEvents'));
       expect(bridge, contains('onRemotePushEvents'));
       expect(activity, contains('RemotePushEventBridge.attach'));
-      expect(activity, contains('RemotePushEventBridge.detach'));
+      expect(activity, contains('shouldDestroyEngineWithHost(): Boolean = false'));
+      expect(activity, isNot(contains('RemotePushEventBridge.detach')));
     });
 
     test(
@@ -350,6 +397,74 @@ void main() {
       expect(bridge, isNot(contains('put("title"')));
       expect(bridge, isNot(contains('put("content"')));
       expect(bridge, isNot(contains('put("openUrl"')));
+    });
+
+    test('live MESSAGE bridge forwards only an opaque provider id', () {
+      final receiver = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+        'AwikiAliyunPushReceiver.kt',
+      ).readAsStringSync();
+      final onMessage = receiver.substring(
+        receiver.indexOf('override fun onMessage'),
+        receiver.indexOf('override fun onNotificationOpened'),
+      );
+
+      expect(onMessage, contains('mapOf("msgId" to message.messageId)'));
+      expect(onMessage, isNot(contains('message.title')));
+      expect(onMessage, isNot(contains('message.content')));
+      expect(onMessage, isNot(contains('message.appId')));
+      expect(onMessage, isNot(contains('message.traceInfo')));
+    });
+
+    test('alive urgent click emits opaque opened reference without route', () {
+      final controller = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/'
+        'AliveBackgroundUrgentNotificationController.kt',
+      ).readAsStringSync();
+      final opener = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/'
+        'AliveBackgroundUrgentOpenReceiver.kt',
+      ).readAsStringSync();
+
+      expect(controller, contains('opaque_message_reference'));
+      expect(controller, isNot(contains('SELECT_NOTIFICATION')));
+      expect(controller, isNot(contains('NotificationTarget')));
+      expect(opener, contains('"notification_opened"'));
+      expect(opener, contains('"mid" to opaqueReference'));
+      expect(opener, isNot(contains('conversationId')));
+      expect(opener, isNot(contains('ownerDid')));
+      expect(opener, isNot(contains('"payload"')));
+    });
+
+    test('different urgent IDs replace through the controller stop path', () {
+      final source = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/'
+        'AliveBackgroundUrgentNotificationController.kt',
+      ).readAsStringSync();
+      final replacement = source.substring(
+        source.indexOf('AliveBackgroundUrgentContract.replacementNativeId('),
+        source.indexOf('activeContent = content'),
+      );
+
+      expect(replacement, contains('cancel('));
+      expect(
+        replacement,
+        contains('AliveBackgroundUrgentStopReason.REPLACED'),
+      );
+      expect(
+        replacement,
+        isNot(contains('NotificationManagerCompat.from(context).cancel')),
+      );
+      expect(
+        source.indexOf('AliveBackgroundUrgentStopReason.REPLACED'),
+        lessThan(source.indexOf('activeNativeId = nativeId')),
+      );
+      expect(
+        source.indexOf('activeNativeId = nativeId'),
+        lessThan(
+          source.indexOf('NotificationManagerCompat.from(context).notify'),
+        ),
+      );
     });
   });
 }

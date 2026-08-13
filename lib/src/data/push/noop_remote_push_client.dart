@@ -21,6 +21,9 @@ class NoopRemotePushClient
   Future<RemotePushRegistration?> initialize() async => null;
 
   @override
+  Future<void> pullPendingEvents() async {}
+
+  @override
   Future<void> setActiveNotificationTargetReference(
     String? targetReference,
   ) async {}

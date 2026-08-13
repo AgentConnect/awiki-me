@@ -297,6 +297,9 @@ final class _FakeRemotePushClient implements RemotePushClient {
 
   @override
   Future<RemotePushRegistration?> initialize() async => registration;
+
+  @override
+  Future<void> pullPendingEvents() async {}
 }
 
 final class _RecordingPushInstallationPort implements PushInstallationPort {

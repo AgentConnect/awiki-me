@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 typedef RemotePushPlatformEventHandler =
@@ -54,6 +55,7 @@ class PluginAliyunEmasPlatform implements AliyunEmasPlatform {
     if (raw is! List) {
       throw const FormatException('Remote push event batch must be a list');
     }
+    debugPrint('[AWikiRemotePush] dart onRemotePushEvents count=${raw.length}');
     await _handler?.call(raw.cast<Object?>());
     return true;
   }

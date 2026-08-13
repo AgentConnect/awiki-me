@@ -49,6 +49,8 @@ abstract interface class RemotePushClient {
 
   Future<RemotePushRegistration?> initialize();
 
+  Future<void> pullPendingEvents();
+
   Future<void> dispose();
 }
 

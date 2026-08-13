@@ -7,10 +7,12 @@ import 'package:awiki_me/src/application/ports/agent_notification_preference_por
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/services/notification_facade.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/agent_urgent_opt_in_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -200,6 +202,68 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<CupertinoSwitch>(switchFinder).value, isTrue);
   });
+
+  testWidgets('Android FSI settings opens only after explicit row tap', (
+    tester,
+  ) async {
+    final notifications = _SettingsAliveBackgroundNotificationFacade();
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: _session('account-settings-fsi'),
+        notificationFacade: notifications,
+        providerOverrides: <Override>[
+          agentNotificationPreferencePortProvider.overrideWithValue(
+            _FakePreferencePort(
+              const AgentNotificationPreference(
+                schema: 'awiki.agent.message.v1',
+                urgent: AgentNotificationUrgentPreference.enabled,
+                updatedAt: null,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(notifications.openSettingsCalls, 0);
+    final row = find.byKey(const Key('settings-agent-full-screen-access-row'));
+    expect(row, findsOneWidget);
+    await tester.ensureVisible(row);
+    await tester.tap(row);
+    await tester.pump();
+    expect(notifications.openSettingsCalls, 1);
+    debugDefaultTargetPlatformOverride = null;
+  });
+}
+
+final class _SettingsAliveBackgroundNotificationFacade
+    extends FakeNotificationFacade
+    implements AliveBackgroundUrgentNotificationFacade {
+  int openSettingsCalls = 0;
+
+  @override
+  Future<AliveBackgroundNotificationState>
+  aliveBackgroundNotificationState() async =>
+      const AliveBackgroundNotificationState.unavailable();
+
+  @override
+  Future<void> cancelAliveBackgroundUrgentNotification(int nativeId) async {}
+
+  @override
+  Future<bool> openAliveBackgroundFullScreenSettings() async {
+    openSettingsCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<AliveBackgroundNotificationSubmission>
+  showAliveBackgroundUrgentNotification(
+    AliveBackgroundUrgentNotification notification,
+  ) async => AliveBackgroundNotificationSubmission.unavailable;
 }
 
 SessionIdentity _session(String accountId) => SessionIdentity(

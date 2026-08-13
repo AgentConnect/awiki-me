@@ -4577,6 +4577,7 @@ class FakeNotificationFacade implements NotificationFacade {
   StructuredUrgentCueResult urgentCueResult = StructuredUrgentCueResult.played;
   int structuredEligibilityCalls = 0;
   int urgentCueCalls = 0;
+  int urgentCueStopCalls = 0;
   int get inAppCalls => inAppNotificationCount;
   int get systemCalls => systemNotificationCount;
 
@@ -4623,6 +4624,11 @@ class FakeNotificationFacade implements NotificationFacade {
   Future<StructuredUrgentCueResult> playStructuredUrgentCue() async {
     urgentCueCalls += 1;
     return urgentCueResult;
+  }
+
+  @override
+  Future<void> stopStructuredUrgentCue() async {
+    urgentCueStopCalls += 1;
   }
 
   @override

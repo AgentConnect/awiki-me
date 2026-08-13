@@ -1127,6 +1127,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsAgentUrgentCallsSubtitle => '允许可信 Agent 使用一次短促声音和振动，默认关闭。';
 
   @override
+  String get settingsAgentFullScreenAccess => '全屏紧急提醒';
+
+  @override
+  String get settingsAgentFullScreenAccessSubtitle =>
+      '打开 Android 14 设置，允许紧急任务使用全屏提醒。';
+
+  @override
   String get settingsCurrentVersion => '当前版本';
 
   @override

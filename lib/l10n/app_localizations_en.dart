@@ -1186,6 +1186,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Allow trusted Agents to use one short sound and vibration. Off by default.';
 
   @override
+  String get settingsAgentFullScreenAccess => 'Full-screen urgent alerts';
+
+  @override
+  String get settingsAgentFullScreenAccessSubtitle =>
+      'Open Android 14 settings to allow full-screen urgent task alerts.';
+
+  @override
   String get settingsCurrentVersion => 'Current version';
 
   @override

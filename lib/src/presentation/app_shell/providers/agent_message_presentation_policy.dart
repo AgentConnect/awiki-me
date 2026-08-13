@@ -30,15 +30,20 @@ final class AgentMessagePresentationPolicy {
       return const AgentMessagePresentationDecision.suppressedPermission();
     }
     final age = acceptedAt == null ? null : now.difference(acceptedAt);
-    if (message.level == AgentMessageLevel.normal ||
-        !senderIsTrustedForCurrentSession ||
-        !urgentOptIn ||
-        age == null ||
-        age.isNegative ||
-        age > window ||
-        senderUrgentCountInWindow >= 3 ||
-        accountUrgentCountInWindow >= 6) {
+    if (message.level == AgentMessageLevel.normal) {
       return AgentMessagePresentationDecision.normal(foreground: isForeground);
+    }
+    if (!senderIsTrustedForCurrentSession) {
+      return const AgentMessagePresentationDecision.suppressedUntrusted();
+    }
+    if (!urgentOptIn) {
+      return const AgentMessagePresentationDecision.suppressedOptOut();
+    }
+    if (age == null || age.isNegative || age > window) {
+      return const AgentMessagePresentationDecision.suppressedExpired();
+    }
+    if (senderUrgentCountInWindow >= 3 || accountUrgentCountInWindow >= 6) {
+      return const AgentMessagePresentationDecision.suppressedRateLimited();
     }
     return AgentMessagePresentationDecision.urgent(
       foreground: isForeground,
@@ -54,6 +59,10 @@ enum AgentMessagePresentationDisposition {
   urgentForegroundCallout,
   urgentNotification,
   suppressedMuted,
+  suppressedUntrusted,
+  suppressedOptOut,
+  suppressedExpired,
+  suppressedRateLimited,
   suppressedPermission,
 }
 
@@ -68,6 +77,18 @@ final class AgentMessagePresentationDecision {
 
   const AgentMessagePresentationDecision.suppressedPermission()
     : this._(AgentMessagePresentationDisposition.suppressedPermission);
+
+  const AgentMessagePresentationDecision.suppressedUntrusted()
+    : this._(AgentMessagePresentationDisposition.suppressedUntrusted);
+
+  const AgentMessagePresentationDecision.suppressedOptOut()
+    : this._(AgentMessagePresentationDisposition.suppressedOptOut);
+
+  const AgentMessagePresentationDecision.suppressedExpired()
+    : this._(AgentMessagePresentationDisposition.suppressedExpired);
+
+  const AgentMessagePresentationDecision.suppressedRateLimited()
+    : this._(AgentMessagePresentationDisposition.suppressedRateLimited);
 
   AgentMessagePresentationDecision.normal({required bool foreground})
     : this._(

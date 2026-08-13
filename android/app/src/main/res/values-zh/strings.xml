@@ -1,3 +1,15 @@
 <resources>
     <string name="app_name">AWiki Me</string>
+    <string name="alive_urgent_channel_name">紧急 Skill Agent 任务</string>
+    <string name="alive_urgent_channel_description">Skill Agent 紧急任务的高优先级提醒</string>
+    <string name="alive_urgent_back">‹ 返回</string>
+    <string name="alive_urgent_title">⚠ 紧急呼叫</string>
+    <string name="alive_urgent_skill_agent">Skill Agent</string>
+    <string name="alive_urgent_not_voice_call">这是任务提醒，不是语音通话</string>
+    <string name="alive_urgent_cue_stops">声音和振动将在 30 秒内停止</string>
+    <string name="alive_urgent_ignore">忽略</string>
+    <string name="alive_urgent_act_now">立即处理</string>
+    <string name="alive_sync_keepalive_channel_name">后台同步</string>
+    <string name="alive_sync_keepalive_channel_description">静默推送提示后短暂保持后台同步</string>
+    <string name="alive_sync_keepalive_text">正在同步消息</string>
 </resources>

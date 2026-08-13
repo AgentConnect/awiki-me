@@ -69,6 +69,9 @@ class _RecordingNotificationFacade implements NotificationFacade {
       StructuredUrgentCueResult.played;
 
   @override
+  Future<void> stopStructuredUrgentCue() async {}
+
+  @override
   Future<void> updateBadgeCount(int count) async {}
 
   @override

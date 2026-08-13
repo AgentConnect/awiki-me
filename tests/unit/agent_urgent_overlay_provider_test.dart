@@ -2,6 +2,7 @@
 
 import 'package:awiki_me/src/application/ports/remote_push_sync_port.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
+import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_message_v1.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/agent_urgent_overlay_provider.dart';
@@ -46,12 +47,14 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       const conversationId = 'dm:peer-scope:v1:agent';
       final navigation = _FakeRemotePushNavigation();
+      final notifications = FakeNotificationFacade();
       late WidgetRef widgetRef;
       await tester.pumpWidget(
         buildLocalizedTestApp(
           session: _session,
           providerOverrides: <Override>[
             remotePushNavigationPortProvider.overrideWithValue(navigation),
+            notificationFacadeProvider.overrideWithValue(notifications),
           ],
           home: Consumer(
             builder: (context, ref, child) {
@@ -127,6 +130,25 @@ void main() {
         'open:$conversationId',
       ]);
       expect(widgetRef.read(agentUrgentOverlayProvider), isNull);
+      expect(notifications.urgentCueStopCalls, 1);
+
+      expect(
+        controller.tryShow(
+          AgentUrgentOverlayState(
+            fence: fence,
+            navigationContext: navigationContext,
+            conversationId: conversationId,
+            senderLabel: 'Agent One',
+            message: _urgentAlert,
+          ),
+        ),
+        isTrue,
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('agent-urgent-ignore')));
+      await tester.pumpAndSettle();
+      expect(widgetRef.read(agentUrgentOverlayProvider), isNull);
+      expect(notifications.urgentCueStopCalls, 2);
 
       expect(
         controller.tryShow(
@@ -149,6 +171,7 @@ void main() {
         findsNothing,
       );
       expect(widgetRef.read(agentUrgentOverlayProvider), isNull);
+      expect(notifications.urgentCueStopCalls, 3);
     },
   );
 

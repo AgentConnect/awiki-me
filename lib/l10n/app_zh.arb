@@ -446,6 +446,8 @@
   "settingsPushNotification": "消息推送通知",
   "settingsAgentUrgentCalls": "允许 Agent 紧急呼叫",
   "settingsAgentUrgentCallsSubtitle": "允许可信 Agent 使用一次短促声音和振动，默认关闭。",
+  "settingsAgentFullScreenAccess": "全屏紧急提醒",
+  "settingsAgentFullScreenAccessSubtitle": "打开 Android 14 设置，允许紧急任务使用全屏提醒。",
   "settingsCurrentVersion": "当前版本",
   "settingsCurrentVersionValue": "当前版本：{version}",
   "@settingsCurrentVersionValue": {

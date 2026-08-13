@@ -98,6 +98,14 @@ class AliyunEmasRemotePushClient
     return _initialization ??= _initializeAndResetAfterFailure();
   }
 
+  @override
+  Future<void> pullPendingEvents() async {
+    if (_disposed) {
+      throw StateError('Remote push client is disposed');
+    }
+    await _acceptPlatformEvents(await _platform.loadPendingEvents());
+  }
+
   Future<RemotePushRegistration?> _initializeAndResetAfterFailure() async {
     try {
       return await _initialize();
@@ -163,7 +171,16 @@ class AliyunEmasRemotePushClient
         _removeExpiredPendingEvents();
         final alreadyPending = _pendingEvents.containsKey(event.deliveryId);
         _retainPendingEvent(event);
-        if (!alreadyPending) _events.add(event);
+        debugPrint(
+          '[AWikiRemotePush] dart '
+          '${alreadyPending ? 'alreadyPending' : 'firstSeen'} '
+          '${event.kind.wireName}',
+        );
+        // Replays of a retained delivery must re-enter the coordinator so a
+        // failed drain can run again inside the WorkManager window.
+        if (!_events.isClosed) {
+          _events.add(event);
+        }
       } on FormatException catch (error) {
         debugPrint('[awiki_me][remote-push][invalid-event] $error');
       }

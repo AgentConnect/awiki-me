@@ -12,6 +12,7 @@ void main() {
       final submissions = <_Submission>[];
       final wake = _RecordingWake();
       var cueCalls = 0;
+      var cueStopCalls = 0;
       final facade = AppNotificationFacade.forTesting(
         structuredSubmit:
             ({required id, title, body, notificationDetails, payload}) async {
@@ -20,6 +21,7 @@ void main() {
               );
             },
         urgentCue: () async => cueCalls += 1,
+        urgentCueStop: () async => cueStopCalls += 1,
         structuredEligibility: () async =>
             StructuredNotificationEligibility.allowed,
         screenWake: wake,
@@ -52,6 +54,8 @@ void main() {
         StructuredUrgentCueResult.played,
       );
       expect(cueCalls, 1);
+      await facade.stopStructuredUrgentCue();
+      expect(cueStopCalls, 1);
       expect(submissions, hasLength(1), reason: 'cue must not create a tray');
       expect(wake.calls, 0);
     },

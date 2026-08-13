@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../../application/ports/remote_push_sync_port.dart';
 import '../../../application/tenant/app_tenant.dart';
+import '../../../app/app_services.dart';
 import '../../../domain/entities/agent/agent_message_v1.dart';
 import '../../chat/parts/agent_message_card.dart';
 import 'remote_push_coordinator_provider.dart';
@@ -156,6 +157,9 @@ class AgentUrgentOverlayHost extends ConsumerWidget {
     if (!overlay.fence.matches(sessionState) ||
         !overlay.navigationContext.matches(currentNavigationContext)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(
+          ref.read(notificationFacadeProvider).stopStructuredUrgentCue(),
+        );
         ref.read(agentUrgentOverlayProvider.notifier).clear();
       });
       return const SizedBox.shrink();
@@ -180,7 +184,12 @@ class AgentUrgentOverlayHost extends ConsumerWidget {
         act: l10n.agentMessageActNow,
       ),
       metaLabel: metaLabel,
-      onIgnore: () => ref.read(agentUrgentOverlayProvider.notifier).clear(),
+      onIgnore: () {
+        unawaited(
+          ref.read(notificationFacadeProvider).stopStructuredUrgentCue(),
+        );
+        ref.read(agentUrgentOverlayProvider.notifier).clear();
+      },
       onAct: () {
         final currentState = ref.read(sessionProvider);
         final currentEpoch = currentState.activeEpoch;
@@ -195,12 +204,18 @@ class AgentUrgentOverlayHost extends ConsumerWidget {
               );
         if (!overlay.fence.matches(currentState) ||
             !overlay.navigationContext.matches(currentContext)) {
+          unawaited(
+            ref.read(notificationFacadeProvider).stopStructuredUrgentCue(),
+          );
           ref.read(agentUrgentOverlayProvider.notifier).clear();
           return;
         }
         final navigation = ref.read(remotePushNavigationPortProvider);
         final navigationContext = overlay.navigationContext;
         final conversationId = overlay.conversationId;
+        unawaited(
+          ref.read(notificationFacadeProvider).stopStructuredUrgentCue(),
+        );
         ref.read(agentUrgentOverlayProvider.notifier).clear();
         unawaited(() async {
           try {

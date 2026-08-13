@@ -47,7 +47,7 @@ void main() {
     expect(cleared.payloadJson, isNull);
   });
 
-  test('urgent is downgraded unless every local gate passes', () {
+  test('urgent is suppressed unless every local gate passes', () {
     final policy = AgentMessagePresentationPolicy();
     final now = DateTime.utc(2026, 8, 11, 12);
     expect(
@@ -65,7 +65,7 @@ void main() {
             accountUrgentCountInWindow: 0,
           )
           .disposition,
-      AgentMessagePresentationDisposition.silentForeground,
+      AgentMessagePresentationDisposition.suppressedUntrusted,
     );
     expect(
       policy
@@ -131,7 +131,7 @@ void main() {
     },
   );
 
-  test('future or missing accepted time always downgrades urgent', () {
+  test('future or missing accepted time always suppresses urgent', () {
     final now = DateTime.utc(2026, 8, 11, 12);
     final policy = AgentMessagePresentationPolicy();
     for (final acceptedAt in <DateTime?>[
@@ -152,7 +152,7 @@ void main() {
       );
       expect(
         decision.disposition,
-        AgentMessagePresentationDisposition.silentForeground,
+        AgentMessagePresentationDisposition.suppressedExpired,
       );
       expect(decision.shouldUseUrgentCue, isFalse);
     }

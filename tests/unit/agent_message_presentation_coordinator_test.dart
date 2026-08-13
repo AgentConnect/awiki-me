@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/alive_urgent_click_binding_store.dart';
 import 'package:awiki_me/src/application/agent_message_presentation_store.dart';
 import 'package:awiki_me/src/application/app_presentation_service.dart';
 import 'package:awiki_me/src/application/app_session_service.dart';
@@ -11,9 +12,12 @@ import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/ports/agent_notification_preference_port.dart';
+import 'package:awiki_me/src/application/ports/remote_push_sync_port.dart';
+import 'package:awiki_me/src/application/remote_push_message_reference.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_message_v1.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/services/notification_facade.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/agent_urgent_opt_in_provider.dart';
@@ -36,34 +40,39 @@ final _now = DateTime.utc(2026, 8, 11, 8);
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test(
-    'WS-first background commit defers durably to provider without App native UI',
-    () async {
-      final notifications = FakeNotificationFacade();
-      final harness = await _Harness.create(notifications: notifications);
-      addTearDown(harness.dispose);
-      await harness.enableUrgent();
-      harness.background();
-      harness.sync.deltaResult = _outcome(
-        eventId: 'evt_agent_urgent_1',
-        acceptedAt: _now,
-      );
+  test('WS-first alive-background commit requests one App-owned FSI', () async {
+    final notifications = _AliveBackgroundNotificationFacade();
+    final harness = await _Harness.create(notifications: notifications);
+    addTearDown(harness.dispose);
+    await harness.enableUrgent();
+    harness.background();
+    harness.sync.deltaResult = _outcome(
+      eventId: 'evt_agent_urgent_1',
+      acceptedAt: _now,
+    );
 
-      await harness.run();
-      harness.sync.deltaResult = const MessageSyncOutcome(
-        status: MessageSyncStatus.idle,
-        eventsApplied: 0,
-        pagesFetched: 1,
-      );
-      await harness.remotePush();
-
-      expect(notifications.structuredNotificationCount, 0);
-      expect(notifications.systemCalls, 0);
-      expect(notifications.urgentCueCalls, 0);
-      expect(notifications.structuredEligibilityCalls, 0);
-      expect(harness.receiptLedgerJson, contains('deferredProvider'));
-    },
-  );
+    await harness.run();
+    harness.sync.deltaResult = const MessageSyncOutcome(
+      status: MessageSyncStatus.idle,
+      eventsApplied: 0,
+      pagesFetched: 1,
+    );
+    expect(notifications.backgroundSubmissions, 1);
+    expect(
+      notifications.lastBackground!.taskName,
+      'Production worker recovery',
+    );
+    expect(
+      notifications.lastBackground!.opaqueMessageReference,
+      remotePushOpaqueMessageReference('logical-evt_agent_urgent_1'),
+    );
+    expect(notifications.systemCalls, 0);
+    expect(notifications.urgentCueCalls, 0);
+    expect(
+      harness.receiptLedgerJson,
+      contains('presentedBackgroundFsiRequested'),
+    );
+  });
 
   test(
     'provider-presented commit becomes terminal without App presentation',
@@ -84,6 +93,113 @@ void main() {
       expect(notifications.structuredNotificationCount, 0);
       expect(notifications.urgentCueCalls, 0);
       expect(harness.receiptLedgerJson, contains('providerPresented'));
+    },
+  );
+
+  test(
+    'startup fresh committed urgent stays timeline-only without claim or cue',
+    () async {
+      final notifications = _AliveBackgroundNotificationFacade();
+      final harness = await _Harness.create(notifications: notifications);
+      addTearDown(harness.dispose);
+      await harness.enableUrgent();
+      harness.background();
+      harness.sync.deltaResult = _outcome(
+        eventId: 'evt_agent_startup_fresh_1',
+        acceptedAt: _now,
+      );
+
+      await harness.run(reason: 'startup');
+
+      expect(notifications.backgroundSubmissions, 0);
+      expect(notifications.urgentCueCalls, 0);
+      expect(harness.container.read(agentUrgentOverlayProvider), isNull);
+      expect(
+        harness.receiptLedgerJson,
+        isNot(contains('evt_agent_startup_fresh_1')),
+      );
+    },
+  );
+
+  test(
+    'remote Push queued after startup presentation finalization rings once',
+    () async {
+      final sync = _SequencedAgentMessageSyncService(<MessageSyncOutcome>[
+        _outcome(
+          eventId: 'evt_agent_startup_queued_1',
+          acceptedAt: _now,
+        ),
+        _outcome(
+          eventId: 'evt_agent_remote_queued_2',
+          acceptedAt: _now,
+        ),
+      ]);
+      final joinStarted = Completer<void>();
+      final joinGate = Completer<List<DeviceJoinRequestNotice>>();
+      final devices = FakeDeviceManagementCore()
+        ..registry = const DeviceRegistrySnapshot(
+          did: 'did:test:me',
+          devices: <DeviceSummary>[
+            DeviceSummary(
+              protocolDeviceId: 'admin-current',
+              signingKeyId: 'did:test:me#admin-sign',
+              e2eeKeyId: 'did:test:me#admin-e2ee',
+              status: DeviceStatus.active,
+              role: DeviceRole.admin,
+              managementReady: true,
+              isCurrent: true,
+            ),
+          ],
+        )
+        ..joinRequestsLoader = (_) {
+          if (!joinStarted.isCompleted) joinStarted.complete();
+          return joinGate.future;
+        };
+      final notifications = _AliveBackgroundNotificationFacade();
+      final harness = await _Harness.create(
+        notifications: notifications,
+        messageSync: sync,
+        deviceCore: devices,
+      );
+      addTearDown(() {
+        if (!joinGate.isCompleted) {
+          joinGate.complete(const <DeviceJoinRequestNotice>[]);
+        }
+        return harness.dispose();
+      });
+      await harness.enableUrgent();
+      harness.background();
+
+      final startupRequest = harness.run(reason: 'startup');
+      await joinStarted.future;
+      final remoteRequest = harness.remotePush(
+        presentation:
+            RemotePushPresentationDisposition.appPresentationRequired,
+      );
+      await pumpEventQueue();
+      expect(
+        harness.container.read(messageSyncCoordinatorProvider).pendingReason,
+        'remote_push',
+      );
+      joinGate.complete(const <DeviceJoinRequestNotice>[]);
+      await startupRequest;
+      await remoteRequest;
+      await pumpEventQueue();
+
+      expect(sync.syncReasons, <String>['startup', 'remote_push']);
+      expect(notifications.backgroundSubmissions, 1);
+      expect(
+        notifications.lastBackground?.opaqueMessageReference,
+        remotePushOpaqueMessageReference('logical-evt_agent_remote_queued_2'),
+      );
+      expect(
+        harness.receiptLedgerJson,
+        contains('presentedBackgroundFsiRequested'),
+      );
+      expect(
+        RegExp('"native_id"').allMatches(harness.receiptLedgerJson).length,
+        1,
+      );
     },
   );
 
@@ -137,7 +253,10 @@ void main() {
       await background.run();
 
       expect(background.notifications.structuredNotificationCount, 0);
-      expect(background.receiptLedgerJson, contains('deferredProvider'));
+      expect(
+        background.receiptLedgerJson,
+        contains('suppressedProcessDetached'),
+      );
 
       final foreground = await _Harness.create();
       addTearDown(foreground.dispose);
@@ -157,7 +276,7 @@ void main() {
   );
 
   test(
-    'startup repairs a recent unread Agent message missed after Core commit',
+    'startup keeps recent unread Agent message timeline-only without replay',
     () async {
       final message = _chatMessage(
         projection: const ValidAgentMessageProjection(
@@ -197,16 +316,13 @@ void main() {
 
       await harness.run();
 
-      expect(harness.notifications.urgentCueCalls, 1);
-      expect(
-        harness.container.read(agentUrgentOverlayProvider)?.message.eventId,
-        'evt_agent_restart_repair_1',
-      );
-      expect(harness.receiptLedgerJson, contains('presentedApp'));
+      expect(harness.notifications.urgentCueCalls, 0);
+      expect(harness.container.read(agentUrgentOverlayProvider), isNull);
+      expect(harness.receiptLedgerJson, isNot(contains('restart_repair')));
 
       await harness.run();
 
-      expect(harness.notifications.urgentCueCalls, 1);
+      expect(harness.notifications.urgentCueCalls, 0);
     },
   );
 
@@ -354,6 +470,116 @@ void main() {
     );
   });
 
+  test('FSI denied uses the same stable ID fallback once', () async {
+    final notifications = _AliveBackgroundNotificationFacade(
+      state: _aliveBackgroundState(
+        fullScreenAccess: AliveBackgroundFullScreenAccess.denied,
+      ),
+      submission: AliveBackgroundNotificationSubmission.fallbackSubmitted,
+    );
+    final harness = await _Harness.create(notifications: notifications);
+    addTearDown(harness.dispose);
+    await harness.enableUrgent();
+    harness.background();
+    harness.sync.deltaResult = _outcome(
+      eventId: 'evt_agent_fallback_1',
+      acceptedAt: _now,
+    );
+
+    await harness.run();
+    await harness.run();
+
+    expect(notifications.backgroundSubmissions, 1);
+    expect(harness.receiptLedgerJson, contains('presentedBackgroundFallback'));
+  });
+
+  test(
+    'background permission and channel denial suppress before submit',
+    () async {
+      for (final fixture
+          in <({AliveBackgroundNotificationState state, String receipt})>[
+            (
+              state: _aliveBackgroundState(notificationsAllowed: false),
+              receipt: 'suppressedPermission',
+            ),
+            (
+              state: _aliveBackgroundState(
+                channelState: AliveBackgroundNotificationChannelState.blocked,
+              ),
+              receipt: 'suppressedChannel',
+            ),
+          ]) {
+        final notifications = _AliveBackgroundNotificationFacade(
+          state: fixture.state,
+        );
+        final harness = await _Harness.create(notifications: notifications);
+        await harness.enableUrgent();
+        harness.background();
+        harness.sync.deltaResult = _outcome(
+          eventId: 'evt_agent_${fixture.receipt}',
+          acceptedAt: _now,
+        );
+
+        await harness.run();
+
+        expect(notifications.backgroundSubmissions, 0);
+        expect(harness.receiptLedgerJson, contains(fixture.receipt));
+        await harness.dispose();
+      }
+    },
+  );
+
+  test(
+    'native and Dart lifecycle disagreement suppresses fail closed',
+    () async {
+      final notifications = _AliveBackgroundNotificationFacade(
+        state: _aliveBackgroundState(nativeActivityResumed: true),
+      );
+      final harness = await _Harness.create(notifications: notifications);
+      addTearDown(harness.dispose);
+      await harness.enableUrgent();
+      harness.background();
+      harness.sync.deltaResult = _outcome(
+        eventId: 'evt_agent_lifecycle_disagreement_1',
+        acceptedAt: _now,
+      );
+
+      await harness.run();
+
+      expect(notifications.backgroundSubmissions, 0);
+      expect(harness.receiptLedgerJson, contains('suppressedLifecycleUnknown'));
+    },
+  );
+
+  test(
+    'resume race during native preflight suppresses before submit',
+    () async {
+      final notifications = _AliveBackgroundNotificationFacade(
+        blockState: true,
+      );
+      final harness = await _Harness.create(notifications: notifications);
+      addTearDown(() {
+        notifications.releaseState();
+        return harness.dispose();
+      });
+      await harness.enableUrgent();
+      harness.background();
+      harness.sync.deltaResult = _outcome(
+        eventId: 'evt_agent_resume_race_1',
+        acceptedAt: _now,
+      );
+
+      final pending = harness.run();
+      await notifications.stateStarted.future;
+      harness.foreground();
+      notifications.releaseState();
+      await pending;
+
+      expect(notifications.backgroundSubmissions, 0);
+      expect(harness.receiptLedgerJson, contains('suppressedLifecycleUnknown'));
+    },
+  );
+
   test('opt-in trust time and permission gates fail closed', () async {
     final defaultOptIn = await _Harness.create();
     addTearDown(defaultOptIn.dispose);
@@ -471,6 +697,59 @@ void main() {
     },
   );
 
+  test(
+    'remote Push recovers a locally committed urgent last message for FSI',
+    () async {
+      final message = _chatMessage(
+        projection: const ValidAgentMessageProjection(
+          AgentMessageV1(
+            eventId: 'evt_agent_local_recover_1',
+            taskName: 'Production worker recovery',
+            kind: AgentMessageKind.alert,
+            level: AgentMessageLevel.urgent,
+            summary: 'Check the production worker',
+            detail: null,
+            action: AgentMessageAction.openConversation,
+          ),
+        ),
+      );
+      final notifications = _AliveBackgroundNotificationFacade();
+      final harness = await _Harness.create(
+        notifications: notifications,
+        initialConversations: <ConversationSummary>[
+          ConversationSummary(
+            conversationId: _conversationId,
+            threadId: _conversationId,
+            displayName: 'Build Agent',
+            lastMessagePreview: 'Check the production worker',
+            lastMessageAt: _now,
+            unreadCount: 1,
+            isGroup: false,
+            lastMessageSnapshot: message,
+          ),
+        ],
+      );
+      addTearDown(harness.dispose);
+      await harness.enableUrgent();
+      harness.background();
+      harness.sync.deltaResult = const MessageSyncOutcome(
+        status: MessageSyncStatus.idle,
+        eventsApplied: 0,
+        pagesFetched: 1,
+      );
+
+      await harness.remotePush(
+        presentation: RemotePushPresentationDisposition.appPresentationRequired,
+      );
+
+      expect(notifications.backgroundSubmissions, 1);
+      expect(
+        harness.receiptLedgerJson,
+        contains('presentedBackgroundFsiRequested'),
+      );
+    },
+  );
+
   test('invalid typed projection stays timeline-only', () async {
     final harness = await _Harness.create();
     addTearDown(harness.dispose);
@@ -512,6 +791,7 @@ final class _Harness {
     FakeNotificationFacade? notifications,
     FakeProductLocalStore? localStore,
     FakeMessageSyncService? messageSync,
+    FakeDeviceManagementCore? deviceCore,
     String activeState = 'active',
     List<ConversationSummary> initialConversations =
         const <ConversationSummary>[],
@@ -554,7 +834,7 @@ final class _Harness {
           const _ForegroundPresentationService(),
         ),
         deviceManagementCorePortProvider.overrideWithValue(
-          FakeDeviceManagementCore(),
+          deviceCore ?? FakeDeviceManagementCore(),
         ),
         ...fakeApplicationServiceOverrides(
           gateway,
@@ -563,6 +843,11 @@ final class _Harness {
         ),
         productLocalStoreProvider.overrideWithValue(store),
         agentNotificationPreferencePortProvider.overrideWithValue(preferences),
+        aliveUrgentClickBindingStoreProvider.overrideWith((ref) {
+          final bindings = AliveUrgentClickBindingStore(now: () => _now);
+          ref.onDispose(bindings.dispose);
+          return bindings;
+        }),
         appSessionServiceProvider.overrideWithValue(
           _StaticAppSessionService(session),
         ),
@@ -626,14 +911,17 @@ final class _Harness {
       .read(appLifecycleProvider.notifier)
       .setLifecycle(AppLifecycleState.paused);
 
-  Future<void> run() => container
+  Future<void> run({String reason = 'test'}) => container
       .read(messageSyncCoordinatorProvider.notifier)
-      .requestSync('test', immediate: true);
+      .requestSync(reason, immediate: true);
 
-  Future<void> remotePush() async {
+  Future<void> remotePush({
+    RemotePushPresentationDisposition presentation =
+        RemotePushPresentationDisposition.providerPresented,
+  }) async {
     await container
         .read(messageSyncCoordinatorProvider.notifier)
-        .requestRemotePushSync();
+        .requestRemotePushSync(presentation: presentation);
   }
 
   Future<void> dispose() async {
@@ -781,6 +1069,71 @@ final class _BlockingNotificationFacade extends FakeNotificationFacade {
   }
 }
 
+AliveBackgroundNotificationState _aliveBackgroundState({
+  bool nativeActivityResumed = false,
+  bool flutterChannelAttached = true,
+  bool notificationsAllowed = true,
+  AliveBackgroundNotificationChannelState channelState =
+      AliveBackgroundNotificationChannelState.high,
+  AliveBackgroundFullScreenAccess fullScreenAccess =
+      AliveBackgroundFullScreenAccess.allowed,
+}) => AliveBackgroundNotificationState(
+  platformSupported: true,
+  nativeActivityResumed: nativeActivityResumed,
+  flutterChannelAttached: flutterChannelAttached,
+  notificationsAllowed: notificationsAllowed,
+  channelState: channelState,
+  fullScreenAccess: fullScreenAccess,
+);
+
+final class _AliveBackgroundNotificationFacade extends FakeNotificationFacade
+    implements AliveBackgroundUrgentNotificationFacade {
+  _AliveBackgroundNotificationFacade({
+    AliveBackgroundNotificationState? state,
+    this.submission = AliveBackgroundNotificationSubmission.fullScreenRequested,
+    this.blockState = false,
+  }) : state = state ?? _aliveBackgroundState();
+
+  AliveBackgroundNotificationState state;
+  AliveBackgroundNotificationSubmission submission;
+  final bool blockState;
+  int backgroundSubmissions = 0;
+  AliveBackgroundUrgentNotification? lastBackground;
+  final List<int> cancelledNativeIds = <int>[];
+  final Completer<void> stateStarted = Completer<void>();
+  final Completer<void> _stateGate = Completer<void>();
+
+  @override
+  Future<AliveBackgroundNotificationState>
+  aliveBackgroundNotificationState() async {
+    if (!stateStarted.isCompleted) stateStarted.complete();
+    if (blockState) await _stateGate.future;
+    return state;
+  }
+
+  void releaseState() {
+    if (!_stateGate.isCompleted) _stateGate.complete();
+  }
+
+  @override
+  Future<void> cancelAliveBackgroundUrgentNotification(int nativeId) async {
+    cancelledNativeIds.add(nativeId);
+  }
+
+  @override
+  Future<bool> openAliveBackgroundFullScreenSettings() async => true;
+
+  @override
+  Future<AliveBackgroundNotificationSubmission>
+  showAliveBackgroundUrgentNotification(
+    AliveBackgroundUrgentNotification notification,
+  ) async {
+    backgroundSubmissions += 1;
+    lastBackground = notification;
+    return submission;
+  }
+}
+
 final class _GatedMessageSyncService extends FakeMessageSyncService {
   final Completer<void> started = Completer<void>();
   final Completer<void> _gate = Completer<void>();
@@ -798,6 +1151,25 @@ final class _GatedMessageSyncService extends FakeMessageSyncService {
 
   void release() {
     if (!_gate.isCompleted) _gate.complete();
+  }
+}
+
+final class _SequencedAgentMessageSyncService extends FakeMessageSyncService {
+  _SequencedAgentMessageSyncService(this.outcomes);
+
+  final List<MessageSyncOutcome> outcomes;
+  var _index = 0;
+
+  @override
+  Future<MessageSyncOutcome> syncNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    syncReasons.add(reason);
+    if (_index >= outcomes.length) {
+      throw StateError('unexpected_agent_message_sync');
+    }
+    return outcomes[_index++];
   }
 }
 

@@ -4,11 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_locale.dart';
 import '../../app/app_router.dart';
+import '../../app/app_services.dart';
 import '../../domain/entities/session_identity.dart';
+import '../../domain/services/notification_facade.dart';
 import '../../l10n/l10n.dart';
-import '../app_shell/providers/app_update_provider.dart';
-import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/agent_urgent_opt_in_provider.dart';
+import '../app_shell/providers/app_runtime_provider.dart';
+import '../app_shell/providers/app_update_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../profile/profile_page.dart';
 import '../devices/devices_page.dart';
@@ -22,8 +24,8 @@ import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
-import 'language_selection_page.dart';
 import 'display_settings_page.dart';
+import 'language_selection_page.dart';
 import '../shared/display_scale.dart';
 import '../shared/local_credential_delete_dialog.dart';
 
@@ -38,6 +40,14 @@ class SettingsPage extends ConsumerWidget {
   final bool embedded;
   final VoidCallback? onBack;
   final VoidCallback? onProfileTap;
+
+  void _openFullScreenAccessSettings(WidgetRef ref) {
+    final facade = ref.read(notificationFacadeProvider);
+    if (facade is AliveBackgroundUrgentNotificationFacade) {
+      (facade as AliveBackgroundUrgentNotificationFacade)
+          .openAliveBackgroundFullScreenSettings();
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -167,6 +177,20 @@ class SettingsPage extends ConsumerWidget {
                     : null,
               ),
             ),
+            if (defaultTargetPlatform == TargetPlatform.android) ...<Widget>[
+              const AppSectionDivider(),
+              AppListTile(
+                key: const Key('settings-agent-full-screen-access-row'),
+                title: l10n.settingsAgentFullScreenAccess,
+                subtitle: l10n.settingsAgentFullScreenAccessSubtitle,
+                leading: leading(
+                  const _SettingsIcon(
+                    icon: CupertinoIcons.rectangle_expand_vertical,
+                  ),
+                ),
+                onTap: () => _openFullScreenAccessSettings(ref),
+              ),
+            ],
           ],
           if (isDesktopPlatform) ...<Widget>[
             const AppSectionDivider(),
@@ -363,6 +387,15 @@ class SettingsPage extends ConsumerWidget {
                       ? ref.read(agentUrgentOptInProvider.notifier).setEnabled
                       : null,
                 ),
+              ),
+            if (session != null &&
+                defaultTargetPlatform == TargetPlatform.android)
+              _QuietSettingsRow(
+                key: const Key('settings-agent-full-screen-access-row'),
+                icon: CupertinoIcons.rectangle_expand_vertical,
+                title: l10n.settingsAgentFullScreenAccess,
+                height: optionRowHeight,
+                onTap: () => _openFullScreenAccessSettings(ref),
               ),
             if (isDesktopPlatform)
               _QuietSettingsRow(
