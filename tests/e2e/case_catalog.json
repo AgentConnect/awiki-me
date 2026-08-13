@@ -2317,7 +2317,10 @@
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
-      "requiredFor": ["optional_nightly", "release"],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
       "owner": "awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
       "evidenceType": "case_attestation",
@@ -2351,7 +2354,10 @@
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
-      "requiredFor": ["optional_nightly", "release"],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
       "owner": "awiki-me-groups+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
       "evidenceType": "case_attestation",
@@ -2364,10 +2370,24 @@
           "DEVICE-GROUP-SYNC-E2E-001:external_group_message_projected_incoming_once"
         ],
         "exactOracleAssertions": [
-          ["DEVICE-GROUP-SYNC-E2E-001:admin_group_own_sync_projected_once", "DEVICE-GROUP-SYNC-E2E-001:joiner_group_own_sync_projected_once", "DEVICE-GROUP-SYNC-E2E-001:canonical_group_and_conversation_preserved", "DEVICE-GROUP-SYNC-E2E-001:external_group_message_projected_incoming_once"],
-          ["DEVICE-GROUP-SYNC-E2E-001:admin_group_own_sync_projected_once", "DEVICE-GROUP-SYNC-E2E-001:joiner_group_own_sync_projected_once", "DEVICE-GROUP-SYNC-E2E-001:external_group_message_projected_incoming_once"]
+          [
+            "DEVICE-GROUP-SYNC-E2E-001:admin_group_own_sync_projected_once",
+            "DEVICE-GROUP-SYNC-E2E-001:joiner_group_own_sync_projected_once",
+            "DEVICE-GROUP-SYNC-E2E-001:canonical_group_and_conversation_preserved",
+            "DEVICE-GROUP-SYNC-E2E-001:external_group_message_projected_incoming_once"
+          ],
+          [
+            "DEVICE-GROUP-SYNC-E2E-001:admin_group_own_sync_projected_once",
+            "DEVICE-GROUP-SYNC-E2E-001:joiner_group_own_sync_projected_once",
+            "DEVICE-GROUP-SYNC-E2E-001:external_group_message_projected_incoming_once"
+          ]
         ],
-        "negativeCheckAssertions": [["DEVICE-GROUP-SYNC-E2E-001:canonical_group_and_conversation_preserved", "DEVICE-GROUP-SYNC-E2E-001:external_group_message_projected_incoming_once"]]
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-GROUP-SYNC-E2E-001:canonical_group_and_conversation_preserved",
+            "DEVICE-GROUP-SYNC-E2E-001:external_group_message_projected_incoming_once"
+          ]
+        ]
       }
     },
     {
@@ -2385,7 +2405,10 @@
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
-      "requiredFor": ["optional_nightly", "release"],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
       "owner": "awiki-me-attachments+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
       "evidenceType": "case_attestation",
@@ -2398,10 +2421,23 @@
           "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_message_projected_once"
         ],
         "exactOracleAssertions": [
-          ["DEVICE-ATTACHMENT-SYNC-E2E-001:canonical_attachment_message_and_object_preserved", "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_metadata_matched", "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_message_projected_once"],
-          ["DEVICE-ATTACHMENT-SYNC-E2E-001:joined_device_download_digest_matched"]
+          [
+            "DEVICE-ATTACHMENT-SYNC-E2E-001:canonical_attachment_message_and_object_preserved",
+            "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_metadata_matched",
+            "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_message_projected_once"
+          ],
+          [
+            "DEVICE-ATTACHMENT-SYNC-E2E-001:joined_device_download_digest_matched"
+          ]
         ],
-        "negativeCheckAssertions": [["DEVICE-ATTACHMENT-SYNC-E2E-001:canonical_attachment_message_and_object_preserved", "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_metadata_matched", "DEVICE-ATTACHMENT-SYNC-E2E-001:joined_device_download_digest_matched", "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_message_projected_once"]]
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-ATTACHMENT-SYNC-E2E-001:canonical_attachment_message_and_object_preserved",
+            "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_metadata_matched",
+            "DEVICE-ATTACHMENT-SYNC-E2E-001:joined_device_download_digest_matched",
+            "DEVICE-ATTACHMENT-SYNC-E2E-001:attachment_message_projected_once"
+          ]
+        ]
       }
     },
     {
@@ -2419,7 +2455,10 @@
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
-      "requiredFor": ["optional_nightly", "release"],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
       "owner": "awiki-me-groups+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
       "evidenceType": "case_attestation",
@@ -2432,10 +2471,22 @@
           "DEVICE-GROUP-READ-SYNC-E2E-001:repeat_sync_preserved_exact_once_and_zero_unread"
         ],
         "exactOracleAssertions": [
-          ["DEVICE-GROUP-READ-SYNC-E2E-001:direct_and_group_unread_projected_independently", "DEVICE-GROUP-READ-SYNC-E2E-001:direct_read_converged_without_clearing_group", "DEVICE-GROUP-READ-SYNC-E2E-001:group_read_converged_without_regressing_direct"],
-          ["DEVICE-GROUP-READ-SYNC-E2E-001:repeat_sync_preserved_exact_once_and_zero_unread"]
+          [
+            "DEVICE-GROUP-READ-SYNC-E2E-001:direct_and_group_unread_projected_independently",
+            "DEVICE-GROUP-READ-SYNC-E2E-001:direct_read_converged_without_clearing_group",
+            "DEVICE-GROUP-READ-SYNC-E2E-001:group_read_converged_without_regressing_direct"
+          ],
+          [
+            "DEVICE-GROUP-READ-SYNC-E2E-001:repeat_sync_preserved_exact_once_and_zero_unread"
+          ]
         ],
-        "negativeCheckAssertions": [["DEVICE-GROUP-READ-SYNC-E2E-001:direct_read_converged_without_clearing_group", "DEVICE-GROUP-READ-SYNC-E2E-001:group_read_converged_without_regressing_direct", "DEVICE-GROUP-READ-SYNC-E2E-001:repeat_sync_preserved_exact_once_and_zero_unread"]]
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-GROUP-READ-SYNC-E2E-001:direct_read_converged_without_clearing_group",
+            "DEVICE-GROUP-READ-SYNC-E2E-001:group_read_converged_without_regressing_direct",
+            "DEVICE-GROUP-READ-SYNC-E2E-001:repeat_sync_preserved_exact_once_and_zero_unread"
+          ]
+        ]
       }
     },
     {
@@ -4248,7 +4299,10 @@
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
-      "requiredFor": ["optional_nightly", "release"],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
       "evidenceType": "case_attestation",
@@ -4261,20 +4315,24 @@
           "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:runtime_inventory_metadata_and_parent_preserved_exactly_once",
           "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:registry_kept_only_the_replacement_identity"
         ],
-        "exactOracleAssertions": [[
-          "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:fresh_root_had_no_old_local_identity_or_ordinary_conversation",
-          "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:four_account_state_domains_converged_without_version_regression",
-          "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:daemon_inventory_metadata_and_status_version_preserved_exactly_once",
-          "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:runtime_inventory_metadata_and_parent_preserved_exactly_once",
-          "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:registry_kept_only_the_replacement_identity"
-        ]],
-        "negativeCheckAssertions": [[
-          "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:fresh_root_had_no_old_local_identity_or_ordinary_conversation",
-          "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:four_account_state_domains_converged_without_version_regression",
-          "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:daemon_inventory_metadata_and_status_version_preserved_exactly_once",
-          "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:runtime_inventory_metadata_and_parent_preserved_exactly_once",
-          "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:registry_kept_only_the_replacement_identity"
-        ]]
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:fresh_root_had_no_old_local_identity_or_ordinary_conversation",
+            "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:four_account_state_domains_converged_without_version_regression",
+            "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:daemon_inventory_metadata_and_status_version_preserved_exactly_once",
+            "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:runtime_inventory_metadata_and_parent_preserved_exactly_once",
+            "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:registry_kept_only_the_replacement_identity"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:fresh_root_had_no_old_local_identity_or_ordinary_conversation",
+            "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:four_account_state_domains_converged_without_version_regression",
+            "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:daemon_inventory_metadata_and_status_version_preserved_exactly_once",
+            "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:runtime_inventory_metadata_and_parent_preserved_exactly_once",
+            "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001:registry_kept_only_the_replacement_identity"
+          ]
+        ]
       }
     },
     {
@@ -4291,7 +4349,10 @@
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
-      "requiredFor": ["optional_nightly", "release"],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
       "evidenceType": "case_attestation",
@@ -4303,18 +4364,22 @@
           "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:runtime_received_replacement_controller_and_replied",
           "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:prompt_and_reply_converged_exactly_once"
         ],
-        "exactOracleAssertions": [[
-          "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:original_runtime_selected_from_visible_agents_ui",
-          "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:prompt_sent_through_visible_composer_without_manual_conversation",
-          "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:runtime_received_replacement_controller_and_replied",
-          "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:prompt_and_reply_converged_exactly_once"
-        ]],
-        "negativeCheckAssertions": [[
-          "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:original_runtime_selected_from_visible_agents_ui",
-          "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:prompt_sent_through_visible_composer_without_manual_conversation",
-          "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:runtime_received_replacement_controller_and_replied",
-          "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:prompt_and_reply_converged_exactly_once"
-        ]]
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:original_runtime_selected_from_visible_agents_ui",
+            "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:prompt_sent_through_visible_composer_without_manual_conversation",
+            "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:runtime_received_replacement_controller_and_replied",
+            "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:prompt_and_reply_converged_exactly_once"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:original_runtime_selected_from_visible_agents_ui",
+            "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:prompt_sent_through_visible_composer_without_manual_conversation",
+            "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:runtime_received_replacement_controller_and_replied",
+            "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001:prompt_and_reply_converged_exactly_once"
+          ]
+        ]
       }
     },
     {
@@ -4331,7 +4396,10 @@
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
-      "requiredFor": ["optional_nightly", "release"],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
       "evidenceType": "case_attestation",
@@ -4344,20 +4412,24 @@
           "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:preview_and_unread_rendered_before_open",
           "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:inbound_and_visible_ui_reply_converged_exactly_once"
         ],
-        "exactOracleAssertions": [[
-          "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:external_peer_resolved_handle_to_replacement_did",
-          "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:old_did_direct_send_was_fenced",
-          "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:inbound_created_one_canonical_direct_without_manual_prerequisite",
-          "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:preview_and_unread_rendered_before_open",
-          "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:inbound_and_visible_ui_reply_converged_exactly_once"
-        ]],
-        "negativeCheckAssertions": [[
-          "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:external_peer_resolved_handle_to_replacement_did",
-          "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:old_did_direct_send_was_fenced",
-          "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:inbound_created_one_canonical_direct_without_manual_prerequisite",
-          "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:preview_and_unread_rendered_before_open",
-          "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:inbound_and_visible_ui_reply_converged_exactly_once"
-        ]]
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:external_peer_resolved_handle_to_replacement_did",
+            "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:old_did_direct_send_was_fenced",
+            "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:inbound_created_one_canonical_direct_without_manual_prerequisite",
+            "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:preview_and_unread_rendered_before_open",
+            "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:inbound_and_visible_ui_reply_converged_exactly_once"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:external_peer_resolved_handle_to_replacement_did",
+            "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:old_did_direct_send_was_fenced",
+            "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:inbound_created_one_canonical_direct_without_manual_prerequisite",
+            "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:preview_and_unread_rendered_before_open",
+            "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001:inbound_and_visible_ui_reply_converged_exactly_once"
+          ]
+        ]
       }
     },
     {
@@ -4374,7 +4446,10 @@
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
-      "requiredFor": ["optional_nightly", "release"],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
       "evidenceType": "case_attestation",
@@ -4385,16 +4460,20 @@
           "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:old_member_replaced_by_recovery_did_without_duplicate",
           "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:public_product_projection_rebind_converged_exactly_once"
         ],
-        "exactOracleAssertions": [[
-          "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:group_identity_profile_role_status_and_count_preserved",
-          "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:old_member_replaced_by_recovery_did_without_duplicate",
-          "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:public_product_projection_rebind_converged_exactly_once"
-        ]],
-        "negativeCheckAssertions": [[
-          "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:group_identity_profile_role_status_and_count_preserved",
-          "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:old_member_replaced_by_recovery_did_without_duplicate",
-          "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:public_product_projection_rebind_converged_exactly_once"
-        ]]
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:group_identity_profile_role_status_and_count_preserved",
+            "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:old_member_replaced_by_recovery_did_without_duplicate",
+            "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:public_product_projection_rebind_converged_exactly_once"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:group_identity_profile_role_status_and_count_preserved",
+            "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:old_member_replaced_by_recovery_did_without_duplicate",
+            "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:public_product_projection_rebind_converged_exactly_once"
+          ]
+        ]
       }
     },
     {
@@ -4411,7 +4490,10 @@
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
-      "requiredFor": ["optional_nightly", "release"],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
       "evidenceType": "case_attestation",
@@ -4423,18 +4505,22 @@
           "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:preview_and_unread_rendered_before_open",
           "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:inbound_and_visible_ui_reply_converged_exactly_once"
         ],
-        "exactOracleAssertions": [[
-          "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:external_member_sent_after_rebind_without_local_group_history_copy",
-          "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:group_conversation_group_did_and_wire_thread_remained_canonical",
-          "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:preview_and_unread_rendered_before_open",
-          "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:inbound_and_visible_ui_reply_converged_exactly_once"
-        ]],
-        "negativeCheckAssertions": [[
-          "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:external_member_sent_after_rebind_without_local_group_history_copy",
-          "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:group_conversation_group_did_and_wire_thread_remained_canonical",
-          "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:preview_and_unread_rendered_before_open",
-          "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:inbound_and_visible_ui_reply_converged_exactly_once"
-        ]]
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:external_member_sent_after_rebind_without_local_group_history_copy",
+            "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:group_conversation_group_did_and_wire_thread_remained_canonical",
+            "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:preview_and_unread_rendered_before_open",
+            "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:inbound_and_visible_ui_reply_converged_exactly_once"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:external_member_sent_after_rebind_without_local_group_history_copy",
+            "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:group_conversation_group_did_and_wire_thread_remained_canonical",
+            "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:preview_and_unread_rendered_before_open",
+            "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001:inbound_and_visible_ui_reply_converged_exactly_once"
+          ]
+        ]
       }
     },
     {
@@ -4451,7 +4537,10 @@
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
-      "requiredFor": ["optional_nightly", "release"],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
       "evidenceType": "case_attestation",
@@ -4465,22 +4554,26 @@
           "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:read_state_did_not_regress",
           "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:group_agent_inventory_and_registry_did_not_duplicate_or_revert"
         ],
-        "exactOracleAssertions": [[
-          "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:same_fresh_recovery_root_reopened_in_new_flutter_process",
-          "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:current_identity_and_four_account_state_domains_persisted",
-          "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:direct_group_and_agent_conversations_remained_exactly_once",
-          "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:six_post_recovery_messages_remained_exactly_once",
-          "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:read_state_did_not_regress",
-          "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:group_agent_inventory_and_registry_did_not_duplicate_or_revert"
-        ]],
-        "negativeCheckAssertions": [[
-          "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:same_fresh_recovery_root_reopened_in_new_flutter_process",
-          "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:current_identity_and_four_account_state_domains_persisted",
-          "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:direct_group_and_agent_conversations_remained_exactly_once",
-          "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:six_post_recovery_messages_remained_exactly_once",
-          "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:read_state_did_not_regress",
-          "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:group_agent_inventory_and_registry_did_not_duplicate_or_revert"
-        ]]
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:same_fresh_recovery_root_reopened_in_new_flutter_process",
+            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:current_identity_and_four_account_state_domains_persisted",
+            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:direct_group_and_agent_conversations_remained_exactly_once",
+            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:six_post_recovery_messages_remained_exactly_once",
+            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:read_state_did_not_regress",
+            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:group_agent_inventory_and_registry_did_not_duplicate_or_revert"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:same_fresh_recovery_root_reopened_in_new_flutter_process",
+            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:current_identity_and_four_account_state_domains_persisted",
+            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:direct_group_and_agent_conversations_remained_exactly_once",
+            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:six_post_recovery_messages_remained_exactly_once",
+            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:read_state_did_not_regress",
+            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:group_agent_inventory_and_registry_did_not_duplicate_or_revert"
+          ]
+        ]
       }
     },
     {
@@ -4754,11 +4847,11 @@
       "action": "Complete visible Handle Recovery, prove the old peer is fenced, submit the recovered Handle through the peer App registration UI, select the Core-owned opaque Join continuation, approve the exact member Join, send standard Root/P5 to that device, and verify bidirectional Direct delivery.",
       "exactOracles": [
         "Registration produces one opaque Recovery-rebind continuation, requests one user-presence decision, and creates one pending joined-device-marked Join for the Recovery DID without exposing grant or transition material to Dart.",
-        "Both App Registry and session views converge after approval, then standard Root/P5 makes the rejoined current peer an active management-ready admin while the recovered sender remains a ready admin.",
+        "Both App Registry and session views converge after approval, then standard Root/P5 makes the rejoined current peer an active management-ready admin while the recovered sender remains a ready admin; the promoted peer refreshes its same-device authorization generation without being logged out.",
         "The old principal stays fenced, Root/P5 is absent from ordinary message history, and both post-transfer Direct directions project exactly once with correct ownership."
       ],
       "negativeChecks": [
-        "A direct Join-OTP bypass, App-selected owner, exposed preparation secret, missing user presence, old-DID convergence, copied state root, root-transfer envelope in ordinary history, duplicate Direct message, non-Linux/macOS execution, implicit or non-awiki.info config, or any skipped business step prevents pass attestation."
+        "A direct Join-OTP bypass, App-selected owner, exposed preparation secret, missing user presence, old-DID convergence, copied state root, root-transfer envelope in ordinary history, false auth-revoked after same-device Root promotion, duplicate Direct message, non-Linux/macOS execution, implicit or non-awiki.info config, or any skipped business step prevents pass attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
@@ -4778,6 +4871,7 @@
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_continuation_rejoined_recovery_did",
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:two_app_registry_session_converged",
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:standard_root_transfer_made_rejoined_peer_management_ready",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:root_promotion_authorization_converged_without_logout",
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:app_to_external_direct_exact_one",
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:external_to_app_and_sibling_direct_exact_one"
         ],
@@ -4790,7 +4884,8 @@
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_returned_opaque_recovery_join_continuation",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_continuation_rejoined_recovery_did",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:two_app_registry_session_converged",
-            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:standard_root_transfer_made_rejoined_peer_management_ready"
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:standard_root_transfer_made_rejoined_peer_management_ready",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:root_promotion_authorization_converged_without_logout"
           ],
           [
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:app_to_external_direct_exact_one",
@@ -4805,6 +4900,7 @@
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_continuation_rejoined_recovery_did",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:two_app_registry_session_converged",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:standard_root_transfer_made_rejoined_peer_management_ready",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:root_promotion_authorization_converged_without_logout",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:app_to_external_direct_exact_one",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:external_to_app_and_sibling_direct_exact_one"
           ]

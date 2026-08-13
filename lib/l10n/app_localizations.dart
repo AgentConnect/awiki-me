@@ -2409,7 +2409,7 @@ abstract class AppLocalizations {
   /// No description provided for @authRevokedDialogMessage.
   ///
   /// In zh, this message translates to:
-  /// **'此账号可能已在其他设备完成重置，请重新登录。'**
+  /// **'此设备的登录授权已失效，请重新登录；如仍无法登录，请重新加入设备或恢复 Handle。'**
   String get authRevokedDialogMessage;
 
   /// No description provided for @messageSyncRetryAction.

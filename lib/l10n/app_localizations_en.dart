@@ -1295,7 +1295,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authRevokedDialogMessage =>
-      'This account may have been reset on another device. Sign in again.';
+      'This device\'s sign-in authorization expired. Sign in again; if that fails, rejoin the device or recover the Handle.';
 
   @override
   String get messageSyncRetryAction => 'Retry';
