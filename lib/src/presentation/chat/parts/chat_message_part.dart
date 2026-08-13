@@ -1056,6 +1056,7 @@ class _ChatBubbleShapeBorder extends ShapeBorder {
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
+    required this.conversation,
     required this.mentionPresentation,
     required this.senderLabel,
     required this.senderAvatarUri,
@@ -1073,6 +1074,7 @@ class _MessageBubble extends StatelessWidget {
   });
 
   final ChatMessage message;
+  final ConversationSummary conversation;
   final ChatMentionPresentationResolver mentionPresentation;
   final String senderLabel;
   final String? senderAvatarUri;
@@ -1224,6 +1226,8 @@ class _MessageBubble extends StatelessWidget {
           );
     final child = _MessageSelectableContent(
       key: Key('chat-message-selection:${message.localId}'),
+      message: message,
+      conversation: conversation,
       text: _copyableMessageText(context, message),
       child: messageContent,
     );
@@ -1396,6 +1400,8 @@ class _MessageBubble extends StatelessWidget {
           );
     final content = _MessageSelectableContent(
       key: Key('chat-message-selection:${message.localId}'),
+      message: message,
+      conversation: conversation,
       text: _copyableMessageText(context, message),
       child: messageContent,
     );
@@ -2866,68 +2872,385 @@ String _copyableMessageText(BuildContext context, ChatMessage message) {
   ].join('\n');
 }
 
-class _MessageSelectableContent extends StatelessWidget {
+class _MessageSelectableContent extends ConsumerStatefulWidget {
   const _MessageSelectableContent({
     super.key,
+    required this.message,
+    required this.conversation,
     required this.text,
     required this.child,
   });
 
+  final ChatMessage message;
+  final ConversationSummary conversation;
   final String text;
   final Widget child;
 
-  Future<void> _copyAll(SelectableRegionState selectableRegionState) async {
-    await Clipboard.setData(ClipboardData(text: text));
-    selectableRegionState.hideToolbar(false);
+  @override
+  ConsumerState<_MessageSelectableContent> createState() =>
+      _MessageSelectableContentState();
+}
+
+class _MessageSelectableContentState
+    extends ConsumerState<_MessageSelectableContent> {
+  final FocusNode _selectionFocusNode = FocusNode(
+    debugLabel: 'message-selection',
+  );
+  final MessageActionExecutor _actionExecutor = MessageActionExecutor();
+  final StaticSelectionContainerDelegate _selectionDelegate =
+      StaticSelectionContainerDelegate();
+
+  String? _selectedText;
+  _PreservedDesktopSelection? _desktopMenuSelection;
+  bool _desktopMenuSelectionNeedsRestore = false;
+  _MessageActionMenuSession? _activeMenuSession;
+  int? _deferredActionPointer;
+  MessageActionSpec? _deferredAction;
+  MessageActionContext? _deferredActionContext;
+  SelectableRegionState? _deferredSelectableRegionState;
+  Rect? _deferredActionBounds;
+
+  @override
+  void dispose() {
+    _clearDeferredDesktopAction();
+    _selectionDelegate.dispose();
+    _selectionFocusNode.dispose();
+    super.dispose();
   }
 
-  List<ContextMenuButtonItem> _contextMenuItems(
-    BuildContext context,
-    SelectableRegionState selectableRegionState,
-  ) {
-    final items = List<ContextMenuButtonItem>.of(
-      selectableRegionState.contextMenuButtonItems,
-    );
-    var copyIndex = items.indexWhere(
-      (item) => item.type == ContextMenuButtonType.copy,
-    );
-    if (copyIndex < 0) {
-      final selectAllIndex = items.indexWhere(
-        (item) => item.type == ContextMenuButtonType.selectAll,
-      );
-      copyIndex = selectAllIndex >= 0 ? selectAllIndex : 0;
-      items.insert(
-        copyIndex,
-        ContextMenuButtonItem(
-          type: ContextMenuButtonType.copy,
-          onPressed: () => _copyAll(selectableRegionState),
-        ),
-      );
+  void _handleSelectionChanged(SelectedContent? content) {
+    final selectedText = content?.plainText;
+    _selectedText = selectedText;
+    _activeMenuSession?.updateSelectedText(selectedText);
+  }
+
+  void _captureDesktopSelectionBeforeRightClick(PointerDownEvent event) {
+    if (defaultTargetPlatform != TargetPlatform.macOS) {
+      return;
     }
-    final selectAllIndex = items.indexWhere(
-      (item) => item.type == ContextMenuButtonType.selectAll,
+    if (event.buttons & kSecondaryMouseButton == 0) {
+      if (event.buttons & kPrimaryMouseButton != 0) {
+        _clearDesktopMenuSelection();
+      }
+      return;
+    }
+    _clearDesktopMenuSelection();
+    final geometry = _selectionDelegate.value;
+    final selectedText = _selectionDelegate.getSelectedContent()?.plainText;
+    final start = geometry.startSelectionPoint;
+    final end = geometry.endSelectionPoint;
+    if (geometry.status != SelectionStatus.uncollapsed ||
+        selectedText == null ||
+        selectedText.isEmpty ||
+        start == null ||
+        end == null) {
+      return;
+    }
+    final transform = _selectionDelegate.getTransformTo(null);
+    final hitExistingSelection = geometry.selectionRects.any(
+      (rect) =>
+          MatrixUtils.transformRect(transform, rect).contains(event.position),
     );
-    final insertionIndex = selectAllIndex >= 0 ? selectAllIndex : copyIndex + 1;
-    items.insert(
-      insertionIndex,
-      ContextMenuButtonItem(
-        label: context.l10n.commonCopyAll,
-        onPressed: () => _copyAll(selectableRegionState),
+    if (!hitExistingSelection) {
+      return;
+    }
+    _desktopMenuSelection = _PreservedDesktopSelection(
+      text: selectedText,
+      startGlobalPosition: MatrixUtils.transformPoint(
+        transform,
+        start.localPosition - Offset(0, start.lineHeight / 2),
+      ),
+      endGlobalPosition: MatrixUtils.transformPoint(
+        transform,
+        end.localPosition - Offset(0, end.lineHeight / 2),
       ),
     );
-    return items;
+    _desktopMenuSelectionNeedsRestore = true;
+  }
+
+  String? _restoreDesktopSelectionForMenu() {
+    final preserved = _desktopMenuSelection;
+    if (preserved == null) {
+      return null;
+    }
+    if (_desktopMenuSelectionNeedsRestore) {
+      _desktopMenuSelectionNeedsRestore = false;
+      _selectionDelegate
+        ..dispatchSelectionEvent(
+          SelectionEdgeUpdateEvent.forStart(
+            globalPosition: preserved.startGlobalPosition,
+          ),
+        )
+        ..dispatchSelectionEvent(
+          SelectionEdgeUpdateEvent.forEnd(
+            globalPosition: preserved.endGlobalPosition,
+          ),
+        );
+    }
+    return preserved.text;
+  }
+
+  void _clearDesktopMenuSelection() {
+    _desktopMenuSelection = null;
+    _desktopMenuSelectionNeedsRestore = false;
+  }
+
+  MessageActionContext _createContextSnapshot() {
+    return MessageActionContext(
+      message: widget.message,
+      conversation: widget.conversation,
+      fullText: widget.text,
+      selectedText: _selectedText,
+      platform: defaultTargetPlatform,
+    );
+  }
+
+  MessageActionCatalog _actionCatalog(
+    SelectableRegionState selectableRegionState,
+  ) {
+    return MessageActionCatalog(<MessageActionSpec>[
+      MessageActionSpec(
+        id: MessageActionId.copySelection,
+        group: MessageActionGroup.selection,
+        order: 10,
+        label: context.l10n.commonCopy,
+        icon: CupertinoIcons.doc_on_doc,
+        isEnabled: (context) => context.copySelectionText.isNotEmpty,
+        onInvoke: (context) => _copyText(context.copySelectionText),
+      ),
+      MessageActionSpec(
+        id: MessageActionId.copyAll,
+        group: MessageActionGroup.selection,
+        order: 20,
+        label: context.l10n.commonCopyAll,
+        icon: CupertinoIcons.doc_plaintext,
+        isEnabled: (context) => context.fullText.isNotEmpty,
+        onInvoke: (context) => _copyText(context.fullText),
+      ),
+      MessageActionSpec(
+        id: MessageActionId.selectAll,
+        group: MessageActionGroup.selection,
+        order: 30,
+        label: context.l10n.commonSelectAll,
+        icon: CupertinoIcons.selection_pin_in_out,
+        isEnabled: (context) => context.fullText.isNotEmpty,
+        dismissPolicy: MessageActionMenuDismissPolicy.afterExecution,
+        preserveSelectionOnDismiss: true,
+        onInvoke: (actionContext) {
+          _selectionFocusNode.requestFocus();
+          selectableRegionState.selectAll(
+            actionContext.isDesktop ? null : SelectionChangedCause.toolbar,
+          );
+        },
+      ),
+    ]);
+  }
+
+  Future<void> _copyText(String text) async {
+    final result = await ref.read(textClipboardServiceProvider).writeText(text);
+    if (!mounted) {
+      return;
+    }
+    if (result.succeeded) {
+      AwikiMeToast.show(context, context.l10n.commonCopied);
+      return;
+    }
+    debugPrint('message_text_copy_failed: ${result.error}');
+    AwikiMeToast.show(context, context.l10n.commonCopyFailed, danger: true);
+  }
+
+  Future<void> _handleUnexpectedActionError(
+    Object error,
+    StackTrace stackTrace,
+  ) async {
+    debugPrint('message_action_failed: $error\n$stackTrace');
+    if (!mounted) {
+      return;
+    }
+    AwikiMeToast.show(context, context.l10n.operationFailedRetry, danger: true);
+  }
+
+  Future<void> _invokeAction({
+    required MessageActionSpec action,
+    required SelectableRegionState selectableRegionState,
+    required MessageActionContext contextSnapshot,
+  }) async {
+    try {
+      await _actionExecutor.execute(
+        action: action,
+        context: contextSnapshot,
+        dismissMenu: ({required preserveSelection}) {
+          selectableRegionState.hideToolbar(!preserveSelection);
+        },
+        onUnexpectedError: _handleUnexpectedActionError,
+      );
+    } finally {
+      _clearDesktopMenuSelection();
+    }
+  }
+
+  void _handleDesktopPointerDown({
+    required MessageActionSpec action,
+    required MessageActionContext contextSnapshot,
+    required int pointer,
+    required Rect activationBounds,
+    required SelectableRegionState selectableRegionState,
+  }) {
+    _clearDeferredDesktopAction();
+    _deferredActionPointer = pointer;
+    _deferredAction = action;
+    _deferredActionContext = contextSnapshot;
+    _deferredSelectableRegionState = selectableRegionState;
+    _deferredActionBounds = activationBounds;
+    GestureBinding.instance.pointerRouter.addGlobalRoute(
+      _handleDeferredDesktopPointerEvent,
+    );
+  }
+
+  void _handleDeferredDesktopPointerEvent(PointerEvent event) {
+    if (event.pointer != _deferredActionPointer ||
+        (event is! PointerUpEvent && event is! PointerCancelEvent)) {
+      return;
+    }
+    final action = _deferredAction;
+    final contextSnapshot = _deferredActionContext;
+    final selectableRegionState = _deferredSelectableRegionState;
+    final shouldActivate =
+        event is PointerUpEvent &&
+        (_deferredActionBounds?.contains(event.position) ?? false);
+    _clearDeferredDesktopAction();
+    if (!shouldActivate ||
+        action == null ||
+        contextSnapshot == null ||
+        selectableRegionState == null) {
+      return;
+    }
+    scheduleMicrotask(() {
+      if (!mounted) {
+        return;
+      }
+      unawaited(
+        _invokeAction(
+          action: action,
+          selectableRegionState: selectableRegionState,
+          contextSnapshot: contextSnapshot,
+        ),
+      );
+    });
+  }
+
+  void _clearDeferredDesktopAction() {
+    if (_deferredActionPointer != null) {
+      GestureBinding.instance.pointerRouter.removeGlobalRoute(
+        _handleDeferredDesktopPointerEvent,
+      );
+    }
+    _deferredActionPointer = null;
+    _deferredAction = null;
+    _deferredActionContext = null;
+    _deferredSelectableRegionState = null;
+    _deferredActionBounds = null;
   }
 
   @override
   Widget build(BuildContext context) {
     return SelectionArea(
+      focusNode: _selectionFocusNode,
+      onSelectionChanged: _handleSelectionChanged,
       contextMenuBuilder: (context, selectableRegionState) {
-        return AdaptiveTextSelectionToolbar.buttonItems(
+        final preservedText = _restoreDesktopSelectionForMenu();
+        final baseContextSnapshot = _createContextSnapshot();
+        final contextSnapshot = preservedText == null
+            ? baseContextSnapshot
+            : MessageActionContext(
+                message: baseContextSnapshot.message,
+                conversation: baseContextSnapshot.conversation,
+                fullText: baseContextSnapshot.fullText,
+                selectedText: preservedText,
+                platform: baseContextSnapshot.platform,
+              );
+        final menuSession = _MessageActionMenuSession(
+          contextSnapshot: contextSnapshot,
+          locksSelectedText: preservedText != null,
+        );
+        _activeMenuSession = menuSession;
+        final actions = _actionCatalog(
+          selectableRegionState,
+        ).resolve(contextSnapshot);
+        return _MessageActionMenu(
+          contextSnapshot: contextSnapshot,
+          actions: actions,
           anchors: selectableRegionState.contextMenuAnchors,
-          buttonItems: _contextMenuItems(context, selectableRegionState),
+          onAction: (action) => _invokeAction(
+            action: action,
+            selectableRegionState: selectableRegionState,
+            contextSnapshot: menuSession.contextSnapshot,
+          ),
+          onDesktopPointerDown: (action, pointer, activationBounds) =>
+              _handleDesktopPointerDown(
+                action: action,
+                contextSnapshot: menuSession.contextSnapshot,
+                pointer: pointer,
+                activationBounds: activationBounds,
+                selectableRegionState: selectableRegionState,
+              ),
+          onDisposed: () {
+            if (identical(_activeMenuSession, menuSession)) {
+              _activeMenuSession = null;
+            }
+          },
         );
       },
-      child: child,
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: _captureDesktopSelectionBeforeRightClick,
+        child: SelectionContainer(
+          delegate: _selectionDelegate,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+@immutable
+class _PreservedDesktopSelection {
+  const _PreservedDesktopSelection({
+    required this.text,
+    required this.startGlobalPosition,
+    required this.endGlobalPosition,
+  });
+
+  final String text;
+  final Offset startGlobalPosition;
+  final Offset endGlobalPosition;
+}
+
+final class _MessageActionMenuSession {
+  _MessageActionMenuSession({
+    required MessageActionContext contextSnapshot,
+    required this.locksSelectedText,
+  }) : _contextSnapshot = contextSnapshot;
+
+  MessageActionContext _contextSnapshot;
+  final bool locksSelectedText;
+
+  MessageActionContext get contextSnapshot => _contextSnapshot;
+
+  void updateSelectedText(String? selectedText) {
+    if (locksSelectedText ||
+        selectedText == null ||
+        selectedText.isEmpty ||
+        selectedText == _contextSnapshot.selectedText) {
+      return;
+    }
+    final current = _contextSnapshot;
+    _contextSnapshot = MessageActionContext(
+      message: current.message,
+      conversation: current.conversation,
+      fullText: current.fullText,
+      selectedText: selectedText,
+      platform: current.platform,
     );
   }
 }

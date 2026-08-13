@@ -8,6 +8,7 @@ final class AgentUiMessageCodes {
   static const selectDaemon = 'agent.select_daemon';
   static const daemonBootstrapMissing = 'agent.daemon_bootstrap_missing';
   static const daemonUnreachableDelete = 'agent.daemon_unreachable_delete';
+  static const daemonDeleteNoResponse = 'agent.daemon_delete_no_response';
   static const daemonUnreachableUpgrade = 'agent.daemon_unreachable_upgrade';
   static const personalAgentMissing = 'agent.personal_agent_missing';
   static const statusSyncWaiting = 'agent.status_sync_waiting';

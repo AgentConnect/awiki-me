@@ -28,6 +28,7 @@ import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/avatar_badge.dart';
+import '../shared/content_aware_two_part_layout.dart';
 import '../shared/formatters/localized_ui_formatters.dart';
 import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';

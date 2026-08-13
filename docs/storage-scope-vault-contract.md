@@ -388,6 +388,10 @@ Store。schema 1 到 26 的归档是明确的预发布兼容退场策略，不�
 
 - display name可原位修改，不改变scope。
 - backend URL只有在server证明相同`remote_realm_id`/service identity时可原位修改。
+- 公网backend URL必须使用HTTPS；只有`localhost`、`127.0.0.1`、`::1`等loopback地址
+  允许HTTP。旧registry中的非loopback HTTP endpoint在加载时只将scheme原地升级为HTTPS，
+  保留profile ID、scope ID、host、port、path、DID host和全部scope数据；该迁移必须使用registry
+  lock、revision递增和原子写入，并且重复启动幂等。
 - server尚无stable realm ID时，scope有数据后禁止修改backend/DID host。
 - DID host/realm变化默认创建新tenant profile和scope。
 - tenant switch必须先推进 App active session generation，使旧 owner 的 sync、timeline、patch、read、send completion 和 presentation cache 立即失效；再停止 realtime、取消 scope-owned work、等待 active operations、flush/close SQLite，旧 runtime 完整 dispose 后才能打开新 scope。新 identity 只能在旧 runtime 释放后启动；同一 identity 的 JWT/profile refresh 不推进 generation。

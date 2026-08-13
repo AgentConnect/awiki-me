@@ -51,8 +51,6 @@ const agentStatusPayloadLookupTimeout = Duration(milliseconds: 1200);
 const agentDeletionRefreshAttempts = 4;
 const agentDeletionRefreshDelay = Duration(seconds: 2);
 const agentDaemonEffectiveStatusFreshnessWindow = Duration(minutes: 10);
-const agentControlSubscriptionRetryBaseDelay = Duration(milliseconds: 150);
-const agentControlSubscriptionRetryMaxDelay = Duration(seconds: 3);
 
 final class AgentActionKeys {
   const AgentActionKeys._();
@@ -481,98 +479,22 @@ final class _AgentsOwnerOperation {
   final int stateEpoch;
 }
 
-final class _AgentControlSessionFence {
-  const _AgentControlSessionFence({
-    required this.sessionGeneration,
-    required this.ownerDid,
-    this.bindingCurrentDid,
-    this.ownerIdentityId,
-    this.accountId,
-    this.protocolDeviceId,
-    this.identityGeneration,
-    this.deviceAuthGeneration,
-  });
-
-  factory _AgentControlSessionFence.fromSession(SessionState state) {
-    final session = state.session;
-    if (session == null) {
-      throw StateError('agent_control_session_unavailable');
-    }
-    final binding = session.accountBinding;
-    return _AgentControlSessionFence(
-      sessionGeneration: state.generation,
-      ownerDid: session.did,
-      bindingCurrentDid: binding?.currentDid,
-      ownerIdentityId: binding?.ownerIdentityId,
-      accountId: binding?.accountId,
-      protocolDeviceId: binding?.protocolDeviceId,
-      identityGeneration: binding?.identityGeneration,
-      deviceAuthGeneration: binding?.deviceAuthGeneration,
-    );
-  }
-
-  final int sessionGeneration;
-  final String ownerDid;
-  final String? bindingCurrentDid;
-  final String? ownerIdentityId;
-  final String? accountId;
-  final String? protocolDeviceId;
-  final String? identityGeneration;
-  final String? deviceAuthGeneration;
-
-  bool matches(SessionState state) {
-    return state.session != null &&
-        this == _AgentControlSessionFence.fromSession(state);
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        other is _AgentControlSessionFence &&
-            other.sessionGeneration == sessionGeneration &&
-            other.ownerDid == ownerDid &&
-            other.bindingCurrentDid == bindingCurrentDid &&
-            other.ownerIdentityId == ownerIdentityId &&
-            other.accountId == accountId &&
-            other.protocolDeviceId == protocolDeviceId &&
-            other.identityGeneration == identityGeneration &&
-            other.deviceAuthGeneration == deviceAuthGeneration;
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    sessionGeneration,
-    ownerDid,
-    bindingCurrentDid,
-    ownerIdentityId,
-    accountId,
-    protocolDeviceId,
-    identityGeneration,
-    deviceAuthGeneration,
-  );
-}
-
-final class _AgentControlSubscription {
-  const _AgentControlSubscription({
-    required this.token,
-    required this.fence,
-    required this.subscription,
-  });
-
-  final int token;
-  final _AgentControlSessionFence fence;
-  final StreamSubscription<AgentControlEvent> subscription;
-}
-
 class AgentsController extends StateNotifier<AgentsState> {
   AgentsController(
     this.ref, {
     Duration inventoryObservationInterval = agentInventoryObservationInterval,
+    int deletionRefreshAttempts = agentDeletionRefreshAttempts,
+    Duration deletionRefreshDelay = agentDeletionRefreshDelay,
   }) : _inventoryObservationInterval = inventoryObservationInterval,
+       _deletionRefreshAttempts = deletionRefreshAttempts,
+       _deletionRefreshDelay = deletionRefreshDelay,
+       assert(deletionRefreshAttempts >= 0),
        super(const AgentsState());
 
   final Ref ref;
   final Duration _inventoryObservationInterval;
+  final int _deletionRefreshAttempts;
+  final Duration _deletionRefreshDelay;
   final Map<String, Timer> _statusQueryTimeouts = <String, Timer>{};
   final Map<String, Timer> _statusQueryClearTimers = <String, Timer>{};
   final Map<String, Timer> _statusQueryPollTimers = <String, Timer>{};
@@ -584,11 +506,6 @@ class AgentsController extends StateNotifier<AgentsState> {
   final Map<String, Timer> _daemonUpgradeAckTimeouts = <String, Timer>{};
   final Map<String, Timer> _daemonUpgradeCancelAckTimeouts = <String, Timer>{};
   final Map<String, Timer> _deletionRefreshTimers = <String, Timer>{};
-  final Map<String, _AgentControlSubscription> _controlEventSubscriptions =
-      <String, _AgentControlSubscription>{};
-  final Map<String, int> _controlEventSubscriptionTokens = <String, int>{};
-  final Map<String, int> _controlEventRetryAttempts = <String, int>{};
-  final Map<String, Timer> _controlEventRetryTimers = <String, Timer>{};
   final Map<String, Map<String, Object?>> _topologyControlOverlays =
       <String, Map<String, Object?>>{};
   Timer? _inventoryAutoSyncTimer;
@@ -602,7 +519,6 @@ class AgentsController extends StateNotifier<AgentsState> {
   _AgentsOwnerOperation? _loadedCacheOperation;
   int _stateEpoch = 0;
   int _inventoryGeneration = 0;
-  int _nextControlEventSubscriptionToken = 0;
   bool _inventoryReconcileRequested = false;
   int _inventoryAutoSyncAttempts = 0;
   bool _inventoryAutoSyncInFlight = false;
@@ -641,7 +557,6 @@ class AgentsController extends StateNotifier<AgentsState> {
     _stopInventoryAutoSync();
     _stopInventoryObservation();
     _cancelStatusTimers();
-    _cancelControlEventSubscriptions();
     _topologyControlOverlays.clear();
     _inventoryReconcileRequested = false;
     state = const AgentsState(error: AgentUiMessageCodes.tenantUnsupported);
@@ -662,7 +577,6 @@ class AgentsController extends StateNotifier<AgentsState> {
       _loadedCacheOwner = null;
       _loadedCacheOperation = null;
       _stateEpoch += 1;
-      _cancelControlEventSubscriptions();
       _topologyControlOverlays.clear();
       _inventoryReconcileRequested = false;
       return Future<void>.value();
@@ -839,7 +753,6 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
     _loadedCacheOwner = cacheOwner;
     _loadedCacheOperation = _captureOwnerOperation();
-    _syncControlEventSubscriptions(visible);
   }
 
   ({Map<String, DateTime> pending, Map<String, String> errors})
@@ -907,7 +820,6 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (session == null) {
       _stopInventoryAutoSync();
       _stopInventoryObservation();
-      _cancelControlEventSubscriptions();
       _topologyControlOverlays.clear();
       _inventoryReconcileRequested = false;
       state = const AgentsState();
@@ -926,7 +838,6 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (!_isCurrentCacheOwner(cacheOwner, operation: ownerOperation)) {
       return;
     }
-    _syncControlEventSubscriptions(state.agents);
     try {
       final remoteAgents = await AwikiPerformanceLogger.async(
         'agents.load.remote_list',
@@ -989,7 +900,6 @@ class AgentsController extends StateNotifier<AgentsState> {
       );
       _loadedCacheOwner = cacheOwner;
       _loadedCacheOperation = ownerOperation;
-      _syncControlEventSubscriptions(agents);
       if (hasDaemon) {
         _inventoryAutoSyncExhaustedOwner = null;
         _stopInventoryAutoSync();
@@ -2334,245 +2244,19 @@ class AgentsController extends StateNotifier<AgentsState> {
     _stopInventoryAutoSync();
     _stopInventoryObservation();
     _cancelStatusTimers();
-    _cancelControlEventSubscriptions();
     _topologyControlOverlays.clear();
     _inventoryReconcileRequested = false;
     state = const AgentsState();
   }
 
-  void _syncControlEventSubscriptions(List<AgentSummary> agents) {
-    final store = ref.read(agentControlStatusStoreProvider);
-    if (store is! AgentControlEventStore) {
-      _cancelControlEventSubscriptions();
+  void applyCommittedControlEvent(AgentControlEvent event) {
+    if (event.payload['schema'] != AgentControlPayloads.statusSchema) {
       return;
     }
-    final eventStore = store as AgentControlEventStore;
-    final daemonDids = agents
-        .where((agent) => agent.isDaemon)
-        .map((agent) => agent.agentDid)
-        .toSet();
-    final sessionState = ref.read(sessionProvider);
-    final session = sessionState.session;
-    if (session == null) {
-      _cancelControlEventSubscriptions();
-      return;
-    }
-    final fence = _AgentControlSessionFence.fromSession(sessionState);
-    for (final daemonDid in _controlEventSubscriptions.keys.toList(
-      growable: false,
-    )) {
-      final current = _controlEventSubscriptions[daemonDid];
-      if (!daemonDids.contains(daemonDid) || current?.fence != fence) {
-        _cancelControlEventSubscription(daemonDid);
-      }
-    }
-    for (final daemonDid in _controlEventRetryTimers.keys.toList(
-      growable: false,
-    )) {
-      if (!daemonDids.contains(daemonDid)) {
-        _controlEventRetryTimers.remove(daemonDid)?.cancel();
-        _controlEventRetryAttempts.remove(daemonDid);
-      }
-    }
-    final owner = _agentCacheOwner(session);
     final operation = _captureOwnerOperation();
-    for (final daemonDid in daemonDids) {
-      if (_controlEventSubscriptions.containsKey(daemonDid) ||
-          _controlEventSubscriptionTokens.containsKey(daemonDid)) {
-        continue;
-      }
-      _startControlEventSubscription(
-        eventStore: eventStore,
-        daemonDid: daemonDid,
-        owner: owner,
-        operation: operation,
-        fence: fence,
-      );
-    }
-  }
-
-  void _startControlEventSubscription({
-    required AgentControlEventStore eventStore,
-    required String daemonDid,
-    required String owner,
-    required _AgentsOwnerOperation operation,
-    required _AgentControlSessionFence fence,
-  }) {
-    _controlEventRetryTimers.remove(daemonDid)?.cancel();
-    final token = ++_nextControlEventSubscriptionToken;
-    _controlEventSubscriptionTokens[daemonDid] = token;
-    final subscription = eventStore
-        .watchDaemonControlEvents(daemonAgentDid: daemonDid)
-        .listen(
-          (event) {
-            if (!_isCurrentControlSubscription(daemonDid, token, fence)) {
-              _handleControlEventSubscriptionTerminated(
-                daemonDid: daemonDid,
-                token: token,
-                fence: fence,
-              );
-              return;
-            }
-            if (!_isCurrentCacheOwner(owner, operation: operation)) {
-              return;
-            }
-            _controlEventRetryAttempts.remove(daemonDid);
-            _applyCommittedControlEvent(event, operation);
-          },
-          onError: (Object error, StackTrace stackTrace) {
-            _handleControlEventSubscriptionTerminated(
-              daemonDid: daemonDid,
-              token: token,
-              fence: fence,
-              error: error,
-            );
-          },
-          onDone: () {
-            _handleControlEventSubscriptionTerminated(
-              daemonDid: daemonDid,
-              token: token,
-              fence: fence,
-            );
-          },
-          cancelOnError: true,
-        );
-    if (_controlEventSubscriptionTokens[daemonDid] != token) {
-      unawaited(subscription.cancel());
+    if (!_isOwnerOperationCurrent(operation)) {
       return;
     }
-    _controlEventSubscriptions[daemonDid] = _AgentControlSubscription(
-      token: token,
-      fence: fence,
-      subscription: subscription,
-    );
-    unawaited(
-      _replayLatestDaemonStatusAfterSubscriptionStart(
-        daemonDid: daemonDid,
-        token: token,
-        fence: fence,
-        operation: operation,
-      ),
-    );
-  }
-
-  bool _isCurrentControlSubscription(
-    String daemonDid,
-    int token,
-    _AgentControlSessionFence fence,
-  ) {
-    return mounted &&
-        _controlEventSubscriptionTokens[daemonDid] == token &&
-        fence.matches(ref.read(sessionProvider));
-  }
-
-  Future<void> _replayLatestDaemonStatusAfterSubscriptionStart({
-    required String daemonDid,
-    required int token,
-    required _AgentControlSessionFence fence,
-    required _AgentsOwnerOperation operation,
-  }) async {
-    final store = ref.read(agentControlStatusStoreProvider);
-    try {
-      final payload = await store
-          .findLatestDaemonStatusPayload(daemonAgentDid: daemonDid)
-          .timeout(agentStatusPayloadLookupTimeout);
-      if (payload != null &&
-          _isCurrentControlSubscription(daemonDid, token, fence) &&
-          _isOwnerOperationCurrent(operation)) {
-        _applyControlPayload(payload, operation);
-      }
-    } on Object {
-      // The committed patch stream remains primary; replay is best effort.
-    }
-  }
-
-  void _handleControlEventSubscriptionTerminated({
-    required String daemonDid,
-    required int token,
-    required _AgentControlSessionFence fence,
-    Object? error,
-  }) {
-    if (_controlEventSubscriptionTokens[daemonDid] != token) {
-      return;
-    }
-    _controlEventSubscriptionTokens.remove(daemonDid);
-    final current = _controlEventSubscriptions.remove(daemonDid);
-    if (current != null && current.token == token) {
-      unawaited(current.subscription.cancel());
-    }
-    if (error != null) {
-      AwikiPerformanceLogger.log(
-        'agents.control_projection.error',
-        fields: <String, Object?>{
-          'daemon_hash': AwikiPerformanceLogger.safeHash(daemonDid),
-          'error': error.runtimeType.toString(),
-        },
-      );
-    }
-    _scheduleControlEventSubscriptionRetry(daemonDid, fence);
-  }
-
-  void _scheduleControlEventSubscriptionRetry(
-    String daemonDid,
-    _AgentControlSessionFence fence,
-  ) {
-    if (!mounted ||
-        !fence.matches(ref.read(sessionProvider)) ||
-        !state.agents.any(
-          (agent) => agent.isDaemon && agent.agentDid == daemonDid,
-        )) {
-      return;
-    }
-    final attempt = (_controlEventRetryAttempts[daemonDid] ?? 0) + 1;
-    _controlEventRetryAttempts[daemonDid] = attempt;
-    final multiplier = 1 << (attempt - 1).clamp(0, 5);
-    final delayMs =
-        (agentControlSubscriptionRetryBaseDelay.inMilliseconds * multiplier)
-            .clamp(
-              agentControlSubscriptionRetryBaseDelay.inMilliseconds,
-              agentControlSubscriptionRetryMaxDelay.inMilliseconds,
-            )
-            .toInt();
-    _controlEventRetryTimers.remove(daemonDid)?.cancel();
-    late final Timer timer;
-    timer = Timer(Duration(milliseconds: delayMs), () {
-      if (!identical(_controlEventRetryTimers[daemonDid], timer)) {
-        return;
-      }
-      _controlEventRetryTimers.remove(daemonDid);
-      if (mounted && fence.matches(ref.read(sessionProvider))) {
-        _syncControlEventSubscriptions(state.agents);
-      }
-    });
-    _controlEventRetryTimers[daemonDid] = timer;
-  }
-
-  void _cancelControlEventSubscription(String daemonDid) {
-    _controlEventRetryTimers.remove(daemonDid)?.cancel();
-    _controlEventRetryAttempts.remove(daemonDid);
-    _controlEventSubscriptionTokens.remove(daemonDid);
-    unawaited(
-      _controlEventSubscriptions.remove(daemonDid)?.subscription.cancel(),
-    );
-  }
-
-  void _cancelControlEventSubscriptions() {
-    for (final timer in _controlEventRetryTimers.values) {
-      timer.cancel();
-    }
-    _controlEventRetryTimers.clear();
-    _controlEventRetryAttempts.clear();
-    _controlEventSubscriptionTokens.clear();
-    for (final entry in _controlEventSubscriptions.values) {
-      unawaited(entry.subscription.cancel());
-    }
-    _controlEventSubscriptions.clear();
-  }
-
-  void _applyCommittedControlEvent(
-    AgentControlEvent event,
-    _AgentsOwnerOperation operation,
-  ) {
     if (state.seenControlEventIds.contains(event.deduplicationKey)) {
       return;
     }
@@ -2589,7 +2273,6 @@ class AgentsController extends StateNotifier<AgentsState> {
       controlEventId: event.deduplicationKey,
       allowNewAgents: matchingPending != null,
     );
-    _syncControlEventSubscriptions(state.agents);
     final shouldReconcile = _recordTopologyControlOverlay(
       event,
       matchingPending: matchingPending,
@@ -2926,14 +2609,14 @@ class AgentsController extends StateNotifier<AgentsState> {
   }) {
     _deletionRefreshTimers.remove(daemonDid)?.cancel();
     if (!_isOwnerOperationCurrent(operation) ||
-        attempt >= agentDeletionRefreshAttempts ||
+        attempt >= _deletionRefreshAttempts ||
         !_hasPendingDeletionForDaemon(daemonDid)) {
       if (_isOwnerOperationCurrent(operation)) {
         _finishDeletionRefresh(daemonDid, operation);
       }
       return;
     }
-    final delay = attempt == 0 ? Duration.zero : agentDeletionRefreshDelay;
+    final delay = attempt == 0 ? Duration.zero : _deletionRefreshDelay;
     late final Timer timer;
     timer = Timer(delay, () {
       if (!identical(_deletionRefreshTimers[daemonDid], timer)) {
@@ -2981,9 +2664,25 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     final remaining = _pendingDeletionAfterAgents(state.agents);
-    if (!identical(remaining, state.pendingDeletionAgentDids)) {
-      state = state.copyWith(pendingDeletionAgentDids: remaining);
+    final daemonFamilyDids = <String>{
+      daemonDid,
+      ...state.runtimesFor(daemonDid).map((agent) => agent.agentDid),
+    };
+    final unresolved = remaining.intersection(daemonFamilyDids);
+    if (unresolved.isEmpty) {
+      if (!identical(remaining, state.pendingDeletionAgentDids)) {
+        state = state.copyWith(pendingDeletionAgentDids: remaining);
+      }
+      return;
     }
+    state = state.copyWith(
+      pendingDeletionAgentDids: _withoutStringKeys(remaining, unresolved),
+      statusQueryErrors: <String, String>{
+        ...state.statusQueryErrors,
+        daemonDid: AgentUiMessageCodes.daemonDeleteNoResponse,
+      },
+      clearError: true,
+    );
   }
 
   bool _hasPendingDeletionForDaemon(String daemonDid) {
@@ -3562,7 +3261,6 @@ class AgentsController extends StateNotifier<AgentsState> {
     _stopInventoryAutoSync();
     _stopInventoryObservation();
     _cancelStatusTimers();
-    _cancelControlEventSubscriptions();
     super.dispose();
   }
 
@@ -4487,6 +4185,9 @@ bool _daemonAcceptsControlCommands(AgentSummary daemon) {
   if (effective != null && !effective.isActionable) {
     return false;
   }
+  if (_isDaemonLastSeenStale(_latestDaemonLastSeenAt(daemon))) {
+    return false;
+  }
   final status = daemon.latest.status.trim().toLowerCase();
   return switch (status) {
     'ready' ||
@@ -4496,6 +4197,27 @@ bool _daemonAcceptsControlCommands(AgentSummary daemon) {
     'archiving' => true,
     _ => false,
   };
+}
+
+DateTime? _latestDaemonLastSeenAt(AgentSummary daemon) {
+  final effective = daemon.daemonEffectiveStatus?.lastSeenAt;
+  final latest = daemon.latest.lastSeenAt;
+  if (effective == null) {
+    return latest;
+  }
+  if (latest == null) {
+    return effective;
+  }
+  return effective.isAfter(latest) ? effective : latest;
+}
+
+bool _isDaemonLastSeenStale(DateTime? lastSeenAt) {
+  if (lastSeenAt == null) {
+    return false;
+  }
+  final age = DateTime.now().toUtc().difference(lastSeenAt.toUtc());
+  return !age.isNegative &&
+      age.compareTo(agentDaemonEffectiveStatusFreshnessWindow) > 0;
 }
 
 bool _daemonCanCreateRuntime(AgentSummary daemon) {

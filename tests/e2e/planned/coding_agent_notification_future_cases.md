@@ -5,17 +5,21 @@
 - Status: planned; no automated case attestation exists yet.
 - Owner: `awiki-me-agents+awiki-cli-runtime`.
 - Scope: real Coding Agent or Skill Agent → daemon/CLI → User Service and
-  Message Service → AWiki Me foreground quiet behavior and background macOS notification,
-  visible recent conversation, and exact-once terminal semantics.
+  Message Service → AWiki Me `waiting for receipt -> processing -> final reply`
+  progression, foreground quiet behavior and background macOS notification,
+  visible recent conversation, and exact-once terminal semantics. The case must
+  also suppress the realtime control callback once, proving that the committed
+  Core patch still projects `running` before the final reply.
 - Blocker: the existing `awiki-system-test` and App E2E runners do not yet have
   one fixture that provisions isolated App, CLI, daemon, and coding-runtime
   identities on an approved tenant and correlates the ordinary final message
   with `awiki.agent.status.v1`.
 - Follow-up: add the cross-service fixture and case attestation, exercise
   `completed`, `blocked`, and `action_required` in both message-first and
-  status-first order, assert that the visible banner title matches the current
-  Agent inventory display name rather than a raw `skill-*` identifier, then
-  register the case in an executable remote suite.
+  status-first order, assert the processing row is visible while the runtime is
+  still active even when the realtime hint is dropped, assert that the visible
+  banner title matches the current Agent inventory display name rather than a
+  raw `skill-*` identifier, then register the case in an executable remote suite.
 
 The 2026-07-29 development-session observation used a non-production tenant and
 confirmed that a CLI message appeared in AWiki Me recents and chat content.

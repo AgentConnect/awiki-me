@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:awiki_me/src/app/bootstrap.dart';
@@ -8,6 +9,7 @@ import 'package:awiki_me/src/data/storage/scope_secret_repository_factory.dart';
 import 'package:awiki_me/src/data/tenant/app_tenant_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:path/path.dart' as p;
 
 import '../../case_attestation.dart';
 
@@ -48,9 +50,33 @@ void main() {
       expect(await first.smsOtpCooldownService.loadRetryAt(), smsRetryAt);
       await first.dispose();
 
+      final registryFile = File(
+        p.join(
+          root.path,
+          'support',
+          'awiki-me',
+          'control',
+          'tenant-registry.json',
+        ),
+      );
+      final legacyRegistry =
+          jsonDecode(await registryFile.readAsString()) as Map;
+      final legacyTenant = (legacyRegistry['tenants'] as List).single as Map;
+      legacyTenant['backend_base_url'] = 'http://awiki.info';
+      await registryFile.writeAsString(jsonEncode(legacyRegistry), flush: true);
+
       final second = await AppBootstrap.create(
         environment: environment,
         appStateRoot: root.path,
+      );
+      final migratedRegistry = await store.loadRegistry();
+      expect(
+        migratedRegistry.activeTenant.backendBaseUrl,
+        'https://awiki.info',
+      );
+      expect(
+        migratedRegistry.activeTenant.storageScopeId,
+        tenant.storageScopeId,
       );
       expect(
         await second.smsOtpCooldownService.loadRetryAt(),
@@ -86,6 +112,7 @@ void main() {
           'scope_provisioned_exclusive',
           'real_app_bootstrap_open_existing',
           'same_process_reopen_same_root',
+          'legacy_public_http_tenant_upgraded_in_place',
           'tenant_sms_cooldown_restored_after_restart',
           'missing_key_failed_without_recreate',
           'native_paths_validated',

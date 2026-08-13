@@ -174,7 +174,7 @@ void main() {
   );
 
   test(
-    'watches only daemon status payloads committed by the Core patch stream',
+    'watches recognized daemon controls committed by the Core patch stream',
     () async {
       final messages = _FakeMessages(const <ChatMessage>[]);
       final store = AwikiImCoreAgentControlStatusStore(messages: messages);
@@ -194,6 +194,18 @@ void main() {
           'state': 'ready',
         },
       );
+      final committedAction = _message(
+        payload: <String, Object?>{
+          'schema': AgentControlPayloads.appActionSchema,
+          'action_id': 'action-draft',
+          'action': 'message.create_draft',
+          'state': 'requires_confirmation',
+          'daemon_agent_did': 'did:daemon',
+          'runtime_agent_did': 'did:runtime',
+          'conversation_id': 'direct:did:human:bob',
+          'args': <String, Object?>{'draft_text': 'Draft'},
+        },
+      );
       messages.emitControlPatch(
         ThreadMessagePatch(
           kind: ThreadMessagePatchKind.reset,
@@ -209,7 +221,14 @@ void main() {
                 'daemon_agent_did': 'did:other-daemon',
               },
             ),
+            _message(
+              payload: const <String, Object?>{
+                'schema': 'external.payload.v1',
+                'daemon_agent_did': 'did:daemon',
+              },
+            ),
             committed,
+            committedAction,
           ],
         ),
       );
@@ -225,10 +244,12 @@ void main() {
       );
       await pumpEventQueue();
 
-      expect(events, hasLength(1));
-      expect(events.single.deduplicationKey, 'evt-create');
-      expect(events.single.daemonAgentDid, 'did:daemon');
-      expect(events.single.isReplay, isTrue);
+      expect(events, hasLength(2));
+      expect(events.first.deduplicationKey, 'evt-create');
+      expect(events.first.daemonAgentDid, 'did:daemon');
+      expect(events.first.isReplay, isTrue);
+      expect(events.last.payload['action_id'], 'action-draft');
+      expect(events.last.isReplay, isTrue);
       expect(messages.controlThread?.peerDidOrHandle, 'did:daemon');
     },
   );

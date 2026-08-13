@@ -76,6 +76,104 @@ void main() {
     expect(manifest.didHostAtCreation, 'awiki.info');
   });
 
+  test('public tenant backends require HTTPS while loopback HTTP remains', () {
+    for (final value in <String>[
+      'http://anpclaw.com',
+      'http://awiki.ai:8080/service',
+      'http://192.168.1.20:9891',
+    ]) {
+      expect(
+        () => normalizeTenantBackendBaseUrl(value),
+        throwsA(
+          isA<AppTenantValidationException>().having(
+            (error) => error.code,
+            'code',
+            'tenant_backend_https_required',
+          ),
+        ),
+      );
+    }
+    expect(
+      normalizeTenantBackendBaseUrl('https://anpclaw.com/'),
+      'https://anpclaw.com',
+    );
+    expect(
+      normalizeTenantBackendBaseUrl('http://localhost:9891/'),
+      'http://localhost:9891',
+    );
+    expect(
+      normalizeTenantBackendBaseUrl('http://127.0.0.1:9891'),
+      'http://127.0.0.1:9891',
+    );
+    expect(
+      normalizeTenantBackendBaseUrl('http://[::1]:9891'),
+      'http://[::1]:9891',
+    );
+  });
+
+  test(
+    'existing public HTTP tenant upgrades in place without moving scope data',
+    () async {
+      final registry = await store.loadRegistry();
+      final tenant = registry.activeTenant;
+      final layout = await store.layoutForScope(tenant.storageScopeId);
+      final sentinel = File(layout.productDatabasePath);
+      await sentinel.parent.create(recursive: true);
+      await sentinel.writeAsBytes(<int>[8, 0, 8]);
+      final registryFile = File(
+        p.join(
+          root.path,
+          'support',
+          'awiki-me',
+          'control',
+          'tenant-registry.json',
+        ),
+      );
+      final legacy = registry.toJson();
+      final tenants = legacy['tenants']! as List<Object?>;
+      final active = tenants.single as Map<String, Object?>;
+      active['backend_base_url'] = 'http://anpclaw.com/api/v1';
+      await registryFile.writeAsString(jsonEncode(legacy), flush: true);
+
+      final migrated = await store.loadRegistry();
+      final reopened = await store.loadRegistry();
+
+      expect(migrated.revision, registry.revision + 1);
+      expect(reopened.revision, migrated.revision);
+      expect(migrated.activeTenant.tenantProfileId, tenant.tenantProfileId);
+      expect(migrated.activeTenant.storageScopeId, tenant.storageScopeId);
+      expect(
+        migrated.activeTenant.backendBaseUrl,
+        'https://anpclaw.com/api/v1',
+      );
+      expect(await sentinel.readAsBytes(), <int>[8, 0, 8]);
+      expect(jsonDecode(await registryFile.readAsString()), migrated.toJson());
+    },
+  );
+
+  test('existing loopback HTTP tenant is not rewritten', () async {
+    final registry = await store.loadRegistry();
+    final registryFile = File(
+      p.join(
+        root.path,
+        'support',
+        'awiki-me',
+        'control',
+        'tenant-registry.json',
+      ),
+    );
+    final legacy = registry.toJson();
+    final tenants = legacy['tenants']! as List<Object?>;
+    final active = tenants.single as Map<String, Object?>;
+    active['backend_base_url'] = 'http://127.0.0.1:9891';
+    await registryFile.writeAsString(jsonEncode(legacy), flush: true);
+
+    final reopened = await store.loadRegistry();
+
+    expect(reopened.revision, registry.revision);
+    expect(reopened.activeTenant.backendBaseUrl, 'http://127.0.0.1:9891');
+  });
+
   test(
     'existing registry ignores new build defaults and preserves scope data',
     () async {

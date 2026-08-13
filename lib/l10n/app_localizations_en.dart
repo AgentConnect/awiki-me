@@ -72,6 +72,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonCopied => 'Copied';
 
   @override
+  String get commonCopyFailed => 'Couldn\'t copy. Please try again.';
+
+  @override
+  String get commonSelectAll => 'Select all';
+
+  @override
   String get commonCopyDetails => 'Copy details';
 
   @override
@@ -398,7 +404,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tenantValidationBackendInvalid =>
-      'Enter a valid http or https backend URL without query or fragment.';
+      'Enter a valid backend URL without credentials, query, or fragment.';
+
+  @override
+  String get tenantValidationBackendHttpsRequired =>
+      'Public tenant addresses must use HTTPS. For example: https://anpclaw.com. HTTP is allowed only for local development addresses such as localhost and 127.0.0.1.';
 
   @override
   String get tenantValidationDidHostInvalid =>
@@ -2554,6 +2564,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get agentErrorDaemonUnreachableDelete =>
       'The daemon is currently unreachable and cannot be deleted yet.';
+
+  @override
+  String get agentErrorDaemonDeleteNoResponse =>
+      'The daemon did not confirm deletion. It is still linked to this account. Try again to remove it from the account without changing files on its host.';
 
   @override
   String get agentErrorDaemonUnreachableUpgrade =>

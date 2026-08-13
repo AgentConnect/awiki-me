@@ -982,6 +982,8 @@ String _tenantErrorMessage(AppLocalizations l10n, _TenantUiError error) {
   final message = switch (error.code) {
     'tenant_name_invalid' => l10n.tenantValidationNameInvalid,
     'tenant_backend_invalid' => l10n.tenantValidationBackendInvalid,
+    'tenant_backend_https_required' =>
+      l10n.tenantValidationBackendHttpsRequired,
     'tenant_did_host_invalid' => l10n.tenantValidationDidHostInvalid,
     'tenant_name_exists' => l10n.tenantValidationNameExists,
     'tenant_endpoint_exists' => l10n.tenantValidationEndpointExists,

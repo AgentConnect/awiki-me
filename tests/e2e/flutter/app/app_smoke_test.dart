@@ -612,6 +612,7 @@ void main() {
   testWidgets(
     'AwikiMeApp start conversation stays in recents before first send',
     (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       await tester.binding.setSurfaceSize(const Size(1280, 820));
       const session = SessionIdentity(
         did: 'did:test:me',
@@ -636,17 +637,7 @@ void main() {
         ..['did:test:smoke-peer.awiki.ai'] = smokePeerProfile
         ..['smoke-peer.awiki.ai'] = smokePeerProfile;
       final picker = test_support.FakeAttachmentPickerService();
-      String? clipboardText;
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        SystemChannels.platform,
-        (call) async {
-          if (call.method == 'Clipboard.setData') {
-            final data = call.arguments as Map<Object?, Object?>;
-            clipboardText = data['text'] as String?;
-          }
-          return null;
-        },
-      );
+      final clipboard = test_support.FakeTextClipboardService();
 
       try {
         await tester.pumpWidget(
@@ -655,6 +646,7 @@ void main() {
             providerOverrides: <Override>[
               ...harness.providerOverrides,
               attachmentPickerServiceProvider.overrideWithValue(picker),
+              textClipboardServiceProvider.overrideWithValue(clipboard),
             ],
           ),
         );
@@ -757,6 +749,10 @@ void main() {
 
         await tester.tap(sentEmoji, buttons: kSecondaryMouseButton);
         await _pumpSmokeFrame(tester);
+        expect(
+          tester.getSize(find.byKey(const Key('message-action-menu'))).width,
+          inInclusiveRange(130, 170),
+        );
         expect(find.text('复制'), findsOneWidget);
         expect(find.text('复制全部'), findsOneWidget);
         expect(find.text('全选'), findsOneWidget);
@@ -766,7 +762,10 @@ void main() {
         ], containsAllInOrder(<String>['复制', '复制全部', '全选']));
         await tester.tap(find.text('复制全部'));
         await _pumpSmokeFrame(tester);
-        expect(clipboardText, '😀');
+        expect(clipboard.writes, <String>['😀']);
+        expect(find.text('已复制'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
         final screenshotButton = find.byKey(
           const Key('chat-screenshot-button'),
         );
@@ -826,10 +825,7 @@ void main() {
         expect(find.text('Smoke Peer Nickname'), findsWidgets);
         expect(find.text('smoke-peer.awiki.ai'), findsNothing);
       } finally {
-        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-          SystemChannels.platform,
-          null,
-        );
+        debugDefaultTargetPlatformOverride = null;
         await tester.binding.setSurfaceSize(null);
       }
     },
@@ -1106,6 +1102,94 @@ void main() {
       expect(control.lastBootstrapDaemonDid, isNull);
       expect(control.lastBootstrapControllerDid, isNull);
       expect(control.lastBootstrapDaemonPublicKey, isNull);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    }
+  });
+
+  testWidgets('AwikiMeApp removes a stale daemon without waiting for control', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'default',
+      handle: 'me',
+      displayName: 'Me',
+      jwtToken: 'test-jwt',
+    );
+    final harness = createFakeAwikiMeAppHarness(session: session);
+    harness.agentControlService.agents = <AgentSummary>[
+      AgentSummary(
+        agentDid: 'did:test:daemon:stale',
+        kind: AgentKind.daemon,
+        handle: 'stale-daemon',
+        displayName: 'Stale Daemon',
+        activeState: 'active',
+        latest: AgentLatestStatus(
+          status: 'needs_upgrade',
+          lastSeenAt: DateTime.utc(2026, 8, 11),
+          needsUpgrade: true,
+        ),
+        daemonEffectiveStatus: DaemonEffectiveStatus(
+          controlState: 'online',
+          primaryStatus: 'needs_upgrade',
+          lastSeenAt: DateTime.utc(2026, 8, 11),
+          upgradeAvailable: true,
+          actionable: true,
+        ),
+      ),
+    ];
+
+    try {
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: harness.bootstrap,
+          providerOverrides: harness.providerOverrides,
+        ),
+      );
+      await _pumpSmokeFrame(tester);
+      await _tapFirstFound(tester, <Finder>[
+        find.bySemanticsIdentifier('e2e-agents-tab'),
+        find.bySemanticsLabel('智能体'),
+        find.bySemanticsLabel('Agents'),
+        find.text('智能体'),
+        find.text('Agents'),
+      ]);
+      await _pumpSmokeFrame(tester);
+
+      expect(find.text('Stale Daemon'), findsWidgets);
+      expect(find.text('从账号移除'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('agent-action-delete')));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('只会从当前账号移除这个 Daemon'), findsOneWidget);
+      expect(find.text('移除'), findsOneWidget);
+      await tester.tap(find.text('移除'));
+      await tester.pumpAndSettle();
+
+      expect(
+        harness.agentControlService.lastRemovedFromAccountAgentDid,
+        'did:test:daemon:stale',
+      );
+      expect(harness.agentControlService.lastDeletedDaemonDid, isNull);
+      expect(
+        ProviderScope.containerOf(
+          tester.element(find.byType(AppShell)),
+          listen: false,
+        ).read(agentsProvider).pendingDeletionAgentDids,
+        isEmpty,
+      );
+      await E2eCaseAttestationWriter.markPassed(
+        'AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001',
+        phases: const <String>[
+          'stale_heartbeat_overrode_cached_actionable_status',
+          'product_ui_offered_account_removal',
+          'account_removal_completed_without_control_delete_wait',
+        ],
+      );
     } finally {
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);

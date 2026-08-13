@@ -91,15 +91,24 @@ class AppTenantStore {
     if (!await file.exists()) {
       return _createInitialRegistry();
     }
-    final decoded = jsonDecode(await file.readAsString());
-    if (decoded is! Map) {
-      throw const FormatException('tenant_registry_invalid');
-    }
-    final registry = AppTenantRegistry.fromJson(
-      decoded.map((key, value) => MapEntry(key.toString(), value)),
-    );
+    final registry = await _readRegistryFile(file);
     await _validateRegistryScopes(registry);
-    return registry;
+    final migrated = _upgradeLegacyPublicHttpBackends(registry);
+    if (identical(migrated, registry)) {
+      _validateRegistryBackendPolicy(registry);
+      return registry;
+    }
+    return StorageScopeProcessLock('${file.path}.lock').synchronized(() async {
+      final current = await _readRegistryFile(file);
+      await _validateRegistryScopes(current);
+      final currentMigrated = _upgradeLegacyPublicHttpBackends(current);
+      _validateRegistryBackendPolicy(currentMigrated);
+      if (identical(currentMigrated, current)) {
+        return current;
+      }
+      await _writeRegistryAtomic(file, currentMigrated);
+      return currentMigrated;
+    });
   }
 
   Future<void> saveRegistry(
@@ -107,6 +116,7 @@ class AppTenantStore {
     int? expectedRevision,
   }) async {
     registry.validate();
+    _validateRegistryBackendPolicy(registry);
     await _validateRegistryScopes(registry);
     final file = await _registryFile();
     await StorageScopeProcessLock('${file.path}.lock').synchronized(() async {
@@ -315,7 +325,13 @@ class AppTenantStore {
   );
 
   Future<AppTenantRegistry> _createInitialRegistry() async {
-    final tenant = (_initialTenantFactory ?? () => defaultTenantProfile())();
+    final initial = (_initialTenantFactory ?? () => defaultTenantProfile())();
+    final normalizedBackend = normalizeTenantBackendBaseUrl(
+      initial.backendBaseUrl,
+    );
+    final tenant = normalizedBackend == initial.backendBaseUrl
+        ? initial
+        : initial.copyWith(backendBaseUrl: normalizedBackend);
     await _provision(tenant);
     final registry = AppTenantRegistry(
       revision: 1,
@@ -473,11 +489,60 @@ String normalizeTenantBackendBaseUrl(String raw) {
   if (uri == null ||
       !(uri.scheme == 'http' || uri.scheme == 'https') ||
       uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty ||
       uri.hasQuery ||
       uri.hasFragment) {
     throw const AppTenantValidationException('tenant_backend_invalid');
   }
+  if (uri.scheme == 'http' && !_isLoopbackHost(uri.host)) {
+    throw const AppTenantValidationException('tenant_backend_https_required');
+  }
   return value;
+}
+
+AppTenantRegistry _upgradeLegacyPublicHttpBackends(AppTenantRegistry registry) {
+  var changed = false;
+  final updatedAt = DateTime.now().toUtc().toIso8601String();
+  final tenants = <AppTenantProfile>[];
+  for (final tenant in registry.tenants) {
+    final upgraded = _legacyPublicHttpUpgrade(tenant.backendBaseUrl);
+    if (upgraded == null) {
+      tenants.add(tenant);
+      continue;
+    }
+    changed = true;
+    tenants.add(
+      tenant.copyWith(backendBaseUrl: upgraded, updatedAt: updatedAt),
+    );
+  }
+  if (!changed) return registry;
+  return registry.copyWith(revision: registry.revision + 1, tenants: tenants);
+}
+
+String? _legacyPublicHttpUpgrade(String raw) {
+  final value = raw.trim().replaceAll(RegExp(r'/+$'), '');
+  final uri = Uri.tryParse(value);
+  if (uri == null ||
+      uri.scheme != 'http' ||
+      uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasQuery ||
+      uri.hasFragment ||
+      _isLoopbackHost(uri.host)) {
+    return null;
+  }
+  return uri.replace(scheme: 'https').toString();
+}
+
+bool _isLoopbackHost(String host) {
+  if (host.toLowerCase() == 'localhost') return true;
+  return InternetAddress.tryParse(host)?.isLoopback ?? false;
+}
+
+void _validateRegistryBackendPolicy(AppTenantRegistry registry) {
+  for (final tenant in registry.tenants) {
+    normalizeTenantBackendBaseUrl(tenant.backendBaseUrl);
+  }
 }
 
 String normalizeTenantDidHost(String raw) {

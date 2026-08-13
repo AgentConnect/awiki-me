@@ -136,6 +136,8 @@ String localizeAgentUiMessage(AppLocalizations l10n, String message) {
       l10n.agentErrorDaemonBootstrapMissing,
     AgentUiMessageCodes.daemonUnreachableDelete =>
       l10n.agentErrorDaemonUnreachableDelete,
+    AgentUiMessageCodes.daemonDeleteNoResponse =>
+      l10n.agentErrorDaemonDeleteNoResponse,
     AgentUiMessageCodes.daemonUnreachableUpgrade =>
       l10n.agentErrorDaemonUnreachableUpgrade,
     AgentUiMessageCodes.personalAgentMissing =>
