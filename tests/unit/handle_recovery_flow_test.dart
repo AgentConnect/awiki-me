@@ -468,9 +468,24 @@ void main() {
       );
       expect(core.lastLocalIdentityId, isNull);
 
+      await tester.tap(find.byKey(const Key('handle-recovery-send-otp')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('handle-recovery-phone-required')),
+        findsOneWidget,
+      );
+      expect(core.lastPhone, isNull);
+      expect(core.lastLocalIdentityId, isNull);
+
       await tester.enterText(
         find.byKey(const Key('handle-recovery-phone-input')),
         '+8613800138000',
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const Key('handle-recovery-phone-required')),
+        findsNothing,
       );
       await tester.tap(find.byKey(const Key('handle-recovery-send-otp')));
       await tester.pumpAndSettle();

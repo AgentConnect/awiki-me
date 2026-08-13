@@ -44,11 +44,13 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
   late final TextEditingController _phoneController;
   bool _isActivatingRecoveredIdentity = false;
   bool _sessionActivationFailed = false;
+  bool _phoneInputRequired = false;
 
   @override
   void initState() {
     super.initState();
     _phoneController = TextEditingController(text: widget.initialPhone);
+    _phoneController.addListener(_handlePhoneInputChanged);
     if (widget.localIdentityId != null) {
       ref.read(handleRecoveryProvider.notifier).reset();
     }
@@ -60,6 +62,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
   @override
   void dispose() {
     _otpController.dispose();
+    _phoneController.removeListener(_handlePhoneInputChanged);
     _phoneController.dispose();
     super.dispose();
   }
@@ -103,6 +106,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                         label: context.l10n.handleRecoveryPhone,
                         placeholder: context.l10n.onboardingPhonePlaceholder,
                         keyboardType: TextInputType.phone,
+                        enabled: !state.isBusy && !state.otpRequested,
                         semanticsIdentifier: 'handle-recovery-phone-input',
                       )
                     else
@@ -111,6 +115,14 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                         label: context.l10n.handleRecoveryPhone,
                         value: widget.initialPhone,
                       ),
+                    if (_phoneInputRequired) ...<Widget>[
+                      const SizedBox(height: 6),
+                      Text(
+                        context.l10n.onboardingIncompletePhoneContent,
+                        key: const Key('handle-recovery-phone-required'),
+                        style: TextStyle(color: context.awikiTheme.danger),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     AppTextField(
                       key: const Key('handle-recovery-otp'),
@@ -300,12 +312,25 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
     );
   }
 
+  void _handlePhoneInputChanged() {
+    if (_phoneInputRequired && _phoneController.text.trim().isNotEmpty) {
+      setState(() => _phoneInputRequired = false);
+    }
+  }
+
   Future<void> _requestOtp() {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) {
+      if (mounted && !_phoneInputRequired) {
+        setState(() => _phoneInputRequired = true);
+      }
+      return Future<void>.value();
+    }
     return ref
         .read(handleRecoveryProvider.notifier)
         .requestOtp(
           handle: widget.initialHandle,
-          phone: _phoneController.text,
+          phone: phone,
           localIdentityId: widget.localIdentityId,
         );
   }

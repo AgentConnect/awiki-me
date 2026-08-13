@@ -2728,6 +2728,22 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
   final container = ProviderScope.containerOf(
     tester.element(find.byType(HandleRecoveryPage)),
   );
+  await _tapOne(
+    tester,
+    find.bySemanticsIdentifier('handle-recovery-send-otp'),
+    failure: 'Settings Recovery did not expose the OTP action.',
+  );
+  if (find
+              .byKey(const Key('handle-recovery-phone-required'))
+              .evaluate()
+              .length !=
+          1 ||
+      recordingCore.requestOtpCalls != 0 ||
+      container.read(handleRecoveryProvider).error != null) {
+    fail(
+      'Blank Settings Recovery phone reached Core or reported a state error.',
+    );
+  }
   await _enterTextByKey(
     tester,
     const Key('handle-recovery-phone-input'),
@@ -3538,6 +3554,7 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   await E2eCaseAttestationWriter.markPassed(
     _settingsContinuityCaseId,
     phases: const <String>[
+      'blank_phone_rejected_before_core_request',
       'settings_recovery_preserved_handle_and_account',
       'did_generation_advanced_exactly_once',
       'same_root_restart_preserved_recovery_state',
@@ -3557,6 +3574,7 @@ class _FreshFocusedEvidence {
   String? directInboundMessageId;
   String? directReplyMessageId;
   String? groupConversationId;
+  String? groupPreRefreshOutboundMessageId;
   String? groupInboundMessageId;
   String? groupReplyMessageId;
   String? agentConversationId;
@@ -3727,11 +3745,26 @@ Future<void> _runFreshFocusedGates({
   await runCase(
     _freshGroupRebindCaseId,
     const <String>[
+      'first_group_send_succeeded_before_explicit_group_profile_refresh',
       'group_identity_profile_role_status_and_count_preserved',
       'old_member_replaced_by_recovery_did_without_duplicate',
       'public_product_projection_rebind_converged_exactly_once',
     ],
     () async {
+      final firstOutbound = await bootstrap.messagingService!.sendText(
+        thread: AppThreadRef.group(snapshot.fixture.groupDid),
+        content: 'fresh-group-pre-refresh ${config.runId}',
+      );
+      _requireCommittedGroup(
+        firstOutbound,
+        groupDid: snapshot.fixture.groupDid,
+        senderDid: newDid,
+        isMine: true,
+        conversationId: snapshot.fixture.groupConversationId,
+      );
+      evidence.groupPreRefreshOutboundMessageId = _requiredMessageId(
+        firstOutbound,
+      );
       final group = await _waitForFixtureGroup(
         tester: tester,
         container: container,
@@ -3811,6 +3844,20 @@ Future<void> _runFreshFocusedGates({
         .lookupHandle(recoveredHandle);
     if (resolved.did != newDid || resolved.did == oldDid) {
       fail('The external peer did not re-resolve the Handle to the new DID.');
+    }
+    final groupPreRefreshOutboundMessageId =
+        evidence.groupPreRefreshOutboundMessageId;
+    if (groupPreRefreshOutboundMessageId != null) {
+      await _waitForGroupMessageExactOne(
+        tester: tester,
+        bootstrap: peerBootstrap,
+        groupDid: snapshot.fixture.groupDid,
+        messageId: groupPreRefreshOutboundMessageId,
+        content: 'fresh-group-pre-refresh ${config.runId}',
+        senderDid: newDid,
+        isMine: false,
+        conversationId: snapshot.fixture.groupConversationId,
+      );
     }
 
     await runCase(
@@ -4333,6 +4380,8 @@ Future<void> _writeFreshRestartHandoff({
     'direct_inbound_message': evidence.directInboundMessageId,
     'direct_reply_message': evidence.directReplyMessageId,
     'group_conversation': evidence.groupConversationId,
+    'group_pre_refresh_outbound_message':
+        evidence.groupPreRefreshOutboundMessageId,
     'group_inbound_message': evidence.groupInboundMessageId,
     'group_reply_message': evidence.groupReplyMessageId,
     'agent_conversation': evidence.agentConversationId,
@@ -4396,6 +4445,7 @@ Future<void> _runFreshRecoveryRestart(WidgetTester tester) async {
     'direct_inbound_message',
     'direct_reply_message',
     'group_conversation',
+    'group_pre_refresh_outbound_message',
     'group_inbound_message',
     'group_reply_message',
     'agent_conversation',
@@ -4487,6 +4537,7 @@ Future<void> _runFreshRecoveryRestart(WidgetTester tester) async {
   final expectedMessageRefs = <String>{
     references['direct_inbound_message']!,
     references['direct_reply_message']!,
+    references['group_pre_refresh_outbound_message']!,
     references['group_inbound_message']!,
     references['group_reply_message']!,
     references['agent_prompt_message']!,
@@ -4551,7 +4602,7 @@ Future<void> _runFreshRecoveryRestart(WidgetTester tester) async {
       'same_fresh_recovery_root_reopened_in_new_flutter_process',
       'current_identity_and_four_account_state_domains_persisted',
       'direct_group_and_agent_conversations_remained_exactly_once',
-      'six_post_recovery_messages_remained_exactly_once',
+      'seven_post_recovery_messages_remained_exactly_once',
       'read_state_did_not_regress',
       'group_agent_inventory_and_registry_did_not_duplicate_or_revert',
     ],

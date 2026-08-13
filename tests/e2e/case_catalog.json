@@ -4437,12 +4437,12 @@
       "feature": "Fresh Handle Recovery projects the rebound Handle-backed Group membership",
       "layer": "remote_product_ui_security",
       "preconditions": "The setup account owns one Handle-backed transport Group with one independent external member and canonical member metadata; the release evidence set separately requires the System remote-recovery P4 atomicity case.",
-      "action": "Complete Fresh Recovery and inspect the high-level App Group projection and roster without copying the setup root or issuing a lower-layer rebind from the App test.",
+      "action": "Complete Fresh Recovery, send once to the original Group before any explicit App Group/profile refresh, then inspect the high-level Group projection and roster without copying the setup root or issuing a lower-layer rebind from the App test.",
       "exactOracles": [
-        "The App product projection keeps the original Group DID, conversation ID, display profile, role, membership status, and member count; exactly one replacement-DID member exists while the old DID and duplicate members are absent. The release-level joined_at and stale-generation atomicity oracle remains owned by the required System remote-recovery case and cannot be inferred from this App attestation."
+        "The first post-Recovery Group send commits before any explicit App Group/profile refresh; the product projection then keeps the original Group DID, conversation ID, display profile, role, membership status, and member count, with exactly one replacement-DID member while the old DID and duplicate members are absent. The release-level joined_at and stale-generation atomicity oracle remains owned by the required System remote-recovery case and cannot be inferred from this App attestation."
       ],
       "negativeChecks": [
-        "Changed Group or conversation ID, missing profile/member metadata, retained old DID, duplicate member, a fake lower-layer mutation, copied old root, or treating this App pass as proof of joined_at/stale-generation behavior without the exact System case prevents the composite release conclusion."
+        "A first send that waits for an explicit Group/profile refresh, changed Group or conversation ID, missing profile/member metadata, retained old DID, duplicate member, a fake lower-layer mutation, copied old root, or treating this App pass as proof of joined_at/stale-generation behavior without the exact System case prevents the composite release conclusion."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
@@ -4456,12 +4456,14 @@
       "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
+          "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:first_group_send_succeeded_before_explicit_group_profile_refresh",
           "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:group_identity_profile_role_status_and_count_preserved",
           "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:old_member_replaced_by_recovery_did_without_duplicate",
           "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:public_product_projection_rebind_converged_exactly_once"
         ],
         "exactOracleAssertions": [
           [
+            "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:first_group_send_succeeded_before_explicit_group_profile_refresh",
             "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:group_identity_profile_role_status_and_count_preserved",
             "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:old_member_replaced_by_recovery_did_without_duplicate",
             "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:public_product_projection_rebind_converged_exactly_once"
@@ -4469,6 +4471,7 @@
         ],
         "negativeCheckAssertions": [
           [
+            "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:first_group_send_succeeded_before_explicit_group_profile_refresh",
             "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:group_identity_profile_role_status_and_count_preserved",
             "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:old_member_replaced_by_recovery_did_without_duplicate",
             "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001:public_product_projection_rebind_converged_exactly_once"
@@ -4527,10 +4530,10 @@
       "caseId": "HANDLE-RECOVERY-FRESH-RESTART-E2E-001",
       "feature": "Fresh Handle Recovery business state survives a new Flutter process over the same root",
       "layer": "remote_product_ui_security",
-      "preconditions": "Fresh Agent, Direct inbound/reply, and Group inbound/reply actions completed and wrote a strict hash-only restart handoff; the first Flutter process exited while retaining only the Recovery, peer, and daemon roots.",
+      "preconditions": "Fresh Agent, Direct inbound/reply, and Group pre-refresh outbound plus inbound/reply actions completed and wrote a strict hash-only restart handoff; the first Flutter process exited while retaining only the Recovery, peer, and daemon roots.",
       "action": "Launch a second Flutter process over the same Recovery root and re-read current identity, four Account State domains, conversations, messages, Agent Inventory, Group, Registry, and read state.",
       "exactOracles": [
-        "The current identity and all four Account State domains persist; the three focused conversations, six post-Recovery messages, original Group, Daemon, Runtime, and Registry each remain exact-one; unread stays cleared and no inventory, conversation, or message duplicates appear."
+        "The current identity and all four Account State domains persist; the three focused conversations, seven post-Recovery messages, original Group, Daemon, Runtime, and Registry each remain exact-one; unread stays cleared and no inventory, conversation, or message duplicates appear."
       ],
       "negativeChecks": [
         "Same-process widget rebuild, different root, raw identity/message handoff, missing post-Recovery object, unread regression, old Registry identity, duplicate Agent/Group/conversation/message, copied setup root, or secret-bearing evidence prevents pass attestation."
@@ -4550,7 +4553,7 @@
           "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:same_fresh_recovery_root_reopened_in_new_flutter_process",
           "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:current_identity_and_four_account_state_domains_persisted",
           "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:direct_group_and_agent_conversations_remained_exactly_once",
-          "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:six_post_recovery_messages_remained_exactly_once",
+          "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:seven_post_recovery_messages_remained_exactly_once",
           "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:read_state_did_not_regress",
           "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:group_agent_inventory_and_registry_did_not_duplicate_or_revert"
         ],
@@ -4559,7 +4562,7 @@
             "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:same_fresh_recovery_root_reopened_in_new_flutter_process",
             "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:current_identity_and_four_account_state_domains_persisted",
             "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:direct_group_and_agent_conversations_remained_exactly_once",
-            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:six_post_recovery_messages_remained_exactly_once",
+            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:seven_post_recovery_messages_remained_exactly_once",
             "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:read_state_did_not_regress",
             "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:group_agent_inventory_and_registry_did_not_duplicate_or_revert"
           ]
@@ -4569,7 +4572,7 @@
             "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:same_fresh_recovery_root_reopened_in_new_flutter_process",
             "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:current_identity_and_four_account_state_domains_persisted",
             "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:direct_group_and_agent_conversations_remained_exactly_once",
-            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:six_post_recovery_messages_remained_exactly_once",
+            "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:seven_post_recovery_messages_remained_exactly_once",
             "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:read_state_did_not_regress",
             "HANDLE-RECOVERY-FRESH-RESTART-E2E-001:group_agent_inventory_and_registry_did_not_duplicate_or_revert"
           ]
@@ -4714,14 +4717,15 @@
       "feature": "Settings Handle DID Recovery preserves Direct, transport Group, and Agent continuity across restart",
       "layer": "remote_product_ui_security",
       "preconditions": "One fresh signed-in App owner, one independently rooted App peer, one Handle-backed non-E2EE transport Group, and one real daemon plus Runtime Agent exist on audited awiki.info; the deterministic test gateway substitutes only the external LLM reply.",
-      "action": "Seed exact Direct, Group, and Agent prompt/reply history, start Recovery from Settings with the exact local identity, cut after the Core commit, then reopen the same App, peer, and daemon roots and continue all three conversations.",
+      "action": "Seed exact Direct, Group, and Agent prompt/reply history, start Recovery from Settings, prove an empty phone is rejected before Core, continue with the exact local identity, cut after the Core commit, then reopen the same App, peer, and daemon roots and continue all three conversations.",
       "exactOracles": [
+        "An empty Settings Recovery phone shows a local input prompt and does not call the Recovery Core or report a transition mismatch.",
         "Handle, account, stable owner, conversation IDs, Group DID, Agent DIDs, and Runtime handle remain unchanged while DID/generation advances exactly once and the old DID is absent after same-root restart; Direct and Group read state remains cleared after that restart.",
         "All pre-Recovery Direct, Handle-backed transport Group, and Agent prompt/reply messages remain exact-one; old outgoing messages remain mine; Group profile, role, membership status, member count, and owner/peer member metadata remain unchanged with the old DID absent and replacement DID exact-one; Direct and Group each continue bidirectionally and the original Agent returns one deterministic reply.",
         "Conversation and Agent ID sets do not change, each thread grows by exactly its two expected post-Recovery messages, and no key message or Agent is duplicated."
       ],
       "negativeChecks": [
-        "A new conversation, Group, or Agent ID, duplicate inventory or message, changed Handle/account, skipped generation, missing history, wrong ownership, one-way messaging, unavailable original Agent, abnormal count growth, different state root, E2EE/DID-only Group claim, fake App/Core/service dependency, secret-bearing evidence, or unaudited host prevents pass attestation."
+        "Forwarding an empty phone to Core, reporting it as a transition mismatch, creating a new conversation, Group, or Agent ID, duplicate inventory or message, changed Handle/account, skipped generation, missing history, wrong ownership, one-way messaging, unavailable original Agent, abnormal count growth, different state root, E2EE/DID-only Group claim, fake App/Core/service dependency, secret-bearing evidence, or unaudited host prevents pass attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
@@ -4735,6 +4739,7 @@
       "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:blank_phone_rejected_before_core_request",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:settings_recovery_preserved_handle_and_account",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:did_generation_advanced_exactly_once",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:same_root_restart_preserved_recovery_state",
@@ -4747,6 +4752,9 @@
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:all_key_messages_converged_exactly_once"
         ],
         "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:blank_phone_rejected_before_core_request"
+          ],
           [
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:settings_recovery_preserved_handle_and_account",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:did_generation_advanced_exactly_once",
@@ -4766,6 +4774,7 @@
         ],
         "negativeCheckAssertions": [
           [
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:blank_phone_rejected_before_core_request",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:settings_recovery_preserved_handle_and_account",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:did_generation_advanced_exactly_once",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:same_root_restart_preserved_recovery_state",
