@@ -5,8 +5,9 @@
 // [OUTPUT]: Secret-free proof that Recovery replaces the DID once, exactly
 //           resumes post-commit local transition, preserves Direct/transport
 //           Group/Agent continuity, attributes fixture failure to the active
-//           identity/Direct/Group/Daemon/Runtime/Agent/checkpoint stage, and
-//           fences an old App principal.
+//           identity/Direct/Group/Daemon/Runtime/Agent/checkpoint stage,
+//           converges Root-promotion authorization without logging out the
+//           promoted device, and fences an old App principal.
 // [POS]: Remote product UI acceptance; setup creates only the remote fixture,
 //        while the tested onboarding or Settings Recovery is UI-driven.
 
@@ -898,6 +899,7 @@ void main() {
           await _transferManagementToRejoinedPeer(
             bootstrap: bootstrap,
             peerBootstrap: peerBootstrap,
+            peerContainer: rejoin.container,
             recoveredContainer: recoveredContainer,
             presence: presence,
             expectedDid: reset.currentDid,
@@ -1000,6 +1002,7 @@ void main() {
             'registration_continuation_rejoined_recovery_did',
             'two_app_registry_session_converged',
             'standard_root_transfer_made_rejoined_peer_management_ready',
+            'root_promotion_authorization_converged_without_logout',
             'app_to_external_direct_exact_one',
             'external_to_app_and_sibling_direct_exact_one',
           ],
@@ -5849,6 +5852,7 @@ Future<void> _requirePeerCurrentIdentityAndRegistry(
 Future<void> _transferManagementToRejoinedPeer({
   required AppBootstrap bootstrap,
   required AppBootstrap peerBootstrap,
+  required ProviderContainer peerContainer,
   required ProviderContainer recoveredContainer,
   required E2eUserPresencePort presence,
   required String expectedDid,
@@ -5913,10 +5917,15 @@ Future<void> _transferManagementToRejoinedPeer({
   final deadline = DateTime.now().add(const Duration(seconds: 90));
   while (DateTime.now().isBefore(deadline)) {
     try {
-      await peerBootstrap.messageSyncService!.syncNow(
+      final outcome = await peerBootstrap.messageSyncService!.syncNow(
         reason: 'handle-recovery-registration-root-transfer',
         limit: 100,
       );
+      if (outcome.status == MessageSyncStatus.authRevoked) {
+        fail(
+          'Root promotion was misclassified as a revoked peer authorization.',
+        );
+      }
     } on MessageSyncCoreFailure catch (error) {
       // The App realtime listener may ACK the same committed P5 control while
       // this explicit E2E reconciliation is in flight. The next bounded read
@@ -5958,6 +5967,13 @@ Future<void> _transferManagementToRejoinedPeer({
         peerReady.length == 1 &&
         senderReady.length == 1 &&
         projectedPeer.length == 1) {
+      final peerSession = await peerBootstrap.appSessionService!
+          .currentSession();
+      if (peerSession?.did != expectedDid ||
+          peerContainer.read(sessionProvider).session?.did != expectedDid ||
+          peerContainer.read(appRuntimeProvider).authRevoked) {
+        fail('Root promotion did not retain the rejoined App session.');
+      }
       final peerHistory = await peerBootstrap.messagingService!.loadHistory(
         AppThreadRef.direct(expectedDid),
         limit: 20,

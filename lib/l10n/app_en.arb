@@ -508,7 +508,7 @@
   "messageSyncStatusProjectionRefreshFailed": "Messages were synced, but the list could not refresh. Retry to reload it.",
   "messageSyncStatusAuthRevoked": "Your sign-in expired or this device is no longer authorized. Sign in again.",
   "authRevokedDialogTitle": "Account sign-in expired",
-  "authRevokedDialogMessage": "This account may have been reset on another device. Sign in again.",
+  "authRevokedDialogMessage": "This device's sign-in authorization expired. Sign in again; if that fails, rejoin the device or recover the Handle.",
   "messageSyncRetryAction": "Retry",
   "messageSyncReloadAction": "Reload",
   "messageSyncReauthenticateAction": "Sign in again",

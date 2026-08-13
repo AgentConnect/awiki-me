@@ -508,7 +508,7 @@
   "messageSyncStatusProjectionRefreshFailed": "消息已同步，但列表刷新失败，请重试重新加载。",
   "messageSyncStatusAuthRevoked": "登录状态已失效或此设备已被取消授权，请重新登录。",
   "authRevokedDialogTitle": "账号登录状态已失效",
-  "authRevokedDialogMessage": "此账号可能已在其他设备完成重置，请重新登录。",
+  "authRevokedDialogMessage": "此设备的登录授权已失效，请重新登录；如仍无法登录，请重新加入设备或恢复 Handle。",
   "messageSyncRetryAction": "重试",
   "messageSyncReloadAction": "重新加载",
   "messageSyncReauthenticateAction": "重新登录",

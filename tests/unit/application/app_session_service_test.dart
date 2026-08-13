@@ -151,6 +151,56 @@ void main() {
     );
 
     test(
+      'refresh keeps the session when the same device auth generation advances',
+      () async {
+        final identity = _session('id-auth-generation');
+        final oldBinding = SessionAccountBinding(
+          ownerIdentityId: identity.identityId,
+          accountId: 'account-${identity.identityId}',
+          currentDid: identity.did,
+          protocolDeviceId: 'protocol-device-${identity.identityId}',
+          identityGeneration: '1',
+          deviceAuthGeneration: '1',
+        );
+        final newBinding = SessionAccountBinding(
+          ownerIdentityId: identity.identityId,
+          accountId: 'account-${identity.identityId}',
+          currentDid: identity.did,
+          protocolDeviceId: 'protocol-device-${identity.identityId}',
+          identityGeneration: '1',
+          deviceAuthGeneration: '2',
+        );
+        final identities = _FakeIdentities(
+          defaultIdentity: identity,
+          activeBindings: <SessionAccountBinding>[oldBinding, newBinding],
+        );
+        final auth = _FakeAuth(
+          refreshResult: const AppAuthState(
+            authenticated: true,
+            bearerToken: 'jwt-generation-2',
+          ),
+        );
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: identities,
+          auth: auth,
+          activeSessionStore: _FakeActiveSessionStore(identity.identityId),
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+        );
+
+        await service.restoreSession();
+        final refreshed = await service.refreshSession();
+
+        expect(refreshed, isNotNull);
+        expect(refreshed?.identityId, identity.identityId);
+        expect(refreshed?.accountBinding?.deviceAuthGeneration, '2');
+        expect(refreshed?.jwtToken, 'jwt-generation-2');
+        expect(auth.refreshCount, 1);
+        expect(await service.currentSession(), same(refreshed));
+      },
+    );
+
+    test(
       'hot restore fails closed when the changed epoch is unknown',
       () async {
         final oldIdentity = _session('id-hot-unknown');

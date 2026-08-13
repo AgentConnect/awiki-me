@@ -139,7 +139,10 @@ void main() {
     expect(find.byType(OnboardingPage), findsOneWidget);
     expect(find.byKey(const Key('authenticated-detail-route')), findsNothing);
     expect(find.text('账号登录状态已失效'), findsOneWidget);
-    expect(find.text('此账号可能已在其他设备完成重置，请重新登录。'), findsOneWidget);
+    expect(
+      find.text('此设备的登录授权已失效，请重新登录；如仍无法登录，请重新加入设备或恢复 Handle。'),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const Key('auth-revoked-dialog-confirm')),
       findsOneWidget,
