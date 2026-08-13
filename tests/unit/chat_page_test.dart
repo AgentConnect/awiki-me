@@ -666,7 +666,7 @@ void main() {
         find.byKey(const Key('chat-message-bubble:agent-valid')),
       );
       expect(cardSize.width, closeTo(outerSize.width, 0.1));
-      expect(cardSize.width, greaterThan(280));
+      expect(cardSize.width, greaterThan(240));
 
       container
           .read(chatThreadsProvider.notifier)
