@@ -1352,6 +1352,36 @@ void main() {
     expect(state.lastError, isNull);
   });
 
+  test('terminal stale read diagnostics stay idle and do not retry', () async {
+    final gateway = FakeAwikiGateway();
+    final messaging = _DiagnosticMessagingService(
+      gateway,
+      diagnostics: const AppMessageSyncDiagnostics(
+        mode: AppMessageSyncMode.idle,
+        pendingMutationCount: 0,
+        dirtyDomains: <AppMessageSyncDirtyDomain>[
+          AppMessageSyncDirtyDomain.readState,
+        ],
+        retryState: AppMessageSyncRetryState.permanentFailure,
+      ),
+    );
+    final sync = FakeMessageSyncService();
+    final container = _container(gateway, sync, messagingService: messaging);
+    addTearDown(container.dispose);
+
+    await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestSync('startup', immediate: true);
+
+    final state = container.read(messageSyncCoordinatorProvider);
+    expect(state.status, MessageSyncCoordinatorStatus.idle);
+    expect(state.pendingMutationCount, 0);
+    expect(state.retryState, AppMessageSyncRetryState.permanentFailure);
+    expect(state.automaticRetryPending, isFalse);
+    expect(state.shouldSurfaceRetryableFailure, isFalse);
+    expect(state.lastError, isNull);
+  });
+
   test(
     'v2 committed live incoming message notifies once by event and message',
     () async {

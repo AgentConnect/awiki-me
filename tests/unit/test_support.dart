@@ -38,6 +38,7 @@ import 'package:awiki_me/src/application/realtime_application_service.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
+import 'package:awiki_me/src/application/text_clipboard_service.dart';
 import 'package:awiki_me/src/domain/entities/bridge_capabilities.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
@@ -455,6 +456,26 @@ bool _historyTargetsPeer(List<ChatMessage> messages, String peer) {
     }
   }
   return false;
+}
+
+class FakeTextClipboardService implements TextClipboardService {
+  final List<String> writes = <String>[];
+  String? text;
+  Object? writeError;
+
+  @override
+  Future<String?> readText() async => text;
+
+  @override
+  Future<TextClipboardWriteResult> writeText(String text) async {
+    final error = writeError;
+    if (error != null) {
+      return TextClipboardWriteResult.failure(error);
+    }
+    writes.add(text);
+    this.text = text;
+    return const TextClipboardWriteResult.success();
+  }
 }
 
 class FakeUpdateService implements UpdateService {

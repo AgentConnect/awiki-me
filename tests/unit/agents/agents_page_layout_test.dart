@@ -1155,14 +1155,6 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const Key('agents-persistent-detail-header-inline')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const Key('agents-persistent-detail-header-stacked')),
-        findsNothing,
-      );
       final actionFinders = <Finder>[
         find.byKey(const Key('agent-action-refresh')),
         find.byKey(const Key('agent-action-create-runtime')),
@@ -1175,6 +1167,10 @@ void main() {
       for (final center in actionCenters.skip(1)) {
         expect(center.dy, closeTo(firstActionY, 0.5));
       }
+      final identityTags = tester.getRect(
+        find.byKey(const Key('agent-detail-identity-tags')),
+      );
+      expect(firstActionY, closeTo(identityTags.center.dy, 0.5));
 
       final headerRect = tester.getRect(
         find.byKey(const Key('agents-persistent-detail-header')),
@@ -1192,7 +1188,7 @@ void main() {
   );
 
   testWidgets(
-    'medium daemon detail header stacks identity above right-aligned actions',
+    'medium daemon detail header stays inline while its content fits',
     (tester) async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -1203,9 +1199,8 @@ void main() {
             displayName: 'Header Daemon',
             activeState: 'active',
             latest: AgentLatestStatus(
-              status: 'needs_upgrade',
+              status: 'ready',
               platform: 'linux-amd64',
-              needsUpgrade: true,
               diagnosticsSummary: genericCliCapabilityDiagnostics,
             ),
           ),
@@ -1230,15 +1225,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const Key('agents-persistent-detail-header-stacked')),
-        findsOneWidget,
+      final identityRect = tester.getRect(
+        find.byKey(const Key('agent-detail-identity-layout')),
       );
-      expect(
-        find.byKey(const Key('agents-persistent-detail-header-inline')),
-        findsNothing,
-      );
-      final identityRect = tester.getRect(find.text('Header Daemon').last);
       final actionsRect = tester.getRect(
         find.byKey(const Key('agents-persistent-detail-actions')),
       );
@@ -1248,15 +1237,172 @@ void main() {
       final deleteRect = tester.getRect(
         find.byKey(const Key('agent-action-delete')),
       );
-      expect(actionsRect.top, greaterThan(identityRect.bottom));
+      expect(actionsRect.center.dy, closeTo(identityRect.center.dy, 0.5));
       expect(actionsRect.right, closeTo(headerRect.right - 14.8, 1));
       expect(deleteRect.right, closeTo(actionsRect.right, 1));
+      for (final key in <Key>[
+        const Key('agent-action-refresh'),
+        const Key('agent-action-create-runtime'),
+        const Key('agent-action-rename'),
+        const Key('agent-action-delete'),
+      ]) {
+        expect(
+          tester.getCenter(find.byKey(key)).dy,
+          closeTo(actionsRect.center.dy, 0.5),
+        );
+      }
       expect(tester.takeException(), isNull);
     },
   );
 
   testWidgets(
-    'large display scale keeps daemon header actions inside responsive bounds',
+    'narrow daemon detail header stacks complete action group only when needed',
+    (tester) async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon:header-scaled',
+            kind: AgentKind.daemon,
+            handle: 'header-scaled-daemon',
+            displayName: 'Scaled Header Daemon',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'needs_upgrade',
+              platform: 'linux-amd64',
+              needsUpgrade: true,
+              diagnosticsSummary: genericCliCapabilityDiagnostics,
+            ),
+          ),
+        ];
+      tester.view.physicalSize = const Size(720, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final identityRect = tester.getRect(
+        find.byKey(const Key('agent-detail-identity-layout')),
+      );
+      final actionsRect = tester.getRect(
+        find.byKey(const Key('agents-persistent-detail-actions')),
+      );
+      expect(actionsRect.top, greaterThan(identityRect.bottom));
+      final headerRect = tester.getRect(
+        find.byKey(const Key('agents-persistent-detail-header')),
+      );
+      for (final key in <Key>[
+        const Key('agent-action-refresh'),
+        const Key('agent-action-create-runtime'),
+        const Key('agent-action-rename'),
+        const Key('agent-action-upgrade'),
+        const Key('agent-action-delete'),
+      ]) {
+        final rect = tester.getRect(find.byKey(key));
+        expect(headerRect.contains(rect.topLeft), isTrue, reason: '$key');
+        expect(headerRect.contains(rect.bottomRight), isTrue, reason: '$key');
+      }
+      final deleteRect = tester.getRect(
+        find.byKey(const Key('agent-action-delete')),
+      );
+      expect(deleteRect.right, closeTo(actionsRect.right, 1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('runtime title shrinks before its identity tag group can split', (
+    tester,
+  ) async {
+    const runtimeDid = 'did:agent:runtime:header-tags';
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon:header-tags',
+          kind: AgentKind.daemon,
+          displayName: 'Daemon',
+          activeState: 'active',
+          latest: readyDaemonStatusWithGenericCliCapability,
+        ),
+        AgentSummary(
+          agentDid: runtimeDid,
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon:header-tags',
+          runtime: 'hermes',
+          displayName: 'zhuochengtesthermes0811-1测试',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    tester.view.physicalSize = const Size(1000, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final context = tester.element(find.byType(AgentsWorkspacePage));
+    ProviderScope.containerOf(
+      context,
+    ).read(agentsProvider.notifier).select(runtimeDid);
+    await tester.pumpAndSettle();
+
+    final tags = find.byKey(const Key('agent-detail-identity-tags'));
+    final status = find.descendant(of: tags, matching: find.text('正常'));
+    final identityType = find.descendant(of: tags, matching: find.text('智能体'));
+    final runtimeType = find.descendant(
+      of: tags,
+      matching: find.text('Hermes'),
+    );
+    expect(status, findsOneWidget);
+    expect(identityType, findsOneWidget);
+    expect(runtimeType, findsOneWidget);
+    final tagCenters = <Offset>[
+      tester.getCenter(status),
+      tester.getCenter(identityType),
+      tester.getCenter(runtimeType),
+    ];
+    for (final center in tagCenters.skip(1)) {
+      expect(center.dy, closeTo(tagCenters.first.dy, 0.5));
+    }
+
+    final actionsRect = tester.getRect(
+      find.byKey(const Key('agents-persistent-detail-actions')),
+    );
+    expect(actionsRect.center.dy, closeTo(tagCenters.first.dy, 0.5));
+    final headerRect = tester.getRect(
+      find.byKey(const Key('agents-persistent-detail-header')),
+    );
+    expect(actionsRect.right, closeTo(headerRect.right - 14.8, 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'large display scale keeps complete header groups inside their bounds',
     (tester) async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -1296,13 +1442,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const Key('agents-persistent-detail-header-stacked')),
-        findsOneWidget,
-      );
       final headerRect = tester.getRect(
         find.byKey(const Key('agents-persistent-detail-header')),
       );
+      final tagsRect = tester.getRect(
+        find.byKey(const Key('agent-detail-identity-tags')),
+      );
+      expect(headerRect.contains(tagsRect.topLeft), isTrue);
+      expect(headerRect.contains(tagsRect.bottomRight), isTrue);
       for (final key in <Key>[
         const Key('agent-action-refresh'),
         const Key('agent-action-create-runtime'),

@@ -206,7 +206,15 @@ Handle 或 thread 进行猜测合并。snapshot message 自身不再独立推断
 
 内联图片统一使用附件卡片外框；没有 caption 时只省略文本和分隔线，不允许退化为直接叠在聊天背景上的透明裸图。图片解码后的像素宽高必须先按当前屏幕 device pixel ratio 换算为自然逻辑尺寸，在 `compact 300 / desktop 320` 的媒体上限和实际父约束内等比缩小，不得为了占满上限而无条件放大。只有图片最长边小于 `120` 逻辑像素时才允许等比补到最小预览尺寸；极端长宽比继续保留完整内容，并由至少 `44×44` 的媒体外框保证可操作性。尺寸尚未探测完成时使用 `240×180` 的稳定占位。带 caption 的附件宽度由 caption 与媒体各自的自然宽度取较大值，分隔线只跟随最终宽度，不得参与或强制扩大宽度。
 
-图片与文字的操作所有权必须分离：桌面端在图片命中区右键打开指针位置菜单，compact 端在图片命中区长按打开 `CompactActionSheet`，两端都只提供复制图片和另存为；单击图片仍沿用原附件预览/打开链路。复制和另存为只能读取 `AttachmentPreviewService` 已解析出的本地预览资源，不允许绕过 core/cache 根据 object URI 直接联网。每条普通消息气泡使用一个消息级 `SelectionArea` 统一管理纯文本、Mention、跨段 Markdown、附件 caption 和文件名的连续选区；已有有效选区时，复制与全选必须直接复用 Flutter 当前平台的原生 `SelectableRegion` 动作，不在 App 内维护第二份选区。若右键命中内容未形成 Flutter 可复制选区（例如单个 Emoji），菜单仍提供复制，并以整条消息全文作为兼容回退。自定义“复制全部”插在复制与全选之间，直接从 `ChatMessage` 投影稳定全文：普通消息复制原始 `content`，附件消息复制非空 caption 和本地化文件名；不得把 Markdown marker 后的渲染文本、下载进度或操作按钮文案当作全文。图片区域继续由 `SelectionContainer.disabled` 排除，不能进入消息文字选区或文字菜单。
+图片与文字的操作所有权必须分离：桌面端在图片命中区右键打开指针位置菜单，compact 端在图片命中区长按打开 `CompactActionSheet`，两端都只提供复制图片和另存为；单击图片仍沿用原附件预览/打开链路。复制和另存为只能读取 `AttachmentPreviewService` 已解析出的本地预览资源，不允许绕过 core/cache 根据 object URI 直接联网。图片区域继续由 `SelectionContainer.disabled` 排除，不能进入消息文字选区或文字菜单。
+
+每条普通消息气泡使用一个消息级 `SelectionArea` 统一拥有纯文本、Mention、跨段 Markdown、附件 caption 和文件名的连续选择与高亮，App 不维护第二套选区。消息操作框架拥有动作目录、菜单打开时冻结的真实消息/会话/选区上下文、异步执行防重、菜单关闭策略与成功/失败反馈；桌面紧凑菜单和移动端自适应工具栏只是同一动作目录的平台适配器。新增回复、引用、转发、收藏、撤回或删除时必须扩展该目录和执行边界，不得在消息 Widget 中再建立独立菜单链路。
+
+桌面 `SelectableRegion` 可能在菜单项收到主键按下后、同一指针抬起前替换并销毁当前 toolbar。桌面菜单项因此只把冻结动作、指针编号和原命中边界交给消息级 `SelectionArea` owner；owner 在指针抬起仍位于原边界时执行一次，拖出或取消时不执行。不得把桌面动作直接绑定到会随 toolbar 销毁的普通 Tap 回调，也不得退化为按下即执行。键盘和无障碍激活继续进入同一动作执行器。桌面全选在指针序列结束后调用不重开 toolbar 的 `selectAll()` 并保留全文高亮；移动端继续使用 `SelectionChangedCause.toolbar` 建立选择句柄，再按动作关闭策略关闭 toolbar。
+
+Flutter 3.44 的 macOS `SelectableRegion` 在每次右键按下时会先按鼠标位置重新执行 select-word，再创建 context menu；它不会像 Windows/Linux 一样先判断右键是否位于已有选区。消息级选择 owner 必须在该默认处理前从公开 `SelectionGeometry` 捕获真实选区，并从同一个 `StaticSelectionContainerDelegate.getSelectedContent()` 直接读取高亮文本，不得用可能落后一帧的 `onSelectionChanged` 缓存代替事实源。右键位于任一现有高亮矩形内时，通过公开 `SelectionEdgeUpdateEvent` 恢复原始起止边界，并冻结右键前的选区文本。一次真实右键可能让 Flutter 多次调用 `contextMenuBuilder`，因此几何只恢复一次，但冻结文本必须持续到动作完成或下一次指针操作，后续菜单重建仍复用它。本次菜单的展示、指针按下和动作执行必须显式传递同一个不可变上下文，菜单建立后迟到的单字 `onSelectionChanged` 通知只能更新下一次菜单使用的实时选区，不能覆盖当前菜单动作。右键位于选区外时不得恢复，继续使用系统的重新选词结果。这里仍由 Flutter Selection 系统拥有唯一选区，App 不持久化字符索引、不按字符串反查选区，也不修改 Flutter SDK。
+
+文字动作顺序固定为复制、复制全部、全选。复制优先使用冻结的有效选区，未形成可复制选区时（例如直接右键单个 Emoji）兼容回退整条消息全文；复制全部始终从 `ChatMessage` 投影稳定全文，普通消息复制原始 `content`，附件消息复制非空 caption 和本地化文件名，不得把 Markdown 渲染结果、下载进度或操作按钮文案当作全文。全选关闭菜单后必须保留全文高亮和移动端选择句柄，后续复制继续使用更新后的真实选区。
 
 Composer 的附件来源仍统一进入 `AttachmentDraft`：文件选择、拖拽、剪贴板图片和 macOS `/usr/sbin/screencapture -i -x` 交互式截图都只负责暂存，用户点击发送后才调用 canonical attachment send API。截图期间主窗口始终保持可见，不再根据 Shift 或 native 全局 modifier 隐藏 App。App 在启动系统截图前必须通过 native `CGPreflightScreenCaptureAccess` 检查权限，单进程最多调用一次 `CGRequestScreenCaptureAccess`；未授权时禁止继续执行 `screencapture`，避免把只有桌面的错误图片当作有效附件。Debug App 必须使用稳定 Apple Development designated requirement，不能用随构建变化的 ad-hoc CDHash。Emoji 面板只修改当前 `TextEditingValue` 的选区并沿用 draft mention range 转换，不引入新的消息类型。
 
@@ -242,12 +250,19 @@ Agent / Personal Agent control payload 是控制面事件，不是普通聊天�
 4. control payload 的结构化语义交给 Agent control projection、runtime status、Personal Agent cards 或后续 application service 处理。
 5. 不允许把 control payload raw JSON 作为普通聊天文案展示。
 
-Agent control status 的事实读取遵守 committed-local-first：Patch stream 是主通知路径，
-`loadLocalHistory(includeControlPayloads: true)` 是廉价补偿读取；这里不得调用会触发远端同步的
-history API，也不得靠放大 UI timeout 维持正确性。每个 Daemon subscription 使用完整的
-session generation、owner DID/identity、account、Protocol Device、identity generation 和
-device auth generation fence；stream error/close 后有界退避重建并回放本地最新 committed
-status，旧 session callback 不得写入新 session。
+Agent control status 的事实读取遵守 committed-local-first。App-wide
+`AgentControlProjectionCoordinator` 是唯一投影入口：WebSocket control payload 只用于降低展示
+延迟，不能成为 Chat “正在处理”、Agent topology、Agent Inbox 或终态通知的唯一来源；Core
+committed control patch stream 必须把同一状态重新投影到这些消费者，保证实时 hint 丢失后仍然
+收敛。realtime 与 committed copy 按 `daemon DID + schema + event/action ID` 在当前 session 内
+去重，但 committed topology projection 始终执行，不能因 realtime 先到而跳过权威拓扑变化。
+
+Patch stream 是主可靠通知路径，`loadLocalHistory(includeControlPayloads: true)` 是廉价补偿读取；
+这里不得调用会触发远端同步的 history API，也不得靠放大 UI timeout 维持正确性。每个 Daemon
+subscription 使用完整的 session generation、owner DID/identity、account、Protocol Device、
+identity generation 和 device auth generation fence；stream error/close 后有界退避重建并回放
+本地最新 committed status，旧 session callback 不得写入新 session。协调器由 AppRuntime 在已
+认证运行期持续持有，身份清理或 runtime dispose 时统一取消订阅并清空进程内去重状态。
 
 User Service 的 Agent Status snapshot 是独立的账号域权威投影。它只有在包含目标 Daemon 且
 `refreshedAt` 不早于当前状态查询开始时间时，才可以清除该 Daemon 的 pending/waiting error；
@@ -568,6 +583,7 @@ copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
 - `tests/unit/application/remote_push_installation_coordinator_test.dart` 与 `tests/unit/data/push/user_service_push_installation_adapter_test.dart`：固定 authenticated installation upsert/disable、安全字段、response binding、registration refresh 和旧 session fencing。
 - `tests/unit/session_provider_test.dart`：固定 clear、A→B 和快速身份替换推进 epoch，同一 identity 的 JWT/profile refresh 保持 epoch。
 - `tests/unit/app_runtime_notification_test.dart`：验证 realtime notification / sync hint 只调度 SDK sync、dirty/gap/repair 和通知 / runtime 分发边界，不直接写 list/detail authoritative state；同时从 `loginWithLocalCredential` 身份切换入口证明新 session epoch 会自动调度自己的 `startup` reliable sync，并在不由测试手动调用 coordinator、sync service 或 conversation-after 的情况下把 committed unread 和 hydrated preview 发布到会话列表。通知路由只受 session epoch 约束，不能被同身份下并发的列表 refresh generation 误取消；还覆盖前台任意页面全局静默、后台终态通知、三种 outcome 的 message-first exact-once、status-first、timeout fallback 和 logout cleanup。Android remote Push 回归还固定 patch-ready 前不启动 sync、cold pending event 优先使用 `remote_push`、provider/App presentation disposition、opened exact conversation、unmatched list fallback、logout/identity switch stale fence、resume retention 与 registration refresh。
+- `tests/unit/agent_control_projection_coordinator_test.dart`：验证完全缺少 realtime control hint 时，Core committed `running` 仍把待处理 turn 推进为权威“正在处理”，terminal status 正确清除；同时固定 realtime/committed 去重、committed topology 不被跳过、stream close 后重订阅与本地回放，以及旧 session epoch 排队事件不得跨身份投影。
 - `tests/unit/agent_terminal_notification_widget_test.dart`：验证所有业务终态与真实运行失败在前台均不形成 App 内横幅，并覆盖 message-first 语义胜出和 dispose timer cleanup。
 - `tests/unit/conversation_list_provider_test.dart`：验证 base row 先于 enrichment 展示、patch upsert/remove/reorder/repair 全部按 canonical ID、clear 后不回填、snapshot bootstrap guard、local hidden waterline 不被旧 patch 冲破、不同 canonical ID 不因 DID/Handle 相同而合并、selected state 仅保存 ID，以及所有 recents 发布入口应用同一 read presentation waterline。
 - `tests/unit/conversation_list_provider_test.dart` 还必须验证 patch-ready single-flight、订阅先于 seed、seed 期间 patch 不丢不重、stream error/close 单次重建，以及同 DID auth generation 切换后旧 patch / Profile 异步结果失效。

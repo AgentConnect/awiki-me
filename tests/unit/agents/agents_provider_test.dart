@@ -1211,17 +1211,11 @@ void main() {
         latest: AgentLatestStatus(status: 'ready'),
       );
       final control = _ControlledInventoryAgentControlService();
-      final events = _StreamingAgentControlStatusStore();
       final directory = _EventuallyAvailableDirectoryApplicationService(
         failuresBeforeSuccess: 0,
       );
-      final container = _container(
-        control,
-        statusStore: events,
-        directory: directory,
-      );
+      final container = _container(control, directory: directory);
       addTearDown(container.dispose);
-      addTearDown(events.close);
       final controller = container.read(agentsProvider.notifier);
 
       final initialLoad = controller.load();
@@ -1246,7 +1240,7 @@ void main() {
 
       final staleLoad = controller.load(showLoading: false);
       await control.waitForListCalls(2);
-      events.emit(
+      controller.applyCommittedControlEvent(
         AgentControlEvent(
           messageId: 'msg-create-1',
           daemonAgentDid: daemon.agentDid,
@@ -1387,10 +1381,8 @@ void main() {
             latest: AgentLatestStatus(status: 'ready'),
           ),
         ];
-      final events = _StreamingAgentControlStatusStore();
-      final container = _container(control, statusStore: events);
+      final container = _container(control);
       addTearDown(container.dispose);
-      addTearDown(events.close);
       final controller = container.read(agentsProvider.notifier);
       await controller.load();
       await controller.createHermesRuntime(
@@ -1403,7 +1395,7 @@ void main() {
           .pendingRuntimeCreations
           .single;
 
-      events.emit(
+      controller.applyCommittedControlEvent(
         AgentControlEvent(
           messageId: 'msg-stale-create',
           daemonAgentDid: 'did:agent:daemon',
@@ -1461,10 +1453,8 @@ void main() {
         latest: AgentLatestStatus(status: 'ready'),
       );
       final control = _ControlledInventoryAgentControlService();
-      final events = _StreamingAgentControlStatusStore();
-      final container = _container(control, statusStore: events);
+      final container = _container(control);
       addTearDown(container.dispose);
-      addTearDown(events.close);
       final controller = container.read(agentsProvider.notifier);
 
       final initialLoad = controller.load();
@@ -1472,7 +1462,7 @@ void main() {
       control.completeListCall(1, const <AgentSummary>[daemon]);
       await initialLoad;
 
-      events.emit(
+      controller.applyCommittedControlEvent(
         AgentControlEvent(
           messageId: 'msg-remote-create',
           daemonAgentDid: daemon.agentDid,
@@ -2849,55 +2839,6 @@ void main() {
     },
   );
 
-  test(
-    'completed control stream is rebuilt and replays committed status',
-    () async {
-      final control = FakeAgentControlService()
-        ..agents = const <AgentSummary>[
-          AgentSummary(
-            agentDid: 'did:agent:daemon',
-            kind: AgentKind.daemon,
-            displayName: 'Daemon',
-            activeState: 'active',
-            latest: AgentLatestStatus(status: 'offline'),
-          ),
-        ];
-      final events = _RestartingAgentControlStatusStore();
-      final container = _container(control, statusStore: events);
-      addTearDown(container.dispose);
-      addTearDown(events.close);
-      await container.read(agentsProvider.notifier).load();
-      expect(events.watchCount, 1);
-      events.latestPayload = const <String, Object?>{
-        'schema': AgentControlPayloads.statusSchema,
-        'event_id': 'evt-ready-after-restart',
-        'status_scope': 'snapshot',
-        'daemon_agent_did': 'did:agent:daemon',
-        'daemon': <String, Object?>{
-          'agent_did': 'did:agent:daemon',
-          'status': 'ready',
-        },
-      };
-
-      await events.closeCurrent();
-      await Future<void>.delayed(
-        agentControlSubscriptionRetryBaseDelay +
-            const Duration(milliseconds: 100),
-      );
-      await pumpEventQueue();
-
-      expect(events.watchCount, greaterThanOrEqualTo(2));
-      expect(
-        container.read(agentsProvider).agents.single.latest.status,
-        'ready',
-      );
-      expect(
-        container.read(agentsProvider).seenControlEventIds,
-        contains('evt-ready-after-restart'),
-      );
-    },
-  );
-
   test('status refresh send timeout clears pending', () async {
     final control = _HangingRefreshAgentControlService()
       ..agents = const <AgentSummary>[
@@ -3129,6 +3070,144 @@ void main() {
     expect(container.read(agentsProvider).pendingDeletionAgentDids, isEmpty);
     expect(container.read(agentsProvider).error, isNull);
   });
+
+  test('deleteSelected removes stale daemon family from account', () async {
+    final lastSeenAt = DateTime.now()
+        .toUtc()
+        .subtract(agentDaemonEffectiveStatusFreshnessWindow)
+        .subtract(const Duration(seconds: 1));
+    final control = FakeAgentControlService()
+      ..agents = <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:stale-daemon',
+          kind: AgentKind.daemon,
+          displayName: 'Daemon 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'needs_upgrade',
+            lastSeenAt: lastSeenAt,
+            needsUpgrade: true,
+          ),
+          daemonEffectiveStatus: DaemonEffectiveStatus(
+            controlState: 'online',
+            primaryStatus: 'needs_upgrade',
+            lastSeenAt: lastSeenAt,
+            upgradeAvailable: true,
+            actionable: true,
+          ),
+        ),
+        const AgentSummary(
+          agentDid: 'did:agent:stale-runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:stale-daemon',
+          runtime: 'hermes',
+          displayName: 'Hermes',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    final daemon = container.read(agentsProvider).selectedAgent!;
+    expect(
+      container.read(agentsProvider).deleteActionForAgent(daemon),
+      AgentDeleteAction.removeFromAccount,
+    );
+
+    await container.read(agentsProvider.notifier).deleteSelected();
+
+    expect(control.lastRemovedFromAccountAgentDid, 'did:agent:stale-daemon');
+    expect(control.lastDeletedDaemonDid, isNull);
+    expect(container.read(agentsProvider).agents, isEmpty);
+  });
+
+  test('fresh daemon heartbeat restores controlled deletion', () async {
+    final now = DateTime.now().toUtc();
+    final staleEffectiveAt = now
+        .subtract(agentDaemonEffectiveStatusFreshnessWindow)
+        .subtract(const Duration(seconds: 1));
+    final control = FakeAgentControlService()
+      ..agents = <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:recovered-daemon',
+          kind: AgentKind.daemon,
+          displayName: 'Recovered Daemon',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready', lastSeenAt: now),
+          daemonEffectiveStatus: DaemonEffectiveStatus(
+            controlState: 'online',
+            primaryStatus: 'ready',
+            lastSeenAt: staleEffectiveAt,
+            actionable: true,
+          ),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    final state = container.read(agentsProvider);
+    expect(
+      state.deleteActionForAgent(state.selectedAgent!),
+      AgentDeleteAction.controlledDelete,
+    );
+  });
+
+  test(
+    'deleteSelected stops waiting and offers account removal after no response',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: 'Daemon 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              lastSeenAt: DateTime.now().toUtc(),
+            ),
+          ),
+        ];
+      final container = _container(
+        control,
+        controllerFactory: (ref) => AgentsController(
+          ref,
+          deletionRefreshAttempts: 1,
+          deletionRefreshDelay: Duration.zero,
+        ),
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+      await controller.load();
+
+      await controller.deleteSelected();
+      expect(
+        container.read(agentsProvider).pendingDeletionAgentDids,
+        contains('did:agent:daemon'),
+      );
+
+      for (var attempt = 0; attempt < 10; attempt += 1) {
+        await pumpEventQueue();
+        if (container.read(agentsProvider).pendingDeletionAgentDids.isEmpty) {
+          break;
+        }
+      }
+
+      final state = container.read(agentsProvider);
+      expect(state.pendingDeletionAgentDids, isEmpty);
+      expect(
+        state.statusQueryErrors['did:agent:daemon'],
+        AgentUiMessageCodes.daemonDeleteNoResponse,
+      );
+      expect(
+        state.deleteActionForAgent(state.selectedAgent!),
+        AgentDeleteAction.removeFromAccount,
+      );
+    },
+  );
 
   test(
     'deleteSelected clears local daemon tracking when removing offline daemon from account',
@@ -5111,108 +5190,6 @@ class _ControlledInventoryAgentControlService extends FakeAgentControlService {
       'Timed out waiting for $expected inventory calls; '
       'observed $listAgentsCalls.',
     );
-  }
-}
-
-class _StreamingAgentControlStatusStore
-    implements AgentControlStatusStore, AgentControlEventStore {
-  final StreamController<AgentControlEvent> _events =
-      StreamController<AgentControlEvent>.broadcast();
-
-  void emit(AgentControlEvent event) => _events.add(event);
-
-  Future<void> close() => _events.close();
-
-  @override
-  Stream<AgentControlEvent> watchDaemonControlEvents({
-    required String daemonAgentDid,
-  }) {
-    return _events.stream.where(
-      (event) => event.daemonAgentDid == daemonAgentDid,
-    );
-  }
-
-  @override
-  Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
-    required String daemonAgentDid,
-  }) async {
-    return null;
-  }
-
-  @override
-  Future<Map<String, Object?>?> findDaemonStatusPayload({
-    required String daemonAgentDid,
-    required String requestId,
-  }) async {
-    return null;
-  }
-
-  @override
-  Future<Map<String, Object?>?> findStatusPayload({
-    required String daemonAgentDid,
-    required String runtimeAgentDid,
-    required String requestId,
-    required String statusScope,
-  }) async {
-    return null;
-  }
-}
-
-class _RestartingAgentControlStatusStore
-    implements AgentControlStatusStore, AgentControlEventStore {
-  final List<StreamController<AgentControlEvent>> _streams =
-      <StreamController<AgentControlEvent>>[];
-
-  Map<String, Object?>? latestPayload;
-  int watchCount = 0;
-
-  Future<void> closeCurrent() async {
-    if (_streams.isNotEmpty && !_streams.last.isClosed) {
-      await _streams.last.close();
-    }
-  }
-
-  Future<void> close() async {
-    for (final stream in _streams) {
-      if (!stream.isClosed) {
-        await stream.close();
-      }
-    }
-  }
-
-  @override
-  Stream<AgentControlEvent> watchDaemonControlEvents({
-    required String daemonAgentDid,
-  }) {
-    watchCount += 1;
-    final stream = StreamController<AgentControlEvent>();
-    _streams.add(stream);
-    return stream.stream;
-  }
-
-  @override
-  Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
-    required String daemonAgentDid,
-  }) async {
-    return latestPayload;
-  }
-
-  @override
-  Future<Map<String, Object?>?> findDaemonStatusPayload({
-    required String daemonAgentDid,
-    required String requestId,
-  }) async {
-    return null;
-  }
-
-  @override
-  Future<Map<String, Object?>?> findStatusPayload({
-    required String daemonAgentDid,
-    required String runtimeAgentDid,
-    required String requestId,
-    required String statusScope,
-  }) async {
-    return null;
   }
 }
 

@@ -76,8 +76,8 @@ class AwikiImCoreAgentControlStatusStore
         }
         final payload = _decodePayload(_controlPayloadJson(message));
         if (payload == null ||
-            _string(payload['schema']) != AgentControlPayloads.statusSchema ||
-            !_matchesDaemonStatusPayload(
+            !AgentControlPayloads.isSystemSchema(_string(payload['schema'])) ||
+            !_matchesDaemonControlPayload(
               payload,
               daemonAgentDid: daemonAgentDid,
             )) {
@@ -252,6 +252,16 @@ bool _matchesDaemonStatusPayload(
       _string(payload['daemon_agent_did']) ??
       _string(_readMap(payload['daemon'])['agent_did']);
   return payloadDaemonDid == daemonAgentDid;
+}
+
+bool _matchesDaemonControlPayload(
+  Map<String, Object?> payload, {
+  required String daemonAgentDid,
+}) {
+  final payloadDaemonDid =
+      _string(payload['daemon_agent_did']) ??
+      _string(_readMap(payload['daemon'])['agent_did']);
+  return payloadDaemonDid == null || payloadDaemonDid == daemonAgentDid;
 }
 
 bool _matchesRuntimeStatusPayload(

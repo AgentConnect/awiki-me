@@ -374,9 +374,6 @@ class _AgentPersistentDetailHeader extends StatelessWidget {
   final AgentVisualStatus visualStatus;
   final List<Widget> actions;
 
-  static const double _inlineMinWidth = 900;
-  static const double _identityMaxWidth = 360;
-
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
@@ -394,8 +391,6 @@ class _AgentPersistentDetailHeader extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final stackActions =
-              constraints.maxWidth < responsive.displayScaled(_inlineMinWidth);
           final identity = _AgentDetailIdentity(
             title: title,
             agent: agent,
@@ -405,47 +400,23 @@ class _AgentPersistentDetailHeader extends StatelessWidget {
           final actionWrap = KeyedSubtree(
             key: const Key('agents-persistent-detail-actions'),
             child: SelectionContainer.disabled(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Wrap(
-                  alignment: WrapAlignment.end,
-                  runAlignment: WrapAlignment.end,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: responsive.spacing(6),
-                  runSpacing: responsive.spacing(6),
-                  children: actions,
-                ),
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                runAlignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: responsive.spacing(6),
+                runSpacing: responsive.spacing(6),
+                children: actions,
               ),
             ),
           );
-          if (stackActions) {
-            return KeyedSubtree(
-              key: const Key('agents-persistent-detail-header-stacked'),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Align(alignment: Alignment.centerLeft, child: identity),
-                  SizedBox(height: responsive.spacing(8)),
-                  actionWrap,
-                ],
-              ),
-            );
-          }
-          return KeyedSubtree(
-            key: const Key('agents-persistent-detail-header-inline'),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: <Widget>[
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: responsive.displayScaled(_identityMaxWidth),
-                  ),
-                  child: identity,
-                ),
-                SizedBox(width: responsive.spacing(14)),
-                Expanded(child: actionWrap),
-              ],
-            ),
+          return AwikiContentAwareTwoPartLayout(
+            key: const Key('agents-persistent-detail-header-layout'),
+            gap: responsive.spacing(14),
+            overflowGap: responsive.spacing(8),
+            overflowSecondaryAlignment: AwikiTwoPartAlignment.end,
+            primary: identity,
+            secondary: actionWrap,
           );
         },
       ),
@@ -472,43 +443,51 @@ class _AgentDetailIdentity extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: responsive.spacing(8),
-      runSpacing: responsive.spacing(7),
-      children: <Widget>[
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: responsive.displayScaled(prominent ? 260 : 230),
-          ),
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: theme.title,
-              fontSize: prominent ? 16 : 14.5,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ),
-        AgentStatusPill(status: visualStatus),
-        SelectionContainer.disabled(
-          child: SemanticPill(
+    final tags = SelectionContainer.disabled(
+      child: Row(
+        key: const Key('agent-detail-identity-tags'),
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          AgentStatusPill(status: visualStatus),
+          SizedBox(width: responsive.spacing(8)),
+          SemanticPill(
             label: agent.isDaemon ? 'Daemon' : context.l10n.identityTypeAgent,
             tone: agent.isDaemon
                 ? SemanticPillTone.muted
                 : SemanticPillTone.identity,
           ),
-        ),
-        if (runtimeDisplay != null)
-          SelectionContainer.disabled(
-            child: SemanticPill(
+          if (runtimeDisplay != null) ...<Widget>[
+            SizedBox(width: responsive.spacing(8)),
+            SemanticPill(
               label: runtimeDisplay!.label,
               tone: SemanticPillTone.runtime,
             ),
+          ],
+        ],
+      ),
+    );
+    return AwikiContentAwareTwoPartLayout(
+      key: const Key('agent-detail-identity-layout'),
+      gap: responsive.spacing(8),
+      overflowGap: responsive.spacing(7),
+      minimumPrimaryWidth: responsive.displayScaled(prominent ? 92 : 72),
+      primary: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: responsive.displayScaled(prominent ? 260 : 230),
+        ),
+        child: Text(
+          title,
+          key: const Key('agent-detail-identity-title'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: theme.title,
+            fontSize: prominent ? 16 : 14.5,
+            fontWeight: FontWeight.w400,
           ),
-      ],
+        ),
+      ),
+      secondary: tags,
     );
   }
 }

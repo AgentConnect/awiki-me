@@ -46,6 +46,8 @@ import '../application/tenant/app_tenant.dart';
 import '../data/services/flutter_attachment_image_dimension_probe.dart';
 import '../application/root_key_transfer_service.dart';
 import '../application/sms_otp_cooldown_service.dart';
+import '../application/text_clipboard_service.dart';
+import '../data/services/flutter_text_clipboard_service.dart';
 import '../data/services/locale_preference_service.dart';
 import '../data/services/local_auth_user_presence_port.dart';
 import '../data/services/method_channel_attachment_picker_service.dart';
@@ -322,6 +324,10 @@ final userPresencePortProvider = Provider<UserPresencePort>(
 
 final attachmentPickerServiceProvider = Provider<AttachmentPickerService>(
   (ref) => MethodChannelAttachmentPickerService(),
+);
+
+final textClipboardServiceProvider = Provider<TextClipboardService>(
+  (ref) => const FlutterTextClipboardService(),
 );
 
 final attachmentCacheServiceProvider = Provider<AttachmentCacheService>(

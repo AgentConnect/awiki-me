@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-12.recovery-local-data-and-windows-attachment-long-path",
+  "sourceRevision": "2026-08-13.stale-daemon-delete-convergence",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -17,6 +17,7 @@
       "resourceCategories": [],
       "caseIds": [
         "AGENT-NOTIFY-SMOKE-E2E-001",
+        "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001",
         "SMOKE-E2E-001",
         "NATIVE-E2E-001"
       ]

@@ -224,6 +224,18 @@ abstract class AppLocalizations {
   /// **'已复制'**
   String get commonCopied;
 
+  /// No description provided for @commonCopyFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制失败，请重试。'**
+  String get commonCopyFailed;
+
+  /// No description provided for @commonSelectAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全选'**
+  String get commonSelectAll;
+
   /// No description provided for @commonCopyDetails.
   ///
   /// In zh, this message translates to:
@@ -797,8 +809,14 @@ abstract class AppLocalizations {
   /// No description provided for @tenantValidationBackendInvalid.
   ///
   /// In zh, this message translates to:
-  /// **'请输入有效的 http 或 https 后端地址，不能包含 query 或 fragment。'**
+  /// **'请输入有效的后端地址，不能包含账号信息、query 或 fragment。'**
   String get tenantValidationBackendInvalid;
+
+  /// No description provided for @tenantValidationBackendHttpsRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'公网租户地址必须使用 HTTPS，例如 https://anpclaw.com。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。'**
+  String get tenantValidationBackendHttpsRequired;
 
   /// No description provided for @tenantValidationDidHostInvalid.
   ///
@@ -4577,6 +4595,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'Daemon 当前不可达，暂时不能删除。'**
   String get agentErrorDaemonUnreachableDelete;
+
+  /// No description provided for @agentErrorDaemonDeleteNoResponse.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon 未确认删除，当前仍关联在账号中。请再次操作，将它从账号中移除；此操作不会改动宿主机上的文件。'**
+  String get agentErrorDaemonDeleteNoResponse;
 
   /// No description provided for @agentErrorDaemonUnreachableUpgrade.
   ///

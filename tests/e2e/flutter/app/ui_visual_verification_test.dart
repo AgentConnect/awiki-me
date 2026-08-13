@@ -298,6 +298,7 @@ void main() {
       await tester.tap(find.bySemanticsLabel('智能体'));
       await _pumpVisualFrames(tester);
       expect(find.byKey(const Key('agents-expanded-layout')), findsOneWidget);
+      _expectExpandedAgentHeaderUsesAvailableWidth(tester);
       expect(
         tester
             .widget<AppIconButton>(
@@ -1492,6 +1493,24 @@ void _expectCompactShellHeader(WidgetTester tester, {required String title}) {
   expect(titleText.style?.fontWeight, FontWeight.w400);
   expect(titleText.style?.height, 1.25);
   expect(find.byKey(const Key('awiki-me-brand-mark')), findsNothing);
+}
+
+void _expectExpandedAgentHeaderUsesAvailableWidth(WidgetTester tester) {
+  final header = tester.getRect(
+    find.byKey(const Key('agents-persistent-detail-header')),
+  );
+  final identity = tester.getRect(
+    find.byKey(const Key('agent-detail-identity-layout')),
+  );
+  final actions = tester.getRect(
+    find.byKey(const Key('agents-persistent-detail-actions')),
+  );
+  expect(actions.center.dy, closeTo(identity.center.dy, 0.5));
+  expect(actions.right, closeTo(header.right - 14.8, 1));
+  expect(header.contains(identity.topLeft), isTrue);
+  expect(header.contains(identity.bottomRight), isTrue);
+  expect(header.contains(actions.topLeft), isTrue);
+  expect(header.contains(actions.bottomRight), isTrue);
 }
 
 void _expectCompactAgentPeerInfoGeometry(WidgetTester tester) {

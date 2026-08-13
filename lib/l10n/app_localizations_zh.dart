@@ -72,6 +72,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonCopied => '已复制';
 
   @override
+  String get commonCopyFailed => '复制失败，请重试。';
+
+  @override
+  String get commonSelectAll => '全选';
+
+  @override
   String get commonCopyDetails => '复制详情';
 
   @override
@@ -381,7 +387,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get tenantValidationBackendInvalid =>
-      '请输入有效的 http 或 https 后端地址，不能包含 query 或 fragment。';
+      '请输入有效的后端地址，不能包含账号信息、query 或 fragment。';
+
+  @override
+  String get tenantValidationBackendHttpsRequired =>
+      '公网租户地址必须使用 HTTPS，例如 https://anpclaw.com。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。';
 
   @override
   String get tenantValidationDidHostInvalid =>
@@ -2410,6 +2420,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentErrorDaemonUnreachableDelete => 'Daemon 当前不可达，暂时不能删除。';
+
+  @override
+  String get agentErrorDaemonDeleteNoResponse =>
+      'Daemon 未确认删除，当前仍关联在账号中。请再次操作，将它从账号中移除；此操作不会改动宿主机上的文件。';
 
   @override
   String get agentErrorDaemonUnreachableUpgrade =>

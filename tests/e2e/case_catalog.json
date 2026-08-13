@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-12.recovery-local-data-and-windows-attachment-long-path",
+  "sourceRevision": "2026-08-13.stale-daemon-delete-convergence",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
       "feature": "Real Coding Agent terminal delivery to AWiki Me",
       "layer": "remote_product_ui",
       "preconditions": "An isolated non-production App identity, Skill Agent identity, coding-agent runtime, daemon, User Service, Message Service, and macOS notification permission are available on the same approved tenant.",
-      "action": "Send an ordinary final message plus completed, blocked, and action-required terminal statuses through the real CLI/daemon/service path while AWiki Me is foregrounded and backgrounded.",
+      "action": "Send a task through the real CLI/daemon/service path, suppress one realtime running callback, then deliver the committed running status, ordinary final message, and completed, blocked, and action-required terminal statuses while AWiki Me is foregrounded and backgrounded.",
       "exactOracles": [
-        "The Skill Agent conversation remains visible, foreground delivery stays quiet, and the matching ordinary final message does not produce a duplicate notification.",
+        "The Skill Agent conversation remains visible and progresses from waiting for receipt to processing before the final reply even when the realtime running hint is suppressed; foreground delivery stays quiet and the matching ordinary final message does not produce a duplicate notification.",
         "Background delivery renders one semantic macOS notification per run; restart/backfill does not replay an already accepted terminal outcome."
       ],
       "negativeChecks": [
-        "Accepted-only service receipts, fake facades, an unexpected foreground banner, duplicate notification, hidden Skill Agent conversation, missing background banner, or manual observation without case attestation cannot pass."
+        "Accepted-only service receipts, fake facades, skipping the processing state, depending only on a realtime control callback, an unexpected foreground banner, duplicate notification, hidden Skill Agent conversation, missing background banner, or manual observation without case attestation cannot pass."
       ],
       "environment": "agent_connect_remote",
       "cleanupPolicy": "isolated_app_cli_daemon_state",
@@ -92,6 +92,53 @@
             "AGENT-NOTIFY-SMOKE-E2E-001:terminal_status_reached_app_shell",
             "AGENT-NOTIFY-SMOKE-E2E-001:background_system_notification_used",
             "AGENT-NOTIFY-SMOKE-E2E-001:background_in_app_toast_not_used"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001",
+      "feature": "Stale Daemon deletion converges without an unreachable control channel",
+      "layer": "product_ui",
+      "preconditions": "The authenticated App inventory contains an active Daemon whose cached status is actionable but whose last heartbeat is older than the control freshness window.",
+      "action": "Open the Agents page, remove the stale Daemon through the visible destructive action and confirm the account-only removal dialog.",
+      "exactOracles": [
+        "The stale heartbeat overrides the cached actionable flag and the product offers account removal instead of controlled host deletion.",
+        "Confirmation removes the Daemon from the account without sending daemon.delete or leaving a pending deletion indicator."
+      ],
+      "negativeChecks": [
+        "Sending daemon.delete, showing the controlled-delete warning, retaining a pending deletion state, or removing without explicit user confirmation fails the case."
+      ],
+      "environment": "no_service",
+      "cleanupPolicy": "none",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/app_smoke_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001:stale_heartbeat_overrode_cached_actionable_status",
+          "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001:product_ui_offered_account_removal",
+          "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001:account_removal_completed_without_control_delete_wait"
+        ],
+        "exactOracleAssertions": [
+          [
+            "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001:stale_heartbeat_overrode_cached_actionable_status",
+            "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001:product_ui_offered_account_removal"
+          ],
+          [
+            "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001:account_removal_completed_without_control_delete_wait"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001:stale_heartbeat_overrode_cached_actionable_status",
+            "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001:product_ui_offered_account_removal",
+            "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001:account_removal_completed_without_control_delete_wait"
           ]
         ]
       }
@@ -1673,14 +1720,14 @@
       "feature": "Storage Scope native bootstrap and tenant SMS cooldown smoke",
       "layer": "product_ui",
       "preconditions": "Flutter desktop and debug native IM Core artifacts are available.",
-      "action": "Provision one Storage Scope through the real App bootstrap, persist a tenant-scoped SMS retry boundary, reopen the same App root, then remove its key and retry openExisting.",
+      "action": "Provision one Storage Scope through the real App bootstrap, persist a tenant-scoped SMS retry boundary, simulate an older public HTTP tenant record, reopen the same App root, then remove its key and retry openExisting.",
       "exactOracles": [
         "Provision reaches ready only after the native VaultRequired validator opens.",
-        "A second real App bootstrap reads the identical existing root and restores the exact tenant SMS retry boundary.",
+        "A second real App bootstrap upgrades only the public backend scheme to HTTPS, retains the identical Storage Scope, and restores the exact tenant SMS retry boundary.",
         "After key deletion, bootstrap returns vault_key_missing and does not recreate the item."
       ],
       "negativeChecks": [
-        "Native load failure, context/path mismatch, root replacement, lost SMS retry boundary, or missing-key recreation fails the case."
+        "Native load failure, context/path mismatch, tenant or scope replacement, a remaining public HTTP endpoint, lost SMS retry boundary, or missing-key recreation fails the case."
       ],
       "environment": "no_service",
       "cleanupPolicy": "none",

@@ -3,17 +3,25 @@ import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/gestures.dart'
+    show
+        GestureBinding,
+        PointerCancelEvent,
+        PointerUpEvent,
+        kPrimaryMouseButton,
+        kSecondaryMouseButton;
 import 'package:flutter/material.dart'
     show
         AdaptiveTextSelectionToolbar,
         ContextMenuButtonItem,
-        ContextMenuButtonType,
         PopupMenuEntry,
         PopupMenuItem,
         RelativeRect,
         RoundedRectangleBorder,
         SelectionArea,
         SelectionContainer,
+        StaticSelectionContainerDelegate,
         showMenu;
 import 'package:flutter/rendering.dart'
     show
@@ -23,10 +31,14 @@ import 'package:flutter/rendering.dart'
         PaintingContext,
         RenderBox,
         RenderBoxContainerDefaultsMixin,
+        SelectionEdgeUpdateEvent,
+        SelectionStatus,
+        SelectedContent,
         ScrollDirection;
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/semantics.dart' show CustomSemanticsAction;
+import 'package:flutter/semantics.dart'
+    show CustomSemanticsAction, SemanticsRole;
 import 'package:flutter/services.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:markdown/markdown.dart' as md;
@@ -91,11 +103,13 @@ import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'chat_mention_presentation.dart';
 import 'chat_provider.dart';
+import 'message_actions.dart';
 
 part 'parts/chat_header_part.dart';
 part 'parts/chat_information_part.dart';
 part 'parts/chat_peer_info_part.dart';
 part 'parts/chat_message_part.dart';
+part 'parts/chat_message_action_menu_part.dart';
 part 'parts/chat_composer_part.dart';
 
 const _chatMessageListBottomInset = 12.0;
@@ -1281,6 +1295,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                     else
                                       _MessageBubble(
                                         message: message,
+                                        conversation: currentConversation,
                                         mentionPresentation:
                                             mentionPresentation,
                                         senderLabel: senderLabel,

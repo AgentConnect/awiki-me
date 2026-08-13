@@ -31,7 +31,6 @@ import '../../../domain/services/realtime_gateway.dart';
 import '../../../l10n/app_message.dart';
 import '../../agents/agent_inbox_provider.dart';
 import '../../agents/agents_provider.dart';
-import '../../agents/personal_agent_feature_visibility.dart';
 import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_provider.dart';
 import '../../friends/friends_navigation_provider.dart';
@@ -45,6 +44,7 @@ import '../../shared/formatters/localized_ui_formatters.dart';
 import '../../shared/realtime_conversation_identity_projection.dart';
 import 'app_lifecycle_provider.dart';
 import 'account_state_sync_coordinator_provider.dart';
+import 'agent_control_projection_coordinator_provider.dart';
 import 'agent_terminal_notification_provider.dart';
 import 'message_sync_coordinator_provider.dart';
 import 'navigation_provider.dart';
@@ -135,6 +135,15 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     _agentTerminalNotificationDeduplicator = ref.read(
       agentTerminalNotificationDeduplicatorProvider,
     );
+    _agentControlProjectionSubscription = ref
+        .listen<AgentTerminalNotification?>(
+          agentControlProjectionCoordinatorProvider,
+          (_, notification) {
+            if (notification != null) {
+              _showAgentTerminalNotification(notification);
+            }
+          },
+        );
     _remotePushMessageSyncCoordinator = ref.read(
       remotePushMessageSyncCoordinatorProvider,
     );
@@ -176,6 +185,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   SessionEpoch? _lastAuthenticatedRefreshEpoch;
   late final AgentTerminalNotificationDeduplicator
   _agentTerminalNotificationDeduplicator;
+  late final ProviderSubscription<AgentTerminalNotification?>
+  _agentControlProjectionSubscription;
   Future<void>? _joinedMemberActivation;
   String? _joinedMemberActivationDid;
   String? _deletingLocalIdentitySelector;
@@ -1419,24 +1430,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     final controlPayload = update.agentControlPayload;
     if (controlPayload != null) {
-      ref.read(agentInboxProvider.notifier).applyControlPayload(controlPayload);
       ref
-          .read(chatThreadsProvider.notifier)
-          .applyAgentRunStatusPayload(controlPayload);
-      ref
-          .read(chatThreadsProvider.notifier)
-          .applyPersonalAgentControlPayload(controlPayload);
-      final terminalNotification = _agentTerminalNotificationDeduplicator
-          .acceptStatus(controlPayload);
-      final hiddenPersonalAgentStatus =
-          !ref.read(personalAgentFeatureVisibleProvider) &&
-          isPersonalAgentControlPayload(
-            controlPayload,
-            ref.read(agentsProvider).agents,
-          );
-      if (terminalNotification != null && !hiddenPersonalAgentStatus) {
-        _showAgentTerminalNotification(terminalNotification);
-      }
+          .read(agentControlProjectionCoordinatorProvider.notifier)
+          .applyRealtimePayload(controlPayload);
       _runtimeTrace(
         'realtime.control_hint',
         fields: <String, Object?>{
@@ -2046,6 +2042,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     _invalidateSessionOperations();
     _stopForegroundCatchUp();
     _clearRealtimeSyncHints();
+    _agentControlProjectionSubscription.close();
     _agentTerminalNotificationDeduplicator.clear();
     _lifecycleSubscription.close();
     _realtimeStatusSubscription.close();

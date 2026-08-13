@@ -1000,6 +1000,58 @@ void main() {
     expect(tenantActions.registry.activeTenant.name, '杭州测试');
   });
 
+  testWidgets('登录页添加公网 HTTP 租户时立即提示使用 HTTPS', (tester) async {
+    final tenantActions = FakeAppTenantActions();
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        providerOverrides: <Override>[
+          appTenantActionsProvider.overrideWithValue(tenantActions),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    await _scrollToOnboardingUtilityBar(tester);
+    await tester.tap(find.byTooltip('管理租户'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tenant-management-create-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('tenant-name-field')),
+        matching: find.byType(CupertinoTextField),
+      ),
+      '新加坡测试',
+    );
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('tenant-backend-field')),
+        matching: find.byType(CupertinoTextField),
+      ),
+      'http://anpclaw.com',
+    );
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('tenant-did-host-field')),
+        matching: find.byType(CupertinoTextField),
+      ),
+      'anpclaw.com',
+    );
+
+    await tester.tap(find.byKey(const Key('tenant-form-submit-button')));
+    await tester.pumpAndSettle();
+
+    expect(tenantActions.createTenantCalls, 0);
+    expect(
+      find.text(
+        '公网租户地址必须使用 HTTPS，例如 https://anpclaw.com。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(TenantManagementDialog), findsOneWidget);
+  });
+
   testWidgets('租户错误提示可选中并展示未知错误详情', (tester) async {
     final tenantActions = FakeAppTenantActions()
       ..nextCreateError = StateError('runtime bootstrap failed');
