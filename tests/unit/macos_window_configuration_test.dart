@@ -244,6 +244,8 @@ void main() {
     final releaseTarget = project.substring(releaseStart, releaseEnd);
     expect(releaseTarget, contains('CODE_SIGN_IDENTITY = "-";'));
     expect(releaseTarget, contains('CODE_SIGN_STYLE = Manual;'));
+    expect(releaseTarget, contains('ENABLE_HARDENED_RUNTIME = YES;'));
+    expect(releaseTarget, contains('CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;'));
     expect(
       releaseTarget,
       contains('PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikime;'),
@@ -276,7 +278,8 @@ void main() {
     expect(packageWorker, contains('AWIKI_MACOS_SIGNING_IDENTITY'));
     expect(packageWorker, contains('AWIKI_MACOS_DEVELOPMENT_TEAM'));
     expect(packageWorker, contains('CODE_SIGN_IDENTITY="\$fingerprint"'));
-    expect(packageWorker, contains('awiki_verify_macos_app_signature'));
+    expect(packageWorker, contains('awiki_verify_macos_distribution_app'));
+    expect(packageWorker, contains('awiki_notarize_and_staple_dmg'));
     expect(packageWorker, contains('xcodebuild'));
     expect(packageWorker, contains('AWIKI_APP_SOURCE_REF="\$APP_REF"'));
     expect(packageWorker, contains('AWIKI_IM_CORE_SOURCE_REF="\$CORE_REF"'));
@@ -335,6 +338,10 @@ void main() {
     expect(signingLibrary, contains('TeamIdentifier=\$expected_team'));
     expect(signingLibrary, contains('Signature=adhoc'));
     expect(signingLibrary, contains('cdhash H'));
+    expect(signingLibrary, contains('Developer ID Application:'));
+    expect(signingLibrary, contains('com.apple.security.get-task-allow'));
+    expect(signingLibrary, contains('xcrun notarytool'));
+    expect(signingLibrary, contains('xcrun stapler staple'));
     expect(signingLibrary, contains('<<< "\$details"'));
     expect(signingLibrary, contains('<<< "\$requirement"'));
     expect(signingLibrary, isNot(contains('"\$details" | grep')));

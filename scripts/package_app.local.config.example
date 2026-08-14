@@ -1,14 +1,7 @@
-# Local/CI macOS trial-release signing configuration.
-#
-# Copy this file to package_app.local.config, or provide the same variables as
-# CI secrets. The copied file is Git-ignored. The certificate and private key
-# must already be imported into a Keychain; never store .p12/.pfx files here.
-
-# Full identity name from: security find-identity -v -p codesigning
-AWIKI_MACOS_SIGNING_IDENTITY="Apple Development: REPLACE_WITH_CERTIFICATE_NAME"
-
-# The 10-character Team ID shown by codesign -dvvv on a signed app.
-AWIKI_MACOS_DEVELOPMENT_TEAM="REPLACE_ME"
+# Local package-controller overrides. This file is Git-ignored.
+# macOS signing and notarization credentials belong only in the protected
+# app-packaging GitHub Environment; package_app.sh dispatches CI and never
+# reads a local P12 or API private key.
 
 # Optional focused validation target override. Leave this unset to keep the
 # committed four-platform release target set. A subset still uses the same

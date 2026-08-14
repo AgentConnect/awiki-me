@@ -63,10 +63,13 @@ contents:
 | `AWIKI_ANDROID_STORE_PASSWORD` | Android keystore password |
 | `AWIKI_ANDROID_KEY_ALIAS` | Android signing alias |
 | `AWIKI_ANDROID_KEY_PASSWORD` | Android key password |
-| `AWIKI_MACOS_P12_BASE64` | Base64-encoded Apple signing identity bundle |
+| `AWIKI_MACOS_P12_BASE64` | Base64-encoded organization Developer ID identity bundle |
 | `AWIKI_MACOS_P12_PASSWORD` | Apple identity bundle password |
-| `AWIKI_MACOS_SIGNING_IDENTITY` | Exact non-ad-hoc codesign identity name |
+| `AWIKI_MACOS_SIGNING_IDENTITY` | Exact Developer ID Application identity name |
 | `AWIKI_MACOS_DEVELOPMENT_TEAM` | Matching ten-character Apple Team ID |
+| `AWIKI_MACOS_NOTARY_KEY_BASE64` | Base64-encoded App Store Connect Team API `.p8` |
+| `AWIKI_MACOS_NOTARY_KEY_ID` | Team API Key ID used by `notarytool` |
+| `AWIKI_MACOS_NOTARY_ISSUER_ID` | Team API Issuer ID used by `notarytool` |
 
 Pull-request CI must not read these secrets. The full package workflow is a
 manual `workflow_dispatch` job registered on the default branch. The Environment

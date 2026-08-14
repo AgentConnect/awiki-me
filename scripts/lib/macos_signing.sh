@@ -43,6 +43,21 @@ awiki_resolve_codesigning_identity() {
   printf '%s\n' "$fingerprint"
 }
 
+awiki_resolve_developer_id_application_identity() {
+  local identity="$1"
+  local fingerprint identities line
+
+  fingerprint="$(awiki_resolve_codesigning_identity "$identity")" || return 1
+  identities="$(security find-identity -v -p codesigning 2>/dev/null)"
+  line="$(grep -i -m 1 " $fingerprint " <<< "$identities" || true)"
+  [[ "$line" == *'"Developer ID Application:'* ]] || {
+    awiki_macos_signing_error \
+      "release identity must be a Developer ID Application certificate: $identity"
+    return 1
+  }
+  printf '%s\n' "$fingerprint"
+}
+
 awiki_verify_macos_app_signature() {
   local app="$1"
   local expected_team="$2"
@@ -95,6 +110,203 @@ awiki_verify_macos_app_signature() {
   fi
   grep -Fq "identifier \"$expected_bundle_id\"" <<< "$requirement" || {
     awiki_macos_signing_error "designated requirement does not contain the bundle identifier"
+    return 1
+  }
+}
+
+awiki_verify_macos_distribution_app() {
+  local app="$1"
+  local expected_team="$2"
+  local expected_bundle_id="$3"
+  local details entitlements
+
+  awiki_verify_macos_app_signature \
+    "$app" "$expected_team" "$expected_bundle_id" || return 1
+  details="$(codesign -dvvv "$app" 2>&1)"
+  grep -Fq 'Authority=Developer ID Application:' <<< "$details" || {
+    awiki_macos_signing_error "app is not signed with Developer ID Application"
+    return 1
+  }
+  grep -Eq '^CodeDirectory .+flags=0x[0-9A-Fa-f]+\([^)]*runtime' <<< "$details" || {
+    awiki_macos_signing_error "app signature does not enable Hardened Runtime"
+    return 1
+  }
+  grep -Eq '^Timestamp=.+' <<< "$details" || {
+    awiki_macos_signing_error "app signature does not contain a secure timestamp"
+    return 1
+  }
+  entitlements="$(codesign -d --entitlements - "$app" 2>&1)" || {
+    awiki_macos_signing_error "could not read app entitlements"
+    return 1
+  }
+  if grep -Fq 'com.apple.security.get-task-allow' <<< "$entitlements"; then
+    awiki_macos_signing_error "release app contains the get-task-allow entitlement"
+    return 1
+  fi
+}
+
+awiki_verify_macos_distribution_dmg() {
+  local dmg="$1"
+  local expected_team="$2"
+  local details
+
+  [[ -f "$dmg" ]] || {
+    awiki_macos_signing_error "DMG not found: $dmg"
+    return 1
+  }
+  codesign --verify --strict "$dmg" || {
+    awiki_macos_signing_error "strict DMG signature verification failed: $dmg"
+    return 1
+  }
+  details="$(codesign -dvvv "$dmg" 2>&1)"
+  grep -Fq 'Authority=Developer ID Application:' <<< "$details" || {
+    awiki_macos_signing_error "DMG is not signed with Developer ID Application"
+    return 1
+  }
+  grep -Fqx "TeamIdentifier=$expected_team" <<< "$details" || {
+    awiki_macos_signing_error "DMG signature Team ID does not match $expected_team"
+    return 1
+  }
+  grep -Eq '^Timestamp=.+' <<< "$details" || {
+    awiki_macos_signing_error "DMG signature does not contain a secure timestamp"
+    return 1
+  }
+  xcrun stapler validate "$dmg" || {
+    awiki_macos_signing_error "DMG does not contain a valid notarization ticket"
+    return 1
+  }
+}
+
+awiki_validate_notary_configuration() {
+  local profile="${AWIKI_MACOS_NOTARY_PROFILE:-}"
+  local key_path="${AWIKI_MACOS_NOTARY_KEY_PATH:-}"
+  local key_id="${AWIKI_MACOS_NOTARY_KEY_ID:-}"
+  local issuer_id="${AWIKI_MACOS_NOTARY_ISSUER_ID:-}"
+  local timeout="${AWIKI_MACOS_NOTARY_TIMEOUT:-30m}"
+
+  [[ "$timeout" =~ ^[1-9][0-9]*[smh]?$ ]] || {
+    awiki_macos_signing_error "invalid AWIKI_MACOS_NOTARY_TIMEOUT: $timeout"
+    return 1
+  }
+  if [[ -n "$profile" ]]; then
+    [[ "$profile" =~ ^[A-Za-z0-9._-]+$ ]] || {
+      awiki_macos_signing_error "invalid AWIKI_MACOS_NOTARY_PROFILE"
+      return 1
+    }
+    [[ -z "$key_path" && -z "$key_id" && -z "$issuer_id" ]] || {
+      awiki_macos_signing_error \
+        "keychain-profile and API-key notarization settings cannot be combined"
+      return 1
+    }
+    return 0
+  fi
+
+  [[ -f "$key_path" ]] || {
+    awiki_macos_signing_error "notarization API key file is missing"
+    return 1
+  }
+  [[ "$key_id" =~ ^[A-Z0-9]{10,}$ ]] || {
+    awiki_macos_signing_error "invalid notarization API Key ID"
+    return 1
+  }
+  [[ "$issuer_id" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]] || {
+    awiki_macos_signing_error "invalid notarization Issuer ID"
+    return 1
+  }
+  if [[ ! "$(stat -f '%OLp' "$key_path")" =~ ^[0-7]*00$ ]]; then
+    awiki_macos_signing_error "notarization API key must not be group/other writable or readable"
+    return 1
+  fi
+}
+
+awiki_notarytool() {
+  local command="$1"
+  shift
+  local auth=()
+
+  awiki_validate_notary_configuration || return 1
+  if [[ -n "${AWIKI_MACOS_NOTARY_PROFILE:-}" ]]; then
+    auth=(--keychain-profile "$AWIKI_MACOS_NOTARY_PROFILE")
+  else
+    auth=(
+      --key "$AWIKI_MACOS_NOTARY_KEY_PATH"
+      --key-id "$AWIKI_MACOS_NOTARY_KEY_ID"
+      --issuer "$AWIKI_MACOS_NOTARY_ISSUER_ID"
+    )
+  fi
+  xcrun notarytool "$command" "$@" "${auth[@]}"
+}
+
+awiki_notarize_and_staple_dmg() {
+  local dmg="$1"
+  local diagnostics_dir="$2"
+  local result="$diagnostics_dir/submission.json"
+  local log="$diagnostics_dir/log.json"
+  local submission_id status submit_succeeded="true"
+
+  mkdir -p "$diagnostics_dir"
+  rm -f "$result" "$log"
+  if ! awiki_notarytool submit \
+    "$dmg" \
+    --wait \
+    --timeout "${AWIKI_MACOS_NOTARY_TIMEOUT:-30m}" \
+    --no-progress \
+    --output-format json > "$result"; then
+    submit_succeeded="false"
+  fi
+  submission_id="$(python3 - "$result" <<'PY' 2>/dev/null || true
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+data = json.loads(path.read_text(encoding="utf-8"))
+print(data.get("id", ""))
+PY
+)"
+  status="$(python3 - "$result" <<'PY' 2>/dev/null || true
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+data = json.loads(path.read_text(encoding="utf-8"))
+print(data.get("status", ""))
+PY
+)"
+  if [[ "$submit_succeeded" != "true" || "$status" != "Accepted" ]]; then
+    [[ -s "$result" ]] && cat "$result" >&2
+    if [[ -n "$submission_id" ]]; then
+      awiki_notarytool log "$submission_id" "$log" >/dev/null 2>&1 || true
+      [[ -s "$log" ]] && cat "$log" >&2
+    fi
+    awiki_macos_signing_error \
+      "Apple notarization did not accept the DMG (submission: ${submission_id:-unavailable})"
+    return 1
+  fi
+
+  xcrun stapler staple "$dmg" || {
+    awiki_macos_signing_error "could not staple the notarization ticket to the DMG"
+    return 1
+  }
+  xcrun stapler validate "$dmg" || {
+    awiki_macos_signing_error "stapled DMG ticket validation failed"
+    return 1
+  }
+  printf '[macos-signing] notarization accepted: %s\n' "$submission_id"
+}
+
+awiki_verify_gatekeeper_app() {
+  local app="$1"
+  local assessment
+
+  assessment="$(spctl --assess --type execute --verbose=4 "$app" 2>&1)" || {
+    printf '%s\n' "$assessment" >&2
+    awiki_macos_signing_error "Gatekeeper rejected the notarized app"
+    return 1
+  }
+  if grep -Fq 'override=security disabled' <<< "$assessment"; then
+    awiki_macos_signing_error \
+      "Gatekeeper assessment is disabled on this build host and cannot attest the app"
+    return 1
+  fi
+  grep -Fq 'origin=Developer ID Application:' <<< "$assessment" || {
+    printf '%s\n' "$assessment" >&2
+    awiki_macos_signing_error "Gatekeeper did not report the Developer ID origin"
     return 1
   }
 }

@@ -388,7 +388,7 @@ jobs:
             printf 'keyPassword=%s\n' "$KEY_PASSWORD"
           } > android/key.properties
 
-      - name: Prepare macOS release signing keychain
+      - name: Prepare macOS Developer ID and notarization credentials
         if: startsWith(matrix.target, 'macos-')
         shell: bash
         env:
@@ -396,22 +396,42 @@ jobs:
           P12_PASSWORD: ${{ secrets.AWIKI_MACOS_P12_PASSWORD }}
           SIGNING_IDENTITY: ${{ secrets.AWIKI_MACOS_SIGNING_IDENTITY }}
           DEVELOPMENT_TEAM: ${{ secrets.AWIKI_MACOS_DEVELOPMENT_TEAM }}
+          NOTARY_KEY_BASE64: ${{ secrets.AWIKI_MACOS_NOTARY_KEY_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.AWIKI_MACOS_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.AWIKI_MACOS_NOTARY_ISSUER_ID }}
         run: |
           test -n "$P12_BASE64" && test -n "$P12_PASSWORD"
           test -n "$SIGNING_IDENTITY" && test -n "$DEVELOPMENT_TEAM"
+          test -n "$NOTARY_KEY_BASE64" && test -n "$NOTARY_KEY_ID"
+          test -n "$NOTARY_ISSUER_ID"
           keychain="$RUNNER_TEMP/awiki-package.keychain-db"
           password="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
-          printf '%s' "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/awiki-signing.p12"
+          p12="$RUNNER_TEMP/awiki-signing.p12"
+          notary_key="$RUNNER_TEMP/AuthKey_${NOTARY_KEY_ID}.p8"
+          printf '%s' "$P12_BASE64" | base64 --decode > "$p12"
+          printf '%s' "$NOTARY_KEY_BASE64" | base64 --decode > "$notary_key"
+          chmod 600 "$p12" "$notary_key"
+          printf 'AWIKI_MACOS_CI_KEYCHAIN=%s\n' "$keychain" >> "$GITHUB_ENV"
+          printf 'AWIKI_MACOS_CI_P12=%s\n' "$p12" >> "$GITHUB_ENV"
+          printf 'AWIKI_MACOS_NOTARY_KEY_PATH=%s\n' "$notary_key" >> "$GITHUB_ENV"
+          openssl pkey -in "$notary_key" -noout -check >/dev/null
           security create-keychain -p "$password" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$password" "$keychain"
-          security import "$RUNNER_TEMP/awiki-signing.p12" \
+          security import "$p12" \
             -k "$keychain" -P "$P12_PASSWORD" -A -t cert -f pkcs12
           security set-key-partition-list \
             -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
           security list-keychains -d user -s "$keychain"
+          xcrun notarytool history \
+            --key "$notary_key" \
+            --key-id "$NOTARY_KEY_ID" \
+            --issuer "$NOTARY_ISSUER_ID" \
+            --output-format json >/dev/null
           printf 'AWIKI_MACOS_SIGNING_IDENTITY=%s\n' "$SIGNING_IDENTITY" >> "$GITHUB_ENV"
           printf 'AWIKI_MACOS_DEVELOPMENT_TEAM=%s\n' "$DEVELOPMENT_TEAM" >> "$GITHUB_ENV"
+          printf 'AWIKI_MACOS_NOTARY_KEY_ID=%s\n' "$NOTARY_KEY_ID" >> "$GITHUB_ENV"
+          printf 'AWIKI_MACOS_NOTARY_ISSUER_ID=%s\n' "$NOTARY_ISSUER_ID" >> "$GITHUB_ENV"
 
       - name: Install pinned Inno Setup
         if: matrix.target == 'windows-x64'
@@ -463,6 +483,26 @@ jobs:
           awiki-me/android/emas.properties
           awiki-me/android/key.properties
           awiki-me/android/upload-keystore.jks
+
+      - name: Remove macOS release credentials
+        if: always() && startsWith(matrix.target, 'macos-')
+        shell: bash
+        run: |
+          if [[ -n "${AWIKI_MACOS_CI_KEYCHAIN:-}" ]]; then
+            security delete-keychain "$AWIKI_MACOS_CI_KEYCHAIN" >/dev/null 2>&1 || true
+          fi
+          rm -f \
+            "${AWIKI_MACOS_CI_P12:-}" \
+            "${AWIKI_MACOS_NOTARY_KEY_PATH:-}"
+
+      - name: Upload macOS notarization diagnostics on failure
+        if: failure() && startsWith(matrix.target, 'macos-')
+        uses: actions/upload-artifact@v7
+        with:
+          name: awiki-me-notarization-${{ matrix.target }}-${{ inputs.request_id }}
+          path: awiki-me/build/package/notary-${{ matrix.target }}/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload verified platform package
         uses: actions/upload-artifact@v7

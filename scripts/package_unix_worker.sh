@@ -346,6 +346,10 @@ verify_macos_dmg() {
   local dmg="$1"
   local expected_arch="$2"
 
+  awiki_verify_macos_distribution_dmg \
+    "$dmg" "$AWIKI_MACOS_DEVELOPMENT_TEAM" ||
+    fail "macOS DMG distribution signature or notarization contract failed"
+
   (
     set -euo pipefail
     local mount_point="$ROOT_DIR/build/package/verify-$TARGET"
@@ -403,10 +407,12 @@ verify_macos_dmg() {
     [[ "$(lipo -archs "$mount_point/AWikiMe.app/Contents/MacOS/AWikiMe")" == "$expected_arch" ]] ||
       fail "mounted macOS app architecture mismatch"
     codesign --verify --deep --strict --verbose=2 "$mount_point/AWikiMe.app"
-    awiki_verify_macos_app_signature \
+    awiki_verify_macos_distribution_app \
       "$mount_point/AWikiMe.app" \
       "$AWIKI_MACOS_DEVELOPMENT_TEAM" \
       ai.awiki.awikime || fail "mounted macOS app signature contract failed"
+    awiki_verify_gatekeeper_app "$mount_point/AWikiMe.app" ||
+      fail "mounted macOS app Gatekeeper assessment failed"
   )
 }
 
@@ -415,6 +421,9 @@ build_macos() {
   [[ -f "$SIGNING_LIB" ]] || fail "macOS signing helper is missing"
   [[ -f "$MACOS_DMG_BACKGROUND" ]] || fail "macOS DMG background is missing"
   [[ -f "$MACOS_DMG_SETTINGS" ]] || fail "macOS DMG settings are missing"
+  for command in codesign hdiutil lipo spctl xcodebuild xcrun; do
+    require_cmd "$command"
+  done
   local dmgbuild_python="${DMGBUILD_PYTHON:-python3}"
   command -v "$dmgbuild_python" >/dev/null 2>&1 ||
     fail "required command not found: $dmgbuild_python"
@@ -425,9 +434,12 @@ build_macos() {
   source "$SIGNING_LIB"
   : "${AWIKI_MACOS_SIGNING_IDENTITY:?AWIKI_MACOS_SIGNING_IDENTITY is required}"
   : "${AWIKI_MACOS_DEVELOPMENT_TEAM:?AWIKI_MACOS_DEVELOPMENT_TEAM is required}"
+  awiki_validate_notary_configuration ||
+    fail "configured macOS notarization credentials are invalid"
   local fingerprint
-  fingerprint="$(awiki_resolve_codesigning_identity "$AWIKI_MACOS_SIGNING_IDENTITY")" ||
-    fail "configured macOS signing identity is unavailable"
+  fingerprint="$(awiki_resolve_developer_id_application_identity \
+    "$AWIKI_MACOS_SIGNING_IDENTITY")" ||
+    fail "configured Developer ID Application identity is unavailable"
 
   local arch arch_label filename derived app
   if [[ "$TARGET" == "macos-arm64" ]]; then
@@ -468,7 +480,10 @@ build_macos() {
     ONLY_ACTIVE_ARCH=NO \
     CODE_SIGN_STYLE=Manual \
     CODE_SIGN_IDENTITY="$fingerprint" \
+    CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
     DEVELOPMENT_TEAM="$AWIKI_MACOS_DEVELOPMENT_TEAM" \
+    ENABLE_HARDENED_RUNTIME=YES \
+    OTHER_CODE_SIGN_FLAGS="--timestamp" \
     AWIKI_APP_SOURCE_REF="$APP_REF" \
     AWIKI_IM_CORE_SOURCE_REF="$CORE_REF" \
     AWIKI_PRIMARY_TENANT_DOMAIN="$PRIMARY_TENANT_DOMAIN" \
@@ -480,9 +495,9 @@ build_macos() {
   [[ "$(lipo -archs "$app/Contents/MacOS/AWikiMe")" == "$arch" ]] ||
     fail "macOS executable architecture mismatch"
   codesign --verify --deep --strict --verbose=2 "$app"
-  awiki_verify_macos_app_signature \
+  awiki_verify_macos_distribution_app \
     "$app" "$AWIKI_MACOS_DEVELOPMENT_TEAM" ai.awiki.awikime ||
-    fail "macOS signature contract failed"
+    fail "macOS Developer ID distribution signature contract failed"
 
   local dmg_work="$ROOT_DIR/build/package/dmg-$TARGET"
   local staged_dmg="$dmg_work/$filename"
@@ -498,6 +513,15 @@ build_macos() {
     "$staged_dmg"
   hdiutil imageinfo "$staged_dmg" | grep -Fq 'Format: UDZO' ||
     fail "macOS DMG is not UDZO"
+  codesign --force \
+    --sign "$fingerprint" \
+    --timestamp \
+    "$staged_dmg"
+  codesign --verify --strict --verbose=2 "$staged_dmg"
+  local notarization_diagnostics="$ROOT_DIR/build/package/notary-$TARGET"
+  awiki_notarize_and_staple_dmg \
+    "$staged_dmg" "$notarization_diagnostics" ||
+    fail "macOS DMG notarization failed"
   verify_macos_dmg "$staged_dmg" "$arch"
   mv "$staged_dmg" "$OUTPUT_DIR/$filename"
   rm -rf "$dmg_work"

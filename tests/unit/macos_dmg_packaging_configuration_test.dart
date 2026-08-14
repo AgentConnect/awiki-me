@@ -137,8 +137,139 @@ void main() {
       ),
     );
   });
+
+  test('macOS release artifacts require Developer ID and notarization', () {
+    final workflow =
+        loadYaml(File('.github/workflows/package-app.yml').readAsStringSync())
+            as YamlMap;
+    final build = (workflow['jobs'] as YamlMap)['build'] as YamlMap;
+    final steps = build['steps'] as YamlList;
+    final prepare = _stepNamed(
+      steps,
+      'Prepare macOS Developer ID and notarization credentials',
+    );
+    expect(prepare['if'], "startsWith(matrix.target, 'macos-')");
+    final prepareEnvironment = prepare['env'] as YamlMap;
+    expect(
+      prepareEnvironment['NOTARY_KEY_BASE64'],
+      r'${{ secrets.AWIKI_MACOS_NOTARY_KEY_BASE64 }}',
+    );
+    expect(
+      prepareEnvironment['NOTARY_KEY_ID'],
+      r'${{ secrets.AWIKI_MACOS_NOTARY_KEY_ID }}',
+    );
+    expect(
+      prepareEnvironment['NOTARY_ISSUER_ID'],
+      r'${{ secrets.AWIKI_MACOS_NOTARY_ISSUER_ID }}',
+    );
+    final prepareScript = prepare['run'].toString();
+    for (final expected in <String>[
+      r'chmod 600 "$p12" "$notary_key"',
+      r'openssl pkey -in "$notary_key" -noout -check',
+      'security create-keychain',
+      'security set-key-partition-list',
+      'xcrun notarytool history',
+      r'--key "$notary_key"',
+      r'--key-id "$NOTARY_KEY_ID"',
+      r'--issuer "$NOTARY_ISSUER_ID"',
+      'AWIKI_MACOS_NOTARY_KEY_PATH=',
+      'AWIKI_MACOS_NOTARY_KEY_ID=',
+      'AWIKI_MACOS_NOTARY_ISSUER_ID=',
+    ]) {
+      expect(prepareScript, contains(expected), reason: expected);
+    }
+
+    final cleanup = _stepNamed(steps, 'Remove macOS release credentials');
+    expect(cleanup['if'], "always() && startsWith(matrix.target, 'macos-')");
+    final cleanupScript = cleanup['run'].toString();
+    expect(cleanupScript, contains('security delete-keychain'));
+    expect(cleanupScript, contains('AWIKI_MACOS_CI_P12'));
+    expect(cleanupScript, contains('AWIKI_MACOS_NOTARY_KEY_PATH'));
+    final diagnostics = _stepNamed(
+      steps,
+      'Upload macOS notarization diagnostics on failure',
+    );
+    expect(
+      diagnostics['if'],
+      "failure() && startsWith(matrix.target, 'macos-')",
+    );
+    expect(
+      steps.cast<YamlMap>().indexOf(cleanup),
+      lessThan(steps.cast<YamlMap>().indexOf(diagnostics)),
+      reason: 'credentials must be removed before an artifact action runs',
+    );
+
+    final worker = File('scripts/package_unix_worker.sh').readAsStringSync();
+    for (final expected in <String>[
+      'awiki_resolve_developer_id_application_identity',
+      'CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO',
+      'ENABLE_HARDENED_RUNTIME=YES',
+      r'OTHER_CODE_SIGN_FLAGS="--timestamp"',
+      'awiki_verify_macos_distribution_app',
+      'awiki_notarize_and_staple_dmg',
+      'awiki_verify_macos_distribution_dmg',
+      'awiki_verify_gatekeeper_app',
+    ]) {
+      expect(worker, contains(expected), reason: expected);
+    }
+    _expectBefore(
+      worker,
+      r'codesign --force \',
+      'awiki_notarize_and_staple_dmg',
+    );
+    _expectBefore(
+      worker,
+      'awiki_notarize_and_staple_dmg',
+      r'verify_macos_dmg "$staged_dmg" "$arch"',
+    );
+    _expectBefore(
+      worker,
+      r'verify_macos_dmg "$staged_dmg" "$arch"',
+      r'mv "$staged_dmg" "$OUTPUT_DIR/$filename"',
+    );
+
+    final signing = File('scripts/lib/macos_signing.sh').readAsStringSync();
+    for (final expected in <String>[
+      'Developer ID Application:',
+      'flags=0x[0-9A-Fa-f]+',
+      'com.apple.security.get-task-allow',
+      r"grep -Eq '^Timestamp=.+'",
+      'xcrun notarytool',
+      '--wait',
+      '--timeout',
+      'xcrun stapler staple',
+      'xcrun stapler validate',
+      'spctl --assess --type execute',
+      'override=security disabled',
+    ]) {
+      expect(signing, contains(expected), reason: expected);
+    }
+
+    final project = File(
+      'macos/Runner.xcodeproj/project.pbxproj',
+    ).readAsStringSync();
+    final releaseStart = project.indexOf(
+      '33CC10FD2044A3C60003C045 /* Release */ = {',
+    );
+    final releaseEnd = project.indexOf('\n\t\t};', releaseStart);
+    final releaseTarget = project.substring(releaseStart, releaseEnd);
+    expect(releaseTarget, contains('ENABLE_HARDENED_RUNTIME = YES;'));
+    expect(releaseTarget, contains('CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;'));
+    final entitlements = File(
+      'macos/Runner/Release.entitlements',
+    ).readAsStringSync();
+    expect(entitlements, isNot(contains('get-task-allow')));
+  });
 }
 
 YamlMap _stepNamed(YamlList steps, String name) {
   return steps.cast<YamlMap>().singleWhere((step) => step['name'] == name);
+}
+
+void _expectBefore(String source, String first, String second) {
+  final firstIndex = source.indexOf(first);
+  final secondIndex = source.indexOf(second);
+  expect(firstIndex, isNonNegative, reason: '$first must be configured');
+  expect(secondIndex, isNonNegative, reason: '$second must be configured');
+  expect(firstIndex, lessThan(secondIndex));
 }
