@@ -332,7 +332,7 @@ awiki_validate_notary_configuration() {
   local key_path="${AWIKI_MACOS_NOTARY_KEY_PATH:-}"
   local key_id="${AWIKI_MACOS_NOTARY_KEY_ID:-}"
   local issuer_id="${AWIKI_MACOS_NOTARY_ISSUER_ID:-}"
-  local timeout="${AWIKI_MACOS_NOTARY_TIMEOUT:-30m}"
+  local timeout="${AWIKI_MACOS_NOTARY_TIMEOUT:-1h}"
 
   [[ "$timeout" =~ ^[1-9][0-9]*[smh]?$ ]] || {
     awiki_macos_signing_error "invalid AWIKI_MACOS_NOTARY_TIMEOUT: $timeout"
@@ -387,45 +387,73 @@ awiki_notarytool() {
   xcrun notarytool "$command" "$@" "${auth[@]}"
 }
 
+awiki_notary_json_field() {
+  local path="$1"
+  local field="$2"
+
+  python3 - "$path" "$field" <<'PY' 2>/dev/null || true
+import json, pathlib, sys
+
+path = pathlib.Path(sys.argv[1])
+data = json.loads(path.read_text(encoding="utf-8"))
+print(data.get(sys.argv[2], ""))
+PY
+}
+
 awiki_notarize_and_staple_dmg() {
   local dmg="$1"
   local diagnostics_dir="$2"
-  local result="$diagnostics_dir/submission.json"
+  local submission="$diagnostics_dir/submission.json"
+  local result="$diagnostics_dir/result.json"
+  local info="$diagnostics_dir/info.json"
   local log="$diagnostics_dir/log.json"
-  local submission_id status submit_succeeded="true"
+  local submission_id status
 
   mkdir -p "$diagnostics_dir"
-  rm -f "$result" "$log"
+  rm -f "$submission" "$result" "$info" "$log"
   if ! awiki_notarytool submit \
     "$dmg" \
-    --wait \
-    --timeout "${AWIKI_MACOS_NOTARY_TIMEOUT:-30m}" \
+    --no-wait \
+    --no-progress \
+    --output-format json > "$submission"; then
+    [[ -s "$submission" ]] && cat "$submission" >&2
+    awiki_macos_signing_error "could not submit the DMG for Apple notarization"
+    return 1
+  fi
+  submission_id="$(awiki_notary_json_field "$submission" id)"
+  [[ "$submission_id" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]] || {
+    [[ -s "$submission" ]] && cat "$submission" >&2
+    awiki_macos_signing_error "Apple notarization did not return a submission ID"
+    return 1
+  }
+
+  if ! awiki_notarytool wait \
+    "$submission_id" \
+    --timeout "${AWIKI_MACOS_NOTARY_TIMEOUT:-1h}" \
     --no-progress \
     --output-format json > "$result"; then
-    submit_succeeded="false"
+    :
   fi
-  submission_id="$(python3 - "$result" <<'PY' 2>/dev/null || true
-import json, pathlib, sys
-path = pathlib.Path(sys.argv[1])
-data = json.loads(path.read_text(encoding="utf-8"))
-print(data.get("id", ""))
-PY
-)"
-  status="$(python3 - "$result" <<'PY' 2>/dev/null || true
-import json, pathlib, sys
-path = pathlib.Path(sys.argv[1])
-data = json.loads(path.read_text(encoding="utf-8"))
-print(data.get("status", ""))
-PY
-)"
-  if [[ "$submit_succeeded" != "true" || "$status" != "Accepted" ]]; then
-    [[ -s "$result" ]] && cat "$result" >&2
-    if [[ -n "$submission_id" ]]; then
-      awiki_notarytool log "$submission_id" "$log" >/dev/null 2>&1 || true
-      [[ -s "$log" ]] && cat "$log" >&2
+  status="$(awiki_notary_json_field "$result" status)"
+  if [[ -z "$status" ]]; then
+    if awiki_notarytool info \
+      "$submission_id" \
+      --output-format json > "$info"; then
+      status="$(awiki_notary_json_field "$info" status)"
     fi
-    awiki_macos_signing_error \
-      "Apple notarization did not accept the DMG (submission: ${submission_id:-unavailable})"
+  fi
+  if [[ "$status" != "Accepted" ]]; then
+    [[ -s "$result" ]] && cat "$result" >&2
+    [[ -s "$info" ]] && cat "$info" >&2
+    awiki_notarytool log "$submission_id" "$log" >/dev/null 2>&1 || true
+    [[ -s "$log" ]] && cat "$log" >&2
+    if [[ "$status" == "In Progress" ]]; then
+      awiki_macos_signing_error \
+        "Apple notarization is still in progress after the wait timeout (submission: $submission_id)"
+    else
+      awiki_macos_signing_error \
+        "Apple notarization did not accept the DMG (submission: $submission_id, status: ${status:-unavailable})"
+    fi
     return 1
   fi
 

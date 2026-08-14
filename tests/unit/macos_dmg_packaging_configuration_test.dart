@@ -244,8 +244,13 @@ void main() {
       'com.apple.security.get-task-allow',
       r"grep -Eq '^Timestamp=.+'",
       'xcrun notarytool',
-      '--wait',
+      'awiki_notarytool submit',
+      '--no-wait',
+      'awiki_notarytool wait',
+      'awiki_notarytool info',
       '--timeout',
+      r'AWIKI_MACOS_NOTARY_TIMEOUT:-1h',
+      'still in progress after the wait timeout',
       'xcrun stapler staple',
       'xcrun stapler validate',
       'spctl --assess --type execute',
@@ -264,6 +269,16 @@ void main() {
       signing,
       'awiki_verify_macos_nested_distribution_code',
       r'details="$(codesign -dvvv "$app" 2>&1)"',
+    );
+    _expectBefore(
+      signing,
+      'awiki_notarytool submit',
+      'awiki_notarytool wait',
+    );
+    _expectBefore(
+      signing,
+      'awiki_notarytool wait',
+      'xcrun stapler staple',
     );
 
     final project = File(

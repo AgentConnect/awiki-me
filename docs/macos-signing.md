@@ -75,9 +75,10 @@ scripts/package_app.sh
 | `AWIKI_MACOS_NOTARY_ISSUER_ID` | Team API Issuer ID |
 
 CI 将 P12 和 `.p8` 写入 owner-only 临时文件，导入独立临时 Keychain，并在编译前使用
-`notarytool history` 验证 API 鉴权。平台 worker 生成并签名 DMG 后，通过 `notarytool submit
---wait` 等待自动公证；只有状态为 `Accepted`、staple 成功且最终验证全部通过时才上传平台
-artifact。失败诊断在删除临时凭证后单独上传，未公证 DMG 不进入聚合任务。
+`notarytool history` 验证 API 鉴权。平台 worker 生成并签名 DMG 后，先通过 `notarytool
+submit --no-wait` 保存可追踪的 submission ID，再独立等待最多一小时。只有状态为
+`Accepted`、staple 成功且最终验证全部通过时才上传平台 artifact。超时或失败诊断在删除
+临时凭证后单独上传，未公证 DMG 不进入聚合任务。
 
 ## 本机公证配置
 
