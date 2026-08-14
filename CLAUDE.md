@@ -5,6 +5,7 @@
 1. **地位**：AWiki 跨平台 Flutter App，面向人类用户和 Agent，承载身份 onboarding、tenant 管理、会话/群组/附件/Mention、Agent/Daemon 控制和产品 UI。
 2. **边界**：App 拥有 UI、导航、application orchestration、平台适配、短期交互状态和 presentation overlay；消息、conversation、read-state、sync/outbox、identity vault 与密码正确性由 sibling `../awiki-cli-rs2/packages/awiki_im_core` / Rust `im-core` 提供。
 3. **约束**：
+   - 文档跟随本文件、[AGENTS.md](AGENTS.md) 和 `docs/`。不要套 GEB 分形协议，不要为每个目录新建 `CLAUDE.md`。
    - 不直接拼 message-service wire、读 raw SQLite、写 reliable checkpoint 或持有 DID/E2EE 私钥。
    - `ProductLocalStore` 只保存 App overlay，不建立第二套 durable message truth。
    - tenant 切换必须先释放旧 runtime，并按不可变 Storage Scope 隔离 identity、conversation、cache 与 vault。

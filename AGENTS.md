@@ -10,6 +10,9 @@ implementations, and App + CLI peer/backend/device validation assets. Root
 `integration_test/*.dart` files are Flutter-tooling shims only. Platform runners live under
 `android/`, `ios/`, `macos/`, and `web/`. Static assets live in `assets/`.
 
+## Documentation
+Follow this file, [`CLAUDE.md`](CLAUDE.md), and `docs/`. Do not apply the GEB fractal protocol, and do not add a `CLAUDE.md` to every directory.
+
 ## Architecture Guardrail
 Before changing conversation identity, list/detail/profile projection,
 read/send/realtime behavior, or release/0710 upgrade behavior, read
