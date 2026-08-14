@@ -58,6 +58,154 @@ awiki_resolve_developer_id_application_identity() {
   printf '%s\n' "$fingerprint"
 }
 
+awiki_codesign_distribution_item() {
+  local item="$1"
+  local fingerprint="$2"
+  local entitlements_dir="$3"
+  local item_index="$4"
+  local entitlements="$entitlements_dir/$item_index.plist"
+  local sign_args=(
+    --force
+    --sign "$fingerprint"
+    --options runtime
+    --timestamp
+    --preserve-metadata=identifier
+  )
+
+  if codesign -d --entitlements :- "$item" > "$entitlements" 2>/dev/null &&
+    [[ -s "$entitlements" ]]; then
+    plutil -lint "$entitlements" >/dev/null || {
+      awiki_macos_signing_error "existing entitlements are invalid: $item"
+      return 1
+    }
+    sign_args+=(--entitlements "$entitlements")
+  else
+    rm -f "$entitlements"
+  fi
+
+  codesign "${sign_args[@]}" "$item" || {
+    awiki_macos_signing_error "could not sign nested distribution code: $item"
+    return 1
+  }
+}
+
+awiki_sign_macos_distribution_app() (
+  local app="$1"
+  local fingerprint="$2"
+  local work_dir macho_list bundle_list item item_index=0
+
+  [[ -d "$app/Contents" ]] || {
+    awiki_macos_signing_error "app bundle not found: $app"
+    return 1
+  }
+  [[ "$fingerprint" =~ ^[0-9A-Fa-f]{40}$ ]] || {
+    awiki_macos_signing_error "invalid signing identity fingerprint"
+    return 1
+  }
+
+  work_dir="$(mktemp -d "${TMPDIR:-/tmp}/awiki-macos-signing.XXXXXX")" || {
+    awiki_macos_signing_error "could not create the signing workspace"
+    return 1
+  }
+  trap 'rm -rf "$work_dir"' EXIT
+  macho_list="$work_dir/macho.list"
+  bundle_list="$work_dir/bundle.list"
+
+  # Sign every executable Mach-O first. This includes helper binaries such as
+  # Sparkle's Autoupdate that are nested inside a framework but are not bundles.
+  find "$app/Contents" -type f -perm -111 -print0 > "$macho_list"
+  while IFS= read -r -d '' item; do
+    if file -b "$item" | grep -Fq 'Mach-O'; then
+      item_index=$((item_index + 1))
+      awiki_codesign_distribution_item \
+        "$item" "$fingerprint" "$work_dir" "$item_index" || return 1
+    fi
+  done < "$macho_list"
+
+  # BSD find's -depth order guarantees that XPC services and helper Apps are
+  # signed before the frameworks that contain them. The outer App is last.
+  find "$app/Contents" -depth -type d \
+    \( -name '*.app' -o -name '*.appex' -o -name '*.bundle' -o \
+      -name '*.framework' -o -name '*.plugin' -o -name '*.xpc' \) \
+    -print0 > "$bundle_list"
+  while IFS= read -r -d '' item; do
+    item_index=$((item_index + 1))
+    awiki_codesign_distribution_item \
+      "$item" "$fingerprint" "$work_dir" "$item_index" || return 1
+  done < "$bundle_list"
+
+  item_index=$((item_index + 1))
+  awiki_codesign_distribution_item \
+    "$app" "$fingerprint" "$work_dir" "$item_index"
+)
+
+awiki_verify_macos_distribution_item() {
+  local item="$1"
+  local expected_team="$2"
+  local details entitlements
+
+  codesign --verify --strict "$item" || {
+    awiki_macos_signing_error "strict code-signature verification failed: $item"
+    return 1
+  }
+  details="$(codesign -dvvv "$item" 2>&1)" || {
+    awiki_macos_signing_error "could not inspect code signature: $item"
+    return 1
+  }
+  grep -Fq 'Authority=Developer ID Application:' <<< "$details" || {
+    awiki_macos_signing_error "code is not signed with Developer ID Application: $item"
+    return 1
+  }
+  grep -Fqx "TeamIdentifier=$expected_team" <<< "$details" || {
+    awiki_macos_signing_error "code signature Team ID does not match $expected_team: $item"
+    return 1
+  }
+  grep -Eq '^CodeDirectory .+flags=0x[0-9A-Fa-f]+\([^)]*runtime' <<< "$details" || {
+    awiki_macos_signing_error "code signature does not enable Hardened Runtime: $item"
+    return 1
+  }
+  grep -Eq '^Timestamp=.+' <<< "$details" || {
+    awiki_macos_signing_error "code signature does not contain a secure timestamp: $item"
+    return 1
+  }
+  entitlements="$(codesign -d --entitlements :- "$item" 2>/dev/null || true)"
+  if grep -Fq 'com.apple.security.get-task-allow' <<< "$entitlements"; then
+    awiki_macos_signing_error "distribution code contains get-task-allow: $item"
+    return 1
+  fi
+}
+
+awiki_verify_macos_nested_distribution_code() (
+  local app="$1"
+  local expected_team="$2"
+  local work_dir macho_list bundle_list item
+
+  work_dir="$(mktemp -d "${TMPDIR:-/tmp}/awiki-macos-verification.XXXXXX")" || {
+    awiki_macos_signing_error "could not create the verification workspace"
+    return 1
+  }
+  trap 'rm -rf "$work_dir"' EXIT
+  macho_list="$work_dir/macho.list"
+  bundle_list="$work_dir/bundle.list"
+
+  find "$app/Contents" -type f -perm -111 -print0 > "$macho_list"
+  while IFS= read -r -d '' item; do
+    if file -b "$item" | grep -Fq 'Mach-O'; then
+      awiki_verify_macos_distribution_item \
+        "$item" "$expected_team" || return 1
+    fi
+  done < "$macho_list"
+
+  find "$app/Contents" -depth -type d \
+    \( -name '*.app' -o -name '*.appex' -o -name '*.bundle' -o \
+      -name '*.framework' -o -name '*.plugin' -o -name '*.xpc' \) \
+    -print0 > "$bundle_list"
+  while IFS= read -r -d '' item; do
+    awiki_verify_macos_distribution_item \
+      "$item" "$expected_team" || return 1
+  done < "$bundle_list"
+)
+
 awiki_verify_macos_app_signature() {
   local app="$1"
   local expected_team="$2"
@@ -122,6 +270,8 @@ awiki_verify_macos_distribution_app() {
 
   awiki_verify_macos_app_signature \
     "$app" "$expected_team" "$expected_bundle_id" || return 1
+  awiki_verify_macos_nested_distribution_code \
+    "$app" "$expected_team" || return 1
   details="$(codesign -dvvv "$app" 2>&1)"
   grep -Fq 'Authority=Developer ID Application:' <<< "$details" || {
     awiki_macos_signing_error "app is not signed with Developer ID Application"

@@ -99,10 +99,11 @@ xcrun notarytool store-credentials awiki-macos-notary \
 `scripts/requirements-macos-dmg.txt` 安装精确版本并校验 wheel SHA-256；`dmgbuild` 只生成
 Finder 布局，不参与 App 签名或公证。
 
-正式包使用 Flutter Release 模式和 production Keychain channel。构建会依次验证 App 严格
-签名、Bundle ID、Team ID、Developer ID authority、Hardened Runtime、时间戳、entitlements、
-DMG 签名、公证票据和 Gatekeeper；任一项不符合都不会生成最终 artifact。Android-only
-打包不依赖 macOS 凭证。
+正式包使用 Flutter Release 模式和 production Keychain channel。构建会先对所有内嵌
+Mach-O、helper App、XPC、plugin 和 framework 由内到外重新签名，并分别保留各自的
+entitlements，最后再签外层 App。随后逐项验证 Bundle ID、Team ID、Developer ID authority、
+Hardened Runtime、时间戳、entitlements、DMG 签名、公证票据和 Gatekeeper；任一项不符合
+都不会生成最终 artifact。Android-only 打包不依赖 macOS 凭证。
 
 发布版本必须先写入并提交 `pubspec.yaml`，打包脚本不会再自动递增版本。脚本要求
 AWiki Me 与 sibling `awiki-cli-rs2` 都是 clean Git worktree，并把二者完整 40 位 commit

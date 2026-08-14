@@ -202,6 +202,7 @@ void main() {
     final worker = File('scripts/package_unix_worker.sh').readAsStringSync();
     for (final expected in <String>[
       'awiki_resolve_developer_id_application_identity',
+      'awiki_sign_macos_distribution_app',
       'CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO',
       'ENABLE_HARDENED_RUNTIME=YES',
       r'OTHER_CODE_SIGN_FLAGS="--timestamp"',
@@ -231,6 +232,14 @@ void main() {
     final signing = File('scripts/lib/macos_signing.sh').readAsStringSync();
     for (final expected in <String>[
       'Developer ID Application:',
+      'awiki_codesign_distribution_item',
+      'awiki_verify_macos_nested_distribution_code',
+      "find \"\$app/Contents\" -type f -perm -111 -print0",
+      "find \"\$app/Contents\" -depth -type d",
+      "-name '*.framework'",
+      "-name '*.xpc'",
+      '--preserve-metadata=identifier',
+      '--options runtime',
       'flags=0x[0-9A-Fa-f]+',
       'com.apple.security.get-task-allow',
       r"grep -Eq '^Timestamp=.+'",
@@ -244,6 +253,18 @@ void main() {
     ]) {
       expect(signing, contains(expected), reason: expected);
     }
+    final buildMacosStart = worker.indexOf('build_macos() {');
+    final buildMacos = worker.substring(buildMacosStart);
+    _expectBefore(
+      buildMacos,
+      'awiki_sign_macos_distribution_app',
+      'awiki_verify_macos_distribution_app',
+    );
+    _expectBefore(
+      signing,
+      'awiki_verify_macos_nested_distribution_code',
+      r'details="$(codesign -dvvv "$app" 2>&1)"',
+    );
 
     final project = File(
       'macos/Runner.xcodeproj/project.pbxproj',

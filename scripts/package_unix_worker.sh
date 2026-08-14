@@ -421,7 +421,7 @@ build_macos() {
   [[ -f "$SIGNING_LIB" ]] || fail "macOS signing helper is missing"
   [[ -f "$MACOS_DMG_BACKGROUND" ]] || fail "macOS DMG background is missing"
   [[ -f "$MACOS_DMG_SETTINGS" ]] || fail "macOS DMG settings are missing"
-  for command in codesign hdiutil lipo spctl xcodebuild xcrun; do
+  for command in codesign file hdiutil lipo plutil security spctl xcodebuild xcrun; do
     require_cmd "$command"
   done
   local dmgbuild_python="${DMGBUILD_PYTHON:-python3}"
@@ -494,6 +494,8 @@ build_macos() {
   [[ -d "$app" ]] || fail "macOS app was not produced"
   [[ "$(lipo -archs "$app/Contents/MacOS/AWikiMe")" == "$arch" ]] ||
     fail "macOS executable architecture mismatch"
+  awiki_sign_macos_distribution_app "$app" "$fingerprint" ||
+    fail "macOS nested Developer ID signing failed"
   codesign --verify --deep --strict --verbose=2 "$app"
   awiki_verify_macos_distribution_app \
     "$app" "$AWIKI_MACOS_DEVELOPMENT_TEAM" ai.awiki.awikime ||
