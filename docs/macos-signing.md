@@ -106,6 +106,10 @@ entitlements，最后再签外层 App。随后逐项验证 Bundle ID、Team ID�
 Hardened Runtime、时间戳、entitlements、DMG 签名、公证票据和 Gatekeeper；任一项不符合
 都不会生成最终 artifact。Android-only 打包不依赖 macOS 凭证。
 
+不同 macOS runner 的 `spctl` 会分别使用 `source=Notarized Developer ID` 或
+`origin=Developer ID Application` 报告同一个成功结论。两种格式都只在 `spctl` assessment
+成功、且前置检查已经确认精确组织 Team 和 Developer ID authority 后才被接受。
+
 最终安全时间戳由该分发签名阶段统一生成，Xcode 中间签名不重复请求时间戳服务。只有明确的
 Apple 时间戳服务瞬时不可用错误会进行有限退避重试；证书、Team、entitlements 或签名结构
 错误仍立即终止。

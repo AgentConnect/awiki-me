@@ -258,6 +258,8 @@ void main() {
       'xcrun stapler validate',
       'spctl --assess --type execute',
       'override=security disabled',
+      'source=Notarized Developer ID',
+      'origin=Developer ID Application:',
     ]) {
       expect(signing, contains(expected), reason: expected);
     }

@@ -506,9 +506,11 @@ awiki_verify_gatekeeper_app() {
       "Gatekeeper assessment is disabled on this build host and cannot attest the app"
     return 1
   fi
-  grep -Fq 'origin=Developer ID Application:' <<< "$assessment" || {
+  if ! grep -Fq 'source=Notarized Developer ID' <<< "$assessment" &&
+    ! grep -Fq 'origin=Developer ID Application:' <<< "$assessment"; then
     printf '%s\n' "$assessment" >&2
-    awiki_macos_signing_error "Gatekeeper did not report the Developer ID origin"
+    awiki_macos_signing_error \
+      "Gatekeeper did not report a notarized Developer ID source"
     return 1
-  }
+  fi
 }
