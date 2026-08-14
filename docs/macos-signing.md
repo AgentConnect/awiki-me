@@ -106,6 +106,10 @@ entitlements，最后再签外层 App。随后逐项验证 Bundle ID、Team ID�
 Hardened Runtime、时间戳、entitlements、DMG 签名、公证票据和 Gatekeeper；任一项不符合
 都不会生成最终 artifact。Android-only 打包不依赖 macOS 凭证。
 
+最终安全时间戳由该分发签名阶段统一生成，Xcode 中间签名不重复请求时间戳服务。只有明确的
+Apple 时间戳服务瞬时不可用错误会进行有限退避重试；证书、Team、entitlements 或签名结构
+错误仍立即终止。
+
 发布版本必须先写入并提交 `pubspec.yaml`，打包脚本不会再自动递增版本。脚本要求
 AWiki Me 与 sibling `awiki-cli-rs2` 都是 clean Git worktree，并把二者完整 40 位 commit
 SHA 与编译期主租户域名写入 package manifest、latest manifest 和签名 App 的

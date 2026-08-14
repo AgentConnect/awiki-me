@@ -483,7 +483,6 @@ build_macos() {
     CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
     DEVELOPMENT_TEAM="$AWIKI_MACOS_DEVELOPMENT_TEAM" \
     ENABLE_HARDENED_RUNTIME=YES \
-    OTHER_CODE_SIGN_FLAGS="--timestamp" \
     AWIKI_APP_SOURCE_REF="$APP_REF" \
     AWIKI_IM_CORE_SOURCE_REF="$CORE_REF" \
     AWIKI_PRIMARY_TENANT_DOMAIN="$PRIMARY_TENANT_DOMAIN" \
@@ -515,10 +514,11 @@ build_macos() {
     "$staged_dmg"
   hdiutil imageinfo "$staged_dmg" | grep -Fq 'Format: UDZO' ||
     fail "macOS DMG is not UDZO"
-  codesign --force \
+  awiki_codesign_with_timestamp_retry \
+    --force \
     --sign "$fingerprint" \
     --timestamp \
-    "$staged_dmg"
+    "$staged_dmg" || fail "macOS DMG signing failed"
   codesign --verify --strict --verbose=2 "$staged_dmg"
   local notarization_diagnostics="$ROOT_DIR/build/package/notary-$TARGET"
   awiki_notarize_and_staple_dmg \

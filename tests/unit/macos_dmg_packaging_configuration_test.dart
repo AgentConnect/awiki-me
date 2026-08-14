@@ -205,7 +205,7 @@ void main() {
       'awiki_sign_macos_distribution_app',
       'CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO',
       'ENABLE_HARDENED_RUNTIME=YES',
-      r'OTHER_CODE_SIGN_FLAGS="--timestamp"',
+      'awiki_codesign_with_timestamp_retry',
       'awiki_verify_macos_distribution_app',
       'awiki_notarize_and_staple_dmg',
       'awiki_verify_macos_distribution_dmg',
@@ -215,7 +215,7 @@ void main() {
     }
     _expectBefore(
       worker,
-      r'codesign --force \',
+      r'awiki_codesign_with_timestamp_retry \',
       'awiki_notarize_and_staple_dmg',
     );
     _expectBefore(
@@ -233,6 +233,7 @@ void main() {
     for (final expected in <String>[
       'Developer ID Application:',
       'awiki_codesign_distribution_item',
+      'awiki_codesign_with_timestamp_retry',
       'awiki_verify_macos_nested_distribution_code',
       "find \"\$app/Contents\" -type f -perm -111 -print0",
       "find \"\$app/Contents\" -depth -type d",
@@ -240,6 +241,8 @@ void main() {
       "-name '*.xpc'",
       '--preserve-metadata=identifier',
       '--options runtime',
+      'timestamp service unavailable; retrying codesign',
+      r'sleep $((attempt * 2))',
       'flags=0x[0-9A-Fa-f]+',
       'com.apple.security.get-task-allow',
       r"grep -Eq '^Timestamp=.+'",

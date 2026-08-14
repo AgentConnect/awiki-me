@@ -58,6 +58,30 @@ awiki_resolve_developer_id_application_identity() {
   printf '%s\n' "$fingerprint"
 }
 
+awiki_codesign_with_timestamp_retry() {
+  local attempt=1
+  local max_attempts=5
+  local output
+
+  while true; do
+    if output="$(codesign "$@" 2>&1)"; then
+      [[ -n "$output" ]] && printf '%s\n' "$output"
+      return 0
+    fi
+    [[ -n "$output" ]] && printf '%s\n' "$output" >&2
+    if [[ "$attempt" -ge "$max_attempts" ]] ||
+      ! grep -Eqi \
+        'timestamp.*(not available|unavailable|timed out|timeout|connection)' \
+        <<< "$output"; then
+      return 1
+    fi
+    printf '[macos-signing] timestamp service unavailable; retrying codesign (%s/%s)\n' \
+      "$attempt" "$max_attempts" >&2
+    sleep $((attempt * 2))
+    attempt=$((attempt + 1))
+  done
+}
+
 awiki_codesign_distribution_item() {
   local item="$1"
   local fingerprint="$2"
@@ -83,7 +107,7 @@ awiki_codesign_distribution_item() {
     rm -f "$entitlements"
   fi
 
-  codesign "${sign_args[@]}" "$item" || {
+  awiki_codesign_with_timestamp_retry "${sign_args[@]}" "$item" || {
     awiki_macos_signing_error "could not sign nested distribution code: $item"
     return 1
   }
