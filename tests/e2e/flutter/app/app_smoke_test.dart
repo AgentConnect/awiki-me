@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/desktop_startup_presentation_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
+import 'package:awiki_me/src/application/models/thread_message_patch.dart';
 import 'package:awiki_me/src/application/ports/skill_onboarding_port.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
@@ -84,6 +88,83 @@ class _ControllableMessageSyncCoordinator extends MessageSyncCoordinator {
 
   @override
   Future<void> requestSync(String reason, {bool immediate = false}) async {}
+}
+
+class _RecoveringDirectMessagingService
+    extends test_support.FakeMessagingService {
+  _RecoveringDirectMessagingService(
+    super.gateway, {
+    required this.ownerDid,
+    required this.targetDid,
+  });
+
+  final String ownerDid;
+  final String targetDid;
+  final StreamController<ThreadMessagePatch> _patches =
+      StreamController<ThreadMessagePatch>.broadcast();
+  final Completer<void> _recovery = Completer<void>();
+  int _version = 0;
+  int sendCalls = 0;
+  String? lastClientMessageId;
+  String? lastIdempotencyKey;
+
+  @override
+  Stream<ThreadMessagePatch> watchConversationTimelinePatches(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  }) => _patches.stream;
+
+  @override
+  Future<ChatMessage> sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    sendCalls += 1;
+    lastClientMessageId = clientMessageId;
+    lastIdempotencyKey = idempotencyKey;
+    final messageId = clientMessageId!;
+    final pending = ChatMessage(
+      localId: messageId,
+      remoteId: messageId,
+      conversationId: conversation.conversationId,
+      threadId: conversation.conversationId,
+      senderDid: ownerDid,
+      senderDidSnapshot: ownerDid,
+      receiverDid: targetDid,
+      content: content,
+      createdAt: DateTime.now(),
+      isMine: true,
+      sendState: MessageSendState.sending,
+    );
+    conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+      pending,
+    ];
+    _patches.add(
+      ThreadMessagePatch(
+        kind: ThreadMessagePatchKind.upsert,
+        ownerDid: ownerDid,
+        version: ++_version,
+        threadKind: 'thread',
+        threadId: conversation.conversationId,
+        conversationId: conversation.conversationId,
+        message: pending,
+      ),
+    );
+    await _recovery.future;
+    final sent = pending.copyWith(sendState: MessageSendState.sent);
+    conversationTimelineById[conversation.conversationId] = <ChatMessage>[sent];
+    return sent;
+  }
+
+  void completeRecovery() {
+    if (!_recovery.isCompleted) {
+      _recovery.complete();
+    }
+  }
+
+  Future<void> dispose() => _patches.close();
 }
 
 Future<void> _activateRuntimeSession(
@@ -1589,6 +1670,134 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     }
   });
+
+  testWidgets(
+    'Direct stale-route recovery keeps one sending bubble through the real composer',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1400, 900));
+      const session = SessionIdentity(
+        did: 'did:test:zhuocheng',
+        credentialName: 'zhuocheng',
+        handle: 'zhuocheng.awiki.ai',
+        displayName: 'zhuocheng',
+        jwtToken: 'test-jwt',
+      );
+      final conversation = ConversationSummary(
+        threadId: 'dm:peer-scope:v1:ocean-smoke',
+        conversationId: 'dm:peer-scope:v1:ocean-smoke',
+        displayName: 'Ocean',
+        lastMessagePreview: '',
+        lastMessageAt: DateTime(2026, 8, 19, 11),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:test:ocean-old',
+        targetPeer: 'ocean.awiki.ai',
+      );
+      final harness = createFakeAwikiMeAppHarness(session: session);
+      harness.gateway.conversations = <ConversationSummary>[conversation];
+      final messaging = _RecoveringDirectMessagingService(
+        harness.gateway,
+        ownerDid: session.did,
+        targetDid: conversation.targetDid!,
+      );
+      addTearDown(messaging.dispose);
+
+      try {
+        await tester.pumpWidget(
+          AwikiMeApp(
+            bootstrap: harness.bootstrap,
+            providerOverrides: <Override>[
+              ...harness.providerOverrides,
+              messagingServiceProvider.overrideWithValue(messaging),
+              conversationListProvider.overrideWith(
+                (ref) => _StaticConversationListController(
+                  ref,
+                  <ConversationSummary>[conversation],
+                ),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(AppShell), findsOneWidget);
+        await tester.tap(
+          find
+              .byKey(Key('conversation-row:${conversation.conversationId}'))
+              .first,
+        );
+        await tester.pumpAndSettle();
+
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(AppShell)),
+        );
+        final remoteHistoryCalls = harness.gateway.fetchDmHistoryCalls;
+        final timelineCalls = messaging.conversationTimelineCalls;
+        const text = '发送期间自动恢复旧路由';
+        await tester.enterText(
+          find.byKey(const Key('chat-composer-input')),
+          text,
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('chat-send-button')));
+        await _pumpSmokeFrame(tester);
+
+        expect(messaging.sendCalls, 1);
+        final messageId = messaging.lastClientMessageId;
+        expect(messageId, isNotNull);
+        expect(messaging.lastIdempotencyKey, 'op-$messageId');
+        final pending = container
+            .read(chatThreadProvider(conversation.threadId))
+            .messages;
+        expect(pending, hasLength(1));
+        expect(pending.single.localId, messageId);
+        expect(pending.single.sendState, MessageSendState.sending);
+        final bubble = find.byKey(Key('chat-message-bubble:$messageId'));
+        expect(bubble, findsOneWidget);
+        expect(
+          find.descendant(of: bubble, matching: find.text(text)),
+          findsOneWidget,
+        );
+        await tester.pump(const Duration(seconds: 3));
+        expect(
+          find.byKey(Key('chat-sending-indicator:$messageId')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('chat-local-history-hydrating-mask')),
+          findsNothing,
+        );
+        expect(harness.gateway.fetchDmHistoryCalls, remoteHistoryCalls);
+        expect(messaging.conversationTimelineCalls, timelineCalls);
+
+        messaging.completeRecovery();
+        await tester.pumpAndSettle();
+
+        final delivered = container
+            .read(chatThreadProvider(conversation.threadId))
+            .messages;
+        expect(delivered, hasLength(1));
+        expect(delivered.single.localId, messageId);
+        expect(delivered.single.sendState, MessageSendState.sent);
+        expect(bubble, findsOneWidget);
+        expect(
+          find.descendant(of: bubble, matching: find.text(text)),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(Key('chat-sending-indicator:$messageId')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('chat-local-history-hydrating-mask')),
+          findsNothing,
+        );
+        expect(harness.gateway.fetchDmHistoryCalls, remoteHistoryCalls);
+        expect(messaging.conversationTimelineCalls, timelineCalls);
+      } finally {
+        await tester.binding.setSurfaceSize(null);
+      }
+    },
+  );
 
   testWidgets(
     'UI optimization smoke keeps conversation info closed and opens Agent info popup',

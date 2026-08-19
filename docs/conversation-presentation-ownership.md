@@ -361,6 +361,10 @@ release/0710 的 legacy DID/thread/Handle alias 只允许由 Core upgrade、alia
 
 打开会话后，text/payload/attachment 首发、重试和 read/sync 都传入同一 canonical `AppConversationReadRef`；Core 用 directory 解析时写入的 owner-scoped Direct route 寻址 current DID。App 不得把 peer-scope 会话降级为 `dm:<targetDid>` write alias。`ChatThreadsController` 只从 canonical `conversationId` timeline、conversation timeline patch 或 committed projection repair 中获得更新消息。列表 preview 的 authoritative base 仍来自 `im-core` conversation summary projection；legacy alias、remote history best-effort page 或 realtime hint 都不能成为第二套 preview 真相。`ConversationListProvider` 是 recents state 的唯一发布边界，snapshot、fast-local、patch reset/upsert/remove/reorder、repair 和 read ack 都必须在发布前应用同一套 read presentation waterline；Profile/Group 展示信息在 Widget/View Provider 中组合，不回写 base summary。这个 waterline 只接受 latest message watermark 前进或 read watermark 前进；summary-only 更新不能提前清 unread，read watermark 覆盖的迟到 unread 不能重新出现，旧的 0 unread 不能清掉更新消息。真正的 read state 必须通过带 message watermark 的 `markConversationRead(AppConversationReadRef, watermark)` 提交，并以 Core 返回的 `effectiveWatermark` 确认本地持久提交；`pendingRemoteAck` 表示 Core 已完成 local-first 提交，不能被 App 误判为本地失败。
 
+Direct 正常发送只使用 Core 已持久化的 current route，不增加 Directory/WNS 请求或 UI 等待。只有 Message Service 明确返回 stale-DID target-binding 错误时，Core 才按 owner + canonical conversation 合并并发恢复，执行一次权威绑定刷新和最多一次重发；同域使用本地域 Directory + 公开 WNS 双重一致性校验，跨域只信任公开 WNS。恢复必须保持 Persona、canonical conversation、message ID、operation/idempotency ID、正文和安全模式不变，只推进 current DID route。任何已经落盘的 wire receiver DID 都是 Core 的不可变消息事实：text/payload 的 pre-send pending row 保留失败 route，attachment 若在远端接受后才首次建立消息行则记录 accepted route，后续恢复或同 logical message 重放都不能改写已有快照；Group 和其他服务错误不进入该流程。
+
+该恢复对 App 始终表现为同一次在途发送：timeline 只保留一个原 message ID 对应的 `sending` 气泡，并在 Core committed 结果到达后原位收敛为 `sent` 或 `failed`。App 不查询 Handle、不复制 Core 恢复状态机、不新增第二个 optimistic 气泡，也不通过 full conversation refresh 或 history backfill 等待恢复。手动重试 text、Mention payload 和 attachment 时必须复用原 `clientMessageId` 及首次发送的 `op-<clientMessageId>` idempotency key；attachment 的 create/upload/commit 与 Manifest 重发边界由 Core 管理。
+
 新加入设备采用 tail-only 消息语义：Agent Inventory 或显式打开只能建立 canonical Direct
 route，不能证明 Message Service 已发布 durable thread binding。空 Direct 在首次
 conversation-after 收到 `SYNC_THREAD_BINDING_REQUIRED` 时，data adapter 将稳定服务码投影为
@@ -572,6 +576,7 @@ copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
 - `tests/unit/chat_mention_composer_test.dart`：验证 draft mention range 维护、编辑失效、候选插入、本地 Profile single-flight 预热、首帧不闪现 Handle、连续 query 只使用一次 roster/Profile 请求，以及气泡按 DID 重投影但不修改原始消息。
 - `tests/unit/chat_page_test.dart`：验证聊天窗口渲染、read ack 边界、header 行为、sending indicator 的 3 秒延迟与明确终态清理等关键 widget 行为。
 - `tests/unit/chat_provider_open_test.dart`：验证打开会话 local-first conversation timeline、conversation-after/remote fallback、conversation timeline patch version gap repair、stream closed repair/re-subscribe、read ack、文本 / payload / 附件 send intent 和附件 retry 都按 `conversationId` / `AppConversationReadRef` 走主路径；其中可见群聊必须在 Controller 自身建立持久 intent，不依赖 Widget 二次回调，并覆盖在途 `seq 5 -> seq 6` 串行合并和 Core `pendingRemoteAck` local-first 成功。
+  - Direct stale-route 恢复与手动 retry 必须覆盖稳定 `clientMessageId` / `op-<clientMessageId>`、原气泡原位 `failed -> sending -> sent|failed`、Mention/附件一致性，以及不触发 full refresh/history backfill。
   - Agent pending turn 必须覆盖精确 reply correlation、多个 legacy candidate 不猜测、单 candidate 旧回复兼容、final/terminal 后迟到 running 不复活，以及 session 切换清空完成 ledger。
   - 其中 `dm:peer-scope:*`、legacy direct、old Flutter direct alias 和 handle/DID rotation 必须由 core/SDK canonical identity 收敛；App 不因 raw thread history unsupported 而把错误暴露成可见 UI 报错。
   - 身份隔离还必须覆盖 A 的 delayed local history、patch repair 和 send completion 在快速 A→B→C 后被丢弃，同时切换当下即清空旧 thread window、patch subscription 和 composer draft。
@@ -589,6 +594,7 @@ copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
 - `tests/unit/conversation_list_provider_test.dart` 还必须验证 patch-ready single-flight、订阅先于 seed、seed 期间 patch 不丢不重、stream error/close 单次重建，以及同 DID auth generation 切换后旧 patch / Profile 异步结果失效。
 - `tests/unit/data/im_core/awiki_im_core_conversation_adapter_test.dart` 与 `awiki_im_core_message_adapter_test.dart`：验证 conversation/timeline patch 的 `ownerIdentityId` 不在 SDK→App 映射中丢失，并验证产品诊断只映射脱敏 mode/count/domain/retry/time 字段。
 - `tests/e2e/flutter/app/app_smoke_test.dart`：验证真实 App UI 从完整 Handle 发起空私聊后，Core committed row 在首条消息前可见，recents 与 selected ID 始终指向同一个 canonical conversation；同时验证后台 committed Agent 消息通过系统通知 facade 投影时，标题使用 Agent inventory 的展示名。
+  - Direct stale-route UI smoke 必须通过真实 composer 约束恢复期间仅有一个稳定 message ID 的 `sending` 气泡，完成后原位变为 `sent`，且全过程不触发 history/full refresh。
 - `tests/e2e/flutter/desktop_cli_peer/flows/attachment_flow.dart`：验证不同客户端账号发送附件时，关闭会话的 unread 精确 `0 -> 1`，从 recents 打开后精确 `1 -> 0`，并在 App presentation 重建后仍从 Core local read state 恢复为 `0`，同时保留 canonical 附件、下载字节和 digest 校验。
 - `tests/e2e/flutter/desktop_cli_peer/flows/direct_message_flow.dart`：direct App + CLI peer E2E 在 CLI -> App 消息后，先等 conversation refresh 返回 `ConversationSummary`，再验证 list latest message 能在 `conversationId` 对应的 canonical timeline 中唯一出现；同正文双消息还必须在 realtime 首次可见、sync sequence 收敛、重连和重启后保持不同 canonical ID 与严格递增顺序。
 - `tests/e2e/flutter/desktop_cli_peer/flows/group_message_flow.dart`：群消息流程必须覆盖 CLI 入站后总未读 `baseline -> baseline + 1`、App 重启后 group row 仍为未读、打开群聊后 Core read watermark 提交并使 conversation unread 与总未读共同收敛回 baseline。
