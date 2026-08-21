@@ -56,6 +56,13 @@ jobs:
           token: ${{ secrets.AWIKI_CI_READ_TOKEN || github.token }}
           path: awiki-cli-rs2
 
+      - name: Checkout unified System Test coordinator
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/awiki-system-test
+          token: ${{ secrets.AWIKI_CI_READ_TOKEN || github.token }}
+          path: test-awiki-system-test
+
       - name: Record exact CLI / SDK source ref
         run: git -C awiki-cli-rs2 rev-parse HEAD | tee /tmp/awiki-cli-ref
 
@@ -68,6 +75,10 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88.0
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
 
       - name: Install Linux desktop dependencies
         run: |
@@ -135,12 +146,34 @@ jobs:
             --config /tmp/awiki-e2e-dry-run.yaml \
             --run-id gha-dry-run-${{ github.run_id }}-${{ github.run_attempt }}
 
+      - name: Run unified PR profile alongside legacy gates
+        working-directory: test-awiki-system-test
+        env:
+          AWIKI_SQLITE3_SOURCE_DIR: /tmp/awiki-sqlite3
+        run: |
+          uv sync --locked
+          export AWIKI_CLI_SOURCE_REF="$(cat /tmp/awiki-cli-ref)"
+          uv run --no-sync awiki-test \
+            --profile pr \
+            --app-root ../test-awiki-me \
+            --cli-root ../awiki-cli-rs2 \
+            --run-id gha-pr-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Upload deterministic reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: awiki-me-deterministic-${{ github.run_id }}-${{ github.run_attempt }}
           path: test-awiki-me/.e2e/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload unified profile report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: awiki-unified-pr-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-awiki-system-test/.artifacts/awiki-test/
           if-no-files-found: error
           retention-days: 14
 
