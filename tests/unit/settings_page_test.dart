@@ -2,6 +2,7 @@ import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/desktop_window_placement_service.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -1231,6 +1232,16 @@ void main() {
               'bootstrap_public_key_b64u':
                   'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
               'bootstrap_key_algorithm': 'x25519',
+              'config_summary': <String, Object?>{
+                'delegated_subkey_proposal': <String, Object?>{
+                  'schema': userSubkeyPackageSchema,
+                  'user_did': 'did:human:me',
+                  'verification_method': 'did:human:me#daemon-key-1',
+                  'key_type': 'Multikey/Ed25519',
+                  'key_algorithm': 'Ed25519',
+                  'public_key_multibase': 'zPublic',
+                },
+              },
             },
           ),
         ),
@@ -1270,7 +1281,7 @@ void main() {
     await tester.tap(find.text('启用个人助理'));
     await tester.pumpAndSettle();
 
-    expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
+    expect(identities.lastAuthorizedDaemonSubkeySelector, 'default');
     expect(control.lastBootstrapDaemonDid, 'did:agent:daemon');
     expect(control.lastBootstrapControllerDid, 'did:human:me');
     expect(
@@ -1324,7 +1335,7 @@ void main() {
     expect(find.text('Personal Agent'), findsNothing);
     expect(find.text('实验功能关闭'), findsNothing);
     expect(find.text('个人助理'), findsNothing);
-    expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+    expect(identities.lastAuthorizedDaemonSubkeySelector, isNull);
     expect(control.lastBootstrapDaemonDid, isNull);
   });
 
@@ -1371,7 +1382,7 @@ void main() {
     await tester.tap(find.text('启用个人助理'));
     await tester.pumpAndSettle();
 
-    expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+    expect(identities.lastAuthorizedDaemonSubkeySelector, isNull);
     expect(control.lastBootstrapDaemonDid, isNull);
   });
 

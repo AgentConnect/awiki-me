@@ -10,6 +10,7 @@ import '../../application/agent/agent_control_service.dart';
 import '../../application/agent/agent_control_status_store.dart';
 import '../../application/models/product_local_models.dart';
 import '../../application/ports/agent_inventory_port.dart';
+import '../../application/ports/identity_core_port.dart';
 import '../../core/app_error_classifier.dart';
 import '../../core/performance_logger.dart';
 import '../../data/agent/user_service_agent_inventory_adapter.dart';
@@ -48,6 +49,8 @@ const agentPersonalAgentRevokeActionTimeout = Duration(seconds: 75);
 const agentStatusQueryPollInterval = Duration(milliseconds: 700);
 const agentStatusQueryPollAttempts = 18;
 const agentStatusPayloadLookupTimeout = Duration(milliseconds: 1200);
+const agentDaemonSubkeyProposalWaitTimeout = Duration(seconds: 12);
+const agentDaemonSubkeyProposalPollInterval = Duration(milliseconds: 200);
 const agentDeletionRefreshAttempts = 4;
 const agentDeletionRefreshDelay = Duration(seconds: 2);
 const agentDaemonEffectiveStatusFreshnessWindow = Duration(minutes: 10);
@@ -1385,11 +1388,21 @@ class AgentsController extends StateNotifier<AgentsState> {
     await _runAction(
       AgentActionKeys.bootstrapPersonalAgent(daemonDid),
       (operation) async {
-        final subkeyPackage =
+        final identityPort = ref.read(identityCorePortProvider);
+        if (identityPort is! DaemonSubkeyAuthorizationCorePort) {
+          throw UnsupportedError(
+            'The identity SDK does not support public daemon subkey authorization.',
+          );
+        }
+        final authorizationPort =
+            identityPort as DaemonSubkeyAuthorizationCorePort;
+        final proposal =
             userSubkeyPackage ??
-            await ref
-                .read(identityCorePortProvider)
-                .ensureDaemonSubkeyPackage(session.credentialName);
+            await _resolveDaemonSubkeyProposal(daemonDid, operation);
+        final subkeyPackage = await authorizationPort.authorizeDaemonSubkey(
+          session.credentialName,
+          proposal,
+        );
         if (!_isOwnerOperationCurrent(operation)) {
           return;
         }
@@ -1423,6 +1436,40 @@ class AgentsController extends StateNotifier<AgentsState> {
       timeout: agentPersonalAgentBootstrapActionTimeout,
       expectedOperation: ownerOperation,
     );
+  }
+
+  Future<UserSubkeyPackage> _resolveDaemonSubkeyProposal(
+    String daemonDid,
+    _AgentsOwnerOperation operation,
+  ) async {
+    final current = _daemonSubkeyProposal(_agentByDid(daemonDid));
+    if (current != null) {
+      return current;
+    }
+    await refreshDaemonStatus(daemonDid);
+    final deadline = DateTime.now().add(agentDaemonSubkeyProposalWaitTimeout);
+    while (_isOwnerOperationCurrent(operation) &&
+        DateTime.now().isBefore(deadline)) {
+      final proposal = _daemonSubkeyProposal(_agentByDid(daemonDid));
+      if (proposal != null) {
+        return proposal;
+      }
+      await Future<void>.delayed(agentDaemonSubkeyProposalPollInterval);
+    }
+    throw StateError('Daemon delegated subkey proposal is not available.');
+  }
+
+  UserSubkeyPackage? _daemonSubkeyProposal(AgentSummary? daemon) {
+    if (daemon == null) {
+      return null;
+    }
+    try {
+      return UserSubkeyPackage.fromDaemonDiagnostics(
+        daemon.latest.diagnosticsSummary,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<bool> upgradeDaemon(String daemonDid) async {

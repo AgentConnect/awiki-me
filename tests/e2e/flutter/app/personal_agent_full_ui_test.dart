@@ -108,6 +108,16 @@ void main() {
             'bootstrap_public_key_b64u':
                 'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
             'bootstrap_key_algorithm': 'x25519',
+            'config_summary': <String, Object?>{
+              'delegated_subkey_proposal': <String, Object?>{
+                'schema': userSubkeyPackageSchema,
+                'user_did': 'did:test:me',
+                'verification_method': 'did:test:me#daemon-key-1',
+                'key_type': 'Multikey/Ed25519',
+                'key_algorithm': 'Ed25519',
+                'public_key_multibase': 'zPublic',
+              },
+            },
           },
         ),
       ),
@@ -1869,7 +1879,8 @@ class _UiPersonalAgentBindingPort implements PersonalAgentBindingPort {
   }
 }
 
-class _UiIdentityCorePort implements IdentityCorePort {
+class _UiIdentityCorePort
+    implements IdentityCorePort, DaemonSubkeyAuthorizationCorePort {
   final List<String> calls = <String>[];
 
   @override
@@ -1908,15 +1919,12 @@ class _UiIdentityCorePort implements IdentityCorePort {
   }
 
   @override
-  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
+  Future<UserSubkeyPackage> authorizeDaemonSubkey(
     String identityIdOrAlias,
+    UserSubkeyPackage proposal,
   ) async {
-    return const UserSubkeyPackage(
-      userDid: 'did:test:me',
-      verificationMethod: 'did:test:me#daemon-key-1',
-      publicKeyMultibase: 'zPublic',
-      privateKeyMultibase: 'zPrivate',
-    );
+    calls.add('authorize:$identityIdOrAlias');
+    return proposal;
   }
 
   @override
@@ -1931,11 +1939,6 @@ class _UiIdentityCorePort implements IdentityCorePort {
   Future<List<AppSession>> listLocalIdentities() async => <AppSession>[
     (await defaultIdentity())!,
   ];
-
-  @override
-  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias) {
-    return ensureDaemonSubkeyPackage(identityIdOrAlias);
-  }
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {

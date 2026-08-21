@@ -2225,7 +2225,7 @@ void main() {
       expect(find.text('运行 Daemon 内创建 Hermes runtime'), findsNothing);
       expect(find.text('等待刷新状态'), findsOneWidget);
       expect(find.text('启用个人助理'), findsNothing);
-      expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+      expect(identities.lastAuthorizedDaemonSubkeySelector, isNull);
       expect(control.lastBootstrapDaemonDid, isNull);
       expect(find.textContaining('尚未上报安全 bootstrap 公钥'), findsNothing);
     },

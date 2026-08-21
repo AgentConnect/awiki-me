@@ -40,10 +40,6 @@ abstract interface class IdentityCorePort {
 
   Future<SessionAccountBinding> activeSyncAccountBinding();
 
-  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias);
-
-  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(String identityIdOrAlias);
-
   Future<DaemonSubkeyAuthorizationRevokeResult> revokeDaemonSubkeyAuthorization(
     String identityIdOrAlias,
   );
@@ -70,6 +66,13 @@ abstract interface class IdentityCorePort {
     String? inviteCode,
     String? displayName,
   });
+}
+
+abstract interface class DaemonSubkeyAuthorizationCorePort {
+  Future<UserSubkeyPackage> authorizeDaemonSubkey(
+    String identityIdOrAlias,
+    UserSubkeyPackage proposal,
+  );
 }
 
 abstract interface class LocalIdentityDataDeletionPort {
