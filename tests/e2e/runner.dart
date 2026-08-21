@@ -12,8 +12,15 @@ import 'host_platform.dart';
 import 'performance_contract.dart';
 import 'prepared_integration_process.dart';
 import 'remote_multi_device_join_contract.dart';
+import 'runner/failure.dart';
+import 'runner/flutter_build_isolation.dart';
+import 'runner/platform.dart';
 import '../../tool/ensure_linux_im_core.dart';
 import '../../tool/isolated_e2e_app_builder.dart' show directorySha256;
+
+export 'runner/failure.dart';
+export 'runner/flutter_build_isolation.dart';
+export 'runner/platform.dart';
 
 const String _defaultDesktopE2eConfigPath = 'tests/e2e/configs/e2e.local.yaml';
 const String _desktopE2eSuiteManifestPath = 'tests/e2e/suite_manifest.json';
@@ -4616,120 +4623,6 @@ Future<T> _withFlutterExecutionLease<T>(
   }
 }
 
-/// Keeps Flutter integration-test products away from the normal `build/`
-/// directory so a test host can never replace the developer-launchable App.
-class DesktopFlutterBuildIsolation {
-  DesktopFlutterBuildIsolation({
-    required this.root,
-    required this.platform,
-    String? userHome,
-  }) : userHome = userHome ?? Platform.environment['HOME'];
-
-  final Directory root;
-  final DesktopE2ePlatform platform;
-  final String? userHome;
-
-  String get buildDirectory => '.e2e/flutter-build/${platform.name}';
-
-  Directory get configDirectory =>
-      Directory('${root.path}/.e2e/flutter-config/${platform.name}');
-
-  File get settingsFile => File('${configDirectory.path}/settings');
-
-  Map<String, String> get environment => <String, String>{
-    'XDG_CONFIG_HOME': configDirectory.path,
-  };
-
-  Link? prepareLinuxNativeAssetsCompatibility({required bool dryRun}) {
-    if (dryRun || platform != DesktopE2ePlatform.linux) {
-      return null;
-    }
-    final target = Directory('${root.path}/$buildDirectory/linux')
-      ..createSync(recursive: true);
-    final link = Link('${root.path}/build/linux');
-    final type = FileSystemEntity.typeSync(link.path, followLinks: false);
-    if (type != FileSystemEntityType.notFound) {
-      if (type != FileSystemEntityType.link ||
-          link.targetSync() != target.absolute.path) {
-        throw E2eFailure(
-          'Flutter E2E native-assets compatibility refuses to replace '
-          '${link.path}.',
-        );
-      }
-      return link;
-    }
-    link.parent.createSync(recursive: true);
-    link.createSync(target.absolute.path);
-    return link;
-  }
-
-  void removeLinuxNativeAssetsCompatibility(Link? link) {
-    if (link == null ||
-        FileSystemEntity.typeSync(link.path, followLinks: false) !=
-            FileSystemEntityType.link) {
-      return;
-    }
-    final expected = Directory(
-      '${root.path}/$buildDirectory/linux',
-    ).absolute.path;
-    if (link.targetSync() == expected) {
-      link.deleteSync();
-    }
-  }
-
-  void prepare({required bool dryRun}) {
-    if (dryRun) {
-      return;
-    }
-    final home = userHome?.trim();
-    if (home != null && home.isNotEmpty) {
-      final legacySettings = File('$home/.flutter_settings');
-      if (legacySettings.existsSync()) {
-        throw E2eFailure(
-          'Flutter E2E build isolation cannot override the legacy '
-          '${legacySettings.path} config. Move it to the XDG Flutter config '
-          'location before running E2E so the normal build/ App remains safe.',
-        );
-      }
-    }
-
-    final settings = <String, Object?>{};
-    if (settingsFile.existsSync()) {
-      try {
-        final decoded = jsonDecode(settingsFile.readAsStringSync());
-        if (decoded is! Map) {
-          throw const FormatException('Flutter settings must be an object.');
-        }
-        settings.addAll(
-          decoded.map((key, value) => MapEntry(key.toString(), value)),
-        );
-      } on Object catch (error) {
-        throw E2eFailure(
-          'Could not load isolated Flutter E2E settings: '
-          '${error.runtimeType}.',
-        );
-      }
-    }
-    settings['build-dir'] = buildDirectory;
-    switch (platform) {
-      case DesktopE2ePlatform.macos:
-        settings['enable-macos-desktop'] = true;
-        break;
-      case DesktopE2ePlatform.linux:
-        settings['enable-linux-desktop'] = true;
-        break;
-    }
-
-    configDirectory.createSync(recursive: true);
-    final temporary = File('${settingsFile.path}.tmp');
-    temporary.writeAsStringSync(
-      const JsonEncoder.withIndent('  ').convert(settings),
-      flush: true,
-    );
-    temporary.renameSync(settingsFile.path);
-  }
-}
-
 class DesktopCommandTimeout extends E2eFailure {
   DesktopCommandTimeout({
     required this.executable,
@@ -6460,31 +6353,6 @@ enum DesktopE2eCase {
   }
 }
 
-enum DesktopE2ePlatform {
-  macos,
-  linux;
-
-  static DesktopE2ePlatform fromHost() {
-    if (Platform.isMacOS) {
-      return DesktopE2ePlatform.macos;
-    }
-    if (Platform.isLinux) {
-      return DesktopE2ePlatform.linux;
-    }
-    throw E2eFailure('Only macOS and Linux desktop E2E are supported.');
-  }
-
-  static DesktopE2ePlatform parse(String value) {
-    return switch (value.trim().toLowerCase()) {
-      'macos' => DesktopE2ePlatform.macos,
-      'linux' => DesktopE2ePlatform.linux,
-      _ => throw E2eFailure(
-        'Unsupported desktop platform "$value". Use macos or linux.',
-      ),
-    };
-  }
-}
-
 class DesktopSecretRedactor {
   DesktopSecretRedactor(Iterable<String> secrets)
     : _secrets =
@@ -6552,15 +6420,6 @@ class DesktopTimingEntry {
   final String name;
   final Duration elapsed;
   final bool succeeded;
-}
-
-class E2eFailure implements Exception {
-  E2eFailure(this.message);
-
-  final String message;
-
-  @override
-  String toString() => message;
 }
 
 String? _stringAt(Map<String, Object?> map, String key) {
