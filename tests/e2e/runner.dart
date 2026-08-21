@@ -1099,7 +1099,7 @@ class DesktopE2eRunner {
       if (pairConfig.platform == DesktopE2ePlatform.linux) {
         await commands.requireExecutable('xvfb-run');
         await commands.requireFile('tool/ensure_linux_im_core.dart');
-        if (!options.dryRun && !commands.dryRun && !options.prepareOnly) {
+        if (!options.dryRun && !commands.dryRun) {
           await LinuxImCoreArtifactGuard(projectRoot: root).ensure();
         }
       }
@@ -1154,10 +1154,28 @@ class DesktopE2eRunner {
     });
 
     if (options.prepareOnly) {
+      if (options.dryRun || commands.dryRun) {
+        _line('would build and validate isolated admin and joiner Apps');
+      } else {
+        await _withFlutterExecutionLease(pairConfig.platform, runId, () async {
+          final competingPids = await competingFlutterIntegrationTestPids();
+          if (competingPids.isNotEmpty) {
+            throw E2eFailure(
+              'Another Flutter integration test is already running '
+              '(pids=${competingPids.join(',')}); refusing to share the '
+              'desktop build environment.',
+            );
+          }
+          await _buildAndValidateAppPairRoles(
+            flutterBin: flutterBin,
+            platform: pairConfig.platform,
+          );
+        });
+      }
       _section('Prepare-only completed');
       _line(
-        'No App was built or launched because the loopback coordinator is '
-        'created only for an executing pair.',
+        'Both isolated App roles were prepared; no coordinator, App process, '
+        'or remote account was created.',
       );
       return;
     }
@@ -1187,26 +1205,10 @@ class DesktopE2eRunner {
         _RunningIsolatedApp? joinerApp;
         try {
           await _writeAppPairRunConfig(pairConfig, coordinator, token);
-          final adminArtifact = await _buildAppPairRole(
-            role: 'admin',
-            bundleId: 'ai.awiki.awikime.dev.e2e.pair.admin',
+          final artifacts = await _buildAndValidateAppPairRoles(
             flutterBin: flutterBin,
             platform: pairConfig.platform,
           );
-          final joinerArtifact = await _buildAppPairRole(
-            role: 'joiner',
-            bundleId: 'ai.awiki.awikime.dev.e2e.pair.joiner',
-            flutterBin: flutterBin,
-            platform: pairConfig.platform,
-          );
-          if (adminArtifact.bundleId == joinerArtifact.bundleId ||
-              adminArtifact.executable.path == joinerArtifact.executable.path ||
-              appPairAdminStateRootDir.path == appPairJoinerStateRootDir.path) {
-            throw E2eFailure(
-              'The two App roles did not receive independent bundle, '
-              'artifact, and state identities.',
-            );
-          }
           final productEnvironment = <String, String>{
             _multiDeviceRemoteJoinGateEnv: '1',
             'AWIKI_MULTI_DEVICE_APP_PAIR_CONFIG': appPairRunConfigFile.path,
@@ -1231,13 +1233,13 @@ class DesktopE2eRunner {
           };
           adminApp = await _RunningIsolatedApp.start(
             role: 'admin',
-            artifact: adminArtifact,
+            artifact: artifacts.admin,
             environment: productEnvironment,
             platform: pairConfig.platform,
           );
           joinerApp = await _RunningIsolatedApp.start(
             role: 'joiner',
-            artifact: joinerArtifact,
+            artifact: artifacts.joiner,
             environment: productEnvironment,
             platform: pairConfig.platform,
           );
@@ -1382,6 +1384,40 @@ class DesktopE2eRunner {
       '--dart-define=AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=$role',
     ], timeout: const Duration(minutes: 12));
     return _IsolatedAppArtifact.fromBuilderOutput(result.output);
+  }
+
+  Future<({_IsolatedAppArtifact admin, _IsolatedAppArtifact joiner})>
+  _buildAndValidateAppPairRoles({
+    required String flutterBin,
+    required DesktopE2ePlatform platform,
+  }) async {
+    final admin = await _timed(
+      'Building isolated App-pair admin artifact',
+      () => _buildAppPairRole(
+        role: 'admin',
+        bundleId: 'ai.awiki.awikime.dev.e2e.pair.admin',
+        flutterBin: flutterBin,
+        platform: platform,
+      ),
+    );
+    final joiner = await _timed(
+      'Building isolated App-pair joiner artifact',
+      () => _buildAppPairRole(
+        role: 'joiner',
+        bundleId: 'ai.awiki.awikime.dev.e2e.pair.joiner',
+        flutterBin: flutterBin,
+        platform: platform,
+      ),
+    );
+    if (admin.bundleId == joiner.bundleId ||
+        admin.executable.path == joiner.executable.path ||
+        appPairAdminStateRootDir.path == appPairJoinerStateRootDir.path) {
+      throw E2eFailure(
+        'The two App roles did not receive independent bundle, artifact, '
+        'and state identities.',
+      );
+    }
+    return (admin: admin, joiner: joiner);
   }
 
   Future<void> _driveAppPair({
