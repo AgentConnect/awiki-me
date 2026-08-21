@@ -2442,6 +2442,7 @@ cliPeer:
       expect(decoded['platform'], Platform.isLinux ? 'linux' : 'macos');
       expect(decoded['caseIds'], <dynamic>[
         'AGENT-NOTIFY-SMOKE-E2E-001',
+        'AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001',
         'SMOKE-E2E-001',
         'NATIVE-E2E-001',
       ]);
