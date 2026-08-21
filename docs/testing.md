@@ -877,13 +877,15 @@ context-specific primary/identity policy; it is not a substitute
 for the remaining DID-only remote case.
 
 Suite `timeoutMinutes` must be greater than or equal to `estimatedMinutes`.
-The full product suite uses a 30-minute runner budget and a 29-minute Flutter
-scenario budget so framework teardown remains bounded without terminating the
-declared 25-minute product flow early.
+The current `full` suite declares 25 active cases, a 40-minute estimate, and a
+45-minute runner/Flutter timeout. These values come from
+`tests/e2e/suite_manifest.json`; documentation must not maintain a second
+hand-written budget.
 
-The v8 `awiki.info` `full` evidence
-`fixed-full-committed-20260717160000` passes all 24 declared cases with verified
-schema-v2 attestation. It closes the earlier v7 red evidence by preserving two
+The historical v8 `awiki.info` `full` evidence
+`fixed-full-committed-20260717160000` passed the 24 cases declared by that older
+manifest revision with verified schema-v2 attestation. It is regression history,
+not evidence for the current 25-case suite. It closed the earlier v7 red evidence by preserving two
 same-body canonical messages during realtime delivery, converging them to
 strictly increasing `serverSequence`, keeping hidden-burst order exact, and
 persisting the newest visible Direct read watermark even when navigation held
