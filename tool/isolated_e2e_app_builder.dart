@@ -392,24 +392,37 @@ class IsolatedE2eAppBuilder {
       );
     }
 
-    final build = await Process.run(
-      request.flutterBin,
-      plan.flutterArguments,
-      workingDirectory: request.projectRoot.path,
-      environment: <String, String>{
-        ...Platform.environment,
-        'LANG': request.platform == IsolatedE2eAppPlatform.macos
-            ? 'en_US.UTF-8'
-            : 'C.UTF-8',
-        'LC_ALL': request.platform == IsolatedE2eAppPlatform.macos
-            ? 'en_US.UTF-8'
-            : 'C.UTF-8',
-        'XDG_CONFIG_HOME': plan.flutterConfigDirectory.path,
-        if (request.platform == IsolatedE2eAppPlatform.macos)
-          'XCODE_XCCONFIG_FILE': plan.overrideConfig.path,
-      },
-      runInShell: false,
+    final linuxNativeAssetsLink = prepareIsolatedLinuxNativeAssetsCompatibility(
+      projectRoot: request.projectRoot,
+      buildDirectory: plan.buildDirectory,
+      platform: request.platform,
     );
+    late final ProcessResult build;
+    try {
+      build = await Process.run(
+        request.flutterBin,
+        plan.flutterArguments,
+        workingDirectory: request.projectRoot.path,
+        environment: <String, String>{
+          ...Platform.environment,
+          'LANG': request.platform == IsolatedE2eAppPlatform.macos
+              ? 'en_US.UTF-8'
+              : 'C.UTF-8',
+          'LC_ALL': request.platform == IsolatedE2eAppPlatform.macos
+              ? 'en_US.UTF-8'
+              : 'C.UTF-8',
+          'XDG_CONFIG_HOME': plan.flutterConfigDirectory.path,
+          if (request.platform == IsolatedE2eAppPlatform.macos)
+            'XCODE_XCCONFIG_FILE': plan.overrideConfig.path,
+        },
+        runInShell: false,
+      );
+    } finally {
+      removeIsolatedLinuxNativeAssetsCompatibility(
+        linuxNativeAssetsLink,
+        buildDirectory: plan.buildDirectory,
+      );
+    }
     if (build.exitCode != 0 || !plan.sourceApp.existsSync()) {
       throw IsolatedE2eAppBuildException(
         'The isolated Debug App build failed for ${request.name}.'
@@ -611,6 +624,9 @@ Future<String> trackedBuildInputsSha256(
     '--',
     'lib',
     'integration_test',
+    'tests/e2e',
+    'tests/unit',
+    'test_driver',
     platform.name,
     'pubspec.yaml',
     'pubspec.lock',
@@ -785,6 +801,7 @@ Future<void> _copyAppDirectory({
   required Directory destination,
   required IsolatedE2eAppPlatform platform,
 }) async {
+  destination.parent.createSync(recursive: true);
   final copy = platform == IsolatedE2eAppPlatform.macos
       ? await Process.run('/usr/bin/ditto', <String>[
           source.path,
@@ -818,6 +835,46 @@ class IsolatedE2eAppBuildException implements Exception {
   const IsolatedE2eAppBuildException(this.message);
 
   final String message;
+}
+
+Link? prepareIsolatedLinuxNativeAssetsCompatibility({
+  required Directory projectRoot,
+  required Directory buildDirectory,
+  required IsolatedE2eAppPlatform platform,
+}) {
+  if (platform != IsolatedE2eAppPlatform.linux) return null;
+  final target = Directory('${buildDirectory.path}/linux')
+    ..createSync(recursive: true);
+  final link = Link('${projectRoot.path}/build/linux');
+  final type = FileSystemEntity.typeSync(link.path, followLinks: false);
+  if (type != FileSystemEntityType.notFound) {
+    if (type != FileSystemEntityType.link ||
+        link.targetSync() != target.absolute.path) {
+      throw IsolatedE2eAppBuildException(
+        'Isolated App native-assets compatibility refuses to replace '
+        '${link.path}.',
+      );
+    }
+    return link;
+  }
+  link.parent.createSync(recursive: true);
+  link.createSync(target.absolute.path);
+  return link;
+}
+
+void removeIsolatedLinuxNativeAssetsCompatibility(
+  Link? link, {
+  required Directory buildDirectory,
+}) {
+  if (link == null ||
+      FileSystemEntity.typeSync(link.path, followLinks: false) !=
+          FileSystemEntityType.link) {
+    return;
+  }
+  if (link.targetSync() ==
+      Directory('${buildDirectory.path}/linux').absolute.path) {
+    link.deleteSync();
+  }
 }
 
 Directory _validatedRoot(

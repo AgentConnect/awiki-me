@@ -135,6 +135,48 @@ void main() {
     }
   });
 
+  test('Linux native-assets compatibility link is bounded and temporary', () {
+    final project = Directory.systemTemp.createTempSync(
+      'awiki_isolated_native_assets_link_test_',
+    );
+    addTearDown(() => project.delete(recursive: true));
+    final isolatedBuild = Directory('${project.path}/work/flutter-build');
+
+    final link = prepareIsolatedLinuxNativeAssetsCompatibility(
+      projectRoot: project,
+      buildDirectory: isolatedBuild,
+      platform: IsolatedE2eAppPlatform.linux,
+    );
+
+    expect(link, isNotNull);
+    expect(link!.targetSync(), '${isolatedBuild.absolute.path}/linux');
+    removeIsolatedLinuxNativeAssetsCompatibility(
+      link,
+      buildDirectory: isolatedBuild,
+    );
+    expect(
+      FileSystemEntity.typeSync(link.path, followLinks: false),
+      FileSystemEntityType.notFound,
+    );
+  });
+
+  test('Linux native-assets compatibility refuses a real default build', () {
+    final project = Directory.systemTemp.createTempSync(
+      'awiki_isolated_native_assets_refusal_test_',
+    );
+    addTearDown(() => project.delete(recursive: true));
+    Directory('${project.path}/build/linux').createSync(recursive: true);
+
+    expect(
+      () => prepareIsolatedLinuxNativeAssetsCompatibility(
+        projectRoot: project,
+        buildDirectory: Directory('${project.path}/work/flutter-build'),
+        platform: IsolatedE2eAppPlatform.linux,
+      ),
+      throwsA(isA<IsolatedE2eAppBuildException>()),
+    );
+  });
+
   test('builder rejects non-integration and path-traversal targets', () {
     expect(
       () => IsolatedE2eAppBuildRequest.parse(<String>[
