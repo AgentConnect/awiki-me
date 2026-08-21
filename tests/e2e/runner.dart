@@ -964,19 +964,18 @@ class DesktopE2eRunner {
         <String>[
           'test',
           '--dart-define=AWIKI_E2E=true',
-          '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
           '--dart-define=AWIKI_HANDLE_RECOVERY_E2E_PHASE=crash_a',
           '--dart-define=AWIKI_E2E_HANDLE_RECOVERY_CRASH_BEFORE_PRODUCT_RESET=true',
           'integration_test/handle_recovery_ui_test.dart',
           '-d',
           platform.name,
-          ..._caseAttestationDartDefines(<String>[
-            if (!localDataOnly) 'HANDLE-RECOVERY-V1-E2E-002',
-            if (localDataOnly) 'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
-          ]),
         ],
         platform: platform,
         timeout: suiteDefinition.timeout,
+        runtimeCaseIds: <String>[
+          if (!localDataOnly) 'HANDLE-RECOVERY-V1-E2E-002',
+          if (localDataOnly) 'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
+        ],
       );
     });
     if (!options.dryRun && !processRestartHandoffFile.existsSync()) {
@@ -989,18 +988,17 @@ class DesktopE2eRunner {
         <String>[
           'test',
           '--dart-define=AWIKI_E2E=true',
-          '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
           '--dart-define=AWIKI_HANDLE_RECOVERY_E2E_PHASE=crash_b',
           'integration_test/handle_recovery_ui_test.dart',
           '-d',
           platform.name,
-          ..._caseAttestationDartDefines(<String>[
-            if (!localDataOnly) 'HANDLE-RECOVERY-V1-E2E-002',
-            if (localDataOnly) 'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
-          ]),
         ],
         platform: platform,
         timeout: suiteDefinition.timeout,
+        runtimeCaseIds: <String>[
+          if (!localDataOnly) 'HANDLE-RECOVERY-V1-E2E-002',
+          if (localDataOnly) 'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
+        ],
       );
     });
     if (localDataOnly) return;
@@ -1037,17 +1035,16 @@ class DesktopE2eRunner {
           <String>[
             'test',
             '--dart-define=AWIKI_E2E=true',
-            '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
             '--dart-define=AWIKI_HANDLE_RECOVERY_E2E_PHASE=fresh_restart',
             'integration_test/handle_recovery_ui_test.dart',
             '-d',
             platform.name,
-            ..._caseAttestationDartDefines(const <String>[
-              'HANDLE-RECOVERY-FRESH-RESTART-E2E-001',
-            ]),
           ],
           platform: platform,
           timeout: suiteDefinition.timeout,
+          runtimeCaseIds: const <String>[
+            'HANDLE-RECOVERY-FRESH-RESTART-E2E-001',
+          ],
         );
       });
     } catch (error) {
@@ -2031,11 +2028,9 @@ class DesktopE2eRunner {
         <String>[
           'test',
           '--dart-define=AWIKI_E2E=true',
-          '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
           'integration_test/desktop_cli_peer_restart_phase_a_test.dart',
           '-d',
           peerConfig.platform.name,
-          ..._caseAttestationDartDefines(suiteDefinition.caseIds),
         ],
         platform: peerConfig.platform,
         timeout: _effectiveFlutterTimeout(peerConfig),
@@ -2049,11 +2044,9 @@ class DesktopE2eRunner {
         <String>[
           'test',
           '--dart-define=AWIKI_E2E=true',
-          '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
           'integration_test/desktop_cli_peer_restart_phase_b_test.dart',
           '-d',
           peerConfig.platform.name,
-          ..._caseAttestationDartDefines(suiteDefinition.caseIds),
         ],
         platform: peerConfig.platform,
         timeout: _effectiveFlutterTimeout(peerConfig),
@@ -2067,11 +2060,9 @@ class DesktopE2eRunner {
         <String>[
           'test',
           '--dart-define=AWIKI_E2E=true',
-          '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
           'integration_test/desktop_cli_peer_credential_delete_phase_c_test.dart',
           '-d',
           peerConfig.platform.name,
-          ..._caseAttestationDartDefines(suiteDefinition.caseIds),
         ],
         platform: peerConfig.platform,
         timeout: _effectiveFlutterTimeout(peerConfig),
@@ -2081,7 +2072,6 @@ class DesktopE2eRunner {
     final flutterArgs = <String>[
       'test',
       '--dart-define=AWIKI_E2E=true',
-      '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
       ..._multiDeviceProductDartDefines(peerConfig.e2eCase),
       if (peerConfig.e2eCase == DesktopE2eCase.personalAgent) ...<String>[
         '--plain-name',
@@ -2090,7 +2080,6 @@ class DesktopE2eRunner {
       peerConfig.e2eCase.testFile,
       '-d',
       peerConfig.platform.name,
-      ..._caseAttestationDartDefines(suiteDefinition.caseIds),
     ];
     _resourceSideEffectsPossible = true;
     await _runFlutterArgs(
@@ -2207,28 +2196,23 @@ class DesktopE2eRunner {
       <String>[
         'test',
         '--dart-define=AWIKI_E2E=true',
-        '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${(appStateRoot ?? appStateRootDir).path}',
         testFile,
         '-d',
         platform.name,
-        ..._caseAttestationDartDefines(caseIds),
       ],
       platform: platform,
       timeout: suiteDefinition.timeout,
+      runtimeCaseIds: caseIds,
+      runtimeAppStateRoot: appStateRoot,
     );
   }
-
-  List<String> _caseAttestationDartDefines(List<String> caseIds) => <String>[
-    '--dart-define=$e2eCaseAttestationPathDefine=${caseAttestationFile.path}',
-    '--dart-define=$e2eCaseScenarioDefine=${options.e2eCase.scenario}',
-    '--dart-define=$e2eCaseRunIdDefine=$runId',
-    '--dart-define=$e2eCaseIdsDefine=${caseIds.join(',')}',
-  ];
 
   Future<void> _runFlutterArgs(
     List<String> flutterArgs, {
     required DesktopE2ePlatform platform,
     Duration timeout = const Duration(minutes: 5),
+    List<String>? runtimeCaseIds,
+    Directory? runtimeAppStateRoot,
   }) async {
     await _withFlutterExecutionLease(platform, runId, () async {
       flutterBuildIsolation.prepare(dryRun: options.dryRun || commands.dryRun);
@@ -2248,6 +2232,12 @@ class DesktopE2eRunner {
       final environment = <String, String>{
         'LANG': locale,
         'LC_ALL': locale,
+        'AWIKI_E2E_APP_STATE_ROOT':
+            (runtimeAppStateRoot ?? appStateRootDir).path,
+        e2eCaseAttestationPathDefine: caseAttestationFile.path,
+        e2eCaseScenarioDefine: options.e2eCase.scenario,
+        e2eCaseRunIdDefine: runId,
+        e2eCaseIdsDefine: (runtimeCaseIds ?? suiteDefinition.caseIds).join(','),
         ...flutterBuildIsolation.environment,
         if (config?.e2eCase == DesktopE2eCase.full) ...const <String, String>{
           _multiDeviceRemoteJoinGateEnv: '1',

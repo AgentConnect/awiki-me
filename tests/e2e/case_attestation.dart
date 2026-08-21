@@ -503,7 +503,7 @@ class E2eCaseAttestationWriter {
         runId.trim().isEmpty ||
         encodedCaseIds.trim().isEmpty) {
       throw StateError(
-        'Runner-owned E2E case attestation requires the complete dart-define set.',
+        'Runner-owned E2E case attestation requires the complete runtime invocation set.',
       );
     }
     final expectedCaseIds = encodedCaseIds

@@ -2392,7 +2392,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d linux',
         ),
       );
       expect(log, contains('would write Flutter E2E run config: <redacted>'));
@@ -2449,26 +2449,26 @@ cliPeer:
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/app_smoke_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/app_smoke_test.dart -d linux',
           ),
         );
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/im_core_open_smoke_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/im_core_open_smoke_test.dart -d linux',
           ),
         );
       } else {
         expect(
           log,
           contains(
-            r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/app_smoke_test.dart -d macos',
+            r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/app_smoke_test.dart -d macos',
           ),
         );
         expect(
           log,
           contains(
-            r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/im_core_open_smoke_test.dart -d macos',
+            r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/im_core_open_smoke_test.dart -d macos',
           ),
         );
       }
@@ -2673,7 +2673,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d linux',
         ),
       );
       expect(log, contains('would write Flutter E2E run config: <redacted>'));
@@ -2687,6 +2687,10 @@ cliPeer:
       );
       expect(log, isNot(contains('test-phone-secret')));
       expect(log, isNot(contains('test-otp-secret')));
+      expect(log, isNot(contains('--dart-define=AWIKI_E2E_APP_STATE_ROOT=')));
+      expect(log, isNot(contains('--dart-define=AWIKI_E2E_ATTESTATION_PATH=')));
+      expect(log, isNot(contains('--dart-define=AWIKI_E2E_RUN_ID=')));
+      expect(log, isNot(contains('--dart-define=AWIKI_E2E_CASE_IDS=')));
       expect(log, isNot(contains(root.path)));
       expect(log, isNot(contains('../awiki-cli-rs2/cargo')));
       expect(log, contains('<redacted>'));
@@ -2961,7 +2965,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_group_test.dart -d macos',
+          r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_group_test.dart -d macos',
         ),
       );
       final timings = File(
@@ -3020,7 +3024,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_direct_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_direct_test.dart -d linux',
         ),
       );
       final timings = File(
@@ -3099,7 +3103,7 @@ performance:
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_performance_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_performance_test.dart -d linux',
           ),
         );
         final runConfig = File(
@@ -3198,7 +3202,7 @@ performance:
       expect(
         log,
         contains(
-          r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_attachment_test.dart -d macos',
+          r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_attachment_test.dart -d macos',
         ),
       );
       final timings = File(
@@ -3252,7 +3256,7 @@ performance:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_contacts_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_contacts_test.dart -d linux',
         ),
       );
       final timings = File(
@@ -3308,7 +3312,7 @@ performance:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_inbound_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_inbound_test.dart -d linux',
         ),
       );
       final timings = File(
@@ -3377,7 +3381,7 @@ performance:
       expect(
         log,
         contains(
-          r"$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> --plain-name 'Personal Agent full UI drives real backend daemon and recovery' integration_test/personal_agent_full_ui_test.dart -d linux",
+          r"$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --plain-name 'Personal Agent full UI drives real backend daemon and recovery' integration_test/personal_agent_full_ui_test.dart -d linux",
         ),
       );
       expect(log, isNot(contains('test-phone-secret')));
@@ -3647,7 +3651,7 @@ performance:
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/codex_agent_full_ui_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/codex_agent_full_ui_test.dart -d linux',
           ),
         );
 
@@ -3754,7 +3758,7 @@ performance:
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/claude_code_agent_full_ui_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/claude_code_agent_full_ui_test.dart -d linux',
           ),
         );
 
@@ -3848,7 +3852,7 @@ performance:
       expect(
         log,
         contains(
-          r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d macos',
+          r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d macos',
         ),
       );
       expect(log, isNot(contains(r'$ xvfb-run')));
