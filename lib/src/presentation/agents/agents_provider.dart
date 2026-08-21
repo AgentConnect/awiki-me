@@ -22,6 +22,7 @@ import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
+import '../../domain/entities/agent/personal_agent_runtime_provider.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../app_shell/providers/app_lifecycle_provider.dart';
@@ -328,7 +329,9 @@ class AgentsState {
 
   AgentSummary? personalAgentRuntimeFor(String daemonDid) {
     for (final runtime in runtimesFor(daemonDid)) {
-      if (isPersonalAgentRuntime(runtime)) {
+      if (PersonalAgentRuntimeProviders.enabled.any(
+        (provider) => provider.matchesHandle(runtime.handle),
+      )) {
         return runtime;
       }
     }
