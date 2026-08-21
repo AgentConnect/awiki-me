@@ -198,9 +198,7 @@ class IsolatedE2eAppBuildRequest {
   }
 
   IsolatedE2eAppBuildPlan toPlan() {
-    final buildDirectory = platform == IsolatedE2eAppPlatform.linux
-        ? Directory('${projectRoot.path}/build')
-        : Directory('${workRoot.path}/flutter-build');
+    final buildDirectory = Directory('${workRoot.path}/flutter-build');
     final flutterConfigDirectory = Directory('${workRoot.path}/flutter-config');
     final overrideConfig = File('${workRoot.path}/AppPair.xcconfig');
     final sourceApp = switch (platform) {

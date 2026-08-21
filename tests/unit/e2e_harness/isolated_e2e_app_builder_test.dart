@@ -75,8 +75,14 @@ void main() {
     final plan = request.toPlan();
 
     expect(request.platform, IsolatedE2eAppPlatform.linux);
-    expect(plan.sourceApp.path, '${project.path}/build/linux/x64/debug/bundle');
-    expect(plan.flutterBuildDirectorySetting, 'build');
+    expect(
+      plan.sourceApp.path,
+      '${root.path}/work/admin/flutter-build/linux/x64/debug/bundle',
+    );
+    expect(
+      plan.flutterBuildDirectorySetting,
+      '.e2e/pair/work/admin/flutter-build',
+    );
     expect(plan.artifactApp.path, '${root.path}/artifacts/AWikiMe-admin-linux');
     expect(plan.executable.path, endsWith('/AWikiMe-admin-linux/awiki_me'));
     expect(plan.flutterArguments, containsAll(<String>['build', 'linux']));
