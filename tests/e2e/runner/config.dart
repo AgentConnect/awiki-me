@@ -843,9 +843,19 @@ class DesktopE2eFileConfig {
     final otpCode = environmentOtpCode?.isNotEmpty == true
         ? environmentOtpCode
         : _stringAt(otp, 'code');
-    final appHandle = _stringAt(appUser, 'handle');
-    final secondaryAppHandle = _stringAt(secondaryAppUser, 'handle');
-    final cliHandle = _stringAt(cliUser, 'handle');
+    final environmentAppHandle = environment[_e2eAppHandleEnv]?.trim();
+    final environmentSecondaryAppHandle = environment[_e2eSecondaryAppHandleEnv]
+        ?.trim();
+    final environmentCliHandle = environment[_e2eCliHandleEnv]?.trim();
+    final appHandle = environmentAppHandle?.isNotEmpty == true
+        ? environmentAppHandle
+        : _stringAt(appUser, 'handle');
+    final secondaryAppHandle = environmentSecondaryAppHandle?.isNotEmpty == true
+        ? environmentSecondaryAppHandle
+        : _stringAt(secondaryAppUser, 'handle');
+    final cliHandle = environmentCliHandle?.isNotEmpty == true
+        ? environmentCliHandle
+        : _stringAt(cliUser, 'handle');
     final configuredRustRepo = _stringAt(daemon, 'rustRepo');
     final environmentRustRepo = environment[_awikiCliRustRepoEnv]?.trim();
     final environmentCliBinary = environment[_e2eCliBinaryEnv]?.trim();

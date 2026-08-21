@@ -104,6 +104,9 @@ const String _e2eCliSourceRefEnv = 'AWIKI_E2E_CLI_SOURCE_REF';
 const String _e2eDaemonBinaryEnv = 'AWIKI_E2E_DAEMON_BINARY';
 const String _e2eOtpPhoneEnv = 'AWIKI_E2E_OTP_PHONE';
 const String _e2eOtpCodeEnv = 'AWIKI_E2E_OTP_CODE';
+const String _e2eAppHandleEnv = 'AWIKI_E2E_APP_HANDLE';
+const String _e2eSecondaryAppHandleEnv = 'AWIKI_E2E_SECONDARY_APP_HANDLE';
+const String _e2eCliHandleEnv = 'AWIKI_E2E_CLI_HANDLE';
 const String _defaultRemoteTargetManifestPath =
     '../awiki-system-test/suites/remote-test-targets.json';
 const Set<String> _accountStateRequiredTargetCapabilities = <String>{

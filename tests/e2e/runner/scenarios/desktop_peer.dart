@@ -281,6 +281,22 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
       }
       if (!options.dryRun) {
         _resourceSideEffectsPossible = true;
+        final current = await _cli(const <String>[
+          '--format',
+          'json',
+          'id',
+          'current',
+        ], allowFailure: true);
+        if (current.exitCode != 0 ||
+            !cliCurrentIdentityReadyForHandle(
+              current.output,
+              handle: peerConfig.cliHandle,
+              didDomain: peerConfig.didDomain,
+            )) {
+          throw E2eFailure(
+            'CLI peer registration did not activate the exact ready identity.',
+          );
+        }
       }
     }
 

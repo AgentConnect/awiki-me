@@ -1489,6 +1489,9 @@ otp:
             'AWIKI_E2E_DAEMON_BINARY': '/cache/awiki-daemon',
             'AWIKI_E2E_OTP_PHONE': 'deployed-phone',
             'AWIKI_E2E_OTP_CODE': 'deployed-code',
+            'AWIKI_E2E_APP_HANDLE': 'runtime-app',
+            'AWIKI_E2E_SECONDARY_APP_HANDLE': 'runtime-secondary',
+            'AWIKI_E2E_CLI_HANDLE': 'runtime-cli',
           },
         );
 
@@ -1497,6 +1500,9 @@ otp:
         expect(config.daemonBinary, '/cache/awiki-daemon');
         expect(config.otpPhone, 'deployed-phone');
         expect(config.otpCode, 'deployed-code');
+        expect(config.appHandle, 'runtime-app');
+        expect(config.secondaryAppHandle, 'runtime-secondary');
+        expect(config.cliHandle, 'runtime-cli');
       },
     );
 
