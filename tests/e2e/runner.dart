@@ -71,6 +71,8 @@ const String _accountStateFailpointEnableEnv =
     'AWIKI_ACCOUNT_STATE_TEST_FAILPOINTS_ENABLED';
 const String _remoteTargetManifestEnv = 'AWIKI_SYSTEM_TEST_TARGET_MANIFEST';
 const String _awikiCliRustRepoEnv = 'AWIKI_CLI_RUST_REPO';
+const String _e2eCliBinaryEnv = 'AWIKI_E2E_CLI_BINARY';
+const String _e2eDaemonBinaryEnv = 'AWIKI_E2E_DAEMON_BINARY';
 const String _e2eOtpPhoneEnv = 'AWIKI_E2E_OTP_PHONE';
 const String _e2eOtpCodeEnv = 'AWIKI_E2E_OTP_CODE';
 const String _defaultRemoteTargetManifestPath =
@@ -5245,13 +5247,19 @@ class DesktopE2eFileConfig {
     final cliHandle = _stringAt(cliUser, 'handle');
     final configuredRustRepo = _stringAt(daemon, 'rustRepo');
     final environmentRustRepo = environment[_awikiCliRustRepoEnv]?.trim();
+    final environmentCliBinary = environment[_e2eCliBinaryEnv]?.trim();
+    final environmentDaemonBinary = environment[_e2eDaemonBinaryEnv]?.trim();
     final rustRepo = environmentRustRepo?.isNotEmpty == true
         ? environmentRustRepo!
         : configuredRustRepo ?? '../awiki-cli-rs2';
-    final cliBin = environmentRustRepo?.isNotEmpty == true
+    final cliBin = environmentCliBinary?.isNotEmpty == true
+        ? environmentCliBinary!
+        : environmentRustRepo?.isNotEmpty == true
         ? '$rustRepo/target/debug/awiki-cli'
         : _stringAt(cliPeer, 'binary') ?? '$rustRepo/target/debug/awiki-cli';
-    final daemonBinary = environmentRustRepo?.isNotEmpty == true
+    final daemonBinary = environmentDaemonBinary?.isNotEmpty == true
+        ? environmentDaemonBinary!
+        : environmentRustRepo?.isNotEmpty == true
         ? '$rustRepo/target/debug/awiki-deamon'
         : _stringAt(daemon, 'binary') ?? '$rustRepo/target/debug/awiki-deamon';
     final platformValue = _stringAt(raw, 'platform');
