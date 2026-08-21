@@ -1,9 +1,11 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-13.stale-daemon-delete-convergence",
+  "sourceRevision": "2026-08-21.test-platform-tier-v1",
   "suites": {
     "smoke": {
-      "tier": "product_ui",
+      "tier": "portable_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter"],
       "requiredFor": [
         "pull_request",
         "release"
@@ -23,7 +25,9 @@
       ]
     },
     "multi-device": {
-      "tier": "product_ui",
+      "tier": "portable_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter"],
       "requiredFor": [
         "pull_request",
         "release"
@@ -43,6 +47,8 @@
     },
     "multi-device-remote-join": {
       "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script","awiki-cli"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -71,6 +77,8 @@
     },
     "multi-device-remote-recovery": {
       "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -104,6 +112,8 @@
     },
     "handle-recovery-local-data": {
       "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script","awiki-daemon"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -134,6 +144,8 @@
     },
     "multi-device-remote-recovery-fresh": {
       "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script","awiki-daemon"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -169,6 +181,8 @@
     },
     "multi-device-app-pair-recovery-registration-rejoin-management-transfer": {
       "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -197,6 +211,8 @@
     },
     "multi-device-app-pair": {
       "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","dart"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -223,6 +239,8 @@
     },
     "multi-device-app-pair-functional": {
       "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","dart","awiki-cli","awiki-daemon"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -271,6 +289,8 @@
     },
     "multi-device-app-pair-content-sync": {
       "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","dart","awiki-cli"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -304,6 +324,8 @@
     },
     "step4-revoke-mls": {
       "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos"],
+      "requiredTools": ["flutter","script","awiki-cli"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -333,6 +355,8 @@
     },
     "production-keychain": {
       "tier": "native_release_security",
+      "supportedPlatforms": ["macos"],
+      "requiredTools": ["flutter","xcode","codesign"],
       "requiredFor": [
         "release"
       ],
@@ -350,7 +374,9 @@
       ]
     },
     "full": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -407,7 +433,9 @@
       ]
     },
     "direct": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -440,7 +468,9 @@
       ]
     },
     "group": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -475,7 +505,9 @@
       ]
     },
     "attachment": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -507,7 +539,9 @@
       ]
     },
     "contacts": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -541,7 +575,9 @@
       ]
     },
     "inbound": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -570,7 +606,9 @@
       ]
     },
     "identity-switch": {
-      "tier": "product_application",
+      "tier": "remote_product_application",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -595,7 +633,9 @@
       ]
     },
     "restart": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "release"
       ],
@@ -626,7 +666,9 @@
       ]
     },
     "display-name-fallback": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -658,7 +700,9 @@
       ]
     },
     "performance": {
-      "tier": "integration_diagnostic",
+      "tier": "remote_integration_diagnostic",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "optional_nightly"
       ],
@@ -697,6 +741,8 @@
     },
     "personal-agent": {
       "tier": "optional_provider_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli","awiki-daemon"],
       "requiredFor": [
         "optional_nightly"
       ],
@@ -726,6 +772,8 @@
     },
     "codex-agent": {
       "tier": "optional_provider_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli","awiki-daemon"],
       "requiredFor": [
         "optional_nightly"
       ],
@@ -756,6 +804,8 @@
     },
     "claude-code-agent": {
       "tier": "optional_provider_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli","awiki-daemon"],
       "requiredFor": [
         "optional_nightly"
       ],

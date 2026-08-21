@@ -1952,7 +1952,9 @@ cliHandle: legacy-cli
     test('suite timeout cannot be shorter than its estimate', () {
       expect(
         () => DesktopE2eSuiteDefinition.fromJson('full', <String, Object?>{
-          'tier': 'product_ui',
+          'tier': 'remote_product_ui',
+          'supportedPlatforms': <String>['macos', 'linux'],
+          'requiredTools': <String>['flutter', 'awiki-cli'],
           'requiredFor': <String>['release'],
           'owner': 'awiki-me-messaging',
           'estimatedMinutes': 25,
@@ -1985,6 +1987,9 @@ cliHandle: legacy-cli
           returnsNormally,
         );
         expect(definition.owner, isNotEmpty);
+        expect(definition.executionLane, isNotEmpty);
+        expect(definition.supportedPlatforms, isNotEmpty);
+        expect(definition.requiredTools, isNotEmpty);
         expect(definition.timeout, isNot(Duration.zero));
         expect(
           definition.timeout,
@@ -2440,8 +2445,19 @@ cliPeer:
           jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
       expect(decoded['case'], 'smoke');
       expect(decoded['platform'], Platform.isLinux ? 'linux' : 'macos');
+      final hostPlatform = decoded['hostPlatform'] as Map<String, dynamic>;
+      expect(hostPlatform['os'], Platform.isLinux ? 'linux' : 'macos');
+      expect(hostPlatform['processArchitecture'], isNotEmpty);
+      expect(hostPlatform['hardwareArchitecture'], isNotEmpty);
+      expect(hostPlatform['translated'], isA<bool>());
+      final suitePolicy = decoded['suitePolicy'] as Map<String, dynamic>;
+      expect(suitePolicy['tier'], 'portable_product_ui');
+      expect(suitePolicy['executionLane'], 'portable');
+      expect(suitePolicy['supportedPlatforms'], contains('linux'));
+      expect(suitePolicy['requiredTools'], contains('flutter'));
       expect(decoded['caseIds'], <dynamic>[
         'AGENT-NOTIFY-SMOKE-E2E-001',
+        'AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001',
         'SMOKE-E2E-001',
         'NATIVE-E2E-001',
       ]);

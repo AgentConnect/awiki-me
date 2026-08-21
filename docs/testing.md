@@ -796,10 +796,25 @@ Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and
 must not be committed because they may contain OTP values.
 
 `tests/e2e/suite_manifest.json` is the checked-in suite source of truth. The
-runner fails on case-ID drift, records tier/owner/required triggers/timeout,
+runner fails on case-ID drift, records canonical tier/derived execution lane,
+supported platforms, required tools, owner, required triggers and timeout,
 and uses a killable child-process runner. A timeout terminates the Flutter/CLI
 process tree and records `failure.code=command_timeout`; it cannot leave an
 untracked test child running indefinitely.
+
+Canonical App tiers have one execution-lane mapping: portable product UI,
+remote product UI/application/security, native release security, optional
+provider UI, and remote integration diagnostics. `requiredFor` only controls
+gate selection and does not duplicate lane semantics. `supportedPlatforms`
+uses the shared `macos / linux / windows` schema; the current Dart desktop E2E
+runner executes macOS/Linux, while the existing Windows build/native-smoke job
+remains an explicit preserved lane.
+
+Host architecture is runtime evidence, not suite configuration. Linux/macOS
+reports record process and hardware architecture. On macOS the runner also
+records Rosetta translation, requires native arm64 tooling on Apple Silicon,
+and verifies that an isolated App contains the detected host architecture
+instead of requiring a hard-coded x86 binary.
 
 Desktop Flutter execution is protected by a host-wide per-platform file lock
 and a preflight scan for already-running `flutter test integration_test/...`

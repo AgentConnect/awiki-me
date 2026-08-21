@@ -8,6 +8,7 @@ import 'package:yaml/yaml.dart';
 import 'account_state_operator_contract.dart';
 import 'app_pair_protocol.dart';
 import 'case_attestation.dart';
+import 'host_platform.dart';
 import 'performance_contract.dart';
 import 'remote_multi_device_join_contract.dart';
 import '../../tool/ensure_linux_im_core.dart';
@@ -340,6 +341,7 @@ class DesktopE2eRunner {
   RemoteHandleRecoveryConfig? remoteHandleRecoveryConfig;
   RemoteMultiDeviceAppPairConfig? remoteMultiDeviceAppPairConfig;
   late final DesktopE2ePlatform platform;
+  late final E2eHostPlatform hostPlatform;
   late final String runId;
   late final Directory reportDir;
   late final Directory cliWorkspaceDir;
@@ -396,6 +398,15 @@ class DesktopE2eRunner {
     _addRuntimeSecret(fileConfig.otpPhone ?? '');
     _addRuntimeSecret(fileConfig.otpCode ?? '');
     platform = fileConfig.platform ?? DesktopE2ePlatform.fromHost();
+    hostPlatform = await E2eHostPlatform.detect();
+    suiteDefinition.validatePlatform(platform.name);
+    if (!options.dryRun && !commands.dryRun) {
+      try {
+        hostPlatform.requireOperatingSystem(platform.name);
+      } on StateError catch (error) {
+        throw E2eFailure(error.message);
+      }
+    }
     flutterBuildIsolation = DesktopFlutterBuildIsolation(
       root: root,
       platform: platform,
@@ -2559,6 +2570,7 @@ class DesktopE2eRunner {
         'runId': runId,
         'awikiMeSourceRef': _repositorySourceRef(),
         'platform': platform.name,
+        'hostPlatform': hostPlatform.toJson(),
         'case': (config?.e2eCase ?? options.e2eCase).caseName,
         'suiteManifest': <String, Object?>{
           'schemaVersion': suiteManifest.schemaVersion,
@@ -3036,6 +3048,8 @@ class DesktopE2eSuiteDefinition {
     required this.allowedHosts,
     required this.allowedDidDomains,
     required this.resourceCategories,
+    required this.supportedPlatforms,
+    required this.requiredTools,
     required this.caseIds,
   });
 
@@ -3049,6 +3063,8 @@ class DesktopE2eSuiteDefinition {
   final List<String> allowedHosts;
   final List<String> allowedDidDomains;
   final List<String> resourceCategories;
+  final List<String> supportedPlatforms;
+  final List<String> requiredTools;
   final List<String> caseIds;
 
   static DesktopE2eSuiteDefinition fromJson(String name, Map raw) {
@@ -3067,6 +3083,12 @@ class DesktopE2eSuiteDefinition {
     final cleanupPolicy = raw['cleanupPolicy'];
     if (tier is! String || tier.trim().isEmpty) {
       throw E2eFailure('E2E suite "$name" has no tier.');
+    }
+    final canonicalTier = tier.trim();
+    try {
+      awikiExecutionLaneForAppTier(canonicalTier);
+    } on FormatException catch (error) {
+      throw E2eFailure(error.message);
     }
     if (owner is! String || owner.trim().isEmpty) {
       throw E2eFailure('E2E suite "$name" has no owner.');
@@ -3089,9 +3111,23 @@ class DesktopE2eSuiteDefinition {
     if (caseIds.isEmpty || caseIds.toSet().length != caseIds.length) {
       throw E2eFailure('E2E suite "$name" has missing or duplicate caseIds.');
     }
+    final supportedPlatforms = stringList('supportedPlatforms');
+    if (supportedPlatforms.isEmpty ||
+        supportedPlatforms.toSet().length != supportedPlatforms.length ||
+        supportedPlatforms.any(
+          (value) => !awikiSupportedTestPlatforms.contains(value),
+        )) {
+      throw E2eFailure('E2E suite "$name" has invalid supportedPlatforms.');
+    }
+    final requiredTools = stringList('requiredTools');
+    if (requiredTools.isEmpty ||
+        requiredTools.toSet().length != requiredTools.length ||
+        requiredTools.any((value) => value.trim().isEmpty)) {
+      throw E2eFailure('E2E suite "$name" has invalid requiredTools.');
+    }
     return DesktopE2eSuiteDefinition(
       name: name,
-      tier: tier.trim(),
+      tier: canonicalTier,
       requiredFor: stringList('requiredFor'),
       owner: owner.trim(),
       estimatedMinutes: estimatedMinutes,
@@ -3100,6 +3136,8 @@ class DesktopE2eSuiteDefinition {
       allowedHosts: stringList('allowedHosts'),
       allowedDidDomains: stringList('allowedDidDomains'),
       resourceCategories: stringList('resourceCategories'),
+      supportedPlatforms: supportedPlatforms,
+      requiredTools: requiredTools,
       caseIds: caseIds,
     );
   }
@@ -3108,6 +3146,22 @@ class DesktopE2eSuiteDefinition {
     if (!_sameOrderedStrings(caseIds, codeCaseIds)) {
       throw E2eFailure(
         'E2E suite manifest drift for "$name"; caseIds do not match the Flutter scenario contract.',
+      );
+    }
+  }
+
+  String get executionLane => awikiExecutionLaneForAppTier(tier);
+
+  void validatePlatform(String platform) {
+    if (!awikiSupportedTestPlatforms.contains(platform)) {
+      throw E2eFailure(
+        'E2E suite "$name" received unknown platform $platform.',
+      );
+    }
+    if (!supportedPlatforms.contains(platform)) {
+      throw E2eFailure(
+        'E2E suite "$name" does not support $platform; supported: '
+        '${supportedPlatforms.join(', ')}.',
       );
     }
   }
@@ -3165,6 +3219,9 @@ class DesktopE2eSuiteDefinition {
 
   Map<String, Object?> toReportJson() => <String, Object?>{
     'tier': tier,
+    'executionLane': executionLane,
+    'supportedPlatforms': supportedPlatforms,
+    'requiredTools': requiredTools,
     'requiredFor': requiredFor,
     'owner': owner,
     'estimatedMinutes': estimatedMinutes,

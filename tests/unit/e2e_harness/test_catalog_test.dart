@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(118));
+      expect(catalog.cases, hasLength(119));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -471,9 +471,12 @@ Future<Directory> _temporaryCatalogRoot() async {
   File('${e2e.path}/suite_manifest.json').writeAsStringSync(
     jsonEncode(<String, Object?>{
       'schemaVersion': 1,
+      'sourceRevision': 'unit-test',
       'suites': <String, Object?>{
         'focused': <String, Object?>{
-          'tier': 'product_ui',
+          'tier': 'remote_product_ui',
+          'supportedPlatforms': <String>['macos', 'linux'],
+          'requiredTools': <String>['flutter', 'awiki-cli'],
           'requiredFor': <String>['release'],
           'owner': 'owner-a',
           'cleanupPolicy': 'none',
@@ -501,7 +504,7 @@ Future<void> complete() {
           'caseId': 'CASE-001',
           'catalogStatus': 'active',
           'feature': 'Feature',
-          'layer': 'product_ui',
+          'layer': 'remote_product_ui',
           'preconditions': 'A precondition.',
           'action': 'Perform an action.',
           'exactOracles': <String>['Exactly one result.'],

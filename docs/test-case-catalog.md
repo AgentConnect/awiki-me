@@ -1,7 +1,7 @@
 # AWiki Me test case catalog
 
 > Generated from `tests/e2e/case_catalog.json`; do not edit by hand.
-> Catalog revision: `2026-08-13.stale-daemon-delete-convergence`.
+> Catalog revision: `2026-08-21.test-platform-tier-v1`.
 
 Every row is reconciled with `tests/e2e/suite_manifest.json`. The checker requires a unique ID, complete ownership/environment/cleanup metadata, an existing implementation path containing the ID, and exact report IDs.
 

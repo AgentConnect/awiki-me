@@ -5,6 +5,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../tests/e2e/host_platform.dart';
 import 'ensure_linux_im_core.dart';
 
 enum IsolatedE2eAppPlatform {
@@ -295,6 +296,7 @@ class IsolatedE2eAppArtifact {
     required this.stateRoot,
     required this.buildDirectory,
     required this.dryRun,
+    required this.hostPlatform,
   });
 
   final String name;
@@ -305,6 +307,7 @@ class IsolatedE2eAppArtifact {
   final String stateRoot;
   final String buildDirectory;
   final bool dryRun;
+  final E2eHostPlatform hostPlatform;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'schemaVersion': 1,
@@ -316,6 +319,7 @@ class IsolatedE2eAppArtifact {
     'stateRoot': stateRoot,
     'buildDirectory': buildDirectory,
     'dryRun': dryRun,
+    'hostPlatform': hostPlatform.toJson(),
   };
 }
 
@@ -323,14 +327,16 @@ class IsolatedE2eAppBuilder {
   Future<IsolatedE2eAppArtifact> build(
     IsolatedE2eAppBuildRequest request,
   ) async {
-    final hostMatches = switch (request.platform) {
-      IsolatedE2eAppPlatform.macos => Platform.isMacOS,
-      IsolatedE2eAppPlatform.linux => Platform.isLinux,
-    };
-    if (!hostMatches && !request.dryRun) {
-      throw const IsolatedE2eAppBuildException(
-        'The isolated E2E App platform must match the build host.',
-      );
+    final hostPlatform = await E2eHostPlatform.detect();
+    if (!request.dryRun) {
+      try {
+        hostPlatform.requireOperatingSystem(request.platform.name);
+        if (request.platform == IsolatedE2eAppPlatform.macos) {
+          hostPlatform.requireNativeMacToolchain();
+        }
+      } on StateError catch (error) {
+        throw IsolatedE2eAppBuildException(error.message);
+      }
     }
     final plan = request.toPlan();
     final artifact = IsolatedE2eAppArtifact(
@@ -342,6 +348,7 @@ class IsolatedE2eAppBuilder {
       stateRoot: request.stateRoot.path,
       buildDirectory: plan.buildDirectory.path,
       dryRun: request.dryRun,
+      hostPlatform: hostPlatform,
     );
     if (request.dryRun) {
       return artifact;
@@ -451,9 +458,14 @@ class IsolatedE2eAppBuilder {
         plan.executable.path,
       ]);
       if (architectures.exitCode != 0 ||
-          architectures.stdout.toString().trim() != 'x86_64') {
-        throw const IsolatedE2eAppBuildException(
-          'The isolated Debug App must contain only x86_64 on this host.',
+          !architectures.stdout
+              .toString()
+              .trim()
+              .split(RegExp(r'\s+'))
+              .contains(hostPlatform.hardwareArchitecture)) {
+        throw IsolatedE2eAppBuildException(
+          'The isolated Debug App does not contain the detected host '
+          'architecture ${hostPlatform.hardwareArchitecture}.',
         );
       }
     }
