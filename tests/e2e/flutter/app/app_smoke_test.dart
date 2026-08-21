@@ -1591,7 +1591,7 @@ void main() {
   });
 
   testWidgets(
-    'UI optimization smoke keeps conversation info closed and opens Agent info popup',
+    'UI optimization smoke uses Agent inventory title and opens Agent info popup',
     (tester) async {
       const session = SessionIdentity(
         did: 'did:test:me',
@@ -1723,8 +1723,19 @@ void main() {
         } else {
           expect(find.text('消息'), findsWidgets);
         }
-        expect(find.text('Hermes Cached'), findsOneWidget);
-        await tester.tap(find.text('Hermes Cached').first);
+        final conversationRow = find.byKey(
+          Key('conversation-row:${conversation.conversationId}'),
+        );
+        expect(conversationRow, findsOneWidget);
+        expect(
+          find.descendant(
+            of: conversationRow,
+            matching: find.text('Hermes UI'),
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('Hermes Cached'), findsNothing);
+        await tester.tap(conversationRow);
         await tester.pumpAndSettle();
 
         expect(find.text('会话信息'), findsNothing);
