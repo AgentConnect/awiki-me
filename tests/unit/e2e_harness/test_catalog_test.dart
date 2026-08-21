@@ -60,6 +60,7 @@ void main() {
           'multi-device-app-pair',
           'multi-device-app-pair-functional',
           'step4-revoke-mls',
+          'root-transfer',
           'full',
           'direct',
           'identity-switch',
@@ -127,7 +128,13 @@ void main() {
         'DEVICE-REGISTRY-SYNC-E2E-001',
         'DEVICE-MESSAGE-GENERATION-FENCE-E2E-001',
       ]);
-      expect(catalog.suiteCaseIds['full'], contains('ROOT-TRANSFER-E2E-001'));
+      expect(
+        catalog.suiteCaseIds['full'],
+        isNot(contains('ROOT-TRANSFER-E2E-001')),
+      );
+      expect(catalog.suiteCaseIds['root-transfer'], <String>[
+        'ROOT-TRANSFER-E2E-001',
+      ]);
       expect(catalog.suiteCaseIds['step4-revoke-mls'], <String>[
         'STEP4-GROUP-PAGINATION-E2E-001',
         'DEVICE-REVOKE-E2E-001',
