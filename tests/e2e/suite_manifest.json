@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-21.test-platform-tier-v1",
+  "sourceRevision": "2026-08-21.unique-profile-owners-v1",
   "suites": {
     "smoke": {
       "tier": "portable_product_ui",
@@ -574,6 +574,36 @@
         "CONTACT-FIRST-CONV-E2E-001"
       ]
     },
+    "contact-first": {
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
+      "requiredFor": [
+        "nightly"
+      ],
+      "owner": "awiki-me-contacts",
+      "estimatedMinutes": 8,
+      "timeoutMinutes": 10,
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "allowedHosts": [
+        "awiki.info",
+        "agentwiki.info",
+        "anpclaw.com"
+      ],
+      "allowedDidDomains": [
+        "awiki.info",
+        "agentwiki.info",
+        "anpclaw.com"
+      ],
+      "resourceCategories": [
+        "relationships",
+        "direct_messages",
+        "read_state"
+      ],
+      "caseIds": [
+        "CONTACT-FIRST-CONV-E2E-001"
+      ]
+    },
     "inbound": {
       "tier": "remote_product_ui",
       "supportedPlatforms": ["macos","linux"],
@@ -601,7 +631,6 @@
         "read_state"
       ],
       "caseIds": [
-        "AUTH-E2E-001",
         "INBOUND-FIRST-CONV-E2E-001"
       ]
     },
@@ -695,7 +724,6 @@
         "read_state"
       ],
       "caseIds": [
-        "AUTH-E2E-001",
         "DISPLAY-NAME-E2E-002"
       ]
     },

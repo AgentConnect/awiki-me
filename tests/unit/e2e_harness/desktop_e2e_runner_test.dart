@@ -604,11 +604,21 @@ void main() {
         'inbound-first',
         '--dry-run',
       ]);
+      final contactFirst = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'contact-first',
+        '--dry-run',
+      ]);
 
       expect(direct.e2eCase, DesktopE2eCase.direct);
       expect(attachment.e2eCase, DesktopE2eCase.attachment);
       expect(contacts.e2eCase, DesktopE2eCase.contacts);
+      expect(contactFirst.e2eCase, DesktopE2eCase.contactFirst);
+      expect(contactFirst.e2eCase.caseIds, <String>[
+        'CONTACT-FIRST-CONV-E2E-001',
+      ]);
       expect(inbound.e2eCase, DesktopE2eCase.inbound);
+      expect(inbound.e2eCase.caseIds, <String>['INBOUND-FIRST-CONV-E2E-001']);
     });
 
     test('parses real process-restart case aliases', () {
@@ -664,10 +674,7 @@ void main() {
       expect(fallback.e2eCase, DesktopE2eCase.displayNameFallback);
       expect(handleFallback.e2eCase, DesktopE2eCase.displayNameFallback);
       expect(fallback.e2eCase.caseName, 'display-name-fallback');
-      expect(fallback.e2eCase.caseIds, <String>[
-        'AUTH-E2E-001',
-        'DISPLAY-NAME-E2E-002',
-      ]);
+      expect(fallback.e2eCase.caseIds, <String>['DISPLAY-NAME-E2E-002']);
       expect(
         fallback.e2eCase.testFile,
         'integration_test/desktop_cli_peer_display_name_fallback_test.dart',
@@ -3321,10 +3328,7 @@ performance:
       final decoded =
           jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
       expect(decoded['case'], 'inbound');
-      expect(decoded['caseIds'], <dynamic>[
-        'AUTH-E2E-001',
-        'INBOUND-FIRST-CONV-E2E-001',
-      ]);
+      expect(decoded['caseIds'], <dynamic>['INBOUND-FIRST-CONV-E2E-001']);
     });
 
     test('generates personal-agent Flutter command and report case IDs', () async {

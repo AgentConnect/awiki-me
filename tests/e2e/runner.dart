@@ -215,8 +215,10 @@ const List<String> _desktopCliPeerContactsCaseIds = <String>[
   'CONTACT-MSG-E2E-001',
   'CONTACT-FIRST-CONV-E2E-001',
 ];
+const List<String> _desktopCliPeerContactFirstCaseIds = <String>[
+  'CONTACT-FIRST-CONV-E2E-001',
+];
 const List<String> _desktopCliPeerInboundCaseIds = <String>[
-  'AUTH-E2E-001',
   'INBOUND-FIRST-CONV-E2E-001',
 ];
 const List<String> _desktopIdentitySwitchCaseIds = <String>[
@@ -228,7 +230,6 @@ const List<String> _desktopCliPeerRestartCaseIds = <String>[
   'IDENTITY-DELETE-E2E-001',
 ];
 const List<String> _desktopCliPeerDisplayNameFallbackCaseIds = <String>[
-  'AUTH-E2E-001',
   'DISPLAY-NAME-E2E-002',
 ];
 const List<String> _desktopCliPeerPerformanceCaseIds = <String>[
@@ -5668,6 +5669,7 @@ enum DesktopE2eCase {
   group(_desktopCliPeerGroupCaseIds),
   attachment(_desktopCliPeerAttachmentCaseIds),
   contacts(_desktopCliPeerContactsCaseIds),
+  contactFirst(_desktopCliPeerContactFirstCaseIds),
   inbound(_desktopCliPeerInboundCaseIds),
   identitySwitch(_desktopIdentitySwitchCaseIds),
   restart(_desktopCliPeerRestartCaseIds),
@@ -5712,6 +5714,8 @@ enum DesktopE2eCase {
         'integration_test/desktop_cli_peer_attachment_test.dart',
       DesktopE2eCase.contacts =>
         'integration_test/desktop_cli_peer_contacts_test.dart',
+      DesktopE2eCase.contactFirst =>
+        'integration_test/desktop_cli_peer_contact_first_test.dart',
       DesktopE2eCase.inbound =>
         'integration_test/desktop_cli_peer_inbound_test.dart',
       DesktopE2eCase.identitySwitch =>
@@ -5735,6 +5739,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.codexAgent => 'codex-agent',
       DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
       DesktopE2eCase.displayNameFallback => 'display-name-fallback',
+      DesktopE2eCase.contactFirst => 'contact-first',
       DesktopE2eCase.identitySwitch => 'identity-switch',
       DesktopE2eCase.multiDevice => 'multi-device',
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
@@ -5934,6 +5939,9 @@ enum DesktopE2eCase {
       'people' ||
       'follow' ||
       'contact-only' => DesktopE2eCase.contacts,
+      'contact-first' ||
+      'contact_first' ||
+      'contact-first-only' => DesktopE2eCase.contactFirst,
       'inbound' ||
       'inbound-first' ||
       'inbound_first' ||

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-21.test-platform-tier-v1",
+  "sourceRevision": "2026-08-21.unique-profile-owners-v1",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
