@@ -55,10 +55,13 @@ App、CLI、daemon 是独立 host，不共享 secure-storage item、root key 或
 
 ## 4. 身份验证 Gate
 
-`AwikiImCoreRuntime.open()` 会验证所有已有 identity；身份激活前
-`ensureIdentityVault()` 还会再次调用 `verifyIdentityVault`。App 按 SDK 的 stable error code
-处理 unavailable、metadata missing/unverified、workspace/device mismatch、record-open 和
-verification failure，不解析 human message，也不执行旧 identity migration。
+`AwikiImCoreRuntime.open()` 会检查所有已有 identity 的 `identityCustodyStatus`；身份激活前
+`ensureIdentityVault()` 还会再次确认 custody backend 为 ANP Identity、生命周期为 `active`
+且 `ready=true`，并通过 `identityDeviceSummary` 确认当前设备可执行认证和消息签名。任一条件
+不满足都以 `identity_custody_unavailable` fail closed。App 按 SDK 的 stable error code 处理
+custody/store 不可用，不解析 human message，也不执行旧 identity migration。
+`ensureIdentityVault()` 是保留的 App port 名称，不再调用已弃用的 AWiki vault verification
+API。
 
 release/0710 Legacy identity 的显式升级由 Core 拥有完整 transaction deadline、pending
 record 和重试分类。App 等待 `completed|retryRequired` typed status，不再叠加 20 秒通用

@@ -150,7 +150,10 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     );
     try {
       for (final identity in await opened.listIdentities()) {
-        await opened.verifyIdentityVault(core.IdentitySelector.id(identity.id));
+        await _ensureIdentityCustodyReady(
+          opened,
+          core.IdentitySelector.id(identity.id),
+        );
       }
     } on Object {
       await opened.dispose();
@@ -186,7 +189,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   Future<void> ensureIdentityVault(String identityIdOrAlias) async {
     final coreInstance = await this.coreInstance();
     final selector = _selectorFromString(identityIdOrAlias);
-    await coreInstance.verifyIdentityVault(selector);
+    await _ensureIdentityCustodyReady(coreInstance, selector);
   }
 
   Future<core.AwikiImClient> currentClient() async {
@@ -291,6 +294,30 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     }
     final idle = _clientOperationsIdle ??= Completer<void>();
     await idle.future;
+  }
+}
+
+Future<void> _ensureIdentityCustodyReady(
+  core.AwikiImCore instance,
+  core.IdentitySelector selector,
+) async {
+  final status = await instance.identityCustodyStatus(selector);
+  if (status.backend != core.IdentityCustodyBackend.anpIdentity ||
+      status.state != core.IdentityCustodyState.active ||
+      !status.ready) {
+    throw const core.AwikiImCoreException(
+      code: 'identity_custody_unavailable',
+      message: 'ANP Identity custody is not ready.',
+    );
+  }
+  final device = await instance.identityDeviceSummary(selector);
+  if (device.readiness != core.IdentityDeviceReadiness.memberReady &&
+      device.readiness != core.IdentityDeviceReadiness.adminAwaitingRoot &&
+      device.readiness != core.IdentityDeviceReadiness.adminReady) {
+    throw const core.AwikiImCoreException(
+      code: 'identity_custody_unavailable',
+      message: 'ANP Identity device custody is not ready.',
+    );
   }
 }
 

@@ -150,6 +150,10 @@ void main() {
       isTrue,
     );
     expect(
+      tenantBootstrapAllowsLocalRecovery('identity_custody_unavailable'),
+      isTrue,
+    );
+    expect(
       tenantBootstrapAllowsLocalRecovery('vault_key_access_denied'),
       isFalse,
     );

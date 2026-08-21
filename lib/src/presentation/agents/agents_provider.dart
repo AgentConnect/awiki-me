@@ -28,7 +28,6 @@ import '../app_shell/providers/session_provider.dart';
 import '../app_shell/providers/app_lifecycle_provider.dart';
 import 'agent_display_name.dart';
 import 'agent_ui_messages.dart';
-import 'personal_agent_feature_visibility.dart';
 
 const agentStatusQueryTimeout = Duration(seconds: 10);
 const agentRuntimeCreationTimeout = Duration(seconds: 45);
