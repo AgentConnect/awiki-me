@@ -108,6 +108,27 @@ void main() {
     );
   });
 
+  test('bundle digest changes for content and executable mode', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'awiki_isolated_bundle_digest_test_',
+    );
+    addTearDown(() => root.delete(recursive: true));
+    final executable = File('${root.path}/awiki_me')
+      ..writeAsStringSync('first');
+    if (!Platform.isWindows) {
+      await Process.run('chmod', <String>['644', executable.path]);
+    }
+    final baseline = await directorySha256(root);
+    executable.writeAsStringSync('second');
+    final contentChanged = await directorySha256(root);
+
+    expect(contentChanged, isNot(baseline));
+    if (!Platform.isWindows) {
+      await Process.run('chmod', <String>['755', executable.path]);
+      expect(await directorySha256(root), isNot(contentChanged));
+    }
+  });
+
   test('builder rejects non-integration and path-traversal targets', () {
     expect(
       () => IsolatedE2eAppBuildRequest.parse(<String>[

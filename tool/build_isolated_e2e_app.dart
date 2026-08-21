@@ -5,6 +5,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
+
 import '../tests/e2e/host_platform.dart';
 import 'ensure_linux_im_core.dart';
 
@@ -297,6 +299,9 @@ class IsolatedE2eAppArtifact {
     required this.buildDirectory,
     required this.dryRun,
     required this.hostPlatform,
+    required this.fingerprint,
+    required this.cacheHit,
+    required this.artifactSha256,
   });
 
   final String name;
@@ -308,6 +313,9 @@ class IsolatedE2eAppArtifact {
   final String buildDirectory;
   final bool dryRun;
   final E2eHostPlatform hostPlatform;
+  final String fingerprint;
+  final bool cacheHit;
+  final String artifactSha256;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'schemaVersion': 1,
@@ -320,6 +328,9 @@ class IsolatedE2eAppArtifact {
     'buildDirectory': buildDirectory,
     'dryRun': dryRun,
     'hostPlatform': hostPlatform.toJson(),
+    'fingerprint': fingerprint,
+    'cacheHit': cacheHit,
+    'artifactSha256': artifactSha256,
   };
 }
 
@@ -339,18 +350,39 @@ class IsolatedE2eAppBuilder {
       }
     }
     final plan = request.toPlan();
-    final artifact = IsolatedE2eAppArtifact(
-      name: request.name,
-      target: request.target,
-      bundleId: request.bundleId,
-      appPath: plan.artifactApp.path,
-      executablePath: plan.executable.path,
-      stateRoot: request.stateRoot.path,
-      buildDirectory: plan.buildDirectory.path,
-      dryRun: request.dryRun,
+    if (request.dryRun) {
+      return _isolatedArtifact(
+        request: request,
+        plan: plan,
+        hostPlatform: hostPlatform,
+        fingerprint: 'dry-run',
+        cacheHit: false,
+        artifactSha256: '',
+      );
+    }
+
+    final fingerprint = await _isolatedBuildFingerprint(
+      request: request,
       hostPlatform: hostPlatform,
     );
-    if (request.dryRun) {
+    final cachedDigest = await _restoreIsolatedArtifactCache(
+      request: request,
+      plan: plan,
+      fingerprint: fingerprint,
+    );
+    if (cachedDigest != null) {
+      final artifact = _isolatedArtifact(
+        request: request,
+        plan: plan,
+        hostPlatform: hostPlatform,
+        fingerprint: fingerprint,
+        cacheHit: true,
+        artifactSha256: cachedDigest,
+      );
+      plan.manifest.writeAsStringSync(
+        const JsonEncoder.withIndent('  ').convert(artifact.toJson()),
+        flush: true,
+      );
       return artifact;
     }
 
@@ -469,12 +501,333 @@ class IsolatedE2eAppBuilder {
         );
       }
     }
+    final artifactSha256 = await directorySha256(plan.artifactApp);
+    await _storeIsolatedArtifactCache(
+      request: request,
+      plan: plan,
+      fingerprint: fingerprint,
+      artifactSha256: artifactSha256,
+    );
+    final artifact = _isolatedArtifact(
+      request: request,
+      plan: plan,
+      hostPlatform: hostPlatform,
+      fingerprint: fingerprint,
+      cacheHit: false,
+      artifactSha256: artifactSha256,
+    );
     plan.manifest.writeAsStringSync(
       const JsonEncoder.withIndent('  ').convert(artifact.toJson()),
       flush: true,
     );
     return artifact;
   }
+}
+
+IsolatedE2eAppArtifact _isolatedArtifact({
+  required IsolatedE2eAppBuildRequest request,
+  required IsolatedE2eAppBuildPlan plan,
+  required E2eHostPlatform hostPlatform,
+  required String fingerprint,
+  required bool cacheHit,
+  required String artifactSha256,
+}) => IsolatedE2eAppArtifact(
+  name: request.name,
+  target: request.target,
+  bundleId: request.bundleId,
+  appPath: plan.artifactApp.path,
+  executablePath: plan.executable.path,
+  stateRoot: request.stateRoot.path,
+  buildDirectory: plan.buildDirectory.path,
+  dryRun: request.dryRun,
+  hostPlatform: hostPlatform,
+  fingerprint: fingerprint,
+  cacheHit: cacheHit,
+  artifactSha256: artifactSha256,
+);
+
+Future<String> _isolatedBuildFingerprint({
+  required IsolatedE2eAppBuildRequest request,
+  required E2eHostPlatform hostPlatform,
+}) async {
+  final flutter = await Process.run(request.flutterBin, const <String>[
+    '--version',
+    '--machine',
+  ], workingDirectory: request.projectRoot.path);
+  if (flutter.exitCode != 0) {
+    throw const IsolatedE2eAppBuildException(
+      'Flutter toolchain identity is unavailable.',
+    );
+  }
+  final flutterJson = jsonDecode(flutter.stdout.toString());
+  if (flutterJson is! Map) {
+    throw const IsolatedE2eAppBuildException(
+      'Flutter toolchain identity is invalid.',
+    );
+  }
+  final sourceDigest = await trackedBuildInputsSha256(
+    request.projectRoot,
+    platform: request.platform,
+  );
+  String nativeCoreSha256 = '';
+  String nativeCoreProvenanceSha256 = '';
+  if (request.platform == IsolatedE2eAppPlatform.linux) {
+    final layout = await LinuxImCoreLayout.resolve(request.projectRoot);
+    nativeCoreSha256 = await fileSha256(layout.artifact);
+    nativeCoreProvenanceSha256 = await fileSha256(layout.manifest);
+  }
+  final flutterIdentity = <String, String>{
+    for (final key in const <String>[
+      'frameworkVersion',
+      'frameworkRevision',
+      'engineRevision',
+      'dartSdkVersion',
+    ])
+      key: flutterJson[key]?.toString() ?? '',
+  };
+  if (flutterIdentity.values.any((value) => value.isEmpty)) {
+    throw const IsolatedE2eAppBuildException(
+      'Flutter toolchain identity omitted a required field.',
+    );
+  }
+  final payload = <String, Object?>{
+    'schemaVersion': 1,
+    'cacheContractVersion': 2,
+    'name': request.name,
+    'target': request.target,
+    'bundleId': request.bundleId,
+    'platform': request.platform.name,
+    'dartDefines': request.dartDefines,
+    'sourceDigest': sourceDigest,
+    'pubspecLockSha256': await fileSha256(
+      File('${request.projectRoot.path}/pubspec.lock'),
+    ),
+    'nativeCoreSha256': nativeCoreSha256,
+    'nativeCoreProvenanceSha256': nativeCoreProvenanceSha256,
+    'host': <String, Object?>{
+      'os': hostPlatform.operatingSystem,
+      'hardwareArchitecture': hostPlatform.hardwareArchitecture,
+      'translated': hostPlatform.translated,
+    },
+    'flutter': flutterIdentity,
+  };
+  return sha256.convert(utf8.encode(jsonEncode(payload))).toString();
+}
+
+Future<String> trackedBuildInputsSha256(
+  Directory projectRoot, {
+  required IsolatedE2eAppPlatform platform,
+}) async {
+  final listed = await Process.run('git', <String>[
+    'ls-files',
+    '--cached',
+    '--others',
+    '--exclude-standard',
+    '-z',
+    '--',
+    'lib',
+    'integration_test',
+    platform.name,
+    'pubspec.yaml',
+    'pubspec.lock',
+  ], workingDirectory: projectRoot.path);
+  if (listed.exitCode != 0) {
+    throw const IsolatedE2eAppBuildException(
+      'App build input inventory is unavailable.',
+    );
+  }
+  final paths =
+      listed.stdout
+          .toString()
+          .split('\u0000')
+          .where((path) => path.isNotEmpty)
+          .toList()
+        ..sort();
+  if (paths.isEmpty) {
+    throw const IsolatedE2eAppBuildException('App build inputs are empty.');
+  }
+  Digest? digest;
+  final input = sha256.startChunkedConversion(
+    _DigestSink((value) => digest = value),
+  );
+  for (final relative in paths) {
+    input.add(utf8.encode('$relative\u0000'));
+    final file = File('${projectRoot.path}/$relative');
+    if (!file.existsSync()) {
+      input.add(const <int>[0xff]);
+      continue;
+    }
+    await for (final chunk in file.openRead()) {
+      input.add(chunk);
+    }
+    input.add(const <int>[0]);
+  }
+  input.close();
+  return digest!.toString();
+}
+
+Future<String> directorySha256(Directory directory) async {
+  if (!directory.existsSync()) {
+    throw const IsolatedE2eAppBuildException('App artifact is missing.');
+  }
+  final entities = directory.listSync(recursive: true, followLinks: false)
+    ..sort((left, right) => left.path.compareTo(right.path));
+  Digest? digest;
+  final input = sha256.startChunkedConversion(
+    _DigestSink((value) => digest = value),
+  );
+  for (final entity in entities) {
+    final relative = entity.path.substring(directory.path.length + 1);
+    input.add(utf8.encode('$relative\u0000'));
+    input.add(utf8.encode('${entity.statSync().mode & 0x1ff}\u0000'));
+    final type = FileSystemEntity.typeSync(entity.path, followLinks: false);
+    if (type == FileSystemEntityType.file) {
+      input.add(const <int>[1]);
+      await for (final chunk in File(entity.path).openRead()) {
+        input.add(chunk);
+      }
+    } else if (type == FileSystemEntityType.link) {
+      input.add(const <int>[2]);
+      input.add(utf8.encode(Link(entity.path).targetSync()));
+    } else if (type == FileSystemEntityType.directory) {
+      input.add(const <int>[3]);
+    }
+    input.add(const <int>[0]);
+  }
+  input.close();
+  return digest!.toString();
+}
+
+Future<String?> _restoreIsolatedArtifactCache({
+  required IsolatedE2eAppBuildRequest request,
+  required IsolatedE2eAppBuildPlan plan,
+  required String fingerprint,
+}) async {
+  final cacheRoot = Directory(
+    '${request.workRoot.path}/artifact-cache/$fingerprint',
+  );
+  if (!cacheRoot.existsSync()) return null;
+  final manifest = File('${cacheRoot.path}/manifest.json');
+  final cachedApp = Directory('${cacheRoot.path}/app');
+  if (!manifest.existsSync() || !cachedApp.existsSync()) {
+    throw const IsolatedE2eAppBuildException(
+      'The isolated App cache entry is incomplete.',
+    );
+  }
+  final decoded = jsonDecode(await manifest.readAsString());
+  if (decoded is! Map ||
+      decoded['schemaVersion'] != 1 ||
+      decoded['fingerprint'] != fingerprint ||
+      decoded['bundleId'] != request.bundleId ||
+      decoded['artifactSha256'] is! String) {
+    throw const IsolatedE2eAppBuildException(
+      'The isolated App cache manifest is invalid.',
+    );
+  }
+  final expectedDigest = decoded['artifactSha256'] as String;
+  if (await directorySha256(cachedApp) != expectedDigest) {
+    throw const IsolatedE2eAppBuildException(
+      'The isolated App cache artifact hash changed.',
+    );
+  }
+  if (plan.artifactApp.existsSync()) {
+    plan.artifactApp.deleteSync(recursive: true);
+  }
+  await _copyAppDirectory(
+    source: cachedApp,
+    destination: plan.artifactApp,
+    platform: request.platform,
+  );
+  if (!plan.executable.existsSync() ||
+      await directorySha256(plan.artifactApp) != expectedDigest) {
+    throw const IsolatedE2eAppBuildException(
+      'The restored isolated App artifact is invalid.',
+    );
+  }
+  return expectedDigest;
+}
+
+Future<void> _storeIsolatedArtifactCache({
+  required IsolatedE2eAppBuildRequest request,
+  required IsolatedE2eAppBuildPlan plan,
+  required String fingerprint,
+  required String artifactSha256,
+}) async {
+  final parent = Directory('${request.workRoot.path}/artifact-cache')
+    ..createSync(recursive: true);
+  final cacheRoot = Directory('${parent.path}/$fingerprint');
+  if (cacheRoot.existsSync()) {
+    throw const IsolatedE2eAppBuildException(
+      'The isolated App cache entry already exists.',
+    );
+  }
+  final temporary = Directory('${parent.path}/.$fingerprint.tmp');
+  if (temporary.existsSync()) {
+    throw const IsolatedE2eAppBuildException(
+      'The isolated App cache temporary entry already exists.',
+    );
+  }
+  temporary.createSync();
+  final cachedApp = Directory('${temporary.path}/app');
+  try {
+    await _copyAppDirectory(
+      source: plan.artifactApp,
+      destination: cachedApp,
+      platform: request.platform,
+    );
+    if (await directorySha256(cachedApp) != artifactSha256) {
+      throw const IsolatedE2eAppBuildException(
+        'The isolated App cache copy hash changed.',
+      );
+    }
+    File('${temporary.path}/manifest.json').writeAsStringSync(
+      const JsonEncoder.withIndent('  ').convert(<String, Object?>{
+        'schemaVersion': 1,
+        'fingerprint': fingerprint,
+        'bundleId': request.bundleId,
+        'artifactSha256': artifactSha256,
+      }),
+      flush: true,
+    );
+    temporary.renameSync(cacheRoot.path);
+  } on Object {
+    if (temporary.existsSync()) temporary.deleteSync(recursive: true);
+    rethrow;
+  }
+}
+
+Future<void> _copyAppDirectory({
+  required Directory source,
+  required Directory destination,
+  required IsolatedE2eAppPlatform platform,
+}) async {
+  final copy = platform == IsolatedE2eAppPlatform.macos
+      ? await Process.run('/usr/bin/ditto', <String>[
+          source.path,
+          destination.path,
+        ])
+      : await Process.run('/bin/cp', <String>[
+          '-a',
+          source.path,
+          destination.path,
+        ]);
+  if (copy.exitCode != 0 || !destination.existsSync()) {
+    throw const IsolatedE2eAppBuildException(
+      'The isolated App directory copy failed.',
+    );
+  }
+}
+
+class _DigestSink implements Sink<Digest> {
+  _DigestSink(this.onDigest);
+
+  final void Function(Digest) onDigest;
+
+  @override
+  void add(Digest data) => onDigest(data);
+
+  @override
+  void close() {}
 }
 
 class IsolatedE2eAppBuildException implements Exception {
