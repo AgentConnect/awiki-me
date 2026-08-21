@@ -1086,6 +1086,14 @@ containment, and complete bundle digest before launch. Set
 `AWIKI_E2E_USE_FLUTTER_TEST=1` only as a legacy debugging fallback; it is not the
 unified profile path.
 
+The top-level `tests/e2e/runner.dart` owns coordination and shared launch
+boundaries. Manifest, options, test-only config, artifact/process lifecycle,
+platform/build isolation, performance and evidence reporting live under
+`tests/e2e/runner/`; desktop-peer, Recovery, Join and App-pair orchestration
+live under `tests/e2e/runner/scenarios/`. These files are one Dart library so
+the split does not duplicate case membership or expose private runtime state.
+Business actions and assertions remain in the existing Flutter/Core tests.
+
 Personal Agent fake Widget coverage is not product acceptance. The optional real
 `personal-agent` suite currently attests only implemented vertical slices:
 `PERSONALAGENT-E2E-001` enable/binding, `PERSONALAGENT-E2E-002` CLI message plus runtime
