@@ -3896,11 +3896,17 @@ class _IsolatedAppArtifact {
     required this.role,
     required this.bundleId,
     required this.executable,
+    required this.fingerprint,
+    required this.cacheHit,
+    required this.artifactSha256,
   });
 
   final String role;
   final String bundleId;
   final File executable;
+  final String fingerprint;
+  final bool cacheHit;
+  final String artifactSha256;
 
   static _IsolatedAppArtifact fromBuilderOutput(String output) {
     Object? decoded;
@@ -3919,11 +3925,22 @@ class _IsolatedAppArtifact {
     final role = decoded['name'];
     final bundleId = decoded['bundleId'];
     final executablePath = decoded['executablePath'];
+    final fingerprint = decoded['fingerprint'];
+    final cacheHit = decoded['cacheHit'];
+    final artifactSha256 = decoded['artifactSha256'];
     if (role is! String ||
         !RegExp(r'^[a-z][a-z0-9-]{0,31}$').hasMatch(role) ||
         bundleId is! String ||
+        !RegExp(
+          r'^[a-z][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+$',
+        ).hasMatch(bundleId) ||
         executablePath is! String ||
-        executablePath.trim().isEmpty) {
+        executablePath.trim().isEmpty ||
+        fingerprint is! String ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(fingerprint) ||
+        cacheHit is! bool ||
+        artifactSha256 is! String ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(artifactSha256)) {
       throw E2eFailure('The isolated App artifact manifest is incomplete.');
     }
     final executable = File(executablePath);
@@ -3934,6 +3951,9 @@ class _IsolatedAppArtifact {
       role: role,
       bundleId: bundleId,
       executable: executable,
+      fingerprint: fingerprint,
+      cacheHit: cacheHit,
+      artifactSha256: artifactSha256,
     );
   }
 }
