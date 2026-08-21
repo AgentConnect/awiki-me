@@ -4,6 +4,19 @@
 
 part of '../../runner.dart';
 
+String desktopE2eTenantName(String runId) {
+  final normalized = runId
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^-|-$'), '');
+  final bounded = normalized.length <= 40
+      ? normalized
+      : normalized.substring(0, 40);
+  final safeSuffix = bounded.replaceFirst(RegExp(r'-+$'), '');
+  return 'e2e-${safeSuffix.isEmpty ? 'run' : safeSuffix}';
+}
+
 extension DesktopE2ePeerScenario on DesktopE2eRunner {
   Future<void> _runAppCliPeer() async {
     final peerConfig = DesktopCliPeerConfig.from(options, fileConfig);
@@ -163,15 +176,7 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
     );
   }
 
-  String get _tenantName {
-    final suffix = runId
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-        .replaceAll(RegExp(r'-+'), '-')
-        .replaceAll(RegExp(r'^-|-$'), '');
-    final bounded = suffix.length <= 40 ? suffix : suffix.substring(0, 40);
-    return 'e2e-${bounded.isEmpty ? 'run' : bounded}';
-  }
+  String get _tenantName => desktopE2eTenantName(runId);
 
   Future<void> _writeCliConfig(Directory workspaceDir) async {
     final peerConfig = _requireConfig();

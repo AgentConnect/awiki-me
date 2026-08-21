@@ -1249,6 +1249,18 @@ void main() {
   });
 
   group('CLI tenant preflight', () {
+    test('bounds and re-normalizes long run IDs', () {
+      final tenant = desktopE2eTenantName(
+        'linux-basic-after-readiness-recovery-v2-app-full',
+      );
+
+      expect(tenant, hasLength(43));
+      expect(tenant, isNot(endsWith('-')));
+      expect(tenant, isNot(contains('--')));
+      expect(tenant, matches(RegExp(r'^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$')));
+      expect(desktopE2eTenantName('---'), 'e2e-run');
+    });
+
     test('returns an exact reusable target or no match', () {
       final tenant = cliTenantConfigFromListJson(
         jsonEncode(<String, Object?>{
