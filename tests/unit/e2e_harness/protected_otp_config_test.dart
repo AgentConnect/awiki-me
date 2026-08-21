@@ -31,4 +31,32 @@ void main() {
     );
     expect(() => ProtectedOtpConfig.load(malformed.path), throwsStateError);
   });
+
+  test('uses only a complete protected environment override', () {
+    final root = Directory.systemTemp.createTempSync('awiki-protected-otp-');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final file = File('${root.path}/e2e.local.yaml')
+      ..writeAsStringSync('otp:\n  phone: "+15550000006"\n  code: "294681"\n');
+
+    final config = ProtectedOtpConfig.load(
+      file.path,
+      environment: const <String, String>{
+        'AWIKI_E2E_OTP_PHONE': '+15550000007',
+        'AWIKI_E2E_OTP_CODE': '836492',
+      },
+    );
+
+    expect(config.phone, '+15550000007');
+    expect(config.code, '836492');
+    expect(config.toString(), isNot(contains('836492')));
+    expect(
+      () => ProtectedOtpConfig.load(
+        file.path,
+        environment: const <String, String>{
+          'AWIKI_E2E_OTP_PHONE': '+15550000007',
+        },
+      ),
+      throwsStateError,
+    );
+  });
 }
