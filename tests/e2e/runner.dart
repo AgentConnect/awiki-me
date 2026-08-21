@@ -71,6 +71,8 @@ const String _accountStateFailpointEnableEnv =
     'AWIKI_ACCOUNT_STATE_TEST_FAILPOINTS_ENABLED';
 const String _remoteTargetManifestEnv = 'AWIKI_SYSTEM_TEST_TARGET_MANIFEST';
 const String _awikiCliRustRepoEnv = 'AWIKI_CLI_RUST_REPO';
+const String _e2eOtpPhoneEnv = 'AWIKI_E2E_OTP_PHONE';
+const String _e2eOtpCodeEnv = 'AWIKI_E2E_OTP_CODE';
 const String _defaultRemoteTargetManifestPath =
     '../awiki-system-test/suites/remote-test-targets.json';
 const Set<String> _accountStateRequiredTargetCapabilities = <String>{
@@ -5230,8 +5232,14 @@ class DesktopE2eFileConfig {
 
     final baseUrl = _stringAt(service, 'baseUrl');
     final didDomain = _stringAt(service, 'didDomain');
-    final otpPhone = _stringAt(otp, 'phone');
-    final otpCode = _stringAt(otp, 'code');
+    final environmentOtpPhone = environment[_e2eOtpPhoneEnv]?.trim();
+    final environmentOtpCode = environment[_e2eOtpCodeEnv]?.trim();
+    final otpPhone = environmentOtpPhone?.isNotEmpty == true
+        ? environmentOtpPhone
+        : _stringAt(otp, 'phone');
+    final otpCode = environmentOtpCode?.isNotEmpty == true
+        ? environmentOtpCode
+        : _stringAt(otp, 'code');
     final appHandle = _stringAt(appUser, 'handle');
     final secondaryAppHandle = _stringAt(secondaryAppUser, 'handle');
     final cliHandle = _stringAt(cliUser, 'handle');

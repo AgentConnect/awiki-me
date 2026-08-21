@@ -1442,6 +1442,34 @@ daemon:
       },
     );
 
+    test('E2E environment overrides deployment OTP values only', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_desktop_override_otp_test_',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      File('${root.path}/e2e.local.yaml').writeAsStringSync('''
+otp:
+  phone: stale-phone
+  code: stale-code
+''');
+
+      final config = DesktopE2eFileConfig.load(
+        root: root,
+        path: 'e2e.local.yaml',
+        environment: const <String, String>{
+          'AWIKI_E2E_OTP_PHONE': 'deployed-phone',
+          'AWIKI_E2E_OTP_CODE': 'deployed-code',
+        },
+      );
+
+      expect(config.otpPhone, 'deployed-phone');
+      expect(config.otpCode, 'deployed-code');
+    });
+
     test('loads minimal local YAML config', () async {
       final root = await Directory.systemTemp.createTemp(
         'awiki_desktop_config_test_',
