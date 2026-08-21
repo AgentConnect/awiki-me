@@ -1095,6 +1095,22 @@ class DesktopE2eRunner {
       };
     });
     await _writeRemoteHandleRecoveryRunConfig(recoveryConfig);
+    Map<String, _IsolatedAppArtifact> preparedRecoveryArtifacts =
+        <String, _IsolatedAppArtifact>{};
+    if (!options.dryRun &&
+        !commands.dryRun &&
+        (options.prepareOnly ||
+            Platform.environment['AWIKI_E2E_USE_FLUTTER_TEST']?.trim() !=
+                '1')) {
+      preparedRecoveryArtifacts = await _timed(
+        'Preparing Handle Recovery integration executables',
+        () => _prepareHandleRecoveryIntegrationExecutables(
+          registrationRejoin: registrationRejoin,
+          freshOnly: freshOnly,
+          localDataOnly: localDataOnly,
+        ),
+      );
+    }
     if (options.prepareOnly) {
       _section('Prepare-only completed');
       _line('No remote identity or Handle Recovery operation was created.');
@@ -1104,10 +1120,16 @@ class DesktopE2eRunner {
     if (registrationRejoin) {
       await _timed(
         'Flutter registration re-Join and management transfer lifecycle',
-        () => _runFlutterTest(
-          'integration_test/handle_recovery_ui_test.dart',
-          caseIds: _multiDeviceAppPairRecoveryRegistrationCaseIds,
-        ),
+        () => preparedRecoveryArtifacts.isNotEmpty
+            ? _executePreparedIntegration(
+                artifact: preparedRecoveryArtifacts['recovery-main']!,
+                caseIds: _multiDeviceAppPairRecoveryRegistrationCaseIds,
+                stateRoot: appStateRootDir,
+              )
+            : _runFlutterTest(
+                'integration_test/handle_recovery_ui_test.dart',
+                caseIds: _multiDeviceAppPairRecoveryRegistrationCaseIds,
+              ),
       );
       return;
     }
@@ -1122,10 +1144,21 @@ class DesktopE2eRunner {
       }
     }
     if (freshOnly) {
-      await _runFreshRemoteHandleRecovery();
+      await _runFreshRemoteHandleRecovery(preparedRecoveryArtifacts);
       return;
     }
+    final crashCaseIds = <String>[
+      if (!localDataOnly) 'HANDLE-RECOVERY-V1-E2E-002',
+      if (localDataOnly) 'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
+    ];
     await _timed('Flutter Recovery committed/reset crash-cut phase A', () {
+      if (preparedRecoveryArtifacts.isNotEmpty) {
+        return _executePreparedIntegration(
+          artifact: preparedRecoveryArtifacts['recovery-crash-a']!,
+          caseIds: crashCaseIds,
+          stateRoot: appStateRootDir,
+        );
+      }
       return _runFlutterArgs(
         <String>[
           'test',
@@ -1138,10 +1171,7 @@ class DesktopE2eRunner {
         ],
         platform: platform,
         timeout: suiteDefinition.timeout,
-        runtimeCaseIds: <String>[
-          if (!localDataOnly) 'HANDLE-RECOVERY-V1-E2E-002',
-          if (localDataOnly) 'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
-        ],
+        runtimeCaseIds: crashCaseIds,
       );
     });
     if (!options.dryRun && !processRestartHandoffFile.existsSync()) {
@@ -1150,6 +1180,13 @@ class DesktopE2eRunner {
       );
     }
     await _timed('Flutter Recovery committed/reset crash-cut phase B', () {
+      if (preparedRecoveryArtifacts.isNotEmpty) {
+        return _executePreparedIntegration(
+          artifact: preparedRecoveryArtifacts['recovery-crash-b']!,
+          caseIds: crashCaseIds,
+          stateRoot: appStateRootDir,
+        );
+      }
       return _runFlutterArgs(
         <String>[
           'test',
@@ -1161,10 +1198,7 @@ class DesktopE2eRunner {
         ],
         platform: platform,
         timeout: suiteDefinition.timeout,
-        runtimeCaseIds: <String>[
-          if (!localDataOnly) 'HANDLE-RECOVERY-V1-E2E-002',
-          if (localDataOnly) 'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
-        ],
+        runtimeCaseIds: crashCaseIds,
       );
     });
     if (localDataOnly) return;
@@ -1173,6 +1207,16 @@ class DesktopE2eRunner {
       multiDeviceAppJoiningStateRootDir.createSync(recursive: true);
     }
     await _timed('Flutter visible Handle Recovery V1 lifecycle', () {
+      if (preparedRecoveryArtifacts.isNotEmpty) {
+        return _executePreparedIntegration(
+          artifact: preparedRecoveryArtifacts['recovery-main']!,
+          caseIds: const <String>[
+            'HANDLE-RECOVERY-V1-E2E-001',
+            'HANDLE-RECOVERY-V1-E2E-003',
+          ],
+          stateRoot: appStateRootDir,
+        );
+      }
       return _runFlutterTest(
         'integration_test/handle_recovery_ui_test.dart',
         caseIds: const <String>[
@@ -1183,10 +1227,67 @@ class DesktopE2eRunner {
     });
   }
 
-  Future<void> _runFreshRemoteHandleRecovery() async {
+  Future<Map<String, _IsolatedAppArtifact>>
+  _prepareHandleRecoveryIntegrationExecutables({
+    required bool registrationRejoin,
+    required bool freshOnly,
+    required bool localDataOnly,
+  }) async {
+    final artifacts = <String, _IsolatedAppArtifact>{};
+    if (registrationRejoin || freshOnly || !localDataOnly) {
+      artifacts['recovery-main'] = await _prepareIntegrationExecutable(
+        name: 'recovery-main',
+        target: 'integration_test/handle_recovery_ui_test.dart',
+        bundleId: 'ai.awiki.awikime.dev.e2e.recovery.main',
+        stateRoot: appStateRootDir,
+      );
+    }
+    if (!registrationRejoin && !freshOnly) {
+      artifacts['recovery-crash-a'] = await _prepareIntegrationExecutable(
+        name: 'recovery-crash-a',
+        target: 'integration_test/handle_recovery_ui_test.dart',
+        bundleId: 'ai.awiki.awikime.dev.e2e.recovery.crash.a',
+        stateRoot: appStateRootDir,
+        dartDefines: const <String>[
+          'AWIKI_HANDLE_RECOVERY_E2E_PHASE=crash_a',
+          'AWIKI_E2E_HANDLE_RECOVERY_CRASH_BEFORE_PRODUCT_RESET=true',
+        ],
+      );
+      artifacts['recovery-crash-b'] = await _prepareIntegrationExecutable(
+        name: 'recovery-crash-b',
+        target: 'integration_test/handle_recovery_ui_test.dart',
+        bundleId: 'ai.awiki.awikime.dev.e2e.recovery.crash.b',
+        stateRoot: appStateRootDir,
+        dartDefines: const <String>['AWIKI_HANDLE_RECOVERY_E2E_PHASE=crash_b'],
+      );
+    }
+    if (freshOnly) {
+      artifacts['recovery-fresh-restart'] = await _prepareIntegrationExecutable(
+        name: 'recovery-fresh-restart',
+        target: 'integration_test/handle_recovery_ui_test.dart',
+        bundleId: 'ai.awiki.awikime.dev.e2e.recovery.fresh.restart',
+        stateRoot: appStateRootDir,
+        dartDefines: const <String>[
+          'AWIKI_HANDLE_RECOVERY_E2E_PHASE=fresh_restart',
+        ],
+      );
+    }
+    return artifacts;
+  }
+
+  Future<void> _runFreshRemoteHandleRecovery(
+    Map<String, _IsolatedAppArtifact> preparedArtifacts,
+  ) async {
     Object? freshFailure;
     try {
       await _timed('Flutter Fresh Root business continuity lifecycle', () {
+        if (preparedArtifacts.isNotEmpty) {
+          return _executePreparedIntegration(
+            artifact: preparedArtifacts['recovery-main']!,
+            caseIds: _handleRecoveryFreshCaseIds,
+            stateRoot: appStateRootDir,
+          );
+        }
         return _runFlutterTest(
           'integration_test/handle_recovery_ui_test.dart',
           caseIds: _handleRecoveryFreshCaseIds,
@@ -1197,6 +1298,13 @@ class DesktopE2eRunner {
     }
     try {
       await _timed('Flutter Fresh Root cold restart verification', () {
+        if (preparedArtifacts.isNotEmpty) {
+          return _executePreparedIntegration(
+            artifact: preparedArtifacts['recovery-fresh-restart']!,
+            caseIds: const <String>['HANDLE-RECOVERY-FRESH-RESTART-E2E-001'],
+            stateRoot: appStateRootDir,
+          );
+        }
         return _runFlutterArgs(
           <String>[
             'test',
@@ -1861,7 +1969,15 @@ class DesktopE2eRunner {
 
     await _timed('Checking tooling', _checkTooling);
     if (options.prepareOnly) {
-      if (_supportsPreparedDesktopPeerExecutable(peerConfig.e2eCase)) {
+      if (peerConfig.e2eCase == DesktopE2eCase.restart) {
+        if (options.dryRun || commands.dryRun) {
+          _line('would prepare three restart integration executables');
+        } else {
+          await _timed('Preparing restart integration executables', () {
+            return _prepareRestartIntegrationExecutables();
+          });
+        }
+      } else if (_supportsPreparedDesktopPeerExecutable(peerConfig.e2eCase)) {
         if (options.dryRun || commands.dryRun) {
           _line('would prepare the desktop integration executable');
         } else {
@@ -2234,6 +2350,38 @@ class DesktopE2eRunner {
 
   Future<void> _planFlutterDesktopSmoke() async {
     final peerConfig = _requireConfig();
+    if (peerConfig.e2eCase == DesktopE2eCase.restart &&
+        !options.dryRun &&
+        !commands.dryRun &&
+        Platform.environment['AWIKI_E2E_USE_FLUTTER_TEST']?.trim() != '1') {
+      final artifacts = await _prepareRestartIntegrationExecutables();
+      await _executePreparedIntegration(
+        artifact: artifacts.phaseA,
+        caseIds: suiteDefinition.caseIds,
+        stateRoot: appStateRootDir,
+      );
+      if (!processRestartHandoffFile.existsSync()) {
+        throw E2eFailure(
+          'Process-restart phase A did not write its handoff evidence.',
+        );
+      }
+      await _executePreparedIntegration(
+        artifact: artifacts.phaseB,
+        caseIds: suiteDefinition.caseIds,
+        stateRoot: appStateRootDir,
+      );
+      if (!credentialDeleteMarkerFile.existsSync()) {
+        throw E2eFailure(
+          'Credential-delete phase B did not write its completion evidence.',
+        );
+      }
+      await _executePreparedIntegration(
+        artifact: artifacts.phaseC,
+        caseIds: suiteDefinition.caseIds,
+        stateRoot: appStateRootDir,
+      );
+      return;
+    }
     if (peerConfig.e2eCase == DesktopE2eCase.restart) {
       await _runFlutterArgs(
         <String>[
@@ -2334,6 +2482,36 @@ class DesktopE2eRunner {
           argument.substring('--dart-define='.length),
       ],
     );
+  }
+
+  Future<
+    ({
+      _IsolatedAppArtifact phaseA,
+      _IsolatedAppArtifact phaseB,
+      _IsolatedAppArtifact phaseC,
+    })
+  >
+  _prepareRestartIntegrationExecutables() async {
+    final phaseA = await _prepareIntegrationExecutable(
+      name: 'restart-a',
+      target: 'integration_test/desktop_cli_peer_restart_phase_a_test.dart',
+      bundleId: 'ai.awiki.awikime.dev.e2e.restart.a',
+      stateRoot: appStateRootDir,
+    );
+    final phaseB = await _prepareIntegrationExecutable(
+      name: 'restart-b',
+      target: 'integration_test/desktop_cli_peer_restart_phase_b_test.dart',
+      bundleId: 'ai.awiki.awikime.dev.e2e.restart.b',
+      stateRoot: appStateRootDir,
+    );
+    final phaseC = await _prepareIntegrationExecutable(
+      name: 'restart-c',
+      target:
+          'integration_test/desktop_cli_peer_credential_delete_phase_c_test.dart',
+      bundleId: 'ai.awiki.awikime.dev.e2e.restart.c',
+      stateRoot: appStateRootDir,
+    );
+    return (phaseA: phaseA, phaseB: phaseB, phaseC: phaseC);
   }
 
   Future<void> _writeFlutterRunConfig(DesktopCliPeerConfig peerConfig) async {

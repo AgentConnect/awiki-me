@@ -132,6 +132,7 @@ Future<void> _recordAppProjectionFixtureFailure({
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(E2eInvocationCompletionWriter.markFinished);
 
   testWidgets(
     'Handle Recovery V4 replaces the DID through the visible App flow',
