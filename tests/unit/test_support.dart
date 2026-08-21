@@ -4113,7 +4113,8 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
   }
 }
 
-class FakeIdentityCorePort implements IdentityCorePort {
+class FakeIdentityCorePort
+    implements IdentityCorePort, DaemonSubkeyAuthorizationCorePort {
   FakeIdentityCorePort({
     UserSubkeyPackage? daemonSubkeyPackage,
     AppSession? defaultSession,
@@ -4123,7 +4124,6 @@ class FakeIdentityCorePort implements IdentityCorePort {
              userDid: 'did:human:me',
              verificationMethod: 'did:human:me#daemon-key-1',
              publicKeyMultibase: 'zPublic',
-             privateKeyMultibase: 'zPrivate',
            ),
        defaultSession =
            defaultSession ??
@@ -4136,8 +4136,8 @@ class FakeIdentityCorePort implements IdentityCorePort {
 
   final UserSubkeyPackage daemonSubkeyPackage;
   final AppSession defaultSession;
-  String? lastDaemonSubkeySelector;
-  String? lastEnsuredDaemonSubkeySelector;
+  String? lastAuthorizedDaemonSubkeySelector;
+  UserSubkeyPackage? lastAuthorizedDaemonSubkeyProposal;
   String? lastRevokedDaemonSubkeySelector;
   String? lastDisplayNameProjectionIdentityId;
   String? lastDisplayNameProjection;
@@ -4163,18 +4163,12 @@ class FakeIdentityCorePort implements IdentityCorePort {
   ];
 
   @override
-  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(
+  Future<UserSubkeyPackage> authorizeDaemonSubkey(
     String identityIdOrAlias,
+    UserSubkeyPackage proposal,
   ) async {
-    lastDaemonSubkeySelector = identityIdOrAlias;
-    return daemonSubkeyPackage;
-  }
-
-  @override
-  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
-    String identityIdOrAlias,
-  ) async {
-    lastEnsuredDaemonSubkeySelector = identityIdOrAlias;
+    lastAuthorizedDaemonSubkeySelector = identityIdOrAlias;
+    lastAuthorizedDaemonSubkeyProposal = proposal;
     return daemonSubkeyPackage;
   }
 

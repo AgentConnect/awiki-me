@@ -29,6 +29,15 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../test_support.dart';
 
+const _daemonSubkeyProposal = <String, Object?>{
+  'schema': userSubkeyPackageSchema,
+  'user_did': 'did:human:me',
+  'verification_method': 'did:human:me#daemon-key-1',
+  'key_type': 'Multikey/Ed25519',
+  'key_algorithm': 'Ed25519',
+  'public_key_multibase': 'zPublic',
+};
+
 void main() {
   test(
     'load projects runtime Agent route before publishing inventory',
@@ -3540,7 +3549,7 @@ void main() {
   );
 
   test(
-    'bootstrapPersonalAgent ensures daemon subkey and delegates desired state',
+    'bootstrapPersonalAgent authorizes daemon proposal and delegates desired state',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -3556,6 +3565,9 @@ void main() {
                 'bootstrap_public_key_b64u':
                     'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
                 'bootstrap_key_algorithm': 'x25519',
+                'config_summary': <String, Object?>{
+                  'delegated_subkey_proposal': _daemonSubkeyProposal,
+                },
               },
             ),
           ),
@@ -3565,7 +3577,6 @@ void main() {
           userDid: 'did:human:me',
           verificationMethod: 'did:human:me#daemon-key-1',
           publicKeyMultibase: 'zPublic',
-          privateKeyMultibase: 'zPrivate',
         ),
       );
       final container = _container(
@@ -3581,8 +3592,11 @@ void main() {
             appInstanceId: 'app_1',
           );
 
-      expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
-      expect(identities.lastDaemonSubkeySelector, isNull);
+      expect(identities.lastAuthorizedDaemonSubkeySelector, 'default');
+      expect(
+        identities.lastAuthorizedDaemonSubkeyProposal?.publicKeyMultibase,
+        'zPublic',
+      );
       expect(control.lastBootstrapDaemonDid, 'did:agent:daemon');
       expect(control.lastBootstrapControllerDid, 'did:human:me');
       expect(control.lastBootstrapAppInstanceId, 'app_1');
@@ -3615,6 +3629,9 @@ void main() {
                 'bootstrap_public_key_b64u':
                     'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
                 'bootstrap_key_algorithm': 'x25519',
+                'config_summary': <String, Object?>{
+                  'delegated_subkey_proposal': _daemonSubkeyProposal,
+                },
               },
             ),
           ),
@@ -3634,7 +3651,6 @@ void main() {
           userDid: 'did:human:me',
           verificationMethod: 'did:human:me#daemon-key-1',
           publicKeyMultibase: 'zPublic',
-          privateKeyMultibase: 'zPrivate',
         ),
       );
       final bindings = _PersonalAgentBindingsStub();
@@ -3652,7 +3668,7 @@ void main() {
             appInstanceId: 'app_1',
           );
 
-      expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
+      expect(identities.lastAuthorizedDaemonSubkeySelector, 'default');
       expect(control.lastBootstrapDaemonDid, isNull);
       expect(bindings.lastUserDid, 'did:human:me');
       expect(bindings.lastDaemonAgentDid, 'did:agent:daemon');
@@ -3686,6 +3702,9 @@ void main() {
                     'bootstrap_public_key_b64u':
                         'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
                     'bootstrap_key_algorithm': 'x25519',
+                    'config_summary': <String, Object?>{
+                      'delegated_subkey_proposal': _daemonSubkeyProposal,
+                    },
                   },
                 ),
               ),
@@ -3733,7 +3752,6 @@ void main() {
           userDid: 'did:human:me',
           verificationMethod: 'did:human:me#daemon-key-1',
           publicKeyMultibase: 'zPublic',
-          privateKeyMultibase: 'zPrivate',
         ),
       );
       final container = _container(
@@ -3750,7 +3768,7 @@ void main() {
             appInstanceId: 'app_1',
           );
 
-      expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+      expect(identities.lastAuthorizedDaemonSubkeySelector, isNull);
       expect(control.lastBootstrapDaemonDid, isNull);
       expect(
         container.read(agentsProvider).error,
@@ -3774,6 +3792,7 @@ void main() {
               diagnosticsSummary: <String, Object?>{
                 'config_summary': <String, Object?>{
                   'bootstrap_key_status': 'ready',
+                  'delegated_subkey_proposal': _daemonSubkeyProposal,
                   'bootstrap_key': <String, Object?>{
                     'key_id': 'did:agent:daemon#key-3',
                     'public_key_b64u':
@@ -3790,7 +3809,6 @@ void main() {
           userDid: 'did:human:me',
           verificationMethod: 'did:human:me#daemon-key-1',
           publicKeyMultibase: 'zPublic',
-          privateKeyMultibase: 'zPrivate',
         ),
       );
       final container = _container(
@@ -3807,7 +3825,7 @@ void main() {
             appInstanceId: 'app_1',
           );
 
-      expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
+      expect(identities.lastAuthorizedDaemonSubkeySelector, 'default');
       expect(control.lastBootstrapDaemonDid, 'did:agent:daemon');
       expect(
         control.lastBootstrapDaemonPublicKey?.publicKeyB64u,
@@ -3831,6 +3849,7 @@ void main() {
               diagnosticsSummary: <String, Object?>{
                 'config_summary': <String, Object?>{
                   'bootstrap_key_status': 'ready',
+                  'delegated_subkey_proposal': _daemonSubkeyProposal,
                   'bootstrap_key_id': 'did:agent:daemon#key-3',
                   'bootstrap_public_key_b64u':
                       'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
@@ -3845,7 +3864,6 @@ void main() {
           userDid: 'did:human:me',
           verificationMethod: 'did:human:me#daemon-key-1',
           publicKeyMultibase: 'zPublic',
-          privateKeyMultibase: 'zPrivate',
         ),
       );
       final container = _container(
@@ -3862,7 +3880,7 @@ void main() {
             appInstanceId: 'app_1',
           );
 
-      expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
+      expect(identities.lastAuthorizedDaemonSubkeySelector, 'default');
       expect(control.lastBootstrapDaemonDid, 'did:agent:daemon');
       expect(
         control.lastBootstrapDaemonPublicKey?.publicKeyB64u,
@@ -3889,7 +3907,6 @@ void main() {
           userDid: 'did:human:me',
           verificationMethod: 'did:human:me#daemon-key-1',
           publicKeyMultibase: 'zPublic',
-          privateKeyMultibase: 'zPrivate',
         ),
       );
       final container = _container(
@@ -3906,7 +3923,7 @@ void main() {
             appInstanceId: 'app_1',
           );
 
-      expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+      expect(identities.lastAuthorizedDaemonSubkeySelector, isNull);
       expect(control.lastBootstrapDaemonDid, isNull);
       expect(
         container.read(agentsProvider).error,

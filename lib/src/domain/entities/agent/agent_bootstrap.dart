@@ -9,7 +9,7 @@ import 'personal_agent_runtime_provider.dart';
 
 const daemonBootstrapSchema = 'awiki.daemon.bootstrap.v1';
 const daemonBootstrapSecureSchema = 'awiki.daemon.bootstrap.secure.v1';
-const userSubkeyPackageSchema = 'awiki.daemon.user_subkey_package.v2';
+const userSubkeyPackageSchema = 'awiki.daemon.user_subkey_package.v3';
 const appMessageHandlerRole = 'app_message_handler';
 const appMessageHandlerRuntime = personalAgentProviderHermesRuntime;
 const appMessageHandlerRuntimeProvider = personalAgentProviderHermesId;
@@ -42,27 +42,51 @@ class UserSubkeyPackage {
     required this.userDid,
     required this.verificationMethod,
     required this.publicKeyMultibase,
-    String? privateKeyPem,
-    String? privateKeyMultibase,
     this.keyType,
     this.keyAlgorithm = 'Ed25519',
-    this.privateKeyEncoding = 'pem',
     this.expiresAt,
     this.allowedScopes = defaultPersonalAgentScopes,
-  }) : privateKeyPem = privateKeyPem ?? privateKeyMultibase ?? '',
-       privateKeyMultibase = privateKeyMultibase ?? privateKeyPem ?? '';
+  });
 
   final String userDid;
   final String verificationMethod;
   final String publicKeyMultibase;
-  final String privateKeyPem;
-  @Deprecated('Use privateKeyPem for PEM v2 packages.')
-  final String privateKeyMultibase;
   final String? keyType;
   final String? keyAlgorithm;
-  final String privateKeyEncoding;
   final DateTime? expiresAt;
   final List<String> allowedScopes;
+
+  factory UserSubkeyPackage.fromDaemonDiagnostics(
+    Map<String, Object?> diagnostics,
+  ) {
+    final configSummary = diagnostics['config_summary'];
+    if (configSummary is! Map) {
+      throw StateError('Daemon delegated subkey proposal is not available.');
+    }
+    final rawProposal = configSummary['delegated_subkey_proposal'];
+    if (rawProposal is! Map) {
+      throw StateError('Daemon delegated subkey proposal is not available.');
+    }
+    final proposal = rawProposal.map<String, Object?>(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    final schema = _nonEmpty(proposal['schema']?.toString());
+    if (schema != userSubkeyPackageSchema) {
+      throw StateError('Unsupported daemon delegated subkey proposal schema.');
+    }
+    _rejectPrivateBootstrapKeys(proposal);
+    final package = UserSubkeyPackage(
+      userDid: _nonEmpty(proposal['user_did']?.toString()) ?? '',
+      verificationMethod:
+          _nonEmpty(proposal['verification_method']?.toString()) ?? '',
+      keyType: _nonEmpty(proposal['key_type']?.toString()),
+      keyAlgorithm: _nonEmpty(proposal['key_algorithm']?.toString()),
+      publicKeyMultibase:
+          _nonEmpty(proposal['public_key_multibase']?.toString()) ?? '',
+    );
+    package.toJson();
+    return package;
+  }
 
   Map<String, Object?> toJson() {
     _requireNonEmpty(userDid, 'userDid');
@@ -71,14 +95,6 @@ class UserSubkeyPackage {
       verificationMethod: verificationMethod,
     );
     _requireNonEmpty(publicKeyMultibase, 'publicKeyMultibase');
-    _requireNonEmpty(privateKeyPem, 'privateKeyPem');
-    if (privateKeyEncoding.trim() != 'pem') {
-      throw ArgumentError.value(
-        privateKeyEncoding,
-        'privateKeyEncoding',
-        'must be pem for $userSubkeyPackageSchema',
-      );
-    }
     return <String, Object?>{
       'schema': userSubkeyPackageSchema,
       'user_did': userDid.trim(),
@@ -87,8 +103,6 @@ class UserSubkeyPackage {
       if (_nonEmpty(keyAlgorithm) != null)
         'key_algorithm': keyAlgorithm!.trim(),
       'public_key_multibase': publicKeyMultibase.trim(),
-      'private_key_encoding': privateKeyEncoding.trim(),
-      'private_key_pem': privateKeyPem.trim(),
       if (expiresAt != null) 'expires_at': expiresAt!.toUtc().toIso8601String(),
       'allowed_scopes': allowedScopes,
     };

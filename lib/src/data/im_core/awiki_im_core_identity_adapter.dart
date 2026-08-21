@@ -15,6 +15,7 @@ import 'awiki_im_core_runtime.dart';
 class AwikiImCoreIdentityAdapter
     implements
         IdentityCorePort,
+        DaemonSubkeyAuthorizationCorePort,
         LocalIdentityDataDeletionPort,
         ExistingHandleContinuationPort,
         LegacyIdentityUpgradePort {
@@ -86,47 +87,35 @@ class AwikiImCoreIdentityAdapter
   }
 
   @override
-  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(
+  Future<UserSubkeyPackage> authorizeDaemonSubkey(
     String identityIdOrAlias,
+    UserSubkeyPackage proposal,
   ) async {
     final coreInstance = await _coreInstance();
     final selector = _selectorFromString(identityIdOrAlias);
+    final coreProposal = core.DaemonSubkeyPublicProposal(
+      userDid: proposal.userDid,
+      verificationMethod: proposal.verificationMethod,
+      publicKeyMultibase: proposal.publicKeyMultibase,
+    );
     try {
-      final package = await coreInstance.loadDaemonSubkeyPackage(selector);
-      return _mappers.userSubkeyPackageFromCore(package);
+      final package = await coreInstance.authorizeDaemonSubkey(
+        selector: selector,
+        proposal: coreProposal,
+      );
+      return _mappers.userSubkeyPublicPackageFromCore(package);
     } on core.AwikiImCoreException catch (error) {
       if (!_shouldTryLocalAliasFallback(selector, error)) {
         rethrow;
       }
     }
-    final package = await coreInstance.loadDaemonSubkeyPackage(
-      core.IdentitySelector.localAlias(
+    final package = await coreInstance.authorizeDaemonSubkey(
+      selector: core.IdentitySelector.localAlias(
         _trimLeadingAt(identityIdOrAlias.trim()),
       ),
+      proposal: coreProposal,
     );
-    return _mappers.userSubkeyPackageFromCore(package);
-  }
-
-  @override
-  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
-    String identityIdOrAlias,
-  ) async {
-    final coreInstance = await _coreInstance();
-    final selector = _selectorFromString(identityIdOrAlias);
-    try {
-      final package = await coreInstance.ensureDaemonSubkeyPackage(selector);
-      return _mappers.userSubkeyPackageFromCore(package);
-    } on core.AwikiImCoreException catch (error) {
-      if (!_shouldTryLocalAliasFallback(selector, error)) {
-        rethrow;
-      }
-    }
-    final package = await coreInstance.ensureDaemonSubkeyPackage(
-      core.IdentitySelector.localAlias(
-        _trimLeadingAt(identityIdOrAlias.trim()),
-      ),
-    );
-    return _mappers.userSubkeyPackageFromCore(package);
+    return _mappers.userSubkeyPublicPackageFromCore(package);
   }
 
   @override

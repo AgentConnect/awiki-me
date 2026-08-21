@@ -7,7 +7,6 @@ import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/ports/profile_core_port.dart';
-import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
@@ -251,18 +250,6 @@ class _FakeIdentities implements IdentityCorePort, LegacyIdentityUpgradePort {
   @override
   Future<AppSession> resolveIdentity(String identityIdOrAlias) async {
     return _session(identityIdOrAlias);
-  }
-
-  @override
-  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias) {
-    throw UnsupportedError('unsupported');
-  }
-
-  @override
-  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
-    String identityIdOrAlias,
-  ) {
-    throw UnsupportedError('unsupported');
   }
 
   @override

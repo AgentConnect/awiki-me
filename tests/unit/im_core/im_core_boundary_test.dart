@@ -82,9 +82,12 @@ void main() {
 
             expect(
               file.path,
-              startsWith('lib/src/data/im_core/'),
+              anyOf(
+                startsWith('lib/src/data/im_core/'),
+                equals('lib/src/core/app_error_classifier.dart'),
+              ),
               reason:
-                  '${file.path} must not import the Rust SDK outside the adapter layer',
+                  '${file.path} must not import the Rust SDK outside adapters or the typed error classifier',
             );
             expect(
               import,

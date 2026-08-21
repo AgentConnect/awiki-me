@@ -68,17 +68,15 @@ class AwikiImCoreMappers {
     return session.toLegacySessionIdentity();
   }
 
-  UserSubkeyPackage userSubkeyPackageFromCore(
-    core.DaemonSubkeyPrivatePackage package,
+  UserSubkeyPackage userSubkeyPublicPackageFromCore(
+    core.DaemonSubkeyPublicPackage package,
   ) {
     return UserSubkeyPackage(
       userDid: package.userDid,
       verificationMethod: package.verificationMethod,
       publicKeyMultibase: package.publicKeyMultibase,
-      privateKeyPem: package.privateKeyPem,
       keyType: package.keyType,
       keyAlgorithm: package.keyAlgorithm,
-      privateKeyEncoding: package.privateKeyEncoding,
     );
   }
 
