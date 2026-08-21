@@ -324,7 +324,7 @@
     },
     "step4-revoke-mls": {
       "tier": "remote_product_ui_security",
-      "supportedPlatforms": ["macos"],
+      "supportedPlatforms": ["macos","linux"],
       "requiredTools": ["flutter","script","awiki-cli"],
       "requiredFor": [
         "optional_nightly",
@@ -340,6 +340,8 @@
       "allowedDidDomains": [
         "awiki.info"
       ],
+      "requiredTargetCapabilities": ["lanes.p5_device.v1"],
+      "missingCapabilityPolicy": "fail",
       "resourceCategories": [
         "dedicated_test_identity",
         "device_join_session",
@@ -435,7 +437,7 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": ["macos","linux"],
       "requiredTools": ["flutter","script","awiki-cli"],
-      "requiredFor": ["optional_nightly"],
+      "requiredFor": ["nightly","release"],
       "owner": "awiki-me-identity",
       "estimatedMinutes": 14,
       "timeoutMinutes": 16,
@@ -443,7 +445,7 @@
       "allowedHosts": ["awiki.info"],
       "allowedDidDomains": ["awiki.info"],
       "requiredTargetCapabilities": ["lanes.p5_device.v1"],
-      "missingCapabilityPolicy": "expected_skip",
+      "missingCapabilityPolicy": "fail",
       "resourceCategories": [
         "dedicated_test_identity",
         "device_join_session",

@@ -851,7 +851,6 @@ void main() {
       }
     },
     skip:
-        (!Platform.isMacOS && _invocationExpects(_deviceRevokeCaseId)) ||
         !_RemoteJoinRunConfig.exists() ||
         (!_invocationExpects(_adminApprovalCaseId) &&
             !_invocationExpects(_rootTransferCaseId) &&

@@ -133,7 +133,7 @@ Options:
                                Join and one CLI peer to check mixed tail-only,
                                Group, attachment, and read-state convergence.
                                full runs the audited App+CLI desktop peer flow.
-                               root-transfer separately runs the optional,
+                               root-transfer separately runs the release,
                                capability-gated App-admin/CLI-member Join +
                                root completion lifecycle and requires the
                                remote Join gate and protected OTP fixture.

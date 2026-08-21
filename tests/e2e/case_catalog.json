@@ -2871,7 +2871,8 @@
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_root_transfer_residual_ledger",
       "requiredFor": [
-        "optional_nightly"
+        "nightly",
+        "release"
       ],
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",

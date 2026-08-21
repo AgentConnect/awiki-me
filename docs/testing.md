@@ -163,7 +163,10 @@ identity，再与发送设备的本地投影合并，不能通过放宽 wire-con
 `DEVICE-JOIN-E2E-003`、`ROOT-TRANSFER-E2E-002` 和
 `MLS-MULTI-DEVICE-E2E-001` 为 planned、不可执行边界。`ROOT-TRANSFER-E2E-001`
 已由独立 Root transfer suite 注册；`DEVICE-REVOKE-E2E-001` 与
-`MLS-MULTI-DEVICE-E2E-002` 已由 `step4-revoke-mls` 注册为 active。不得把 planning
+`MLS-MULTI-DEVICE-E2E-002` 已由 `step4-revoke-mls` 注册为 active。Root transfer 和
+Step4 都要求 reviewed target 明确声明 `lanes.p5_device.v1`；缺能力时 release fail closed，
+不能改写为 optional skip。Step4 的 App client flow 支持 Linux/Xvfb 与 macOS；System 同名
+suite 的 Linux-only 属性来自 managed operator/cleanup，不表示 App 依赖 macOS API。不得把 planning
 文档、本地 capability gate、Widget fake 或手工演示记录为远端 E2E pass。
 
 聊天附件入口需要同时覆盖按钮、桌面拖拽、剪贴板粘贴和 macOS 交互式截图；
@@ -877,7 +880,7 @@ context-specific primary/identity policy; it is not a substitute
 for the remaining DID-only remote case.
 
 Suite `timeoutMinutes` must be greater than or equal to `estimatedMinutes`.
-The current `full` suite declares 25 active cases, a 40-minute estimate, and a
+The current `full` suite declares 24 active cases, a 40-minute estimate, and a
 45-minute runner/Flutter timeout. These values come from
 `tests/e2e/suite_manifest.json`; documentation must not maintain a second
 hand-written budget.
@@ -885,7 +888,7 @@ hand-written budget.
 The historical v8 `awiki.info` `full` evidence
 `fixed-full-committed-20260717160000` passed the 24 cases declared by that older
 manifest revision with verified schema-v2 attestation. It is regression history,
-not evidence for the current 25-case suite. It closed the earlier v7 red evidence by preserving two
+not evidence for the current 24-case suite. It closed the earlier v7 red evidence by preserving two
 same-body canonical messages during realtime delivery, converging them to
 strictly increasing `serverSequence`, keeping hidden-burst order exact, and
 persisting the newest visible Direct read watermark even when navigation held

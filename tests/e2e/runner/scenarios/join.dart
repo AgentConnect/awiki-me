@@ -22,7 +22,10 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
               DesktopE2ePlatform.macos,
               DesktopE2ePlatform.linux,
             }
-          : const <DesktopE2ePlatform>{DesktopE2ePlatform.macos},
+          : const <DesktopE2ePlatform>{
+              DesktopE2ePlatform.macos,
+              DesktopE2ePlatform.linux,
+            },
     );
     remoteMultiDeviceJoinConfig = joinConfig;
     _addRuntimeSecret(joinConfig.phone);

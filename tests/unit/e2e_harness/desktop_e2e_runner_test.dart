@@ -571,7 +571,7 @@ void main() {
       );
     });
 
-    test('parses optional root-transfer case aliases', () {
+    test('parses release root-transfer case aliases', () {
       final hyphen = DesktopE2eOptions.parse(const <String>[
         '--case',
         'root-transfer',
@@ -2080,11 +2080,15 @@ cliHandle: legacy-cli
         );
       }
       final rootTransfer = manifest.definitionFor(DesktopE2eCase.rootTransfer);
-      expect(rootTransfer.requiredFor, <String>['optional_nightly']);
+      expect(rootTransfer.requiredFor, <String>['nightly', 'release']);
       expect(rootTransfer.requiredTargetCapabilities, <String>[
         'lanes.p5_device.v1',
       ]);
-      expect(rootTransfer.missingCapabilityPolicy, 'expected_skip');
+      expect(rootTransfer.missingCapabilityPolicy, 'fail');
+      final step4 = manifest.definitionFor(DesktopE2eCase.step4RevokeMls);
+      expect(step4.supportedPlatforms, containsAll(<String>['macos', 'linux']));
+      expect(step4.requiredTargetCapabilities, <String>['lanes.p5_device.v1']);
+      expect(step4.missingCapabilityPolicy, 'fail');
     });
 
     test(

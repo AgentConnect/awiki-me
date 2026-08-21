@@ -358,7 +358,7 @@ class AppTestCatalog {
         '- `full` means the audited Direct, Group, P9 Mention, Contacts and '
         'Attachment product slices. The capability-gated '
         '`ROOT-TRANSFER-E2E-001` readiness-completion lifecycle is owned by '
-        'the separate optional `root-transfer` suite. `full` does '
+        'the separate release `root-transfer` suite. `full` does '
         '**not** claim onboarding beyond that isolated lifecycle, '
         'profile editing/search, identity switching, group role/remove/leave, '
         'secure-trust UI, mobile-device, or optional runtime-provider coverage.',
