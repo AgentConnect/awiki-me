@@ -6,7 +6,7 @@ part of '../../runner.dart';
 
 extension DesktopE2eJoinScenario on DesktopE2eRunner {
   Future<void> _runRemoteMultiDeviceJoin({List<String>? caseIds}) async {
-    final fullRootTransfer = options.e2eCase == DesktopE2eCase.full;
+    final fullRootTransfer = options.e2eCase == DesktopE2eCase.rootTransfer;
     final joinConfig = RemoteMultiDeviceJoinConfig.from(
       fileConfig: fileConfig,
       environment: fullRootTransfer
@@ -116,6 +116,9 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
     final adminAppCases = requestedCaseIds
         .where((caseId) => !joiningAppCaseIds.contains(caseId))
         .toList(growable: false);
+    final adminAppStateRoot = fullRootTransfer
+        ? rootTransferAppAdminStateRootDir
+        : appStateRootDir;
     if (joiningAppCases.isNotEmpty) {
       await _timed('Flutter joining App + CLI admin lifecycle', () {
         if (preparedJoinArtifact != null) {
@@ -137,7 +140,7 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
     }
     if (adminAppCases.isNotEmpty) {
       if (!options.dryRun && !commands.dryRun) {
-        appStateRootDir.createSync(recursive: true);
+        adminAppStateRoot.createSync(recursive: true);
         cliWorkspaceDir.createSync(recursive: true);
         cliHomeDir.createSync(recursive: true);
       }
@@ -146,7 +149,7 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
           return _executePreparedIntegration(
             artifact: preparedJoinArtifact,
             caseIds: adminAppCases,
-            stateRoot: appStateRootDir,
+            stateRoot: adminAppStateRoot,
             environment: const <String, String>{
               _multiDeviceRemoteJoinGateEnv: '1',
             },
@@ -155,7 +158,7 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
         return _runFlutterTest(
           'integration_test/multi_device_join_ui_test.dart',
           caseIds: adminAppCases,
-          appStateRoot: appStateRootDir,
+          appStateRoot: adminAppStateRoot,
         );
       });
     }
@@ -164,7 +167,7 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
   Future<void> _writeRemoteMultiDeviceJoinRunConfig(
     RemoteMultiDeviceJoinConfig joinConfig,
   ) async {
-    final fullRootTransferOnly = options.e2eCase == DesktopE2eCase.full;
+    final fullRootTransferOnly = options.e2eCase == DesktopE2eCase.rootTransfer;
     final payload = <String, Object?>{
       'schemaVersion': 2,
       'enabled': true,

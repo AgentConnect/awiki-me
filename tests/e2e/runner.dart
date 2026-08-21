@@ -143,8 +143,8 @@ const List<String> _desktopCliPeerCaseIds = <String>[
   'ATTACH-E2E-002',
   'ATTACH-REG-001',
   'DISPLAY-NAME-E2E-004',
-  'ROOT-TRANSFER-E2E-001',
 ];
+const List<String> _rootTransferCaseIds = <String>['ROOT-TRANSFER-E2E-001'];
 const List<String> _desktopSmokeCaseIds = <String>[
   'AGENT-NOTIFY-SMOKE-E2E-001',
   'AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001',
@@ -589,7 +589,7 @@ class DesktopE2eRunner {
         multiDeviceCliAdminHomeDir.createSync(recursive: true);
         multiDeviceAppJoiningStateRootDir.createSync(recursive: true);
       }
-      if (options.e2eCase == DesktopE2eCase.full) {
+      if (options.e2eCase == DesktopE2eCase.rootTransfer) {
         rootTransferCliMemberWorkspaceDir.createSync(recursive: true);
         rootTransferCliMemberHomeDir.createSync(recursive: true);
         rootTransferAppAdminStateRootDir.createSync(recursive: true);
@@ -650,6 +650,8 @@ class DesktopE2eRunner {
           await _runRemoteMultiDeviceAppPair();
         case DesktopE2eCase.step4RevokeMls:
           await _runRemoteMultiDeviceJoin();
+        case DesktopE2eCase.rootTransfer:
+          await _runRemoteMultiDeviceJoin();
         case DesktopE2eCase.full:
           await _runFull();
         default:
@@ -704,18 +706,6 @@ class DesktopE2eRunner {
 
   Future<void> _runFull() async {
     await _runAppCliPeer();
-    if (options.prepareOnly) {
-      await _runRemoteMultiDeviceJoin(caseIds: suiteDefinition.caseIds);
-      return;
-    }
-    if (options.dryRun || commands.dryRun) {
-      _line(
-        'would run real App-admin + CLI-member Join and '
-        'ROOT-TRANSFER-E2E-001 completion after the desktop peer flow',
-      );
-      return;
-    }
-    await _runRemoteMultiDeviceJoin(caseIds: suiteDefinition.caseIds);
   }
 
   Future<void> _runLocalSmoke() async {

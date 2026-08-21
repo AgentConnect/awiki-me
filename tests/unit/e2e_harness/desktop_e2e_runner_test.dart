@@ -571,6 +571,24 @@ void main() {
       );
     });
 
+    test('parses optional root-transfer case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'root-transfer',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'root_transfer',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.rootTransfer);
+      expect(underscore.e2eCase, DesktopE2eCase.rootTransfer);
+      expect(hyphen.e2eCase.caseIds, <String>['ROOT-TRANSFER-E2E-001']);
+      expect(hyphen.e2eCase.caseName, 'root-transfer');
+    });
+
     test('rejects retired remote multi-device MLS aliases', () {
       for (final value in <String>[
         'multi-device-remote-mls',
@@ -773,7 +791,8 @@ void main() {
                 'multi-device-remote-recovery-fresh, '
                 'multi-device-app-pair-recovery-registration-rejoin-management-transfer, '
                 'multi-device-app-pair, multi-device-app-pair-functional, '
-                'multi-device-app-pair-content-sync, step4-revoke-mls, full, performance, direct, '
+                'multi-device-app-pair-content-sync, step4-revoke-mls, '
+                'root-transfer, full, performance, direct, '
                 'group, attachment, contacts, inbound, identity-switch, restart, '
                 'display-name-fallback, '
                 'personal-agent, codex-agent, or claude-code-agent.',
@@ -2060,7 +2079,45 @@ cliHandle: legacy-cli
           greaterThanOrEqualTo(Duration(minutes: definition.estimatedMinutes)),
         );
       }
+      final rootTransfer = manifest.definitionFor(DesktopE2eCase.rootTransfer);
+      expect(rootTransfer.requiredFor, <String>['optional_nightly']);
+      expect(rootTransfer.requiredTargetCapabilities, <String>[
+        'lanes.p5_device.v1',
+      ]);
+      expect(rootTransfer.missingCapabilityPolicy, 'expected_skip');
     });
+
+    test(
+      'required suites cannot expected-skip a missing target capability',
+      () {
+        expect(
+          () =>
+              DesktopE2eSuiteDefinition.fromJson('required', <String, Object?>{
+                'tier': 'remote_product_ui',
+                'supportedPlatforms': <String>['macos', 'linux'],
+                'requiredTools': <String>['flutter'],
+                'requiredFor': <String>['release'],
+                'owner': 'awiki-me-messaging',
+                'estimatedMinutes': 1,
+                'timeoutMinutes': 1,
+                'cleanupPolicy': 'residual_ledger',
+                'allowedHosts': <String>['awiki.info'],
+                'allowedDidDomains': <String>['awiki.info'],
+                'requiredTargetCapabilities': <String>['provider-v1'],
+                'missingCapabilityPolicy': 'expected_skip',
+                'resourceCategories': <String>[],
+                'caseIds': <String>['CASE-001'],
+              }),
+          throwsA(
+            isA<E2eFailure>().having(
+              (error) => error.message,
+              'message',
+              contains('all requiredFor values are optional'),
+            ),
+          ),
+        );
+      },
+    );
 
     test('suite manifest drift fails closed', () {
       final definition = DesktopE2eSuiteManifest.load(
@@ -2706,13 +2763,7 @@ cliPeer:
       );
       expect(log, contains('would write Flutter E2E run config: <redacted>'));
       expect(log, contains('tenant_backend=https://service.example.test'));
-      expect(
-        log,
-        contains(
-          'would run real App-admin + CLI-member Join and '
-          'ROOT-TRANSFER-E2E-001 completion',
-        ),
-      );
+      expect(log, isNot(contains('ROOT-TRANSFER-E2E-001')));
       expect(log, isNot(contains('test-phone-secret')));
       expect(log, isNot(contains('test-otp-secret')));
       expect(log, isNot(contains('--dart-define=AWIKI_E2E_APP_STATE_ROOT=')));
@@ -2769,14 +2820,13 @@ cliPeer:
         'ATTACH-E2E-002',
         'ATTACH-REG-001',
         'DISPLAY-NAME-E2E-004',
-        'ROOT-TRANSFER-E2E-001',
       ]);
       expect(decoded['runId'], 'run123');
       expect(decoded['platform'], 'linux');
       expect(decoded['dryRun'], isTrue);
       expect(decoded['prepareOnly'], isFalse);
       final caseResults = decoded['caseResults'] as List<dynamic>;
-      expect(caseResults, hasLength(25));
+      expect(caseResults, hasLength(24));
       expect(
         caseResults.every(
           (value) =>

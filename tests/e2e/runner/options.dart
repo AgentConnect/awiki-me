@@ -82,6 +82,7 @@ Usage:
   dart run tests/e2e/runner.dart --case multi-device-app-pair-functional
   dart run tests/e2e/runner.dart --case multi-device-app-pair-content-sync
   dart run tests/e2e/runner.dart --case step4-revoke-mls
+  dart run tests/e2e/runner.dart --case root-transfer
   dart run tests/e2e/runner.dart --case full
   dart run tests/e2e/runner.dart --case inbound
   dart run tests/e2e/runner.dart --case restart
@@ -95,7 +96,7 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|step4-revoke-mls|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
+  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|step4-revoke-mls|root-transfer|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
                                unattended real App/CLI message-driven
@@ -131,10 +132,11 @@ Options:
                                multi-device-app-pair-content-sync reuses one
                                Join and one CLI peer to check mixed tail-only,
                                Group, attachment, and read-state convergence.
-                               full runs the audited App+CLI peer flow and then
-                               one real App-admin/CLI-member Join + root
-                               completion lifecycle; it therefore also requires
-                               the remote Join gate and protected OTP fixture.
+                               full runs the audited App+CLI desktop peer flow.
+                               root-transfer separately runs the optional,
+                               capability-gated App-admin/CLI-member Join +
+                               root completion lifecycle and requires the
+                               remote Join gate and protected OTP fixture.
                                The other cases run real App+CLI peer flows. The
                                performance case records product-level startup,
                                conversation, and send-to-visible timings and
@@ -166,6 +168,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   multiDeviceAppPairFunctional(_multiDeviceAppPairFunctionalCaseIds),
   multiDeviceAppPairContentSync(_multiDeviceAppPairContentSyncCaseIds),
   step4RevokeMls(_step4RevokeMlsCaseIds),
+  rootTransfer(_rootTransferCaseIds),
   full(_desktopCliPeerCaseIds),
   performance(_desktopCliPeerPerformanceCaseIds),
   direct(_desktopCliPeerDirectCaseIds),
@@ -205,6 +208,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.multiDeviceAppPairFunctional => _multiDeviceAppPairTarget,
       DesktopE2eCase.multiDeviceAppPairContentSync => _multiDeviceAppPairTarget,
       DesktopE2eCase.step4RevokeMls =>
+        'integration_test/multi_device_join_ui_test.dart',
+      DesktopE2eCase.rootTransfer =>
         'integration_test/multi_device_join_ui_test.dart',
       DesktopE2eCase.full =>
         'integration_test/desktop_cli_peer_smoke_test.dart',
@@ -261,6 +266,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.multiDeviceAppPairContentSync =>
         'multi-device-app-pair-content-sync',
       DesktopE2eCase.step4RevokeMls => 'step4-revoke-mls',
+      DesktopE2eCase.rootTransfer => 'root-transfer',
       _ => name,
     };
   }
@@ -296,6 +302,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.multiDeviceAppPairContentSync =>
         'multi-device-app-pair-content-sync',
       DesktopE2eCase.step4RevokeMls => 'step4-revoke-mls',
+      DesktopE2eCase.rootTransfer => 'root-transfer',
       DesktopE2eCase.personalAgent => 'personal-agent',
       DesktopE2eCase.codexAgent => 'codex-agent',
       DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
@@ -329,6 +336,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         minutes: 20,
       ),
       DesktopE2eCase.step4RevokeMls => const Duration(minutes: 25),
+      DesktopE2eCase.rootTransfer => const Duration(minutes: 16),
       _ => const Duration(minutes: 5),
     };
   }
@@ -355,6 +363,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.multiDeviceAppPairContentSync =>
         _multiDeviceAppPairContentSyncScenario,
       DesktopE2eCase.step4RevokeMls => _multiDeviceRemoteJoinScenario,
+      DesktopE2eCase.rootTransfer => _multiDeviceRemoteJoinScenario,
       _ => _desktopCliPeerScenario,
     };
   }
@@ -380,6 +389,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.multiDeviceAppPairContentSync =>
         _multiDeviceAppPairRunConfigPath,
       DesktopE2eCase.step4RevokeMls => _multiDeviceRemoteJoinRunConfigPath,
+      DesktopE2eCase.rootTransfer => _multiDeviceRemoteJoinRunConfigPath,
       _ => _desktopCliPeerRunConfigPath,
     };
   }
@@ -421,6 +431,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       'multi_device_app_pair_content_sync' =>
         DesktopE2eCase.multiDeviceAppPairContentSync,
       'step4-revoke-mls' || 'step4_revoke_mls' => DesktopE2eCase.step4RevokeMls,
+      'root-transfer' || 'root_transfer' => DesktopE2eCase.rootTransfer,
       'full' => DesktopE2eCase.full,
       'performance' ||
       'perf' ||
@@ -491,7 +502,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         'multi-device-app-pair-recovery-registration-rejoin-management-transfer, '
         'multi-device-app-pair, multi-device-app-pair-functional, '
         'multi-device-app-pair-content-sync, '
-        'step4-revoke-mls, full, performance, direct, '
+        'step4-revoke-mls, root-transfer, full, performance, direct, '
         'group, attachment, contacts, inbound, identity-switch, restart, '
         'display-name-fallback, '
         'personal-agent, codex-agent, or claude-code-agent.',

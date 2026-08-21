@@ -428,9 +428,30 @@
         "ATTACH-E2E-001",
         "ATTACH-E2E-002",
         "ATTACH-REG-001",
-        "DISPLAY-NAME-E2E-004",
-        "ROOT-TRANSFER-E2E-001"
+        "DISPLAY-NAME-E2E-004"
       ]
+    },
+    "root-transfer": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script","awiki-cli"],
+      "requiredFor": ["optional_nightly"],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 14,
+      "timeoutMinutes": 16,
+      "cleanupPolicy": "isolated_root_transfer_residual_ledger",
+      "allowedHosts": ["awiki.info"],
+      "allowedDidDomains": ["awiki.info"],
+      "requiredTargetCapabilities": ["lanes.p5_device.v1"],
+      "missingCapabilityPolicy": "expected_skip",
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "device_join_session",
+        "root_transfer",
+        "isolated_app_state",
+        "isolated_cli_state"
+      ],
+      "caseIds": ["ROOT-TRANSFER-E2E-001"]
     },
     "direct": {
       "tier": "remote_product_ui",

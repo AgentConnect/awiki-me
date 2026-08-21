@@ -279,7 +279,7 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
           'CLI peer register failed: ${redactor.redact(register.output)}',
         );
       }
-      if (!options.dryRun) {
+      if (!options.dryRun && !commands.dryRun) {
         _resourceSideEffectsPossible = true;
         final current = await _cli(const <String>[
           '--format',

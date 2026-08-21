@@ -96,6 +96,8 @@ class DesktopE2eSuiteDefinition {
     required this.cleanupPolicy,
     required this.allowedHosts,
     required this.allowedDidDomains,
+    required this.requiredTargetCapabilities,
+    required this.missingCapabilityPolicy,
     required this.resourceCategories,
     required this.supportedPlatforms,
     required this.requiredTools,
@@ -111,6 +113,8 @@ class DesktopE2eSuiteDefinition {
   final String cleanupPolicy;
   final List<String> allowedHosts;
   final List<String> allowedDidDomains;
+  final List<String> requiredTargetCapabilities;
+  final String missingCapabilityPolicy;
   final List<String> resourceCategories;
   final List<String> supportedPlatforms;
   final List<String> requiredTools;
@@ -174,16 +178,49 @@ class DesktopE2eSuiteDefinition {
         requiredTools.any((value) => value.trim().isEmpty)) {
       throw E2eFailure('E2E suite "$name" has invalid requiredTools.');
     }
+    final requiredFor = stringList('requiredFor');
+    final allowedHosts = stringList('allowedHosts');
+    final requiredTargetCapabilities =
+        raw.containsKey('requiredTargetCapabilities')
+        ? stringList('requiredTargetCapabilities')
+        : const <String>[];
+    if (requiredTargetCapabilities.toSet().length !=
+            requiredTargetCapabilities.length ||
+        requiredTargetCapabilities.any((value) => value.trim().isEmpty) ||
+        (requiredTargetCapabilities.isNotEmpty && allowedHosts.isEmpty)) {
+      throw E2eFailure(
+        'E2E suite "$name" has invalid requiredTargetCapabilities.',
+      );
+    }
+    final missingCapabilityPolicy = (raw['missingCapabilityPolicy'] ?? 'fail')
+        .toString()
+        .trim();
+    if (missingCapabilityPolicy != 'fail' &&
+        missingCapabilityPolicy != 'expected_skip') {
+      throw E2eFailure(
+        'E2E suite "$name" has invalid missingCapabilityPolicy.',
+      );
+    }
+    if (missingCapabilityPolicy == 'expected_skip' &&
+        (requiredTargetCapabilities.isEmpty ||
+            requiredFor.isEmpty ||
+            requiredFor.any((value) => !value.startsWith('optional_')))) {
+      throw E2eFailure(
+        'E2E suite "$name" can expected-skip missing capabilities only when all requiredFor values are optional.',
+      );
+    }
     return DesktopE2eSuiteDefinition(
       name: name,
       tier: canonicalTier,
-      requiredFor: stringList('requiredFor'),
+      requiredFor: requiredFor,
       owner: owner.trim(),
       estimatedMinutes: estimatedMinutes,
       timeout: Duration(minutes: timeoutMinutes),
       cleanupPolicy: cleanupPolicy.trim(),
-      allowedHosts: stringList('allowedHosts'),
+      allowedHosts: allowedHosts,
       allowedDidDomains: stringList('allowedDidDomains'),
+      requiredTargetCapabilities: requiredTargetCapabilities,
+      missingCapabilityPolicy: missingCapabilityPolicy,
       resourceCategories: stringList('resourceCategories'),
       supportedPlatforms: supportedPlatforms,
       requiredTools: requiredTools,
@@ -276,6 +313,8 @@ class DesktopE2eSuiteDefinition {
     'estimatedMinutes': estimatedMinutes,
     'timeoutMinutes': timeout.inMinutes,
     'cleanupPolicy': cleanupPolicy,
+    'requiredTargetCapabilities': requiredTargetCapabilities,
+    'missingCapabilityPolicy': missingCapabilityPolicy,
     'unexpectedSkipBudget': 0,
   };
 }

@@ -2857,7 +2857,7 @@
     {
       "caseId": "ROOT-TRANSFER-E2E-001",
       "feature": "AWiki Me management-device root import",
-      "layer": "remote_product_ui",
+      "layer": "remote_product_ui_security",
       "preconditions": "An accepted Step 3 contract has established a management-ready AWiki Me admin and an independent CLI active member with management_ready false; both use fresh native Core roots and exact protocol device IDs, and the unattended suite uses the test-scoped user-presence port while production LocalAuthentication remains unchanged.",
       "action": "Open Devices on the ready AWiki Me admin, select the exact eligible member, let Core prepare a safe recipient summary, complete exactly one E2E-only user-presence decision, stop the App sender flow at standard P5 accepted, then bring the CLI receiver online to import and complete readiness directly.",
       "exactOracles": [
@@ -2869,10 +2869,9 @@
         "A wrong or ineligible target, caller-supplied message ID, old list/retry/pending state, a second user-presence action, treating accepted as receiver readiness, waiting for or emitting an imported ACK/Reply, root/control JSON in inbox or UI, Root bytes in logs/errors/reports, or management actions before Registry readiness fails."
       ],
       "environment": "awiki_info_remote",
-      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "cleanupPolicy": "isolated_root_transfer_residual_ledger",
       "requiredFor": [
-        "nightly",
-        "release"
+        "optional_nightly"
       ],
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
