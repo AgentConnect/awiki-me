@@ -15,12 +15,14 @@ import 'remote_multi_device_join_contract.dart';
 import 'runner/failure.dart';
 import 'runner/flutter_build_isolation.dart';
 import 'runner/platform.dart';
+import 'runner/redaction.dart';
 import '../../tool/ensure_linux_im_core.dart';
 import '../../tool/isolated_e2e_app_builder.dart' show directorySha256;
 
 export 'runner/failure.dart';
 export 'runner/flutter_build_isolation.dart';
 export 'runner/platform.dart';
+export 'runner/redaction.dart';
 
 const String _defaultDesktopE2eConfigPath = 'tests/e2e/configs/e2e.local.yaml';
 const String _desktopE2eSuiteManifestPath = 'tests/e2e/suite_manifest.json';
@@ -6351,63 +6353,6 @@ enum DesktopE2eCase {
       ),
     };
   }
-}
-
-class DesktopSecretRedactor {
-  DesktopSecretRedactor(Iterable<String> secrets)
-    : _secrets =
-          secrets
-              .where((secret) => secret.trim().isNotEmpty)
-              .map((secret) => secret.trim())
-              .toSet()
-              .toList()
-            ..sort((a, b) => b.length.compareTo(a.length));
-
-  final List<String> _secrets;
-
-  void addSecret(String secret) {
-    final value = secret.trim();
-    if (value.isEmpty || _secrets.contains(value)) {
-      return;
-    }
-    _secrets.add(value);
-    _secrets.sort((a, b) => b.length.compareTo(a.length));
-  }
-
-  String redact(String input) {
-    var output = input;
-    for (final secret in _secrets) {
-      output = output.replaceAll(secret, '<redacted>');
-    }
-    output = output.replaceAll(
-      RegExp(
-        r'(otp|token|jwt|private[_-]?key|secret|authorization)=([^\s]+)',
-        caseSensitive: false,
-      ),
-      '<redacted-key>=<redacted>',
-    );
-    output = output.replaceAllMapped(
-      RegExp(r'(--otp|--phone)\s+([^\s]+)', caseSensitive: false),
-      (match) => '${match.group(1)} <redacted>',
-    );
-    output = output.replaceAll(
-      RegExp(r'did:[A-Za-z0-9._%~/-]+(?::[A-Za-z0-9._%~/-]+)+'),
-      '<redacted-did>',
-    );
-    return output;
-  }
-}
-
-String sanitizeAppPairDriverDiagnostic(
-  String input,
-  DesktopSecretRedactor redactor,
-) {
-  return redactor
-      .redact(input)
-      .replaceAll(
-        RegExp(r'(?<![0-9])[0-9]{6}(?![0-9])'),
-        '<redacted-six-digit>',
-      );
 }
 
 class DesktopTimingEntry {
