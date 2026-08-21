@@ -78,6 +78,7 @@ const String _preparedAppArtifactDirectoryEnv =
 const String _requiredPreparedAppArtifactsEnv =
     'AWIKI_E2E_REQUIRED_PREPARED_APP_ARTIFACTS';
 const String _e2eCliBinaryEnv = 'AWIKI_E2E_CLI_BINARY';
+const String _e2eCliSourceRefEnv = 'AWIKI_E2E_CLI_SOURCE_REF';
 const String _e2eDaemonBinaryEnv = 'AWIKI_E2E_DAEMON_BINARY';
 const String _e2eOtpPhoneEnv = 'AWIKI_E2E_OTP_PHONE';
 const String _e2eOtpCodeEnv = 'AWIKI_E2E_OTP_CODE';
@@ -679,6 +680,7 @@ class DesktopE2eRunner {
   Future<void> _runFull() async {
     await _runAppCliPeer();
     if (options.prepareOnly) {
+      await _runRemoteMultiDeviceJoin(caseIds: suiteDefinition.caseIds);
       return;
     }
     if (options.dryRun || commands.dryRun) {
@@ -850,6 +852,7 @@ class DesktopE2eRunner {
     required _IsolatedAppArtifact artifact,
     required List<String> caseIds,
     required Directory stateRoot,
+    Map<String, String> environment = const <String, String>{},
   }) async {
     if (platform == DesktopE2ePlatform.linux) {
       await commands.requireExecutable('setsid');
@@ -863,6 +866,7 @@ class DesktopE2eRunner {
         e2eCaseScenarioDefine: options.e2eCase.scenario,
         e2eCaseRunIdDefine: runId,
         e2eCaseIdsDefine: caseIds.join(','),
+        ...environment,
       },
       completionFile: invocationCompletionFile,
       expectedScenario: options.e2eCase.scenario,
@@ -977,6 +981,22 @@ class DesktopE2eRunner {
     });
 
     await _writeRemoteMultiDeviceJoinRunConfig(joinConfig);
+    _IsolatedAppArtifact? preparedJoinArtifact;
+    if (!options.dryRun &&
+        !commands.dryRun &&
+        (options.prepareOnly ||
+            Platform.environment['AWIKI_E2E_USE_FLUTTER_TEST']?.trim() !=
+                '1')) {
+      preparedJoinArtifact = await _timed(
+        'Preparing remote Join integration executable',
+        () => _prepareIntegrationExecutable(
+          name: 'remote-join',
+          target: 'integration_test/multi_device_join_ui_test.dart',
+          bundleId: 'ai.awiki.awikime.dev.e2e.remote.join',
+          stateRoot: appStateRootDir,
+        ),
+      );
+    }
     if (options.prepareOnly) {
       _section('Prepare-only completed');
       _line('No remote identity or Join session was created.');
@@ -996,6 +1016,16 @@ class DesktopE2eRunner {
         .toList(growable: false);
     if (joiningAppCases.isNotEmpty) {
       await _timed('Flutter joining App + CLI admin lifecycle', () {
+        if (preparedJoinArtifact != null) {
+          return _executePreparedIntegration(
+            artifact: preparedJoinArtifact,
+            caseIds: joiningAppCases,
+            stateRoot: multiDeviceAppJoiningStateRootDir,
+            environment: const <String, String>{
+              _multiDeviceRemoteJoinGateEnv: '1',
+            },
+          );
+        }
         return _runFlutterTest(
           'integration_test/multi_device_join_ui_test.dart',
           caseIds: joiningAppCases,
@@ -1010,6 +1040,16 @@ class DesktopE2eRunner {
         cliHomeDir.createSync(recursive: true);
       }
       await _timed('Flutter admin App + CLI joining lifecycle', () {
+        if (preparedJoinArtifact != null) {
+          return _executePreparedIntegration(
+            artifact: preparedJoinArtifact,
+            caseIds: adminAppCases,
+            stateRoot: appStateRootDir,
+            environment: const <String, String>{
+              _multiDeviceRemoteJoinGateEnv: '1',
+            },
+          );
+        }
         return _runFlutterTest(
           'integration_test/multi_device_join_ui_test.dart',
           caseIds: adminAppCases,
@@ -5697,6 +5737,7 @@ class DesktopE2eFileConfig {
     final configuredRustRepo = _stringAt(daemon, 'rustRepo');
     final environmentRustRepo = environment[_awikiCliRustRepoEnv]?.trim();
     final environmentCliBinary = environment[_e2eCliBinaryEnv]?.trim();
+    final environmentCliSourceRef = environment[_e2eCliSourceRefEnv]?.trim();
     final environmentDaemonBinary = environment[_e2eDaemonBinaryEnv]?.trim();
     final rustRepo = environmentRustRepo?.isNotEmpty == true
         ? environmentRustRepo!
@@ -5760,7 +5801,9 @@ class DesktopE2eFileConfig {
       secondaryAppHandle: secondaryAppHandle,
       cliHandle: cliHandle,
       cliBin: _resolvePath(root, cliBin),
-      cliSourceRef: _stringAt(cliPeer, 'sourceRef'),
+      cliSourceRef: environmentCliSourceRef?.isNotEmpty == true
+          ? environmentCliSourceRef
+          : _stringAt(cliPeer, 'sourceRef'),
       performance: DesktopPerformanceConfig.fromYaml(performance),
     );
   }

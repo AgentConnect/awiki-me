@@ -135,6 +135,7 @@ const Duration _remoteTimeout = Duration(seconds: 30);
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(E2eInvocationCompletionWriter.markFinished);
 
   testWidgets(
     'App new device joins after CLI listener emits a host wake',

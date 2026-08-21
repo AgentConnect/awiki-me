@@ -1472,6 +1472,8 @@ otp:
           environment: const <String, String>{
             'AWIKI_CLI_RUST_REPO': '/worktrees/awiki-cli-rs2',
             'AWIKI_E2E_CLI_BINARY': '/cache/awiki-cli',
+            'AWIKI_E2E_CLI_SOURCE_REF':
+                '2222222222222222222222222222222222222222',
             'AWIKI_E2E_DAEMON_BINARY': '/cache/awiki-daemon',
             'AWIKI_E2E_OTP_PHONE': 'deployed-phone',
             'AWIKI_E2E_OTP_CODE': 'deployed-code',
@@ -1479,6 +1481,7 @@ otp:
         );
 
         expect(config.cliBin, '/cache/awiki-cli');
+        expect(config.cliSourceRef, '2222222222222222222222222222222222222222');
         expect(config.daemonBinary, '/cache/awiki-daemon');
         expect(config.otpPhone, 'deployed-phone');
         expect(config.otpCode, 'deployed-code');
@@ -3871,7 +3874,12 @@ performance:
           await root.delete(recursive: true);
         }
       });
-      _writeLocalConfig(root, platform: 'linux', cliBin: '/tmp/fake-awiki-cli');
+      _writeLocalConfig(
+        root,
+        platform: 'linux',
+        cliBin: '/tmp/fake-awiki-cli',
+        otpCode: '123456',
+      );
       final lines = <String>[];
       final runner = DesktopE2eRunner(
         root: root,
@@ -4440,6 +4448,7 @@ void _writeLocalConfig(
   String cliHandle = 'e2e-cli',
   String cliBin = '/tmp/fake-awiki-cli',
   String cliSourceRef = '1111111111111111111111111111111111111111',
+  String otpCode = 'test-otp-secret',
   String? messageServiceUrl,
   String? messageServiceWsUrl,
   String? daemonRustRepo,
@@ -4532,7 +4541,7 @@ $messageServiceWs
 $daemon$personalAgent$codexAgent$claudeCodeAgent$performanceBlock
 otp:
   phone: test-phone-secret
-  code: test-otp-secret
+  code: $otpCode
 accounts:
   appUser:
     handle: $appHandle
@@ -4540,6 +4549,6 @@ accounts:
     handle: $cliHandle
 cliPeer:
   binary: $cliBin
-  sourceRef: $cliSourceRef
+  sourceRef: "$cliSourceRef"
 ''');
 }
