@@ -395,7 +395,11 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
       '--handle',
       peerConfig.appHandle,
     ]);
-    final secondaryAppResolved = peerConfig.secondaryAppHandle == null
+    final secondaryAppHandle =
+        peerConfig.e2eCase == DesktopE2eCase.identitySwitch
+        ? peerConfig.secondaryAppHandle
+        : null;
+    final secondaryAppResolved = secondaryAppHandle == null
         ? null
         : await _cli(<String>[
             '--format',
@@ -403,7 +407,7 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
             'id',
             'resolve',
             '--handle',
-            peerConfig.secondaryAppHandle!,
+            secondaryAppHandle,
           ]);
     final currentDid = _cliDidFromJson(current.output, current: true);
     final appDid = _cliDidFromJson(appResolved.output);
