@@ -13,6 +13,7 @@ import 'performance_contract.dart';
 import 'prepared_integration_process.dart';
 import 'remote_multi_device_join_contract.dart';
 import '../../tool/ensure_linux_im_core.dart';
+import '../../tool/isolated_e2e_app_builder.dart' show directorySha256;
 
 const String _defaultDesktopE2eConfigPath = 'tests/e2e/configs/e2e.local.yaml';
 const String _desktopE2eSuiteManifestPath = 'tests/e2e/suite_manifest.json';
@@ -72,6 +73,10 @@ const String _accountStateFailpointEnableEnv =
     'AWIKI_ACCOUNT_STATE_TEST_FAILPOINTS_ENABLED';
 const String _remoteTargetManifestEnv = 'AWIKI_SYSTEM_TEST_TARGET_MANIFEST';
 const String _awikiCliRustRepoEnv = 'AWIKI_CLI_RUST_REPO';
+const String _preparedAppArtifactDirectoryEnv =
+    'AWIKI_E2E_PREPARED_APP_ARTIFACT_DIR';
+const String _requiredPreparedAppArtifactsEnv =
+    'AWIKI_E2E_REQUIRED_PREPARED_APP_ARTIFACTS';
 const String _e2eCliBinaryEnv = 'AWIKI_E2E_CLI_BINARY';
 const String _e2eDaemonBinaryEnv = 'AWIKI_E2E_DAEMON_BINARY';
 const String _e2eOtpPhoneEnv = 'AWIKI_E2E_OTP_PHONE';
@@ -771,7 +776,52 @@ class DesktopE2eRunner {
     required String target,
     required String bundleId,
     required Directory stateRoot,
+    List<String> dartDefines = const <String>[],
   }) async {
+    final preparedDirectory =
+        Platform.environment[_preparedAppArtifactDirectoryEnv]?.trim() ?? '';
+    if (preparedDirectory.isNotEmpty) {
+      final manifest = File('$preparedDirectory/$name.json');
+      if (!manifest.existsSync()) {
+        final required =
+            Platform.environment[_requiredPreparedAppArtifactsEnv]
+                ?.split(',')
+                .map((value) => value.trim())
+                .where((value) => value.isNotEmpty)
+                .toSet() ??
+            const <String>{};
+        if (required.contains(name)) {
+          throw E2eFailure(
+            'Prepared integration artifact manifest is missing for $name.',
+          );
+        }
+      } else {
+        final artifact = _IsolatedAppArtifact.fromBuilderOutput(
+          manifest.readAsStringSync(),
+        );
+        if (artifact.role != name ||
+            artifact.target != target ||
+            artifact.bundleId != bundleId) {
+          throw E2eFailure(
+            'Prepared integration artifact identity does not match $name.',
+          );
+        }
+        final appRoot = artifact.appDirectory.resolveSymbolicLinksSync();
+        final executable = artifact.executable.resolveSymbolicLinksSync();
+        if (executable != appRoot && !executable.startsWith('$appRoot/')) {
+          throw E2eFailure(
+            'Prepared integration executable escapes its App artifact.',
+          );
+        }
+        if (await directorySha256(artifact.appDirectory) !=
+            artifact.artifactSha256) {
+          throw E2eFailure(
+            'Prepared integration App artifact hash changed for $name.',
+          );
+        }
+        return artifact;
+      }
+    }
     final workRoot = Directory(
       '${root.path}/.e2e/build-cache/prepared-integration/'
       '${platform.name}/$name',
@@ -791,6 +841,7 @@ class DesktopE2eRunner {
       '--bundle-id=$bundleId',
       '--platform=${platform.name}',
       '--flutter-bin=flutter',
+      for (final define in dartDefines) '--dart-define=$define',
     ], timeout: const Duration(minutes: 12));
     return _IsolatedAppArtifact.fromBuilderOutput(result.output);
   }
@@ -1809,14 +1860,23 @@ class DesktopE2eRunner {
     );
 
     await _timed('Checking tooling', _checkTooling);
+    if (options.prepareOnly) {
+      if (_supportsPreparedDesktopPeerExecutable(peerConfig.e2eCase)) {
+        if (options.dryRun || commands.dryRun) {
+          _line('would prepare the desktop integration executable');
+        } else {
+          await _timed('Preparing desktop integration executable', () {
+            return _prepareDesktopPeerExecutable(peerConfig);
+          });
+        }
+      }
+      _section('Prepare-only completed');
+      _line('No CLI identity, App process, or remote resource was created.');
+      return;
+    }
     await _timed('Preparing CLI workspace', _prepareCliWorkspace);
     await _timed('Preparing CLI identity', _prepareCliIdentity);
     await _timed('Checking CLI ready state', _checkCliReady);
-    if (options.prepareOnly) {
-      _section('Prepare-only completed');
-      _line('Flutter desktop E2E was not started.');
-      return;
-    }
     await _writeFlutterRunConfig(peerConfig);
     await _timed('Flutter App + CLI peer flow', _planFlutterDesktopSmoke);
     await _timed('Checking App identity ready state', _checkAppIdentityReady);
@@ -2220,6 +2280,19 @@ class DesktopE2eRunner {
       );
       return;
     }
+    if (!options.dryRun &&
+        !commands.dryRun &&
+        _supportsPreparedDesktopPeerExecutable(peerConfig.e2eCase) &&
+        Platform.environment['AWIKI_E2E_USE_FLUTTER_TEST']?.trim() != '1') {
+      final artifact = await _prepareDesktopPeerExecutable(peerConfig);
+      _resourceSideEffectsPossible = true;
+      await _executePreparedIntegration(
+        artifact: artifact,
+        caseIds: suiteDefinition.caseIds,
+        stateRoot: appStateRootDir,
+      );
+      return;
+    }
     final flutterArgs = <String>[
       'test',
       '--dart-define=AWIKI_E2E=true',
@@ -2237,6 +2310,29 @@ class DesktopE2eRunner {
       flutterArgs,
       platform: peerConfig.platform,
       timeout: _effectiveFlutterTimeout(peerConfig),
+    );
+  }
+
+  bool _supportsPreparedDesktopPeerExecutable(DesktopE2eCase e2eCase) =>
+      e2eCase != DesktopE2eCase.restart &&
+      e2eCase != DesktopE2eCase.personalAgent;
+
+  Future<_IsolatedAppArtifact> _prepareDesktopPeerExecutable(
+    DesktopCliPeerConfig peerConfig,
+  ) {
+    final caseName = peerConfig.e2eCase.caseName;
+    final bundleSuffix = caseName.replaceAll('-', '.');
+    return _prepareIntegrationExecutable(
+      name: caseName,
+      target: peerConfig.e2eCase.testFile,
+      bundleId: 'ai.awiki.awikime.dev.e2e.$bundleSuffix',
+      stateRoot: appStateRootDir,
+      dartDefines: <String>[
+        for (final argument in _multiDeviceProductDartDefines(
+          peerConfig.e2eCase,
+        ))
+          argument.substring('--dart-define='.length),
+      ],
     );
   }
 
@@ -3894,7 +3990,9 @@ class DesktopCommandResult {
 class _IsolatedAppArtifact {
   const _IsolatedAppArtifact({
     required this.role,
+    required this.target,
     required this.bundleId,
+    required this.appDirectory,
     required this.executable,
     required this.fingerprint,
     required this.cacheHit,
@@ -3902,7 +4000,9 @@ class _IsolatedAppArtifact {
   });
 
   final String role;
+  final String target;
   final String bundleId;
+  final Directory appDirectory;
   final File executable;
   final String fingerprint;
   final bool cacheHit;
@@ -3923,17 +4023,25 @@ class _IsolatedAppArtifact {
       );
     }
     final role = decoded['name'];
+    final target = decoded['target'];
     final bundleId = decoded['bundleId'];
+    final appPath = decoded['appPath'];
     final executablePath = decoded['executablePath'];
     final fingerprint = decoded['fingerprint'];
     final cacheHit = decoded['cacheHit'];
     final artifactSha256 = decoded['artifactSha256'];
     if (role is! String ||
         !RegExp(r'^[a-z][a-z0-9-]{0,31}$').hasMatch(role) ||
+        target is! String ||
+        !target.startsWith('integration_test/') ||
+        !target.endsWith('_test.dart') ||
+        target.contains('..') ||
         bundleId is! String ||
         !RegExp(
           r'^[a-z][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+$',
         ).hasMatch(bundleId) ||
+        appPath is! String ||
+        appPath.trim().isEmpty ||
         executablePath is! String ||
         executablePath.trim().isEmpty ||
         fingerprint is! String ||
@@ -3949,7 +4057,9 @@ class _IsolatedAppArtifact {
     }
     return _IsolatedAppArtifact(
       role: role,
+      target: target,
       bundleId: bundleId,
+      appDirectory: Directory(appPath),
       executable: executable,
       fingerprint: fingerprint,
       cacheHit: cacheHit,
