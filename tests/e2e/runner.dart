@@ -10,6 +10,7 @@ import 'app_pair_protocol.dart';
 import 'case_attestation.dart';
 import 'host_platform.dart';
 import 'performance_contract.dart';
+import 'prepared_integration_process.dart';
 import 'remote_multi_device_join_contract.dart';
 import '../../tool/ensure_linux_im_core.dart';
 
@@ -371,6 +372,7 @@ class DesktopE2eRunner {
   late final File caseAttestationFile;
   late final File scenarioProgressFile;
   late final File failureObservationFile;
+  late final File invocationCompletionFile;
   late final File resourceLedgerFile;
   late final File processRestartHandoffFile;
   late final File credentialDeleteMarkerFile;
@@ -473,6 +475,9 @@ class DesktopE2eRunner {
     failureObservationFile = e2eFailureObservationFileForAttestation(
       caseAttestationFile,
     );
+    invocationCompletionFile = e2eInvocationCompletionFileForAttestation(
+      caseAttestationFile,
+    );
     resourceLedgerFile = File('${reportDir.path}/resource_ledger.json');
     processRestartHandoffFile = File(
       '${reportDir.parent.path}/process_restart_handoff.json',
@@ -503,6 +508,7 @@ class DesktopE2eRunner {
     _addRuntimeSecret(caseAttestationFile.path);
     _addRuntimeSecret(scenarioProgressFile.path);
     _addRuntimeSecret(failureObservationFile.path);
+    _addRuntimeSecret(invocationCompletionFile.path);
     _addRuntimeSecret(resourceLedgerFile.path);
     _addRuntimeSecret(processRestartHandoffFile.path);
     _addRuntimeSecret(credentialDeleteMarkerFile.path);
@@ -530,6 +536,11 @@ class DesktopE2eRunner {
       if (failureObservationTemporary.existsSync()) {
         failureObservationTemporary.deleteSync();
       }
+      if (invocationCompletionFile.existsSync()) {
+        invocationCompletionFile.deleteSync();
+      }
+      final completionTemporary = File('${invocationCompletionFile.path}.tmp');
+      if (completionTemporary.existsSync()) completionTemporary.deleteSync();
       if (processRestartHandoffFile.existsSync()) {
         processRestartHandoffFile.deleteSync();
       }
@@ -695,6 +706,48 @@ class DesktopE2eRunner {
         ], timeout: const Duration(minutes: 1));
       });
     }
+    if (!options.dryRun &&
+        !commands.dryRun &&
+        Platform.environment['AWIKI_E2E_USE_FLUTTER_TEST']?.trim() != '1') {
+      final appArtifact = await _timed(
+        'Preparing App smoke executable',
+        () => _prepareIntegrationExecutable(
+          name: 'smoke-app',
+          target: 'integration_test/app_smoke_test.dart',
+          bundleId: 'ai.awiki.awikime.dev.e2e.smoke.app',
+          stateRoot: appStateRootDir,
+        ),
+      );
+      final coreArtifact = await _timed(
+        'Preparing native Core smoke executable',
+        () => _prepareIntegrationExecutable(
+          name: 'smoke-core',
+          target: 'integration_test/im_core_open_smoke_test.dart',
+          bundleId: 'ai.awiki.awikime.dev.e2e.smoke.core',
+          stateRoot: appStateRootDir,
+        ),
+      );
+      if (options.prepareOnly) return;
+      await _timed('Executing prepared App smoke', () {
+        return _executePreparedIntegration(
+          artifact: appArtifact,
+          caseIds: const <String>[
+            'AGENT-NOTIFY-SMOKE-E2E-001',
+            'AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001',
+            'SMOKE-E2E-001',
+          ],
+          stateRoot: appStateRootDir,
+        );
+      });
+      await _timed('Executing prepared native Core smoke', () {
+        return _executePreparedIntegration(
+          artifact: coreArtifact,
+          caseIds: const <String>['NATIVE-E2E-001'],
+          stateRoot: appStateRootDir,
+        );
+      });
+      return;
+    }
     await _timed('Flutter App smoke', () {
       return _runFlutterTest(
         'integration_test/app_smoke_test.dart',
@@ -711,6 +764,67 @@ class DesktopE2eRunner {
         caseIds: const <String>['NATIVE-E2E-001'],
       );
     });
+  }
+
+  Future<_IsolatedAppArtifact> _prepareIntegrationExecutable({
+    required String name,
+    required String target,
+    required String bundleId,
+    required Directory stateRoot,
+  }) async {
+    final workRoot = Directory(
+      '${root.path}/.e2e/build-cache/prepared-integration/'
+      '${platform.name}/$name',
+    );
+    final artifactRoot = Directory(
+      '${reportDir.parent.path}/prepared-artifacts',
+    );
+    _addRuntimeSecret(workRoot.path);
+    _addRuntimeSecret(artifactRoot.path);
+    final result = await commands.captureResult('dart', <String>[
+      'tool/build_isolated_e2e_app.dart',
+      '--name=$name',
+      '--target=$target',
+      '--state-root=${stateRoot.path}',
+      '--work-root=${workRoot.path}',
+      '--artifact-root=${artifactRoot.path}',
+      '--bundle-id=$bundleId',
+      '--platform=${platform.name}',
+      '--flutter-bin=flutter',
+    ], timeout: const Duration(minutes: 12));
+    return _IsolatedAppArtifact.fromBuilderOutput(result.output);
+  }
+
+  Future<void> _executePreparedIntegration({
+    required _IsolatedAppArtifact artifact,
+    required List<String> caseIds,
+    required Directory stateRoot,
+  }) async {
+    if (platform == DesktopE2ePlatform.linux) {
+      await commands.requireExecutable('setsid');
+    }
+    final execution = await runPreparedIntegrationExecutable(
+      executable: artifact.executable,
+      operatingSystem: platform.name,
+      environment: <String, String>{
+        'AWIKI_E2E_APP_STATE_ROOT': stateRoot.path,
+        e2eCaseAttestationPathDefine: caseAttestationFile.path,
+        e2eCaseScenarioDefine: options.e2eCase.scenario,
+        e2eCaseRunIdDefine: runId,
+        e2eCaseIdsDefine: caseIds.join(','),
+      },
+      completionFile: invocationCompletionFile,
+      expectedScenario: options.e2eCase.scenario,
+      expectedRunId: runId,
+      expectedCaseIds: caseIds,
+      timeout: suiteDefinition.timeout,
+      outputLine: (line) => _line(redactor.redact(line)),
+    );
+    if (!execution.terminatedAfterCompletion) {
+      throw E2eFailure(
+        'Prepared integration process did not reach its completion boundary.',
+      );
+    }
   }
 
   Future<void> _runLocalMultiDeviceCapabilityGate() async {
@@ -3806,7 +3920,7 @@ class _IsolatedAppArtifact {
     final bundleId = decoded['bundleId'];
     final executablePath = decoded['executablePath'];
     if (role is! String ||
-        !appPairRoles.contains(role) ||
+        !RegExp(r'^[a-z][a-z0-9-]{0,31}$').hasMatch(role) ||
         bundleId is! String ||
         executablePath is! String ||
         executablePath.trim().isEmpty) {
