@@ -47,6 +47,8 @@ void main() {
     expect(isPersonalAgentRuntime(regularAgent), isFalse);
     expect(isPersonalAgentRuntime(regularHermesAgent), isFalse);
     expect(isPersonalAgentRuntime(futurePersonalAgent), isTrue);
+    expect(isEnabledPersonalAgentRuntime(personalAgent), isTrue);
+    expect(isEnabledPersonalAgentRuntime(futurePersonalAgent), isFalse);
   });
 
   test(

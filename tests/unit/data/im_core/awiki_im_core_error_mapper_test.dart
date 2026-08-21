@@ -1,9 +1,28 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/application/models/message_sync_diagnostics.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_error_mapper.dart';
+import 'package:awiki_me/src/core/app_error_classifier.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('maps only safe Core service data into an SDK-neutral App error', () {
+    final mapped = const AwikiImCoreErrorMapper().appError(
+      const core.AwikiImCoreException(
+        code: 'service_error',
+        message: 'registration unavailable',
+        serviceDataJson:
+            '{"awiki_code":"identity.registration_verification_unavailable"}',
+      ),
+    );
+
+    expect(mapped, isA<AppStructuredError>());
+    expect(
+      structuredAppErrorCode(mapped),
+      'identity.registration_verification_unavailable',
+    );
+    expect(normalizeAppError(mapped), contains('registration unavailable'));
+  });
+
   const mapper = AwikiImCoreErrorMapper();
 
   test('maps unsupported capability with stable code', () {

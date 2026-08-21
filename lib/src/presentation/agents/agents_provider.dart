@@ -3590,7 +3590,10 @@ class AgentsController extends StateNotifier<AgentsState> {
         !_daemonAcceptsControlCommands(daemon)) {
       return null;
     }
-    return state.personalAgentRuntimeFor(daemonDid);
+    final target = state.personalAgentRuntimeFor(daemonDid);
+    return target != null && isEnabledPersonalAgentRuntime(target)
+        ? target
+        : null;
   }
 
   DaemonBootstrapPublicKey? _daemonBootstrapPublicKey(AgentSummary daemon) {

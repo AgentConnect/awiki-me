@@ -28,6 +28,16 @@ bool isPersonalAgentRuntime(AgentSummary agent) {
       );
 }
 
+bool isEnabledPersonalAgentRuntime(AgentSummary agent) {
+  if (!isPersonalAgentRuntime(agent)) return false;
+  final provider = PersonalAgentRuntimeProviders.byRuntime(agent.runtime);
+  if (provider != null) return provider.enabled;
+  for (final candidate in PersonalAgentRuntimeProviders.all) {
+    if (candidate.matchesHandle(agent.handle)) return candidate.enabled;
+  }
+  return true;
+}
+
 bool isPersonalAgentConversation(
   ConversationSummary conversation,
   Iterable<AgentSummary> agents,

@@ -9,6 +9,7 @@ import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_device_management_adapter.dart';
+import 'awiki_im_core_error_mapper.dart';
 import 'awiki_im_core_runtime.dart';
 
 class AwikiImCoreIdentityAdapter
@@ -193,14 +194,16 @@ class AwikiImCoreIdentityAdapter
     String? displayName,
   }) async {
     final coreInstance = await _runtime.coreInstance();
-    final result = await coreInstance.registerHandleWithPhone(
-      localAlias: handle,
-      requestedHandle: handle,
-      phone: phone,
-      otp: otp,
-      inviteCode: inviteCode,
-      profile: core.InitialProfile(displayName: displayName),
-      makeDefault: true,
+    final result = await _withMappedAppError(
+      () => coreInstance.registerHandleWithPhone(
+        localAlias: handle,
+        requestedHandle: handle,
+        phone: phone,
+        otp: otp,
+        inviteCode: inviteCode,
+        profile: core.InitialProfile(displayName: displayName),
+        makeDefault: true,
+      ),
     );
     return _registrationResult(coreInstance, result);
   }
@@ -213,13 +216,15 @@ class AwikiImCoreIdentityAdapter
     String? displayName,
   }) async {
     final coreInstance = await _runtime.coreInstance();
-    final result = await coreInstance.registerHandleWithEmail(
-      localAlias: handle,
-      requestedHandle: handle,
-      email: email,
-      inviteCode: inviteCode,
-      profile: core.InitialProfile(displayName: displayName),
-      makeDefault: true,
+    final result = await _withMappedAppError(
+      () => coreInstance.registerHandleWithEmail(
+        localAlias: handle,
+        requestedHandle: handle,
+        email: email,
+        inviteCode: inviteCode,
+        profile: core.InitialProfile(displayName: displayName),
+        makeDefault: true,
+      ),
     );
     return _registrationResult(coreInstance, result);
   }
@@ -231,12 +236,14 @@ class AwikiImCoreIdentityAdapter
     String? displayName,
   }) async {
     final coreInstance = await _runtime.coreInstance();
-    final result = await coreInstance.registerHandleWithoutContactVerification(
-      localAlias: handle,
-      requestedHandle: handle,
-      inviteCode: inviteCode,
-      profile: core.InitialProfile(displayName: displayName),
-      makeDefault: true,
+    final result = await _withMappedAppError(
+      () => coreInstance.registerHandleWithoutContactVerification(
+        localAlias: handle,
+        requestedHandle: handle,
+        inviteCode: inviteCode,
+        profile: core.InitialProfile(displayName: displayName),
+        makeDefault: true,
+      ),
     );
     return _registrationResult(coreInstance, result);
   }
@@ -325,6 +332,17 @@ class AwikiImCoreIdentityAdapter
   @override
   Future<void> discardExistingHandleContinuation(String continuationId) async {
     _existingHandleContinuations.remove(continuationId);
+  }
+}
+
+Future<T> _withMappedAppError<T>(Future<T> Function() action) async {
+  try {
+    return await action();
+  } on core.AwikiImCoreException catch (error, stackTrace) {
+    Error.throwWithStackTrace(
+      const AwikiImCoreErrorMapper().appError(error),
+      stackTrace,
+    );
   }
 }
 
