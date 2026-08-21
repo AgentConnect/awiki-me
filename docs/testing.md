@@ -1067,6 +1067,25 @@ and timestamps. This is the first assertion-evidence layer; one-to-one trace
 from every catalog exact oracle/negative guard to a dedicated assertion ID is
 still required before the conversation-correctness plan is complete.
 
+### Prepared desktop execution
+
+On macOS and Linux, `--prepare-only` builds content-addressed integration
+executables without creating identities or starting remote business flows.
+The smoke, desktop-core/focused, Join, restart, and Handle Recovery runners then
+launch those verified executables with run-owned state and attestation paths.
+Run ID, state root, scenario, and case IDs are runtime E2E inputs and do not
+change the build fingerprint; true fault-injection or product-capability flavors
+remain compile-time inputs. A warm prepared execution must not invoke
+`flutter build` or `flutter test`.
+
+Multi-phase scenarios keep distinct artifacts when their compiled behavior is
+different: restart uses `restart-a/b/c`, Handle Recovery uses main/crash/fresh
+variants, and `full` prepares both `full` and `remote-join`. The runner validates
+the artifact name, target, bundle ID, host architecture, fingerprint, executable
+containment, and complete bundle digest before launch. Set
+`AWIKI_E2E_USE_FLUTTER_TEST=1` only as a legacy debugging fallback; it is not the
+unified profile path.
+
 Personal Agent fake Widget coverage is not product acceptance. The optional real
 `personal-agent` suite currently attests only implemented vertical slices:
 `PERSONALAGENT-E2E-001` enable/binding, `PERSONALAGENT-E2E-002` CLI message plus runtime
