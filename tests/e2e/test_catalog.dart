@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'host_platform.dart';
+
 const String appSuiteManifestPath = 'tests/e2e/suite_manifest.json';
 const String appCaseCatalogPath = 'tests/e2e/case_catalog.json';
 const String appCaseCatalogDocumentPath = 'docs/test-case-catalog.md';
@@ -34,12 +36,53 @@ class AppTestCatalog {
         'suite manifest and case catalog must use schemaVersion 1',
       );
     }
+    final manifestRevision = _requiredString(
+      manifest,
+      'sourceRevision',
+      label: 'suite manifest',
+    );
+    final catalogRevision = _requiredString(
+      catalog,
+      'sourceRevision',
+      label: 'case catalog',
+    );
+    if (manifestRevision != catalogRevision) {
+      throw const FormatException(
+        'suite manifest and case catalog sourceRevision must match',
+      );
+    }
     final suites = _requiredObject(manifest, 'suites', label: 'suite manifest');
     final expectedByCaseId = <String, _ExpectedCase>{};
     final suiteCaseIds = <String, List<String>>{};
     for (final entry in suites.entries) {
       final suiteName = entry.key;
       final suite = _object(entry.value, label: 'suite $suiteName');
+      final tier = _requiredString(suite, 'tier', label: 'suite $suiteName');
+      awikiExecutionLaneForAppTier(tier);
+      final supportedPlatforms = _stringList(
+        suite,
+        'supportedPlatforms',
+        label: 'suite $suiteName',
+      );
+      if (supportedPlatforms.isEmpty ||
+          supportedPlatforms.toSet().length != supportedPlatforms.length ||
+          supportedPlatforms.any(
+            (value) => !awikiSupportedTestPlatforms.contains(value),
+          )) {
+        throw FormatException(
+          'suite $suiteName has invalid supportedPlatforms',
+        );
+      }
+      final requiredTools = _stringList(
+        suite,
+        'requiredTools',
+        label: 'suite $suiteName',
+      );
+      if (requiredTools.isEmpty ||
+          requiredTools.toSet().length != requiredTools.length ||
+          requiredTools.any((value) => value.trim().isEmpty)) {
+        throw FormatException('suite $suiteName has invalid requiredTools');
+      }
       final caseIds = _stringList(suite, 'caseIds', label: 'suite $suiteName');
       if (caseIds.isEmpty || caseIds.toSet().length != caseIds.length) {
         throw FormatException(
@@ -52,7 +95,7 @@ class AppTestCatalog {
             .putIfAbsent(caseId, _ExpectedCase.new)
             .addSuite(
               suiteName: suiteName,
-              tier: _requiredString(suite, 'tier', label: 'suite $suiteName'),
+              tier: tier,
               owner: _requiredString(suite, 'owner', label: 'suite $suiteName'),
               cleanupPolicy: _requiredString(
                 suite,
@@ -313,8 +356,9 @@ class AppTestCatalog {
       ..writeln()
       ..writeln(
         '- `full` means the audited Direct, Group, P9 Mention, Contacts and '
-        'Attachment product slices plus one real App-admin/CLI-member Join and '
-        '`ROOT-TRANSFER-E2E-001` readiness-completion lifecycle. It does '
+        'Attachment product slices. The capability-gated '
+        '`ROOT-TRANSFER-E2E-001` readiness-completion lifecycle is owned by '
+        'the separate release `root-transfer` suite. `full` does '
         '**not** claim onboarding beyond that isolated lifecycle, '
         'profile editing/search, identity switching, group role/remove/leave, '
         'secure-trust UI, mobile-device, or optional runtime-provider coverage.',

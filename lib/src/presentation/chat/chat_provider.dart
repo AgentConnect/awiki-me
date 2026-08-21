@@ -5648,11 +5648,20 @@ class ChatThreadsController
       return;
     }
     _upsertPersonalAgentSyncRecord(threadId, record);
-    if (!ref.read(personalAgentFeatureVisibleProvider)) {
-      return;
-    }
     final runtimeAgentDid = record.runtimeAgentDid?.trim();
     if (runtimeAgentDid == null || runtimeAgentDid.isEmpty) {
+      return;
+    }
+    if (record.isTerminal) {
+      _clearAgentPendingTurnsForPersonalAgent(
+        threadId: threadId,
+        runtimeAgentDid: runtimeAgentDid,
+        sourceMessageId: record.messageId,
+        runId: record.runId,
+      );
+      return;
+    }
+    if (!ref.read(personalAgentFeatureVisibleProvider)) {
       return;
     }
     if (record.isRuntimeStatus && _isActiveRunStatus(record.state ?? '')) {
@@ -5667,14 +5676,6 @@ class ChatThreadsController
         startedAt: DateTime.now(),
       );
       return;
-    }
-    if (record.isTerminal) {
-      _clearAgentPendingTurnsForPersonalAgent(
-        threadId: threadId,
-        runtimeAgentDid: runtimeAgentDid,
-        sourceMessageId: record.messageId,
-        runId: record.runId,
-      );
     }
   }
 

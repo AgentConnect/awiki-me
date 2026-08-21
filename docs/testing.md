@@ -163,7 +163,10 @@ identity，再与发送设备的本地投影合并，不能通过放宽 wire-con
 `DEVICE-JOIN-E2E-003`、`ROOT-TRANSFER-E2E-002` 和
 `MLS-MULTI-DEVICE-E2E-001` 为 planned、不可执行边界。`ROOT-TRANSFER-E2E-001`
 已由独立 Root transfer suite 注册；`DEVICE-REVOKE-E2E-001` 与
-`MLS-MULTI-DEVICE-E2E-002` 已由 `step4-revoke-mls` 注册为 active。不得把 planning
+`MLS-MULTI-DEVICE-E2E-002` 已由 `step4-revoke-mls` 注册为 active。Root transfer 和
+Step4 都要求 reviewed target 明确声明 `lanes.p5_device.v1`；缺能力时 release fail closed，
+不能改写为 optional skip。Step4 的 App client flow 支持 Linux/Xvfb 与 macOS；System 同名
+suite 的 Linux-only 属性来自 managed operator/cleanup，不表示 App 依赖 macOS API。不得把 planning
 文档、本地 capability gate、Widget fake 或手工演示记录为远端 E2E pass。
 
 聊天附件入口需要同时覆盖按钮、桌面拖拽、剪贴板粘贴和 macOS 交互式截图；
@@ -796,10 +799,25 @@ Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and
 must not be committed because they may contain OTP values.
 
 `tests/e2e/suite_manifest.json` is the checked-in suite source of truth. The
-runner fails on case-ID drift, records tier/owner/required triggers/timeout,
+runner fails on case-ID drift, records canonical tier/derived execution lane,
+supported platforms, required tools, owner, required triggers and timeout,
 and uses a killable child-process runner. A timeout terminates the Flutter/CLI
 process tree and records `failure.code=command_timeout`; it cannot leave an
 untracked test child running indefinitely.
+
+Canonical App tiers have one execution-lane mapping: portable product UI,
+remote product UI/application/security, native release security, optional
+provider UI, and remote integration diagnostics. `requiredFor` only controls
+gate selection and does not duplicate lane semantics. `supportedPlatforms`
+uses the shared `macos / linux / windows` schema; the current Dart desktop E2E
+runner executes macOS/Linux, while the existing Windows build/native-smoke job
+remains an explicit preserved lane.
+
+Host architecture is runtime evidence, not suite configuration. Linux/macOS
+reports record process and hardware architecture. On macOS the runner also
+records Rosetta translation, requires native arm64 tooling on Apple Silicon,
+and verifies that an isolated App contains the detected host architecture
+instead of requiring a hard-coded x86 binary.
 
 Desktop Flutter execution is protected by a host-wide per-platform file lock
 and a preflight scan for already-running `flutter test integration_test/...`
@@ -862,13 +880,15 @@ context-specific primary/identity policy; it is not a substitute
 for the remaining DID-only remote case.
 
 Suite `timeoutMinutes` must be greater than or equal to `estimatedMinutes`.
-The full product suite uses a 30-minute runner budget and a 29-minute Flutter
-scenario budget so framework teardown remains bounded without terminating the
-declared 25-minute product flow early.
+The current `full` suite declares 24 active cases, a 40-minute estimate, and a
+45-minute runner/Flutter timeout. These values come from
+`tests/e2e/suite_manifest.json`; documentation must not maintain a second
+hand-written budget.
 
-The v8 `awiki.info` `full` evidence
-`fixed-full-committed-20260717160000` passes all 24 declared cases with verified
-schema-v2 attestation. It closes the earlier v7 red evidence by preserving two
+The historical v8 `awiki.info` `full` evidence
+`fixed-full-committed-20260717160000` passed the 24 cases declared by that older
+manifest revision with verified schema-v2 attestation. It is regression history,
+not evidence for the current 24-case suite. It closed the earlier v7 red evidence by preserving two
 same-body canonical messages during realtime delivery, converging them to
 strictly increasing `serverSequence`, keeping hidden-burst order exact, and
 persisting the newest visible Direct read watermark even when navigation held
@@ -1049,6 +1069,33 @@ redacted; the scenario file stores only case IDs, phase/assertion IDs, status,
 and timestamps. This is the first assertion-evidence layer; one-to-one trace
 from every catalog exact oracle/negative guard to a dedicated assertion ID is
 still required before the conversation-correctness plan is complete.
+
+### Prepared desktop execution
+
+On macOS and Linux, `--prepare-only` builds content-addressed integration
+executables without creating identities or starting remote business flows.
+The smoke, desktop-core/focused, Join, restart, and Handle Recovery runners then
+launch those verified executables with run-owned state and attestation paths.
+Run ID, state root, scenario, and case IDs are runtime E2E inputs and do not
+change the build fingerprint; true fault-injection or product-capability flavors
+remain compile-time inputs. A warm prepared execution must not invoke
+`flutter build` or `flutter test`.
+
+Multi-phase scenarios keep distinct artifacts when their compiled behavior is
+different: restart uses `restart-a/b/c`, Handle Recovery uses main/crash/fresh
+variants, and `full` prepares both `full` and `remote-join`. The runner validates
+the artifact name, target, bundle ID, host architecture, fingerprint, executable
+containment, and complete bundle digest before launch. Set
+`AWIKI_E2E_USE_FLUTTER_TEST=1` only as a legacy debugging fallback; it is not the
+unified profile path.
+
+The top-level `tests/e2e/runner.dart` owns coordination and shared launch
+boundaries. Manifest, options, test-only config, artifact/process lifecycle,
+platform/build isolation, performance and evidence reporting live under
+`tests/e2e/runner/`; desktop-peer, Recovery, Join and App-pair orchestration
+live under `tests/e2e/runner/scenarios/`. These files are one Dart library so
+the split does not duplicate case membership or expose private runtime state.
+Business actions and assertions remain in the existing Flutter/Core tests.
 
 Personal Agent fake Widget coverage is not product acceptance. The optional real
 `personal-agent` suite currently attests only implemented vertical slices:

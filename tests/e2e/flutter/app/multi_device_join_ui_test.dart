@@ -65,7 +65,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:integration_test/integration_test.dart';
-import 'package:yaml/yaml.dart';
 
 import '../../account_state_operator_contract.dart';
 import '../../app_pair_protocol.dart';
@@ -74,6 +73,7 @@ import '../../desktop_process_host.dart';
 import '../../e2e_user_presence_port.dart';
 import '../../remote_multi_device_join_contract.dart';
 import '../../sync_recovery_operator_contract.dart';
+import '../support/protected_otp_config.dart';
 
 part 'multi_device_app_pair_ui_test.part.dart';
 part 'multi_device_app_pair_content_sync_test.part.dart';
@@ -135,6 +135,7 @@ const Duration _remoteTimeout = Duration(seconds: 30);
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(E2eInvocationCompletionWriter.markFinished);
 
   testWidgets(
     'App new device joins after CLI listener emits a host wake',
@@ -850,7 +851,6 @@ void main() {
       }
     },
     skip:
-        (!Platform.isMacOS && _invocationExpects(_deviceRevokeCaseId)) ||
         !_RemoteJoinRunConfig.exists() ||
         (!_invocationExpects(_adminApprovalCaseId) &&
             !_invocationExpects(_rootTransferCaseId) &&
@@ -1782,26 +1782,11 @@ class _DedicatedAccount {
       fromProtectedConfig(config.localConfigPath);
 
   static _DedicatedAccount fromProtectedConfig(String configPath) {
-    final file = File(configPath);
-    if (!file.existsSync()) {
-      throw StateError('The protected local OTP fixture is missing.');
-    }
-    final Object? decoded;
-    try {
-      decoded = loadYaml(file.readAsStringSync());
-    } on Object {
-      throw StateError('The protected local OTP fixture is invalid.');
-    }
-    if (decoded is! Map) {
-      throw StateError('The protected local OTP fixture is invalid.');
-    }
-    final otp = _map(_stringMap(decoded), 'otp');
-    final phone = _required(otp, 'phone');
-    final code = _required(otp, 'code');
-    if (!isSixDigitAsciiOtp(code)) {
-      throw StateError('The protected local test OTP is invalid.');
-    }
-    return _DedicatedAccount(phone: phone, fixedOtp: code);
+    final protectedOtp = ProtectedOtpConfig.load(configPath);
+    return _DedicatedAccount(
+      phone: protectedOtp.phone,
+      fixedOtp: protectedOtp.code,
+    );
   }
 }
 

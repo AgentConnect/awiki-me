@@ -1,6 +1,7 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/l10n/app_localizations_en.dart';
 import 'package:awiki_me/l10n/app_localizations_zh.dart';
+import 'package:awiki_me/src/core/app_error_classifier.dart';
 import 'package:awiki_me/src/l10n/app_message.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -40,22 +41,24 @@ void main() {
     'maps structured registration verification errors without parsing messages',
     () {
       final unavailable = AppMessage.fromError(
-        const core.AwikiImCoreException(
-          code: 'service_error',
-          message: 'diagnostic text may change',
-          statusCode: 409,
-          serviceCode: '-32003',
-          serviceDataJson:
-              '{"awiki_code":"identity.registration_verification_unavailable","retryable":true}',
+        const AppStructuredError(
+          code: 'identity.registration_verification_unavailable',
+          cause: core.AwikiImCoreException(
+            code: 'service_error',
+            message: 'diagnostic text may change',
+            statusCode: 409,
+            serviceCode: '-32003',
+          ),
         ),
       );
       final invalid = AppMessage.fromError(
-        const core.AwikiImCoreException(
-          code: 'service_error',
-          message: 'another diagnostic',
-          statusCode: 400,
-          serviceDataJson:
-              '{"awiki_code":"identity.registration_verification_invalid","retryable":true}',
+        const AppStructuredError(
+          code: 'identity.registration_verification_invalid',
+          cause: core.AwikiImCoreException(
+            code: 'service_error',
+            message: 'another diagnostic',
+            statusCode: 400,
+          ),
         ),
       );
 
@@ -75,12 +78,13 @@ void main() {
 
   test('maps invalid registration recovery state to support guidance', () {
     final message = AppMessage.fromError(
-      const core.AwikiImCoreException(
-        code: 'service_error',
-        message: 'diagnostic text may change',
-        statusCode: 409,
-        serviceDataJson:
-            '{"awiki_code":"identity.registration_recovery_state_invalid","retryable":false}',
+      const AppStructuredError(
+        code: 'identity.registration_recovery_state_invalid',
+        cause: core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'diagnostic text may change',
+          statusCode: 409,
+        ),
       ),
     );
 

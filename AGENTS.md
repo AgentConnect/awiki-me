@@ -32,12 +32,14 @@ dart run tests/unit/runner.dart
 flutter run
 ```
 
-On the current Intel macOS development machine, routine AWiki Me Debug builds
-must build only `x86_64-apple-darwin`, including the sibling
-`awiki-cli-rs2/packages/awiki_im_core` native artifact. Do not compile ARM or a
-universal macOS XCFramework during debugging unless the user explicitly asks
-for ARM, universal, Release, or packaging output. Keep the Flutter App itself
-as a Debug incremental build.
+Routine macOS Debug builds must detect the current host instead of fixing one
+chip in test code: Intel uses `x86_64-apple-darwin`, Apple Silicon uses
+`arm64-apple-darwin`, and the sibling `awiki_im_core` artifact must contain the
+same native architecture. A Rosetta-translated x86 process on Apple Silicon is
+reported explicitly and is not accepted as a native host build. Do not compile
+a universal macOS XCFramework during routine debugging unless the user asks for
+universal, Release, or packaging output. Keep the Flutter App itself as a Debug
+incremental build.
 
 For manual macOS dual-App runs, use
 `scripts/build_manual_dual_macos_apps.sh`. It builds normal `lib/main.dart`
@@ -80,6 +82,11 @@ with a local config for the detected platform. Require macOS only for an
 assertion that genuinely depends on macOS operating-system behavior, such as
 codesigning, Keychain, or LocalAuthentication, and never claim that Linux
 simulates or attests those macOS-specific behaviors.
+
+The suite platform schema also preserves `windows`; the existing Windows x64
+build/native-smoke CI remains authoritative for that lane. The Mac/Linux E2E
+runner must not silently treat Windows as an unknown platform or delete that
+gate.
 
 Every new feature or behavior change must add or update the corresponding test
 coverage in the same change. Prefer focused unit/provider/widget tests first;

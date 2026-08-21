@@ -1,7 +1,3 @@
-import 'dart:convert';
-
-import 'package:awiki_im_core/awiki_im_core.dart' as core;
-
 enum AppErrorKind {
   authentication,
   didNotFoundOrRevoked,
@@ -10,28 +6,20 @@ enum AppErrorKind {
   other,
 }
 
+final class AppStructuredError implements Exception {
+  const AppStructuredError({required this.code, required this.cause});
+
+  final String code;
+  final Object cause;
+
+  @override
+  String toString() => cause.toString();
+}
+
 String? structuredAppErrorCode(Object error) {
-  if (error is! core.AwikiImCoreException) {
-    return null;
-  }
-  final raw = error.serviceDataJson;
-  if (raw == null || raw.trim().isEmpty) {
-    return null;
-  }
-  try {
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map<String, dynamic>) {
-      return null;
-    }
-    final value = decoded['awiki_code'];
-    if (value is! String) {
-      return null;
-    }
-    final code = value.trim();
-    return _isStableErrorCode(code) ? code : null;
-  } on FormatException {
-    return null;
-  }
+  if (error is! AppStructuredError) return null;
+  final code = error.code.trim();
+  return _isStableErrorCode(code) ? code : null;
 }
 
 bool _isStableErrorCode(String value) {

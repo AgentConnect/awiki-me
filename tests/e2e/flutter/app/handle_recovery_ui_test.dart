@@ -72,12 +72,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:integration_test/integration_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:yaml/yaml.dart';
 
 import '../../case_attestation.dart';
 import '../../e2e_user_presence_port.dart';
 import '../../handle_recovery_fixture_contract.dart';
 import '../../remote_multi_device_join_contract.dart';
+import '../support/protected_otp_config.dart';
 
 const String _caseId = 'HANDLE-RECOVERY-V1-E2E-001';
 const String _crashCutCaseId = 'HANDLE-RECOVERY-V1-E2E-002';
@@ -132,6 +132,7 @@ Future<void> _recordAppProjectionFixtureFailure({
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(E2eInvocationCompletionWriter.markFinished);
 
   testWidgets(
     'Handle Recovery V4 replaces the DID through the visible App flow',
@@ -6535,26 +6536,11 @@ class _DedicatedAccount {
   final String fixedOtp;
 
   static _DedicatedAccount fromConfig(_RemoteRecoveryRunConfig config) {
-    final file = File(config.localConfigPath);
-    if (!file.existsSync()) {
-      throw StateError('The ignored local OTP fixture is missing.');
-    }
-    final Object? decoded;
-    try {
-      decoded = loadYaml(file.readAsStringSync());
-    } on Object {
-      throw StateError('The ignored local OTP fixture is invalid.');
-    }
-    if (decoded is! Map) {
-      throw StateError('The ignored local OTP fixture is invalid.');
-    }
-    final otp = _map(_stringMap(decoded), 'otp');
-    final phone = _required(otp, 'phone');
-    final fixedOtp = _required(otp, 'code');
-    if (!isSixDigitAsciiOtp(fixedOtp)) {
-      throw StateError('The ignored local test OTP is invalid.');
-    }
-    return _DedicatedAccount(phone: phone, fixedOtp: fixedOtp);
+    final protectedOtp = ProtectedOtpConfig.load(config.localConfigPath);
+    return _DedicatedAccount(
+      phone: protectedOtp.phone,
+      fixedOtp: protectedOtp.code,
+    );
   }
 }
 

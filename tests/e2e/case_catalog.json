@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-13.stale-daemon-delete-convergence",
+  "sourceRevision": "2026-08-21.unique-profile-owners-v1",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
@@ -52,7 +52,7 @@
     {
       "caseId": "AGENT-NOTIFY-SMOKE-E2E-001",
       "feature": "Coding Agent background terminal notification routing",
-      "layer": "product_ui",
+      "layer": "portable_product_ui",
       "preconditions": "Flutter desktop can launch the authenticated fake-bootstrap AWiki Me shell without backend credentials.",
       "action": "Background the App lifecycle and inject a completed awiki.agent.status.v1 update through the App realtime boundary.",
       "exactOracles": [
@@ -99,7 +99,7 @@
     {
       "caseId": "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001",
       "feature": "Stale Daemon deletion converges without an unreachable control channel",
-      "layer": "product_ui",
+      "layer": "portable_product_ui",
       "preconditions": "The authenticated App inventory contains an active Daemon whose cached status is actionable but whose last heartbeat is older than the control freshness window.",
       "action": "Open the Agents page, remove the stale Daemon through the visible destructive action and confirm the account-only removal dialog.",
       "exactOracles": [
@@ -298,7 +298,7 @@
     {
       "caseId": "ATTACH-E2E-001",
       "feature": "App to CLI attachment",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Stage an attachment through desktop drop UI and send it to CLI.",
       "exactOracles": [
@@ -323,7 +323,7 @@
     {
       "caseId": "ATTACH-E2E-002",
       "feature": "CLI to App attachment",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Send an attachment from CLI and open/download it through App UI.",
       "exactOracles": [
@@ -348,7 +348,7 @@
     {
       "caseId": "ATTACH-REG-001",
       "feature": "Attachment integrity regression",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Requery both attachment directions after the stability window.",
       "exactOracles": [
@@ -371,7 +371,7 @@
     {
       "caseId": "AUTH-E2E-001",
       "feature": "Remote identity/auth preflight",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Prepare the App identity, activate the authenticated shell, and cross-check App/CLI handle resolution.",
       "exactOracles": [
@@ -576,7 +576,7 @@
     {
       "caseId": "CONTACT-E2E-001",
       "feature": "App follow interaction",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; the CLI peer first follows the isolated App identity and becomes a visible follower contact.",
       "action": "Open the exact follower contact and tap the visible follow control in the resulting Direct peer information surface.",
       "exactOracles": [
@@ -620,7 +620,7 @@
     {
       "caseId": "CONTACT-E2E-002",
       "feature": "CLI follow and App unfollow interaction",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Let CLI follow the App identity, refresh, then tap App unfollow.",
       "exactOracles": [
@@ -664,7 +664,7 @@
     {
       "caseId": "CONTACT-FIRST-CONV-E2E-001",
       "feature": "Contact-first canonical Direct creation",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The contacts-focused awiki.info run has an isolated App state root, the exact CLI peer is an inbound follower, and no Direct row exists for its current DID or Handle.",
       "action": "Open the exact follower row, verify its real peer profile, and use the profile send-message action before identity lookup, recents, local search, or sending a first message.",
       "exactOracles": [
@@ -709,7 +709,7 @@
     {
       "caseId": "CONTACT-MSG-E2E-001",
       "feature": "Contact row canonical Direct message closed loop",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; the exact CLI peer is visible in the App Contacts UI after canonical relationship convergence.",
       "action": "Click the exact visible contact row, use the peer profile send-message action, send one run-unique message through the App, restart, then receive and read one run-unique CLI message.",
       "exactOracles": [
@@ -763,7 +763,7 @@
     {
       "caseId": "CONTACT-REG-001",
       "feature": "Relationship transition/idempotency regression",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Exercise the canonical relationship lifecycle through refreshes and repeated reads.",
       "exactOracles": [
@@ -805,7 +805,7 @@
     {
       "caseId": "CONV-LIST-E2E-001",
       "feature": "Multi-conversation list projection correctness",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The full remote awiki.info flow has one canonical Direct and one canonical Group for the isolated App state root.",
       "action": "While both conversations are closed, deliver Direct, Group, then Direct messages and restart before inspecting the list.",
       "exactOracles": [
@@ -849,7 +849,7 @@
     {
       "caseId": "DISPLAY-NAME-E2E-001",
       "feature": "Nickname consistency across identity and conversation surfaces",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The CLI peer publishes a deterministic nickname that differs from its Handle and DID.",
       "action": "Resolve the peer, open Direct and Contacts, inspect the add-member and @ mention candidates, add the same peer to a Group, observe the system event and receive a Group message.",
       "exactOracles": [
@@ -893,7 +893,7 @@
     {
       "caseId": "DISPLAY-NAME-E2E-002",
       "feature": "Compact Handle primary names with full identity preservation",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "A dedicated awiki.info CLI peer has no nickname and has one stable full Handle distinct from its DID and generated user name.",
       "action": "Resolve the peer and exercise identity lookup, Direct, Contacts, group member, group system-event, and sender-label surfaces through the App.",
       "exactOracles": [
@@ -960,7 +960,7 @@
     {
       "caseId": "DISPLAY-NAME-E2E-004",
       "feature": "Explicit Profile refresh converges every App display surface",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The awiki.info peer starts with one nickname distinct from its Handle and DID, then publishes a second run-unique nickname while its Direct, Contact, Group, system-event, and sender-label surfaces already exist.",
       "action": "Open the existing Direct, click the visible peer avatar to refresh Profile, then reopen identity lookup, recents, Contacts, group info, the member-added system event, and the existing group sender label.",
       "exactOracles": [
@@ -1004,7 +1004,7 @@
     {
       "caseId": "DISPLAY-NAME-REG-001",
       "feature": "Cached nickname is correct on the first visible frame",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The CLI peer nickname has already been resolved into the isolated App profile projection and the Direct conversation survives an App-shell restart.",
       "action": "Restart the App shell and open the canonical Direct row through the visible conversation list before any remote profile refresh is requested.",
       "exactOracles": [
@@ -1048,7 +1048,7 @@
     {
       "caseId": "GROUP-E2E-001",
       "feature": "App group create/member/send",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Create a group, add the canonical CLI member, and send through visible App UI.",
       "exactOracles": [
@@ -1109,7 +1109,7 @@
     {
       "caseId": "GROUP-E2E-002",
       "feature": "CLI group to App message",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Send a run-unique group message from CLI, navigate to it in App UI, then open the sender profile and choose Send Message.",
       "exactOracles": [
@@ -1165,7 +1165,7 @@
     {
       "caseId": "GROUP-P9-001",
       "feature": "App structured P9 mention",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Compose a group mention through App UI and send it.",
       "exactOracles": [
@@ -1213,7 +1213,7 @@
     {
       "caseId": "GROUP-P9-002",
       "feature": "CLI structured P9 mention",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Send a structured group mention from CLI to the App.",
       "exactOracles": [
@@ -1262,7 +1262,7 @@
     {
       "caseId": "GROUP-REG-001",
       "feature": "Group history stability regression",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Refresh and requery the group history after bidirectional sends and mentions.",
       "exactOracles": [
@@ -1306,7 +1306,7 @@
     {
       "caseId": "INBOUND-FIRST-CONV-E2E-001",
       "feature": "Inbound-first canonical Direct creation",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The inbound-focused awiki.info run has an isolated App state root and no Direct row for the exact CLI peer current DID or Handle.",
       "action": "Keep the peer conversation closed, send the first Direct message from CLI, open the resulting visible row, then re-enter through identity lookup, recents, and local search.",
       "exactOracles": [
@@ -1376,7 +1376,7 @@
     {
       "caseId": "IDENTITY-SWITCH-E2E-001",
       "feature": "Bidirectional local identity switch message recovery",
-      "layer": "product_application",
+      "layer": "remote_product_application",
       "preconditions": "The awiki.info run has one isolated App state root containing two distinct local App identities plus a distinct CLI preflight identity; both App identities establish their reliable-sync tail anchors before either test message is sent.",
       "action": "Anchor both online App identities, send from primary to secondary, logout and activate secondary, hydrate and read the post-anchor exact message, then repeat in reverse and rapidly switch both identities once more.",
       "exactOracles": [
@@ -1427,7 +1427,7 @@
     {
       "caseId": "MSG-E2E-001",
       "feature": "Direct App to CLI message",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Open a canonical Direct conversation, verify it before the first message and after App restart, then type and send a run-unique message through visible App controls.",
       "exactOracles": [
@@ -1480,7 +1480,7 @@
     {
       "caseId": "MSG-E2E-002",
       "feature": "Direct CLI to App unread/read",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Send a run-unique direct message from CLI while the App target conversation is not open, then open it through UI.",
       "exactOracles": [
@@ -1528,7 +1528,7 @@
     {
       "caseId": "MSG-REG-001",
       "feature": "Direct failure/retry/replay regression",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Inject the E2E transport failure, tap the visible retry action, reconnect, rebuild the App shell, and requery.",
       "exactOracles": [
@@ -1584,7 +1584,7 @@
     {
       "caseId": "MSG-SEQUENCE-E2E-001",
       "feature": "Cross-conversation exact message sequence and isolation",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The full remote awiki.info flow has one canonical Direct and one canonical Group.",
       "action": "Deliver ordered Direct/Group traffic, then hide the App, send a three-message Direct burst without waiting for App convergence, resume, open each row, and requery local history.",
       "exactOracles": [
@@ -1718,7 +1718,7 @@
     {
       "caseId": "NATIVE-E2E-001",
       "feature": "Storage Scope native bootstrap and tenant SMS cooldown smoke",
-      "layer": "product_ui",
+      "layer": "portable_product_ui",
       "preconditions": "Flutter desktop and debug native IM Core artifacts are available.",
       "action": "Provision one Storage Scope through the real App bootstrap, persist a tenant-scoped SMS retry boundary, simulate an older public HTTP tenant record, reopen the same App root, then remove its key and retry openExisting.",
       "exactOracles": [
@@ -1768,7 +1768,7 @@
     {
       "caseId": "PERF-E2E-001",
       "feature": "Real backend performance flow",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Complete the measured App/CLI backend scenario.",
       "exactOracles": [
@@ -1790,7 +1790,7 @@
     {
       "caseId": "PERF-E2E-002",
       "feature": "Multi-conversation dataset",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Prepare the audited remote dataset.",
       "exactOracles": [
@@ -1812,7 +1812,7 @@
     {
       "caseId": "PERF-E2E-003",
       "feature": "Cold shell visibility",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Measure cold App shell and conversation-list visibility.",
       "exactOracles": [
@@ -1835,7 +1835,7 @@
     {
       "caseId": "PERF-E2E-004",
       "feature": "Snapshot/hydration timing",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Measure snapshot, fast-local and full hydration.",
       "exactOracles": [
@@ -1857,7 +1857,7 @@
     {
       "caseId": "PERF-E2E-005",
       "feature": "App→CLI latency",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Measure App send to CLI visibility.",
       "exactOracles": [
@@ -1879,7 +1879,7 @@
     {
       "caseId": "PERF-E2E-006",
       "feature": "CLI→App latency",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Measure CLI send to App visibility.",
       "exactOracles": [
@@ -1901,7 +1901,7 @@
     {
       "caseId": "PERF-E2E-007",
       "feature": "No full-refresh regression",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Observe refresh counters during send/receive.",
       "exactOracles": [
@@ -1923,7 +1923,7 @@
     {
       "caseId": "PERF-E2E-008",
       "feature": "Long-thread open timing",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Open and hydrate the long audited thread.",
       "exactOracles": [
@@ -1945,7 +1945,7 @@
     {
       "caseId": "PERF-E2E-009",
       "feature": "Timing report schema",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Write the product timing report.",
       "exactOracles": [
@@ -1967,7 +1967,7 @@
     {
       "caseId": "PERF-E2E-010",
       "feature": "Hard budget semantics",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Evaluate hard performance budgets.",
       "exactOracles": [
@@ -1989,7 +1989,7 @@
     {
       "caseId": "PERF-E2E-011",
       "feature": "Soft budget semantics",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Evaluate soft performance budgets.",
       "exactOracles": [
@@ -2011,7 +2011,7 @@
     {
       "caseId": "PERF-E2E-012",
       "feature": "Performance diagnostics",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Retain sanitized failure diagnostics.",
       "exactOracles": [
@@ -2033,7 +2033,7 @@
     {
       "caseId": "IDENTITY-DELETE-E2E-001",
       "feature": "Current credential deletion across idle Patch and cold restart",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "A real native Core identity is active in an isolated App state root, the committed conversation Patch stream is attached and idle, and the runner can launch a third independent Flutter process against that same root.",
       "action": "After the normal cold-restart conversation assertions, delete the current credential while the conversation Patch stream is idle; then start another Flutter process against the same App state root.",
       "exactOracles": [
@@ -2080,7 +2080,7 @@
     {
       "caseId": "PROCESS-RESTART-E2E-001",
       "feature": "Canonical conversation cold-process restart",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The runner can launch two independent Flutter integration-test processes against one isolated App state root and one attested x86_64 build.",
       "action": "Phase A creates Direct/Group conversations, messages, unread state, and cached Profiles; Phase B starts a new Flutter process and restores only persisted state.",
       "exactOracles": [
@@ -2130,7 +2130,7 @@
     {
       "caseId": "MESSAGE-PATCH-RESTART-E2E-001",
       "feature": "Cold restart closes a message gap committed while Patch subscription is unavailable",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Phase A has a real bound App/Core session, the runner can stop realtime and launch a distinct Flutter process against the same isolated state root, and the CLI peer is independently authenticated.",
       "action": "Pause Phase A, stop realtime, destroy its App ProviderContainer and native bootstrap, prove Patch/sync providers are unavailable, then commit one Direct message from the CLI and start Phase B normally.",
       "exactOracles": [
@@ -2188,7 +2188,7 @@
     {
       "caseId": "SMOKE-E2E-001",
       "feature": "App shell smoke",
-      "layer": "product_ui",
+      "layer": "portable_product_ui",
       "preconditions": "Flutter desktop and debug native IM Core artifacts are available.",
       "action": "Launch the real Flutter desktop app shim without backend credentials.",
       "exactOracles": [
@@ -2215,7 +2215,7 @@
     {
       "caseId": "UNREAD-MULTI-E2E-001",
       "feature": "Multi-conversation unread isolation and read clearing",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The full remote awiki.info flow has one closed canonical Direct and one closed canonical Group.",
       "action": "Receive two Direct messages and one Group message, restart, open Group, then open Direct.",
       "exactOracles": [
@@ -2262,7 +2262,7 @@
     {
       "caseId": "CONV-CANON-E2E-001",
       "feature": "Canonical Direct conversation across App entries",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The awiki.info peer has a nickname distinct from its Handle and DID, and the isolated App state contains no Direct row for that Persona.",
       "action": "Create the Direct through identity lookup before the first message, then reopen it through recents, local conversation search, restart, and the visible Contact row.",
       "exactOracles": [
@@ -2308,7 +2308,7 @@
     {
       "caseId": "GROUP-CANON-E2E-001",
       "feature": "Canonical Group conversation across App lifecycle",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The App creates a unique group on awiki.info through visible UI.",
       "action": "Create the group, add the canonical peer, refresh members, restart the App shell, and send/receive the first messages.",
       "exactOracles": [
@@ -2857,7 +2857,7 @@
     {
       "caseId": "ROOT-TRANSFER-E2E-001",
       "feature": "AWiki Me management-device root import",
-      "layer": "product_ui",
+      "layer": "remote_product_ui_security",
       "preconditions": "An accepted Step 3 contract has established a management-ready AWiki Me admin and an independent CLI active member with management_ready false; both use fresh native Core roots and exact protocol device IDs, and the unattended suite uses the test-scoped user-presence port while production LocalAuthentication remains unchanged.",
       "action": "Open Devices on the ready AWiki Me admin, select the exact eligible member, let Core prepare a safe recipient summary, complete exactly one E2E-only user-presence decision, stop the App sender flow at standard P5 accepted, then bring the CLI receiver online to import and complete readiness directly.",
       "exactOracles": [
@@ -2869,7 +2869,7 @@
         "A wrong or ineligible target, caller-supplied message ID, old list/retry/pending state, a second user-presence action, treating accepted as receiver readiness, waiting for or emitting an imported ACK/Reply, root/control JSON in inbox or UI, Root bytes in logs/errors/reports, or management actions before Registry readiness fails."
       ],
       "environment": "awiki_info_remote",
-      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "cleanupPolicy": "isolated_root_transfer_residual_ledger",
       "requiredFor": [
         "nightly",
         "release"
@@ -3124,7 +3124,7 @@
     {
       "caseId": "MULTI-DEVICE-CAPABILITY-GATE-E2E-001",
       "feature": "AWiki Me local Join surface with available E2EE capabilities and default-plain product policy",
-      "layer": "product_ui",
+      "layer": "portable_product_ui",
       "preconditions": "Flutter desktop and debug native IM Core artifacts are available; no backend, OTP, CLI peer, or pre-existing identity is used.",
       "action": "Open one temporary Storage Scope through production AppBootstrap/native Core, verify the default device-management composition, and mount the Join surface inside the production App provider tree without submitting an OTP.",
       "exactOracles": [

@@ -75,8 +75,14 @@ void main() {
     final plan = request.toPlan();
 
     expect(request.platform, IsolatedE2eAppPlatform.linux);
-    expect(plan.sourceApp.path, '${project.path}/build/linux/x64/debug/bundle');
-    expect(plan.flutterBuildDirectorySetting, 'build');
+    expect(
+      plan.sourceApp.path,
+      '${root.path}/work/admin/flutter-build/linux/x64/debug/bundle',
+    );
+    expect(
+      plan.flutterBuildDirectorySetting,
+      '.e2e/pair/work/admin/flutter-build',
+    );
     expect(plan.artifactApp.path, '${root.path}/artifacts/AWikiMe-admin-linux');
     expect(plan.executable.path, endsWith('/AWikiMe-admin-linux/awiki_me'));
     expect(plan.flutterArguments, containsAll(<String>['build', 'linux']));
@@ -105,6 +111,69 @@ void main() {
     expect(
       planFor('run-a').flutterArguments,
       planFor('run-b').flutterArguments,
+    );
+  });
+
+  test('bundle digest changes for content and executable mode', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'awiki_isolated_bundle_digest_test_',
+    );
+    addTearDown(() => root.delete(recursive: true));
+    final executable = File('${root.path}/awiki_me')
+      ..writeAsStringSync('first');
+    if (!Platform.isWindows) {
+      await Process.run('chmod', <String>['644', executable.path]);
+    }
+    final baseline = await directorySha256(root);
+    executable.writeAsStringSync('second');
+    final contentChanged = await directorySha256(root);
+
+    expect(contentChanged, isNot(baseline));
+    if (!Platform.isWindows) {
+      await Process.run('chmod', <String>['755', executable.path]);
+      expect(await directorySha256(root), isNot(contentChanged));
+    }
+  });
+
+  test('Linux native-assets compatibility link is bounded and temporary', () {
+    final project = Directory.systemTemp.createTempSync(
+      'awiki_isolated_native_assets_link_test_',
+    );
+    addTearDown(() => project.delete(recursive: true));
+    final isolatedBuild = Directory('${project.path}/work/flutter-build');
+
+    final link = prepareIsolatedLinuxNativeAssetsCompatibility(
+      projectRoot: project,
+      buildDirectory: isolatedBuild,
+      platform: IsolatedE2eAppPlatform.linux,
+    );
+
+    expect(link, isNotNull);
+    expect(link!.targetSync(), '${isolatedBuild.absolute.path}/linux');
+    removeIsolatedLinuxNativeAssetsCompatibility(
+      link,
+      buildDirectory: isolatedBuild,
+    );
+    expect(
+      FileSystemEntity.typeSync(link.path, followLinks: false),
+      FileSystemEntityType.notFound,
+    );
+  });
+
+  test('Linux native-assets compatibility refuses a real default build', () {
+    final project = Directory.systemTemp.createTempSync(
+      'awiki_isolated_native_assets_refusal_test_',
+    );
+    addTearDown(() => project.delete(recursive: true));
+    Directory('${project.path}/build/linux').createSync(recursive: true);
+
+    expect(
+      () => prepareIsolatedLinuxNativeAssetsCompatibility(
+        projectRoot: project,
+        buildDirectory: Directory('${project.path}/work/flutter-build'),
+        platform: IsolatedE2eAppPlatform.linux,
+      ),
+      throwsA(isA<IsolatedE2eAppBuildException>()),
     );
   });
 

@@ -35,6 +35,7 @@ const String _codexDaemonMaxRuntimeMs = '780000';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(E2eInvocationCompletionWriter.markFinished);
 
   testWidgets(
     'Codex Agent full UI sends deterministic prompt and shows visible reply',

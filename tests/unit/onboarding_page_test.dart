@@ -15,6 +15,7 @@ import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/ports/user_presence_port.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
+import 'package:awiki_me/src/core/app_error_classifier.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
@@ -1865,13 +1866,14 @@ void main() {
 
   testWidgets('服务端拒绝已失效验证码后清空输入并阻止重复提交', (tester) async {
     final gateway = FakeAwikiGateway()
-      ..nextOnboardingPhoneRegistrationError = const core.AwikiImCoreException(
-        code: 'service_error',
-        message: 'diagnostic text may change',
-        statusCode: 409,
-        serviceCode: '-32003',
-        serviceDataJson:
-            '{"awiki_code":"identity.registration_verification_unavailable","retryable":true}',
+      ..nextOnboardingPhoneRegistrationError = const AppStructuredError(
+        code: 'identity.registration_verification_unavailable',
+        cause: core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'diagnostic text may change',
+          statusCode: 409,
+          serviceCode: '-32003',
+        ),
       );
 
     await tester.pumpWidget(

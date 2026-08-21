@@ -8,12 +8,16 @@ const String e2eCaseRunIdDefine = 'AWIKI_E2E_RUN_ID';
 const String e2eCaseIdsDefine = 'AWIKI_E2E_CASE_IDS';
 const String e2eScenarioProgressFileName = 'scenario_progress.json';
 const String e2eFailureObservationFileName = 'failure_observation.json';
+const String e2eInvocationCompletionFileName = 'invocation_completion.json';
 
 File e2eScenarioProgressFileForAttestation(File attestationFile) =>
     File('${attestationFile.parent.path}/$e2eScenarioProgressFileName');
 
 File e2eFailureObservationFileForAttestation(File attestationFile) =>
     File('${attestationFile.parent.path}/$e2eFailureObservationFileName');
+
+File e2eInvocationCompletionFileForAttestation(File attestationFile) =>
+    File('${attestationFile.parent.path}/$e2eInvocationCompletionFileName');
 
 String e2eInvocationValue(
   String key, {
@@ -23,6 +27,137 @@ String e2eInvocationValue(
   final compiled = compiledValue.trim();
   if (compiled.isNotEmpty) return compiled;
   return (environment ?? Platform.environment)[key]?.trim() ?? '';
+}
+
+class E2eInvocationCompletion {
+  const E2eInvocationCompletion({
+    required this.scenario,
+    required this.runId,
+    required this.expectedCaseIds,
+    required this.finishedAt,
+  });
+
+  final String scenario;
+  final String runId;
+  final List<String> expectedCaseIds;
+  final String finishedAt;
+
+  factory E2eInvocationCompletion.fromJson(Map<String, Object?> json) {
+    if (json['schemaVersion'] != 1 ||
+        json['status'] != 'test_process_finished') {
+      throw const FormatException('invocation completion envelope is invalid');
+    }
+    final rawCaseIds = json['expectedCaseIds'];
+    if (rawCaseIds is! List ||
+        rawCaseIds.isEmpty ||
+        rawCaseIds.any(
+          (value) =>
+              value is! String || !RegExp(r'^[A-Z0-9-]+$').hasMatch(value),
+        )) {
+      throw const FormatException(
+        'invocation completion expectedCaseIds are invalid',
+      );
+    }
+    final caseIds = rawCaseIds.cast<String>();
+    if (caseIds.toSet().length != caseIds.length) {
+      throw const FormatException(
+        'invocation completion expectedCaseIds contain duplicates',
+      );
+    }
+    return E2eInvocationCompletion(
+      scenario: _requiredString(json, 'scenario'),
+      runId: _requiredString(json, 'runId'),
+      expectedCaseIds: List<String>.unmodifiable(caseIds),
+      finishedAt: _requiredString(json, 'finishedAt'),
+    );
+  }
+
+  static E2eInvocationCompletion read(File file) {
+    final decoded = jsonDecode(file.readAsStringSync());
+    if (decoded is! Map) {
+      throw const FormatException('invocation completion must be an object');
+    }
+    return E2eInvocationCompletion.fromJson(<String, Object?>{
+      for (final entry in decoded.entries) entry.key.toString(): entry.value,
+    });
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'schemaVersion': 1,
+    'status': 'test_process_finished',
+    'scenario': scenario,
+    'runId': runId,
+    'expectedCaseIds': expectedCaseIds,
+    'finishedAt': finishedAt,
+  };
+}
+
+class E2eInvocationCompletionWriter {
+  E2eInvocationCompletionWriter._();
+
+  static Future<void> markFinished({Map<String, String>? environment}) async {
+    final attestationPath = e2eInvocationValue(
+      e2eCaseAttestationPathDefine,
+      compiledValue: const String.fromEnvironment(e2eCaseAttestationPathDefine),
+      environment: environment,
+    );
+    final scenario = e2eInvocationValue(
+      e2eCaseScenarioDefine,
+      compiledValue: const String.fromEnvironment(e2eCaseScenarioDefine),
+      environment: environment,
+    );
+    final runId = e2eInvocationValue(
+      e2eCaseRunIdDefine,
+      compiledValue: const String.fromEnvironment(e2eCaseRunIdDefine),
+      environment: environment,
+    );
+    final encodedCaseIds = e2eInvocationValue(
+      e2eCaseIdsDefine,
+      compiledValue: const String.fromEnvironment(e2eCaseIdsDefine),
+      environment: environment,
+    );
+    if (<String>{
+      attestationPath,
+      scenario,
+      runId,
+      encodedCaseIds,
+    }.every((value) => value.trim().isEmpty)) {
+      return;
+    }
+    if (<String>{
+      attestationPath,
+      scenario,
+      runId,
+      encodedCaseIds,
+    }.any((value) => value.trim().isEmpty)) {
+      throw StateError(
+        'Runner-owned E2E completion requires the complete runtime invocation set.',
+      );
+    }
+    final completion = E2eInvocationCompletion.fromJson(<String, Object?>{
+      'schemaVersion': 1,
+      'status': 'test_process_finished',
+      'scenario': scenario,
+      'runId': runId,
+      'expectedCaseIds': encodedCaseIds
+          .split(',')
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false),
+      'finishedAt': DateTime.now().toUtc().toIso8601String(),
+    });
+    final file = e2eInvocationCompletionFileForAttestation(
+      File(attestationPath),
+    );
+    await file.parent.create(recursive: true);
+    final temporary = File('${file.path}.tmp');
+    await temporary.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(completion.toJson()),
+      flush: true,
+    );
+    if (Platform.isWindows && file.existsSync()) file.deleteSync();
+    await temporary.rename(file.path);
+  }
 }
 
 /// First fail-closed E2E observation retained independently from case pass
@@ -503,7 +638,7 @@ class E2eCaseAttestationWriter {
         runId.trim().isEmpty ||
         encodedCaseIds.trim().isEmpty) {
       throw StateError(
-        'Runner-owned E2E case attestation requires the complete dart-define set.',
+        'Runner-owned E2E case attestation requires the complete runtime invocation set.',
       );
     }
     final expectedCaseIds = encodedCaseIds

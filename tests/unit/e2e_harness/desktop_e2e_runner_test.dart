@@ -571,6 +571,24 @@ void main() {
       );
     });
 
+    test('parses release root-transfer case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'root-transfer',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'root_transfer',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.rootTransfer);
+      expect(underscore.e2eCase, DesktopE2eCase.rootTransfer);
+      expect(hyphen.e2eCase.caseIds, <String>['ROOT-TRANSFER-E2E-001']);
+      expect(hyphen.e2eCase.caseName, 'root-transfer');
+    });
+
     test('rejects retired remote multi-device MLS aliases', () {
       for (final value in <String>[
         'multi-device-remote-mls',
@@ -604,11 +622,21 @@ void main() {
         'inbound-first',
         '--dry-run',
       ]);
+      final contactFirst = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'contact-first',
+        '--dry-run',
+      ]);
 
       expect(direct.e2eCase, DesktopE2eCase.direct);
       expect(attachment.e2eCase, DesktopE2eCase.attachment);
       expect(contacts.e2eCase, DesktopE2eCase.contacts);
+      expect(contactFirst.e2eCase, DesktopE2eCase.contactFirst);
+      expect(contactFirst.e2eCase.caseIds, <String>[
+        'CONTACT-FIRST-CONV-E2E-001',
+      ]);
       expect(inbound.e2eCase, DesktopE2eCase.inbound);
+      expect(inbound.e2eCase.caseIds, <String>['INBOUND-FIRST-CONV-E2E-001']);
     });
 
     test('parses real process-restart case aliases', () {
@@ -664,10 +692,7 @@ void main() {
       expect(fallback.e2eCase, DesktopE2eCase.displayNameFallback);
       expect(handleFallback.e2eCase, DesktopE2eCase.displayNameFallback);
       expect(fallback.e2eCase.caseName, 'display-name-fallback');
-      expect(fallback.e2eCase.caseIds, <String>[
-        'AUTH-E2E-001',
-        'DISPLAY-NAME-E2E-002',
-      ]);
+      expect(fallback.e2eCase.caseIds, <String>['DISPLAY-NAME-E2E-002']);
       expect(
         fallback.e2eCase.testFile,
         'integration_test/desktop_cli_peer_display_name_fallback_test.dart',
@@ -766,7 +791,8 @@ void main() {
                 'multi-device-remote-recovery-fresh, '
                 'multi-device-app-pair-recovery-registration-rejoin-management-transfer, '
                 'multi-device-app-pair, multi-device-app-pair-functional, '
-                'multi-device-app-pair-content-sync, step4-revoke-mls, full, performance, direct, '
+                'multi-device-app-pair-content-sync, step4-revoke-mls, '
+                'root-transfer, full, performance, direct, '
                 'group, attachment, contacts, inbound, identity-switch, restart, '
                 'display-name-fallback, '
                 'personal-agent, codex-agent, or claude-code-agent.',
@@ -1242,6 +1268,18 @@ void main() {
   });
 
   group('CLI tenant preflight', () {
+    test('bounds and re-normalizes long run IDs', () {
+      final tenant = desktopE2eTenantName(
+        'linux-basic-after-readiness-recovery-v2-app-full',
+      );
+
+      expect(tenant, hasLength(43));
+      expect(tenant, isNot(endsWith('-')));
+      expect(tenant, isNot(contains('--')));
+      expect(tenant, matches(RegExp(r'^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$')));
+      expect(desktopE2eTenantName('---'), 'e2e-run');
+    });
+
     test('returns an exact reusable target or no match', () {
       final tenant = cliTenantConfigFromListJson(
         jsonEncode(<String, Object?>{
@@ -1439,6 +1477,51 @@ daemon:
           config.daemonBinary,
           '/worktrees/awiki-cli-rs2/target/debug/awiki-deamon',
         );
+      },
+    );
+
+    test(
+      'E2E environment overrides prepared binaries and deployment OTP',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_desktop_override_otp_test_',
+        );
+        addTearDown(() async {
+          if (await root.exists()) {
+            await root.delete(recursive: true);
+          }
+        });
+        File('${root.path}/e2e.local.yaml').writeAsStringSync('''
+otp:
+  phone: stale-phone
+  code: stale-code
+''');
+
+        final config = DesktopE2eFileConfig.load(
+          root: root,
+          path: 'e2e.local.yaml',
+          environment: const <String, String>{
+            'AWIKI_CLI_RUST_REPO': '/worktrees/awiki-cli-rs2',
+            'AWIKI_E2E_CLI_BINARY': '/cache/awiki-cli',
+            'AWIKI_E2E_CLI_SOURCE_REF':
+                '2222222222222222222222222222222222222222',
+            'AWIKI_E2E_DAEMON_BINARY': '/cache/awiki-daemon',
+            'AWIKI_E2E_OTP_PHONE': 'deployed-phone',
+            'AWIKI_E2E_OTP_CODE': 'deployed-code',
+            'AWIKI_E2E_APP_HANDLE': 'runtime-app',
+            'AWIKI_E2E_SECONDARY_APP_HANDLE': 'runtime-secondary',
+            'AWIKI_E2E_CLI_HANDLE': 'runtime-cli',
+          },
+        );
+
+        expect(config.cliBin, '/cache/awiki-cli');
+        expect(config.cliSourceRef, '2222222222222222222222222222222222222222');
+        expect(config.daemonBinary, '/cache/awiki-daemon');
+        expect(config.otpPhone, 'deployed-phone');
+        expect(config.otpCode, 'deployed-code');
+        expect(config.appHandle, 'runtime-app');
+        expect(config.secondaryAppHandle, 'runtime-secondary');
+        expect(config.cliHandle, 'runtime-cli');
       },
     );
 
@@ -1952,7 +2035,9 @@ cliHandle: legacy-cli
     test('suite timeout cannot be shorter than its estimate', () {
       expect(
         () => DesktopE2eSuiteDefinition.fromJson('full', <String, Object?>{
-          'tier': 'product_ui',
+          'tier': 'remote_product_ui',
+          'supportedPlatforms': <String>['macos', 'linux'],
+          'requiredTools': <String>['flutter', 'awiki-cli'],
           'requiredFor': <String>['release'],
           'owner': 'awiki-me-messaging',
           'estimatedMinutes': 25,
@@ -1985,13 +2070,58 @@ cliHandle: legacy-cli
           returnsNormally,
         );
         expect(definition.owner, isNotEmpty);
+        expect(definition.executionLane, isNotEmpty);
+        expect(definition.supportedPlatforms, isNotEmpty);
+        expect(definition.requiredTools, isNotEmpty);
         expect(definition.timeout, isNot(Duration.zero));
         expect(
           definition.timeout,
           greaterThanOrEqualTo(Duration(minutes: definition.estimatedMinutes)),
         );
       }
+      final rootTransfer = manifest.definitionFor(DesktopE2eCase.rootTransfer);
+      expect(rootTransfer.requiredFor, <String>['nightly', 'release']);
+      expect(rootTransfer.requiredTargetCapabilities, <String>[
+        'lanes.p5_device.v1',
+      ]);
+      expect(rootTransfer.missingCapabilityPolicy, 'fail');
+      final step4 = manifest.definitionFor(DesktopE2eCase.step4RevokeMls);
+      expect(step4.supportedPlatforms, containsAll(<String>['macos', 'linux']));
+      expect(step4.requiredTargetCapabilities, <String>['lanes.p5_device.v1']);
+      expect(step4.missingCapabilityPolicy, 'fail');
     });
+
+    test(
+      'required suites cannot expected-skip a missing target capability',
+      () {
+        expect(
+          () =>
+              DesktopE2eSuiteDefinition.fromJson('required', <String, Object?>{
+                'tier': 'remote_product_ui',
+                'supportedPlatforms': <String>['macos', 'linux'],
+                'requiredTools': <String>['flutter'],
+                'requiredFor': <String>['release'],
+                'owner': 'awiki-me-messaging',
+                'estimatedMinutes': 1,
+                'timeoutMinutes': 1,
+                'cleanupPolicy': 'residual_ledger',
+                'allowedHosts': <String>['awiki.info'],
+                'allowedDidDomains': <String>['awiki.info'],
+                'requiredTargetCapabilities': <String>['provider-v1'],
+                'missingCapabilityPolicy': 'expected_skip',
+                'resourceCategories': <String>[],
+                'caseIds': <String>['CASE-001'],
+              }),
+          throwsA(
+            isA<E2eFailure>().having(
+              (error) => error.message,
+              'message',
+              contains('all requiredFor values are optional'),
+            ),
+          ),
+        );
+      },
+    );
 
     test('suite manifest drift fails closed', () {
       final definition = DesktopE2eSuiteManifest.load(
@@ -2351,7 +2481,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d linux',
         ),
       );
       expect(log, contains('would write Flutter E2E run config: <redacted>'));
@@ -2408,26 +2538,26 @@ cliPeer:
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/app_smoke_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/app_smoke_test.dart -d linux',
           ),
         );
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/im_core_open_smoke_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/im_core_open_smoke_test.dart -d linux',
           ),
         );
       } else {
         expect(
           log,
           contains(
-            r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/app_smoke_test.dart -d macos',
+            r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/app_smoke_test.dart -d macos',
           ),
         );
         expect(
           log,
           contains(
-            r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/im_core_open_smoke_test.dart -d macos',
+            r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/im_core_open_smoke_test.dart -d macos',
           ),
         );
       }
@@ -2440,8 +2570,19 @@ cliPeer:
           jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
       expect(decoded['case'], 'smoke');
       expect(decoded['platform'], Platform.isLinux ? 'linux' : 'macos');
+      final hostPlatform = decoded['hostPlatform'] as Map<String, dynamic>;
+      expect(hostPlatform['os'], Platform.isLinux ? 'linux' : 'macos');
+      expect(hostPlatform['processArchitecture'], isNotEmpty);
+      expect(hostPlatform['hardwareArchitecture'], isNotEmpty);
+      expect(hostPlatform['translated'], isA<bool>());
+      final suitePolicy = decoded['suitePolicy'] as Map<String, dynamic>;
+      expect(suitePolicy['tier'], 'portable_product_ui');
+      expect(suitePolicy['executionLane'], 'portable');
+      expect(suitePolicy['supportedPlatforms'], contains('linux'));
+      expect(suitePolicy['requiredTools'], contains('flutter'));
       expect(decoded['caseIds'], <dynamic>[
         'AGENT-NOTIFY-SMOKE-E2E-001',
+        'AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001',
         'SMOKE-E2E-001',
         'NATIVE-E2E-001',
       ]);
@@ -2621,20 +2762,18 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d linux',
         ),
       );
       expect(log, contains('would write Flutter E2E run config: <redacted>'));
       expect(log, contains('tenant_backend=https://service.example.test'));
-      expect(
-        log,
-        contains(
-          'would run real App-admin + CLI-member Join and '
-          'ROOT-TRANSFER-E2E-001 completion',
-        ),
-      );
+      expect(log, isNot(contains('ROOT-TRANSFER-E2E-001')));
       expect(log, isNot(contains('test-phone-secret')));
       expect(log, isNot(contains('test-otp-secret')));
+      expect(log, isNot(contains('--dart-define=AWIKI_E2E_APP_STATE_ROOT=')));
+      expect(log, isNot(contains('--dart-define=AWIKI_E2E_ATTESTATION_PATH=')));
+      expect(log, isNot(contains('--dart-define=AWIKI_E2E_RUN_ID=')));
+      expect(log, isNot(contains('--dart-define=AWIKI_E2E_CASE_IDS=')));
       expect(log, isNot(contains(root.path)));
       expect(log, isNot(contains('../awiki-cli-rs2/cargo')));
       expect(log, contains('<redacted>'));
@@ -2685,14 +2824,13 @@ cliPeer:
         'ATTACH-E2E-002',
         'ATTACH-REG-001',
         'DISPLAY-NAME-E2E-004',
-        'ROOT-TRANSFER-E2E-001',
       ]);
       expect(decoded['runId'], 'run123');
       expect(decoded['platform'], 'linux');
       expect(decoded['dryRun'], isTrue);
       expect(decoded['prepareOnly'], isFalse);
       final caseResults = decoded['caseResults'] as List<dynamic>;
-      expect(caseResults, hasLength(25));
+      expect(caseResults, hasLength(24));
       expect(
         caseResults.every(
           (value) =>
@@ -2909,7 +3047,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_group_test.dart -d macos',
+          r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_group_test.dart -d macos',
         ),
       );
       final timings = File(
@@ -2968,7 +3106,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_direct_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_direct_test.dart -d linux',
         ),
       );
       final timings = File(
@@ -3047,7 +3185,7 @@ performance:
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_performance_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_performance_test.dart -d linux',
           ),
         );
         final runConfig = File(
@@ -3146,7 +3284,7 @@ performance:
       expect(
         log,
         contains(
-          r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_attachment_test.dart -d macos',
+          r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_attachment_test.dart -d macos',
         ),
       );
       final timings = File(
@@ -3200,7 +3338,7 @@ performance:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_contacts_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_contacts_test.dart -d linux',
         ),
       );
       final timings = File(
@@ -3256,7 +3394,7 @@ performance:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_inbound_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_inbound_test.dart -d linux',
         ),
       );
       final timings = File(
@@ -3265,10 +3403,7 @@ performance:
       final decoded =
           jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
       expect(decoded['case'], 'inbound');
-      expect(decoded['caseIds'], <dynamic>[
-        'AUTH-E2E-001',
-        'INBOUND-FIRST-CONV-E2E-001',
-      ]);
+      expect(decoded['caseIds'], <dynamic>['INBOUND-FIRST-CONV-E2E-001']);
     });
 
     test('generates personal-agent Flutter command and report case IDs', () async {
@@ -3325,7 +3460,7 @@ performance:
       expect(
         log,
         contains(
-          r"$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> --plain-name 'Personal Agent full UI drives real backend daemon and recovery' integration_test/personal_agent_full_ui_test.dart -d linux",
+          r"$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --plain-name 'Personal Agent full UI drives real backend daemon and recovery' integration_test/personal_agent_full_ui_test.dart -d linux",
         ),
       );
       expect(log, isNot(contains('test-phone-secret')));
@@ -3595,7 +3730,7 @@ performance:
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/codex_agent_full_ui_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/codex_agent_full_ui_test.dart -d linux',
           ),
         );
 
@@ -3702,7 +3837,7 @@ performance:
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/claude_code_agent_full_ui_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/claude_code_agent_full_ui_test.dart -d linux',
           ),
         );
 
@@ -3796,7 +3931,7 @@ performance:
       expect(
         log,
         contains(
-          r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d macos',
+          r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d macos',
         ),
       );
       expect(log, isNot(contains(r'$ xvfb-run')));
@@ -3811,7 +3946,12 @@ performance:
           await root.delete(recursive: true);
         }
       });
-      _writeLocalConfig(root, platform: 'linux', cliBin: '/tmp/fake-awiki-cli');
+      _writeLocalConfig(
+        root,
+        platform: 'linux',
+        cliBin: '/tmp/fake-awiki-cli',
+        otpCode: '123456',
+      );
       final lines = <String>[];
       final runner = DesktopE2eRunner(
         root: root,
@@ -4380,6 +4520,7 @@ void _writeLocalConfig(
   String cliHandle = 'e2e-cli',
   String cliBin = '/tmp/fake-awiki-cli',
   String cliSourceRef = '1111111111111111111111111111111111111111',
+  String otpCode = 'test-otp-secret',
   String? messageServiceUrl,
   String? messageServiceWsUrl,
   String? daemonRustRepo,
@@ -4472,7 +4613,7 @@ $messageServiceWs
 $daemon$personalAgent$codexAgent$claudeCodeAgent$performanceBlock
 otp:
   phone: test-phone-secret
-  code: test-otp-secret
+  code: $otpCode
 accounts:
   appUser:
     handle: $appHandle
@@ -4480,6 +4621,6 @@ accounts:
     handle: $cliHandle
 cliPeer:
   binary: $cliBin
-  sourceRef: $cliSourceRef
+  sourceRef: "$cliSourceRef"
 ''');
 }

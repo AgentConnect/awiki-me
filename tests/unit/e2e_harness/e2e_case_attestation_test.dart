@@ -25,6 +25,42 @@ void main() {
     );
   });
 
+  test(
+    'invocation completion marks process finish without claiming pass',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_e2e_invocation_completion_test_',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final attestation = File('${root.path}/case_attestation.json');
+      final environment = <String, String>{
+        e2eCaseAttestationPathDefine: attestation.path,
+        e2eCaseScenarioDefine: 'scenario-a',
+        e2eCaseRunIdDefine: 'run-a',
+        e2eCaseIdsDefine: 'CASE-001,CASE-002',
+      };
+
+      await E2eInvocationCompletionWriter.markFinished(
+        environment: environment,
+      );
+      final completion = E2eInvocationCompletion.read(
+        e2eInvocationCompletionFileForAttestation(attestation),
+      );
+
+      expect(completion.scenario, 'scenario-a');
+      expect(completion.runId, 'run-a');
+      expect(completion.expectedCaseIds, <String>['CASE-001', 'CASE-002']);
+      expect(completion.toJson()['status'], 'test_process_finished');
+      expect(completion.toJson(), isNot(contains('passed')));
+      await expectLater(
+        E2eInvocationCompletionWriter.markFinished(
+          environment: <String, String>{...environment, e2eCaseRunIdDefine: ''},
+        ),
+        throwsStateError,
+      );
+    },
+  );
+
   group('E2eCaseAttestation', () {
     test(
       'failure observation is structured and rejects payload-like codes',

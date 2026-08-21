@@ -11,7 +11,10 @@ import '../storage/awiki_storage_roots.dart';
 import '../storage/awiki_storage_scope_layout.dart';
 
 export '../storage/awiki_storage_roots.dart'
-    show awikiE2eAppStateRoot, normalizeAwikiE2eAppStateRootForLaunch;
+    show
+        awikiE2eAppStateRoot,
+        normalizeAwikiE2eAppStateRootForLaunch,
+        resolveAwikiE2eAppStateRoot;
 
 /// The oldest local-state schema this App may open or upgrade in place.
 ///
