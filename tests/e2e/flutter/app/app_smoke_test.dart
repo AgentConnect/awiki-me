@@ -111,6 +111,7 @@ Future<void> _activateRuntimeSession(
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(E2eInvocationCompletionWriter.markFinished);
 
   testWidgets('desktop startup excludes the mobile branded splash', (
     tester,
