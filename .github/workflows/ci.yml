@@ -375,7 +375,7 @@ jobs:
             -p im-core-dart `
             --locked `
             --no-default-features `
-            --features blocking,sqlite,http,windows
+            --features blocking,sqlite,http,windows,identity-native-anp
 
       - name: Build and verify x64 native IM Core
         working-directory: awiki-cli-rs2
