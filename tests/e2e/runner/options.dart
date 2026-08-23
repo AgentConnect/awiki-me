@@ -319,7 +319,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.restart => const Duration(minutes: 10),
       DesktopE2eCase.displayNameFallback => const Duration(minutes: 15),
       DesktopE2eCase.identitySwitch => const Duration(minutes: 10),
-      DesktopE2eCase.multiDeviceRemoteJoin => const Duration(minutes: 22),
+      DesktopE2eCase.multiDeviceRemoteJoin => const Duration(minutes: 40),
       DesktopE2eCase.multiDeviceRemoteRecovery => const Duration(minutes: 20),
       DesktopE2eCase.handleRecoveryLocalData => const Duration(minutes: 45),
       DesktopE2eCase.multiDeviceRemoteRecoveryFresh => const Duration(

@@ -157,6 +157,7 @@ const List<String> _multiDeviceCapabilityGateCaseIds = <String>[
 const List<String> _multiDeviceRemoteJoinCaseIds = <String>[
   'DEVICE-JOIN-E2E-001',
   'DEVICE-JOIN-E2E-002',
+  'DEVICE-JOIN-E2E-006',
   'DEVICE-JOIN-MESSAGE-CORE-E2E-001',
 ];
 const List<String> _multiDeviceRemoteRecoveryCaseIds = <String>[

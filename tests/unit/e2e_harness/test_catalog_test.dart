@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(119));
+      expect(catalog.cases, hasLength(120));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -19,6 +19,7 @@ void main() {
           'ROOT-TRANSFER-E2E-002',
           'DEVICE-JOIN-E2E-001',
           'DEVICE-JOIN-E2E-002',
+          'DEVICE-JOIN-E2E-006',
           'DEVICE-JOIN-MESSAGE-CORE-E2E-001',
           'DEVICE-JOIN-E2E-004',
           'DEVICE-AGENT-SYNC-E2E-001',
@@ -80,6 +81,7 @@ void main() {
       expect(catalog.suiteCaseIds['multi-device-remote-join'], <String>[
         'DEVICE-JOIN-E2E-001',
         'DEVICE-JOIN-E2E-002',
+        'DEVICE-JOIN-E2E-006',
         'DEVICE-JOIN-MESSAGE-CORE-E2E-001',
       ]);
       expect(catalog.suiteCaseIds['multi-device-remote-recovery'], <String>[

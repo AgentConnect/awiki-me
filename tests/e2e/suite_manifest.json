@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-21.unique-profile-owners-v1",
+  "sourceRevision": "2026-08-23.dsh-device-join-refactor-v1",
   "suites": {
     "smoke": {
       "tier": "portable_product_ui",
@@ -48,14 +48,14 @@
     "multi-device-remote-join": {
       "tier": "remote_product_ui_security",
       "supportedPlatforms": ["macos","linux"],
-      "requiredTools": ["flutter","script","awiki-cli"],
+      "requiredTools": ["flutter","script","awiki-cli","node"],
       "requiredFor": [
         "optional_nightly",
         "release"
       ],
       "owner": "awiki-me-identity",
-      "estimatedMinutes": 20,
-      "timeoutMinutes": 30,
+      "estimatedMinutes": 50,
+      "timeoutMinutes": 60,
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
         "awiki.info"
@@ -72,6 +72,7 @@
       "caseIds": [
         "DEVICE-JOIN-E2E-001",
         "DEVICE-JOIN-E2E-002",
+        "DEVICE-JOIN-E2E-006",
         "DEVICE-JOIN-MESSAGE-CORE-E2E-001"
       ]
     },

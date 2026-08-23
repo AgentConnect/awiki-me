@@ -77,9 +77,11 @@ import '../support/protected_otp_config.dart';
 
 part 'multi_device_app_pair_ui_test.part.dart';
 part 'multi_device_app_pair_content_sync_test.part.dart';
+part 'dsh_device_join_interop_test.part.dart';
 
 const String _newDeviceCaseId = 'DEVICE-JOIN-E2E-001';
 const String _adminApprovalCaseId = 'DEVICE-JOIN-E2E-002';
+const String _dshAdminJoinCaseId = 'DEVICE-JOIN-E2E-006';
 const String _joinMessageCoreCaseId = 'DEVICE-JOIN-MESSAGE-CORE-E2E-001';
 const String _appPairCaseId = 'DEVICE-JOIN-E2E-004';
 const String _appPairCredentialResetCaseId = 'DEVICE-JOIN-E2E-005';
@@ -861,6 +863,8 @@ void main() {
           : const Duration(minutes: 14),
     ),
   );
+
+  _registerDshDeviceJoinInteropTest();
 }
 
 Future<void> _verifyStep4RevokeAndMls({
@@ -1652,6 +1656,8 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
     required this.cliHome,
     required this.cliAdminWorkspace,
     required this.cliAdminHome,
+    required this.dshRepoRoot,
+    required this.dshStateRoot,
     required this.appStateRoot,
     required this.appJoiningStateRoot,
   });
@@ -1692,6 +1698,8 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
   final String cliHome;
   final String cliAdminWorkspace;
   final String cliAdminHome;
+  final String dshRepoRoot;
+  final String dshStateRoot;
   final String appStateRoot;
   final String appJoiningStateRoot;
 
@@ -1713,6 +1721,7 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
     final testControl = _map(root, 'testControl');
     final joiningCli = _map(root, 'cliJoiningDevice');
     final adminCli = _map(root, 'cliAdminDevice');
+    final dsh = _map(root, 'dshDevice');
     final app = _map(root, 'app');
     final joiningApp = _map(root, 'appJoiningDevice');
     final config = _RemoteJoinRunConfig(
@@ -1737,6 +1746,8 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
       cliHome: _required(joiningCli, 'home'),
       cliAdminWorkspace: _required(adminCli, 'workspace'),
       cliAdminHome: _required(adminCli, 'home'),
+      dshRepoRoot: _required(dsh, 'repoRoot'),
+      dshStateRoot: _required(dsh, 'stateRoot'),
       appStateRoot: _required(app, 'stateRoot'),
       appJoiningStateRoot: _required(joiningApp, 'stateRoot'),
     );
@@ -1767,6 +1778,11 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
         _required(adminCli, 'binary') != config.cliBin ||
         _required(adminCli, 'sourceRef') != config.cliSourceRef) {
       throw StateError('Remote multi-device CLI build is not auditable.');
+    }
+    if (_required(dsh, 'nodePackageVersion') != '0.1.8' ||
+        Directory(config.dshRepoRoot).absolute.path != config.dshRepoRoot ||
+        Directory(config.dshStateRoot).absolute.path != config.dshStateRoot) {
+      throw StateError('Remote multi-device DSH build is not auditable.');
     }
     return config;
   }

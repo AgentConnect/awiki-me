@@ -313,9 +313,10 @@ void main() {
       expect(hyphen.e2eCase.caseIds, <String>[
         'DEVICE-JOIN-E2E-001',
         'DEVICE-JOIN-E2E-002',
+        'DEVICE-JOIN-E2E-006',
         'DEVICE-JOIN-MESSAGE-CORE-E2E-001',
       ]);
-      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 22));
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 40));
       expect(
         hyphen.e2eCase.testFile,
         'integration_test/multi_device_join_ui_test.dart',

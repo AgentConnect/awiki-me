@@ -122,7 +122,7 @@ user-presence 同时成立后才显示执行入口；公开 Join 表单不暴露
 E2EE capability 默认可用，但普通 Direct 和新建群的产品策略默认选择非 E2EE。该用例不发送 OTP，也不声称完成远端 Join、SAS、
 审批、根导入、撤销、MLS 或 Handle Recovery。
 
-`DEVICE-JOIN-E2E-001/002` 由独立的 `multi-device-remote-join` suite 承载；它们不会混入
+`DEVICE-JOIN-E2E-001/002/006` 由独立的 `multi-device-remote-join` suite 承载；它们不会混入
 本地 capability gate。该 suite 只覆盖 App 新设备 + CLI 管理设备和 App 管理设备 + CLI
 新设备的消息驱动 member Join。两个方向均使用独立 native Core root、动态一次性 OTP、
 双端 SAS 和场景级 attestation；加入端 CLI 的 SAS 只从前台 TTY 提示读取，结构化 JSON

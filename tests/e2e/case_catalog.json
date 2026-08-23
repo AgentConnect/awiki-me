@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-21.unique-profile-owners-v1",
+  "sourceRevision": "2026-08-23.dsh-device-join-refactor-v1",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
@@ -2380,10 +2380,22 @@
           "DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_group_and_attachment_visible_once"
         ],
         "exactOracleAssertions": [
-          ["DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_group_and_attachment_absent", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:explicit_pull_preserved_tail_boundary"],
-          ["DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_group_and_attachment_visible_once"]
+          [
+            "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_group_and_attachment_absent",
+            "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread",
+            "DEVICE-CONTENT-TAIL-ONLY-E2E-001:explicit_pull_preserved_tail_boundary"
+          ],
+          [
+            "DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_group_and_attachment_visible_once"
+          ]
         ],
-        "negativeCheckAssertions": [["DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_group_and_attachment_absent", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_group_and_attachment_visible_once"]]
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_group_and_attachment_absent",
+            "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread",
+            "DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_group_and_attachment_visible_once"
+          ]
+        ]
       }
     },
     {
@@ -4959,6 +4971,68 @@
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:root_promotion_authorization_converged_without_logout",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:app_to_external_direct_exact_one",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:external_to_app_and_sibling_direct_exact_one"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-JOIN-E2E-006",
+      "feature": "AWiki Me joins a Handle created and managed by DSH",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The protected awiki.info config provides the fixed registration OTP and reviewed Handle-revoke factor; dsh-awiki is built against published @awiki/im-core-node 0.1.8; AWiki Me and DSH use independent empty Core roots; all service URLs resolve exactly to HTTPS awiki.info.",
+      "action": "Start the real DSH Host driver, create a fresh Handle and prove DSH bootstrap admin_ready, use visible AWiki Me onboarding to choose ordinary Join, let DSH reliable sync/local inbox discover an opaque requestRef, start verification, compare independently rendered SAS, approve with APPROVE, wait for AWiki Me member activation, revoke the App through opaque deviceRef with REVOKE, then call public Handle revoke through DSH DID auth.",
+      "exactOracles": [
+        "DSH is the unique ready-admin and AWiki Me remains pending without SAS before explicit DSH verification.",
+        "The independently rendered App and DSH six-digit SAS values match without entering evidence, and DSH approval activates AWiki Me as current member with management_ready false.",
+        "DSH Registry contains exactly admin+member, then the non-current member is revoked and public Handle revoke completes so the fresh Handle does not remain active."
+      ],
+      "negativeChecks": [
+        "Missing published Node v10/DSH build, awiki.ai or mixed endpoint, copied state, missing protected factor, Recovery instead of ordinary Join, raw native IDs at the Browser boundary, early/mismatched/persisted SAS, missing APPROVE/REVOKE, admin-role join, automatic approval, failed member revoke, residual active Handle, mock, or skip prevents attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/dsh_device_join_interop_test.part.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-JOIN-E2E-006:dsh_bootstrap_ready_admin",
+          "DEVICE-JOIN-E2E-006:app_ordinary_join_left_pending",
+          "DEVICE-JOIN-E2E-006:sas_matched_without_secret_evidence",
+          "DEVICE-JOIN-E2E-006:dsh_foreground_member_approval_completed",
+          "DEVICE-JOIN-E2E-006:app_joined_as_member",
+          "DEVICE-JOIN-E2E-006:dsh_revoked_member",
+          "DEVICE-JOIN-E2E-006:public_handle_cleanup_recovered_quota"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-JOIN-E2E-006:dsh_bootstrap_ready_admin",
+            "DEVICE-JOIN-E2E-006:app_ordinary_join_left_pending"
+          ],
+          [
+            "DEVICE-JOIN-E2E-006:sas_matched_without_secret_evidence",
+            "DEVICE-JOIN-E2E-006:dsh_foreground_member_approval_completed",
+            "DEVICE-JOIN-E2E-006:app_joined_as_member"
+          ],
+          [
+            "DEVICE-JOIN-E2E-006:dsh_revoked_member",
+            "DEVICE-JOIN-E2E-006:public_handle_cleanup_recovered_quota"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-JOIN-E2E-006:dsh_bootstrap_ready_admin",
+            "DEVICE-JOIN-E2E-006:app_ordinary_join_left_pending",
+            "DEVICE-JOIN-E2E-006:sas_matched_without_secret_evidence",
+            "DEVICE-JOIN-E2E-006:dsh_foreground_member_approval_completed",
+            "DEVICE-JOIN-E2E-006:app_joined_as_member",
+            "DEVICE-JOIN-E2E-006:dsh_revoked_member",
+            "DEVICE-JOIN-E2E-006:public_handle_cleanup_recovered_quota"
           ]
         ]
       }

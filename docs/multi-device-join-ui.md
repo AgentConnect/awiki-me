@@ -162,6 +162,12 @@ split claim/admin poll、admin toggle 或旧 root-control 的场景不能作为�
 不得直接调用 Message Inbox hydration、`requestSync()` 或 `refreshJoinInbox()` 代替唤醒。
 实现存在不等于远端已通过，仍需独立的 `awiki.info` pass attestation。
 
+`DEVICE-JOIN-E2E-006` 追加真实 DSH→AWiki Me 互操作：DSH 创建 Handle 并证明 bootstrap
+`admin_ready`，AWiki Me 通过可见 onboarding 发起 ordinary Join，DSH 只用 reliable sync/Core
+local inbox 和 opaque refs 完成 SAS + `APPROVE` member 审批，再以 `REVOKE` 撤销测试 App 并
+通过公开 Handle revoke 回收 quota。该 case 只在 Node v10 `0.1.8` 已发布、DSH 已构建且受保护
+revoke factor fixture 可用时执行；任何 `awiki.ai` 或混合 endpoint 在创建账号前失败。
+
 App↔App 验证使用独立的 `multi-device-app-pair` suite 和
 `DEVICE-JOIN-E2E-004`。它在同一台 macOS 上运行两个 bundle/build/state 均隔离的真实
 App 进程，管理端仍必须由 `system_notification_changed` → Core typed Join inbox →

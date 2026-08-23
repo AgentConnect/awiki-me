@@ -7,6 +7,8 @@ part of '../../runner.dart';
 extension DesktopE2eJoinScenario on DesktopE2eRunner {
   Future<void> _runRemoteMultiDeviceJoin({List<String>? caseIds}) async {
     final fullRootTransfer = options.e2eCase == DesktopE2eCase.rootTransfer;
+    final requestedCaseIds = caseIds ?? options.e2eCase.caseIds;
+    final includesDshInterop = requestedCaseIds.contains('DEVICE-JOIN-E2E-006');
     final joinConfig = RemoteMultiDeviceJoinConfig.from(
       fileConfig: fileConfig,
       environment: fullRootTransfer
@@ -31,6 +33,9 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
     _addRuntimeSecret(joinConfig.phone);
     _addRuntimeSecret(joinConfig.fixedOtp);
     _addRuntimeSecret(joinConfig.cliBin);
+    final dshRevokeOtp =
+        Platform.environment['AWIKI_DSH_HANDLE_REVOKE_OTP']?.trim() ?? '';
+    if (dshRevokeOtp.isNotEmpty) _addRuntimeSecret(dshRevokeOtp);
     if (!options.dryRun && !commands.dryRun) {
       suiteDefinition.validateRemoteTargetValues(
         didDomain: joinConfig.didDomain,
@@ -58,6 +63,31 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
     await _timed('Checking remote Join tooling and source', () async {
       await commands.requireExecutable('flutter');
       await commands.requireExecutable('script');
+      if (includesDshInterop) {
+        await commands.requireExecutable('node');
+        final dshRoot = Directory(
+          Directory('../dsh-awiki').absolute.resolveSymbolicLinksSync(),
+        );
+        await commands.requireFile(
+          '${dshRoot.path}/scripts/device-join-e2e.mjs',
+        );
+        await commands.requireFile('${dshRoot.path}/lib/index.js');
+        final manifest = jsonDecode(
+          File('${dshRoot.path}/package.json').readAsStringSync(),
+        );
+        if (manifest is! Map ||
+            (manifest['dependencies'] as Map?)?['@awiki/im-core-node'] !=
+                '0.1.8') {
+          throw E2eFailure('DSH E2E requires @awiki/im-core-node 0.1.8.');
+        }
+        if (!options.dryRun &&
+            !commands.dryRun &&
+            !isSixDigitAsciiOtp(dshRevokeOtp)) {
+          throw E2eFailure(
+            'The reviewed DSH Handle-revoke factor fixture is unavailable.',
+          );
+        }
+      }
       if (joinConfig.platform == DesktopE2ePlatform.linux) {
         await commands.requireExecutable('xvfb-run');
       }
@@ -108,9 +138,9 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
       return;
     }
     _resourceSideEffectsPossible = true;
-    final requestedCaseIds = caseIds ?? options.e2eCase.caseIds;
     const joiningAppCaseIds = <String>{
       'DEVICE-JOIN-E2E-001',
+      'DEVICE-JOIN-E2E-006',
       'DEVICE-JOIN-MESSAGE-CORE-E2E-001',
     };
     final joiningAppCases = requestedCaseIds
@@ -210,6 +240,13 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
         'home': fullRootTransferOnly
             ? cliHomeDir.path
             : multiDeviceCliAdminHomeDir.path,
+      },
+      'dshDevice': <String, Object?>{
+        'repoRoot': Directory(
+          '../dsh-awiki',
+        ).absolute.resolveSymbolicLinksSync(),
+        'stateRoot': multiDeviceCliAdminWorkspaceDir.path,
+        'nodePackageVersion': '0.1.8',
       },
       'app': <String, Object?>{
         'stateRoot': fullRootTransferOnly
