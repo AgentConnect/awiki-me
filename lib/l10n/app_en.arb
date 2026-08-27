@@ -505,6 +505,7 @@
   "messageSyncStatusRecovering": "Recovering recent messages and current read state…",
   "messageSyncStatusRetrying": "The message service is temporarily unavailable. Retrying automatically…",
   "messageSyncStatusRetryableFailure": "New messages cannot be synced right now. Check your network and retry.",
+  "messageSyncStatusBlocked": "Message sync is paused. Upgrade the client or repair this device to continue.",
   "messageSyncStatusProjectionRefreshFailed": "Messages were synced, but the list could not refresh. Retry to reload it.",
   "messageSyncStatusAuthRevoked": "Your sign-in expired or this device is no longer authorized. Sign in again.",
   "authRevokedDialogTitle": "Account sign-in expired",

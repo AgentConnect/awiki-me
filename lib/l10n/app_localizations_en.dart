@@ -1293,6 +1293,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'New messages cannot be synced right now. Check your network and retry.';
 
   @override
+  String get messageSyncStatusBlocked =>
+      'Message sync is paused. Upgrade the client or repair this device to continue.';
+
+  @override
   String get messageSyncStatusProjectionRefreshFailed =>
       'Messages were synced, but the list could not refresh. Retry to reload it.';
 

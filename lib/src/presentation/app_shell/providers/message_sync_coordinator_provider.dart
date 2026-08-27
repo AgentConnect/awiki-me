@@ -42,6 +42,7 @@ enum MessageSyncCoordinatorStatus {
   retryableFailure,
   projectionRefreshFailed,
   authRevoked,
+  blocked,
 }
 
 class MessageSyncCoordinatorState {
@@ -639,6 +640,28 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
           );
           return const RemotePushSyncReceipt(
             disposition: RemotePushSyncDisposition.retryableFailure,
+          );
+        }
+        if (result.status == MessageSyncStatus.blocked) {
+          final failureCode = result.errorCode ?? 'message_sync_blocked';
+          _recoveryRetryPending = false;
+          _runningRecoveryRetry = false;
+          _patchReplacementRetryPending = false;
+          _cancelCoreDirectedRetry();
+          _resetRetryableFailureTracking();
+          state = state.copyWith(
+            status: MessageSyncCoordinatorStatus.blocked,
+            lastError: MessageSyncCoordinatorFailure(failureCode),
+          );
+          _completeQueuedWaiters(
+            _queuedAfterActive,
+            const RemotePushSyncReceipt(
+              disposition: RemotePushSyncDisposition.blocked,
+            ),
+          );
+          _queuedAfterActive = null;
+          return const RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.blocked,
           );
         }
         if (result.status == MessageSyncStatus.authRevoked) {

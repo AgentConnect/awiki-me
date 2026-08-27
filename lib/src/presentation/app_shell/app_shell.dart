@@ -402,7 +402,8 @@ class _AppShellState extends ConsumerState<AppShell> {
             (!state.transientFailurePresentationSuppressed ||
                 state.shouldSurfaceRetryableFailure)) ||
         state.status == MessageSyncCoordinatorStatus.projectionRefreshFailed ||
-        state.status == MessageSyncCoordinatorStatus.authRevoked;
+        state.status == MessageSyncCoordinatorStatus.authRevoked ||
+        state.status == MessageSyncCoordinatorStatus.blocked;
   }
 
   String _messageSyncBannerMessage(
@@ -422,6 +423,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         context.l10n.messageSyncStatusProjectionRefreshFailed,
       MessageSyncCoordinatorStatus.authRevoked =>
         context.l10n.messageSyncStatusAuthRevoked,
+      MessageSyncCoordinatorStatus.blocked =>
+        context.l10n.messageSyncStatusBlocked,
       MessageSyncCoordinatorStatus.idle => context.l10n.messageSyncStatusIdle,
       MessageSyncCoordinatorStatus.syncing =>
         context.l10n.messageSyncStatusSyncing,

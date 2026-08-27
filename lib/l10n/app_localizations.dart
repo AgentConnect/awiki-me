@@ -2406,6 +2406,12 @@ abstract class AppLocalizations {
   /// **'暂时无法同步新消息，请检查网络后重试。'**
   String get messageSyncStatusRetryableFailure;
 
+  /// No description provided for @messageSyncStatusBlocked.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息同步已暂停，请升级客户端或修复此设备后继续。'**
+  String get messageSyncStatusBlocked;
+
   /// No description provided for @messageSyncStatusProjectionRefreshFailed.
   ///
   /// In zh, this message translates to:

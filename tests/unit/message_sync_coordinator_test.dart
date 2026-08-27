@@ -109,6 +109,7 @@ void main() {
       MessageSyncStatus.recoveryRequired:
           RemotePushSyncDisposition.recoveryRequired,
       MessageSyncStatus.authRevoked: RemotePushSyncDisposition.authRevoked,
+      MessageSyncStatus.blocked: RemotePushSyncDisposition.blocked,
     };
 
     for (final entry in cases.entries) {
@@ -196,7 +197,24 @@ void main() {
           .requestSync('v1a_after_watchdog', immediate: true);
       await Future<void>.delayed(const Duration(milliseconds: 2));
       expect(sync.syncReasons, ['remote_push', 'v1a_after_watchdog']);
+      sync.completeAt(1);
       await second;
+
+      final beforeLateCompletion = container.read(
+        messageSyncCoordinatorProvider,
+      );
+      sync.completeAt(0);
+      await Future<void>.delayed(const Duration(milliseconds: 2));
+      final afterLateCompletion = container.read(
+        messageSyncCoordinatorProvider,
+      );
+      expect(afterLateCompletion.status, beforeLateCompletion.status);
+      expect(afterLateCompletion.lastStatus, beforeLateCompletion.lastStatus);
+      expect(
+        afterLateCompletion.pendingReason,
+        beforeLateCompletion.pendingReason,
+      );
+      expect(sync.syncReasons, ['remote_push', 'v1a_after_watchdog']);
     },
   );
 
@@ -223,6 +241,34 @@ void main() {
       expect(state.shouldSurfaceRetryableFailure, isFalse);
     },
   );
+
+  test('v1a blocked Core outcome never schedules a tight retry', () async {
+    final sync = FakeMessageSyncService(
+      deltaResult: const MessageSyncOutcome(
+        status: MessageSyncStatus.blocked,
+        eventsApplied: 0,
+        pagesFetched: 0,
+        errorCode: 'sync.client_upgrade_required',
+      ),
+    );
+    final container = _container(
+      FakeAwikiGateway(),
+      sync,
+      failureBackoff: const Duration(milliseconds: 5),
+    );
+    addTearDown(container.dispose);
+
+    final receipt = await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestRemotePushSync();
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    final state = container.read(messageSyncCoordinatorProvider);
+    expect(receipt.disposition, RemotePushSyncDisposition.blocked);
+    expect(state.status, MessageSyncCoordinatorStatus.blocked);
+    expect(state.automaticRetryPending, isFalse);
+    expect(sync.syncReasons, ['remote_push']);
+  });
 
   test(
     'intercepted foreground Push stays silent outside its conversation',
@@ -2413,7 +2459,11 @@ class _QueuedBlockingMessageSyncService extends FakeMessageSyncService {
   }
 
   void completeNext() {
-    final completer = _pending.removeAt(0);
+    completeAt(0);
+  }
+
+  void completeAt(int index) {
+    final completer = _pending.removeAt(index);
     completer.complete(
       const MessageSyncOutcome(
         status: MessageSyncStatus.idle,

@@ -1227,6 +1227,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get messageSyncStatusRetryableFailure => '暂时无法同步新消息，请检查网络后重试。';
 
   @override
+  String get messageSyncStatusBlocked => '消息同步已暂停，请升级客户端或修复此设备后继续。';
+
+  @override
   String get messageSyncStatusProjectionRefreshFailed =>
       '消息已同步，但列表刷新失败，请重试重新加载。';
 

@@ -177,5 +177,6 @@ MessageSyncStatus _messageSyncStatusFromCore(core.MessageSyncStatus value) {
     core.MessageSyncStatus.retryableFailure =>
       MessageSyncStatus.retryableFailure,
     core.MessageSyncStatus.authRevoked => MessageSyncStatus.authRevoked,
+    core.MessageSyncStatus.blocked => MessageSyncStatus.blocked,
   };
 }

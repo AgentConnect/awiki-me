@@ -56,6 +56,7 @@ enum MessageSyncStatus {
   recoveryRequired,
   retryableFailure,
   authRevoked,
+  blocked,
 }
 
 class CommittedIncomingMessage {
