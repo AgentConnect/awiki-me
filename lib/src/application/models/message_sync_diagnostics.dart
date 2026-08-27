@@ -10,6 +10,49 @@ enum AppMessageSyncRetryState {
   permanentFailure,
 }
 
+enum AppMessageSyncLane { p5Device, p6Group }
+
+class AppMessageSyncLaneState {
+  const AppMessageSyncLaneState({
+    required this.lane,
+    required this.committedCursor,
+    required this.pending,
+    this.lastTransportError,
+  });
+
+  final AppMessageSyncLane lane;
+  final String committedCursor;
+  final bool pending;
+  final String? lastTransportError;
+}
+
+enum AppMessageSyncDomainStatus {
+  pending,
+  processing,
+  applied,
+  terminal,
+  rejoinRequired,
+  repairRequired,
+  upgradeRequired,
+  actionRequired,
+}
+
+class AppMessageSyncDomainState {
+  const AppMessageSyncDomainState({
+    required this.lane,
+    required this.scope,
+    required this.retryable,
+    this.operationRef,
+    required this.status,
+  });
+
+  final AppMessageSyncLane lane;
+  final String scope;
+  final bool retryable;
+  final String? operationRef;
+  final AppMessageSyncDomainStatus status;
+}
+
 enum AppMessageSyncFailureStage { prepare, coreSync, postCommitProjection }
 
 enum AppMessageSyncFailureCategory {
@@ -32,6 +75,8 @@ class AppMessageSyncDiagnostics {
     this.dirtyDomains = const <AppMessageSyncDirtyDomain>[],
     required this.retryState,
     this.nextRetryAt,
+    this.lanes = const <AppMessageSyncLaneState>[],
+    this.domainStates = const <AppMessageSyncDomainState>[],
   });
 
   final DateTime? lastSuccessAt;
@@ -40,6 +85,18 @@ class AppMessageSyncDiagnostics {
   final List<AppMessageSyncDirtyDomain> dirtyDomains;
   final AppMessageSyncRetryState retryState;
   final DateTime? nextRetryAt;
+  final List<AppMessageSyncLaneState> lanes;
+  final List<AppMessageSyncDomainState> domainStates;
+
+  bool get laneDegraded =>
+      lanes.any((lane) => lane.lastTransportError != null) ||
+      domainStates.any(
+        (state) =>
+            state.status == AppMessageSyncDomainStatus.rejoinRequired ||
+            state.status == AppMessageSyncDomainStatus.repairRequired ||
+            state.status == AppMessageSyncDomainStatus.upgradeRequired ||
+            state.status == AppMessageSyncDomainStatus.actionRequired,
+      );
 }
 
 /// Product-owned, payload-free diagnostics serialization.

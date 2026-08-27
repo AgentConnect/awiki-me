@@ -74,6 +74,44 @@ class AwikiImCoreMessageAdapter
             AppMessageSyncRetryState.permanentFailure,
         },
         nextRetryAt: _parseDiagnosticTimestamp(diagnostics.nextRetryAt),
+        lanes: diagnostics.lanes
+            .map(
+              (state) => AppMessageSyncLaneState(
+                lane: _appSyncLane(state.lane),
+                committedCursor: state.committedCursor,
+                pending: state.pending,
+                lastTransportError: state.lastTransportError,
+              ),
+            )
+            .toList(growable: false),
+        domainStates: diagnostics.domainStates
+            .map(
+              (state) => AppMessageSyncDomainState(
+                lane: _appSyncLane(state.lane),
+                scope: state.scope,
+                retryable: state.retryable,
+                operationRef: state.operationRef,
+                status: switch (state.status) {
+                  core.MessageSyncDomainStatus.pending =>
+                    AppMessageSyncDomainStatus.pending,
+                  core.MessageSyncDomainStatus.processing =>
+                    AppMessageSyncDomainStatus.processing,
+                  core.MessageSyncDomainStatus.applied =>
+                    AppMessageSyncDomainStatus.applied,
+                  core.MessageSyncDomainStatus.terminal =>
+                    AppMessageSyncDomainStatus.terminal,
+                  core.MessageSyncDomainStatus.rejoinRequired =>
+                    AppMessageSyncDomainStatus.rejoinRequired,
+                  core.MessageSyncDomainStatus.repairRequired =>
+                    AppMessageSyncDomainStatus.repairRequired,
+                  core.MessageSyncDomainStatus.upgradeRequired =>
+                    AppMessageSyncDomainStatus.upgradeRequired,
+                  core.MessageSyncDomainStatus.actionRequired =>
+                    AppMessageSyncDomainStatus.actionRequired,
+                },
+              ),
+            )
+            .toList(growable: false),
       );
     });
   }
@@ -762,6 +800,11 @@ class AwikiImCoreMessageAdapter
     return _threadPatchFromCore(patch, ownerDid: ownerDid);
   }
 }
+
+AppMessageSyncLane _appSyncLane(core.MessageSyncLane lane) => switch (lane) {
+  core.MessageSyncLane.p5Device => AppMessageSyncLane.p5Device,
+  core.MessageSyncLane.p6Group => AppMessageSyncLane.p6Group,
+};
 
 void _requireExpectedConversationId(
   String? actualConversationId,

@@ -603,22 +603,35 @@ void main() {
     expect(adapter.sentPayload, isNull);
   });
 
-  test('sync diagnostics maps only redacted product-safe fields', () async {
-    final client = _FakeClient(ownerDid: 'did:alice');
-    final adapter = AwikiImCoreMessageAdapter(runtime: _FakeRuntime(client));
+  test(
+    'v1b sync diagnostics keeps transport and domain state separate',
+    () async {
+      final client = _FakeClient(ownerDid: 'did:alice');
+      final adapter = AwikiImCoreMessageAdapter(runtime: _FakeRuntime(client));
 
-    final diagnostics = await adapter.syncDiagnostics();
+      final diagnostics = await adapter.syncDiagnostics();
 
-    expect(diagnostics.lastSuccessAt, DateTime.parse('2026-07-29T01:02:03Z'));
-    expect(diagnostics.mode, AppMessageSyncMode.recovering);
-    expect(diagnostics.pendingMutationCount, 2);
-    expect(diagnostics.dirtyDomains, <AppMessageSyncDirtyDomain>[
-      AppMessageSyncDirtyDomain.messages,
-      AppMessageSyncDirtyDomain.readState,
-    ]);
-    expect(diagnostics.retryState, AppMessageSyncRetryState.scheduled);
-    expect(diagnostics.nextRetryAt, DateTime.parse('2026-07-29T01:03:03Z'));
-  });
+      expect(diagnostics.lastSuccessAt, DateTime.parse('2026-07-29T01:02:03Z'));
+      expect(diagnostics.mode, AppMessageSyncMode.recovering);
+      expect(diagnostics.pendingMutationCount, 2);
+      expect(diagnostics.dirtyDomains, <AppMessageSyncDirtyDomain>[
+        AppMessageSyncDirtyDomain.messages,
+        AppMessageSyncDirtyDomain.readState,
+      ]);
+      expect(diagnostics.retryState, AppMessageSyncRetryState.scheduled);
+      expect(diagnostics.nextRetryAt, DateTime.parse('2026-07-29T01:03:03Z'));
+      expect(diagnostics.lanes.single.lane, AppMessageSyncLane.p5Device);
+      expect(
+        diagnostics.lanes.single.lastTransportError,
+        'lane_storage_pressure',
+      );
+      expect(
+        diagnostics.domainStates.map((state) => state.status).toSet(),
+        AppMessageSyncDomainStatus.values.toSet(),
+      );
+      expect(diagnostics.laneDegraded, isTrue);
+    },
+  );
 }
 
 class _FakeRuntime extends AwikiImCoreRuntime {
@@ -718,6 +731,72 @@ class _FakeMessageApi implements core.MessageApi {
       ],
       retryState: core.MessageSyncRetryState.scheduled,
       nextRetryAt: '2026-07-29T01:03:03Z',
+      lanes: <core.MessageSyncLaneState>[
+        core.MessageSyncLaneState(
+          lane: core.MessageSyncLane.p5Device,
+          committedCursor: '41:7',
+          pending: true,
+          lastTransportError: 'lane_storage_pressure',
+        ),
+      ],
+      domainStates: <core.MessageSyncDomainState>[
+        core.MessageSyncDomainState(
+          lane: core.MessageSyncLane.p6Group,
+          scope: 'did:example:group',
+          retryable: false,
+          operationRef: 'p6-operation',
+          status: core.MessageSyncDomainStatus.pending,
+        ),
+        core.MessageSyncDomainState(
+          lane: core.MessageSyncLane.p6Group,
+          scope: 'did:example:group',
+          retryable: false,
+          operationRef: 'p6-operation',
+          status: core.MessageSyncDomainStatus.processing,
+        ),
+        core.MessageSyncDomainState(
+          lane: core.MessageSyncLane.p6Group,
+          scope: 'did:example:group',
+          retryable: false,
+          operationRef: 'p6-operation',
+          status: core.MessageSyncDomainStatus.applied,
+        ),
+        core.MessageSyncDomainState(
+          lane: core.MessageSyncLane.p6Group,
+          scope: 'did:example:group',
+          retryable: false,
+          operationRef: 'p6-operation',
+          status: core.MessageSyncDomainStatus.terminal,
+        ),
+        core.MessageSyncDomainState(
+          lane: core.MessageSyncLane.p6Group,
+          scope: 'did:example:group',
+          retryable: false,
+          operationRef: 'p6-operation',
+          status: core.MessageSyncDomainStatus.rejoinRequired,
+        ),
+        core.MessageSyncDomainState(
+          lane: core.MessageSyncLane.p6Group,
+          scope: 'did:example:group',
+          retryable: false,
+          operationRef: 'p6-operation',
+          status: core.MessageSyncDomainStatus.repairRequired,
+        ),
+        core.MessageSyncDomainState(
+          lane: core.MessageSyncLane.p6Group,
+          scope: 'did:example:group',
+          retryable: false,
+          operationRef: 'p6-operation',
+          status: core.MessageSyncDomainStatus.upgradeRequired,
+        ),
+        core.MessageSyncDomainState(
+          lane: core.MessageSyncLane.p6Group,
+          scope: 'did:example:group',
+          retryable: false,
+          operationRef: 'p6-operation',
+          status: core.MessageSyncDomainStatus.actionRequired,
+        ),
+      ],
     );
   }
 
