@@ -155,6 +155,52 @@ void main() {
   });
 
   test(
+    'v1a coordinator calls Core before preparing the Patch projection',
+    () async {
+      final gateway = FakeAwikiGateway();
+      late int conversationReadsWhenCoreStarted;
+      final sync = _ObservingMessageSyncService(() {
+        conversationReadsWhenCoreStarted = gateway.listConversationsCalls;
+      });
+      final container = _container(gateway, sync);
+      addTearDown(container.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('v1a_core_first', immediate: true);
+
+      expect(conversationReadsWhenCoreStarted, 0);
+      expect(gateway.listConversationsCalls, greaterThan(0));
+    },
+  );
+
+  test(
+    'v1a watchdog detaches a stuck Core Future and permits a new run',
+    () async {
+      final sync = _QueuedBlockingMessageSyncService();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        syncWatchdog: const Duration(milliseconds: 10),
+        failureBackoff: const Duration(minutes: 1),
+      );
+      addTearDown(container.dispose);
+
+      final first = await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync();
+      expect(first.disposition, RemotePushSyncDisposition.retryableFailure);
+
+      final second = container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('v1a_after_watchdog', immediate: true);
+      await Future<void>.delayed(const Duration(milliseconds: 2));
+      expect(sync.syncReasons, ['remote_push', 'v1a_after_watchdog']);
+      await second;
+    },
+  );
+
+  test(
     'remote Push suppresses transient failure presentation while retrying',
     () async {
       final container = _container(
@@ -1048,7 +1094,9 @@ void main() {
       await bobSync;
       await pumpEventQueue();
 
-      expect(gateway.listConversationsCalls, 3);
+      // The stale Alice Core result is fenced before Patch preparation, so
+      // only Bob's current generation performs projection reads.
+      expect(gateway.listConversationsCalls, 2);
       expect(
         container.read(messageSyncCoordinatorProvider).lastReason,
         'bob_startup',
@@ -1101,7 +1149,7 @@ void main() {
   });
 
   test(
-    'bound startup records Patch subscribe and reset before reliable sync',
+    'bound startup records Patch readiness before projecting Core sync',
     () async {
       final gateway = FakeAwikiGateway();
       final conversations = _BoundReadyConversationService(
@@ -2164,6 +2212,7 @@ ProviderContainer _container(
   Duration minInterval = Duration.zero,
   Duration failureBackoff = Duration.zero,
   Duration failureSurfaceDelay = Duration.zero,
+  Duration syncWatchdog = const Duration(seconds: 30),
   FakeDeviceManagementCore? devices,
   FakeNotificationFacade? notifications,
   AppPresentationService? appPresentationService,
@@ -2218,6 +2267,7 @@ ProviderContainer _container(
           minInterval: minInterval,
           failureBackoff: failureBackoff,
           failureSurfaceDelay: failureSurfaceDelay,
+          syncWatchdog: syncWatchdog,
         ),
       ),
       sessionProvider.overrideWith((ref) {
@@ -2323,6 +2373,26 @@ class _BlockingMessageSyncService extends FakeMessageSyncService {
         eventsApplied: 0,
         pagesFetched: 0,
       ),
+    );
+  }
+}
+
+class _ObservingMessageSyncService extends FakeMessageSyncService {
+  _ObservingMessageSyncService(this.onSyncStarted);
+
+  final void Function() onSyncStarted;
+
+  @override
+  Future<MessageSyncOutcome> syncNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    syncReasons.add(reason);
+    onSyncStarted();
+    return const MessageSyncOutcome(
+      status: MessageSyncStatus.idle,
+      eventsApplied: 0,
+      pagesFetched: 0,
     );
   }
 }

@@ -241,6 +241,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     this.minInterval = const Duration(seconds: 2),
     this.failureBackoff = const Duration(seconds: 8),
     this.failureSurfaceDelay = const Duration(seconds: 30),
+    this.syncWatchdog = const Duration(seconds: 30),
   }) : _sessionEpoch = ref.read(sessionProvider).activeEpoch,
        super(const MessageSyncCoordinatorState()) {
     _sessionSubscription = ref.listen<SessionState>(
@@ -253,6 +254,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   final Duration minInterval;
   final Duration failureBackoff;
   final Duration failureSurfaceDelay;
+  final Duration syncWatchdog;
 
   late final ProviderSubscription<SessionState> _sessionSubscription;
   SessionEpoch? _sessionEpoch;
@@ -581,6 +583,17 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       AppMessageSyncDiagnostics? diagnostics;
       var failureStage = AppMessageSyncFailureStage.prepare;
       try {
+        failureStage = AppMessageSyncFailureStage.coreSync;
+        final result = await ref
+            .read(messageSyncServiceProvider)
+            .syncNow(reason: reason)
+            .timeout(syncWatchdog);
+        if (!_isCurrentSync(epoch, sessionFence)) {
+          return const RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.staleSession,
+          );
+        }
+        failureStage = AppMessageSyncFailureStage.prepare;
         await ref.read(conversationListProvider.notifier).ensurePatchReady();
         if (!_isCurrentSync(epoch, sessionFence)) {
           return const RemotePushSyncReceipt(
@@ -592,14 +605,6 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
             .read(conversationListProvider.notifier)
             .recordReliableSyncStartedForCurrentPatchGeneration();
         failureStage = AppMessageSyncFailureStage.coreSync;
-        final result = await ref
-            .read(messageSyncServiceProvider)
-            .syncNow(reason: reason);
-        if (!_isCurrentSync(epoch, sessionFence)) {
-          return const RemotePushSyncReceipt(
-            disposition: RemotePushSyncDisposition.staleSession,
-          );
-        }
         diagnosticsAttempted = true;
         diagnostics = await _refreshDiagnosticsBestEffort(epoch, sessionFence);
         if (!_isCurrentSync(epoch, sessionFence)) {
