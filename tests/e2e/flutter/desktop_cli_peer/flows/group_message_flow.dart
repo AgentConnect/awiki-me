@@ -448,8 +448,6 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     ],
   );
 
-  final recovery = await groups.resumeRebindRecovery();
-  expect(recovery.blocked, 0);
   return _GroupRegressionResult(
     conversationId: conversation.conversationId,
     groupDid: groupDid,

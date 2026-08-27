@@ -19,8 +19,6 @@ class GroupState {
     this.memberPages = const <String, GroupMemberPageState>{},
     this.isLoading = false,
     this.isLoadingMoreGroups = false,
-    this.isResumingRecovery = false,
-    this.recoverySummary,
   });
 
   final List<GroupSummary> groups;
@@ -30,8 +28,6 @@ class GroupState {
   final Map<String, GroupMemberPageState> memberPages;
   final bool isLoading;
   final bool isLoadingMoreGroups;
-  final bool isResumingRecovery;
-  final GroupRebindRecoverySummary? recoverySummary;
 
   GroupState copyWith({
     List<GroupSummary>? groups,
@@ -42,8 +38,6 @@ class GroupState {
     Map<String, GroupMemberPageState>? memberPages,
     bool? isLoading,
     bool? isLoadingMoreGroups,
-    bool? isResumingRecovery,
-    GroupRebindRecoverySummary? recoverySummary,
   }) {
     return GroupState(
       groups: groups ?? this.groups,
@@ -55,8 +49,6 @@ class GroupState {
       memberPages: memberPages ?? this.memberPages,
       isLoading: isLoading ?? this.isLoading,
       isLoadingMoreGroups: isLoadingMoreGroups ?? this.isLoadingMoreGroups,
-      isResumingRecovery: isResumingRecovery ?? this.isResumingRecovery,
-      recoverySummary: recoverySummary ?? this.recoverySummary,
     );
   }
 }
@@ -100,13 +92,6 @@ class _GroupMemberProfilePrewarmOperation {
   final Future<void> operation;
 }
 
-class _GroupRecoveryOperation {
-  const _GroupRecoveryOperation({required this.owner, required this.operation});
-
-  final _GroupOwnerOperation owner;
-  final Future<GroupRebindRecoverySummary> operation;
-}
-
 class GroupMemberPageState {
   const GroupMemberPageState({
     required this.hasMore,
@@ -141,7 +126,6 @@ class GroupController extends StateNotifier<GroupState> {
   _memberProfilePrewarms = <String, _GroupMemberProfilePrewarmOperation>{};
   final Map<String, String> _memberProfileReadyKeys = <String, String>{};
   int _memberLoadGeneration = 0;
-  _GroupRecoveryOperation? _recoveryOperation;
   final Map<String, int> _memberLoadGenerations = <String, int>{};
   int _groupLoadGeneration = 0;
 
@@ -151,8 +135,6 @@ class GroupController extends StateNotifier<GroupState> {
     state = state.copyWith(isLoading: true, isLoadingMoreGroups: false);
     try {
       final groups = ref.read(groupApplicationServiceProvider);
-      final recovery = await groups.resumeRebindRecovery(limit: limit);
-      _requireCurrentOwnerOperation(ownerOperation);
       final page = await groups.listGroups(limit: limit);
       _validatePageCursor(page);
       if (!_isGroupOwnerOperationCurrent(ownerOperation) ||
@@ -170,7 +152,6 @@ class GroupController extends StateNotifier<GroupState> {
         groupsNextCursor: page.nextCursor,
         clearGroupsNextCursor: page.nextCursor == null,
         isLoading: false,
-        recoverySummary: _hasRecoveryWork(recovery) ? recovery : null,
       );
     } catch (_) {
       if (_isGroupOwnerOperationCurrent(ownerOperation) &&
@@ -658,50 +639,6 @@ class GroupController extends StateNotifier<GroupState> {
     return joined;
   }
 
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({int limit = 100}) {
-    final ownerOperation = _captureOwnerOperation();
-    final active = _recoveryOperation;
-    if (active != null && active.owner == ownerOperation) {
-      return active.operation;
-    }
-    late final Future<GroupRebindRecoverySummary> operation;
-    operation = _runRebindRecovery(ownerOperation: ownerOperation, limit: limit)
-        .whenComplete(() {
-          if (identical(_recoveryOperation?.operation, operation)) {
-            _recoveryOperation = null;
-          }
-        });
-    _recoveryOperation = _GroupRecoveryOperation(
-      owner: ownerOperation,
-      operation: operation,
-    );
-    return operation;
-  }
-
-  Future<GroupRebindRecoverySummary> _runRebindRecovery({
-    required _GroupOwnerOperation ownerOperation,
-    required int limit,
-  }) async {
-    _requireCurrentOwnerOperation(ownerOperation);
-    state = state.copyWith(isResumingRecovery: true);
-    try {
-      final summary = await ref
-          .read(groupApplicationServiceProvider)
-          .resumeRebindRecovery(limit: limit);
-      _requireCurrentOwnerOperation(ownerOperation);
-      state = state.copyWith(
-        isResumingRecovery: false,
-        recoverySummary: summary,
-      );
-      return summary;
-    } catch (_) {
-      if (_isGroupOwnerOperationCurrent(ownerOperation)) {
-        state = state.copyWith(isResumingRecovery: false);
-      }
-      rethrow;
-    }
-  }
-
   Future<GroupSummary> addGroupMember({
     required String groupId,
     required String memberRef,
@@ -759,7 +696,6 @@ class GroupController extends StateNotifier<GroupState> {
     _initialMemberLoads.clear();
     _memberProfilePrewarms.clear();
     _memberProfileReadyKeys.clear();
-    _recoveryOperation = null;
     state = const GroupState();
   }
 
@@ -803,14 +739,6 @@ void _validatePageCursor<T>(
       (page.hasMore && nextCursor == previousCursor)) {
     throw StateError('group_page_cursor_invalid');
   }
-}
-
-bool _hasRecoveryWork(GroupRebindRecoverySummary summary) {
-  return summary.processed > 0 ||
-      summary.completed > 0 ||
-      summary.hasPending ||
-      summary.hasBlocked ||
-      summary.items.isNotEmpty;
 }
 
 final groupProvider = StateNotifierProvider<GroupController, GroupState>(

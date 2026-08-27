@@ -29,6 +29,10 @@ import 'package:http/testing.dart';
 import 'test_support.dart';
 
 void main() {
+  test('candidate build defaults to the 0815 release line', () {
+    expect(awikiMeReleaseLine, '0815');
+  });
+
   test('bootstrap exposes its app-lifetime remote Push dependencies', () {
     final client = _FakeRemotePushClient();
     final coordinator = RemotePushInstallationCoordinator(

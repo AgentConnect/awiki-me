@@ -874,10 +874,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int registerHandleCalls = 0;
   int registerHandleWithEmailCalls = 0;
   int registerHandleWithoutContactVerificationCalls = 0;
-  int resumeGroupRecoveryCalls = 0;
-  bool failGroupRecovery = false;
-  GroupRebindRecoverySummary groupRecoverySummary =
-      GroupRebindRecoverySummary.empty;
   int logoutCalls = 0;
   int deleteLocalThreadCalls = 0;
   String? lastDeletedLocalThreadId;
@@ -3807,17 +3803,6 @@ class FakeGroupApplicationService implements GroupApplicationService {
     gateway.lastGroupIdentityMode = identity.mode;
     gateway.lastGroupIdentityHandle = identity.handle;
     return gateway.joinGroup(groupDid);
-  }
-
-  @override
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({
-    int limit = 100,
-  }) async {
-    gateway.resumeGroupRecoveryCalls += 1;
-    if (gateway.failGroupRecovery) {
-      throw StateError('group recovery unavailable');
-    }
-    return gateway.groupRecoverySummary;
   }
 
   @override

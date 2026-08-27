@@ -42,7 +42,8 @@ void main() {
     );
     expect(prepared.readyToCommit, isTrue);
     expect(prepared.accountUserId, 'account-1');
-    expect(prepared.impact.unsupportedE2eeGroupCount, 2);
+    expect(prepared.impact.localOrdinaryDataWillMigrate, isTrue);
+    expect(prepared.impact.otherDevicesMustRejoin, isTrue);
     expect(prepared.canDiscard, isTrue);
 
     final activated = await adapter.activate(
@@ -448,8 +449,6 @@ class _FakeRecoveryCore implements core.AwikiImCore {
         impact: const core.HandleRecoveryImpact(
           localOrdinaryDataWillMigrate: true,
           otherDevicesMustRejoin: true,
-          unsupportedE2eeGroupCount: 2,
-          unsupportedDidOnlyGroupCount: 1,
         ),
         registryEpochReset: phase == core.HandleRecoveryPhase.applied
             ? const core.HandleRecoveryRegistryEpochReset(

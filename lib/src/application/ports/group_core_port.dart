@@ -28,8 +28,6 @@ abstract interface class GroupCorePort {
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   });
 
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({int limit = 100});
-
   Future<GroupSummary> getGroup(String groupDid);
 
   Future<GroupCollectionPage<GroupSummary>> listGroups({

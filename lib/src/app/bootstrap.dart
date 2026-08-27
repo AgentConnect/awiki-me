@@ -106,7 +106,7 @@ enum AppBootstrapProgress {
 
 const String awikiMeReleaseLine = String.fromEnvironment(
   'AWIKI_RELEASE',
-  defaultValue: '0714',
+  defaultValue: '0815',
 );
 
 class AppBootstrap {

@@ -21,8 +21,6 @@ abstract interface class GroupApplicationService {
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   });
 
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({int limit = 100});
-
   Future<GroupSummary> getGroup(String groupDid);
 
   Future<GroupCollectionPage<GroupSummary>> listGroups({
@@ -88,10 +86,6 @@ class ImCoreGroupApplicationService implements GroupApplicationService {
     String groupDid, {
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   }) => _groups.joinGroup(groupDid, identity: identity);
-
-  @override
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({int limit = 100}) =>
-      _groups.resumeRebindRecovery(limit: limit);
 
   @override
   Future<GroupSummary> getGroup(String groupDid) => _groups.getGroup(groupDid);

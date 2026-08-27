@@ -35,12 +35,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
 
-class _RecoveryGroupController extends GroupController {
-  _RecoveryGroupController(super.ref, GroupRebindRecoverySummary summary) {
-    state = GroupState(recoverySummary: summary);
-  }
-}
-
 class _DelayedPublicProfileService implements ProfileApplicationService {
   final Completer<UserProfile> profile = Completer<UserProfile>();
   int loadCalls = 0;
@@ -121,50 +115,6 @@ class _DelayedRefreshGroupService extends FakeGroupApplicationService {
     return Future<GroupCollectionPage<GroupMemberSummary>>.value(
       const GroupCollectionPage<GroupMemberSummary>(
         items: <GroupMemberSummary>[],
-        hasMore: false,
-      ),
-    );
-  }
-}
-
-class _RecoveryGatedGroupListService extends FakeGroupApplicationService {
-  _RecoveryGatedGroupListService(super.gateway);
-
-  bool recoveryResumed = false;
-
-  @override
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({int limit = 100}) {
-    recoveryResumed = true;
-    return Future<GroupRebindRecoverySummary>.value(
-      const GroupRebindRecoverySummary(
-        processed: 1,
-        completed: 1,
-        pending: 0,
-        blocked: 0,
-      ),
-    );
-  }
-
-  @override
-  Future<GroupCollectionPage<GroupSummary>> listGroups({
-    int limit = 100,
-    String? cursor,
-  }) {
-    if (!recoveryResumed) {
-      throw StateError('group recovery must run before group.list');
-    }
-    return Future<GroupCollectionPage<GroupSummary>>.value(
-      const GroupCollectionPage<GroupSummary>(
-        items: <GroupSummary>[
-          GroupSummary(
-            conversationId: 'group:recovered',
-            groupId: 'did:wba:awiki.ai:groups:recovered',
-            name: 'Recovered group',
-            description: '',
-            memberCount: 2,
-            lastMessageAt: null,
-          ),
-        ],
         hasMore: false,
       ),
     );
@@ -562,48 +512,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('群列表区分 recovery 的 P4 pending 与 P6 blocked', (tester) async {
-    const summary = GroupRebindRecoverySummary(
-      processed: 2,
-      completed: 0,
-      pending: 1,
-      blocked: 1,
-      sendPausedGroupDids: <String>['did:example:group'],
-      items: <GroupRebindRecoveryItem>[
-        GroupRebindRecoveryItem(
-          groupDid: 'did:example:group',
-          layer: 'p4',
-          phase: 'awaiting_p6',
-          blocked: false,
-        ),
-        GroupRebindRecoveryItem(
-          groupDid: 'did:example:group',
-          layer: 'p6',
-          phase: 'blocked',
-          blocked: true,
-        ),
-      ],
-    );
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const GroupListPage(),
-        providerOverrides: <Override>[
-          groupProvider.overrideWith(
-            (ref) => _RecoveryGroupController(ref, summary),
-          ),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('group-recovery-status-band')), findsOneWidget);
-    expect(find.text('did:example:group'), findsNWidgets(2));
-    expect(find.text('成员关系'), findsOneWidget);
-    expect(find.text('群加密'), findsOneWidget);
-    expect(find.text('等待中'), findsOneWidget);
-    expect(find.text('已阻塞'), findsOneWidget);
-  });
-
   testWidgets('通过 Group DID 加入群失败时停留列表并提示错误', (tester) async {
     final gateway = FakeAwikiGateway()
       ..loginResult = session
@@ -734,25 +642,6 @@ void main() {
       container.read(groupMembersProvider(groupDid)).single.displayName,
       '李智诚',
     );
-  });
-
-  test('群列表刷新会先续跑 Handle Recovery 群重绑定', () async {
-    final gateway = FakeAwikiGateway();
-    final groups = _RecoveryGatedGroupListService(gateway);
-    final container = ProviderContainer(
-      overrides: <Override>[
-        ...fakeApplicationServiceOverrides(gateway),
-        groupApplicationServiceProvider.overrideWithValue(groups),
-      ],
-    );
-    addTearDown(container.dispose);
-    container.read(sessionProvider.notifier).setSession(session);
-
-    await container.read(groupProvider.notifier).refresh();
-
-    expect(groups.recoveryResumed, isTrue);
-    expect(container.read(groupProvider).groups.single.name, 'Recovered group');
-    expect(container.read(groupProvider).recoverySummary?.completed, 1);
   });
 
   test('旧身份群成员 Profile 慢请求不会写入新身份投影', () async {

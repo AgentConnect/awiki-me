@@ -337,18 +337,16 @@ void main() {
       expect(presence.calls, 0);
     });
 
-    test('Group repair impact never changes an applied Recovery result', () {
+    test('Group repair is not projected into an applied Recovery result', () {
       final applied = _operation(
         lifecycleClass: HandleRecoveryLifecycleClass.applied,
         commitAttempted: true,
-        unsupportedE2eeGroupCount: 3,
-        unsupportedDidOnlyGroupCount: 2,
       );
 
       expect(applied.isCompleted, isTrue);
       expect(applied.canResume, isFalse);
-      expect(applied.impact.hasUnsupportedE2eeGroups, isTrue);
-      expect(applied.impact.hasUnsupportedDidOnlyGroups, isTrue);
+      expect(applied.impact.localOrdinaryDataWillMigrate, isTrue);
+      expect(applied.impact.otherDevicesMustRejoin, isTrue);
     });
 
     test('remote committed may precede the local state-root receipt', () async {
@@ -1286,19 +1284,15 @@ HandleRecoveryProgress _operation({
       'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   HandleRecoveryLocalMigration localMigration =
       HandleRecoveryLocalMigration.supported,
-  int unsupportedE2eeGroupCount = 0,
-  int unsupportedDidOnlyGroupCount = 0,
 }) => HandleRecoveryProgress(
   operationId: operationId,
   ownerIdentityId: 'identity-alice',
   accountUserId: accountUserId,
   handle: 'alice.awiki.info',
   lifecycleClass: lifecycleClass,
-  impact: HandleRecoveryImpact(
+  impact: const HandleRecoveryImpact(
     localOrdinaryDataWillMigrate: true,
     otherDevicesMustRejoin: true,
-    unsupportedE2eeGroupCount: unsupportedE2eeGroupCount,
-    unsupportedDidOnlyGroupCount: unsupportedDidOnlyGroupCount,
   ),
   commitAttempted: commitAttempted,
   keyState: keyState,

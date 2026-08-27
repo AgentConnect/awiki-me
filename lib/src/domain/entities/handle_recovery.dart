@@ -94,17 +94,10 @@ class HandleRecoveryImpact {
   const HandleRecoveryImpact({
     required this.localOrdinaryDataWillMigrate,
     required this.otherDevicesMustRejoin,
-    this.unsupportedE2eeGroupCount = 0,
-    this.unsupportedDidOnlyGroupCount = 0,
   });
 
   final bool localOrdinaryDataWillMigrate;
   final bool otherDevicesMustRejoin;
-  final int unsupportedE2eeGroupCount;
-  final int unsupportedDidOnlyGroupCount;
-
-  bool get hasUnsupportedE2eeGroups => unsupportedE2eeGroupCount > 0;
-  bool get hasUnsupportedDidOnlyGroups => unsupportedDidOnlyGroupCount > 0;
 }
 
 class HandleRecoveryOtpResult {

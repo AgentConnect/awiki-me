@@ -588,11 +588,6 @@ class _FakeGroups implements GroupApplicationService {
   }) async => _group();
 
   @override
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({
-    int limit = 100,
-  }) async => GroupRebindRecoverySummary.empty;
-
-  @override
   Future<void> leaveGroup(String groupDid) async {}
 
   @override

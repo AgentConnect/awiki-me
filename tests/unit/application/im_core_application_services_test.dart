@@ -103,7 +103,6 @@ void main() {
         'did:group',
         identity: GroupIdentitySelection.handle('alice.example.com'),
       );
-      final recovery = await service.resumeRebindRecovery(limit: 25);
       await service.listGroups(limit: 10);
       await service.addMember(
         groupDid: 'did:group',
@@ -118,8 +117,6 @@ void main() {
         'handle/alice.example.com',
         'handle/alice.example.com',
       ]);
-      expect(groups.recoveryLimit, 25);
-      expect(recovery.pending, 1);
       expect(groups.listLimit, 10);
       expect(groups.addedMembers, ['did:group/alice.awiki.ai/admin']);
       expect(groups.removedMembers, ['did:group/did:alice']);
@@ -223,7 +220,6 @@ class _FakeGroups implements GroupCorePort {
   final List<String> addedMembers = <String>[];
   final List<String> removedMembers = <String>[];
   int? listLimit;
-  int? recoveryLimit;
   final List<String> identities = <String>[];
 
   @override
@@ -261,19 +257,6 @@ class _FakeGroups implements GroupCorePort {
   }) async {
     identities.add('${identity.mode.name}/${identity.handle ?? ''}');
     return _group();
-  }
-
-  @override
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({
-    int limit = 100,
-  }) async {
-    recoveryLimit = limit;
-    return const GroupRebindRecoverySummary(
-      processed: 1,
-      completed: 0,
-      pending: 1,
-      blocked: 0,
-    );
   }
 
   @override

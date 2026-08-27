@@ -256,7 +256,7 @@ class _DshE2eDriver {
     for (final value in <String>[
       config.userServiceUrl,
       config.messageServiceUrl,
-      config.serviceBaseUrl,
+      config.baseUrl,
     ]) {
       final uri = Uri.tryParse(value);
       if (uri == null || uri.scheme != 'https' || uri.host != 'awiki.info') {

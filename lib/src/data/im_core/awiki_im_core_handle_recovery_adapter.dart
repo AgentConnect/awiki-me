@@ -480,8 +480,6 @@ HandleRecoveryImpact _impactFromCore(core.HandleRecoveryImpact value) =>
     HandleRecoveryImpact(
       localOrdinaryDataWillMigrate: value.localOrdinaryDataWillMigrate,
       otherDevicesMustRejoin: value.otherDevicesMustRejoin,
-      unsupportedE2eeGroupCount: value.unsupportedE2eeGroupCount,
-      unsupportedDidOnlyGroupCount: value.unsupportedDidOnlyGroupCount,
     );
 
 HandleRecoveryLocalMigration _localMigration({

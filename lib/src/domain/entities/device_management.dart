@@ -67,14 +67,10 @@ class DeviceJoinHandleRecoveryContext {
   const DeviceJoinHandleRecoveryContext({
     required this.handle,
     required this.localOrdinaryDataWillMigrate,
-    this.unsupportedE2eeGroupCount = 0,
-    this.unsupportedDidOnlyGroupCount = 0,
   });
 
   final String handle;
   final bool localOrdinaryDataWillMigrate;
-  final int unsupportedE2eeGroupCount;
-  final int unsupportedDidOnlyGroupCount;
 }
 
 class DeviceSummary {

@@ -66,33 +66,6 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
   }
 
   @override
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({
-    int limit = 100,
-  }) async {
-    final result = await _runtime.withCurrentClient(
-      (client) => client.groups.resumeRebindRecovery(limit: limit),
-    );
-    return GroupRebindRecoverySummary(
-      processed: result.processed,
-      completed: result.completed,
-      pending: result.pending,
-      blocked: result.blocked,
-      sendPausedGroupDids: result.sendPausedGroupDids,
-      items: result.items
-          .map(
-            (item) => GroupRebindRecoveryItem(
-              groupDid: item.groupDid,
-              layer: item.layer,
-              phase: item.phase,
-              blocked: item.blocked,
-            ),
-          )
-          .toList(growable: false),
-      warnings: result.warnings,
-    );
-  }
-
-  @override
   Future<GroupSummary> getGroup(String groupDid) async {
     final result = await _runtime.withCurrentClient(
       (client) => client.groups.getGroup(groupDid),
