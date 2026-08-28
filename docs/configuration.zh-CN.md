@@ -22,7 +22,7 @@ user/message/mail/ANP URL **全部**由 `https://$AWIKI_PRIMARY_TENANT_DOMAIN` �
 
 DID transition：App 不读 CLI 环境变量。im-core `ImCoreOpenOptions` 默认 `did_transition_vnext_hidden_rollout_enabled=true`，Dart 映射从 Default 继承。
 
-原生 `im-core-dart` 当前 Flutter 构建 feature **没有 `secure-direct`**。即使 Direct E2EE 能力开关为 true，App 原生库也编不进 P5 实现，直到落地 PR-3。
+原生 `im-core-dart` Flutter 构建已编进 `group-e2ee` 与 `secure-direct`。`defaultDirectMessageE2eeRequired` 与 `defaultGroupCreationE2eeRequired` 仍为 `false`（默认可发明文 / 建普通群）。
 
 ## Push（Android EMAS / iOS xcconfig）
 

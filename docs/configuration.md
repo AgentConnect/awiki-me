@@ -20,7 +20,7 @@ Authoritative configuration for **awiki-me**. Most knobs are compile-time `--dar
 
 DID transition: App does not read the CLI env. im-core `ImCoreOpenOptions` defaults `did_transition_vnext_hidden_rollout_enabled` to **true**.
 
-Flutter `im-core-dart` builds currently omit `secure-direct` (until PR-3).
+Flutter `im-core-dart` builds include `group-e2ee` and `secure-direct`. `defaultDirectMessageE2eeRequired` and `defaultGroupCreationE2eeRequired` stay `false`.
 
 ## Push / observability / tests
 
