@@ -1392,6 +1392,63 @@ void main() {
     expect(staleSafe.toJson()['current'], isFalse);
   });
 
+  test(
+    'lane and domain degradation does not become auth revoke or logout',
+    () async {
+      final gateway = FakeAwikiGateway();
+      const diagnostics = AppMessageSyncDiagnostics(
+        mode: AppMessageSyncMode.idle,
+        pendingMutationCount: 0,
+        retryState: AppMessageSyncRetryState.none,
+        lanes: <AppMessageSyncLaneState>[
+          AppMessageSyncLaneState(
+            lane: AppMessageSyncLane.p5Device,
+            committedCursor: '41:7',
+            pending: true,
+            lastTransportError: 'lane_storage_pressure',
+          ),
+        ],
+        domainStates: <AppMessageSyncDomainState>[
+          AppMessageSyncDomainState(
+            lane: AppMessageSyncLane.p6Group,
+            scope: 'redacted-group-scope',
+            retryable: false,
+            status: AppMessageSyncDomainStatus.actionRequired,
+          ),
+        ],
+      );
+      final messaging = _DiagnosticMessagingService(
+        gateway,
+        diagnostics: diagnostics,
+      );
+      final sync = FakeMessageSyncService(
+        deltaResult: const MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+        ),
+      );
+      final container = _container(
+        gateway,
+        sync,
+        messagingService: messaging,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('lane_domain_degraded', immediate: true);
+
+      final state = container.read(messageSyncCoordinatorProvider);
+      expect(diagnostics.laneDegraded, isTrue);
+      expect(state.status, MessageSyncCoordinatorStatus.idle);
+      expect(state.lastStatus, MessageSyncStatus.changed);
+      expect(state.isAuthRevoked, isFalse);
+      expect(state.lastError, isNull);
+      expect(gateway.logoutCalls, 0);
+    },
+  );
+
   test('successful sync honors the Core mutation retry deadline', () async {
     final gateway = FakeAwikiGateway();
     final retryAt = DateTime.now().add(const Duration(milliseconds: 40));

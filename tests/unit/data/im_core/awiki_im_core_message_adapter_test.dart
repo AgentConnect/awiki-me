@@ -621,6 +621,7 @@ void main() {
       expect(diagnostics.retryState, AppMessageSyncRetryState.scheduled);
       expect(diagnostics.nextRetryAt, DateTime.parse('2026-07-29T01:03:03Z'));
       expect(diagnostics.lanes.single.lane, AppMessageSyncLane.p5Device);
+      expect(diagnostics.lanes.single.committedCursor, '41:7');
       expect(
         diagnostics.lanes.single.lastTransportError,
         'lane_storage_pressure',
