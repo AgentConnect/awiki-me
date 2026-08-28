@@ -167,6 +167,7 @@ Flutter 负责产品 UI 与应用编排；共享 IM Core 负责协议正确性�
 | 文档 | 用途 |
 | --- | --- |
 | [开始使用](docs/getting-started.zh-CN.md) | 发布版、源码构建、首次登录与第一条消息 |
+| [配置说明](docs/configuration.zh-CN.md) | 编译期开关、产品闸与默认值 |
 | [平台与服务兼容性](docs/compatibility.zh-CN.md) | 平台、服务、Agent 与加密能力边界 |
 | [安全模型概览](docs/security-overview.zh-CN.md) | Storage Scope、SecretVault、租户切换与安全红线 |
 | [开发指南](docs/development.zh-CN.md) | 架构、仓库结构、测试和打包入口 |
