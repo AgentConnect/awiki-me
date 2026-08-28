@@ -846,6 +846,9 @@ Link? prepareIsolatedLinuxNativeAssetsCompatibility({
   final target = Directory('${buildDirectory.path}/linux')
     ..createSync(recursive: true);
   final link = Link('${projectRoot.path}/build/linux');
+  final nativeAssetsTarget = Directory('${buildDirectory.path}/native_assets');
+  Directory('${nativeAssetsTarget.path}/linux').createSync(recursive: true);
+  final nativeAssetsLink = Link('${projectRoot.path}/build/native_assets');
   final type = FileSystemEntity.typeSync(link.path, followLinks: false);
   if (type != FileSystemEntityType.notFound) {
     if (type != FileSystemEntityType.link ||
@@ -855,10 +858,26 @@ Link? prepareIsolatedLinuxNativeAssetsCompatibility({
         '${link.path}.',
       );
     }
-    return link;
+  }
+  final nativeAssetsType = FileSystemEntity.typeSync(
+    nativeAssetsLink.path,
+    followLinks: false,
+  );
+  if (nativeAssetsType != FileSystemEntityType.notFound &&
+      (nativeAssetsType != FileSystemEntityType.link ||
+          nativeAssetsLink.targetSync() != nativeAssetsTarget.absolute.path)) {
+    throw IsolatedE2eAppBuildException(
+      'Isolated App native-assets compatibility refuses to replace '
+      '${nativeAssetsLink.path}.',
+    );
   }
   link.parent.createSync(recursive: true);
-  link.createSync(target.absolute.path);
+  if (type == FileSystemEntityType.notFound) {
+    link.createSync(target.absolute.path);
+  }
+  if (nativeAssetsType == FileSystemEntityType.notFound) {
+    nativeAssetsLink.createSync(nativeAssetsTarget.absolute.path);
+  }
   return link;
 }
 
@@ -874,6 +893,13 @@ void removeIsolatedLinuxNativeAssetsCompatibility(
   if (link.targetSync() ==
       Directory('${buildDirectory.path}/linux').absolute.path) {
     link.deleteSync();
+  }
+  final nativeAssetsLink = Link('${link.parent.path}/native_assets');
+  if (FileSystemEntity.typeSync(nativeAssetsLink.path, followLinks: false) ==
+          FileSystemEntityType.link &&
+      nativeAssetsLink.targetSync() ==
+          Directory('${buildDirectory.path}/native_assets').absolute.path) {
+    nativeAssetsLink.deleteSync();
   }
 }
 

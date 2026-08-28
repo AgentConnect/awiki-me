@@ -150,12 +150,25 @@ void main() {
 
     expect(link, isNotNull);
     expect(link!.targetSync(), '${isolatedBuild.absolute.path}/linux');
+    final nativeAssetsLink = Link('${project.path}/build/native_assets');
+    expect(
+      nativeAssetsLink.targetSync(),
+      '${isolatedBuild.absolute.path}/native_assets',
+    );
+    expect(
+      Directory('${isolatedBuild.path}/native_assets/linux').existsSync(),
+      isTrue,
+    );
     removeIsolatedLinuxNativeAssetsCompatibility(
       link,
       buildDirectory: isolatedBuild,
     );
     expect(
       FileSystemEntity.typeSync(link.path, followLinks: false),
+      FileSystemEntityType.notFound,
+    );
+    expect(
+      FileSystemEntity.typeSync(nativeAssetsLink.path, followLinks: false),
       FileSystemEntityType.notFound,
     );
   });

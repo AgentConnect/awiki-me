@@ -183,9 +183,24 @@ void main() {
           link!.targetSync(),
           '${root.path}/.e2e/flutter-build/linux/linux',
         );
+        final nativeAssetsLink = Link('${root.path}/build/native_assets');
+        expect(
+          nativeAssetsLink.targetSync(),
+          '${root.path}/.e2e/flutter-build/linux/native_assets',
+        );
+        expect(
+          Directory(
+            '${root.path}/.e2e/flutter-build/linux/native_assets/linux',
+          ).existsSync(),
+          isTrue,
+        );
         isolation.removeLinuxNativeAssetsCompatibility(link);
         expect(
           FileSystemEntity.typeSync(link.path, followLinks: false),
+          FileSystemEntityType.notFound,
+        );
+        expect(
+          FileSystemEntity.typeSync(nativeAssetsLink.path, followLinks: false),
           FileSystemEntityType.notFound,
         );
       },

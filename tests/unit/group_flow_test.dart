@@ -400,8 +400,8 @@ void main() {
       expect(gateway.lastCreatedGroupGoal, isEmpty);
       expect(gateway.lastCreatedGroupRules, isEmpty);
       expect(gateway.lastCreatedGroupPrompt, isEmpty);
-      expect(gateway.lastGroupIdentityMode, GroupIdentityMode.handle);
-      expect(gateway.lastGroupIdentityHandle, 'me.awiki.ai');
+      expect(gateway.lastGroupIdentityMode, GroupIdentityMode.didOnly);
+      expect(gateway.lastGroupIdentityHandle, isNull);
       expect(find.byType(ChatView), findsOneWidget);
       expect(find.text('融资协作群'), findsWidgets);
     } finally {
@@ -438,8 +438,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(gateway.lastJoinedGroupDid, groupDid);
-      expect(gateway.lastGroupIdentityMode, GroupIdentityMode.handle);
-      expect(gateway.lastGroupIdentityHandle, 'me.awiki.ai');
+      expect(gateway.lastGroupIdentityMode, GroupIdentityMode.didOnly);
+      expect(gateway.lastGroupIdentityHandle, isNull);
       expect(find.byType(ChatView), findsOneWidget);
       expect(find.text('Joined $groupDid'), findsWidgets);
     } finally {
@@ -448,7 +448,7 @@ void main() {
     }
   });
 
-  testWidgets('无 Handle 时建群不会静默降级为 DID-only', (tester) async {
+  testWidgets('无 Handle 时建群使用 DID-only', (tester) async {
     const didOnlySession = SessionIdentity(
       did: 'did:web:identity.example.com:users:a-very-long-identity-value',
       credentialName: 'did-only.json',
@@ -478,9 +478,9 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('create-group-submit-button')));
     await tester.pumpAndSettle();
-    expect(gateway.lastGroupIdentityMode, isNull);
+    expect(gateway.lastGroupIdentityMode, GroupIdentityMode.didOnly);
     expect(gateway.lastGroupIdentityHandle, isNull);
-    expect(find.byType(ChatView), findsNothing);
+    expect(find.byType(ChatView), findsOneWidget);
   });
 
   testWidgets('窄屏建群隐藏身份选择且不遮挡操作', (tester) async {

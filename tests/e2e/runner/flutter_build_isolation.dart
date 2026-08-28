@@ -39,6 +39,11 @@ class DesktopFlutterBuildIsolation {
     final target = Directory('${root.path}/$buildDirectory/linux')
       ..createSync(recursive: true);
     final link = Link('${root.path}/build/linux');
+    final nativeAssetsTarget = Directory(
+      '${root.path}/$buildDirectory/native_assets',
+    );
+    Directory('${nativeAssetsTarget.path}/linux').createSync(recursive: true);
+    final nativeAssetsLink = Link('${root.path}/build/native_assets');
     final type = FileSystemEntity.typeSync(link.path, followLinks: false);
     if (type != FileSystemEntityType.notFound) {
       if (type != FileSystemEntityType.link ||
@@ -48,10 +53,27 @@ class DesktopFlutterBuildIsolation {
           '${link.path}.',
         );
       }
-      return link;
+    }
+    final nativeAssetsType = FileSystemEntity.typeSync(
+      nativeAssetsLink.path,
+      followLinks: false,
+    );
+    if (nativeAssetsType != FileSystemEntityType.notFound &&
+        (nativeAssetsType != FileSystemEntityType.link ||
+            nativeAssetsLink.targetSync() !=
+                nativeAssetsTarget.absolute.path)) {
+      throw E2eFailure(
+        'Flutter E2E native-assets compatibility refuses to replace '
+        '${nativeAssetsLink.path}.',
+      );
     }
     link.parent.createSync(recursive: true);
-    link.createSync(target.absolute.path);
+    if (type == FileSystemEntityType.notFound) {
+      link.createSync(target.absolute.path);
+    }
+    if (nativeAssetsType == FileSystemEntityType.notFound) {
+      nativeAssetsLink.createSync(nativeAssetsTarget.absolute.path);
+    }
     return link;
   }
 
@@ -66,6 +88,15 @@ class DesktopFlutterBuildIsolation {
     ).absolute.path;
     if (link.targetSync() == expected) {
       link.deleteSync();
+    }
+    final nativeAssetsLink = Link('${link.parent.path}/native_assets');
+    final expectedNativeAssets = Directory(
+      '${root.path}/$buildDirectory/native_assets',
+    ).absolute.path;
+    if (FileSystemEntity.typeSync(nativeAssetsLink.path, followLinks: false) ==
+            FileSystemEntityType.link &&
+        nativeAssetsLink.targetSync() == expectedNativeAssets) {
+      nativeAssetsLink.deleteSync();
     }
   }
 

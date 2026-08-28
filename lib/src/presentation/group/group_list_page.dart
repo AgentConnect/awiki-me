@@ -207,11 +207,6 @@ class GroupListPage extends ConsumerWidget {
 
   Future<void> _showJoinDialog(BuildContext context, WidgetRef ref) async {
     final textController = TextEditingController();
-    final session = ref.read(sessionProvider).session;
-    final activeHandle = groupHandleForDid(
-      handle: session?.handle,
-      did: session?.did ?? '',
-    );
     try {
       await AppNavigator.showDialog<void>(
         context,
@@ -254,12 +249,13 @@ class GroupListPage extends ConsumerWidget {
                           }
                           Navigator.of(ctx).pop();
                           try {
-                            final identity = GroupIdentitySelection.handle(
-                              activeHandle ?? '',
-                            );
                             final group = await ref
                                 .read(groupProvider.notifier)
-                                .joinGroup(groupDid, identity: identity);
+                                .joinGroup(
+                                  groupDid,
+                                  identity:
+                                      const GroupIdentitySelection.didOnly(),
+                                );
                             await ref
                                 .read(groupProvider.notifier)
                                 .loadGroupMembers(group.groupId);
