@@ -65,6 +65,12 @@ const String _multiDeviceRemoteRecoveryFreshScenario =
 const String _handleRecoveryLocalDataScenario = 'handle-recovery-local-data-v1';
 const String _multiDeviceAppPairRecoveryRegistrationScenario =
     'multi-device-app-pair-recovery-registration-rejoin-management-transfer';
+const String _multiDeviceAppPairRecoveryResumeScenario =
+    'multi-device-app-pair-recovery-registration-resume';
+const String _multiDeviceAppPairRecoveryRetirementScenario =
+    'multi-device-app-pair-recovery-retirement-ordinary-rejoin';
+const String _identityDeletionRecoveryGuardScenario =
+    'identity-deletion-recovery-guard';
 const String _multiDeviceRemoteRecoveryRunConfigPath =
     '.e2e/multi-device-remote-recovery/current/run_config.json';
 const String _multiDeviceAppPairScenario =
@@ -178,6 +184,16 @@ const List<String> _handleRecoveryFreshCaseIds = <String>[
 ];
 const List<String> _multiDeviceAppPairRecoveryRegistrationCaseIds = <String>[
   'HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001',
+];
+const List<String> _multiDeviceAppPairRecoveryResumeCaseIds = <String>[
+  'HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001',
+];
+const List<String> _multiDeviceAppPairRecoveryRetirementCaseIds = <String>[
+  'HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001',
+];
+const List<String> _identityDeletionRecoveryGuardCaseIds = <String>[
+  'IDENTITY-DELETION-RECOVERY-GUARD-E2E-001',
+  'IDENTITY-DATA-DELETION-RESUME-E2E-001',
 ];
 const List<String> _multiDeviceAppPairCaseIds = <String>[
   'DEVICE-JOIN-E2E-004',
@@ -602,7 +618,12 @@ class DesktopE2eRunner {
             options.e2eCase == DesktopE2eCase.handleRecoveryLocalData ||
             options.e2eCase == DesktopE2eCase.multiDeviceRemoteRecoveryFresh ||
             options.e2eCase ==
-                DesktopE2eCase.multiDeviceAppPairRecoveryRegistration)) {
+                DesktopE2eCase.multiDeviceAppPairRecoveryRegistration ||
+            options.e2eCase ==
+                DesktopE2eCase.multiDeviceAppPairRecoveryResume ||
+            options.e2eCase ==
+                DesktopE2eCase.multiDeviceAppPairRecoveryRetirement ||
+            options.e2eCase == DesktopE2eCase.identityDeletionRecoveryGuard)) {
       appStateRootDir.createSync(recursive: true);
       multiDeviceAppJoiningStateRootDir.createSync(recursive: true);
     }
@@ -642,6 +663,12 @@ class DesktopE2eRunner {
         case DesktopE2eCase.multiDeviceRemoteRecoveryFresh:
           await _runRemoteHandleRecovery();
         case DesktopE2eCase.multiDeviceAppPairRecoveryRegistration:
+          await _runRemoteHandleRecovery();
+        case DesktopE2eCase.multiDeviceAppPairRecoveryResume:
+          await _runRemoteHandleRecovery();
+        case DesktopE2eCase.multiDeviceAppPairRecoveryRetirement:
+          await _runRemoteHandleRecovery();
+        case DesktopE2eCase.identityDeletionRecoveryGuard:
           await _runRemoteHandleRecovery();
         case DesktopE2eCase.multiDeviceAppPair:
           await _runRemoteMultiDeviceAppPair();

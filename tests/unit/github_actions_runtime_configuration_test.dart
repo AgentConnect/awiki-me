@@ -12,15 +12,16 @@ const Map<String, int> _minimumNode24ActionMajors = <String, int>{
 
 void main() {
   test('GitHub workflows use actions with native Node 24 runtimes', () {
-    final workflowFiles = Directory('.github/workflows')
-        .listSync()
-        .whereType<File>()
-        .where(
-          (file) =>
-              file.path.endsWith('.yml') || file.path.endsWith('.yaml'),
-        )
-        .toList()
-      ..sort((left, right) => left.path.compareTo(right.path));
+    final workflowFiles =
+        Directory('.github/workflows')
+            .listSync()
+            .whereType<File>()
+            .where(
+              (file) =>
+                  file.path.endsWith('.yml') || file.path.endsWith('.yaml'),
+            )
+            .toList()
+          ..sort((left, right) => left.path.compareTo(right.path));
     expect(workflowFiles, isNotEmpty);
 
     final observedActions = <String>{};
@@ -40,11 +41,7 @@ void main() {
 
     expect(
       observedActions,
-      containsAll(<String>[
-        'checkout',
-        'upload-artifact',
-        'download-artifact',
-      ]),
+      containsAll(<String>['checkout', 'upload-artifact', 'download-artifact']),
     );
   });
 }

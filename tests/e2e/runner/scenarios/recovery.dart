@@ -8,17 +8,65 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
   Future<Map<String, _IsolatedAppArtifact>>
   _prepareHandleRecoveryIntegrationExecutables({
     required bool registrationRejoin,
+    required bool registrationResume,
     required bool freshOnly,
     required bool localDataOnly,
+    required bool identityDeletion,
   }) async {
     final artifacts = <String, _IsolatedAppArtifact>{};
-    if (registrationRejoin || freshOnly || !localDataOnly) {
+    if (identityDeletion) {
+      artifacts['identity-deletion-a'] = await _prepareIntegrationExecutable(
+        name: 'identity-deletion-a',
+        target: 'integration_test/handle_recovery_ui_test.dart',
+        bundleId: 'ai.awiki.awikime.dev.e2e.identity.deletion.a',
+        stateRoot: appStateRootDir,
+        dartDefines: const <String>[
+          'AWIKI_HANDLE_RECOVERY_E2E_PHASE=identity_deletion_a',
+          'AWIKI_E2E_IDENTITY_DELETION_CRASH_AFTER_PRODUCT_DELETE=true',
+        ],
+      );
+      artifacts['identity-deletion-b'] = await _prepareIntegrationExecutable(
+        name: 'identity-deletion-b',
+        target: 'integration_test/handle_recovery_ui_test.dart',
+        bundleId: 'ai.awiki.awikime.dev.e2e.identity.deletion.b',
+        stateRoot: appStateRootDir,
+        dartDefines: const <String>[
+          'AWIKI_HANDLE_RECOVERY_E2E_PHASE=identity_deletion_b',
+        ],
+      );
+      return artifacts;
+    }
+    if (!registrationResume &&
+        (registrationRejoin || freshOnly || !localDataOnly)) {
       artifacts['recovery-main'] = await _prepareIntegrationExecutable(
         name: 'recovery-main',
         target: 'integration_test/handle_recovery_ui_test.dart',
         bundleId: 'ai.awiki.awikime.dev.e2e.recovery.main',
         stateRoot: appStateRootDir,
+        dartDefines: const <String>[],
       );
+    }
+    if (registrationResume) {
+      artifacts['recovery-registration-resume-a'] =
+          await _prepareIntegrationExecutable(
+            name: 'recovery-registration-resume-a',
+            target: 'integration_test/handle_recovery_ui_test.dart',
+            bundleId: 'ai.awiki.awikime.dev.e2e.recovery.registration.a',
+            stateRoot: appStateRootDir,
+            dartDefines: const <String>[
+              'AWIKI_HANDLE_RECOVERY_E2E_PHASE=registration_resume_a',
+            ],
+          );
+      artifacts['recovery-registration-resume-b'] =
+          await _prepareIntegrationExecutable(
+            name: 'recovery-registration-resume-b',
+            target: 'integration_test/handle_recovery_ui_test.dart',
+            bundleId: 'ai.awiki.awikime.dev.e2e.recovery.registration.b',
+            stateRoot: appStateRootDir,
+            dartDefines: const <String>[
+              'AWIKI_HANDLE_RECOVERY_E2E_PHASE=registration_resume_b',
+            ],
+          );
     }
     if (!registrationRejoin && !freshOnly) {
       artifacts['recovery-crash-a'] = await _prepareIntegrationExecutable(
@@ -169,9 +217,22 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
   }
 
   Future<void> _runRemoteHandleRecovery() async {
+    final identityDeletion =
+        options.e2eCase == DesktopE2eCase.identityDeletionRecoveryGuard;
+    final registrationResume =
+        options.e2eCase == DesktopE2eCase.multiDeviceAppPairRecoveryResume;
     final registrationRejoin =
         options.e2eCase ==
-        DesktopE2eCase.multiDeviceAppPairRecoveryRegistration;
+            DesktopE2eCase.multiDeviceAppPairRecoveryRegistration ||
+        registrationResume ||
+        options.e2eCase == DesktopE2eCase.multiDeviceAppPairRecoveryRetirement;
+    final retirementOrdinary =
+        options.e2eCase == DesktopE2eCase.multiDeviceAppPairRecoveryRetirement;
+    final registrationCaseIds = retirementOrdinary
+        ? _multiDeviceAppPairRecoveryRetirementCaseIds
+        : registrationResume
+        ? _multiDeviceAppPairRecoveryResumeCaseIds
+        : _multiDeviceAppPairRecoveryRegistrationCaseIds;
     final freshOnly =
         options.e2eCase == DesktopE2eCase.multiDeviceRemoteRecoveryFresh;
     final localDataOnly =
@@ -181,11 +242,19 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
       environment: Platform.environment,
     );
     remoteHandleRecoveryConfig = recoveryConfig;
+    if (identityDeletion &&
+        Platform.environment[_syncRecoveryTargetEnv]?.trim() !=
+            'rwiki-cn-testing') {
+      throw E2eFailure(
+        'Identity deletion Recovery guard requires '
+        'AWIKI_SYSTEM_TEST_TARGET=rwiki-cn-testing.',
+      );
+    }
     if (registrationRejoin) {
       if (fileConfig.path == null || fileConfig.path!.trim().isEmpty) {
         throw E2eFailure(
           'The recovery registration App-pair case requires an explicit '
-          'awiki.info config file.',
+          'reviewed remote config file.',
         );
       }
     }
@@ -255,8 +324,10 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
         'Preparing Handle Recovery integration executables',
         () => _prepareHandleRecoveryIntegrationExecutables(
           registrationRejoin: registrationRejoin,
+          registrationResume: registrationResume,
           freshOnly: freshOnly,
           localDataOnly: localDataOnly,
+          identityDeletion: identityDeletion,
         ),
       );
     }
@@ -266,20 +337,131 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
       return;
     }
     _resourceSideEffectsPossible = true;
+    if (identityDeletion) {
+      await _timed('Flutter identity deletion guard phase A', () {
+        if (preparedRecoveryArtifacts.isNotEmpty) {
+          return _executePreparedIntegration(
+            artifact: preparedRecoveryArtifacts['identity-deletion-a']!,
+            caseIds: _identityDeletionRecoveryGuardCaseIds,
+            stateRoot: appStateRootDir,
+          );
+        }
+        return _runFlutterArgs(
+          <String>[
+            'test',
+            '--dart-define=AWIKI_E2E=true',
+            '--dart-define=AWIKI_HANDLE_RECOVERY_E2E_PHASE=identity_deletion_a',
+            '--dart-define=AWIKI_E2E_IDENTITY_DELETION_CRASH_AFTER_PRODUCT_DELETE=true',
+            'integration_test/handle_recovery_ui_test.dart',
+            '-d',
+            platform.name,
+          ],
+          platform: platform,
+          timeout: suiteDefinition.timeout,
+          runtimeCaseIds: _identityDeletionRecoveryGuardCaseIds,
+          runtimeAppStateRoot: appStateRootDir,
+        );
+      });
+      if (!options.dryRun && !processRestartHandoffFile.existsSync()) {
+        throw E2eFailure(
+          'Identity deletion phase A did not write its handoff evidence.',
+        );
+      }
+      await _timed('Flutter identity deletion resume phase B', () {
+        if (preparedRecoveryArtifacts.isNotEmpty) {
+          return _executePreparedIntegration(
+            artifact: preparedRecoveryArtifacts['identity-deletion-b']!,
+            caseIds: _identityDeletionRecoveryGuardCaseIds,
+            stateRoot: appStateRootDir,
+          );
+        }
+        return _runFlutterArgs(
+          <String>[
+            'test',
+            '--dart-define=AWIKI_E2E=true',
+            '--dart-define=AWIKI_HANDLE_RECOVERY_E2E_PHASE=identity_deletion_b',
+            'integration_test/handle_recovery_ui_test.dart',
+            '-d',
+            platform.name,
+          ],
+          platform: platform,
+          timeout: suiteDefinition.timeout,
+          runtimeCaseIds: _identityDeletionRecoveryGuardCaseIds,
+          runtimeAppStateRoot: appStateRootDir,
+        );
+      });
+      return;
+    }
     if (registrationRejoin) {
-      await _timed(
-        'Flutter registration re-Join and management transfer lifecycle',
-        () => preparedRecoveryArtifacts.isNotEmpty
-            ? _executePreparedIntegration(
-                artifact: preparedRecoveryArtifacts['recovery-main']!,
-                caseIds: _multiDeviceAppPairRecoveryRegistrationCaseIds,
-                stateRoot: appStateRootDir,
-              )
-            : _runFlutterTest(
-                'integration_test/handle_recovery_ui_test.dart',
-                caseIds: _multiDeviceAppPairRecoveryRegistrationCaseIds,
-              ),
-      );
+      if (registrationResume) {
+        await _timed('Flutter registration Join resume phase A', () {
+          if (preparedRecoveryArtifacts.isNotEmpty) {
+            return _executePreparedIntegration(
+              artifact:
+                  preparedRecoveryArtifacts['recovery-registration-resume-a']!,
+              caseIds: registrationCaseIds,
+              stateRoot: appStateRootDir,
+            );
+          }
+          return _runFlutterArgs(
+            <String>[
+              'test',
+              '--dart-define=AWIKI_E2E=true',
+              '--dart-define=AWIKI_HANDLE_RECOVERY_E2E_PHASE=registration_resume_a',
+              'integration_test/handle_recovery_ui_test.dart',
+              '-d',
+              platform.name,
+            ],
+            platform: platform,
+            timeout: suiteDefinition.timeout,
+            runtimeCaseIds: registrationCaseIds,
+            runtimeAppStateRoot: appStateRootDir,
+          );
+        });
+        if (!options.dryRun && !processRestartHandoffFile.existsSync()) {
+          throw E2eFailure(
+            'Registration Join resume phase A did not write its handoff evidence.',
+          );
+        }
+        await _timed('Flutter registration Join resume phase B', () {
+          if (preparedRecoveryArtifacts.isNotEmpty) {
+            return _executePreparedIntegration(
+              artifact:
+                  preparedRecoveryArtifacts['recovery-registration-resume-b']!,
+              caseIds: registrationCaseIds,
+              stateRoot: appStateRootDir,
+            );
+          }
+          return _runFlutterArgs(
+            <String>[
+              'test',
+              '--dart-define=AWIKI_E2E=true',
+              '--dart-define=AWIKI_HANDLE_RECOVERY_E2E_PHASE=registration_resume_b',
+              'integration_test/handle_recovery_ui_test.dart',
+              '-d',
+              platform.name,
+            ],
+            platform: platform,
+            timeout: suiteDefinition.timeout,
+            runtimeCaseIds: registrationCaseIds,
+            runtimeAppStateRoot: appStateRootDir,
+          );
+        });
+      } else {
+        await _timed(
+          'Flutter registration re-Join and management transfer lifecycle',
+          () => preparedRecoveryArtifacts.isNotEmpty
+              ? _executePreparedIntegration(
+                  artifact: preparedRecoveryArtifacts['recovery-main']!,
+                  caseIds: registrationCaseIds,
+                  stateRoot: appStateRootDir,
+                )
+              : _runFlutterTest(
+                  'integration_test/handle_recovery_ui_test.dart',
+                  caseIds: registrationCaseIds,
+                ),
+        );
+      }
       return;
     }
     if (!options.dryRun && !commands.dryRun) {

@@ -50,6 +50,16 @@ abstract interface class AppSessionService {
 
 abstract interface class LocalIdentityDataDeletionSessionService {
   Future<AppSession> deleteLocalIdentityData(String identityIdOrAlias);
+
+  Future<LocalIdentityDeletionTicket> prepareLocalIdentityDataDeletion(
+    String identityIdOrAlias,
+  );
+
+  Future<AppSession> completeLocalIdentityDataDeletion(
+    LocalIdentityDeletionTicket ticket,
+  );
+
+  Future<List<LocalIdentityDeletionTicket>> pendingLocalIdentityDataDeletions();
 }
 
 final class AppSessionTransition {
@@ -608,10 +618,52 @@ class ImCoreAppSessionService
     );
   }
 
+  @override
+  Future<LocalIdentityDeletionTicket> prepareLocalIdentityDataDeletion(
+    String identityIdOrAlias,
+  ) {
+    return _runSessionTransition(() async {
+      if (!_runtime.isOpen) {
+        await _runtime.open();
+      }
+      return _localIdentityDataDeletionPort.prepareLocalIdentityDataDeletion(
+        identityIdOrAlias,
+      );
+    });
+  }
+
+  @override
+  Future<AppSession> completeLocalIdentityDataDeletion(
+    LocalIdentityDeletionTicket ticket,
+  ) {
+    final transition = beginSessionTransition();
+    return _runOwnedSessionTransition(
+      transition,
+      () => _deleteLocalIdentity(
+        ticket.ownerIdentityId,
+        transition,
+        deleteOwnerData: true,
+        deletionId: ticket.deletionId,
+      ),
+    );
+  }
+
+  @override
+  Future<List<LocalIdentityDeletionTicket>>
+  pendingLocalIdentityDataDeletions() {
+    return _runSessionTransition(() async {
+      if (!_runtime.isOpen) {
+        await _runtime.open();
+      }
+      return _localIdentityDataDeletionPort.pendingLocalIdentityDataDeletions();
+    });
+  }
+
   Future<AppSession> _deleteLocalIdentity(
     String identityIdOrAlias,
     AppSessionTransition transition, {
     required bool deleteOwnerData,
+    String? deletionId,
   }) async {
     _requireCurrentTransition(transition);
     final selector = identityIdOrAlias.trim();
@@ -632,8 +684,13 @@ class ImCoreAppSessionService
         await realtimeCleanup;
       }
     }
-    final deleted = deleteOwnerData
-        ? await _deleteLocalIdentityData(identityIdOrAlias)
+    final deleted = deletionId != null
+        ? await _localIdentityDataDeletionPort
+              .completeLocalIdentityDataDeletion(deletionId)
+        : deleteOwnerData
+        ? await _localIdentityDataDeletionPort.deleteLocalIdentityData(
+            identityIdOrAlias,
+          )
         : await _identities.deleteLocalIdentity(identityIdOrAlias);
     if (current != null &&
         (_matchesIdentity(current, selector) ||
@@ -659,13 +716,12 @@ class ImCoreAppSessionService
     return deleted;
   }
 
-  Future<AppSession> _deleteLocalIdentityData(String identityIdOrAlias) {
+  LocalIdentityDataDeletionPort get _localIdentityDataDeletionPort {
     final identities = _identities;
     if (identities is! LocalIdentityDataDeletionPort) {
       throw UnsupportedError('local_identity_data_deletion_unavailable');
     }
-    return (identities as LocalIdentityDataDeletionPort)
-        .deleteLocalIdentityData(identityIdOrAlias);
+    return identities as LocalIdentityDataDeletionPort;
   }
 
   void _requireCurrentTransition(AppSessionTransition transition) {

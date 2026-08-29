@@ -873,6 +873,12 @@ class FakeAwikiGateway implements AwikiAccountGateway {
   String? lastDeletedLocalThreadId;
   int deleteLocalCredentialCalls = 0;
   int deleteLocalIdentityDataCalls = 0;
+  int prepareLocalIdentityDataDeletionCalls = 0;
+  int completeLocalIdentityDataDeletionCalls = 0;
+  Object? prepareLocalIdentityDataDeletionError;
+  Object? completeLocalIdentityDataDeletionError;
+  final List<LocalIdentityDeletionTicket> pendingLocalIdentityDeletionTickets =
+      <LocalIdentityDeletionTicket>[];
   String? lastDeletedLocalCredentialSelector;
   Object? deleteLocalCredentialError;
   Completer<void>? logoutCompleter;
@@ -1806,6 +1812,72 @@ class FakeAppSessionService
     gateway.deleteLocalIdentityDataCalls += 1;
     return deleteLocalIdentity(identityIdOrAlias);
   }
+
+  @override
+  Future<LocalIdentityDeletionTicket> prepareLocalIdentityDataDeletion(
+    String identityIdOrAlias,
+  ) async {
+    gateway.prepareLocalIdentityDataDeletionCalls += 1;
+    final prepareError = gateway.prepareLocalIdentityDataDeletionError;
+    if (prepareError != null) {
+      throw prepareError;
+    }
+    final existing = gateway.pendingLocalIdentityDeletionTickets
+        .cast<LocalIdentityDeletionTicket?>()
+        .firstWhere(
+          (ticket) =>
+              ticket != null && ticket.ownerIdentityId == identityIdOrAlias,
+          orElse: () => null,
+        );
+    if (existing != null) {
+      return existing;
+    }
+    final identity = gateway.localCredentials
+        .cast<SessionIdentity?>()
+        .firstWhere(
+          (candidate) =>
+              candidate != null &&
+              _matchesLocalCredential(candidate, identityIdOrAlias),
+          orElse: () => null,
+        );
+    if (identity == null) {
+      throw StateError('local_identity_not_found');
+    }
+    final ownerIdentityId = identity.localIdentityId?.trim();
+    if (ownerIdentityId == null || ownerIdentityId.isEmpty) {
+      throw StateError('local_identity_owner_missing');
+    }
+    final ticket = LocalIdentityDeletionTicket(
+      deletionId: 'delete-${gateway.prepareLocalIdentityDataDeletionCalls}',
+      ownerIdentityId: ownerIdentityId,
+      currentDid: identity.did,
+    );
+    gateway.pendingLocalIdentityDeletionTickets.add(ticket);
+    return ticket;
+  }
+
+  @override
+  Future<AppSession> completeLocalIdentityDataDeletion(
+    LocalIdentityDeletionTicket ticket,
+  ) async {
+    gateway.completeLocalIdentityDataDeletionCalls += 1;
+    final completeError = gateway.completeLocalIdentityDataDeletionError;
+    if (completeError != null) {
+      throw completeError;
+    }
+    gateway.deleteLocalIdentityDataCalls += 1;
+    gateway.pendingLocalIdentityDeletionTickets.removeWhere(
+      (pending) => pending.deletionId == ticket.deletionId,
+    );
+    return deleteLocalIdentity(ticket.ownerIdentityId);
+  }
+
+  @override
+  Future<List<LocalIdentityDeletionTicket>>
+  pendingLocalIdentityDataDeletions() async =>
+      List<LocalIdentityDeletionTicket>.unmodifiable(
+        gateway.pendingLocalIdentityDeletionTickets,
+      );
 
   @override
   Future<AppSession?> refreshSession() async {

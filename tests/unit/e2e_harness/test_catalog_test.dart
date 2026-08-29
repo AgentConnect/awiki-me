@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(120));
+      expect(catalog.cases, hasLength(122));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -40,6 +40,7 @@ void main() {
           'HANDLE-RECOVERY-V1-E2E-002',
           'HANDLE-RECOVERY-V1-E2E-003',
           'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
+          'HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001',
           'IDENTITY-DELETE-E2E-001',
           'ANDROID-DEVICE-JOIN-E2E-001',
           'IOS-DEVICE-JOIN-E2E-001',
@@ -58,6 +59,7 @@ void main() {
           'multi-device-remote-recovery',
           'multi-device-remote-recovery-fresh',
           'handle-recovery-local-data',
+          'multi-device-app-pair-recovery-retirement-ordinary-rejoin',
           'multi-device-app-pair',
           'multi-device-app-pair-functional',
           'step4-revoke-mls',
@@ -92,6 +94,11 @@ void main() {
       expect(catalog.suiteCaseIds['handle-recovery-local-data'], <String>[
         'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
       ]);
+      expect(
+        catalog
+            .suiteCaseIds['multi-device-app-pair-recovery-retirement-ordinary-rejoin'],
+        <String>['HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001'],
+      );
       expect(
         catalog.suiteCaseIds['multi-device-remote-recovery-fresh'],
         <String>[

@@ -38,6 +38,12 @@ Tenant Profile（App 业务连接配置）
 - 删除单个本地身份由 im-core identity-retirement 事务负责；它不删除 scope
   Keychain item，也不等价于删除整个 Storage Scope。App 只负责先脱离 active session，
   realtime/runtime teardown 不能成为该离线事务的网络前置条件。
+- “退出并删除当前数据”必须在最终用户确认后先向 Core prepare 同一 identity 的
+  secret-free deletion ticket；prepare 失败时 push、session 和 Product store 均不得修改。
+  ticket 创建后不可取消，顺序固定为 Core prepare → App Product owner transaction → Core
+  complete。App 启动时必须在 session restore 前读取 pending ticket，幂等重复 Product 删除并
+  complete；Core open 不替 App 删除 Product 数据。credential-only 退役只使用短 journal 做
+  admission/续跑，不得进入 full-data Product/Core business 删除。
 - 已完成的 New Device Join 是本地身份激活的 crash-recovery journal，不是永久会话。
   identity-retirement 只清理与被删除身份的 DID 和 `protocol_device_id` 同时精确匹配的
   `authorized` New Device journal；进行中 Join、admin 侧状态、其他身份和 sibling device
@@ -49,6 +55,19 @@ Tenant Profile（App 业务连接配置）
   `protocol_device_id` 精确一致，统一 onboarding 再提交同 Handle 时由 Core 返回 ordinary
   `joinRequired`，App 显示 Join/Handle Recovery 选择；任何缺失、未完成或不匹配状态仍由 Core
   fail closed，App 不读取 SQLite 或 marker 自行判断。
+- existing-Handle 响应同时携带 closed Recovery transition 时，Core 只接受 retired current
+  或 direct-previous 的唯一 exact tuple，ordinary Join 固定复用 retired stable owner。Core 在
+  remote create 前写入 schema 38 的 secret-free rollover journal；Registry save 后通过单一
+  SQLite 事务切换 binding/new device、退休旧 write state、更新 DID history 并完成 journal。
+  Core open 在 retirement replay 前恢复该事务，旧 tombstone 只有在 completed journal、Registry
+  和 binding 三者精确闭合时才停止清理。App 不读取该表、不请求 user presence、不接收 reset
+  reference，也不把该流程当成第二次 Recovery。
+- Recovery-rebind registration Join 的 durable session、joined-device marker和临时密钥均由
+  Core 独占。remote create 前必须先持久化 `attempting`；App 进程退出后，新的 registration
+  只能获得指向原 session 的新 opaque preparation，不得创建第二个 Join 或 Recovery。
+  cancel/reject/expire 的清理顺序固定为本地 session terminal、精确删除临时密钥、CAS 删除
+  marker；terminal session 审计文件保留。App 只显示继续 Join/取消和 bounded terminal-wait
+  文案，不读取 durable phase、marker、session secret或 SQLite。
 - 每个有效 scope/account/device binding 默认参加普通消息与账号状态同步，不按本地 scope、
   账号或设备做产品灰度；raw cursor、recovery 和 mutation outbox 仍只属于该 scope 的 Core
   SQLite。测试 operator allowlist 不得写入 scope registry 或业务 cache。
@@ -396,8 +415,11 @@ Store。schema 1 到 26 的归档是明确的预发布兼容退场策略，不�
 - DID host/realm变化默认创建新tenant profile和scope。
 - tenant switch必须先推进 App active session generation，使旧 owner 的 sync、timeline、patch、read、send completion 和 presentation cache 立即失效；再停止 realtime、取消 scope-owned work、等待 active operations、flush/close SQLite，旧 runtime 完整 dispose 后才能打开新 scope。新 identity 只能在旧 runtime 释放后启动；同一 identity 的 JWT/profile refresh 不推进 generation。
 - archive默认保留scope和key。
-- explicit local-data deletion进入`deleting`，停止runtime、删除platform secret和scope files；
-  失败保持可重试的`deleting/blocked`。
+- explicit local-data deletion在最终确认后先取得 Core ticket，再进入`deleting`并按 stable
+  owner 删除 Product rows；Core complete 负责 Core business rows、binding和身份退役。崩溃时
+  ticket保持 pending，下一进程先重放同一 Product 删除与 complete，不能创建第二张 ticket、
+  取消已提交删除或恢复被删除身份。单身份删除不删除整个 scope root/platform root key；失败
+  保持可重试的`deleting/blocked`。
 
 删除root key只完成Identity Vault secret的crypto-erasure，不代表SQLite/Product/attachment
 已经删除，也不承诺SSD物理secure erase。

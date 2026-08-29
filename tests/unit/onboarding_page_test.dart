@@ -1923,6 +1923,53 @@ void main() {
     expect(gateway.onboardingPhoneRegistrationCalls, 1);
   });
 
+  for (final continuityCase in <String, String>{
+    'handle_recovery.local_state_conflict':
+        'registrationLocalStateNeedsAttention',
+    'handle_recovery.transition_missing': 'registrationContinuityChanged',
+    'handle_recovery.join_terminal_wait': 'registrationJoinTerminalWait',
+  }.entries) {
+    testWidgets('continuity error ${continuityCase.key} 消费 OTP 并要求重新获取', (
+      tester,
+    ) async {
+      final gateway = FakeAwikiGateway()
+        ..nextOnboardingPhoneRegistrationError = AppStructuredError(
+          code: continuityCase.key,
+          cause: core.AwikiImCoreException(
+            code: 'service_error',
+            message: 'unstable native diagnostic',
+            serviceCode: continuityCase.key,
+          ),
+        );
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+      );
+      await tester.pumpAndSettle();
+
+      final fields = find.byType(CupertinoTextField);
+      await tester.enterText(fields.at(0), '13800138000');
+      await tester.enterText(fields.at(1), 'alice');
+      await tester.enterText(fields.at(2), '123456');
+      await _tapVisible(tester, find.text('发送验证码'));
+      await tester.pump();
+      await _tapVisible(tester, find.text('登录/注册'));
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
+      );
+      final state = container.read(onboardingProvider);
+      expect(state.isPhoneOtpConsumed, isTrue);
+      expect(state.canSubmitPhoneOtp, isFalse);
+      expect(
+        container.read(uiFeedbackProvider)?.message.id,
+        continuityCase.value,
+      );
+      expect(gateway.onboardingPhoneRegistrationCalls, 1);
+    });
+  }
+
   testWidgets('手机号注册在 provider 边界阻止并发重复提交', (tester) async {
     final pending = Completer<void>();
     final gateway = FakeAwikiGateway()
@@ -2004,6 +2051,19 @@ void main() {
     await tester.pump();
     await _tapVisible(tester, find.text('登录/注册'));
     await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('existing-handle-recovery-action')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('existing-handle-join-action')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('existing-handle-cancel-action')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const Key('existing-handle-join-action')));
     await tester.pumpAndSettle();

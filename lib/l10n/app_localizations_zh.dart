@@ -293,6 +293,39 @@ class AppLocalizationsZh extends AppLocalizations {
       '当前 Handle 的身份状态需要服务器处理，请联系支持后重试。';
 
   @override
+  String get registrationLocalStateNeedsAttention =>
+      '本机存在无法安全自动收敛的身份状态。请先处理本地状态，然后重新发送验证码。';
+
+  @override
+  String get registrationContinuityChanged => '身份连续性状态已变化。请重新发送验证码后再试。';
+
+  @override
+  String get registrationJoinTerminalWait =>
+      '旧的设备 Join 正在安全结束。请稍候片刻，然后重新发送验证码再试。';
+
+  @override
+  String get identityDeletionDiscardRecoveryFirst =>
+      '当前有一条尚未验证的身份恢复请求。请先明确放弃该恢复请求，再删除此身份。';
+
+  @override
+  String get identityDeletionResumeRecoveryFirst =>
+      '身份恢复已经开始。请先继续恢复并收敛到安全结果，再删除此身份。';
+
+  @override
+  String get identityDeletionCompleteTransitionFirst =>
+      '身份切换仍在落地。请先完成身份切换，再删除此身份。';
+
+  @override
+  String get identityDeletionCompleteJoinFirst =>
+      '设备 Join 仍在进行。请先完成设备加入，再删除此身份。';
+
+  @override
+  String get identityDeletionPendingWillResume => '这项已确认的删除尚未完成，应用将在启动时自动继续。';
+
+  @override
+  String get identityDeletionConflict => '本地身份控制状态存在冲突，尚未删除任何 App 产品数据。';
+
+  @override
   String get tenantSwitcherLabel => '管理租户';
 
   @override

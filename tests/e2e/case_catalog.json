@@ -4976,6 +4976,259 @@
       }
     },
     {
+      "caseId": "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001",
+      "feature": "A fenced old App peer resumes one durable Recovery-rebind Join after App/Core interruption",
+      "layer": "remote_product_ui_security",
+      "preconditions": "An explicit Linux/Xvfb or macOS awiki.info configuration, protected fixed OTP account, and two fresh isolated App roots are available; the Apps share the old DID before visible Recovery, and the runner can execute two isolated Flutter processes against the same roots.",
+      "action": "Phase A completes visible Recovery, registers the fenced peer, confirms the rebind continuation, durably creates one pending Join, writes an opaque handoff and exits; Phase B opens the same App/Core roots in a new process, obtains a fresh OTP, registers again, continues the adopted Join, approves and activates it.",
+      "exactOracles": [
+        "Phase A shows only Continue Join and Cancel, never a new Recovery action; Core durably creates one joined-device Join before the first Flutter process exits.",
+        "A distinct Phase B App/Core process has no process-local preparation, uses a fresh OTP registration, shows the same rebind-only choice and returns the original Join session without generic conflict.",
+        "The admin completes one Join authority, both App Registry/session views converge at the Recovery DID, and no second Recovery authority is created."
+      ],
+      "negativeChecks": [
+        "A public fault API/header, in-process hang/exception cut, Recovery action in the rebind dialog, reused OTP, second Join session/device key/Recovery operation, copied state root, raw authority output, generic local-state conflict, missing approval/activation, or skipped step prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:old_app_peer_joined_before_recovery",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:old_principal_remote_action_fenced",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:registration_returned_opaque_recovery_join_continuation",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:recovery_action_absent_from_rebind_dialog",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:core_begin_committed_before_app_interruption",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:app_and_core_reopened_on_same_state_root",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:fresh_otp_registration_adopted_durable_join",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:registration_resume_returned_original_join_session",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:single_admin_join_authority_completed",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:two_app_registry_session_converged",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:no_second_recovery_authority"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:registration_returned_opaque_recovery_join_continuation",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:recovery_action_absent_from_rebind_dialog",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:core_begin_committed_before_app_interruption"
+          ],
+          [
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:app_and_core_reopened_on_same_state_root",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:fresh_otp_registration_adopted_durable_join",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:registration_resume_returned_original_join_session"
+          ],
+          [
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:single_admin_join_authority_completed",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:two_app_registry_session_converged",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:no_second_recovery_authority"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:old_app_peer_joined_before_recovery",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:old_principal_remote_action_fenced",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:registration_returned_opaque_recovery_join_continuation",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:recovery_action_absent_from_rebind_dialog",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:core_begin_committed_before_app_interruption",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:app_and_core_reopened_on_same_state_root",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:fresh_otp_registration_adopted_durable_join",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:registration_resume_returned_original_join_session",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:single_admin_join_authority_completed",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:two_app_registry_session_converged",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:no_second_recovery_authority"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001",
+      "feature": "Recovery-aware App identity deletion admission preserves Product and Core state until explicit discard",
+      "layer": "remote_product_ui_security",
+      "preconditions": "An explicit Linux/Xvfb or macOS rwiki.cn configuration, protected fixed OTP account, one fresh App/Core root, and the production Settings deletion coordinator are available.",
+      "action": "Register and activate one identity, seed one App product sentinel, create a pre-attempt Recovery through the public Core adapter, invoke the full-data deletion flow, verify the stable discard-required UI result and unchanged operation/Product/identity, explicitly discard Recovery, then invoke deletion again.",
+      "exactOracles": [
+        "The first deletion attempt is rejected before Product mutation with the mapped discard-required message while operation lifecycle, commit-attempted, key state, identity and sentinel remain unchanged.",
+        "The same pending key remains usable for the explicit public discard, which is the only action that releases deletion admission.",
+        "Only the second confirmed deletion attempt creates one ticket and reaches the deliberate Product-deleted/Core-not-complete process cut."
+      ],
+      "negativeChecks": [
+        "Automatic discard/resume, Product deletion before ticket, changed Recovery authority, missing identity or sentinel, second ticket, same-process-only simulation, awiki.info target, leaked secret, or skipped step prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:active_recovery_blocked_before_product_mutation",
+          "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:recovery_operation_and_pending_key_preserved_until_explicit_discard",
+          "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:ticket_created_only_after_guard_resolution"
+        ],
+        "exactOracleAssertions": [
+          [
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:active_recovery_blocked_before_product_mutation"
+          ],
+          [
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:recovery_operation_and_pending_key_preserved_until_explicit_discard"
+          ],
+          [
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:ticket_created_only_after_guard_resolution"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:active_recovery_blocked_before_product_mutation",
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:recovery_operation_and_pending_key_preserved_until_explicit_discard",
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:ticket_created_only_after_guard_resolution"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "IDENTITY-DATA-DELETION-RESUME-E2E-001",
+      "feature": "Full App identity data deletion resumes one committed ticket in a distinct process",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Phase A has one durable full-data deletion ticket and committed Product delete on an isolated rwiki.cn App/Core root, but Core completion has not run.",
+      "action": "Terminate Phase A, launch a distinct Phase B Flutter process on the same root, inspect the one pending ticket before widget startup, start the real App, and let AppRuntime bootstrap replay Product deletion and Core completion before session restoration.",
+      "exactOracles": [
+        "Phase A exits with Product data absent, one local identity still present, and exactly one pending ticket.",
+        "Phase B has a different process ID, reads the same ticket/owner/current-DID authority, and repeats the already-committed Product delete without failure.",
+        "Bootstrap completes Core retirement, clears the pending ticket and target identity, and restores no session for the deleted identity."
+      ],
+      "negativeChecks": [
+        "A widget rebuild, same process, new ticket, cancellation, non-idempotent Product delete, session restoration before resume, retained target identity, awiki.info target, leaked raw handoff in reports, or skipped step prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "IDENTITY-DATA-DELETION-RESUME-E2E-001:phase_a_product_delete_committed_before_core_complete",
+          "IDENTITY-DATA-DELETION-RESUME-E2E-001:phase_b_used_a_distinct_app_process",
+          "IDENTITY-DATA-DELETION-RESUME-E2E-001:bootstrap_replayed_the_same_pending_ticket",
+          "IDENTITY-DATA-DELETION-RESUME-E2E-001:product_delete_replay_was_idempotent",
+          "IDENTITY-DATA-DELETION-RESUME-E2E-001:core_completion_removed_only_the_target_identity",
+          "IDENTITY-DATA-DELETION-RESUME-E2E-001:no_session_restored_for_the_deleted_identity"
+        ],
+        "exactOracleAssertions": [
+          [
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:phase_a_product_delete_committed_before_core_complete"
+          ],
+          [
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:phase_b_used_a_distinct_app_process",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:bootstrap_replayed_the_same_pending_ticket",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:product_delete_replay_was_idempotent"
+          ],
+          [
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:core_completion_removed_only_the_target_identity",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:no_session_restored_for_the_deleted_identity"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:phase_a_product_delete_committed_before_core_complete",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:phase_b_used_a_distinct_app_process",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:bootstrap_replayed_the_same_pending_ticket",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:product_delete_replay_was_idempotent",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:core_completion_removed_only_the_target_identity",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:no_session_restored_for_the_deleted_identity"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001",
+      "feature": "A recovered current App identity retires locally and ordinary-rejoins with the same stable owner",
+      "layer": "remote_product_ui_security",
+      "preconditions": "An explicit Linux/Xvfb or macOS rwiki.cn configuration, protected fixed OTP account, and two fresh isolated App roots are available; one Recovery has completed, the sibling has rejoined, and standard Root transfer has made that sibling a management-ready admin.",
+      "action": "Retire the recovered current credential through the App public local-credential path, submit the same Handle with a new registration OTP, require an opaque Ordinary continuation with no user-presence request, approve from the sibling admin, activate the fresh protocol device, compare stable owner/Recovery/sibling inventories, then reopen the same App/Core root.",
+      "exactOracles": [
+        "Exactly one Recovery is applied before retirement; the sibling becomes and remains a management-ready admin while public local retirement leaves no target Registry credential in the joining root.",
+        "Registration returns Ordinary mode, consumes the OTP, requests no user presence, emits no Recovery reset authority, and authorizes a protocol device distinct from the retired device.",
+        "The active local identity and binding remain unique on the same stable owner/current DID/new device; Recovery operation IDs and sibling identity IDs do not change.",
+        "A cold App/Core reopen authenticates the same stable owner and current DID, proving the old tombstone did not delete the new Vault material."
+      ],
+      "negativeChecks": [
+        "Settings data deletion, scope reset, direct SQLite/Vault/marker mutation, old OTP or device reuse, Recovery-rebind mode, any user-presence call, non-null reset authority, changed stable owner, additional Recovery operation, sibling mutation, duplicate local identity/binding, failed cold reopen, non-Linux/macOS execution, implicit or non-rwiki.cn config, secret-bearing evidence, or a skipped business step prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:single_recovery_applied_before_retirement",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:sibling_promoted_to_management_ready_admin",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:current_credential_retired_through_public_app_path",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:registration_returned_ordinary_join_without_user_presence",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:ordinary_join_exposed_no_recovery_reset_authority",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:fresh_protocol_device_reused_stable_local_owner",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:active_local_binding_and_identity_remained_unique",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:recovery_operation_inventory_did_not_increase",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:sibling_identity_inventory_remained_unchanged",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:cold_app_core_reopen_preserved_new_identity_and_vault"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:single_recovery_applied_before_retirement",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:sibling_promoted_to_management_ready_admin",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:current_credential_retired_through_public_app_path"
+          ],
+          [
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:registration_returned_ordinary_join_without_user_presence",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:ordinary_join_exposed_no_recovery_reset_authority",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:fresh_protocol_device_reused_stable_local_owner"
+          ],
+          [
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:active_local_binding_and_identity_remained_unique",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:recovery_operation_inventory_did_not_increase",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:sibling_identity_inventory_remained_unchanged"
+          ],
+          [
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:cold_app_core_reopen_preserved_new_identity_and_vault"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:single_recovery_applied_before_retirement",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:sibling_promoted_to_management_ready_admin",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:current_credential_retired_through_public_app_path",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:registration_returned_ordinary_join_without_user_presence",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:ordinary_join_exposed_no_recovery_reset_authority",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:fresh_protocol_device_reused_stable_local_owner",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:active_local_binding_and_identity_remained_unique",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:recovery_operation_inventory_did_not_increase",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:sibling_identity_inventory_remained_unchanged",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:cold_app_core_reopen_preserved_new_identity_and_vault"
+          ]
+        ]
+      }
+    },
+    {
       "caseId": "DEVICE-JOIN-E2E-006",
       "feature": "AWiki Me joins a Handle created and managed by DSH",
       "layer": "remote_product_ui_security",

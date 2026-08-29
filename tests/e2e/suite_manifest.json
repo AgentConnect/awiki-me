@@ -210,6 +210,95 @@
         "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001"
       ]
     },
+    "multi-device-app-pair-recovery-registration-resume": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script"],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 27,
+      "timeoutMinutes": 30,
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "handle_recovery_operation",
+        "device_join_session",
+        "app_core_restart",
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001"
+      ]
+    },
+    "identity-deletion-recovery-guard": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script"],
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 20,
+      "timeoutMinutes": 25,
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "allowedHosts": [
+        "rwiki.cn"
+      ],
+      "allowedDidDomains": [
+        "rwiki.cn"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "handle_recovery_operation",
+        "local_identity_deletion_ticket",
+        "app_product_store",
+        "app_core_restart",
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001",
+        "IDENTITY-DATA-DELETION-RESUME-E2E-001"
+      ]
+    },
+    "multi-device-app-pair-recovery-retirement-ordinary-rejoin": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script"],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 32,
+      "timeoutMinutes": 35,
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "allowedHosts": [
+        "rwiki.cn"
+      ],
+      "allowedDidDomains": [
+        "rwiki.cn"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "handle_recovery_operation",
+        "device_join_session",
+        "root_key_transfer",
+        "direct_message",
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001"
+      ]
+    },
     "multi-device-app-pair": {
       "tier": "remote_product_ui_security",
       "supportedPlatforms": ["macos","linux"],

@@ -14,6 +14,7 @@ import '../../../app/app_locale.dart';
 import '../../../app/app_services.dart';
 import '../../../app/ui_feedback.dart';
 import '../../../application/app_session_service.dart';
+import '../../../core/app_error_classifier.dart';
 import '../../../core/performance_logger.dart';
 import '../../../application/models/app_session.dart';
 import '../../../application/remote_push_installation_coordinator.dart';
@@ -55,6 +56,10 @@ import 'session_provider.dart';
 
 const bool _runtimeTraceEnabled = bool.fromEnvironment(
   'AWIKI_RUNTIME_TRACE',
+  defaultValue: false,
+);
+const bool _e2eCrashAfterIdentityProductDelete = bool.fromEnvironment(
+  'AWIKI_E2E_IDENTITY_DELETION_CRASH_AFTER_PRODUCT_DELETE',
   defaultValue: false,
 );
 const Set<SyncDomain> _accountStateRealtimeDomains = <SyncDomain>{
@@ -217,7 +222,23 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     _beginBusyOperation();
     try {
       final sessions = ref.read(appSessionServiceProvider);
-      final localIdentities = await sessions.listLocalIdentities();
+      var localIdentities = await sessions.listLocalIdentities();
+      if (sessions is LocalIdentityDataDeletionSessionService) {
+        final deletionSessions =
+            sessions as LocalIdentityDataDeletionSessionService;
+        final pending = await deletionSessions
+            .pendingLocalIdentityDataDeletions();
+        if (pending.isNotEmpty) {
+          for (final ticket in pending) {
+            await _deletePreparedIdentityProductData(
+              ownerIdentityId: ticket.ownerIdentityId,
+              currentDid: ticket.currentDid,
+            );
+            await deletionSessions.completeLocalIdentityDataDeletion(ticket);
+          }
+          localIdentities = await sessions.listLocalIdentities();
+        }
+      }
       final localCredentials = _legacySessionsFromAppSessions(localIdentities);
       ref.read(sessionProvider.notifier).setCapabilities(_imCoreCapabilities);
       ref.read(sessionProvider.notifier).setLocalCredentials(localCredentials);
@@ -605,19 +626,28 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     final deletionSessions =
         sessions as LocalIdentityDataDeletionSessionService;
-    final productLocalStore = ref.read(productLocalStoreProvider);
     _deletingLocalIdentitySelector = selector;
     _isLoggingOut = true;
     try {
+      final ticket = await deletionSessions.prepareLocalIdentityDataDeletion(
+        selector,
+      );
+      if (ticket.ownerIdentityId != ownerIdentityId ||
+          ticket.currentDid != identity.did) {
+        throw StateError('local_identity_deletion_ticket_mismatch');
+      }
       _agentTerminalNotificationDeduplicator.clear();
       final pushSession = _currentRemotePushInstallationSession();
       _deactivateRemotePushLocally(pushSession);
       await _disableRemotePushBestEffort(pushSession);
-      await productLocalStore.deleteOwnerData(
-        ownerIdentityId: ownerIdentityId,
-        currentDid: identity.did,
+      await _deletePreparedIdentityProductData(
+        ownerIdentityId: ticket.ownerIdentityId,
+        currentDid: ticket.currentDid,
       );
-      await deletionSessions.deleteLocalIdentityData(selector);
+      if (_e2eCrashAfterIdentityProductDelete) {
+        throw StateError('e2e_identity_deletion_crash_after_product_delete');
+      }
+      await deletionSessions.completeLocalIdentityDataDeletion(ticket);
       if (mounted) {
         state = state.copyWith(activatedDid: null);
         _clearAuthenticatedUiState();
@@ -637,6 +667,34 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     } finally {
       _isLoggingOut = false;
       _deletingLocalIdentitySelector = null;
+    }
+  }
+
+  Future<void> _deletePreparedIdentityProductData({
+    required String ownerIdentityId,
+    required String currentDid,
+  }) async {
+    try {
+      await ref
+          .read(productLocalStoreProvider)
+          .deleteOwnerData(
+            ownerIdentityId: ownerIdentityId,
+            currentDid: currentDid,
+          );
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[awiki_me][identity-deletion][error] '
+        'code=identity.local_data_deletion_pending '
+        'stage=product_delete ticket_retained=true '
+        'core_complete_started=false',
+      );
+      Error.throwWithStackTrace(
+        AppStructuredError(
+          code: 'identity.local_data_deletion_pending',
+          cause: error,
+        ),
+        stackTrace,
+      );
     }
   }
 
