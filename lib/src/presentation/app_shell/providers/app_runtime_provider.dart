@@ -14,6 +14,7 @@ import '../../../app/app_locale.dart';
 import '../../../app/app_services.dart';
 import '../../../app/ui_feedback.dart';
 import '../../../application/app_session_service.dart';
+import '../../../core/app_error_classifier.dart';
 import '../../../core/performance_logger.dart';
 import '../../../application/models/app_session.dart';
 import '../../../application/remote_push_installation_coordinator.dart';
@@ -229,9 +230,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         final pending = await deletionSessions
             .pendingLocalIdentityDataDeletions();
         if (pending.isNotEmpty) {
-          final productLocalStore = ref.read(productLocalStoreProvider);
           for (final ticket in pending) {
-            await productLocalStore.deleteOwnerData(
+            await _deletePreparedIdentityProductData(
               ownerIdentityId: ticket.ownerIdentityId,
               currentDid: ticket.currentDid,
             );
@@ -638,7 +638,6 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     final deletionSessions =
         sessions as LocalIdentityDataDeletionSessionService;
-    final productLocalStore = ref.read(productLocalStoreProvider);
     _deletingLocalIdentitySelector = selector;
     _isLoggingOut = true;
     try {
@@ -653,7 +652,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       final pushSession = _currentRemotePushInstallationSession();
       _deactivateRemotePushLocally(pushSession);
       await _disableRemotePushBestEffort(pushSession);
-      await productLocalStore.deleteOwnerData(
+      await _deletePreparedIdentityProductData(
         ownerIdentityId: ticket.ownerIdentityId,
         currentDid: ticket.currentDid,
       );
@@ -680,6 +679,34 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     } finally {
       _isLoggingOut = false;
       _deletingLocalIdentitySelector = null;
+    }
+  }
+
+  Future<void> _deletePreparedIdentityProductData({
+    required String ownerIdentityId,
+    required String currentDid,
+  }) async {
+    try {
+      await ref
+          .read(productLocalStoreProvider)
+          .deleteOwnerData(
+            ownerIdentityId: ownerIdentityId,
+            currentDid: currentDid,
+          );
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[awiki_me][identity-deletion][error] '
+        'code=identity.local_data_deletion_pending '
+        'stage=product_delete ticket_retained=true '
+        'core_complete_started=false',
+      );
+      Error.throwWithStackTrace(
+        AppStructuredError(
+          code: 'identity.local_data_deletion_pending',
+          cause: error,
+        ),
+        stackTrace,
+      );
     }
   }
 

@@ -255,6 +255,55 @@ void main() {
       expect(container.read(sessionProvider).localCredentials, isEmpty);
     });
 
+    test('启动续跑时 Product 删除失败显示稳定 pending 状态并保留 ticket', () async {
+      const session = SessionIdentity(
+        did: 'did:wba:awiki.info:users:alice-bootstrap-product-failure',
+        localIdentityId: 'identity-alice-bootstrap-product-failure',
+        credentialName: 'alice-bootstrap-product-failure',
+        displayName: 'Alice',
+        handle: 'alice.awiki.info',
+        jwtToken: 'token-alice',
+      );
+      final failOnceStore = _FailOnceDeleteProductLocalStore();
+      final isolatedContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            productLocalStore: failOnceStore,
+          ),
+          realtimeGatewayProvider.overrideWithValue(FakeRealtimeGateway()),
+          notificationFacadeProvider.overrideWithValue(
+            FakeNotificationFacade(),
+          ),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+      addTearDown(isolatedContainer.dispose);
+      gateway.localCredentials = const <SessionIdentity>[session];
+      gateway.pendingLocalIdentityDeletionTickets.add(
+        const LocalIdentityDeletionTicket(
+          deletionId: 'delete-bootstrap-product-failure-1',
+          ownerIdentityId: 'identity-alice-bootstrap-product-failure',
+          currentDid:
+              'did:wba:awiki.info:users:alice-bootstrap-product-failure',
+        ),
+      );
+
+      await isolatedContainer.read(appRuntimeProvider.notifier).initialize();
+
+      expect(failOnceStore.deleteAttempts, 1);
+      expect(gateway.completeLocalIdentityDataDeletionCalls, 0);
+      expect(gateway.pendingLocalIdentityDeletionTickets, hasLength(1));
+      expect(
+        isolatedContainer.read(uiFeedbackProvider)?.message.id,
+        'identityDeletionPendingWillResume',
+      );
+      expect(isolatedContainer.read(sessionProvider).session, isNull);
+    });
+
     test('Product 删除失败保留同一 ticket，重试后才调用 Core complete', () async {
       const session = SessionIdentity(
         did: 'did:wba:awiki.info:users:alice-product-retry',
@@ -297,6 +346,10 @@ void main() {
       final firstDeletionId =
           gateway.pendingLocalIdentityDeletionTickets.single.deletionId;
       expect(isolatedContainer.read(sessionProvider).session, session);
+      expect(
+        isolatedContainer.read(uiFeedbackProvider)?.message.id,
+        'identityDeletionPendingWillResume',
+      );
 
       await isolatedContainer
           .read(appRuntimeProvider.notifier)
