@@ -263,7 +263,6 @@ void main() {
       final failOnceStore = _FailOnceDeleteProductLocalStore();
       final isolatedContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -273,7 +272,6 @@ void main() {
           notificationFacadeProvider.overrideWithValue(
             FakeNotificationFacade(),
           ),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
@@ -312,7 +310,6 @@ void main() {
       final failOnceStore = _FailOnceDeleteProductLocalStore();
       final isolatedContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -322,7 +319,6 @@ void main() {
           notificationFacadeProvider.overrideWithValue(
             FakeNotificationFacade(),
           ),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
