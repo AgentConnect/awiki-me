@@ -512,7 +512,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     required String fullHandle,
     required String phone,
   }) async {
+    final rebindContinuation =
+        ref.read(onboardingProvider).existingHandleJoinMode ==
+        ExistingHandleJoinMode.handleRecoveryRebind;
     final recoveryAvailable =
+        !rebindContinuation &&
         phone.isNotEmpty &&
         (ref.read(onboardingProvider).serverInfo?.supportsPhoneHandleRecovery ??
             false);
@@ -560,6 +564,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         );
         if (started && context.mounted) await openDeviceJoinPage(context);
       case _ExistingHandleAction.recoverHandle:
+        if (rebindContinuation) {
+          throw StateError('rebind_join_recovery_action_forbidden');
+        }
         await controller.discardExistingHandleContinuation();
         if (context.mounted) {
           await AppNavigator.push<void>(

@@ -135,6 +135,43 @@ void main() {
     );
   });
 
+  test(
+    'new registration preparation supersedes only the same local Handle',
+    () async {
+      final sdk = _IdentityErrorCore();
+      final adapter = AwikiImCoreIdentityAdapter.withCoreInstance(
+        coreInstance: () async => sdk,
+      );
+      final first = await adapter.registerHandleWithPhone(
+        phone: '+8613800138000',
+        otp: '123456',
+        handle: 'alice',
+      );
+      final second = await adapter.registerHandleWithPhone(
+        phone: '+8613800138000',
+        otp: '654321',
+        handle: 'alice',
+      );
+
+      expect(
+        first.existingHandleContinuationId,
+        isNot(second.existingHandleContinuationId),
+      );
+      await expectLater(
+        adapter.beginExistingHandleDeviceJoin(
+          first.existingHandleContinuationId!,
+          userPresenceConfirmed: false,
+        ),
+        throwsA(isA<StateError>()),
+      );
+      final resumed = await adapter.beginExistingHandleDeviceJoin(
+        second.existingHandleContinuationId!,
+        userPresenceConfirmed: false,
+      );
+      expect(resumed.joinSessionId, 'join-registration-recovery');
+    },
+  );
+
   test('adapter preserves structured errors through legacy upgrade', () async {
     final sdk = _IdentityErrorCore()..upgradeError = _recoveryStateError;
     final adapter = AwikiImCoreIdentityAdapter.withCoreInstance(
@@ -152,6 +189,73 @@ void main() {
       ),
     );
   });
+
+  test(
+    'adapter projects prepare, pending, and complete deletion APIs',
+    () async {
+      final sdk = _IdentityErrorCore();
+      final adapter = AwikiImCoreIdentityAdapter.withCoreInstance(
+        coreInstance: () async => sdk,
+      );
+
+      final prepared = await adapter.prepareLocalIdentityDataDeletion(
+        'identity-alice',
+      );
+      final pending = await adapter.pendingLocalIdentityDataDeletions();
+      final completed = await adapter.completeLocalIdentityDataDeletion(
+        prepared.deletionId,
+      );
+
+      expect(prepared.deletionId, 'delete-alice-1');
+      expect(prepared.ownerIdentityId, 'identity-alice');
+      expect(prepared.currentDid, 'did:wba:awiki.info:user:alice:e1_current');
+      expect(pending, hasLength(1));
+      expect(pending.single.deletionId, prepared.deletionId);
+      expect(completed.identityId, 'identity-alice');
+    },
+  );
+
+  test(
+    'adapter maps every stable guard through all deletion entries',
+    () async {
+      const codes = <String>[
+        'handle_recovery.precommit_discard_required',
+        'handle_recovery.operation_must_resume',
+        'handle_recovery.transition_must_complete',
+        'handle_recovery.join_must_complete',
+        'identity.local_data_deletion_pending',
+        'identity.local_deletion_conflict',
+      ];
+      for (final code in codes) {
+        final sdk = _IdentityErrorCore()
+          ..deletionError = core.AwikiImCoreException(
+            code: 'service_error',
+            message: 'redacted deletion guard',
+            serviceCode: code,
+          );
+        final adapter = AwikiImCoreIdentityAdapter.withCoreInstance(
+          coreInstance: () async => sdk,
+        );
+        for (final action in <Future<Object?> Function()>[
+          () => adapter.deleteLocalIdentity('identity-alice'),
+          () => adapter.deleteLocalIdentityData('identity-alice'),
+          () => adapter.prepareLocalIdentityDataDeletion('identity-alice'),
+          () => adapter.completeLocalIdentityDataDeletion('delete-alice-1'),
+        ]) {
+          await expectLater(
+            action(),
+            throwsA(
+              isA<AppStructuredError>().having(
+                structuredAppErrorCode,
+                'code',
+                code,
+              ),
+            ),
+          );
+        }
+      }
+    },
+  );
 }
 
 const _recoveryStateError = core.AwikiImCoreException(
@@ -165,6 +269,38 @@ class _IdentityErrorCore implements core.AwikiImCore {
   Object? registrationError;
   Object? joinError;
   Object? upgradeError;
+  Object? deletionError;
+
+  static const _deletedIdentity = core.DeleteLocalIdentityResult(
+    deleted: core.IdentitySummary(
+      id: 'identity-alice',
+      did: 'did:wba:awiki.info:user:alice:e1_current',
+      handle: 'alice.awiki.info',
+      localAlias: 'alice',
+      isDefault: true,
+      readyForAuth: false,
+      readyForMessaging: false,
+    ),
+    wasDefault: true,
+  );
+
+  @override
+  Future<core.DeleteLocalIdentityResult> deleteLocalIdentity(
+    core.IdentitySelector selector,
+  ) async {
+    final error = deletionError;
+    if (error != null) throw error;
+    return _deletedIdentity;
+  }
+
+  @override
+  Future<core.DeleteLocalIdentityResult> deleteLocalIdentityData(
+    core.IdentitySelector selector,
+  ) async {
+    final error = deletionError;
+    if (error != null) throw error;
+    return _deletedIdentity;
+  }
 
   @override
   Future<core.HandleRegistrationResult> registerHandleWithPhone({
@@ -212,6 +348,39 @@ class _IdentityErrorCore implements core.AwikiImCore {
     final error = upgradeError;
     if (error != null) throw error;
     return const core.LegacyUpgradeStatus.completed();
+  }
+
+  @override
+  Future<core.LocalIdentityDeletionTicket> prepareLocalIdentityDataDeletion(
+    core.IdentitySelector selector,
+  ) async {
+    final error = deletionError;
+    if (error != null) throw error;
+    return const core.LocalIdentityDeletionTicket(
+      deletionId: 'delete-alice-1',
+      ownerIdentityId: 'identity-alice',
+      currentDid: 'did:wba:awiki.info:user:alice:e1_current',
+    );
+  }
+
+  @override
+  Future<List<core.LocalIdentityDeletionTicket>>
+  pendingLocalIdentityDataDeletions() async =>
+      const <core.LocalIdentityDeletionTicket>[
+        core.LocalIdentityDeletionTicket(
+          deletionId: 'delete-alice-1',
+          ownerIdentityId: 'identity-alice',
+          currentDid: 'did:wba:awiki.info:user:alice:e1_current',
+        ),
+      ];
+
+  @override
+  Future<core.DeleteLocalIdentityResult> completeLocalIdentityDataDeletion(
+    String deletionId,
+  ) async {
+    final error = deletionError;
+    if (error != null) throw error;
+    return _deletedIdentity;
   }
 
   @override

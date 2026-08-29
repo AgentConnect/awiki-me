@@ -9,6 +9,48 @@ import '../../e2e/performance_contract.dart';
 
 void main() {
   group('App-pair runtime isolation', () {
+    test(
+      'registration Join resume uses two process phases and no App hang',
+      () {
+        final scenario = File(
+          'tests/e2e/runner/scenarios/recovery.dart',
+        ).readAsStringSync();
+        final app = File(
+          'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+        ).readAsStringSync();
+        final adapter = File(
+          'lib/src/data/im_core/awiki_im_core_identity_adapter.dart',
+        ).readAsStringSync();
+
+        expect(scenario, contains("'recovery-registration-resume-a'"));
+        expect(scenario, contains("'recovery-registration-resume-b'"));
+        expect(scenario, contains('if (!registrationResume &&'));
+        expect(
+          scenario,
+          contains('AWIKI_HANDLE_RECOVERY_E2E_PHASE=registration_resume_a'),
+        );
+        expect(
+          scenario,
+          contains('AWIKI_HANDLE_RECOVERY_E2E_PHASE=registration_resume_b'),
+        );
+        expect(
+          scenario,
+          contains(
+            'Registration Join resume phase A did not write its handoff',
+          ),
+        );
+        expect(app, contains('_runRegistrationResumePhaseB'));
+        expect(app, contains('RegistrationJoinResumeHandoff.fromJson'));
+        expect(
+          '$scenario\n$app\n$adapter',
+          isNot(
+            contains('AWIKI_E2E_REGISTRATION_JOIN_INTERRUPT_AFTER_CORE_BEGIN'),
+          ),
+        );
+        expect(adapter, isNot(contains('Completer<DeviceJoinProgress>')));
+      },
+    );
+
     test('App-pair reader accepts the schema written by the runner', () {
       final source = File(
         'tests/e2e/flutter/app/multi_device_join_ui_test.dart',
@@ -445,6 +487,71 @@ void main() {
       expect(hyphen.e2eCase.runConfigPath, contains('remote-recovery'));
     });
 
+    test('parses recovery registration resume App-pair aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi-device-app-pair-recovery-registration-resume',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi_device_app_pair_recovery_registration_resume',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.multiDeviceAppPairRecoveryResume);
+      expect(
+        underscore.e2eCase,
+        DesktopE2eCase.multiDeviceAppPairRecoveryResume,
+      );
+      expect(hyphen.e2eCase.requiresCliPeer, isFalse);
+      expect(
+        hyphen.e2eCase.scenario,
+        'multi-device-app-pair-recovery-registration-resume',
+      );
+      expect(hyphen.e2eCase.caseIds, <String>[
+        'HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001',
+      ]);
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 30));
+      expect(
+        hyphen.e2eCase.testFile,
+        'integration_test/handle_recovery_ui_test.dart',
+      );
+      expect(hyphen.e2eCase.runConfigPath, contains('remote-recovery'));
+    });
+
+    test('parses recovery retirement ordinary rejoin App-pair aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi-device-app-pair-recovery-retirement-ordinary-rejoin',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi_device_app_pair_recovery_retirement_ordinary_rejoin',
+        '--dry-run',
+      ]);
+
+      expect(
+        hyphen.e2eCase,
+        DesktopE2eCase.multiDeviceAppPairRecoveryRetirement,
+      );
+      expect(
+        underscore.e2eCase,
+        DesktopE2eCase.multiDeviceAppPairRecoveryRetirement,
+      );
+      expect(hyphen.e2eCase.requiresCliPeer, isFalse);
+      expect(
+        hyphen.e2eCase.scenario,
+        'multi-device-app-pair-recovery-retirement-ordinary-rejoin',
+      );
+      expect(hyphen.e2eCase.caseIds, <String>[
+        'HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001',
+      ]);
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 35));
+      expect(hyphen.e2eCase.runConfigPath, contains('remote-recovery'));
+    });
+
     test('parses isolated App-pair member Join case aliases', () {
       final hyphen = DesktopE2eOptions.parse(const <String>[
         '--case',
@@ -791,6 +898,8 @@ void main() {
                 'multi-device-remote-recovery, '
                 'multi-device-remote-recovery-fresh, '
                 'multi-device-app-pair-recovery-registration-rejoin-management-transfer, '
+                'multi-device-app-pair-recovery-registration-resume, '
+                'multi-device-app-pair-recovery-retirement-ordinary-rejoin, '
                 'multi-device-app-pair, multi-device-app-pair-functional, '
                 'multi-device-app-pair-content-sync, step4-revoke-mls, '
                 'root-transfer, full, performance, direct, '

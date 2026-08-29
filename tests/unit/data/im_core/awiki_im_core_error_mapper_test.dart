@@ -23,6 +23,25 @@ void main() {
     expect(normalizeAppError(mapped), contains('registration unavailable'));
   });
 
+  for (final code in <String>[
+    'handle_recovery.local_state_conflict',
+    'handle_recovery.transition_missing',
+    'handle_recovery.join_terminal_wait',
+  ]) {
+    test('allowlists continuity serviceCode $code without service data', () {
+      final mapped = const AwikiImCoreErrorMapper().appError(
+        core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'unstable native diagnostic',
+          serviceCode: code,
+        ),
+      );
+
+      expect(mapped, isA<AppStructuredError>());
+      expect(structuredAppErrorCode(mapped), code);
+    });
+  }
+
   const mapper = AwikiImCoreErrorMapper();
 
   test('maps unsupported capability with stable code', () {

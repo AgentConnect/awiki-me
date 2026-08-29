@@ -163,7 +163,7 @@ void main() {
   });
 
   test(
-    'deleteOwnerData purges one recovered owner and preserves another',
+    'deleteOwnerData is idempotent, purges one recovered owner, and preserves another',
     () async {
       final store = _store(databaseDir);
       final now = DateTime.utc(2026, 8, 11);
@@ -234,6 +234,10 @@ void main() {
       );
       await store.applyDeviceRegistryEpochReset(recovery);
 
+      await store.deleteOwnerData(
+        ownerIdentityId: aliceBinding.ownerIdentityId,
+        currentDid: recovery.reference.currentDid,
+      );
       await store.deleteOwnerData(
         ownerIdentityId: aliceBinding.ownerIdentityId,
         currentDid: recovery.reference.currentDid,

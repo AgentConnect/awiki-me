@@ -75,8 +75,28 @@ abstract interface class DaemonSubkeyAuthorizationCorePort {
   );
 }
 
+class LocalIdentityDeletionTicket {
+  const LocalIdentityDeletionTicket({
+    required this.deletionId,
+    required this.ownerIdentityId,
+    required this.currentDid,
+  });
+
+  final String deletionId;
+  final String ownerIdentityId;
+  final String currentDid;
+}
+
 abstract interface class LocalIdentityDataDeletionPort {
   Future<AppSession> deleteLocalIdentityData(String identityIdOrAlias);
+
+  Future<LocalIdentityDeletionTicket> prepareLocalIdentityDataDeletion(
+    String identityIdOrAlias,
+  );
+
+  Future<AppSession> completeLocalIdentityDataDeletion(String deletionId);
+
+  Future<List<LocalIdentityDeletionTicket>> pendingLocalIdentityDataDeletions();
 }
 
 abstract interface class ExistingHandleContinuationPort {

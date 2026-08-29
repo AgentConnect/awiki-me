@@ -145,18 +145,69 @@ class AwikiImCoreIdentityAdapter
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
     final coreInstance = await _coreInstance();
-    final result = await _deleteLocalIdentity(coreInstance, identityIdOrAlias);
+    final result = await _withMappedAppError(
+      () => _deleteLocalIdentity(coreInstance, identityIdOrAlias),
+    );
     return _mappers.appSessionFromIdentity(result.deleted);
   }
 
   @override
   Future<AppSession> deleteLocalIdentityData(String identityIdOrAlias) async {
     final coreInstance = await _coreInstance();
-    final result = await _withIdentitySelectorFallback(
-      identityIdOrAlias,
-      coreInstance.deleteLocalIdentityData,
+    final result = await _withMappedAppError(
+      () => _withIdentitySelectorFallback(
+        identityIdOrAlias,
+        coreInstance.deleteLocalIdentityData,
+      ),
     );
     return _mappers.appSessionFromIdentity(result.deleted);
+  }
+
+  @override
+  Future<LocalIdentityDeletionTicket> prepareLocalIdentityDataDeletion(
+    String identityIdOrAlias,
+  ) async {
+    final coreInstance = await _coreInstance();
+    final ticket = await _withMappedAppError(
+      () => _withIdentitySelectorFallback(
+        identityIdOrAlias,
+        coreInstance.prepareLocalIdentityDataDeletion,
+      ),
+    );
+    return LocalIdentityDeletionTicket(
+      deletionId: ticket.deletionId,
+      ownerIdentityId: ticket.ownerIdentityId,
+      currentDid: ticket.currentDid,
+    );
+  }
+
+  @override
+  Future<AppSession> completeLocalIdentityDataDeletion(
+    String deletionId,
+  ) async {
+    final coreInstance = await _coreInstance();
+    final result = await _withMappedAppError(
+      () => coreInstance.completeLocalIdentityDataDeletion(deletionId),
+    );
+    return _mappers.appSessionFromIdentity(result.deleted);
+  }
+
+  @override
+  Future<List<LocalIdentityDeletionTicket>>
+  pendingLocalIdentityDataDeletions() async {
+    final coreInstance = await _coreInstance();
+    final tickets = await _withMappedAppError(
+      coreInstance.pendingLocalIdentityDataDeletions,
+    );
+    return tickets
+        .map(
+          (ticket) => LocalIdentityDeletionTicket(
+            deletionId: ticket.deletionId,
+            ownerIdentityId: ticket.ownerIdentityId,
+            currentDid: ticket.currentDid,
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
@@ -271,10 +322,16 @@ class AwikiImCoreIdentityAdapter
       }
       final continuationId =
           'existing-handle-${DateTime.now().microsecondsSinceEpoch}-${_continuationSequence++}';
+      _existingHandleContinuations.removeWhere(
+        (_, pending) =>
+            identical(pending.coreInstance, coreInstance) &&
+            pending.fullHandle == continuation.fullHandle,
+      );
       _existingHandleContinuations[continuationId] =
           _PendingExistingHandleRegistration(
             coreInstance: coreInstance,
             preparationId: continuation.preparationId,
+            fullHandle: continuation.fullHandle,
             mode: mode,
             requiresUserPresence: continuation.requiresUserPresence,
           );
@@ -362,12 +419,14 @@ class _PendingExistingHandleRegistration {
   const _PendingExistingHandleRegistration({
     required this.coreInstance,
     required this.preparationId,
+    required this.fullHandle,
     required this.mode,
     required this.requiresUserPresence,
   });
 
   final core.AwikiImCore coreInstance;
   final String preparationId;
+  final String fullHandle;
   final ExistingHandleJoinMode mode;
   final bool requiresUserPresence;
 }

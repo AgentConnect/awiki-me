@@ -99,6 +99,39 @@ void main() {
     );
   });
 
+  test(
+    'maps every stable identity deletion guard to dedicated localized copy',
+    () {
+      const expected = <String, String>{
+        'handle_recovery.precommit_discard_required':
+            'identityDeletionDiscardRecoveryFirst',
+        'handle_recovery.operation_must_resume':
+            'identityDeletionResumeRecoveryFirst',
+        'handle_recovery.transition_must_complete':
+            'identityDeletionCompleteTransitionFirst',
+        'handle_recovery.join_must_complete':
+            'identityDeletionCompleteJoinFirst',
+        'identity.local_data_deletion_pending':
+            'identityDeletionPendingWillResume',
+        'identity.local_deletion_conflict': 'identityDeletionConflict',
+      };
+      for (final entry in expected.entries) {
+        final message = AppMessage.fromError(
+          AppStructuredError(
+            code: entry.key,
+            cause: const core.AwikiImCoreException(
+              code: 'service_error',
+              message: 'redacted diagnostic',
+            ),
+          ),
+        );
+        expect(message.id, entry.value);
+        expect(message.resolve(AppLocalizationsZh()), isNotEmpty);
+        expect(message.resolve(AppLocalizationsEn()), isNotEmpty);
+      }
+    },
+  );
+
   test('maps im-core transport unavailable errors to friendly network copy', () {
     final message = AppMessage.fromError(
       const core.AwikiImCoreException(

@@ -305,6 +305,42 @@ class AppLocalizationsEn extends AppLocalizations {
       'This Handle\'s identity state needs server-side attention. Contact support before trying again.';
 
   @override
+  String get registrationLocalStateNeedsAttention =>
+      'This device has identity state that cannot be reconciled safely. Resolve the local state, then send a new verification code.';
+
+  @override
+  String get registrationContinuityChanged =>
+      'Identity continuity changed. Send a new verification code and try again.';
+
+  @override
+  String get registrationJoinTerminalWait =>
+      'The previous device Join is ending safely. Wait briefly, then send a new verification code and try again.';
+
+  @override
+  String get identityDeletionDiscardRecoveryFirst =>
+      'A recovery request is waiting for verification. Discard that recovery request before deleting this identity.';
+
+  @override
+  String get identityDeletionResumeRecoveryFirst =>
+      'Identity recovery has already started. Resume it to a safe result before deleting this identity.';
+
+  @override
+  String get identityDeletionCompleteTransitionFirst =>
+      'An identity transition is still being applied. Complete it before deleting this identity.';
+
+  @override
+  String get identityDeletionCompleteJoinFirst =>
+      'A device Join is still in progress. Complete it before deleting this identity.';
+
+  @override
+  String get identityDeletionPendingWillResume =>
+      'This confirmed deletion is still being completed and will resume automatically.';
+
+  @override
+  String get identityDeletionConflict =>
+      'This identity has conflicting local control state. No local product data was deleted.';
+
+  @override
   String get tenantSwitcherLabel => 'Manage tenants';
 
   @override

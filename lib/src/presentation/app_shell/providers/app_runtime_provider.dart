@@ -57,6 +57,10 @@ const bool _runtimeTraceEnabled = bool.fromEnvironment(
   'AWIKI_RUNTIME_TRACE',
   defaultValue: false,
 );
+const bool _e2eCrashAfterIdentityProductDelete = bool.fromEnvironment(
+  'AWIKI_E2E_IDENTITY_DELETION_CRASH_AFTER_PRODUCT_DELETE',
+  defaultValue: false,
+);
 const Set<SyncDomain> _accountStateRealtimeDomains = <SyncDomain>{
   SyncDomain.profile,
   SyncDomain.agentInventory,
@@ -218,7 +222,24 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     _beginBusyOperation();
     try {
       final sessions = ref.read(appSessionServiceProvider);
-      final localIdentities = await sessions.listLocalIdentities();
+      var localIdentities = await sessions.listLocalIdentities();
+      if (sessions is LocalIdentityDataDeletionSessionService) {
+        final deletionSessions =
+            sessions as LocalIdentityDataDeletionSessionService;
+        final pending = await deletionSessions
+            .pendingLocalIdentityDataDeletions();
+        if (pending.isNotEmpty) {
+          final productLocalStore = ref.read(productLocalStoreProvider);
+          for (final ticket in pending) {
+            await productLocalStore.deleteOwnerData(
+              ownerIdentityId: ticket.ownerIdentityId,
+              currentDid: ticket.currentDid,
+            );
+            await deletionSessions.completeLocalIdentityDataDeletion(ticket);
+          }
+          localIdentities = await sessions.listLocalIdentities();
+        }
+      }
       final localCredentials = _legacySessionsFromAppSessions(localIdentities);
       ref.read(sessionProvider.notifier).setCapabilities(_imCoreCapabilities);
       ref.read(sessionProvider.notifier).setLocalCredentials(localCredentials);
@@ -621,15 +642,25 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     _deletingLocalIdentitySelector = selector;
     _isLoggingOut = true;
     try {
+      final ticket = await deletionSessions.prepareLocalIdentityDataDeletion(
+        selector,
+      );
+      if (ticket.ownerIdentityId != ownerIdentityId ||
+          ticket.currentDid != identity.did) {
+        throw StateError('local_identity_deletion_ticket_mismatch');
+      }
       _agentTerminalNotificationDeduplicator.clear();
       final pushSession = _currentRemotePushInstallationSession();
       _deactivateRemotePushLocally(pushSession);
       await _disableRemotePushBestEffort(pushSession);
       await productLocalStore.deleteOwnerData(
-        ownerIdentityId: ownerIdentityId,
-        currentDid: identity.did,
+        ownerIdentityId: ticket.ownerIdentityId,
+        currentDid: ticket.currentDid,
       );
-      await deletionSessions.deleteLocalIdentityData(selector);
+      if (_e2eCrashAfterIdentityProductDelete) {
+        throw StateError('e2e_identity_deletion_crash_after_product_delete');
+      }
+      await deletionSessions.completeLocalIdentityDataDeletion(ticket);
       if (mounted) {
         state = state.copyWith(activatedDid: null);
         _clearAuthenticatedUiState();

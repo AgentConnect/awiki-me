@@ -1428,11 +1428,7 @@ void main() {
           pagesFetched: 1,
         ),
       );
-      final container = _container(
-        gateway,
-        sync,
-        messagingService: messaging,
-      );
+      final container = _container(gateway, sync, messagingService: messaging);
       addTearDown(container.dispose);
 
       await container

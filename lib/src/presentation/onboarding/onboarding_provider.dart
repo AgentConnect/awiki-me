@@ -461,8 +461,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         final status = await _activateRegistrationResult(result, transition);
         return status;
       } catch (error) {
-        if (structuredAppErrorCode(error) ==
-            'identity.registration_verification_unavailable') {
+        if (const <String>{
+          'identity.registration_verification_unavailable',
+          'handle_recovery.local_state_conflict',
+          'handle_recovery.transition_missing',
+          'handle_recovery.join_terminal_wait',
+        }.contains(structuredAppErrorCode(error))) {
           state = state.copyWith(isPhoneOtpConsumed: true);
         }
         rethrow;

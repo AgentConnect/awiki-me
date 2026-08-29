@@ -297,6 +297,60 @@ void main() {
     });
   });
 
+  group('Registration Join resume handoff', () {
+    test('persists only opaque references, counts, and one retry boundary', () {
+      final handoff = _registrationJoinResumeHandoff();
+      final encoded = jsonEncode(handoff.toJson());
+
+      for (final raw in <String>[
+        'fixture-run-42',
+        'owner-identity',
+        'recovery.example',
+        'did:awiki:new',
+        'join-session-42',
+        'device-42',
+      ]) {
+        expect(encoded, isNot(contains(raw)));
+      }
+      handoff.requireRunId('fixture-run-42');
+      handoff.requireReference('join_session', 'join-session-42');
+      expect(handoff.registrationRetryAt, DateTime.utc(2026, 8, 29, 12, 0));
+
+      final restored = RegistrationJoinResumeHandoff.fromJson(
+        _copyJson(handoff.toJson()),
+      );
+      restored.requireReference('protocol_device', 'device-42');
+      expect(restored.expectedCounts['pending_join_authorities'], 1);
+    });
+
+    test('rejects raw references, missing counts, and invalid retry time', () {
+      final base = _copyJson(_registrationJoinResumeHandoff().toJson());
+      final rawReference = _copyJson(base);
+      (rawReference['references']! as Map<String, Object?>)['join_session'] =
+          'join-session-42';
+      expect(
+        () => RegistrationJoinResumeHandoff.fromJson(rawReference),
+        throwsFormatException,
+      );
+
+      final missingCount = _copyJson(base);
+      (missingCount['expectedCounts']! as Map<String, Object?>).remove(
+        'recovery_operations',
+      );
+      expect(
+        () => RegistrationJoinResumeHandoff.fromJson(missingCount),
+        throwsFormatException,
+      );
+
+      final invalidRetry = _copyJson(base)
+        ..['registrationRetryAt'] = '2026-08-29T12:00:00+08:00';
+      expect(
+        () => RegistrationJoinResumeHandoff.fromJson(invalidRetry),
+        throwsFormatException,
+      );
+    });
+  });
+
   group('Handle Recovery shared oracles', () {
     test('exact-one counts raw canonical and semantic matches separately', () {
       final items = <_Item>[
@@ -733,6 +787,26 @@ HandleRecoveryCrashCutHandoff _crashCutHandoff() {
       'pre_reset_registry_devices': 1,
     },
     fixtureCheckpoint: _localCheckpoint(),
+  );
+}
+
+RegistrationJoinResumeHandoff _registrationJoinResumeHandoff() {
+  return RegistrationJoinResumeHandoff.fromRaw(
+    runId: 'fixture-run-42',
+    registrationRetryAt: DateTime.utc(2026, 8, 29, 12),
+    rawReferences: const <String, String>{
+      'stable_owner': 'owner-identity',
+      'full_handle': 'recovery.example',
+      'current_identity': 'did:awiki:new',
+      'join_session': 'join-session-42',
+      'protocol_device': 'device-42',
+    },
+    expectedCounts: const <String, int>{
+      'recovery_operations': 1,
+      'pending_join_authorities': 1,
+      'registry_devices': 1,
+      'peer_local_identities': 1,
+    },
   );
 }
 

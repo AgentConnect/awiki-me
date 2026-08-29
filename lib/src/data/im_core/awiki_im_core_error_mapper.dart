@@ -61,7 +61,21 @@ class AwikiImCoreErrorMapper {
   }
 
   Object appError(core.AwikiImCoreException error) {
-    final code = _structuredAppErrorCode(error.serviceDataJson);
+    final serviceCode = error.serviceCode?.trim();
+    final code =
+        const <String>{
+          'handle_recovery.local_state_conflict',
+          'handle_recovery.transition_missing',
+          'handle_recovery.join_terminal_wait',
+          'handle_recovery.precommit_discard_required',
+          'handle_recovery.operation_must_resume',
+          'handle_recovery.transition_must_complete',
+          'handle_recovery.join_must_complete',
+          'identity.local_data_deletion_pending',
+          'identity.local_deletion_conflict',
+        }.contains(serviceCode)
+        ? serviceCode
+        : _structuredAppErrorCode(error.serviceDataJson);
     return code == null ? error : AppStructuredError(code: code, cause: error);
   }
 

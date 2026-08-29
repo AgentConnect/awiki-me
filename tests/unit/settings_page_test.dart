@@ -441,6 +441,7 @@ void main() {
 
   testWidgets('设置页退出并删除当前数据会删除本地凭证而不显示未实现错误', (tester) async {
     final gateway = FakeAwikiGateway();
+    final productLocalStore = FakeProductLocalStore();
     const session = SessionIdentity(
       did: 'did:test:123',
       credentialName: 'default',
@@ -456,6 +457,9 @@ void main() {
         home: const SettingsPage(),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          productLocalStoreProvider.overrideWithValue(productLocalStore),
+        ],
       ),
     );
 
@@ -474,6 +478,9 @@ void main() {
       find.textContaining('删除的本地历史消息和端到端加密密钥不能通过恢复或加入设备找回'),
       findsOneWidget,
     );
+    expect(gateway.prepareLocalIdentityDataDeletionCalls, 0);
+    expect(gateway.completeLocalIdentityDataDeletionCalls, 0);
+    expect(productLocalStore.deleteOwnerDataCalls, 0);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(SettingsPage)),
@@ -484,6 +491,9 @@ void main() {
 
     expect(gateway.deleteLocalCredentialCalls, 1);
     expect(gateway.deleteLocalIdentityDataCalls, 1);
+    expect(gateway.prepareLocalIdentityDataDeletionCalls, 1);
+    expect(gateway.completeLocalIdentityDataDeletionCalls, 1);
+    expect(productLocalStore.deleteOwnerDataCalls, 1);
     expect(gateway.logoutCalls, 0);
     expect(container.read(uiFeedbackProvider), isNull);
   });
