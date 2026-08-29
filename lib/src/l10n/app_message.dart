@@ -375,9 +375,6 @@ class AppMessage {
     if (raw == 'screenshot_screen_recording_permission_required') {
       return AppMessage.screenshotPermissionRequired();
     }
-    if (raw == 'document_picker_failed') {
-      return AppMessage.documentPickerFailed();
-    }
     if (raw == '文件选择失败，请稍后重试。') {
       return AppMessage.documentPickerFailed();
     }

@@ -3,7 +3,8 @@ import 'dart:async';
 import '../../application/realtime_application_service.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../domain/services/realtime_gateway.dart';
-import 'compat_awiki_gateway.dart';
+
+const String compatRealtimeUpdateEventKey = '_awikiImCoreRealtimeUpdate';
 
 class CompatRealtimeGateway implements RealtimeGateway {
   CompatRealtimeGateway({required RealtimeApplicationService realtime})

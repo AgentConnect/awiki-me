@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -93,7 +92,6 @@ void main() {
           <ChatMessage>[message];
     container = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         ...fakeApplicationServiceOverrides(
           gateway,
           messagingService: messagingService,
@@ -715,7 +713,6 @@ ProviderContainer _containerWithCachePolicy(
 ) {
   return ProviderContainer(
     overrides: <Override>[
-      awikiGatewayProvider.overrideWithValue(gateway),
       ...fakeApplicationServiceOverrides(gateway),
       conversationListProvider.overrideWith(
         (ref) => _StaticConversationListController(ref, <ConversationSummary>[

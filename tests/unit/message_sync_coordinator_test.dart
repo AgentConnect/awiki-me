@@ -1428,11 +1428,7 @@ void main() {
           pagesFetched: 1,
         ),
       );
-      final container = _container(
-        gateway,
-        sync,
-        messagingService: messaging,
-      );
+      final container = _container(gateway, sync, messagingService: messaging);
       addTearDown(container.dispose);
 
       await container
@@ -2337,7 +2333,6 @@ ProviderContainer _container(
       );
   return ProviderContainer(
     overrides: <Override>[
-      awikiGatewayProvider.overrideWithValue(gateway),
       awikiEnvironmentConfigProvider.overrideWithValue(
         AwikiEnvironmentConfig(messageSyncV2ReadEnabled: syncV2ReadEnabled),
       ),

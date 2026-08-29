@@ -32,7 +32,6 @@ void main() {
     final gateway = FakeAwikiGateway()..myProfile = serverProfile;
     final container = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         profileApplicationServiceProvider.overrideWithValue(
           FakeProfileApplicationService(gateway),
         ),
@@ -81,7 +80,6 @@ void main() {
     final gateway = FakeAwikiGateway()..myProfile = serverProfile;
     final container = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         profileApplicationServiceProvider.overrideWithValue(
           FakeProfileApplicationService(gateway),
         ),
@@ -130,7 +128,6 @@ void main() {
     final gateway = FakeAwikiGateway()..myProfile = serverProfile;
     final container = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         profileApplicationServiceProvider.overrideWithValue(
           FakeProfileApplicationService(gateway),
         ),

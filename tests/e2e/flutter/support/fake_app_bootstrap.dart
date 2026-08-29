@@ -56,10 +56,8 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
       messageSyncV2ReadEnabled: messageSyncV2ReadEnabled,
     ),
     accountGateway: gateway,
-    gateway: gateway,
     realtimeGateway: realtimeGateway,
     notificationFacade: notificationFacade,
-    e2eeFacade: FakeE2eeFacade(),
     localePreferenceService: FakeLocalePreferenceService(
       initialMode: localeMode,
     ),

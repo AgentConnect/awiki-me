@@ -32,7 +32,6 @@ void main() {
     );
     container = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
         ...fakeApplicationServiceOverrides(
           gateway,

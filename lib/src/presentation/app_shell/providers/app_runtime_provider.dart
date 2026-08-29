@@ -181,7 +181,6 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   _SessionEpochOperation? _realtimeRecoveryOperation;
   _SessionEpochBarrierOperation? _sessionEpochBarrierOperation;
   int _busyOperationCount = 0;
-  Future<void> _e2eeInitializationTail = Future<void>.value();
   SessionEpoch? _lastAuthenticatedRefreshEpoch;
   late final AgentTerminalNotificationDeduplicator
   _agentTerminalNotificationDeduplicator;
@@ -271,11 +270,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       }
       ref.read(selectedConversationProvider.notifier).clearSelection();
       ref.read(friendsWorkspaceNavigationProvider.notifier).reset();
-      final initialized = await _enqueueE2eeInitialization(
-        lease,
-        session,
-      ).timeout(_requestTimeout);
-      if (!initialized || !_isSessionLeaseTransitionCurrent(lease)) {
+      if (!_isSessionLeaseTransitionCurrent(lease)) {
         return;
       }
       ref.read(sessionProvider.notifier).activateSession(session);
@@ -297,9 +292,13 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       }
       await ref
           .read(conversationListProvider.notifier)
-          .preparePatchGeneration();
+          .preparePatchGeneration()
+          .timeout(_requestTimeout);
       if (!_isSessionLeaseTransitionCurrent(lease) ||
           !_isSessionEpochActive(epoch)) {
+        if (_isSessionEpochActive(epoch)) {
+          _clearAuthenticatedUiState();
+        }
         return;
       }
       state = state.copyWith(
@@ -326,13 +325,29 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       if (!_isSessionLeaseTransitionCurrent(lease)) {
         return;
       }
-      await ref.read(appSessionServiceProvider).abortSessionIfCurrent(lease);
+      final aborted = await ref
+          .read(appSessionServiceProvider)
+          .abortSessionIfCurrent(lease);
+      final activeSession = ref.read(sessionProvider).session;
+      if (aborted &&
+          activeSession?.localIdentityId == lease.session.identityId &&
+          activeSession?.did == lease.session.did) {
+        _clearAuthenticatedUiState();
+      }
       rethrow;
     } catch (_) {
       if (!_isSessionLeaseTransitionCurrent(lease)) {
         return;
       }
-      await ref.read(appSessionServiceProvider).abortSessionIfCurrent(lease);
+      final aborted = await ref
+          .read(appSessionServiceProvider)
+          .abortSessionIfCurrent(lease);
+      final activeSession = ref.read(sessionProvider).session;
+      if (aborted &&
+          activeSession?.localIdentityId == lease.session.identityId &&
+          activeSession?.did == lease.session.did) {
+        _clearAuthenticatedUiState();
+      }
       rethrow;
     } finally {
       if (mounted) {
@@ -467,33 +482,6 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         ref
             .read(appSessionServiceProvider)
             .isSessionTransitionCurrent(lease.transition);
-  }
-
-  Future<bool> _enqueueE2eeInitialization(
-    AppSessionLease lease,
-    SessionIdentity session,
-  ) {
-    final previous = _e2eeInitializationTail;
-    final completed = Completer<void>();
-    _e2eeInitializationTail = completed.future;
-
-    return () async {
-      await previous;
-      try {
-        if (!_isSessionLeaseTransitionCurrent(lease)) {
-          return false;
-        }
-        await AwikiPerformanceLogger.async(
-          'app_runtime.activate_session.e2ee',
-          () => ref.read(e2eeFacadeProvider).initialize(session),
-        );
-        return _isSessionLeaseTransitionCurrent(lease);
-      } finally {
-        if (!completed.isCompleted) {
-          completed.complete();
-        }
-      }
-    }();
   }
 
   Future<void> activateJoinedMember(String expectedDid) {

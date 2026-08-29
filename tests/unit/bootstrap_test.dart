@@ -43,10 +43,8 @@ void main() {
     final bootstrap = AppBootstrap(
       environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
       accountGateway: gateway,
-      gateway: gateway,
       realtimeGateway: FakeRealtimeGateway(),
       notificationFacade: FakeNotificationFacade(),
-      e2eeFacade: FakeE2eeFacade(),
       localePreferenceService: FakeLocalePreferenceService(),
       updateService: FakeUpdateService(),
       remotePushClient: client,
@@ -150,10 +148,8 @@ void main() {
       final bootstrap = AppBootstrap(
         environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
         accountGateway: gateway,
-        gateway: gateway,
         realtimeGateway: FakeRealtimeGateway(),
         notificationFacade: FakeNotificationFacade(),
-        e2eeFacade: FakeE2eeFacade(),
         localePreferenceService: FakeLocalePreferenceService(),
         updateService: FakeUpdateService(),
         realtimeApplicationService: _RecordingRealtimeService(calls),
@@ -258,10 +254,8 @@ AppBootstrap _buildBootstrap({
   return AppBootstrap(
     environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
     accountGateway: gateway,
-    gateway: gateway,
     realtimeGateway: FakeRealtimeGateway(),
     notificationFacade: FakeNotificationFacade(),
-    e2eeFacade: FakeE2eeFacade(),
     localePreferenceService: FakeLocalePreferenceService(),
     updateService: FakeUpdateService(),
     appSessionService: appSessionService,

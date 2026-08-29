@@ -65,8 +65,6 @@ import 'package:awiki_me/src/domain/entities/peer_agent_identity.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
-import 'package:awiki_me/src/domain/repositories/awiki_gateway.dart';
-import 'package:awiki_me/src/domain/services/e2ee_facade.dart';
 import 'package:awiki_me/src/domain/services/notification_facade.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/domain/services/update_service.dart';
@@ -236,7 +234,6 @@ Widget buildLocalizedTestApp({
   FakeAwikiGateway? gateway,
   FakeRealtimeGateway? realtimeGateway,
   FakeNotificationFacade? notificationFacade,
-  FakeE2eeFacade? e2eeFacade,
   FakeLocalePreferenceService? localePreferenceService,
   FakeUpdateService? updateService,
   AttachmentCacheService? attachmentCacheService,
@@ -250,17 +247,14 @@ Widget buildLocalizedTestApp({
   final resolvedGateway = gateway ?? FakeAwikiGateway();
   final resolvedRealtime = realtimeGateway ?? FakeRealtimeGateway();
   final resolvedNotification = notificationFacade ?? FakeNotificationFacade();
-  final resolvedE2ee = e2eeFacade ?? FakeE2eeFacade();
   final resolvedLocalePreference =
       localePreferenceService ?? FakeLocalePreferenceService();
   final resolvedUpdateService = updateService ?? FakeUpdateService();
   return ProviderScope(
     overrides: <Override>[
-      awikiGatewayProvider.overrideWithValue(resolvedGateway),
       awikiAccountGatewayProvider.overrideWithValue(resolvedGateway),
       realtimeGatewayProvider.overrideWithValue(resolvedRealtime),
       notificationFacadeProvider.overrideWithValue(resolvedNotification),
-      e2eeFacadeProvider.overrideWithValue(resolvedE2ee),
       localePreferenceServiceProvider.overrideWithValue(
         resolvedLocalePreference,
       ),
@@ -733,7 +727,7 @@ class FakeAttachmentCacheService implements AttachmentCacheService {
       '$messageId::$attachmentId';
 }
 
-class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
+class FakeAwikiGateway implements AwikiAccountGateway {
   List<SessionIdentity> localCredentials = const <SessionIdentity>[];
   List<ConversationSummary> conversations = const <ConversationSummary>[];
   Map<String, List<ChatMessage>> dmHistoryByPeerDid =
@@ -884,7 +878,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   Completer<void>? logoutCompleter;
   Completer<void>? deleteLocalCredentialCompleter;
 
-  @override
   Future<BridgeCapabilities> loadCapabilities() async {
     return const BridgeCapabilities(
       profileMarkdown: true,
@@ -921,7 +914,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     }
   }
 
-  @override
   Future<void> deleteLocalThread(String threadId) async {
     deleteLocalThreadCalls += 1;
     lastDeletedLocalThreadId = threadId;
@@ -933,7 +925,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return exportedPath;
   }
 
-  @override
   Future<List<ChatMessage>> fetchDmHistory(String peerDid) async {
     fetchDmHistoryCalls += 1;
     lastFetchedDmPeerDid = peerDid;
@@ -971,7 +962,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return peerDidOrHandle;
   }
 
-  @override
   Future<List<ChatMessage>> fetchGroupHistory(String groupId) async {
     fetchGroupHistoryCalls += 1;
     return groupHistoryByGroupId[groupId] ?? const <ChatMessage>[];
@@ -998,7 +988,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return localGroupHistoryByGroupId[groupId] ?? const <ChatMessage>[];
   }
 
-  @override
   Future<void> follow(String didOrHandle) async {
     if (failNextFollow) {
       failNextFollow = false;
@@ -1026,7 +1015,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     relationshipsByDidOrHandle[summary.did] = summary;
   }
 
-  @override
   Future<GroupSummary> createGroup({
     required String name,
     required String slug,
@@ -1070,14 +1058,12 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return group;
   }
 
-  @override
   Future<RealtimeUpdate?> consumeRealtimeEvent(
     Map<String, Object?> event,
   ) async {
     return nextRealtimeUpdate;
   }
 
-  @override
   Future<GroupSummary> getGroup(String groupId) async {
     if (getGroupError != null) {
       throw getGroupError!;
@@ -1096,7 +1082,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     );
   }
 
-  @override
   Future<RelationshipSummary> getRelationshipStatus(String didOrHandle) async {
     return relationshipsByDidOrHandle[didOrHandle] ??
         relationshipsByDidOrHandle[normalizeTestIdentity(didOrHandle)] ??
@@ -1113,7 +1098,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return importedCredential;
   }
 
-  @override
   Future<GroupSummary> joinGroup(String groupDid) async {
     if (failNextJoinGroup) {
       failNextJoinGroup = false;
@@ -1137,7 +1121,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return group;
   }
 
-  @override
   Future<GroupSummary> addGroupMember({
     required String groupId,
     required String memberRef,
@@ -1196,7 +1179,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return null;
   }
 
-  @override
   Future<GroupSummary> removeGroupMember({
     required String groupId,
     required String memberRef,
@@ -1237,7 +1219,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return emailVerificationResult;
   }
 
-  @override
   Future<List<ConversationSummary>> listConversations() async {
     listConversationsCalls += 1;
     if (failNextListConversations) {
@@ -1247,7 +1228,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return conversations;
   }
 
-  @override
   Future<List<RelationshipSummary>> listFollowers() async {
     if (failListFollowers) {
       throw StateError('followers unavailable');
@@ -1255,7 +1235,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return followers;
   }
 
-  @override
   Future<List<GroupMemberSummary>> listGroupMembers(String groupId) async {
     listGroupMembersCalls += 1;
     if (listGroupMembersError != null) {
@@ -1269,7 +1248,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return groupMembersByGroupId[groupId] ?? const <GroupMemberSummary>[];
   }
 
-  @override
   Future<List<GroupSummary>> listGroups() async {
     return groups;
   }
@@ -1280,7 +1258,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return localCredentials;
   }
 
-  @override
   Future<List<RelationshipSummary>> listFollowing() async {
     if (failListFollowing) {
       throw StateError('following unavailable');
@@ -1302,7 +1279,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return serverInfo;
   }
 
-  @override
   Future<UserProfile> loadMyProfile() async {
     if (myProfile != null) {
       return myProfile!;
@@ -1313,7 +1289,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     throw UnimplementedError();
   }
 
-  @override
   Future<UserProfile> loadPublicProfile(String didOrHandle) async {
     loadPublicProfileQueries.add(didOrHandle);
     final normalized = normalizeTestIdentity(didOrHandle);
@@ -1350,7 +1325,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     }
   }
 
-  @override
   Future<void> markRead(String threadId) async {
     markReadCalls += 1;
     lastMarkReadThreadId = threadId;
@@ -1481,7 +1455,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     );
   }
 
-  @override
   Future<ChatMessage> retryMessage(ChatMessage message) async {
     return sendTextMessage(
       threadId: message.threadId,
@@ -1509,7 +1482,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     }
   }
 
-  @override
   Future<ChatMessage> sendTextMessage({
     required String threadId,
     String? peerDid,
@@ -1616,7 +1588,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     );
   }
 
-  @override
   Future<void> unfollow(String didOrHandle) async {
     lastUnfollowedDidOrHandle = didOrHandle;
     final normalized = normalizeTestIdentity(didOrHandle);
@@ -1635,7 +1606,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     );
   }
 
-  @override
   Future<UserProfile> updateProfile(ProfilePatch patch) async {
     lastProfilePatch = patch;
     if (updatedProfile != null) {
@@ -4603,48 +4573,6 @@ class FakeNotificationFacade implements NotificationFacade {
   Future<void> dispose() async {
     disposed = true;
     await _activations.close();
-  }
-}
-
-class FakeE2eeFacade implements E2eeFacade {
-  @override
-  Future<ChatMessage> decryptIncomingMessage(ChatMessage message) async {
-    return message;
-  }
-
-  @override
-  Future<void> ensureSession(String peerDid) async {}
-
-  @override
-  Future<EncryptedPayload> encryptOutgoing({
-    required String peerDid,
-    required String originalType,
-    required String plaintext,
-  }) async {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<Map<String, Object?>> exportSessionState() async {
-    return const <String, Object?>{};
-  }
-
-  @override
-  Future<void> importSessionState(Map<String, Object?> state) async {}
-
-  @override
-  Future<void> initialize(SessionIdentity identity) async {}
-
-  @override
-  Future<bool> isSupported() async {
-    return false;
-  }
-
-  @override
-  Future<E2eeProcessResult> processIncomingProtocolMessage(
-    ChatMessage message,
-  ) async {
-    return const E2eeProcessResult();
   }
 }
 

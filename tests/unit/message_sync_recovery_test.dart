@@ -168,7 +168,6 @@ ProviderContainer _container(
 }) {
   return ProviderContainer(
     overrides: <Override>[
-      awikiGatewayProvider.overrideWithValue(gateway),
       awikiEnvironmentConfigProvider.overrideWithValue(
         AwikiEnvironmentConfig(messageSyncV2ReadEnabled: syncV2ReadEnabled),
       ),

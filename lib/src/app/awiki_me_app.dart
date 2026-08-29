@@ -62,7 +62,6 @@ class AwikiMeApp extends StatelessWidget {
             bootstrap.tenantRegistry!.activeTenant,
           ),
         awikiAccountGatewayProvider.overrideWithValue(bootstrap.accountGateway),
-        awikiGatewayProvider.overrideWithValue(bootstrap.gateway),
         realtimeGatewayProvider.overrideWithValue(bootstrap.realtimeGateway),
         notificationFacadeProvider.overrideWithValue(
           bootstrap.notificationFacade,
@@ -82,7 +81,6 @@ class AwikiMeApp extends StatelessWidget {
         desktopShellServiceProvider.overrideWithValue(
           bootstrap.desktopShellService,
         ),
-        e2eeFacadeProvider.overrideWithValue(bootstrap.e2eeFacade),
         localePreferenceServiceProvider.overrideWithValue(
           bootstrap.localePreferenceService,
         ),

@@ -11,7 +11,6 @@ import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/application/realtime_application_service.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
-import 'package:awiki_me/src/data/im_core/pending_im_core_group_mutation_adapter.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
@@ -120,12 +119,6 @@ void main() {
       expect(groups.listLimit, 10);
       expect(groups.addedMembers, ['did:group/alice.awiki.ai/admin']);
       expect(groups.removedMembers, ['did:group/did:alice']);
-
-      const pending = PendingImCoreGroupMutationAdapter();
-      expect(
-        () => pending.addMember(groupDid: 'did:group', memberRef: 'did:bob'),
-        throwsA(isA<UnsupportedError>()),
-      );
     },
   );
 

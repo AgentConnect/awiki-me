@@ -24,7 +24,6 @@ void main() {
       productLocalStore = FakeProductLocalStore();
       container = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -34,7 +33,6 @@ void main() {
           notificationFacadeProvider.overrideWithValue(
             FakeNotificationFacade(),
           ),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
@@ -159,7 +157,6 @@ void main() {
       final deferredStore = _DeferredDeleteProductLocalStore();
       final isolatedContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -169,7 +166,6 @@ void main() {
           notificationFacadeProvider.overrideWithValue(
             FakeNotificationFacade(),
           ),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
@@ -209,7 +205,6 @@ void main() {
       );
       final isolatedContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -219,7 +214,6 @@ void main() {
           notificationFacadeProvider.overrideWithValue(
             FakeNotificationFacade(),
           ),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );

@@ -586,10 +586,8 @@ AppBootstrap _copyBootstrapForPersonalAgentUiTest(
   return AppBootstrap(
     environment: source.environment,
     accountGateway: source.accountGateway,
-    gateway: source.gateway,
     realtimeGateway: source.realtimeGateway,
     notificationFacade: source.notificationFacade,
-    e2eeFacade: source.e2eeFacade,
     localePreferenceService: source.localePreferenceService,
     updateService: source.updateService,
     appSessionService: source.appSessionService,

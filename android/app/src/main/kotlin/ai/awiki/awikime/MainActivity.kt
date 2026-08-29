@@ -20,14 +20,11 @@ import java.util.UUID
 
 class MainActivity : FlutterFragmentActivity() {
     companion object {
-        private const val DOCUMENT_CHANNEL = "ai.awiki.awikime/document_picker"
         private const val ATTACHMENT_CHANNEL = "ai.awiki.awikime/attachment_picker"
         private const val ATTACHMENT_VIEWER_CHANNEL = "ai.awiki.awikime/attachment_viewer"
         private const val UPDATE_CHANNEL = "ai.awiki.awikime/app_update"
         private const val LOCAL_DATA_RECOVERY_CHANNEL =
             "ai.awiki.awikime/android_local_data_recovery"
-        private const val REQUEST_SAVE_ZIP = 2001
-        private const val REQUEST_PICK_ZIP = 2002
         private const val REQUEST_PICK_ATTACHMENT = 2003
         private const val REQUEST_SAVE_ATTACHMENT = 2004
     }
@@ -56,8 +53,6 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         when (requestCode) {
-            REQUEST_SAVE_ZIP -> handleSaveResult(resultCode = resultCode, data = data)
-            REQUEST_PICK_ZIP -> handlePickResult(resultCode = resultCode, data = data)
             REQUEST_PICK_ATTACHMENT -> handleAttachmentPickResult(resultCode = resultCode, data = data)
             REQUEST_SAVE_ATTACHMENT -> handleSaveResult(resultCode = resultCode, data = data)
         }
@@ -67,15 +62,6 @@ class MainActivity : FlutterFragmentActivity() {
         super.configureFlutterEngine(flutterEngine)
 
         RemotePushEventBridge.attach(this, flutterEngine.dartExecutor.binaryMessenger)
-
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DOCUMENT_CHANNEL)
-            .setMethodCallHandler { call: MethodCall, result: MethodChannel.Result ->
-                when (call.method) {
-                    "saveZipFile" -> handleSaveZipFile(call = call, result = result)
-                    "pickZipFile" -> launchPickDocument(result)
-                    else -> result.notImplemented()
-                }
-            }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ATTACHMENT_CHANNEL)
             .setMethodCallHandler { call: MethodCall, result: MethodChannel.Result ->
@@ -136,29 +122,6 @@ class MainActivity : FlutterFragmentActivity() {
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         RemotePushEventBridge.detach()
         super.cleanUpFlutterEngine(flutterEngine)
-    }
-
-    private fun handleSaveZipFile(call: MethodCall, result: MethodChannel.Result) {
-        try {
-            val args = call.arguments as? Map<*, *> ?: emptyMap<Any?, Any?>()
-            val fileName = (args["file_name"] as? String)
-                ?.takeIf { it.isNotBlank() }
-                ?: throw IllegalArgumentException("file_name is required")
-            val bytes = when (val raw = args["bytes"]) {
-                is ByteArray -> raw
-                is List<*> -> raw.filterIsInstance<Number>().map { it.toByte() }.toByteArray()
-                else -> throw IllegalArgumentException("bytes is required")
-            }
-            launchSaveDocument(
-                fileName = fileName,
-                mimeType = "application/zip",
-                bytes = bytes,
-                result = result,
-                requestCode = REQUEST_SAVE_ZIP,
-            )
-        } catch (e: Exception) {
-            result.error("save_failed", formatExceptionMessage(e), null)
-        }
     }
 
     private fun handleSaveAttachment(call: MethodCall, result: MethodChannel.Result) {
@@ -242,27 +205,6 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    private fun handlePickResult(resultCode: Int, data: Intent?) {
-        val callback = pendingPickResult
-        pendingPickResult = null
-        if (callback == null) {
-            return
-        }
-        if (resultCode != Activity.RESULT_OK || data?.data == null) {
-            callback.success(null)
-            return
-        }
-        val uri = data.data ?: return
-        try {
-            val bytes = contentResolver.openInputStream(uri)?.use { input ->
-                input.readBytes()
-            } ?: throw IllegalStateException("无法读取所选文件。")
-            callback.success(bytes)
-        } catch (e: Exception) {
-            callback.error("pick_failed", formatExceptionMessage(e), null)
-        }
-    }
-
     private fun handleAttachmentPickResult(resultCode: Int, data: Intent?) {
         val callback = pendingPickResult
         pendingPickResult = null
@@ -310,19 +252,6 @@ class MainActivity : FlutterFragmentActivity() {
             putExtra(Intent.EXTRA_TITLE, fileName)
         }
         startActivityForResult(intent, requestCode)
-    }
-
-    private fun launchPickDocument(result: MethodChannel.Result) {
-        if (pendingPickResult != null) {
-            result.error("pick_in_progress", "已有导入任务正在进行。", null)
-            return
-        }
-        pendingPickResult = result
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "application/zip"
-        }
-        startActivityForResult(intent, REQUEST_PICK_ZIP)
     }
 
     private fun launchPickAttachment(result: MethodChannel.Result) {

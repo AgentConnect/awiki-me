@@ -55,7 +55,6 @@ void main() {
         ];
       final container = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           notificationFacadeProvider.overrideWithValue(
             FakeNotificationFacade(),
           ),
@@ -160,7 +159,6 @@ void main() {
         ];
       final container = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           notificationFacadeProvider.overrideWithValue(
             FakeNotificationFacade(),
           ),
@@ -244,7 +242,6 @@ void main() {
       ];
     final container = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
         ...fakeApplicationServiceOverrides(
           gateway,
@@ -320,7 +317,6 @@ void main() {
       ];
     final container = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
         ...fakeApplicationServiceOverrides(
           gateway,
@@ -383,7 +379,6 @@ void main() {
       ];
     final container = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
         ...fakeApplicationServiceOverrides(
           gateway,
