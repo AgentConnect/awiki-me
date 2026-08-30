@@ -2841,8 +2841,7 @@ class _JoinCli {
         'AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED': '1',
       if (config.multiDeviceGroupE2eeEnabled)
         'AWIKI_MULTI_DEVICE_GROUP_E2EE_ENABLED': '1',
-      if (Platform.environment['AWIKI_ROOT_TRANSFER_SAFE_DIAGNOSTICS'] == '1')
-        'AWIKI_ROOT_TRANSFER_SAFE_DIAGNOSTICS': '1',
+      'AWIKI_ROOT_TRANSFER_SAFE_DIAGNOSTICS': '1',
       if (accountVerificationToken != null)
         'AWIKI_ACCOUNT_VERIFICATION_TOKEN': accountVerificationToken,
     };
