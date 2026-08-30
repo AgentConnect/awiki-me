@@ -471,8 +471,12 @@ void main() {
       stderr:
           '[awiki-im-core][root-import] '
           'stage=local_projection_binding status=failed\n'
-          '{"error":{"code":"internal_error",'
-          '"message":"binding failed around $secret"}}',
+          '{\n'
+          '  "error": {\n'
+          '    "code": "internal_error",\n'
+          '    "message": "binding failed around $secret"\n'
+          '  }\n'
+          '}',
     );
 
     expect(

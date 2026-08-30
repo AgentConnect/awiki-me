@@ -175,7 +175,12 @@ String safeCliFailureDiagnostic({
 
 Object? _decodeCliErrorPayload(Object? value) {
   if (value is! String) return null;
-  for (final candidate in <String>[value, ...value.split('\n').reversed]) {
+  final objectStart = value.indexOf('{');
+  for (final candidate in <String>[
+    value,
+    if (objectStart > 0) value.substring(objectStart),
+    ...value.split('\n').reversed,
+  ]) {
     if (candidate.trim().isEmpty) continue;
     try {
       final decoded = jsonDecode(candidate);
