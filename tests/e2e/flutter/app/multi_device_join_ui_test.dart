@@ -3197,7 +3197,19 @@ Future<String> _exchangeJoinGrant({
     fail('The Join account-verification exchange returned invalid JSON.');
   }
   if (decoded is! Map || decoded['purpose'] != _joinPurpose) {
-    fail('The Join account-verification exchange returned an invalid scope.');
+    final observedPurpose = decoded is Map && decoded['purpose'] is String
+        ? _appPairSafeToken(decoded['purpose'] as String)
+        : 'missing';
+    final fields = decoded is Map
+        ? (decoded.keys
+              .map((key) => _appPairSafeToken(key.toString()))
+              .toList(growable: false)
+            ..sort())
+        : const <String>[];
+    fail(
+      'The Join account-verification exchange returned an invalid scope '
+      '(purpose=$observedPurpose,fields=${fields.join(',')}).',
+    );
   }
   final token = decoded['account_verification_token'];
   if (token is! String || token.trim().isEmpty) {
