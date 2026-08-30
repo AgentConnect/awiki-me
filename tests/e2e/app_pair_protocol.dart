@@ -143,8 +143,10 @@ String safeCliFailureDiagnostic({
   String? errorCode;
   String? serviceCode;
   String? messageCategory;
+  String? rootImportStage;
   for (final output in <Object?>[stderr, stdout]) {
     if (output == null || output.toString().trim().isEmpty) continue;
+    rootImportStage ??= _safeRootImportDiagnosticStage(output);
     Object? decoded;
     try {
       decoded = jsonDecode(output.toString());
@@ -172,7 +174,26 @@ String safeCliFailureDiagnostic({
     if (errorCode != null) 'code=$errorCode',
     if (serviceCode != null) 'serviceCode=$serviceCode',
     if (messageCategory != null) 'messageCategory=$messageCategory',
+    if (rootImportStage != null) 'rootImportStage=$rootImportStage',
   ].join(', ');
+}
+
+String? _safeRootImportDiagnosticStage(Object? value) {
+  if (value is! String) return null;
+  final match = RegExp(
+    r'^\[awiki-im-core\]\[root-import\] stage=([a-z0-9_]+) status=failed$',
+    multiLine: true,
+  ).firstMatch(value);
+  final stage = match?.group(1);
+  return const <String>{
+        'recover_before_secure_inbox',
+        'load_active_sync_binding',
+        'read_lane_capability',
+        'refresh_lane_bootstrap',
+        'hydrate_secure_inbox',
+      }.contains(stage)
+      ? stage
+      : null;
 }
 
 String? _safeCliMessageCategory(Object? value) {

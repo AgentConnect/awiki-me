@@ -387,4 +387,36 @@ void main() {
     );
     expect(diagnostic, isNot(contains('secret-bearing-value')));
   });
+
+  test(
+    'CLI failure diagnostics expose only allowlisted root import stages',
+    () {
+      const secret = 'secret-bearing-receiver-state';
+      final diagnostic = safeCliFailureDiagnostic(
+        exitCode: 1,
+        stdout: '{"error":{"code":"internal_error"}}',
+        stderr:
+            '[awiki-im-core][root-import] '
+            'stage=hydrate_secure_inbox status=failed\n$secret',
+      );
+
+      expect(
+        diagnostic,
+        'exit=1, code=internal_error, rootImportStage=hydrate_secure_inbox',
+      );
+      expect(diagnostic, isNot(contains(secret)));
+    },
+  );
+
+  test('CLI failure diagnostics reject unrecognized root import stages', () {
+    final diagnostic = safeCliFailureDiagnostic(
+      exitCode: 1,
+      stdout: '',
+      stderr:
+          '[awiki-im-core][root-import] '
+          'stage=secret_bearing_stage status=failed',
+    );
+
+    expect(diagnostic, 'exit=1');
+  });
 }
