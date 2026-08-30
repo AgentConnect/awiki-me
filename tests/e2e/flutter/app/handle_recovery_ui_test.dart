@@ -1776,7 +1776,6 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
       description: 'Settings Handle Recovery continuity',
       goal: 'Verify stable transport Group continuity',
       rules: 'E2E only',
-      identity: GroupIdentitySelection.handle(ownerHandle),
     );
     await groups.addMember(groupDid: group.groupId, memberRef: peerSession.did);
     await _waitForPeerGroup(
@@ -5680,6 +5679,7 @@ class _RecordingDeviceManagementService extends DeviceManagementService {
           'code=${_safeDiagnosticToken(error.code)}',
           'status=${error.statusCode?.toString() ?? 'none'}',
           'service=${_safeDiagnosticToken(error.serviceCode)}',
+          'detail=${_safeCoreFailureDetail(error.message)}',
         ].join(','),
         DeviceManagementTransportException(:final code) =>
           'transport=${_safeDiagnosticToken(code)}',
@@ -5690,6 +5690,20 @@ class _RecordingDeviceManagementService extends DeviceManagementService {
       rethrow;
     }
   }
+}
+
+String _safeCoreFailureDetail(String message) {
+  final normalized = message.toLowerCase();
+  if (normalized.contains('provider') ||
+      normalized.contains('identity not found')) {
+    return 'provider_identity_missing';
+  }
+  if (normalized.contains('canonical') || normalized.contains('subject')) {
+    return 'canonical_identity_missing';
+  }
+  if (normalized.contains('conversation'))
+    return 'conversation_identity_missing';
+  return 'other';
 }
 
 class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
@@ -5712,6 +5726,7 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
           'code=${_safeDiagnosticToken(error.code)}',
           'status=${error.statusCode?.toString() ?? 'none'}',
           'service=${_safeDiagnosticToken(error.serviceCode)}',
+          'detail=${_safeCoreFailureDetail(error.message)}',
         ].join(','),
         HandleRecoveryFailure() => 'failure=${error.code.name}',
         _ when error.runtimeType.toString() == 'PanicException' =>
