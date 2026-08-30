@@ -1840,7 +1840,8 @@ class _JoinCli {
     required this.workspace,
     required this.home,
     required String role,
-  }) : _tenantName = 'e2e-${_safeId(config.runId, 28)}-${_safeId(role, 8)}';
+  }) : _tenantName = 'e2e-${_safeId(config.runId, 28)}-${_safeId(role, 8)}',
+       _vaultRootKeyB64 = _newCliVaultRootKeyB64();
 
   factory _JoinCli.joining(_RemoteJoinRunConfig config) => _JoinCli._(
     config: config,
@@ -1867,6 +1868,7 @@ class _JoinCli {
   final String workspace;
   final String home;
   final String _tenantName;
+  final String _vaultRootKeyB64;
   final DesktopProcessHost _processHost = DesktopProcessHost.current();
   Process? _joinRequestListener;
   String? _hostNotificationPath;
@@ -2834,6 +2836,7 @@ class _JoinCli {
       'HOME': home,
       'AWIKI_CLI_WORKSPACE_HOME_DIR': workspace,
       'AWIKI_CLI_UPDATE_CACHE_ONLY': '1',
+      'AWIKI_IM_CORE_VAULT_ROOT_KEY_B64': _vaultRootKeyB64,
       if (config.multiDeviceDirectE2eeEnabled)
         'AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED': '1',
       if (config.multiDeviceGroupE2eeEnabled)
@@ -2877,6 +2880,12 @@ class _JoinCli {
       }
     }
   }
+}
+
+String _newCliVaultRootKeyB64() {
+  final random = Random.secure();
+  final bytes = List<int>.generate(32, (_) => random.nextInt(256));
+  return base64UrlEncode(bytes).replaceAll('=', '');
 }
 
 Future<bool> _processExited(Process process) async {
