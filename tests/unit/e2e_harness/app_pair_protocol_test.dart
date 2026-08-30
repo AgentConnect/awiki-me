@@ -462,4 +462,24 @@ void main() {
 
     expect(diagnostic, 'exit=1, rootImportStage=local_projection_conversion');
   });
+
+  test('CLI failure diagnostics parse JSON after a safe stage line', () {
+    const secret = 'secret-bearing-binding-detail';
+    final diagnostic = safeCliFailureDiagnostic(
+      exitCode: 1,
+      stdout: '',
+      stderr:
+          '[awiki-im-core][root-import] '
+          'stage=local_projection_binding status=failed\n'
+          '{"error":{"code":"internal_error",'
+          '"message":"binding failed around $secret"}}',
+    );
+
+    expect(
+      diagnostic,
+      'exit=1, code=internal_error, messageCategory=identity_binding, '
+      'rootImportStage=local_projection_binding',
+    );
+    expect(diagnostic, isNot(contains(secret)));
+  });
 }

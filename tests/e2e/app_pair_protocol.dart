@@ -147,12 +147,7 @@ String safeCliFailureDiagnostic({
   for (final output in <Object?>[stderr, stdout]) {
     if (output == null || output.toString().trim().isEmpty) continue;
     rootImportStage ??= _safeRootImportDiagnosticStage(output);
-    Object? decoded;
-    try {
-      decoded = jsonDecode(output.toString());
-    } on FormatException {
-      continue;
-    }
+    final decoded = _decodeCliErrorPayload(output);
     if (decoded is! Map || decoded['error'] is! Map) continue;
     final error = decoded['error'] as Map;
     final candidateCode = error['code']?.toString();
@@ -176,6 +171,20 @@ String safeCliFailureDiagnostic({
     if (messageCategory != null) 'messageCategory=$messageCategory',
     if (rootImportStage != null) 'rootImportStage=$rootImportStage',
   ].join(', ');
+}
+
+Object? _decodeCliErrorPayload(Object? value) {
+  if (value is! String) return null;
+  for (final candidate in <String>[value, ...value.split('\n').reversed]) {
+    if (candidate.trim().isEmpty) continue;
+    try {
+      final decoded = jsonDecode(candidate);
+      if (decoded is Map && decoded['error'] is Map) return decoded;
+    } on FormatException {
+      continue;
+    }
+  }
+  return null;
 }
 
 String? _safeRootImportDiagnosticStage(Object? value) {
@@ -219,6 +228,8 @@ String? _safeCliMessageCategory(Object? value) {
     ('remote service', 'remote_service'),
     ('serialization', 'serialization'),
     ('permission denied', 'permission'),
+    ('binding', 'identity_binding'),
+    ('generation', 'identity_generation'),
   ]) {
     if (message.contains(entry.$1)) return entry.$2;
   }
