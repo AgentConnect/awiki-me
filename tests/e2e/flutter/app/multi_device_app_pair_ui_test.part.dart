@@ -69,8 +69,11 @@ void appPairAdminMain() {
               handle: handle,
               nickName: 'AWiki App Pair Admin',
             );
-      } on Object {
-        fail('The App-pair admin registration failed safely.');
+      } on Object catch (error) {
+        fail(
+          'The App-pair admin registration failed safely '
+          '(${_appPairClosedRegistrationError(error)}).',
+        );
       }
       final adminSession = registration.identity;
       if (registration.status != IdentityRegistrationStatus.registered ||
@@ -4263,6 +4266,24 @@ String _appPairErrorDiagnostic(Object? error) {
         '${error.message}';
   }
   return error.runtimeType.toString();
+}
+
+String _appPairClosedRegistrationError(Object error) {
+  if (error is core.AwikiImCoreException) {
+    return 'type=AwikiImCoreException,code=${_appPairSafeToken(error.code)},'
+        'service=${_appPairSafeToken(error.serviceCode ?? 'none')}';
+  }
+  return 'type=${_appPairSafeToken(error.runtimeType.toString())}';
+}
+
+String _appPairSafeToken(String value) {
+  final normalized = value.trim();
+  if (normalized.isEmpty ||
+      normalized.length > 96 ||
+      !RegExp(r'^[A-Za-z0-9_.:-]+$').hasMatch(normalized)) {
+    return 'redacted';
+  }
+  return normalized;
 }
 
 Future<ChatMessage> _waitForAppPairMessage({
