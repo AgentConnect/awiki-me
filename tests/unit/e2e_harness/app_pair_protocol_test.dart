@@ -419,4 +419,20 @@ void main() {
 
     expect(diagnostic, 'exit=1');
   });
+
+  test('CLI failure diagnostics accept the initial client stage', () {
+    final diagnostic = safeCliFailureDiagnostic(
+      exitCode: 1,
+      stdout: '{"error":{"code":"internal_error"}}',
+      stderr:
+          '[awiki-im-core][root-import] '
+          'stage=build_initial_cli_client status=failed',
+    );
+
+    expect(
+      diagnostic,
+      'exit=1, code=internal_error, '
+      'rootImportStage=build_initial_cli_client',
+    );
+  });
 }

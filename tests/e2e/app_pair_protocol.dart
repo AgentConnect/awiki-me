@@ -191,6 +191,10 @@ String? _safeRootImportDiagnosticStage(Object? value) {
         'read_lane_capability',
         'refresh_lane_bootstrap',
         'hydrate_secure_inbox',
+        'build_initial_cli_client',
+        'hydrate_cli_secure_inbox',
+        'build_refreshed_cli_client',
+        'read_cli_inbox_projection',
       }.contains(stage)
       ? stage
       : null;
