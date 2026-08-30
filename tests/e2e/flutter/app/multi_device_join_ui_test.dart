@@ -1292,6 +1292,14 @@ Future<void> _verifyRootTransferCompletion({
       }
       final state = container.read(devicesProvider);
       _failOnDeviceError(state, 'The App failed root transfer');
+      if (state.rootTransfer.phase == RootKeyTransferPhase.failed) {
+        fail(
+          'The App root transfer failed with closed code '
+          '${_appPairSafeToken(state.rootTransfer.errorCode ?? 'missing')} '
+          '(presenceCalls=${presence.calls},'
+          'presenceCompletions=${presence.completions}).',
+        );
+      }
       return state.rootTransfer.phase == RootKeyTransferPhase.sent &&
           state.rootTransfer.receipt != null;
     },
