@@ -143,11 +143,14 @@ String safeCliFailureDiagnostic({
   String? errorCode;
   String? serviceCode;
   String? messageCategory;
-  String? rootImportStage;
   for (final output in <Object?>[stderr, stdout]) {
     if (output == null || output.toString().trim().isEmpty) continue;
-    rootImportStage ??= _safeRootImportDiagnosticStage(output);
-    final decoded = _decodeCliErrorPayload(output);
+    Object? decoded;
+    try {
+      decoded = jsonDecode(output.toString());
+    } on FormatException {
+      continue;
+    }
     if (decoded is! Map || decoded['error'] is! Map) continue;
     final error = decoded['error'] as Map;
     final candidateCode = error['code']?.toString();
@@ -169,89 +172,13 @@ String safeCliFailureDiagnostic({
     if (errorCode != null) 'code=$errorCode',
     if (serviceCode != null) 'serviceCode=$serviceCode',
     if (messageCategory != null) 'messageCategory=$messageCategory',
-    if (rootImportStage != null) 'rootImportStage=$rootImportStage',
   ].join(', ');
-}
-
-Object? _decodeCliErrorPayload(Object? value) {
-  if (value is! String) return null;
-  final objectStart = value.indexOf('{');
-  for (final candidate in <String>[
-    value,
-    if (objectStart > 0) value.substring(objectStart),
-    ...value.split('\n').reversed,
-  ]) {
-    if (candidate.trim().isEmpty) continue;
-    try {
-      final decoded = jsonDecode(candidate);
-      if (decoded is Map && decoded['error'] is Map) return decoded;
-    } on FormatException {
-      continue;
-    }
-  }
-  return null;
-}
-
-String? _safeRootImportDiagnosticStage(Object? value) {
-  if (value is! String) return null;
-  final match = RegExp(
-    r'^\[awiki-im-core\]\[root-import\] stage=([a-z0-9_]+) status=failed$',
-    multiLine: true,
-  ).firstMatch(value);
-  final stage = match?.group(1);
-  return const <String>{
-        'recover_before_secure_inbox',
-        'load_active_sync_binding',
-        'read_lane_capability',
-        'refresh_lane_bootstrap',
-        'hydrate_secure_inbox',
-        'build_initial_cli_client',
-        'hydrate_cli_secure_inbox',
-        'build_refreshed_cli_client',
-        'read_cli_inbox_projection',
-        'read_projection_readiness',
-        'read_projection_foreground_sync',
-        'read_projection_local_state',
-        'local_projection_binding',
-        'local_projection_database',
-        'local_projection_query',
-        'local_projection_conversion',
-      }.contains(stage)
-      ? stage
-      : null;
 }
 
 String? _safeCliMessageCategory(Object? value) {
   if (value is! String) return null;
   final message = value.toLowerCase();
   for (final entry in const <(String, String)>[
-    (
-      'active handle generation changed concurrently',
-      'handle_generation_concurrent',
-    ),
-    (
-      'device authorization generation cannot move backwards',
-      'device_generation_backward',
-    ),
-    (
-      'identity generation cannot move backwards',
-      'identity_generation_backward',
-    ),
-    (
-      'current did cannot change without a newer identity generation',
-      'did_generation_conflict',
-    ),
-    ('already bound to a different account', 'account_binding_conflict'),
-    ('already bound to a different protocol device', 'device_binding_conflict'),
-    (
-      'account device is already bound to a different local owner',
-      'owner_binding_conflict',
-    ),
-    ('authoritative handle binding does not match', 'handle_binding_conflict'),
-    (
-      'active device auth generation is not canonical',
-      'device_generation_noncanonical',
-    ),
     ('root import', 'root_import'),
     ('identity provider', 'identity_provider'),
     ('secret vault', 'vault'),
@@ -260,8 +187,6 @@ String? _safeCliMessageCategory(Object? value) {
     ('remote service', 'remote_service'),
     ('serialization', 'serialization'),
     ('permission denied', 'permission'),
-    ('binding', 'identity_binding'),
-    ('generation', 'identity_generation'),
   ]) {
     if (message.contains(entry.$1)) return entry.$2;
   }

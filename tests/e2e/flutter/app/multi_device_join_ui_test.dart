@@ -2714,7 +2714,7 @@ class _JoinCli {
         'direct',
         '--limit',
         '20',
-      ], safeAction: 'root_import_secure_inbox');
+      ]);
       final inboxData = _data(inbox, action: null);
       final rawMessages = inboxData['messages'];
       if (rawMessages is! List) {
@@ -2841,7 +2841,6 @@ class _JoinCli {
         'AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED': '1',
       if (config.multiDeviceGroupE2eeEnabled)
         'AWIKI_MULTI_DEVICE_GROUP_E2EE_ENABLED': '1',
-      'AWIKI_ROOT_TRANSFER_SAFE_DIAGNOSTICS': '1',
       if (accountVerificationToken != null)
         'AWIKI_ACCOUNT_VERIFICATION_TOKEN': accountVerificationToken,
     };
