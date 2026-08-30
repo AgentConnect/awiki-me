@@ -195,6 +195,9 @@ String? _safeRootImportDiagnosticStage(Object? value) {
         'hydrate_cli_secure_inbox',
         'build_refreshed_cli_client',
         'read_cli_inbox_projection',
+        'read_projection_readiness',
+        'read_projection_foreground_sync',
+        'read_projection_local_state',
       }.contains(stage)
       ? stage
       : null;

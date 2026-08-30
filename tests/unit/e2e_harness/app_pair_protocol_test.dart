@@ -435,4 +435,19 @@ void main() {
       'rootImportStage=build_initial_cli_client',
     );
   });
+
+  test('CLI failure diagnostics accept the foreground sync stage', () {
+    final diagnostic = safeCliFailureDiagnostic(
+      exitCode: 1,
+      stdout: '',
+      stderr:
+          '[awiki-im-core][root-import] '
+          'stage=read_projection_foreground_sync status=failed',
+    );
+
+    expect(
+      diagnostic,
+      'exit=1, rootImportStage=read_projection_foreground_sync',
+    );
+  });
 }
