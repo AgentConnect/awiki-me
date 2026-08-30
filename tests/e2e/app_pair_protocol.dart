@@ -198,6 +198,10 @@ String? _safeRootImportDiagnosticStage(Object? value) {
         'read_projection_readiness',
         'read_projection_foreground_sync',
         'read_projection_local_state',
+        'local_projection_binding',
+        'local_projection_database',
+        'local_projection_query',
+        'local_projection_conversion',
       }.contains(stage)
       ? stage
       : null;

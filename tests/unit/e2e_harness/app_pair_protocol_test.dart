@@ -450,4 +450,16 @@ void main() {
       'exit=1, rootImportStage=read_projection_foreground_sync',
     );
   });
+
+  test('CLI failure diagnostics accept the local conversion stage', () {
+    final diagnostic = safeCliFailureDiagnostic(
+      exitCode: 1,
+      stdout: '',
+      stderr:
+          '[awiki-im-core][root-import] '
+          'stage=local_projection_conversion status=failed',
+    );
+
+    expect(diagnostic, 'exit=1, rootImportStage=local_projection_conversion');
+  });
 }
