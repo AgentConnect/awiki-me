@@ -3129,7 +3129,22 @@ Future<String> _requestAndResolveOtp({
         decoded is! Map ||
         decoded['error'] != null ||
         decoded['result'] is! Map) {
-      fail('The scoped registration OTP request was rejected.');
+      final error = decoded is Map ? decoded['error'] : null;
+      final data = error is Map ? error['data'] : null;
+      final rpcCode = error is Map && error['code'] is int
+          ? error['code'] as int
+          : 0;
+      final serviceCode = data is Map && data['code'] is String
+          ? _appPairSafeToken(data['code'] as String)
+          : 'none';
+      final retryAfter = data is Map && data['retry_after_seconds'] is int
+          ? data['retry_after_seconds'] as int
+          : 0;
+      fail(
+        'The scoped registration OTP request was rejected '
+        '(http=${response.statusCode},rpc=$rpcCode,code=$serviceCode,'
+        'retryAfter=$retryAfter).',
+      );
     }
     return account.fixedOtp;
   }
