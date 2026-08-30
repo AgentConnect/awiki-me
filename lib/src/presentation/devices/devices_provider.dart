@@ -21,6 +21,11 @@ import '../app_shell/providers/session_provider.dart';
 import '../app_shell/providers/app_lifecycle_provider.dart';
 import '../recovery/handle_recovery_provider.dart';
 
+typedef _RootTransferTarget = ({
+  RootKeyTransferContext context,
+  DeviceSummary recipient,
+});
+
 enum DeviceRevokeNotice {
   revoked,
   revokedGroupsSyncing,
@@ -126,6 +131,13 @@ class DevicesState {
     return confirming == device.protocolDeviceId &&
         revokeRetryAllowedDeviceId == device.protocolDeviceId;
   }
+
+  bool canGrantManagement(DeviceSummary device) =>
+      currentDeviceCanManage &&
+      !device.isCurrent &&
+      device.status == DeviceStatus.active &&
+      device.role == DeviceRole.member &&
+      !device.managementReady;
 
   DevicesState copyWith({
     DeviceRegistrySnapshot? registry,
@@ -766,14 +778,31 @@ class DevicesController extends StateNotifier<DevicesState> {
 
   Future<bool> prepareRootTransferForActiveJoin() async {
     final target = _activeRootTransferTarget();
+    return _prepareRootTransfer(target);
+  }
+
+  Future<bool> prepareRootTransferForDevice(DeviceSummary device) async {
+    final target = _deviceListRootTransferTarget(device.protocolDeviceId);
+    return _prepareRootTransfer(target);
+  }
+
+  Future<bool> _prepareRootTransfer(_RootTransferTarget? target) async {
     if (target == null) {
       return false;
     }
     if (state.rootTransfer.phase != RootKeyTransferPhase.idle) {
-      if (state.rootTransfer.context == target.context) {
+      if (state.rootTransfer.context == target.context &&
+          state.rootTransfer.phase != RootKeyTransferPhase.failed) {
         return false;
       }
+      final stalePreparation = state.rootTransfer.preparation;
       state = state.copyWith(clearRootTransfer: true);
+      if (stalePreparation != null) {
+        await ref
+            .read(rootKeyTransferServiceProvider)
+            .discard(stalePreparation);
+        if (!mounted) return false;
+      }
     }
     final context = target.context;
     state = state.copyWith(
@@ -795,7 +824,7 @@ class DevicesController extends StateNotifier<DevicesState> {
       }
       if (state.rootTransfer.phase != RootKeyTransferPhase.preparing ||
           state.rootTransfer.context != context ||
-          !_isActiveRootTransferContext(context)) {
+          !_isRootTransferContextCurrent(context)) {
         await service.discard(preparation);
         _failRootTransferIfCurrent(
           context,
@@ -837,7 +866,7 @@ class DevicesController extends StateNotifier<DevicesState> {
         sender == null) {
       return false;
     }
-    if (!_isActiveRootTransferContext(context)) {
+    if (!_isRootTransferContextCurrent(context)) {
       await ref.read(rootKeyTransferServiceProvider).discard(preparation);
       _failRootTransferIfCurrent(
         context,
@@ -863,12 +892,12 @@ class DevicesController extends StateNotifier<DevicesState> {
             preparation: preparation,
             presenceReason: presenceReason,
             contextStillValid: () =>
-                mounted && _isActiveRootTransferContext(context),
+                mounted && _isRootTransferContextCurrent(context),
           );
       if (!mounted) return false;
       if (state.rootTransfer.phase != RootKeyTransferPhase.sending ||
           state.rootTransfer.context != context ||
-          !_isActiveRootTransferContext(context)) {
+          !_isRootTransferContextCurrent(context)) {
         return true;
       }
       state = state.copyWith(
@@ -892,8 +921,7 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
   }
 
-  ({RootKeyTransferContext context, DeviceSummary recipient})?
-  _activeRootTransferTarget() {
+  _RootTransferTarget? _activeRootTransferTarget() {
     final selector = _selector;
     final registry = state.registry;
     final progress = state.activeJoin;
@@ -923,7 +951,8 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
     return (
       context: RootKeyTransferContext(
-        joinSessionId: progress.joinSessionId,
+        origin: RootKeyTransferOrigin.activeJoin,
+        flowId: progress.joinSessionId,
         did: selector,
         recipientDeviceId: authoritativeRecipient.protocolDeviceId,
         recipientSigningKeyId: authoritativeRecipient.signingKeyId,
@@ -933,8 +962,49 @@ class DevicesController extends StateNotifier<DevicesState> {
     );
   }
 
-  bool _isActiveRootTransferContext(RootKeyTransferContext context) =>
-      _activeRootTransferTarget()?.context == context;
+  _RootTransferTarget? _deviceListRootTransferTarget(String recipientDeviceId) {
+    final selector = _selector;
+    final registry = state.registry;
+    final sender = registry?.currentDevice;
+    final recipient = _findDevice(registry, recipientDeviceId);
+    if (selector == null ||
+        registry == null ||
+        registry.did != selector ||
+        sender?.canManageDevices != true ||
+        recipient == null ||
+        !state.canGrantManagement(recipient) ||
+        sender!.protocolDeviceId == recipient.protocolDeviceId) {
+      return null;
+    }
+    return (
+      context: RootKeyTransferContext(
+        origin: RootKeyTransferOrigin.deviceList,
+        flowId: recipient.protocolDeviceId,
+        did: selector,
+        recipientDeviceId: recipient.protocolDeviceId,
+        recipientSigningKeyId: recipient.signingKeyId,
+        recipientE2eeKeyId: recipient.e2eeKeyId,
+      ),
+      recipient: recipient,
+    );
+  }
+
+  bool _isRootTransferContextCurrent(RootKeyTransferContext context) =>
+      switch (context.origin) {
+        RootKeyTransferOrigin.activeJoin =>
+          _activeRootTransferTarget()?.context == context,
+        RootKeyTransferOrigin.deviceList =>
+          _deviceListRootTransferTarget(context.recipientDeviceId)?.context ==
+              context,
+      };
+
+  Future<void> cancelRootTransfer() async {
+    final preparation = state.rootTransfer.preparation;
+    state = state.copyWith(clearRootTransfer: true);
+    if (preparation != null) {
+      await ref.read(rootKeyTransferServiceProvider).discard(preparation);
+    }
+  }
 
   void _failRootTransferIfCurrent(
     RootKeyTransferContext context, {

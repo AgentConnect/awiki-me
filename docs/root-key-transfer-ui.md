@@ -6,27 +6,36 @@
 [`v1-step3-root-key-transfer-and-management-readiness-implementation-plan.md`](../../awiki-plan/20260718-awiki-multi-device-implementation/refactor/v1-step3-root-key-transfer-and-management-readiness-implementation-plan.md)
 为准。本文只记录 AWiki Me 的产品入口、Host API 和状态边界。
 
-## 1. 唯一产品入口
+## 1. 产品入口
 
-V1 只在当前管理设备刚完成一次 Join，并且新设备已经以
-`active + member + management_ready=false` 加入后，显示“继续授予管理权限”。
-目标固定为这次 Join 返回的 `authorizedDevice`，不能从设备列表重新选择。
+V1 提供两个入口，但二者委托同一个 Core Root Transfer：
 
-设备列表不提供根密钥发送、进度、重试或接收端恢复按钮。V1 也不提供通用设备选择器、
-传输历史、Registry completion 轮询或 imported-ACK 状态机。
+- 当前管理设备刚完成一次 Join，且目标已经成为
+  `active + member + management_ready=false` 时，可以立即“继续授予管理权限”；目标固定为
+  这次 Join 返回的 `authorizedDevice`；
+- 用户当时跳过、关闭页面或稍后改变决定时，设备列表会对权威 Registry 中符合相同条件的
+  普通设备显示“授予管理权限”。
+
+设备列表不是通用传输控制台：不提供传输历史、接收端恢复按钮、Registry completion 轮询或
+imported-ACK 状态机。每次点击都从 fresh Registry/Manifest/PreKey 或既有 P5 pending 重新
+`prepare`，不复用 Join Session 或旧 handle。
 
 ## 2. 操作顺序
 
 App 严格执行下面的单目标流程：
 
 1. 调用 identity-scoped `client.rootKeyTransfer.prepare(recipientDeviceId)`；
-2. 校验 Core 返回的 DID、设备 ID、签名密钥 ID 和 E2EE 密钥 ID 与刚完成的 Join 一致；
+2. 校验 Core 返回的 DID、设备 ID、签名密钥 ID 和 E2EE 密钥 ID 与当前选中的 eligible 设备一致；
 3. 只展示上述无秘密目标摘要，不展示 authorization handle；
 4. 用户点击确认后，只触发一次系统 user-presence；
 5. 将 opaque authorization handle 和确认结果传给
    `confirmAndSend`；
 6. 校验接受回执的 DID、sender、recipient 和非空 message ID；
 7. 以“根密钥已发送”结束，不等待 Registry readiness completion。
+
+如果已有 response-loss 后的 `pending_delivery`，`prepare` 只返回绑定原 message ID 和原 P5
+密文的短期 handle，不自动发网；Realtime/App 启动也不自动重发。只有本次 user-presence
+确认后的 `confirmAndSend` 才续跑相同 bytes。取消确认会消费 handle，但不导出 root、不发网。
 
 页面状态只包含：
 
@@ -56,5 +65,5 @@ flutter test \
   tests/unit/devices/devices_ui_test.dart
 ```
 
-专项验证覆盖精确 Join 目标、prepare 先于 user-presence、一次确认、opaque handle、无秘密
-DTO／错误映射、接受回执校验，以及设备列表不存在通用根密钥操作。
+专项验证覆盖精确 Join 目标、设备列表 eligible member、prepare 先于 user-presence、一次确认、
+pending 不在确认前发网、opaque handle、无秘密 DTO／错误映射和接受回执校验。

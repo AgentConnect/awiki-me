@@ -135,6 +135,19 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                             canRevoke: state.canRevokeDevice(
                               registry.devices[index],
                             ),
+                            canGrantManagement: state.canGrantManagement(
+                              registry.devices[index],
+                            ),
+                            rootTransfer:
+                                state.rootTransfer.context?.origin ==
+                                        RootKeyTransferOrigin.deviceList &&
+                                    state
+                                            .rootTransfer
+                                            .context
+                                            ?.recipientDeviceId ==
+                                        registry.devices[index].protocolDeviceId
+                                ? state.rootTransfer
+                                : const RootKeyTransferUiState(),
                             isSubmitting:
                                 state.revokeSubmittingDeviceId ==
                                 registry.devices[index].protocolDeviceId,
@@ -143,6 +156,8 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                                 registry.devices[index].protocolDeviceId,
                             onRevoke: () =>
                                 _confirmDeviceRevoke(registry.devices[index]),
+                            onGrantManagement: () =>
+                                _grantManagement(registry.devices[index]),
                           ),
                           if (index != registry.devices.length - 1)
                             const AppSectionDivider(),
@@ -235,6 +250,87 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
         );
   }
 
+  Future<void> _grantManagement(DeviceSummary device) async {
+    var transfer = ref.read(devicesProvider).rootTransfer;
+    final alreadyPrepared =
+        transfer.context?.origin == RootKeyTransferOrigin.deviceList &&
+        transfer.context?.recipientDeviceId == device.protocolDeviceId &&
+        transfer.phase == RootKeyTransferPhase.awaitingConfirmation &&
+        transfer.preparation != null;
+    if (!alreadyPrepared) {
+      final prepared = await ref
+          .read(devicesProvider.notifier)
+          .prepareRootTransferForDevice(device);
+      if (!mounted || !prepared) return;
+      transfer = ref.read(devicesProvider).rootTransfer;
+    }
+    final preparation = transfer.preparation;
+    if (transfer.phase != RootKeyTransferPhase.awaitingConfirmation ||
+        transfer.context?.origin != RootKeyTransferOrigin.deviceList ||
+        transfer.context?.recipientDeviceId != device.protocolDeviceId ||
+        preparation == null) {
+      return;
+    }
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        key: const Key('device-root-transfer-confirm-dialog'),
+        title: Text(context.l10n.deviceRootTransferGrantManagement),
+        content: Text(
+          context.l10n.deviceRootTransferTarget(
+            preparation.recipient.deviceId,
+            preparation.recipient.signingKeyId,
+            preparation.recipient.e2eeKeyId,
+          ),
+          key: const Key('device-root-transfer-recipient-summary'),
+        ),
+        actions: <Widget>[
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(context.l10n.commonCancel),
+          ),
+          CupertinoDialogAction(
+            key: const Key('device-root-transfer-confirm-action'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(context.l10n.deviceRootTransferConfirm),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (confirmed != true) {
+      await ref.read(devicesProvider.notifier).cancelRootTransfer();
+      return;
+    }
+    final sent = await ref
+        .read(devicesProvider.notifier)
+        .confirmAndSendRootTransfer(
+          presenceReason: context.l10n.deviceRootTransferPresenceReason,
+        );
+    if (!mounted) return;
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        key: Key(
+          sent
+              ? 'device-root-transfer-sent-dialog'
+              : 'device-root-transfer-failed-dialog',
+        ),
+        title: Text(
+          sent
+              ? context.l10n.deviceRootTransferSent
+              : context.l10n.deviceRootTransferFailed,
+        ),
+        actions: <Widget>[
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(context.l10n.commonDone),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _openPending(DeviceJoinRequestNotice request) async {
     await AppNavigator.push<void>(
       context,
@@ -286,18 +382,24 @@ class _DeviceTile extends StatelessWidget {
     required this.readiness,
     required this.revokeEnabled,
     required this.canRevoke,
+    required this.canGrantManagement,
+    required this.rootTransfer,
     required this.isSubmitting,
     required this.isConfirming,
     required this.onRevoke,
+    required this.onGrantManagement,
   });
 
   final DeviceSummary device;
   final DeviceManagementReadiness? readiness;
   final bool revokeEnabled;
   final bool canRevoke;
+  final bool canGrantManagement;
+  final RootKeyTransferUiState rootTransfer;
   final bool isSubmitting;
   final bool isConfirming;
   final VoidCallback onRevoke;
+  final VoidCallback onGrantManagement;
 
   @override
   Widget build(BuildContext context) {
@@ -315,10 +417,53 @@ class _DeviceTile extends StatelessWidget {
         status,
         if (readinessLabel != null) readinessLabel,
       ].join(' · '),
-      trailing: revokeEnabled && canRevoke
+      trailing: canGrantManagement || (revokeEnabled && canRevoke)
           ? Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
+                if (canGrantManagement)
+                  CupertinoButton(
+                    key: Key(
+                      'device-grant-management-${device.protocolDeviceId}',
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    onPressed:
+                        rootTransfer.isPending ||
+                            rootTransfer.phase == RootKeyTransferPhase.sent
+                        ? null
+                        : onGrantManagement,
+                    child: rootTransfer.isPending
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              const CupertinoActivityIndicator(radius: 8),
+                              const SizedBox(width: 6),
+                              Text(
+                                rootTransfer.phase ==
+                                        RootKeyTransferPhase.sending
+                                    ? context.l10n.deviceRootTransferSending
+                                    : context.l10n.deviceRootTransferPreparing,
+                              ),
+                            ],
+                          )
+                        : Text(
+                            rootTransfer.phase ==
+                                    RootKeyTransferPhase.awaitingConfirmation
+                                ? context.l10n.deviceRootTransferConfirm
+                                : rootTransfer.phase ==
+                                      RootKeyTransferPhase.sent
+                                ? context.l10n.deviceRootTransferSent
+                                : context
+                                      .l10n
+                                      .deviceRootTransferGrantManagement,
+                            style: TextStyle(
+                              color: context.awikiTheme.infoAccent,
+                            ),
+                          ),
+                  ),
                 if (revokeEnabled && canRevoke)
                   CupertinoButton(
                     key: Key('device-revoke-${device.protocolDeviceId}'),

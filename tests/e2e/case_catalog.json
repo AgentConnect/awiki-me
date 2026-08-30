@@ -2871,14 +2871,15 @@
       "feature": "AWiki Me management-device root import",
       "layer": "remote_product_ui_security",
       "preconditions": "An accepted Step 3 contract has established a management-ready AWiki Me admin and an independent CLI active member with management_ready false; both use fresh native Core roots and exact protocol device IDs, and the unattended suite uses the test-scoped user-presence port while production LocalAuthentication remains unchanged.",
-      "action": "Open Devices on the ready AWiki Me admin, select the exact eligible member, let Core prepare a safe recipient summary, complete exactly one E2E-only user-presence decision, stop the App sender flow at standard P5 accepted, then bring the CLI receiver online to import and complete readiness directly.",
+      "action": "Approve the CLI as a rootless member, close the short-lived Join sheet, clear its transient state, open Devices on the ready AWiki Me admin, select the exact eligible member, let Core perform a fresh prepare and display a safe recipient summary, complete exactly one E2E-only user-presence decision, stop the App sender flow at standard P5 accepted, then bring the CLI receiver online to import and complete readiness directly.",
       "exactOracles": [
         "Before receiver completion, the exact recipient remains active member with management_ready false; no Init-only pending, sender waiting, or App-owned transfer state is projected.",
+        "The later-grant action remains available after the Join sheet and active Join presentation state are gone, and its Core preparation is bound to the exact eligible Devices row rather than a retained Join session or handle.",
         "The App displays only Core's safe recipient summary, delegates exactly one E2E-only user-presence decision without changing production LocalAuthentication, and treats the closed standard P5 accepted receipt as the end of the sender operation.",
         "The CLI receiver imports the envelope, completes directly with User Service, and becomes active admin with management_ready true after fresh device auth and Registry convergence; Root control never appears in either product inbox."
       ],
       "negativeChecks": [
-        "A wrong or ineligible target, caller-supplied message ID, old list/retry/pending state, a second user-presence action, treating accepted as receiver readiness, waiting for or emitting an imported ACK/Reply, root/control JSON in inbox or UI, Root bytes in logs/errors/reports, or management actions before Registry readiness fails."
+        "A wrong or ineligible target, dependence on retained Join presentation state, reuse of an old authorization handle, caller-supplied message ID, automatic pending send before fresh user presence, a second user-presence action, treating accepted as receiver readiness, waiting for or emitting an imported ACK/Reply, root/control JSON in inbox or UI, Root bytes in logs/errors/reports, or management actions before Registry readiness fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_root_transfer_residual_ledger",
@@ -2893,6 +2894,8 @@
       "assertionContract": {
         "assertionIds": [
           "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion",
+          "ROOT-TRANSFER-E2E-001:join_sheet_closed_before_later_grant",
+          "ROOT-TRANSFER-E2E-001:device_list_fresh_prepare",
           "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
           "ROOT-TRANSFER-E2E-001:sender_accepted_terminal",
           "ROOT-TRANSFER-E2E-001:receiver_completion_ready",
@@ -2901,6 +2904,10 @@
         "exactOracleAssertions": [
           [
             "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion"
+          ],
+          [
+            "ROOT-TRANSFER-E2E-001:join_sheet_closed_before_later_grant",
+            "ROOT-TRANSFER-E2E-001:device_list_fresh_prepare"
           ],
           [
             "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
@@ -2914,6 +2921,8 @@
         "negativeCheckAssertions": [
           [
             "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion",
+            "ROOT-TRANSFER-E2E-001:join_sheet_closed_before_later_grant",
+            "ROOT-TRANSFER-E2E-001:device_list_fresh_prepare",
             "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
             "ROOT-TRANSFER-E2E-001:sender_accepted_terminal",
             "ROOT-TRANSFER-E2E-001:receiver_completion_ready",

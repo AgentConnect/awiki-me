@@ -127,7 +127,9 @@ AWiki Me 只维护一个当前 access token 会话，不引入 refresh token 或
 
 Join V1 不提供 `admin` 选择，也不因批准 Join 触发根密钥传输；结果固定为
 `active + member + management_ready=false`。管理员升级和普通 P5 RootKeyEnvelope 属于
-第三步，当前保留的旧 root-control 实现不能从本 Join 流程被调用。
+独立的 Root Transfer：用户可以在 Join 完成页立即执行，也可以以后从设备列表对 eligible
+member 执行。两条入口都重新调用 Core fresh prepare，不改变 Join 授权结果，也不复用 Join
+Session、旧 handle 或旧 root-control 实现。
 
 ## 4. 永久撤销
 

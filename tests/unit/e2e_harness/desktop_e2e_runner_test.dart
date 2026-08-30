@@ -705,9 +705,15 @@ void main() {
         'root_transfer',
         '--dry-run',
       ]);
+      final laterGrant = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi-device-app-pair-later-admin-grant',
+        '--dry-run',
+      ]);
 
       expect(hyphen.e2eCase, DesktopE2eCase.rootTransfer);
       expect(underscore.e2eCase, DesktopE2eCase.rootTransfer);
+      expect(laterGrant.e2eCase, DesktopE2eCase.rootTransfer);
       expect(hyphen.e2eCase.caseIds, <String>['ROOT-TRANSFER-E2E-001']);
       expect(hyphen.e2eCase.caseName, 'root-transfer');
     });

@@ -84,6 +84,7 @@ Usage:
   dart run tests/e2e/runner.dart --case multi-device-app-pair-functional
   dart run tests/e2e/runner.dart --case multi-device-app-pair-content-sync
   dart run tests/e2e/runner.dart --case step4-revoke-mls
+  dart run tests/e2e/runner.dart --case multi-device-app-pair-later-admin-grant
   dart run tests/e2e/runner.dart --case root-transfer
   dart run tests/e2e/runner.dart --case full
   dart run tests/e2e/runner.dart --case inbound
@@ -98,7 +99,7 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair-recovery-registration-resume|multi-device-app-pair-recovery-retirement-ordinary-rejoin|identity-deletion-recovery-guard|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|step4-revoke-mls|root-transfer|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
+  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair-recovery-registration-resume|multi-device-app-pair-recovery-retirement-ordinary-rejoin|identity-deletion-recovery-guard|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|step4-revoke-mls|multi-device-app-pair-later-admin-grant|root-transfer|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
                                unattended real App/CLI message-driven
@@ -135,10 +136,12 @@ Options:
                                Join and one CLI peer to check mixed tail-only,
                                Group, attachment, and read-state convergence.
                                full runs the audited App+CLI desktop peer flow.
-                               root-transfer separately runs the release,
-                               capability-gated App-admin/CLI-member Join +
-                               root completion lifecycle and requires the
-                               remote Join gate and protected OTP fixture.
+                               multi-device-app-pair-later-admin-grant is the
+                               focused alias for the release root-transfer
+                               case: it closes the Join sheet, clears its
+                               transient state, then grants from Devices.
+                               It requires the remote Join gate and protected
+                               OTP fixture.
                                The other cases run real App+CLI peer flows. The
                                performance case records product-level startup,
                                conversation, and send-to-visible timings and
@@ -489,7 +492,10 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       'multi_device_app_pair_content_sync' =>
         DesktopE2eCase.multiDeviceAppPairContentSync,
       'step4-revoke-mls' || 'step4_revoke_mls' => DesktopE2eCase.step4RevokeMls,
-      'root-transfer' || 'root_transfer' => DesktopE2eCase.rootTransfer,
+      'multi-device-app-pair-later-admin-grant' ||
+      'multi_device_app_pair_later_admin_grant' ||
+      'root-transfer' ||
+      'root_transfer' => DesktopE2eCase.rootTransfer,
       'full' => DesktopE2eCase.full,
       'performance' ||
       'perf' ||

@@ -260,7 +260,8 @@ class _DeviceJoinApprovalSheetState
     }
 
     final expectedContext = RootKeyTransferContext(
-      joinSessionId: progress.joinSessionId,
+      origin: RootKeyTransferOrigin.activeJoin,
+      flowId: progress.joinSessionId,
       did: progress.did,
       recipientDeviceId: recipient.protocolDeviceId,
       recipientSigningKeyId: recipient.signingKeyId,

@@ -1181,7 +1181,23 @@ Future<void> _verifyRootTransferCompletion({
     expectedDeviceId: recipientDeviceId,
   );
 
+  Navigator.of(tester.element(find.byType(DeviceJoinApprovalSheet))).pop();
+  await _pumpUntil(
+    tester,
+    () => find.byType(DeviceJoinApprovalSheet).evaluate().isEmpty,
+    failure: 'The App could not leave the short-lived Join completion sheet.',
+  );
+  container.read(devicesProvider.notifier).clearActive();
+  await container.read(devicesProvider.notifier).loadManagement();
+  if (container.read(devicesProvider).activeJoin != null) {
+    fail('The later Root transfer entry still depended on Join UI state.');
+  }
+  await _openDevicesPage(tester);
+
   final presenceCallsBeforePrepare = presence.calls;
+  final grantAction = find.byKey(
+    Key('device-grant-management-$recipientDeviceId'),
+  );
   await _pumpUntil(
     tester,
     () {
@@ -1189,20 +1205,16 @@ Future<void> _verifyRootTransferCompletion({
         container.read(devicesProvider),
         'The App failed to project the authorized member',
       );
-      return find
-              .byKey(const Key('root-transfer-grant-management'))
-              .evaluate()
-              .length ==
-          1;
+      return grantAction.evaluate().length == 1;
     },
     timeout: const Duration(seconds: 45),
     failure:
-        'The exact joined member did not expose root transfer after Registry convergence.',
+        'The eligible member did not expose later management grant in Devices.',
   );
   await _tapOne(
     tester,
-    find.byKey(const Key('root-transfer-grant-management')),
-    failure: 'The exact joined member did not expose root transfer.',
+    grantAction,
+    failure: 'The Devices later-grant action was unavailable.',
   );
   await _pumpUntil(
     tester,
@@ -1218,7 +1230,8 @@ Future<void> _verifyRootTransferCompletion({
   );
   final prepared = container.read(devicesProvider).rootTransfer;
   final preparation = prepared.preparation!;
-  if (prepared.context?.joinSessionId != joinSessionId ||
+  if (prepared.context?.origin != RootKeyTransferOrigin.deviceList ||
+      prepared.context?.flowId != recipientDeviceId ||
       prepared.context?.did != did ||
       prepared.context?.recipientDeviceId != recipientDeviceId ||
       preparation.recipient.did != did ||
@@ -1229,23 +1242,31 @@ Future<void> _verifyRootTransferCompletion({
       preparation.recipient.registryVersion < 1 ||
       presence.calls != presenceCallsBeforePrepare ||
       prepared.receipt != null) {
-    fail('Root transfer preparation escaped the exact Join context.');
+    fail('Root transfer preparation escaped the exact Devices recipient.');
   }
   if (find
-              .byKey(const Key('root-transfer-recipient-summary'))
+              .byKey(const Key('device-root-transfer-recipient-summary'))
               .evaluate()
               .length !=
           1 ||
-      find.byKey(const Key('root-transfer-confirm-send')).evaluate().length !=
+      find
+              .byKey(const Key('device-root-transfer-confirm-action'))
+              .evaluate()
+              .length !=
           1 ||
-      find.byKey(const Key('root-transfer-sent')).evaluate().isNotEmpty) {
+      find
+          .byKey(const Key('device-root-transfer-sent-dialog'))
+          .evaluate()
+          .isNotEmpty) {
     fail('The App did not stop at the safe prepare-before-confirm boundary.');
   }
   final summaryText = tester
-      .widget<Text>(find.byKey(const Key('root-transfer-recipient-summary')))
+      .widget<Text>(
+        find.byKey(const Key('device-root-transfer-recipient-summary')),
+      )
       .data;
   final expectedSummary = tester
-      .element(find.byType(DeviceJoinApprovalSheet))
+      .element(find.byType(DevicesPage))
       .l10n
       .deviceRootTransferTarget(
         preparation.recipient.deviceId,
@@ -1258,7 +1279,7 @@ Future<void> _verifyRootTransferCompletion({
 
   await _tapOne(
     tester,
-    find.byKey(const Key('root-transfer-confirm-send')),
+    find.byKey(const Key('device-root-transfer-confirm-action')),
     failure: 'The prepared root-transfer confirmation was unavailable.',
   );
   await _pumpUntil(
@@ -1326,33 +1347,28 @@ Future<void> _verifyRootTransferCompletion({
   }
 
   final done = find.descendant(
-    of: find.byType(DeviceJoinApprovalSheet),
+    of: find.byKey(const Key('device-root-transfer-sent-dialog')),
     matching: find.text(
-      tester.element(find.byType(DeviceJoinApprovalSheet)).l10n.commonDone,
+      tester.element(find.byType(DevicesPage)).l10n.commonDone,
     ),
   );
   await _tapOne(
     tester,
     done,
-    failure: 'The sent root-transfer sheet could not be closed.',
+    failure: 'The sent later-grant result could not be closed.',
   );
   await _pumpUntil(
     tester,
-    () => find.byType(DeviceJoinApprovalSheet).evaluate().isEmpty,
-    failure: 'The root-transfer sheet remained open after completion.',
+    () => find
+        .byKey(const Key('device-root-transfer-sent-dialog'))
+        .evaluate()
+        .isEmpty,
+    failure: 'The later-grant result remained open after completion.',
   );
-  for (final key in const <Key>[
-    Key('root-transfer-grant-management'),
-    Key('root-transfer-preparing'),
-    Key('root-transfer-recipient-summary'),
-    Key('root-transfer-confirm-send'),
-    Key('root-transfer-sending'),
-    Key('root-transfer-sent'),
-    Key('root-transfer-failed'),
-  ]) {
-    if (find.byKey(key).evaluate().isNotEmpty) {
-      fail('Generic Devices projected a root-transfer control.');
-    }
+  await container.read(devicesProvider.notifier).refreshRegistryOnly();
+  await tester.pump();
+  if (grantAction.evaluate().isNotEmpty) {
+    fail('The Devices later-grant action remained after Registry readiness.');
   }
 
   if (_invocationExpects(_rootTransferCaseId)) {
@@ -1360,6 +1376,8 @@ Future<void> _verifyRootTransferCompletion({
       _rootTransferCaseId,
       phases: const <String>[
         'member_not_ready_before_completion',
+        'join_sheet_closed_before_later_grant',
+        'device_list_fresh_prepare',
         'safe_summary_single_presence',
         'sender_accepted_terminal',
         'receiver_completion_ready',

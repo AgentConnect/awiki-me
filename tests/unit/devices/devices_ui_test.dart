@@ -1735,16 +1735,133 @@ void main() {
     expect(find.byKey(const Key('root-transfer-confirm-send')), findsNothing);
   });
 
-  testWidgets('device list never exposes a generic root-transfer action', (
-    tester,
-  ) async {
-    final core = FakeDeviceManagementCore()..registry = _rootTransferRegistry();
-    await tester.pumpWidget(_app(const DevicesPage(), core));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'device list grants management to an eligible member after fresh presence',
+    (tester) async {
+      final core = FakeDeviceManagementCore()..registry = _laterGrantRegistry();
+      final transfer = FakeRootKeyTransferPort();
+      final presence = FakeUserPresence();
+      await tester.pumpWidget(
+        _app(
+          const DevicesPage(),
+          core,
+          rootTransfer: transfer,
+          presence: presence,
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('root-transfer-admin-new')), findsNothing);
-    expect(find.text('继续授予管理权限'), findsNothing);
-  });
+      final action = find.byKey(
+        const Key('device-grant-management-member-later'),
+      );
+      expect(action, findsOneWidget);
+      expect(
+        ProviderScope.containerOf(
+          tester.element(find.byKey(const Key('devices-page'))),
+        ).read(devicesProvider).activeJoin,
+        isNull,
+      );
+
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+
+      expect(transfer.prepareCalls, 1);
+      expect(transfer.lastRecipientDeviceId, 'member-later');
+      expect(transfer.confirmCalls, 0);
+      expect(presence.calls, 0);
+      expect(
+        find.byKey(const Key('device-root-transfer-confirm-dialog')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('member-later'), findsWidgets);
+
+      await tester.tap(
+        find.byKey(const Key('device-root-transfer-confirm-action')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(presence.calls, 1);
+      expect(transfer.confirmCalls, 1);
+      expect(transfer.lastUserPresenceConfirmed, isTrue);
+      expect(
+        find.byKey(const Key('device-root-transfer-sent-dialog')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('root_private_key'), findsNothing);
+      expect(find.textContaining('authorization_handle'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'device-list grant cancellation consumes the handle without send',
+    (tester) async {
+      final core = FakeDeviceManagementCore()..registry = _laterGrantRegistry();
+      final transfer = FakeRootKeyTransferPort();
+      final presence = FakeUserPresence();
+      await tester.pumpWidget(
+        _app(
+          const DevicesPage(),
+          core,
+          rootTransfer: transfer,
+          presence: presence,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const Key('device-grant-management-member-later')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('取消').last);
+      await tester.pumpAndSettle();
+
+      expect(presence.calls, 0);
+      expect(transfer.confirmCalls, 1);
+      expect(transfer.lastUserPresenceConfirmed, isFalse);
+      expect(
+        find.byKey(const Key('device-root-transfer-confirm-dialog')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'device-list grant stays hidden for current ready and revoked rows',
+    (tester) async {
+      final core = FakeDeviceManagementCore()
+        ..registry = DeviceRegistrySnapshot(
+          did: testDid,
+          devices: <DeviceSummary>[
+            _device(
+              id: 'admin-current',
+              role: DeviceRole.admin,
+              managementReady: true,
+              isCurrent: true,
+            ),
+            _device(
+              id: 'admin-ready',
+              role: DeviceRole.admin,
+              managementReady: true,
+            ),
+            _device(
+              id: 'member-revoked',
+              role: DeviceRole.member,
+              status: DeviceStatus.revoked,
+            ),
+          ],
+        );
+      await tester.pumpWidget(_app(const DevicesPage(), core));
+      await tester.pumpAndSettle();
+
+      for (final id in <String>[
+        'admin-current',
+        'admin-ready',
+        'member-revoked',
+      ]) {
+        expect(find.byKey(Key('device-grant-management-$id')), findsNothing);
+      }
+    },
+  );
 
   testWidgets('opening a notice is read-only until verification starts', (
     tester,
@@ -2392,6 +2509,19 @@ DeviceRegistrySnapshot _rootTransferRegistry({bool recipientReady = false}) {
     ],
   );
 }
+
+DeviceRegistrySnapshot _laterGrantRegistry() => DeviceRegistrySnapshot(
+  did: testDid,
+  devices: <DeviceSummary>[
+    _device(
+      id: 'admin-current',
+      role: DeviceRole.admin,
+      managementReady: true,
+      isCurrent: true,
+    ),
+    _device(id: 'member-later', role: DeviceRole.member),
+  ],
+);
 
 DeviceSummary _device({
   required String id,

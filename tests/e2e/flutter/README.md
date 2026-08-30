@@ -206,6 +206,12 @@ runner. `ROOT-TRANSFER-E2E-002` and `MLS-MULTI-DEVICE-E2E-001` remain planned.
 `step4-revoke-mls`; their scenario-owned attestations, not catalog text, are
 required remote pass evidence.
 
+`--case multi-device-app-pair-later-admin-grant` is the focused alias for
+`ROOT-TRANSFER-E2E-001`. It deliberately closes the Join completion sheet and
+clears its transient provider state before opening Devices, then performs a
+fresh prepare, one E2E-only user-presence decision, standard P5 accepted, and
+CLI receiver readiness completion. It does not run the full App suite.
+
 `--case multi-device-app-pair-content-sync` is the focused two-App content
 entry. It reuses one real member Join and one independent CLI peer to attest
 pre-Join Group/attachment absence (ordinary Direct reuses its existing focused
