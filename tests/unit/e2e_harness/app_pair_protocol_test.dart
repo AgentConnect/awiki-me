@@ -486,4 +486,23 @@ void main() {
     );
     expect(diagnostic, isNot(contains(secret)));
   });
+
+  test('CLI failure diagnostics classify generation rollback safely', () {
+    const secret = 'secret-bearing-generation-detail';
+    final diagnostic = safeCliFailureDiagnostic(
+      exitCode: 1,
+      stdout: '',
+      stderr:
+          '{"error":{"code":"internal_error",'
+          '"message":"device authorization generation cannot move '
+          'backwards around $secret"}}',
+    );
+
+    expect(
+      diagnostic,
+      'exit=1, code=internal_error, '
+      'messageCategory=device_generation_backward',
+    );
+    expect(diagnostic, isNot(contains(secret)));
+  });
 }

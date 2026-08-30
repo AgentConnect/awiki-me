@@ -225,6 +225,33 @@ String? _safeCliMessageCategory(Object? value) {
   if (value is! String) return null;
   final message = value.toLowerCase();
   for (final entry in const <(String, String)>[
+    (
+      'active handle generation changed concurrently',
+      'handle_generation_concurrent',
+    ),
+    (
+      'device authorization generation cannot move backwards',
+      'device_generation_backward',
+    ),
+    (
+      'identity generation cannot move backwards',
+      'identity_generation_backward',
+    ),
+    (
+      'current did cannot change without a newer identity generation',
+      'did_generation_conflict',
+    ),
+    ('already bound to a different account', 'account_binding_conflict'),
+    ('already bound to a different protocol device', 'device_binding_conflict'),
+    (
+      'account device is already bound to a different local owner',
+      'owner_binding_conflict',
+    ),
+    ('authoritative handle binding does not match', 'handle_binding_conflict'),
+    (
+      'active device auth generation is not canonical',
+      'device_generation_noncanonical',
+    ),
     ('root import', 'root_import'),
     ('identity provider', 'identity_provider'),
     ('secret vault', 'vault'),
