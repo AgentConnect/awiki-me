@@ -37,6 +37,7 @@ import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
+import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
 import 'package:awiki_me/src/l10n/l10n.dart';
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
@@ -66,6 +67,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:integration_test/integration_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../account_state_operator_contract.dart';
 import '../../app_pair_protocol.dart';
@@ -3093,6 +3095,7 @@ Future<String> _requestAndResolveOtp({
   required String purpose,
   required String handle,
 }) async {
+  final clientVersionHeader = await _e2eClientVersionHeader();
   http.Response? response;
   for (var attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -3101,7 +3104,10 @@ Future<String> _requestAndResolveOtp({
             Uri.parse(
               config.userServiceUrl,
             ).resolve('/user-service/v1/auth/sms-codes'),
-            headers: const <String, String>{'Content-Type': 'application/json'},
+            headers: <String, String>{
+              'Content-Type': 'application/json',
+              awikiClientVersionHeaderName: clientVersionHeader,
+            },
             body: jsonEncode(<String, Object?>{
               'phone': account.phone,
               'purpose': purpose,
@@ -3127,6 +3133,15 @@ Future<String> _requestAndResolveOtp({
   }
   if (response.statusCode != 200) {
     fail('The purpose-bound OTP request was rejected.');
+  }
+  Object? decoded;
+  try {
+    decoded = jsonDecode(response.body);
+  } on Object {
+    fail('The purpose-bound OTP request returned invalid JSON.');
+  }
+  if (decoded is! Map || decoded.length != 1 || decoded['message'] is! String) {
+    fail('The purpose-bound OTP request returned an invalid response.');
   }
   return account.fixedOtp;
 }
@@ -3165,6 +3180,7 @@ Future<String> _exchangeJoinGrant({
   required String otp,
   required String operationId,
 }) async {
+  final clientVersionHeader = await _e2eClientVersionHeader();
   final http.Response response;
   try {
     response = await client
@@ -3172,7 +3188,10 @@ Future<String> _exchangeJoinGrant({
           Uri.parse(
             config.userServiceUrl,
           ).resolve('/user-service/v1/auth/account-verification/exchange'),
-          headers: const <String, String>{'Content-Type': 'application/json'},
+          headers: <String, String>{
+            'Content-Type': 'application/json',
+            awikiClientVersionHeaderName: clientVersionHeader,
+          },
           body: jsonEncode(<String, Object?>{
             'provider': 'sms',
             'purpose': _joinPurpose,
@@ -3196,7 +3215,15 @@ Future<String> _exchangeJoinGrant({
   } on Object {
     fail('The Join account-verification exchange returned invalid JSON.');
   }
-  if (decoded is! Map || decoded['purpose'] != _joinPurpose) {
+  if (decoded is! Map ||
+      decoded.keys.toSet().difference(const <Object>{
+        'account_verification_token',
+        'purpose',
+        'expires_at',
+      }).isNotEmpty ||
+      decoded.length != 3 ||
+      decoded['purpose'] != _joinPurpose ||
+      decoded['expires_at'] is! String) {
     final observedPurpose = decoded is Map && decoded['purpose'] is String
         ? _appPairSafeToken(decoded['purpose'] as String)
         : 'missing';
@@ -3216,6 +3243,16 @@ Future<String> _exchangeJoinGrant({
     fail('The Join account-verification exchange returned no grant.');
   }
   return token;
+}
+
+Future<String> _e2eClientVersionHeader() async {
+  final packageInfo = await PackageInfo.fromPlatform();
+  final version = packageInfo.version.trim();
+  final build = int.tryParse(packageInfo.buildNumber.trim());
+  if (version.isEmpty || build == null || build <= 0) {
+    fail('The E2E App package version is invalid.');
+  }
+  return 'awiki-me/$awikiMeReleaseLine/$version+$build';
 }
 
 String _requireCliReadyBootstrapAdmin(List<Map<String, Object?>> devices) {
