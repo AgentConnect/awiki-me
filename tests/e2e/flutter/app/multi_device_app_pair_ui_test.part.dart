@@ -4269,6 +4269,10 @@ String _appPairErrorDiagnostic(Object? error) {
 }
 
 String _appPairClosedRegistrationError(Object error) {
+  final appCode = structuredAppErrorCode(error);
+  if (appCode != null) {
+    return 'type=AppStructuredError,code=${_appPairSafeToken(appCode)}';
+  }
   if (error is core.AwikiImCoreException) {
     return 'type=AwikiImCoreException,code=${_appPairSafeToken(error.code)},'
         'service=${_appPairSafeToken(error.serviceCode ?? 'none')}';
