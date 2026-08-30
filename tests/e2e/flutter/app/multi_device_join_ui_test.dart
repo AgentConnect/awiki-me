@@ -573,11 +573,10 @@ void main() {
         appStateRoot: config.appStateRoot,
       );
       final handle = _uniqueHandle(config.handlePrefix);
-      final genesisOtp = await _requestAndResolveOtp(
-        client: httpClient,
+      final genesisOtp = await _requestAppRegistrationOtp(
+        bootstrap: bootstrap,
         config: config,
         account: account,
-        purpose: _registrationPurpose,
         handle: handle,
       );
       final IdentityRegistrationResult registration;
@@ -3128,6 +3127,32 @@ Future<String> _requestAndResolveOtp({
   }
   if (response.statusCode != 200) {
     fail('The purpose-bound OTP request was rejected.');
+  }
+  return account.fixedOtp;
+}
+
+Future<String> _requestAppRegistrationOtp({
+  required AppBootstrap bootstrap,
+  required _RemoteJoinEndpointConfig config,
+  required _DedicatedAccount account,
+  required String handle,
+}) async {
+  final support = bootstrap.onboardingSupportService;
+  if (support == null) {
+    fail('The production registration OTP service is unavailable.');
+  }
+  try {
+    await support.sendRegistrationOtp(
+      phone: account.phone,
+      handle: handle,
+      domain: config.didDomain,
+      fullHandle: '$handle.${config.didDomain}',
+    );
+  } on Object catch (error) {
+    fail(
+      'The production registration OTP request failed safely '
+      '(${_appPairClosedRegistrationError(error)}).',
+    );
   }
   return account.fixedOtp;
 }

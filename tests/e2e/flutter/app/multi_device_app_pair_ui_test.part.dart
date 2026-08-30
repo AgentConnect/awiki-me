@@ -53,11 +53,10 @@ void appPairAdminMain() {
         appStateRoot: config.adminStateRoot,
       );
       final handle = _uniqueHandle(config.handlePrefix);
-      final genesisOtp = await _requestAndResolveOtp(
-        client: httpClient,
+      final genesisOtp = await _requestAppRegistrationOtp(
+        bootstrap: bootstrap,
         config: config,
         account: account,
-        purpose: _registrationPurpose,
         handle: handle,
       );
       final IdentityRegistrationResult registration;
