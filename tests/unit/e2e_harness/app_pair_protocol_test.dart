@@ -369,4 +369,22 @@ void main() {
       'exit=4',
     );
   });
+
+  test('CLI failure diagnostics classify messages without exposing them', () {
+    const secret = 'root import failed around secret-bearing-value';
+
+    final diagnostic = safeCliFailureDiagnostic(
+      exitCode: 1,
+      stdout: '',
+      stderr:
+          '{"error":{"code":"internal_error",'
+          '"message":"$secret"}}',
+    );
+
+    expect(
+      diagnostic,
+      'exit=1, code=internal_error, messageCategory=root_import',
+    );
+    expect(diagnostic, isNot(contains('secret-bearing-value')));
+  });
 }

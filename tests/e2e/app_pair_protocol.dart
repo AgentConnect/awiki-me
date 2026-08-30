@@ -142,6 +142,7 @@ String safeCliFailureDiagnostic({
 }) {
   String? errorCode;
   String? serviceCode;
+  String? messageCategory;
   for (final output in <Object?>[stderr, stdout]) {
     if (output == null || output.toString().trim().isEmpty) continue;
     Object? decoded;
@@ -163,13 +164,33 @@ String safeCliFailureDiagnostic({
     if (_isSafeDiagnosticCode(candidateServiceCode, requireNamespace: true)) {
       serviceCode = candidateServiceCode;
     }
+    messageCategory = _safeCliMessageCategory(error['message']);
     break;
   }
   return <String>[
     'exit=$exitCode',
     if (errorCode != null) 'code=$errorCode',
     if (serviceCode != null) 'serviceCode=$serviceCode',
+    if (messageCategory != null) 'messageCategory=$messageCategory',
   ].join(', ');
+}
+
+String? _safeCliMessageCategory(Object? value) {
+  if (value is! String) return null;
+  final message = value.toLowerCase();
+  for (final entry in const <(String, String)>[
+    ('root import', 'root_import'),
+    ('identity provider', 'identity_provider'),
+    ('secret vault', 'vault'),
+    ('vault', 'vault'),
+    ('local state', 'local_state'),
+    ('remote service', 'remote_service'),
+    ('serialization', 'serialization'),
+    ('permission denied', 'permission'),
+  ]) {
+    if (message.contains(entry.$1)) return entry.$2;
+  }
+  return null;
 }
 
 bool _isSafeDiagnosticCode(String? value, {required bool requireNamespace}) {
