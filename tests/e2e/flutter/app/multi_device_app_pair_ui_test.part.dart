@@ -114,7 +114,6 @@ void appPairAdminMain() {
         await _prepareAppPairFunctionalHistory(
           config: config,
           account: account,
-          httpClient: httpClient,
           bootstrap: bootstrap,
           container: container,
           adminDid: adminSession.did,

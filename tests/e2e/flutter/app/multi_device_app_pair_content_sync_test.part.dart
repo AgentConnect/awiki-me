@@ -29,7 +29,6 @@ Uint8List _contentBytes(String runId, String phase) =>
 Future<void> _prepareAppPairContentHistory({
   required _AppPairRunConfig config,
   required _DedicatedAccount account,
-  required http.Client httpClient,
   required AppBootstrap bootstrap,
   required ProviderContainer container,
   required String adminDid,
@@ -39,11 +38,10 @@ Future<void> _prepareAppPairContentHistory({
   resources.peer = peer;
   await peer.initialize();
   final peerHandle = _uniqueHandle(config.handlePrefix);
-  final peerOtp = await _requestAndResolveOtp(
-    client: httpClient,
+  final peerOtp = await _requestAppRegistrationOtp(
+    bootstrap: bootstrap,
     config: config,
     account: account,
-    purpose: _registrationPurpose,
     handle: peerHandle,
   );
   final peerDid = await peer.registerReadyAdmin(

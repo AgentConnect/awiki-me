@@ -3093,61 +3093,6 @@ Future<String> _requestAndResolveOtp({
   required String purpose,
   required String handle,
 }) async {
-  if (purpose == _registrationPurpose) {
-    late final http.Response response;
-    try {
-      response = await client
-          .post(
-            Uri.parse(
-              config.userServiceUrl,
-            ).resolve('/user-service/v1/handle/rpc'),
-            headers: const <String, String>{'Content-Type': 'application/json'},
-            body: jsonEncode(<String, Object?>{
-              'jsonrpc': '2.0',
-              'id': 'app-e2e-registration-otp',
-              'method': 'send_otp',
-              'params': <String, Object?>{
-                'phone': account.phone,
-                'purpose': purpose,
-                'handle': handle,
-                'domain': config.didDomain,
-                'full_handle': '$handle.${config.didDomain}',
-              },
-            }),
-          )
-          .timeout(_remoteTimeout);
-    } on Object {
-      fail('The scoped registration OTP request failed safely.');
-    }
-    Object? decoded;
-    try {
-      decoded = jsonDecode(response.body);
-    } on Object {
-      fail('The scoped registration OTP request returned invalid JSON.');
-    }
-    if (response.statusCode != 200 ||
-        decoded is! Map ||
-        decoded['error'] != null ||
-        decoded['result'] is! Map) {
-      final error = decoded is Map ? decoded['error'] : null;
-      final data = error is Map ? error['data'] : null;
-      final rpcCode = error is Map && error['code'] is int
-          ? error['code'] as int
-          : 0;
-      final serviceCode = data is Map && data['code'] is String
-          ? _appPairSafeToken(data['code'] as String)
-          : 'none';
-      final retryAfter = data is Map && data['retry_after_seconds'] is int
-          ? data['retry_after_seconds'] as int
-          : 0;
-      fail(
-        'The scoped registration OTP request was rejected '
-        '(http=${response.statusCode},rpc=$rpcCode,code=$serviceCode,'
-        'retryAfter=$retryAfter).',
-      );
-    }
-    return account.fixedOtp;
-  }
   http.Response? response;
   for (var attempt = 0; attempt < 3; attempt += 1) {
     try {
