@@ -97,12 +97,14 @@ multi-client messaging, or mobile-device flows. If coverage cannot be added in
 the current change, document the reason, skipped case ID, owner, and follow-up
 in the relevant test docs or plan before merging.
 
-Any code addition or modification must, in the same task, add or update the
-corresponding unit tests, system tests, and end-to-end (E2E) tests. Keep unit
-tests in this repository, put cross-service system coverage in
-`../awiki-system-test`, and keep AWiki Me product E2E coverage under
-`tests/e2e/`; when another repository owns a required test layer, update it in
-the same task.
+Every production behavior change must add or update the corresponding unit
+tests in the same task. If an existing test already covers the exact behavior
+and failure mode, identify it and record the result. Before completion, review
+the corresponding `../awiki-system-test` suite/catalog and this repository's
+`tests/e2e/` product coverage; update either layer in the same task when it is
+incomplete, or record a concrete non-applicable reason. Keep unit tests in this
+repository, cross-service System Tests in `../awiki-system-test`, and all
+product E2E implementations exclusively under `tests/e2e/`.
 
 For development/test OTP flows, load the protected phone and code only from
 the ignored, permission-restricted local E2E configuration. Never place those
