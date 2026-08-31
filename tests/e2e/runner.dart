@@ -632,15 +632,13 @@ class DesktopE2eRunner {
       appStateRootDir.createSync(recursive: true);
       multiDeviceAppJoiningStateRootDir.createSync(recursive: true);
     }
-    if (!options.dryRun &&
-        (options.e2eCase == DesktopE2eCase.multiDeviceAppPair ||
-            options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional ||
-            options.e2eCase == DesktopE2eCase.multiDeviceAppPairContentSync)) {
+    if (!options.dryRun && options.e2eCase.usesRemoteAppPairScenario) {
       resetAppPairRuntimeDirectories(
         functional:
             options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional,
         contentSync:
-            options.e2eCase == DesktopE2eCase.multiDeviceAppPairContentSync,
+            options.e2eCase == DesktopE2eCase.multiDeviceAppPairContentSync ||
+            options.e2eCase == DesktopE2eCase.multiDeviceAppPairPagingRecovery,
         adminStateRoot: appPairAdminStateRootDir,
         joinerStateRoot: appPairJoinerStateRootDir,
         daemonStateRoot: appPairDaemonStateRootDir,
@@ -680,6 +678,8 @@ class DesktopE2eRunner {
         case DesktopE2eCase.multiDeviceAppPairFunctional:
           await _runRemoteMultiDeviceAppPair();
         case DesktopE2eCase.multiDeviceAppPairContentSync:
+          await _runRemoteMultiDeviceAppPair();
+        case DesktopE2eCase.multiDeviceAppPairPagingRecovery:
           await _runRemoteMultiDeviceAppPair();
         case DesktopE2eCase.step4RevokeMls:
           await _runRemoteMultiDeviceJoin();

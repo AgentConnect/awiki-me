@@ -666,7 +666,7 @@ void main() {
         hyphen.e2eCase.scenario,
         'multi-device-two-isolated-app-content-sync',
       );
-      expect(hyphen.e2eCase.preparedArtifactName, 'app-pair-content-sync');
+      expect(hyphen.e2eCase.usesRemoteAppPairScenario, isTrue);
       expect(hyphen.e2eCase.caseIds, <String>[
         'DEVICE-CONTENT-TAIL-ONLY-E2E-001',
         'DEVICE-GROUP-SYNC-E2E-001',
@@ -698,7 +698,7 @@ void main() {
         hyphen.e2eCase.scenario,
         'multi-device-two-isolated-app-paging-recovery',
       );
-      expect(hyphen.e2eCase.preparedArtifactName, 'app-pair-paging-recovery');
+      expect(hyphen.e2eCase.usesRemoteAppPairScenario, isTrue);
       expect(hyphen.e2eCase.caseIds, <String>[
         'DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001',
       ]);
