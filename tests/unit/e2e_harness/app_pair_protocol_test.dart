@@ -241,6 +241,58 @@ void main() {
     },
   );
 
+  test(
+    'paging-recovery checkpoints accept only their exact public fields',
+    () async {
+      final server = await AppPairCoordinatorServer.start(
+        token: List<String>.filled(48, 't').join(),
+      );
+      addTearDown(server.close);
+      final client = AppPairCoordinatorClient(
+        endpoint: server.endpoint,
+        token: server.token,
+      );
+
+      await client.publish(
+        'admin',
+        'paging_peer_ready',
+        data: const <String, Object?>{
+          'peerDid': 'did:wba:awiki.info:peer',
+          'conversationId': 'dm:peer-scope:v1:peer',
+        },
+      );
+      await client.publish('joiner', 'paging_joiner_ready');
+      await client.publish(
+        'admin',
+        'paging_baseline_sent',
+        data: const <String, Object?>{'messageId': 'baseline-1'},
+      );
+      await client.publish('joiner', 'paging_baseline_visible');
+      await client.publish('joiner', 'paging_offline_ready');
+      await client.publish('admin', 'paging_fixture_ready');
+      await client.publish('joiner', 'paging_recovery_completed');
+      await client.publish(
+        'admin',
+        'paging_post_recovery_sent',
+        data: const <String, Object?>{'messageId': 'post-recovery-1'},
+      );
+      await client.publish('joiner', 'paging_post_recovery_visible');
+
+      await expectLater(
+        client.publish(
+          'admin',
+          'paging_peer_ready',
+          data: const <String, Object?>{
+            'peerDid': 'did:wba:awiki.info:peer',
+            'conversationId': 'dm:peer-scope:v1:peer',
+            'pageCount': 6,
+          },
+        ),
+        throwsA(isA<AppPairProtocolException>()),
+      );
+    },
+  );
+
   test('account-state checkpoints accept every exact route shape', () async {
     final server = await AppPairCoordinatorServer.start(
       token: List<String>.filled(48, 't').join(),
