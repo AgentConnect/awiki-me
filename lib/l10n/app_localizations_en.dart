@@ -1333,6 +1333,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Message sync is paused. Upgrade the client or repair this device to continue.';
 
   @override
+  String get messageSyncStatusCapacityExceeded =>
+      'Message recovery cannot continue because required account state exceeds the safe capacity. Contact support.';
+
+  @override
   String get messageSyncStatusProjectionRefreshFailed =>
       'Messages were synced, but the list could not refresh. Retry to reload it.';
 

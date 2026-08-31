@@ -1263,6 +1263,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get messageSyncStatusBlocked => '消息同步已暂停，请升级客户端或修复此设备后继续。';
 
   @override
+  String get messageSyncStatusCapacityExceeded =>
+      '恢复所需的账号状态超过安全容量，消息恢复无法继续，请联系支持人员。';
+
+  @override
   String get messageSyncStatusProjectionRefreshFailed =>
       '消息已同步，但列表刷新失败，请重试重新加载。';
 

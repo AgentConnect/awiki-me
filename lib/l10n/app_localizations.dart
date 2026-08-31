@@ -2466,6 +2466,12 @@ abstract class AppLocalizations {
   /// **'消息同步已暂停，请升级客户端或修复此设备后继续。'**
   String get messageSyncStatusBlocked;
 
+  /// No description provided for @messageSyncStatusCapacityExceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复所需的账号状态超过安全容量，消息恢复无法继续，请联系支持人员。'**
+  String get messageSyncStatusCapacityExceeded;
+
   /// No description provided for @messageSyncStatusProjectionRefreshFailed.
   ///
   /// In zh, this message translates to:

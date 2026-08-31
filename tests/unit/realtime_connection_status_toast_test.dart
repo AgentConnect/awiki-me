@@ -183,6 +183,31 @@ void main() {
     expect(find.byType(CupertinoActivityIndicator), findsWidgets);
   });
 
+  testWidgets('AppShell 容量超限显示终止型同步提示', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gatewayWithProfile(),
+        session: session,
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(
+                status: MessageSyncCoordinatorStatus.capacityExceeded,
+                lastFailureCode: 'sync.snapshot_required_state_too_large',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('恢复所需的账号状态超过安全容量，消息恢复无法继续，请联系支持人员。'), findsOneWidget);
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+  });
+
   testWidgets('AppShell 前两次连续同步失败保持静默', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(

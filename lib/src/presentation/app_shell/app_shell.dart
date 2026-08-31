@@ -306,7 +306,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                 danger:
                     messageSync.shouldSurfaceRetryableFailure ||
                     messageSync.status ==
-                        MessageSyncCoordinatorStatus.authRevoked,
+                        MessageSyncCoordinatorStatus.authRevoked ||
+                    messageSync.status ==
+                        MessageSyncCoordinatorStatus.capacityExceeded,
                 showSpinner:
                     messageSync.status ==
                         MessageSyncCoordinatorStatus.recoveryRequired ||
@@ -402,6 +404,7 @@ class _AppShellState extends ConsumerState<AppShell> {
             (!state.transientFailurePresentationSuppressed ||
                 state.shouldSurfaceRetryableFailure)) ||
         state.status == MessageSyncCoordinatorStatus.projectionRefreshFailed ||
+        state.status == MessageSyncCoordinatorStatus.capacityExceeded ||
         state.status == MessageSyncCoordinatorStatus.authRevoked ||
         state.status == MessageSyncCoordinatorStatus.blocked;
   }
@@ -421,6 +424,8 @@ class _AppShellState extends ConsumerState<AppShell> {
             : context.l10n.messageSyncStatusRetrying,
       MessageSyncCoordinatorStatus.projectionRefreshFailed =>
         context.l10n.messageSyncStatusProjectionRefreshFailed,
+      MessageSyncCoordinatorStatus.capacityExceeded =>
+        context.l10n.messageSyncStatusCapacityExceeded,
       MessageSyncCoordinatorStatus.authRevoked =>
         context.l10n.messageSyncStatusAuthRevoked,
       MessageSyncCoordinatorStatus.blocked =>
