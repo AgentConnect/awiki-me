@@ -553,7 +553,7 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
     final caseName = peerConfig.e2eCase.caseName;
     final bundleSuffix = caseName.replaceAll('-', '.');
     return _prepareIntegrationExecutable(
-      name: caseName,
+      name: peerConfig.e2eCase.preparedArtifactName,
       target: peerConfig.e2eCase.testFile,
       bundleId: 'ai.awiki.awikime.dev.e2e.$bundleSuffix',
       stateRoot: appStateRootDir,

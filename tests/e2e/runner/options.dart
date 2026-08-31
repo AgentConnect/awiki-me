@@ -302,6 +302,15 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
     };
   }
 
+  String get preparedArtifactName {
+    return switch (this) {
+      DesktopE2eCase.multiDeviceAppPairContentSync => 'app-pair-content-sync',
+      DesktopE2eCase.multiDeviceAppPairPagingRecovery =>
+        'app-pair-paging-recovery',
+      _ => caseName,
+    };
+  }
+
   bool get requiresCliPeer =>
       this != DesktopE2eCase.smoke &&
       this != DesktopE2eCase.multiDevice &&
