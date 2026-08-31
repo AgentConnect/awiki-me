@@ -10,13 +10,16 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
         Platform.environment['AWIKI_E2E_FLUTTER_BIN']?.trim().isNotEmpty == true
         ? Platform.environment['AWIKI_E2E_FLUTTER_BIN']!.trim()
         : 'flutter';
+    final pagingRecovery =
+        options.e2eCase == DesktopE2eCase.multiDeviceAppPairPagingRecovery;
     final pairConfig = RemoteMultiDeviceAppPairConfig.from(
       fileConfig: fileConfig,
       environment: Platform.environment,
       functional:
           options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional,
       contentSync:
-          options.e2eCase == DesktopE2eCase.multiDeviceAppPairContentSync,
+          options.e2eCase == DesktopE2eCase.multiDeviceAppPairContentSync ||
+          pagingRecovery,
     );
     remoteMultiDeviceAppPairConfig = pairConfig;
     _addRuntimeSecret(pairConfig.phone);
@@ -58,8 +61,10 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
       await commands.requireFile('tool/build_isolated_e2e_app.dart');
       await commands.requireFile(_multiDeviceAppPairTarget);
       await commands.requireFile('test_driver/integration_test.dart');
-      if (pairConfig.functional) {
+      if (pairConfig.functional || pagingRecovery) {
         _requireAppPairRecoveryOperatorEnvironment(Platform.environment);
+      }
+      if (pairConfig.functional) {
         _requireAppPairAccountStateOperatorEnvironment(
           root: root,
           environment: Platform.environment,
@@ -168,13 +173,15 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
             e2eCaseScenarioDefine: options.e2eCase.scenario,
             e2eCaseRunIdDefine: runId,
             e2eCaseIdsDefine: options.e2eCase.caseIds.join(','),
-            if (pairConfig.functional) ...<String, String>{
+            if (pairConfig.functional || pagingRecovery) ...<String, String>{
               _syncRecoveryEnableEnv:
                   Platform.environment[_syncRecoveryEnableEnv]!,
               _syncRecoveryOperatorModeEnv:
                   Platform.environment[_syncRecoveryOperatorModeEnv]!,
               _syncRecoveryTargetEnv:
                   Platform.environment[_syncRecoveryTargetEnv]!,
+            },
+            if (pairConfig.functional) ...<String, String>{
               _accountStateEnableEnv:
                   Platform.environment[_accountStateEnableEnv]!,
               _accountStateOperatorCommandEnv:

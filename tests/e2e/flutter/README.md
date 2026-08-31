@@ -221,6 +221,15 @@ run Agent, Profile, Recovery, Registry, or MLS flows.
 On Linux, both product Apps and their existing-App drivers run in isolated
 Xvfb displays; Linux execution is a real remote E2E run, not a macOS dry-run.
 
+`--case multi-device-app-pair-paging-recovery` is the single-case Schema 3
+paging entry. It reuses the same real member Join and audited CLI peer, commits
+one ordinary baseline, takes only the joining App offline, prepares the closed
+`messages_501` exact-device fixture, and resumes through the normal App
+lifecycle. Pass requires the old projection to remain exact-once, no capacity
+or bounded-history outcome, one fresh post-recovery Direct projection, and
+secret-free diagnostics. It does not run the functional Agent/Account State
+matrix or the content Group/attachment matrix.
+
 `--case personal-agent` is the durable acceptance entry for Personal Agent
 product behavior. It is a fail-fast real-backend gate: local YAML must provide
 `personalAgent.realBackend: true`, `service.messageServiceUrl`,

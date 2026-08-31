@@ -2,12 +2,17 @@
 
 The App-pair harness is the reusable Linux/Xvfb and macOS E2E boundary for
 scenarios that need two independently runnable AWiki Me processes on one
-computer. It exposes focused member-Join, functional, and content-sync suites:
+computer. It exposes focused member-Join, functional, content-sync, and paged
+recovery suites:
 
 - `multi-device-app-pair`: security acceptance for `DEVICE-JOIN-E2E-004`,
   including one real macOS LocalAuthentication decision;
 - `multi-device-app-pair-functional`: unattended functional acceptance for
-  cross-device Agent inventory and Direct-message convergence.
+  cross-device Agent inventory and Direct-message convergence;
+- `multi-device-app-pair-content-sync`: one Join plus Group, attachment, and
+  read-state convergence;
+- `multi-device-app-pair-paging-recovery`: one Join plus one exact-device
+  `messages_501` Schema 3 recovery case.
 
 ## Isolation model
 
@@ -175,6 +180,9 @@ protocol device and resolves exactly one account; the managed User operator
 then authorizes that account through the active Handle test-phone binding and
 confirms the same active device. Message Service revalidates the mapping,
 requires the replica to be bootstrapped, and updates exactly one active stream.
+The paging-recovery alias permits only the closed `messages_501` action; the
+operator receipt is preparation evidence, while the product oracle remains the
+App/Core committed projection and typed outcome.
 The App runner supplies neither an account ID nor a dynamic account allowlist.
 Its closed receipt is fault-injection evidence only, never a message/recovery
 oracle.

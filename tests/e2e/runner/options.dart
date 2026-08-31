@@ -83,6 +83,7 @@ Usage:
   dart run tests/e2e/runner.dart --case multi-device-app-pair
   dart run tests/e2e/runner.dart --case multi-device-app-pair-functional
   dart run tests/e2e/runner.dart --case multi-device-app-pair-content-sync
+  dart run tests/e2e/runner.dart --case multi-device-app-pair-paging-recovery
   dart run tests/e2e/runner.dart --case step4-revoke-mls
   dart run tests/e2e/runner.dart --case multi-device-app-pair-later-admin-grant
   dart run tests/e2e/runner.dart --case root-transfer
@@ -99,7 +100,7 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair-recovery-registration-resume|multi-device-app-pair-recovery-retirement-ordinary-rejoin|identity-deletion-recovery-guard|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|step4-revoke-mls|multi-device-app-pair-later-admin-grant|root-transfer|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
+  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair-recovery-registration-resume|multi-device-app-pair-recovery-retirement-ordinary-rejoin|identity-deletion-recovery-guard|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|multi-device-app-pair-paging-recovery|step4-revoke-mls|multi-device-app-pair-later-admin-grant|root-transfer|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
                                unattended real App/CLI message-driven
@@ -135,6 +136,9 @@ Options:
                                multi-device-app-pair-content-sync reuses one
                                Join and one CLI peer to check mixed tail-only,
                                Group, attachment, and read-state convergence.
+                               multi-device-app-pair-paging-recovery reuses
+                               one Join and one CLI peer to run only the
+                               messages_501 Schema 3 recovery case.
                                full runs the audited App+CLI desktop peer flow.
                                multi-device-app-pair-later-admin-grant is the
                                focused alias for the release root-transfer
@@ -177,6 +181,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   multiDeviceAppPair(_multiDeviceAppPairCaseIds),
   multiDeviceAppPairFunctional(_multiDeviceAppPairFunctionalCaseIds),
   multiDeviceAppPairContentSync(_multiDeviceAppPairContentSyncCaseIds),
+  multiDeviceAppPairPagingRecovery(_multiDeviceAppPairPagingRecoveryCaseIds),
   step4RevokeMls(_step4RevokeMlsCaseIds),
   rootTransfer(_rootTransferCaseIds),
   full(_desktopCliPeerCaseIds),
@@ -223,6 +228,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.multiDeviceAppPair => _multiDeviceAppPairTarget,
       DesktopE2eCase.multiDeviceAppPairFunctional => _multiDeviceAppPairTarget,
       DesktopE2eCase.multiDeviceAppPairContentSync => _multiDeviceAppPairTarget,
+      DesktopE2eCase.multiDeviceAppPairPagingRecovery =>
+        _multiDeviceAppPairTarget,
       DesktopE2eCase.step4RevokeMls =>
         'integration_test/multi_device_join_ui_test.dart',
       DesktopE2eCase.rootTransfer =>
@@ -287,6 +294,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         'multi-device-app-pair-functional',
       DesktopE2eCase.multiDeviceAppPairContentSync =>
         'multi-device-app-pair-content-sync',
+      DesktopE2eCase.multiDeviceAppPairPagingRecovery =>
+        'multi-device-app-pair-paging-recovery',
       DesktopE2eCase.step4RevokeMls => 'step4-revoke-mls',
       DesktopE2eCase.rootTransfer => 'root-transfer',
       _ => name,
@@ -332,6 +341,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         'multi-device-app-pair-functional',
       DesktopE2eCase.multiDeviceAppPairContentSync =>
         'multi-device-app-pair-content-sync',
+      DesktopE2eCase.multiDeviceAppPairPagingRecovery =>
+        'multi-device-app-pair-paging-recovery',
       DesktopE2eCase.step4RevokeMls => 'step4-revoke-mls',
       DesktopE2eCase.rootTransfer => 'root-transfer',
       DesktopE2eCase.personalAgent => 'personal-agent',
@@ -375,6 +386,9 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.multiDeviceAppPairContentSync => const Duration(
         minutes: 20,
       ),
+      DesktopE2eCase.multiDeviceAppPairPagingRecovery => const Duration(
+        minutes: 20,
+      ),
       DesktopE2eCase.step4RevokeMls => const Duration(minutes: 25),
       DesktopE2eCase.rootTransfer => const Duration(minutes: 16),
       _ => const Duration(minutes: 5),
@@ -408,6 +422,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         _multiDeviceAppPairFunctionalScenario,
       DesktopE2eCase.multiDeviceAppPairContentSync =>
         _multiDeviceAppPairContentSyncScenario,
+      DesktopE2eCase.multiDeviceAppPairPagingRecovery =>
+        _multiDeviceAppPairPagingRecoveryScenario,
       DesktopE2eCase.step4RevokeMls => _multiDeviceRemoteJoinScenario,
       DesktopE2eCase.rootTransfer => _multiDeviceRemoteJoinScenario,
       _ => _desktopCliPeerScenario,
@@ -439,6 +455,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.multiDeviceAppPairFunctional =>
         _multiDeviceAppPairRunConfigPath,
       DesktopE2eCase.multiDeviceAppPairContentSync =>
+        _multiDeviceAppPairRunConfigPath,
+      DesktopE2eCase.multiDeviceAppPairPagingRecovery =>
         _multiDeviceAppPairRunConfigPath,
       DesktopE2eCase.step4RevokeMls => _multiDeviceRemoteJoinRunConfigPath,
       DesktopE2eCase.rootTransfer => _multiDeviceRemoteJoinRunConfigPath,
@@ -491,6 +509,9 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       'multi-device-app-pair-content-sync' ||
       'multi_device_app_pair_content_sync' =>
         DesktopE2eCase.multiDeviceAppPairContentSync,
+      'multi-device-app-pair-paging-recovery' ||
+      'multi_device_app_pair_paging_recovery' =>
+        DesktopE2eCase.multiDeviceAppPairPagingRecovery,
       'step4-revoke-mls' || 'step4_revoke_mls' => DesktopE2eCase.step4RevokeMls,
       'multi-device-app-pair-later-admin-grant' ||
       'multi_device_app_pair_later_admin_grant' ||
@@ -569,6 +590,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         'identity-deletion-recovery-guard, '
         'multi-device-app-pair, multi-device-app-pair-functional, '
         'multi-device-app-pair-content-sync, '
+        'multi-device-app-pair-paging-recovery, '
         'step4-revoke-mls, root-transfer, full, performance, direct, '
         'group, attachment, contacts, inbound, identity-switch, restart, '
         'display-name-fallback, '

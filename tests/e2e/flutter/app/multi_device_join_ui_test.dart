@@ -80,6 +80,7 @@ import '../support/protected_otp_config.dart';
 
 part 'multi_device_app_pair_ui_test.part.dart';
 part 'multi_device_app_pair_content_sync_test.part.dart';
+part 'multi_device_app_pair_paging_recovery_test.part.dart';
 part 'dsh_device_join_interop_test.part.dart';
 
 const String _newDeviceCaseId = 'DEVICE-JOIN-E2E-001';
@@ -102,6 +103,8 @@ const String _appPairAttachmentSyncCaseId = 'DEVICE-ATTACHMENT-SYNC-E2E-001';
 const String _appPairGroupReadSyncCaseId = 'DEVICE-GROUP-READ-SYNC-E2E-001';
 const String _appPairOfflineRecoveryV2CaseId =
     'DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001';
+const String _appPairPagingRecoveryCaseId =
+    'DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001';
 const String _appPairAgentAddSyncCaseId = 'DEVICE-AGENT-ADD-SYNC-E2E-001';
 const String _appPairAgentRenameSyncCaseId = 'DEVICE-AGENT-RENAME-SYNC-E2E-001';
 const String _appPairAgentDeleteSyncCaseId = 'DEVICE-AGENT-DELETE-SYNC-E2E-001';

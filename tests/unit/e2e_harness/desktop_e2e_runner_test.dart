@@ -675,6 +675,38 @@ void main() {
       expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 20));
     });
 
+    test('parses focused App-pair paging-recovery case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi-device-app-pair-paging-recovery',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi_device_app_pair_paging_recovery',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.multiDeviceAppPairPagingRecovery);
+      expect(
+        underscore.e2eCase,
+        DesktopE2eCase.multiDeviceAppPairPagingRecovery,
+      );
+      expect(hyphen.e2eCase.requiresCliPeer, isTrue);
+      expect(
+        hyphen.e2eCase.scenario,
+        'multi-device-two-isolated-app-paging-recovery',
+      );
+      expect(hyphen.e2eCase.caseIds, <String>[
+        'DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001',
+      ]);
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 20));
+      expect(
+        hyphen.e2eCase.testFile,
+        'integration_test/multi_device_app_pair_test.dart',
+      );
+    });
+
     test('parses focused Step4 revoke MLS case', () {
       final options = DesktopE2eOptions.parse(const <String>[
         '--case',
@@ -921,8 +953,11 @@ void main() {
                 'multi-device-app-pair-recovery-registration-rejoin-management-transfer, '
                 'multi-device-app-pair-recovery-registration-resume, '
                 'multi-device-app-pair-recovery-retirement-ordinary-rejoin, '
+                'identity-deletion-recovery-guard, '
                 'multi-device-app-pair, multi-device-app-pair-functional, '
-                'multi-device-app-pair-content-sync, step4-revoke-mls, '
+                'multi-device-app-pair-content-sync, '
+                'multi-device-app-pair-paging-recovery, '
+                'step4-revoke-mls, '
                 'root-transfer, full, performance, direct, '
                 'group, attachment, contacts, inbound, identity-switch, restart, '
                 'display-name-fallback, '

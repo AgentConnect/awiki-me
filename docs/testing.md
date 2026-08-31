@@ -225,7 +225,7 @@ Linux 用例独立报告真实通过或失败。
 | --- | --- | --- |
 | 1：稳定身份与数据库骨架 | 无独立产品 UI case；作为本 suite 全部 case 的 preflight | 必须先取得合法 `ActiveSyncAccountBinding`，并由 Core 持有 stable owner、replica 与 cursor；迁移/fixture 证据不能冒充 UI E2E。 |
 | 2：在线普通消息 | `DEVICE-MESSAGE-SYNC-E2E-001`、`DEVICE-MESSAGE-SYNC-E2E-002`、`DEVICE-MESSAGE-ONLINE-SYNC-E2E-001`、`DEVICE-AGENT-MESSAGE-SYNC-E2E-001` | 覆盖 joined Apps 双向 own-sync、远端回复、sender/recipient sibling exact-once 和默认普通 Agent 消息；不创建 P5/E2EE session。 |
-| 3：已读、离线与 Snapshot | `DEVICE-MESSAGE-READ-SYNC-E2E-001`、`DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001`、`DEVICE-MESSAGE-TAIL-ONLY-E2E-001` | 覆盖单调已读、新设备 tail-only、已有设备 compact recovery 和保留窗口外本地消息。47:59/48:00/48:01 与 499/500/501 精确边界仍由隔离 Message Service/Core 测试证明，不能在共享远端造数替代。 |
+| 3：已读、离线与 Snapshot | `DEVICE-MESSAGE-READ-SYNC-E2E-001`、`DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001`、`DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001`、`DEVICE-MESSAGE-TAIL-ONLY-E2E-001` | 覆盖单调已读、新设备 tail-only、已有设备 Schema 3 compact recovery、501 条真实多页恢复和旧本地投影保留。9,999/10,000/10,001 items、64 MiB 前后、99/100/101 页与必需状态超预算仍由隔离 Message Service/Core 测试证明；共享远端只用闭合 exact-device fixture，不以数据库当产品 oracle。 |
 | 4：账号状态域 | `DEVICE-AGENT-SYNC-E2E-001`、`DEVICE-AGENT-ADD-SYNC-E2E-001`、`DEVICE-AGENT-RENAME-SYNC-E2E-001`、`DEVICE-AGENT-UNBIND-SYNC-E2E-001`、`DEVICE-AGENT-DELETE-SYNC-E2E-001`、`DEVICE-AGENT-ARCHIVE-SYNC-E2E-001`、`DEVICE-PROFILE-SYNC-E2E-001`、`DEVICE-REGISTRY-SYNC-E2E-001`、`DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001` | Agent topology/current status、Profile 和 Registry 使用独立 versioned snapshot；一个域失败不能阻止消息或其他域收敛。Archive case 创建第三个独立 runtime，再经 App `deleteSelected` → daemon runtime delete → User Service archive 的真实产品链路验证 active→archived，不能使用 test operator 或复用 Codex 删除。 |
 | 5：Dirty Hint | `DEVICE-MESSAGE-HINT-LOSS-E2E-001`、`DEVICE-MESSAGE-RECONNECT-E2E-001` | WebSocket 只作 dirty hint；断线或提示丢失后必须由前台/重连 HTTP pull exact-once 恢复。Push wake-up 当前为 `DEFERRED`，没有 active pass case。 |
 | 6：体验、观测与发布验收 | `DEVICE-MESSAGE-PATCH-READY-E2E-001`、`DEVICE-MESSAGE-DIAGNOSTICS-E2E-001`、`DEVICE-MESSAGE-GENERATION-FENCE-E2E-001`、`MESSAGE-PATCH-RESTART-E2E-001`，以及上述 active case 的完整、顺序一致 schema-v2 attestation | 覆盖产品观测的 subscribe→reset→first-sync 顺序、diagnostics 成功刷新序列与脱敏、同 DID revoked-device auth fencing、撤权 App 自动回到登录页，以及 Phase A 完全销毁后提交 gap 的跨进程恢复；不宣称测试直接注入了旧 generation Patch。 |
@@ -234,8 +234,9 @@ Linux 用例独立报告真实通过或失败。
 
 - HTTP 服务端事实加 Core SQLite 原子 commit 是可靠 truth；WebSocket payload、Push、App
   memory state 或 CLI 输出都不能替代。
-- 新设备只从 tail 开始；已有设备自动恢复只包含服务端当前时间最近 48 小时内、最多 500
-  条普通逻辑消息。Agent/Profile/Registry 当前快照不受该窗口限制。
+- 新设备只从 tail 开始；已有设备 Schema 3 恢复先完整纳入 read/Group/有效 exact-device
+  notification，再在 64 MiB、10,000 items、100 页硬预算内选择最新完整普通消息后缀。
+  普通历史触顶返回 `olderHistoryExcluded` 成功，必需状态超预算才返回 capacity。
 
 `multi-device-app-pair-content-sync` 是内容同步的聚焦入口。它只建立一次账号、双 App、
 真实 member Join、CLI peer、Direct 和 Group，在同一轮中分别 attestation：混合内容
@@ -243,6 +244,12 @@ tail-only（补 Group 和 Attachment，普通 Direct 复用既有专项）、普
 SHA-256、以及 Direct/Group 精确 `0→1→0` 未读隔离。该入口不启动
 Daemon、Agent、Profile、Recovery 或 Registry 流程；业务能力不满足时测试失败并保留报告，
 不由 E2E 用例修改业务实现。
+
+`multi-device-app-pair-paging-recovery` 是本计划唯一真实分页 App case。它只建立一次账号、
+双 App member Join 和一个 CLI peer；joining App 在已有普通 Direct 基线后离线，operator 只准备
+`messages_501`，App resume 仅调用正常 coordinator/Core sync。通过要求基线 exact-once 保留、
+`capacityExceeded=false`、`olderHistoryExcluded=false`、恢复后新 Direct exact-once，以及 diagnostics
+不含 cursor/token/page ref/manifest；它不运行 Agent、Account State、Group、附件或 MLS。
 - App 必须先订阅 committed patch 并完成当前 session generation 的一次 bounded seed，
   再执行首次 `syncNow`。普通 delta/hint/reconnect 后不得做全 conversation refresh、
   20×50 history prewarm 或 forced visible refresh。
@@ -435,6 +442,12 @@ shares the Direct, Group, attachment, and read/unread actions while four case
 attestations remain independent. On a Linux host this case must execute with a
 `platform: linux` config under Xvfb; a macOS-shaped dry-run is not pass
 evidence.
+
+For the single paged-recovery product case, use
+`--case multi-device-app-pair-paging-recovery`. It reuses the content-sync
+CLI/App-pair configuration and additionally requires the reviewed Stage-3
+recovery operator environment. It does not require a Daemon or Account State
+operator and must not be replaced by `full` or the 21-case functional suite.
 
 The macOS runner is not the service host. Account State test actions therefore
 require `AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE=ali` and the exact reviewed

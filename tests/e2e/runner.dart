@@ -79,6 +79,8 @@ const String _multiDeviceAppPairFunctionalScenario =
     'multi-device-two-isolated-app-functional';
 const String _multiDeviceAppPairContentSyncScenario =
     'multi-device-two-isolated-app-content-sync';
+const String _multiDeviceAppPairPagingRecoveryScenario =
+    'multi-device-two-isolated-app-paging-recovery';
 const String _multiDeviceAppPairRunConfigPath =
     '.e2e/multi-device-app-pair/current/run_config.json';
 const String _multiDeviceAppPairTarget =
@@ -227,6 +229,9 @@ const List<String> _multiDeviceAppPairContentSyncCaseIds = <String>[
   'DEVICE-GROUP-SYNC-E2E-001',
   'DEVICE-ATTACHMENT-SYNC-E2E-001',
   'DEVICE-GROUP-READ-SYNC-E2E-001',
+];
+const List<String> _multiDeviceAppPairPagingRecoveryCaseIds = <String>[
+  'DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001',
 ];
 const List<String> _step4RevokeMlsCaseIds = <String>[
   'STEP4-GROUP-PAGINATION-E2E-001',

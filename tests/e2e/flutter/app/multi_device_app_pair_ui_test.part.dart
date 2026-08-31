@@ -18,6 +18,9 @@ void appPairAdminMain() {
         config.localConfigPath,
       );
       final coordinator = config.coordinator;
+      final pagingRecovery = _invocationExplicitlyExpects(
+        _appPairPagingRecoveryCaseId,
+      );
       final httpClient = http.Client();
       final presence = E2eUserPresencePort();
       final functionalResources = _AppPairFunctionalAdminResources();
@@ -122,14 +125,23 @@ void appPairAdminMain() {
         );
       }
       if (config.contentSync) {
-        await _prepareAppPairContentHistory(
-          config: config,
-          account: account,
-          bootstrap: bootstrap,
-          container: container,
-          adminDid: adminSession.did,
-          resources: contentResources,
-        );
+        if (pagingRecovery) {
+          await _prepareAppPairPagingPeer(
+            config: config,
+            account: account,
+            bootstrap: bootstrap,
+            resources: contentResources,
+          );
+        } else {
+          await _prepareAppPairContentHistory(
+            config: config,
+            account: account,
+            bootstrap: bootstrap,
+            container: container,
+            adminDid: adminSession.did,
+            resources: contentResources,
+          );
+        }
       }
       await coordinator.publish(
         'admin',
@@ -365,14 +377,26 @@ void appPairAdminMain() {
           resources: functionalResources,
         );
       } else if (config.contentSync) {
-        await _runAppPairAdminContentSync(
-          tester: tester,
-          config: config,
-          bootstrap: bootstrap,
-          container: container,
-          adminDid: adminSession.did,
-          resources: contentResources,
-        );
+        if (pagingRecovery) {
+          await _runAppPairAdminPagingRecovery(
+            tester: tester,
+            config: config,
+            bootstrap: bootstrap,
+            container: container,
+            adminDid: adminSession.did,
+            joinedDeviceId: joinedDeviceId,
+            resources: contentResources,
+          );
+        } else {
+          await _runAppPairAdminContentSync(
+            tester: tester,
+            config: config,
+            bootstrap: bootstrap,
+            container: container,
+            adminDid: adminSession.did,
+            resources: contentResources,
+          );
+        }
       } else {
         await E2eCaseAttestationWriter.markPassed(
           _appPairCaseId,
@@ -402,6 +426,9 @@ void appPairJoinerMain() {
         config.localConfigPath,
       );
       final coordinator = config.coordinator;
+      final pagingRecovery = _invocationExplicitlyExpects(
+        _appPairPagingRecoveryCaseId,
+      );
       AppBootstrap? bootstrap;
       await tester.binding.setSurfaceSize(const Size(1320, 820));
       _requireIndependentEmptyPaths(<String>[config.joinerStateRoot]);
@@ -598,13 +625,23 @@ void appPairJoinerMain() {
           joinedDeviceId: pending.protocolDeviceId,
         );
       } else if (config.contentSync) {
-        await _runAppPairJoinerContentSync(
-          tester: tester,
-          config: config,
-          bootstrap: bootstrap,
-          container: container,
-          accountDid: did,
-        );
+        if (pagingRecovery) {
+          await _runAppPairJoinerPagingRecovery(
+            tester: tester,
+            config: config,
+            bootstrap: bootstrap,
+            container: container,
+            accountDid: did,
+          );
+        } else {
+          await _runAppPairJoinerContentSync(
+            tester: tester,
+            config: config,
+            bootstrap: bootstrap,
+            container: container,
+            accountDid: did,
+          );
+        }
       } else {
         await _leaveCompletedAppPairJoin(tester);
         await _deleteJoinedCredentialAndOpenFreshJoin(
@@ -831,7 +868,8 @@ void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
       _invocationExpects(_appPairContentTailOnlyCaseId) ||
       _invocationExpects(_appPairGroupSyncCaseId) ||
       _invocationExpects(_appPairAttachmentSyncCaseId) ||
-      _invocationExpects(_appPairGroupReadSyncCaseId);
+      _invocationExpects(_appPairGroupReadSyncCaseId) ||
+      _invocationExpects(_appPairPagingRecoveryCaseId);
   final expectsSecurity =
       _invocationExpects(_appPairCaseId) ||
       _invocationExpects(_appPairCredentialResetCaseId);
@@ -4078,7 +4116,32 @@ Future<void> _resumeAppPairAndWaitForSync({
   }
 }
 
-Future<void> _forceAppPairRetentionGap(String protocolDeviceId) async {
+Future<void> _forceAppPairRetentionGap(String protocolDeviceId) =>
+    _runAppPairRecoveryOperator(
+      protocolDeviceId: protocolDeviceId,
+      request: <String, String>{
+        'action': 'force_retention_gap',
+        'protocol_device_id': protocolDeviceId,
+      },
+      expectedMode: 'retention_gap',
+    );
+
+Future<void> _prepareAppPairPagingMessages(String protocolDeviceId) =>
+    _runAppPairRecoveryOperator(
+      protocolDeviceId: protocolDeviceId,
+      request: <String, String>{
+        'action': 'prepare_paging_fixture',
+        'protocol_device_id': protocolDeviceId,
+        'fixture': 'messages_501',
+      },
+      expectedMode: 'messages_501',
+    );
+
+Future<void> _runAppPairRecoveryOperator({
+  required String protocolDeviceId,
+  required Map<String, String> request,
+  required String expectedMode,
+}) async {
   final environment = Platform.environment;
   final mode = environment[_syncRecoveryOperatorModeEnv]?.trim();
   if (environment[_syncRecoveryEnableEnv] != '1' ||
@@ -4095,19 +4158,17 @@ Future<void> _forceAppPairRetentionGap(String protocolDeviceId) async {
   );
   final stdoutFuture = process.stdout.transform(utf8.decoder).join();
   final stderrFuture = process.stderr.drain<void>();
-  process.stdin.write(
-    jsonEncode(<String, String>{
-      'action': 'force_retention_gap',
-      'protocol_device_id': protocolDeviceId,
-    }),
-  );
+  if (request['protocol_device_id'] != protocolDeviceId) {
+    fail('The fixed recovery operator request changed device scope.');
+  }
+  process.stdin.write(jsonEncode(request));
   await process.stdin.close();
   int exitCode;
   try {
     exitCode = await process.exitCode.timeout(const Duration(seconds: 30));
   } on TimeoutException {
     process.kill();
-    fail('The fixed recovery retention-gap preparation timed out.');
+    fail('The fixed recovery preparation timed out.');
   }
   final stdoutText = await stdoutFuture;
   await stderrFuture;
@@ -4121,9 +4182,9 @@ Future<void> _forceAppPairRetentionGap(String protocolDeviceId) async {
       receipt is! Map ||
       receipt.length != 3 ||
       receipt['affected_streams'] != 1 ||
-      receipt['mode'] != 'retention_gap' ||
+      receipt['mode'] != expectedMode ||
       receipt['prepared'] != true) {
-    fail('The fixed recovery retention-gap preparation failed.');
+    fail('The fixed recovery preparation failed.');
   }
 }
 

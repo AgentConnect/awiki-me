@@ -76,6 +76,7 @@ dart run tests/e2e/runner.dart --case multi-device
 dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-app-pair --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-app-pair-functional --config <local-awiki-info-config.yaml>
+dart run tests/e2e/runner.dart --case multi-device-app-pair-paging-recovery --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-remote-recovery --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case handle-recovery-local-data --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-app-pair-recovery-registration-rejoin-management-transfer --config <explicit-awiki-info-config.yaml>
@@ -133,7 +134,9 @@ active Handle 的手机号绑定和受保护的测试手机号摘要授权，App
 account allowlist。Stage-3 retention-gap operator 同样固定到 Ali 不可变 Message Service
 发布、已审查的 Ali `/usr/bin/python3.11` stdlib runtime 与 root-owned、service-group-readable 且不可由 group/other 写入的配置，由服务端显式门禁；Message helper 唯一解析 account 后复用 User
 operator 的 active Handle 测试手机号摘要绑定和 active-device 授权，再重验映射、要求
-replica 已 bootstrap 并精确更新一个 active stream。App runner 不接收或转发 account
-ID/allowlist，闭合 receipt 也不作为消息或恢复 oracle。
+replica 已 bootstrap 并精确更新一个 active stream。focused paging alias 只额外允许闭合的
+`messages_501` fixture；它仍由 exact device、测试手机号授权和 managed cleanup 约束，App 不接触
+account/cursor/token/page ref/manifest。App runner 不接收或转发 account ID/allowlist，闭合
+receipt 也不作为消息或恢复 oracle。
 
 ⚡触发器：App 目录职责、SDK/App 边界、tenant/state/vault 归属、测试结构或平台支持变化时同步更新本文件。

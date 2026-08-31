@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-23.dsh-device-join-refactor-v1",
+  "sourceRevision": "2026-08-31.compact-recovery-paging-v1",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
@@ -3671,6 +3671,67 @@
             "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:recent_plain_messages_converged_once",
             "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:older_local_messages_preserved",
             "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:current_state_and_post_anchor_delta_converged"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001",
+      "feature": "An existing AWiki Me replica completes real Schema 3 multi-page recovery",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated Apps share one joined awiki.info account, an independent exact-source CLI peer has committed one ordinary Direct baseline, the joining App is offline, and the reviewed exact-device operator is enabled for messages_501 with managed cleanup.",
+      "action": "Prepare exactly 501 recoverable ordinary messages for the offline joining device, force its account stream behind retention, resume through the normal App lifecycle, then send one fresh Direct message after recovery.",
+      "exactOracles": [
+        "The normal App coordinator completes the Core-owned Schema 3 recovery chain without exposing or supplying a cursor, token, page ref, manifest, page count, item count, or byte count.",
+        "The previously committed ordinary baseline remains exact-once after recovery, and the App reports neither capacityExceeded nor olderHistoryExcluded for the 501-message package.",
+        "A fresh post-recovery Direct message converges exactly once, and the safe diagnostics refresh sequence advances without sensitive protocol fields."
+      ],
+      "negativeChecks": [
+        "A database-cloned projection oracle, App-side page merge, App recovery API, supplied recovery selector, capacity or bounded-history outcome, lost/duplicate baseline, missing/duplicate positive-control message, unsafe diagnostics, skip, or full App suite substitution prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:joined_replica_committed_ordinary_baseline",
+          "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:exact_device_messages_501_fixture_prepared",
+          "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:core_owned_schema3_paged_recovery_completed",
+          "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:pre_recovery_projection_preserved_exactly_once",
+          "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:capacity_and_bounded_history_remained_false",
+          "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:post_recovery_delta_converged_exactly_once",
+          "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:diagnostics_remained_secret_free"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:joined_replica_committed_ordinary_baseline",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:exact_device_messages_501_fixture_prepared",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:core_owned_schema3_paged_recovery_completed"
+          ],
+          [
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:pre_recovery_projection_preserved_exactly_once",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:capacity_and_bounded_history_remained_false"
+          ],
+          [
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:post_recovery_delta_converged_exactly_once",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:diagnostics_remained_secret_free"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:joined_replica_committed_ordinary_baseline",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:exact_device_messages_501_fixture_prepared",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:core_owned_schema3_paged_recovery_completed",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:pre_recovery_projection_preserved_exactly_once",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:capacity_and_bounded_history_remained_false",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:post_recovery_delta_converged_exactly_once",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:diagnostics_remained_secret_free"
           ]
         ]
       }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-23.dsh-device-join-refactor-v1",
+  "sourceRevision": "2026-08-31.compact-recovery-paging-v1",
   "suites": {
     "smoke": {
       "tier": "portable_product_ui",
@@ -410,6 +410,35 @@
         "DEVICE-GROUP-SYNC-E2E-001",
         "DEVICE-ATTACHMENT-SYNC-E2E-001",
         "DEVICE-GROUP-READ-SYNC-E2E-001"
+      ]
+    },
+    "multi-device-app-pair-paging-recovery": {
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","dart","awiki-cli"],
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "estimatedMinutes": 14,
+      "timeoutMinutes": 20,
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "device_join_session",
+        "isolated_app_state",
+        "isolated_cli_state",
+        "direct_message",
+        "compact_recovery_paging_fixture"
+      ],
+      "caseIds": [
+        "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001"
       ]
     },
     "step4-revoke-mls": {
