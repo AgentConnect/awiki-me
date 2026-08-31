@@ -65,6 +65,7 @@ class AwikiImCoreMessageSyncAdapter
             pagesFetched: result.pagesFetched,
             messagesHydrated: result.messagesHydrated,
             duplicatesSkipped: result.duplicatesSkipped,
+            olderHistoryExcluded: result.olderHistoryExcluded,
             changedConversationIds: List<String>.unmodifiable(
               result.changedConversationIds,
             ),

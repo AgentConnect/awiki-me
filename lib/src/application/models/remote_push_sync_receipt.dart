@@ -6,6 +6,7 @@ enum RemotePushSyncDisposition {
   recoveryRequired,
   authRevoked,
   blocked,
+  capacityExceeded,
   staleSession,
   ignored,
 }

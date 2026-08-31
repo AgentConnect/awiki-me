@@ -43,6 +43,7 @@ enum MessageSyncCoordinatorStatus {
   projectionRefreshFailed,
   authRevoked,
   blocked,
+  capacityExceeded,
 }
 
 class MessageSyncCoordinatorState {
@@ -72,6 +73,7 @@ class MessageSyncCoordinatorState {
     this.transientFailurePresentationSuppressed = false,
     this.consecutiveRetryableFailures = 0,
     this.automaticRetryPending = false,
+    this.olderHistoryExcluded = false,
   });
 
   final MessageSyncCoordinatorStatus status;
@@ -99,6 +101,7 @@ class MessageSyncCoordinatorState {
   final bool transientFailurePresentationSuppressed;
   final int consecutiveRetryableFailures;
   final bool automaticRetryPending;
+  final bool olderHistoryExcluded;
 
   bool get isSyncing =>
       status == MessageSyncCoordinatorStatus.syncing ||
@@ -167,6 +170,7 @@ class MessageSyncCoordinatorState {
     bool? transientFailurePresentationSuppressed,
     int? consecutiveRetryableFailures,
     bool? automaticRetryPending,
+    bool? olderHistoryExcluded,
   }) {
     return MessageSyncCoordinatorState(
       status: status ?? this.status,
@@ -229,6 +233,7 @@ class MessageSyncCoordinatorState {
           consecutiveRetryableFailures ?? this.consecutiveRetryableFailures,
       automaticRetryPending:
           automaticRetryPending ?? this.automaticRetryPending,
+      olderHistoryExcluded: olderHistoryExcluded ?? this.olderHistoryExcluded,
     );
   }
 }
@@ -621,7 +626,12 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
             'committed_incoming': result.committedIncomingMessages.length,
           },
         );
-        state = state.copyWith(lastStatus: result.status, lastError: null);
+        state = state.copyWith(
+          lastStatus: result.status,
+          lastError: null,
+          olderHistoryExcluded:
+              state.olderHistoryExcluded || result.olderHistoryExcluded,
+        );
         if (result.status != MessageSyncStatus.recoveryRequired) {
           _runningRecoveryRetry = false;
           _recoveryRetryPending = false;
@@ -649,19 +659,30 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
           _patchReplacementRetryPending = false;
           _cancelCoreDirectedRetry();
           _resetRetryableFailureTracking();
+          final capacityExceeded = switch (failureCode) {
+            'sync.snapshot_item_too_large' ||
+            'sync.snapshot_required_state_too_large' => true,
+            _ => false,
+          };
           state = state.copyWith(
-            status: MessageSyncCoordinatorStatus.blocked,
+            status: capacityExceeded
+                ? MessageSyncCoordinatorStatus.capacityExceeded
+                : MessageSyncCoordinatorStatus.blocked,
             lastError: MessageSyncCoordinatorFailure(failureCode),
           );
           _completeQueuedWaiters(
             _queuedAfterActive,
-            const RemotePushSyncReceipt(
-              disposition: RemotePushSyncDisposition.blocked,
+            RemotePushSyncReceipt(
+              disposition: capacityExceeded
+                  ? RemotePushSyncDisposition.capacityExceeded
+                  : RemotePushSyncDisposition.blocked,
             ),
           );
           _queuedAfterActive = null;
-          return const RemotePushSyncReceipt(
-            disposition: RemotePushSyncDisposition.blocked,
+          return RemotePushSyncReceipt(
+            disposition: capacityExceeded
+                ? RemotePushSyncDisposition.capacityExceeded
+                : RemotePushSyncDisposition.blocked,
           );
         }
         if (result.status == MessageSyncStatus.authRevoked) {

@@ -271,6 +271,60 @@ void main() {
   });
 
   test(
+    'Schema 3 bounded history is a ready success with one safe marker',
+    () async {
+      final sync = FakeMessageSyncService(
+        deltaResult: const MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 0,
+          pagesFetched: 64,
+          olderHistoryExcluded: true,
+        ),
+      );
+      final container = _container(FakeAwikiGateway(), sync);
+      addTearDown(container.dispose);
+
+      final receipt = await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync();
+      final state = container.read(messageSyncCoordinatorProvider);
+
+      expect(receipt.disposition, RemotePushSyncDisposition.succeeded);
+      expect(state.status, MessageSyncCoordinatorStatus.idle);
+      expect(state.olderHistoryExcluded, isTrue);
+    },
+  );
+
+  test(
+    'Schema 3 hard capacity errors are terminal capacity outcomes',
+    () async {
+      for (final errorCode in <String>[
+        'sync.snapshot_item_too_large',
+        'sync.snapshot_required_state_too_large',
+      ]) {
+        final sync = FakeMessageSyncService(
+          deltaResult: MessageSyncOutcome(
+            status: MessageSyncStatus.blocked,
+            eventsApplied: 0,
+            pagesFetched: 0,
+            errorCode: errorCode,
+          ),
+        );
+        final container = _container(FakeAwikiGateway(), sync);
+        final receipt = await container
+            .read(messageSyncCoordinatorProvider.notifier)
+            .requestRemotePushSync();
+        final state = container.read(messageSyncCoordinatorProvider);
+
+        expect(receipt.disposition, RemotePushSyncDisposition.capacityExceeded);
+        expect(state.status, MessageSyncCoordinatorStatus.capacityExceeded);
+        expect(state.automaticRetryPending, isFalse);
+        container.dispose();
+      }
+    },
+  );
+
+  test(
     'intercepted foreground Push stays silent outside its conversation',
     () async {
       final committed = _committedIncoming(
