@@ -5,7 +5,7 @@
 const String primaryTenantDomainEnvironmentKey = 'AWIKI_PRIMARY_TENANT_DOMAIN';
 const String primaryTenantDomain = String.fromEnvironment(
   primaryTenantDomainEnvironmentKey,
-  defaultValue: 'awiki.ai',
+  defaultValue: 'awiki.me',
 );
 const String primaryTenantBaseUrl = 'https://$primaryTenantDomain';
 const bool defaultMultiDeviceDeviceRevokeEnabled = bool.fromEnvironment(
@@ -31,6 +31,7 @@ const bool defaultMessageSyncV2ReadEnabled = bool.fromEnvironment(
   defaultValue: true,
 );
 const Set<String> agentDaemonTenantDomainAllowlist = <String>{
+  'awiki.me',
   'awiki.ai',
   'agent-connect.cn',
   'anpclaw.com',

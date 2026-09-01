@@ -4,7 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config/awiki_environment_config.dart';
 
-const String primaryTenantName = 'AWiki';
+const int officialTenantCatalogVersion = 1;
+const String chinaTenantName = 'AWiki 中国（上海）';
+const String chinaTenantBackendBaseUrl = 'https://awiki.me';
+const String chinaTenantDidHost = 'awiki.me';
+const String globalTenantName = 'AWiki 全球（硅谷）';
+const String globalTenantBackendBaseUrl = 'https://awiki.ai';
+const String globalTenantDidHost = 'awiki.ai';
+const String primaryTenantName = chinaTenantName;
 const String primaryTenantBackendBaseUrl = primaryTenantBaseUrl;
 const String primaryTenantDidHost = primaryTenantDomain;
 
@@ -57,6 +64,22 @@ enum AppTenantKind {
   );
 }
 
+enum AppTenantOfficialKey {
+  china('china'),
+  global('global');
+
+  const AppTenantOfficialKey(this.wireName);
+  final String wireName;
+
+  static AppTenantOfficialKey? parseOptional(Object? value) {
+    if (value == null) return null;
+    return values.firstWhere(
+      (item) => item.wireName == value,
+      orElse: () => throw const FormatException('tenant_official_key_invalid'),
+    );
+  }
+}
+
 enum AppTenantLifecycle {
   active('active'),
   archived('archived');
@@ -81,6 +104,7 @@ class AppTenantProfile {
     required this.lifecycle,
     required this.createdAt,
     required this.updatedAt,
+    this.officialKey,
     this.remoteRealmId,
   });
 
@@ -93,6 +117,7 @@ class AppTenantProfile {
         _requiredString(json, 'storage_scope_id'),
       ),
       kind: AppTenantKind.parse(json['kind']),
+      officialKey: AppTenantOfficialKey.parseOptional(json['official_key']),
       name: _requiredString(json, 'display_name'),
       backendBaseUrl: _requiredString(json, 'backend_base_url'),
       didHost: _requiredString(json, 'did_host'),
@@ -106,6 +131,7 @@ class AppTenantProfile {
   final TenantProfileId tenantProfileId;
   final StorageScopeId storageScopeId;
   final AppTenantKind kind;
+  final AppTenantOfficialKey? officialKey;
   final String name;
   final String backendBaseUrl;
   final String didHost;
@@ -118,11 +144,13 @@ class AppTenantProfile {
 
   bool get isArchived => lifecycle == AppTenantLifecycle.archived;
   bool get isPrimaryTenant => kind == AppTenantKind.builtInAwiki;
+  bool get isOfficialTenant => officialKey != null;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'tenant_profile_id': tenantProfileId.value,
     'storage_scope_id': storageScopeId.value,
     'kind': kind.wireName,
+    'official_key': officialKey?.wireName,
     'display_name': name,
     'backend_base_url': backendBaseUrl,
     'did_host': didHost,
@@ -133,6 +161,9 @@ class AppTenantProfile {
   };
 
   AppTenantProfile copyWith({
+    AppTenantKind? kind,
+    AppTenantOfficialKey? officialKey,
+    bool clearOfficialKey = false,
     String? name,
     String? backendBaseUrl,
     String? didHost,
@@ -142,7 +173,8 @@ class AppTenantProfile {
   }) => AppTenantProfile(
     tenantProfileId: tenantProfileId,
     storageScopeId: storageScopeId,
-    kind: kind,
+    kind: kind ?? this.kind,
+    officialKey: clearOfficialKey ? null : officialKey ?? this.officialKey,
     name: name ?? this.name,
     backendBaseUrl: backendBaseUrl ?? this.backendBaseUrl,
     didHost: didHost ?? this.didHost,
@@ -158,6 +190,7 @@ class AppTenantRegistry {
     required this.revision,
     required this.activeTenantProfileId,
     required this.tenants,
+    this.officialCatalogVersion = 0,
   });
 
   factory AppTenantRegistry.fromJson(Map<String, Object?> json) {
@@ -171,6 +204,9 @@ class AppTenantRegistry {
     }
     final registry = AppTenantRegistry(
       revision: revision,
+      officialCatalogVersion: json['official_catalog_version'] is int
+          ? json['official_catalog_version']! as int
+          : 0,
       activeTenantProfileId: TenantProfileId.parse(
         _requiredString(json, 'active_tenant_profile_id'),
       ),
@@ -190,6 +226,7 @@ class AppTenantRegistry {
   }
 
   final int revision;
+  final int officialCatalogVersion;
   final TenantProfileId activeTenantProfileId;
   final List<AppTenantProfile> tenants;
 
@@ -204,12 +241,22 @@ class AppTenantRegistry {
   void validate() {
     final profiles = <TenantProfileId>{};
     final scopes = <StorageScopeId>{};
+    final officialKeys = <AppTenantOfficialKey>{};
     for (final tenant in tenants) {
       if (!profiles.add(tenant.tenantProfileId)) {
         throw const FormatException('tenant_profile_duplicate');
       }
       if (!scopes.add(tenant.storageScopeId)) {
         throw const FormatException('storage_scope_duplicate');
+      }
+      final officialKey = tenant.officialKey;
+      if (officialKey != null) {
+        if (tenant.kind != AppTenantKind.builtInAwiki) {
+          throw const FormatException('tenant_official_kind_invalid');
+        }
+        if (!officialKeys.add(officialKey)) {
+          throw const FormatException('tenant_official_key_duplicate');
+        }
       }
     }
     if (!tenants.any(
@@ -222,6 +269,7 @@ class AppTenantRegistry {
 
   Map<String, Object?> toJson() => <String, Object?>{
     'schema_version': 1,
+    'official_catalog_version': officialCatalogVersion,
     'revision': revision,
     'active_tenant_profile_id': activeTenantProfileId.value,
     'tenants': tenants.map((tenant) => tenant.toJson()).toList(),
@@ -229,12 +277,15 @@ class AppTenantRegistry {
 
   AppTenantRegistry copyWith({
     int? revision,
+    int? officialCatalogVersion,
     TenantProfileId? activeTenantProfileId,
     List<AppTenantProfile>? tenants,
   }) {
     final nextTenants = tenants ?? this.tenants;
     return AppTenantRegistry(
       revision: revision ?? this.revision,
+      officialCatalogVersion:
+          officialCatalogVersion ?? this.officialCatalogVersion,
       activeTenantProfileId:
           activeTenantProfileId ?? this.activeTenantProfileId,
       tenants: nextTenants,
@@ -302,12 +353,7 @@ class DisabledAppTenantActions implements AppTenantActions {
 }
 
 final appTenantRegistryProvider = Provider<AppTenantRegistry>((ref) {
-  final tenant = defaultTenantProfile();
-  return AppTenantRegistry(
-    revision: 1,
-    activeTenantProfileId: tenant.tenantProfileId,
-    tenants: <AppTenantProfile>[tenant],
-  );
+  return defaultTenantRegistry();
 });
 final activeAppTenantProvider = Provider<AppTenantProfile>(
   (ref) => ref.watch(appTenantRegistryProvider).activeTenant,
@@ -317,17 +363,69 @@ final appTenantActionsProvider = Provider<AppTenantActions>(
 );
 
 AppTenantProfile defaultTenantProfile({DateTime? now}) {
+  const officialKey = primaryTenantDomain == globalTenantDidHost
+      ? AppTenantOfficialKey.global
+      : primaryTenantDomain == chinaTenantDidHost
+      ? AppTenantOfficialKey.china
+      : null;
+  final name = switch (officialKey) {
+    AppTenantOfficialKey.china => chinaTenantName,
+    AppTenantOfficialKey.global => globalTenantName,
+    null => 'AWiki',
+  };
   final timestamp = (now ?? DateTime.now()).toUtc().toIso8601String();
   return AppTenantProfile(
     tenantProfileId: TenantProfileId.generate(),
     storageScopeId: StorageScopeId.generate(),
     kind: AppTenantKind.builtInAwiki,
-    name: primaryTenantName,
+    officialKey: officialKey,
+    name: name,
     backendBaseUrl: primaryTenantBackendBaseUrl,
     didHost: primaryTenantDidHost,
     lifecycle: AppTenantLifecycle.active,
     createdAt: timestamp,
     updatedAt: timestamp,
+  );
+}
+
+AppTenantProfile officialTenantProfile(
+  AppTenantOfficialKey key, {
+  DateTime? now,
+}) {
+  final timestamp = (now ?? DateTime.now()).toUtc().toIso8601String();
+  return AppTenantProfile(
+    tenantProfileId: TenantProfileId.generate(),
+    storageScopeId: StorageScopeId.generate(),
+    kind: AppTenantKind.builtInAwiki,
+    officialKey: key,
+    name: key == AppTenantOfficialKey.china
+        ? chinaTenantName
+        : globalTenantName,
+    backendBaseUrl: key == AppTenantOfficialKey.china
+        ? chinaTenantBackendBaseUrl
+        : globalTenantBackendBaseUrl,
+    didHost: key == AppTenantOfficialKey.china
+        ? chinaTenantDidHost
+        : globalTenantDidHost,
+    lifecycle: AppTenantLifecycle.active,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  );
+}
+
+AppTenantRegistry defaultTenantRegistry({DateTime? now}) {
+  final initial = defaultTenantProfile(now: now);
+  final tenants = <AppTenantProfile>[initial];
+  for (final key in AppTenantOfficialKey.values) {
+    if (initial.officialKey != key) {
+      tenants.add(officialTenantProfile(key, now: now));
+    }
+  }
+  return AppTenantRegistry(
+    revision: 1,
+    officialCatalogVersion: officialTenantCatalogVersion,
+    activeTenantProfileId: initial.tenantProfileId,
+    tenants: tenants,
   );
 }
 
