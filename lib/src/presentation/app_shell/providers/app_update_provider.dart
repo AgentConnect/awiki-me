@@ -24,12 +24,26 @@ class AppUpdateState {
     this.currentVersion,
     this.latestManifest,
     this.errorMessage,
+    this.failureReason,
+    this.cachedAt,
+    this.usedCache = false,
+    this.policyUnavailable = false,
+    this.versionUnsupported = false,
+    this.recommendationDismissed = false,
+    this.manualOfficialSource,
   });
 
   final AppUpdateStatus status;
   final AppVersion? currentVersion;
   final AppUpdateManifest? latestManifest;
   final String? errorMessage;
+  final String? failureReason;
+  final DateTime? cachedAt;
+  final bool usedCache;
+  final bool policyUnavailable;
+  final bool versionUnsupported;
+  final bool recommendationDismissed;
+  final AppOfficialUpdateSource? manualOfficialSource;
 
   bool get hasUpdate =>
       latestManifest != null &&
@@ -47,6 +61,9 @@ class AppUpdateState {
       return latestManifest!.platforms.macos.appcastUrl?.isNotEmpty == true ||
           latestManifest!.platforms.macos.downloadUrl?.isNotEmpty == true;
     }
+    if (Platform.isWindows) {
+      return latestManifest!.platforms.windows.downloadUrl?.isNotEmpty == true;
+    }
     return false;
   }
 
@@ -57,6 +74,15 @@ class AppUpdateState {
     String? errorMessage,
     bool clearErrorMessage = false,
     bool clearLatestManifest = false,
+    String? failureReason,
+    bool clearFailureReason = false,
+    DateTime? cachedAt,
+    bool? usedCache,
+    bool? policyUnavailable,
+    bool? versionUnsupported,
+    bool? recommendationDismissed,
+    AppOfficialUpdateSource? manualOfficialSource,
+    bool clearManualOfficialSource = false,
   }) {
     return AppUpdateState(
       status: status ?? this.status,
@@ -67,6 +93,18 @@ class AppUpdateState {
       errorMessage: clearErrorMessage
           ? null
           : (errorMessage ?? this.errorMessage),
+      failureReason: clearFailureReason
+          ? failureReason
+          : (failureReason ?? this.failureReason),
+      cachedAt: cachedAt ?? this.cachedAt,
+      usedCache: usedCache ?? this.usedCache,
+      policyUnavailable: policyUnavailable ?? this.policyUnavailable,
+      versionUnsupported: versionUnsupported ?? this.versionUnsupported,
+      recommendationDismissed:
+          recommendationDismissed ?? this.recommendationDismissed,
+      manualOfficialSource: clearManualOfficialSource
+          ? null
+          : (manualOfficialSource ?? this.manualOfficialSource),
     );
   }
 }
@@ -115,10 +153,25 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
       final result = await ref
           .read(updateServiceProvider)
           .checkForUpdates(force: force);
+      final manifest = result.latestManifest;
+      final ignored = manifest != null && result.hasUpdate
+          ? await ref.read(updateServiceProvider).isVersionIgnored(manifest)
+          : false;
+      if (manifest != null && result.hasUpdate && !ignored) {
+        await ref.read(updateServiceProvider).markVersionPrompted(manifest);
+      }
       if (!mounted) return;
       state = state.copyWith(
         currentVersion: result.currentVersion,
         latestManifest: result.latestManifest,
+        failureReason: result.failureReason,
+        clearFailureReason: result.failureReason == null,
+        cachedAt: result.cachedAt,
+        usedCache: result.usedCache,
+        policyUnavailable: result.policyUnavailable,
+        versionUnsupported: result.versionUnsupported,
+        recommendationDismissed: ignored,
+        clearManualOfficialSource: true,
         status: result.hasUpdate
             ? AppUpdateStatus.updateAvailable
             : AppUpdateStatus.upToDate,
@@ -140,6 +193,64 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
             .read(uiFeedbackProvider.notifier)
             .showError(AppMessage.updateCheckFailed());
       }
+    }
+  }
+
+  Future<void> checkOfficialSource(AppOfficialUpdateSource source) async {
+    if (!mounted) return;
+    state = state.copyWith(
+      status: AppUpdateStatus.checking,
+      clearErrorMessage: true,
+      recommendationDismissed: true,
+    );
+    try {
+      final result = await ref
+          .read(updateServiceProvider)
+          .checkOfficialSource(source);
+      if (!mounted) return;
+      state = state.copyWith(
+        currentVersion: result.currentVersion,
+        latestManifest: result.latestManifest,
+        failureReason: result.failureReason,
+        clearFailureReason: result.failureReason == null,
+        cachedAt: result.cachedAt,
+        usedCache: result.usedCache,
+        policyUnavailable: result.policyUnavailable,
+        versionUnsupported: false,
+        recommendationDismissed: true,
+        manualOfficialSource: source,
+        status: result.hasUpdate
+            ? AppUpdateStatus.updateAvailable
+            : AppUpdateStatus.upToDate,
+        clearErrorMessage: true,
+      );
+      if (!result.hasUpdate) {
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showInfo(AppMessage.updateAlreadyLatest());
+      }
+    } catch (error) {
+      if (!mounted) return;
+      state = state.copyWith(
+        status: AppUpdateStatus.error,
+        errorMessage: error.toString(),
+        recommendationDismissed: true,
+        manualOfficialSource: source,
+      );
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.updateCheckFailed());
+    }
+  }
+
+  Future<void> dismissRecommendation() async {
+    final manifest = state.latestManifest;
+    if (manifest == null) return;
+    state = state.copyWith(recommendationDismissed: true);
+    try {
+      await ref.read(updateServiceProvider).ignoreVersion(manifest);
+    } catch (_) {
+      // The in-memory dismissal still avoids interrupting the current session.
     }
   }
 

@@ -42,8 +42,12 @@ void main() {
 
   AppUpdateManifest buildManifest() {
     return AppUpdateManifest(
+      policyOrigin: 'https://example.com',
+      policyRevision: 1,
       version: '0.2.0',
       buildNumber: 2,
+      minimumSupportedVersion: '0.1.0',
+      minimumSupportedBuildNumber: 1,
       publishedAt: DateTime.utc(2026, 4, 5, 8),
       releaseNotesUrl: 'https://example.com/release-notes',
       githubReleaseUrl: 'https://example.com/releases/tag/v0.2.0',
@@ -51,10 +55,15 @@ void main() {
         macos: AppUpdatePlatformManifest(
           downloadUrl: 'https://example.com/app.dmg',
           appcastUrl: 'https://example.com/appcast.xml',
+          sha256:
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          sizeBytes: 123,
         ),
         android: AppUpdatePlatformManifest(
           downloadUrl: 'https://example.com/app.apk',
-          sha256: 'abc',
+          sha256:
+              'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          sizeBytes: 456,
           minSupportedBuildNumber: 1,
         ),
       ),
@@ -84,6 +93,31 @@ void main() {
       expect(state.currentVersion?.version, '0.1.0');
       expect(state.latestManifest?.version, '0.2.0');
       expect(state.status, AppUpdateStatus.updateAvailable);
+    });
+
+    test('忽略推荐版本会持久标记并立即隐藏横幅', () async {
+      updateService.latestManifest = buildManifest();
+      await container.read(appUpdateProvider.notifier).initialize();
+
+      await container.read(appUpdateProvider.notifier).dismissRecommendation();
+
+      expect(container.read(appUpdateProvider).recommendationDismissed, isTrue);
+      expect(updateService.ignored, isTrue);
+    });
+
+    test('手动官方源检查不会对自定义租户施加最低版本门禁', () async {
+      updateService.latestManifest = buildManifest();
+
+      await container
+          .read(appUpdateProvider.notifier)
+          .checkOfficialSource(AppOfficialUpdateSource.global);
+
+      expect(container.read(appUpdateProvider), isA<AppUpdateState>());
+      expect(
+        container.read(appUpdateProvider).manualOfficialSource,
+        AppOfficialUpdateSource.global,
+      );
+      expect(container.read(appUpdateProvider).versionUnsupported, isFalse);
     });
 
     test('手动检查发现已是最新版本时写入提示', () async {

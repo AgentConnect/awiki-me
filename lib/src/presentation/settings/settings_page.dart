@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_locale.dart';
 import '../../app/app_router.dart';
+import '../../application/tenant/app_tenant.dart';
 import '../../domain/entities/session_identity.dart';
+import '../../domain/services/update_service.dart';
 import '../../l10n/l10n.dart';
 import '../app_shell/providers/app_update_provider.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
@@ -44,6 +46,7 @@ class SettingsPage extends ConsumerWidget {
     final session = ref.watch(sessionProvider).session;
     final runtime = ref.read(appRuntimeProvider.notifier);
     final updateState = ref.watch(appUpdateProvider);
+    final activeTenant = ref.watch(activeAppTenantProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
     final displayScale = ref.watch(displayScaleProvider);
     final isDesktopPlatform =
@@ -131,6 +134,30 @@ class SettingsPage extends ConsumerWidget {
                       .read(appUpdateProvider.notifier)
                       .checkForUpdates(force: true),
           ),
+          if (!activeTenant.isOfficialTenant) ...<Widget>[
+            const AppSectionDivider(),
+            AppListTile(
+              key: const Key('settings-check-china-update-source-row'),
+              title: l10n.settingsCheckChinaUpdateSource,
+              leading: leading(const _SettingsIcon(icon: CupertinoIcons.globe)),
+              onTap: updateState.status == AppUpdateStatus.checking
+                  ? null
+                  : () => ref
+                        .read(appUpdateProvider.notifier)
+                        .checkOfficialSource(AppOfficialUpdateSource.china),
+            ),
+            const AppSectionDivider(),
+            AppListTile(
+              key: const Key('settings-check-global-update-source-row'),
+              title: l10n.settingsCheckGlobalUpdateSource,
+              leading: leading(const _SettingsIcon(icon: CupertinoIcons.globe)),
+              onTap: updateState.status == AppUpdateStatus.checking
+                  ? null
+                  : () => ref
+                        .read(appUpdateProvider.notifier)
+                        .checkOfficialSource(AppOfficialUpdateSource.global),
+            ),
+          ],
           const AppSectionDivider(),
           AppListTile(
             title: l10n.settingsLanguage,
@@ -320,6 +347,30 @@ class SettingsPage extends ConsumerWidget {
                         .read(appUpdateProvider.notifier)
                         .checkForUpdates(force: true),
             ),
+            if (!activeTenant.isOfficialTenant)
+              _QuietSettingsRow(
+                key: const Key('settings-check-china-update-source-row'),
+                icon: CupertinoIcons.globe,
+                title: l10n.settingsCheckChinaUpdateSource,
+                height: optionRowHeight,
+                onTap: updateState.status == AppUpdateStatus.checking
+                    ? null
+                    : () => ref
+                          .read(appUpdateProvider.notifier)
+                          .checkOfficialSource(AppOfficialUpdateSource.china),
+              ),
+            if (!activeTenant.isOfficialTenant)
+              _QuietSettingsRow(
+                key: const Key('settings-check-global-update-source-row'),
+                icon: CupertinoIcons.globe,
+                title: l10n.settingsCheckGlobalUpdateSource,
+                height: optionRowHeight,
+                onTap: updateState.status == AppUpdateStatus.checking
+                    ? null
+                    : () => ref
+                          .read(appUpdateProvider.notifier)
+                          .checkOfficialSource(AppOfficialUpdateSource.global),
+              ),
             _QuietSettingsRow(
               key: const Key('settings-language-row'),
               icon: CupertinoIcons.globe,

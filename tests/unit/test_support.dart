@@ -486,6 +486,9 @@ class FakeUpdateService implements UpdateService {
   int checkForUpdatesCalls = 0;
   Object? checkError;
   Object? installError;
+  bool ignored = false;
+  AppOfficialUpdateSource preferredOfficialSource =
+      AppOfficialUpdateSource.china;
 
   @override
   Future<AppUpdateCheckResult> checkForUpdates({required bool force}) async {
@@ -503,6 +506,29 @@ class FakeUpdateService implements UpdateService {
   Future<AppVersion> getCurrentVersion() async {
     getCurrentVersionCalls += 1;
     return currentVersion;
+  }
+
+  @override
+  Future<AppUpdateCheckResult> checkOfficialSource(
+    AppOfficialUpdateSource source,
+  ) async {
+    preferredOfficialSource = source;
+    return checkForUpdates(force: true);
+  }
+
+  @override
+  Future<AppOfficialUpdateSource> loadPreferredOfficialSource() async =>
+      preferredOfficialSource;
+
+  @override
+  Future<bool> isVersionIgnored(AppUpdateManifest manifest) async => ignored;
+
+  @override
+  Future<void> markVersionPrompted(AppUpdateManifest manifest) async {}
+
+  @override
+  Future<void> ignoreVersion(AppUpdateManifest manifest) async {
+    ignored = true;
   }
 
   @override

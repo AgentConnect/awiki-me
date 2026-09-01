@@ -458,7 +458,12 @@ class AppBootstrap {
         storage: preferenceStorage,
         scopeId: registeredTenant.storageScopeId.value,
       );
-      final updateService = AppUpdateService(storage: preferenceStorage);
+      final updateService = AppUpdateService(
+        storage: preferenceStorage,
+        tenantId: registeredTenant.id,
+        backendBaseUrl: registeredTenant.backendBaseUrl,
+        officialTenant: registeredTenant.isOfficialTenant,
+      );
       final bootstrap = AppBootstrap(
         environment: effectiveEnvironment,
         accountGateway: accountGateway,
@@ -644,6 +649,10 @@ class AppBootstrap {
     final localStore = productLocalStore;
     if (localStore is AwikiProductLocalStoreSqlite) {
       await disposeStep(localStore.close);
+    }
+    final updates = updateService;
+    if (updates is DisposableUpdateService) {
+      (updates as DisposableUpdateService).dispose();
     }
     if (disposeNotificationFacade) {
       await disposeStep(notificationFacade.dispose);
