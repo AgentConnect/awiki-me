@@ -2316,6 +2316,18 @@ abstract class AppLocalizations {
   /// **'检查更新'**
   String get settingsCheckForUpdates;
 
+  /// No description provided for @settingsCheckChinaUpdateSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查中国官方更新源'**
+  String get settingsCheckChinaUpdateSource;
+
+  /// No description provided for @settingsCheckGlobalUpdateSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查全球官方更新源'**
+  String get settingsCheckGlobalUpdateSource;
+
   /// No description provided for @settingsViewReleaseNotes.
   ///
   /// In zh, this message translates to:
@@ -5741,6 +5753,40 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'更新失败，请打开下载页手动安装。'**
   String get updateInstallFailed;
+
+  /// No description provided for @updateRestrictedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前租户需要更新'**
+  String get updateRestrictedTitle;
+
+  /// No description provided for @updateRestrictedMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'{tenantName} 要求 AWiki Me {minimumVersion} 或更高版本，当前版本为 {currentVersion}。本地数据和租户管理仍可使用。'**
+  String updateRestrictedMessage(
+    Object tenantName,
+    Object minimumVersion,
+    Object currentVersion,
+  );
+
+  /// No description provided for @updateRestrictedInstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'下载并安装更新'**
+  String get updateRestrictedInstall;
+
+  /// No description provided for @updateRestrictedSwitchTenant.
+  ///
+  /// In zh, this message translates to:
+  /// **'切换租户'**
+  String get updateRestrictedSwitchTenant;
+
+  /// No description provided for @updateRestrictedSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'设置和本地数据'**
+  String get updateRestrictedSettings;
 
   /// No description provided for @daemonUpgradeStarted.
   ///

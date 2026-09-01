@@ -1179,6 +1179,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsCheckForUpdates => '检查更新';
 
   @override
+  String get settingsCheckChinaUpdateSource => '检查中国官方更新源';
+
+  @override
+  String get settingsCheckGlobalUpdateSource => '检查全球官方更新源';
+
+  @override
   String get settingsViewReleaseNotes => '查看更新日志';
 
   @override
@@ -3038,6 +3044,27 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get updateInstallFailed => '更新失败，请打开下载页手动安装。';
+
+  @override
+  String get updateRestrictedTitle => '当前租户需要更新';
+
+  @override
+  String updateRestrictedMessage(
+    Object tenantName,
+    Object minimumVersion,
+    Object currentVersion,
+  ) {
+    return '$tenantName 要求 AWiki Me $minimumVersion 或更高版本，当前版本为 $currentVersion。本地数据和租户管理仍可使用。';
+  }
+
+  @override
+  String get updateRestrictedInstall => '下载并安装更新';
+
+  @override
+  String get updateRestrictedSwitchTenant => '切换租户';
+
+  @override
+  String get updateRestrictedSettings => '设置和本地数据';
 
   @override
   String get daemonUpgradeStarted => '已开始升级代理。';

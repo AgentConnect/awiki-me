@@ -147,6 +147,10 @@ class PackageManifestBuilder {
     required this.targets,
     required this.downloadBaseUrl,
     required this.downloadPageUrl,
+    this.policyOrigin,
+    this.policyRevision = 1,
+    this.minimumSupportedVersion,
+    this.minimumSupportedBuildNumber,
   });
 
   final String version;
@@ -156,6 +160,10 @@ class PackageManifestBuilder {
   final Set<String> targets;
   final String downloadBaseUrl;
   final String downloadPageUrl;
+  final String? policyOrigin;
+  final int policyRevision;
+  final String? minimumSupportedVersion;
+  final int? minimumSupportedBuildNumber;
 
   Future<Map<String, Object?>> aggregate({
     required Directory artifactsRoot,
@@ -267,14 +275,23 @@ class PackageManifestBuilder {
         targets.containsAll(packageTargetOrder);
     final manifest = <String, Object?>{
       'schemaVersion': 1,
+      'product': 'awiki-me',
+      'channel': 'stable',
+      'policy_origin': policyOrigin ?? Uri.parse(downloadBaseUrl).origin,
+      'policy_revision': policyRevision,
       'packageSet': isCompleteRelease ? 'release' : 'validation',
       'complete': isCompleteRelease,
       'requestId': requestId,
       'version': version,
       'buildNumber': buildNumber,
+      'minimum_supported_version': minimumSupportedVersion ?? version,
+      'minimum_supported_build_number':
+          minimumSupportedBuildNumber ?? buildNumber,
+      'published_at': (publishedAt ?? DateTime.now()).toUtc().toIso8601String(),
       'publishedAt': (publishedAt ?? DateTime.now()).toUtc().toIso8601String(),
       'sourceRefs': sourceRefs.toJson(),
       'releaseNotesUrl': downloadPageUrl,
+      'release_notes_url': downloadPageUrl,
       'githubReleaseUrl': downloadPageUrl,
       'artifacts': artifactEntries,
       'platforms': _platformEntries(artifactEntries),
@@ -296,6 +313,17 @@ class PackageManifestBuilder {
 
   void _validateInputs() {
     _validateVersion(version);
+    if (minimumSupportedVersion != null) {
+      _validateVersion(minimumSupportedVersion!);
+    }
+    if (policyRevision < 1) {
+      throw const FormatException('policyRevision must be positive');
+    }
+    if ((minimumSupportedBuildNumber ?? buildNumber) > buildNumber) {
+      throw const FormatException(
+        'minimum supported build cannot exceed recommended build',
+      );
+    }
     if (buildNumber <= 0) {
       throw const FormatException('buildNumber must be greater than zero');
     }
@@ -333,6 +361,7 @@ class PackageManifestBuilder {
         'downloadUrl':
             '${_withoutTrailingSlash(downloadBaseUrl)}/$version/$filename',
         'sha256': artifact['sha256'],
+        'sizeBytes': artifact['sizeBytes'],
       };
     }
 
@@ -419,6 +448,13 @@ Future<void> main(List<String> args) async {
           targets: targets,
           downloadBaseUrl: _option(options, '--download-base-url'),
           downloadPageUrl: _option(options, '--download-page-url'),
+          policyOrigin: options['--policy-origin'],
+          policyRevision:
+              int.tryParse(options['--policy-revision'] ?? '1') ?? 0,
+          minimumSupportedVersion: options['--minimum-version'],
+          minimumSupportedBuildNumber: int.tryParse(
+            options['--minimum-build-number'] ?? '',
+          ),
         ).aggregate(
           artifactsRoot: Directory(_option(options, '--artifacts-root')),
           outputDirectory: Directory(_option(options, '--output-dir')),

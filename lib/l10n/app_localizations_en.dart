@@ -1240,6 +1240,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsCheckForUpdates => 'Check for updates';
 
   @override
+  String get settingsCheckChinaUpdateSource =>
+      'Check the China official update source';
+
+  @override
+  String get settingsCheckGlobalUpdateSource =>
+      'Check the Global official update source';
+
+  @override
   String get settingsViewReleaseNotes => 'View release notes';
 
   @override
@@ -3220,6 +3228,27 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get updateInstallFailed =>
       'Update failed. Please install it from the download page.';
+
+  @override
+  String get updateRestrictedTitle => 'Update required for this tenant';
+
+  @override
+  String updateRestrictedMessage(
+    Object tenantName,
+    Object minimumVersion,
+    Object currentVersion,
+  ) {
+    return '$tenantName requires AWiki Me $minimumVersion or later. You are using $currentVersion. Local data and tenant controls remain available.';
+  }
+
+  @override
+  String get updateRestrictedInstall => 'Download and install update';
+
+  @override
+  String get updateRestrictedSwitchTenant => 'Switch tenant';
+
+  @override
+  String get updateRestrictedSettings => 'Settings and local data';
 
   @override
   String get daemonUpgradeStarted => 'Daemon upgrade started.';
