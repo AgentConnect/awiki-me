@@ -326,7 +326,7 @@ class _TenantListTile extends StatelessWidget {
                   ],
                 ],
               ),
-              if (tenant.isPrimaryTenant) ...<Widget>[
+              if (tenant.isOfficialTenant) ...<Widget>[
                 SizedBox(height: responsive.spacing(4)),
                 _TenantManagedLabel(
                   key: Key('tenant-primary-managed:${tenant.id}'),

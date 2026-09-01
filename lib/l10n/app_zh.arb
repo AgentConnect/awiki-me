@@ -135,7 +135,7 @@
   "tenantEdit": "编辑租户",
   "tenantUse": "使用",
   "tenantCurrent": "当前",
-  "tenantDefaultBadge": "默认配置",
+  "tenantDefaultBadge": "官方租户",
   "tenantName": "租户名称",
   "tenantNamePlaceholder": "团队或服务名称",
   "tenantBackendBaseUrl": "后端地址",
