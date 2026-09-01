@@ -135,7 +135,7 @@
   "tenantEdit": "Edit tenant",
   "tenantUse": "Use",
   "tenantCurrent": "Current",
-  "tenantDefaultBadge": "Default configuration",
+  "tenantDefaultBadge": "Official tenant",
   "tenantName": "Tenant name",
   "tenantNamePlaceholder": "Team or service name",
   "tenantBackendBaseUrl": "Backend base URL",

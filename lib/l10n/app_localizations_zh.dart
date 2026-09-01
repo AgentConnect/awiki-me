@@ -350,7 +350,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tenantCurrent => '当前';
 
   @override
-  String get tenantDefaultBadge => '默认配置';
+  String get tenantDefaultBadge => '官方租户';
 
   @override
   String get tenantName => '租户名称';

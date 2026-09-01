@@ -737,7 +737,7 @@ abstract class AppLocalizations {
   /// No description provided for @tenantDefaultBadge.
   ///
   /// In zh, this message translates to:
-  /// **'默认配置'**
+  /// **'官方租户'**
   String get tenantDefaultBadge;
 
   /// No description provided for @tenantName.

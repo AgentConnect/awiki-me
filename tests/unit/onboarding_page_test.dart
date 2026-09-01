@@ -402,8 +402,8 @@ void main() {
 
     expect(support.phone, '13800138000');
     expect(support.handle, 'alice-0714');
-    expect(support.domain, 'awiki.ai');
-    expect(support.fullHandle, 'alice-0714.awiki.ai');
+    expect(support.domain, 'awiki.me');
+    expect(support.fullHandle, 'alice-0714.awiki.me');
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -1653,7 +1653,7 @@ void main() {
       );
       expect(
         container.read(onboardingProvider).otpTargetFullHandle,
-        'alice.awiki.ai',
+        'alice.awiki.me',
       );
 
       await tester.enterText(
@@ -2179,10 +2179,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(HandleRecoveryPage), findsOneWidget);
-    expect(find.text('alice.awiki.ai'), findsOneWidget);
+    expect(find.text('alice.awiki.me'), findsOneWidget);
     expect(find.text('+8613800138000'), findsOneWidget);
     expect(find.byType(CupertinoTextField), findsOneWidget);
-    expect(recoveryCore.handle, 'alice.awiki.ai');
+    expect(recoveryCore.handle, 'alice.awiki.me');
     expect(recoveryCore.phone, '+8613800138000');
     expect(recoveryCore.localIdentityId, isNull);
     expect(identityPort.discardedContinuationId, 'existing-handle-test');

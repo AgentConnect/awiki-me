@@ -367,7 +367,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tenantCurrent => 'Current';
 
   @override
-  String get tenantDefaultBadge => 'Default configuration';
+  String get tenantDefaultBadge => 'Official tenant';
 
   @override
   String get tenantName => 'Tenant name';

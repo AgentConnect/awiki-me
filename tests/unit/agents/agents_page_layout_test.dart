@@ -1729,7 +1729,7 @@ void main() {
 
       final handleField = tester.widget<CupertinoTextField>(handleFieldFinder);
       expect(handleField.controller?.text, 'my-agent');
-      expect(find.text('最终 Handle：@my-agent.awiki.ai'), findsOneWidget);
+      expect(find.text('最终 Handle：@my-agent.awiki.me'), findsOneWidget);
       expect(find.text('这个 Handle 可以使用'), findsOneWidget);
 
       await tester.enterText(nameFieldFinder, '写作助手');
