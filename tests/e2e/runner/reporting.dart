@@ -462,11 +462,14 @@ extension DesktopE2eReporting on DesktopE2eRunner {
         'resourceCategories': suiteDefinition.resourceCategories,
         'resourceCounts': <String, Object?>{
           'fixedIdentityPool': config != null
-              ? 2
+              ? 0
               : remoteMultiDeviceJoinConfig != null
               ? 1
               : remoteHandleRecoveryConfig != null
               ? 2
+              : 0,
+          'runScopedIdentities': config != null && _resourceSideEffectsPossible
+              ? 'at_most_2'
               : 0,
           'createdIdentities': _resourceSideEffectsPossible ? 'unknown' : 0,
           'messages': _resourceSideEffectsPossible ? 'unknown' : 0,

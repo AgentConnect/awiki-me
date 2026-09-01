@@ -419,8 +419,12 @@ class DesktopCliPeerConfig implements DesktopRemoteTargetContract {
 
   static DesktopCliPeerConfig from(
     DesktopE2eOptions options,
-    DesktopE2eFileConfig fileConfig,
-  ) {
+    DesktopE2eFileConfig fileConfig, {
+    String? cliBinOverride,
+    String? cliSourceRefOverride,
+    String? cliHandleOverride,
+    String? appHandleOverride,
+  }) {
     final sourcePath = fileConfig.path ?? options.configPath;
     if (fileConfig.path == null) {
       throw E2eFailure('E2E config file was not found: $sourcePath');
@@ -443,7 +447,7 @@ class DesktopCliPeerConfig implements DesktopRemoteTargetContract {
     );
     final otpCode = _requiredConfig(fileConfig.otpCode, 'otp.code', sourcePath);
     final appHandle = _requiredConfig(
-      fileConfig.appHandle,
+      appHandleOverride ?? fileConfig.appHandle,
       'accounts.appUser.handle',
       sourcePath,
     );
@@ -455,7 +459,7 @@ class DesktopCliPeerConfig implements DesktopRemoteTargetContract {
           )
         : fileConfig.secondaryAppHandle;
     final cliHandle = _requiredConfig(
-      fileConfig.cliHandle,
+      cliHandleOverride ?? fileConfig.cliHandle,
       'accounts.cliPeer.handle',
       sourcePath,
     );
@@ -474,7 +478,7 @@ class DesktopCliPeerConfig implements DesktopRemoteTargetContract {
       );
     }
     final cliBin = _requiredConfig(
-      fileConfig.cliBin,
+      cliBinOverride ?? fileConfig.cliBin,
       'cliPeer.binary',
       sourcePath,
     );
@@ -488,7 +492,8 @@ class DesktopCliPeerConfig implements DesktopRemoteTargetContract {
       secondaryAppHandle: secondaryAppHandle,
       cliHandle: cliHandle,
       cliBin: cliBin,
-      cliSourceRef: fileConfig.cliSourceRef ?? 'unrecorded',
+      cliSourceRef:
+          cliSourceRefOverride ?? fileConfig.cliSourceRef ?? 'unrecorded',
       e2eCase: options.e2eCase,
       performance: fileConfig.performance ?? DesktopPerformanceConfig.defaults,
       userServiceUrl: fileConfig.userServiceUrl,

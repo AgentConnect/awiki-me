@@ -32,6 +32,7 @@ part 'runner/scenarios/app_pair.dart';
 part 'runner/scenarios/desktop_peer.dart';
 part 'runner/scenarios/join.dart';
 part 'runner/scenarios/recovery.dart';
+part 'runner/cli_artifact.dart';
 part 'runner/config.dart';
 part 'runner/app_artifacts.dart';
 part 'runner/options.dart';
@@ -1260,6 +1261,11 @@ String cliBuildVersionFromVersionJson(String output) {
   }
   final data = decoded is Map ? decoded['data'] : null;
   final version = data is Map ? data['version'] : null;
+  if (version == 'dev') {
+    throw E2eFailure(
+      'Remote App + CLI E2E requires a versioned CLI build; received version=dev.',
+    );
+  }
   if (version is! String || !_isCanonicalNumericVersion(version)) {
     throw E2eFailure(
       'CLI version preflight did not report a Core-compatible numeric version.',

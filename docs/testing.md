@@ -630,13 +630,23 @@ Required configuration values:
 - `service.didDomain`: DID domain paired with the selected service profile;
   Singapore staging uses `anpclaw.com`.
 - `otp.phone` and `otp.code`: the test OTP credential.
-- `accounts.appUser.handle`: App-side test handle.
-- `accounts.cliPeer.handle`: CLI peer test handle.
-- `cliPeer.binary`: `awiki-cli` binary path.
+- `accounts.appUser.handle`: App-side Handle prefix. A real run appends the
+  same bounded run suffix used for its fresh App state root; set
+  `AWIKI_E2E_APP_HANDLE` only with a prepared matching identity/root.
+- `accounts.cliPeer.handle`: CLI peer Handle prefix. Real App + CLI peer runs
+  append a bounded suffix derived from the run ID so every fresh CLI root
+  registers a fresh account instead of entering Device Join for an identity
+  owned by an earlier run. Set `AWIKI_E2E_CLI_HANDLE` only when an operator
+  intentionally provides a prepared fixed identity/root pair.
+- `cliPeer.binary`: fallback `awiki-cli` binary path used by dry-run planning.
+  Real App + CLI peer runs build a stable-versioned artifact from
+  `daemon.rustRepo` in a content-addressed `.e2e/cli-build-cache` Cargo target,
+  unless `AWIKI_E2E_CLI_BINARY` explicitly selects a prepared artifact.
 - `cliPeer.sourceRef`: exact non-zero 40-character commit SHA embedded in the
   selected CLI binary. It does not attest the App's SDK artifact revision.
 
-Before identity or message assertions, the runner executes `awiki-cli version`,
+Before creating a CLI workspace, requesting OTP, or performing any remote
+identity/message action, the runner executes `awiki-cli version`,
 requires `data.commit` to equal `cliPeer.sourceRef`, and requires `data.version`
 to use the Core-compatible one-to-four-component numeric form such as
 `1.0.46`. Debug labels such as `e2e-debug`, prerelease suffixes, `unknown`,
@@ -1047,7 +1057,7 @@ backend credentials, OTP, and CLI peer configuration are prepared.
 | --- | --- | --- | --- | --- |
 | PR required | Every pull request and push to main | Flutter, sibling `awiki-cli-rs2` at an exact SHA, deterministic service-independent dependencies. | `dart analyze`, `dart run tests/unit/runner.dart`, smoke E2E. | Real OTP, real service accounts, live backend, mobile devices, SSH evidence. |
 | Optional desktop | Developer or self-hosted runner with desktop support | macOS or Linux desktop runner. | App shell and native SDK smoke on the available desktop platform. | Non-production account pool or real message service. |
-| Nightly desktop | Prepared runner | Remote `awiki.info`, OTP/account pool, debug `awiki-cli` + SDK built from one exact SHA, isolated App and CLI state. | Direct message, contacts, group, attachment basics, report/redaction/resource ledger. | Local service stacks or scenarios without owner. |
+| Nightly desktop | Prepared runner | Remote `awiki.info`, OTP/account pool, stable-versioned `awiki-cli` + SDK built from one exact SHA, isolated Cargo/App/CLI state. | Direct message, contacts, group, attachment basics, report/redaction/resource ledger. | Local service stacks or scenarios without owner. |
 | Nightly mobile | Prepared device runner | iOS or Android device pair, Maestro, local config from secrets. | Real two-device direct message when device pool is available. | Desktop-only scenarios. |
 | Release | Release candidate validation | Stable nightly environment plus release owner review. | P0/P1 regression subset for desktop smoke, native SDK smoke, App + CLI basics, mobile when available. | New feature cases that have not been promoted. |
 | Manual | Developer or QA runbook | Local or remote environment prepared by the runner. | Any focused case needed for debugging or evidence, with command, runId, platform, endpoints, and report path recorded. | Manual results presented as automatic PR gate evidence. |

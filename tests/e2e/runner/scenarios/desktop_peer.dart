@@ -17,9 +17,76 @@ String desktopE2eTenantName(String runId) {
   return 'e2e-${safeSuffix.isEmpty ? 'run' : safeSuffix}';
 }
 
+String desktopE2eRunHandle(String prefix, String runId) {
+  final normalizedPrefix = prefix.toLowerCase().replaceAll(
+    RegExp(r'[^a-z0-9]+'),
+    '',
+  );
+  final normalizedRunId = runId.toLowerCase().replaceAll(
+    RegExp(r'[^a-z0-9]+'),
+    '',
+  );
+  if (normalizedPrefix.isEmpty || normalizedRunId.length < 8) {
+    throw E2eFailure(
+      'CLI Handle prefix and run ID must contain canonical alphanumeric text.',
+    );
+  }
+  const maxHandleLength = 32;
+  final suffix = normalizedRunId.substring(normalizedRunId.length - 10);
+  final prefixLength = min(
+    normalizedPrefix.length,
+    maxHandleLength - suffix.length,
+  );
+  return '${normalizedPrefix.substring(0, prefixLength)}$suffix';
+}
+
 extension DesktopE2ePeerScenario on DesktopE2eRunner {
   Future<void> _runAppCliPeer() async {
-    final peerConfig = DesktopCliPeerConfig.from(options, fileConfig);
+    final explicitCliBinary =
+        Platform.environment[_e2eCliBinaryEnv]?.trim().isNotEmpty == true;
+    final explicitCliHandle =
+        Platform.environment[_e2eCliHandleEnv]?.trim().isNotEmpty == true;
+    final explicitAppHandle =
+        Platform.environment[_e2eAppHandleEnv]?.trim().isNotEmpty == true;
+    final preparedCli =
+        !options.dryRun && !commands.dryRun && !explicitCliBinary
+        ? await _timed('Preparing versioned CLI artifact', () {
+            return prepareVersionedCliArtifact(
+              root: root,
+              rustRepoPath: fileConfig.daemonRustRepo ?? '../awiki-cli-rs2',
+              expectedSourceRef: fileConfig.cliSourceRef,
+              commands: commands,
+            );
+          })
+        : null;
+    final peerConfig = DesktopCliPeerConfig.from(
+      options,
+      fileConfig,
+      cliBinOverride: preparedCli?.binary.path,
+      cliSourceRefOverride: preparedCli?.sourceRef,
+      cliHandleOverride:
+          !options.dryRun && !commands.dryRun && !explicitCliHandle
+          ? desktopE2eRunHandle(
+              _requiredConfig(
+                fileConfig.cliHandle,
+                'accounts.cliPeer.handle',
+                fileConfig.path ?? options.configPath,
+              ),
+              runId,
+            )
+          : null,
+      appHandleOverride:
+          !options.dryRun && !commands.dryRun && !explicitAppHandle
+          ? desktopE2eRunHandle(
+              _requiredConfig(
+                fileConfig.appHandle,
+                'accounts.appUser.handle',
+                fileConfig.path ?? options.configPath,
+              ),
+              runId,
+            )
+          : null,
+    );
     config = peerConfig;
     if (!options.dryRun && !commands.dryRun) {
       suiteDefinition.validateRemoteTarget(peerConfig);
@@ -57,6 +124,7 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
     );
 
     await _timed('Checking tooling', _checkTooling);
+    await _timed('Checking CLI build provenance', _checkCliBuildProvenance);
     if (options.prepareOnly) {
       if (peerConfig.e2eCase == DesktopE2eCase.restart) {
         if (options.dryRun || commands.dryRun) {
@@ -119,6 +187,27 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
     await _prepareCliTenant(workspaceDir: cliWorkspaceDir, homeDir: cliHomeDir);
     await _writeCliConfig(cliWorkspaceDir);
     await _cli(const <String>['--format', 'json', 'config', 'show']);
+  }
+
+  Future<void> _checkCliBuildProvenance() async {
+    if (options.dryRun || commands.dryRun) return;
+    final peerConfig = _requireConfig();
+    if (!isAuditableGitSha(peerConfig.cliSourceRef)) {
+      throw E2eFailure(
+        'cliPeer.sourceRef must be the exact non-zero 40-character commit SHA embedded in the CLI binary.',
+      );
+    }
+    final result = await _cli(const <String>['--format', 'json', 'version']);
+    final version = cliBuildVersionFromVersionJson(result.output);
+    final binaryCommit = cliBuildCommitFromVersionJson(result.output);
+    if (binaryCommit != peerConfig.cliSourceRef.toLowerCase()) {
+      throw E2eFailure(
+        'cliPeer.sourceRef does not match the commit embedded in the CLI binary.',
+      );
+    }
+    _line(
+      'cli build: version=$version commit=${binaryCommit.substring(0, 12)}',
+    );
   }
 
   Future<void> _prepareCliTenant({
@@ -339,19 +428,6 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
         'identitiesDistinct': false,
       };
       return;
-    }
-    if (!isAuditableGitSha(peerConfig.cliSourceRef)) {
-      throw E2eFailure(
-        'cliPeer.sourceRef must be the exact non-zero 40-character commit SHA embedded in the CLI binary.',
-      );
-    }
-    final version = await _cli(const <String>['--format', 'json', 'version']);
-    cliBuildVersionFromVersionJson(version.output);
-    final binaryCommit = cliBuildCommitFromVersionJson(version.output);
-    if (binaryCommit != peerConfig.cliSourceRef.toLowerCase()) {
-      throw E2eFailure(
-        'cliPeer.sourceRef does not match the commit embedded in the CLI binary.',
-      );
     }
     final cliResolved = await _cli(<String>[
       '--format',

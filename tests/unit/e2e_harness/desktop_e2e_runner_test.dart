@@ -1375,6 +1375,80 @@ void main() {
   group('CLI build provenance', () {
     const commit = 'abcdefabcdefabcdefabcdefabcdefabcdefabcd';
 
+    test('reads only a canonical numeric stable release version', () {
+      expect(
+        stableCliVersionFromReleaseConfig(
+          jsonEncode(<String, Object?>{
+            'channels': <String, Object?>{
+              'stable': <String, Object?>{'version': '1.0.48'},
+            },
+          }),
+        ),
+        '1.0.48',
+      );
+      expect(
+        () => stableCliVersionFromReleaseConfig(
+          jsonEncode(<String, Object?>{
+            'channels': <String, Object?>{
+              'stable': <String, Object?>{'version': '1.0.48-beta.1'},
+            },
+          }),
+        ),
+        throwsA(isA<E2eFailure>()),
+      );
+    });
+
+    test(
+      'builds a versioned CLI in a content-addressed Cargo target',
+      () async {
+        final root = Directory.systemTemp.createTempSync(
+          'awiki_versioned_cli_artifact_',
+        );
+        addTearDown(() => root.deleteSync(recursive: true));
+        final repo = Directory('${root.path}/awiki-cli-rs2')..createSync();
+        File('${repo.path}/Cargo.toml').writeAsStringSync('[workspace]\n');
+        final releaseConfig = File(
+          '${repo.path}/scripts/release/cli/release-config.json',
+        )..createSync(recursive: true);
+        releaseConfig.writeAsStringSync(
+          jsonEncode(<String, Object?>{
+            'channels': <String, Object?>{
+              'stable': <String, Object?>{'version': '1.0.48'},
+            },
+          }),
+        );
+        final commands = _VersionedCliBuildCommandRunner(
+          root: root,
+          sourceRef: commit,
+        );
+
+        final artifact = await prepareVersionedCliArtifact(
+          root: root,
+          rustRepoPath: repo.path,
+          expectedSourceRef: commit,
+          commands: commands,
+        );
+
+        expect(artifact.sourceRef, commit);
+        expect(artifact.version, '1.0.48');
+        expect(artifact.binary.existsSync(), isTrue);
+        expect(
+          artifact.binary.path,
+          contains('.e2e/cli-build-cache/$commit/1.0.48/target/debug/'),
+        );
+        expect(
+          File('${repo.path}/target/debug/awiki-cli').existsSync(),
+          isFalse,
+        );
+        expect(commands.cargoEnvironment['AWIKI_CLI_COMMIT'], commit);
+        expect(commands.cargoEnvironment['AWIKI_CLI_VERSION'], '1.0.48');
+        expect(
+          commands.cargoEnvironment['CARGO_TARGET_DIR'],
+          '${root.path}/.e2e/cli-build-cache/$commit/1.0.48/target',
+        );
+      },
+    );
+
     test('accepts only Core-compatible numeric build versions', () {
       for (final version in <String>['0', '1.0', '1.0.46', '1.2.3.4']) {
         expect(
@@ -1418,6 +1492,24 @@ void main() {
       );
     });
 
+    test('rejects dev CLI builds with an actionable preflight error', () {
+      expect(
+        () => cliBuildVersionFromVersionJson(
+          jsonEncode(<String, Object?>{
+            'ok': true,
+            'data': <String, Object?>{'version': 'dev'},
+          }),
+        ),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            'Remote App + CLI E2E requires a versioned CLI build; received version=dev.',
+          ),
+        ),
+      );
+    });
+
     test('rejects unknown or malformed embedded commits', () {
       expect(
         () => cliBuildCommitFromVersionJson(
@@ -1436,6 +1528,25 @@ void main() {
   });
 
   group('CLI tenant preflight', () {
+    test(
+      'derives a bounded run-unique CLI Handle from the configured prefix',
+      () {
+        final first = desktopE2eRunHandle(
+          'me2e-cli-prefix-that-is-longer-than-needed',
+          '20260901020347-hlvgpfpa5j',
+        );
+        final second = desktopE2eRunHandle(
+          'me2e-cli-prefix-that-is-longer-than-needed',
+          '20260901020348-hlvgpfpa6k',
+        );
+
+        expect(first, hasLength(32));
+        expect(first, matches(RegExp(r'^[a-z0-9]+$')));
+        expect(first, isNot(second));
+        expect(first, endsWith('hlvgpfpa5j'));
+      },
+    );
+
     test('bounds and re-normalizes long run IDs', () {
       final tenant = desktopE2eTenantName(
         'linux-basic-after-readiness-recovery-v2-app-full',
@@ -1827,6 +1938,28 @@ cliHandle: legacy-cli
   });
 
   group('DesktopCliPeerConfig', () {
+    test('accepts run-scoped App and CLI Handle overrides', () {
+      final config = DesktopCliPeerConfig.from(
+        DesktopE2eOptions.parse(const <String>['--case', 'full']),
+        const DesktopE2eFileConfig(
+          path: '/tmp/e2e.local.yaml',
+          platform: DesktopE2ePlatform.linux,
+          serviceBaseUrl: 'https://service.example.test',
+          didDomain: 'example.test',
+          otpPhone: 'test-phone-secret',
+          otpCode: 'test-otp-secret',
+          appHandle: 'app-from-file',
+          cliHandle: 'cli-prefix-from-file',
+          cliBin: '/tmp/file-awiki-cli',
+        ),
+        appHandleOverride: 'apprun12345678',
+        cliHandleOverride: 'clirun12345678',
+      );
+
+      expect(config.appHandle, 'apprun12345678');
+      expect(config.cliHandle, 'clirun12345678');
+    });
+
     test('loads all E2E values from file config only', () {
       final config = DesktopCliPeerConfig.from(
         DesktopE2eOptions.parse(const <String>['--case', 'full']),
@@ -4570,6 +4703,48 @@ performance:
       );
     });
   });
+}
+
+class _VersionedCliBuildCommandRunner extends DesktopCommandRunner {
+  _VersionedCliBuildCommandRunner({
+    required super.root,
+    required this.sourceRef,
+  }) : super(
+         dryRun: false,
+         redactor: DesktopSecretRedactor(const <String>[]),
+         logLine: (_) {},
+       );
+
+  final String sourceRef;
+  Map<String, String> cargoEnvironment = const <String, String>{};
+
+  @override
+  Future<DesktopCommandResult> captureResult(
+    String executable,
+    List<String> args, {
+    Directory? workingDirectory,
+    Map<String, String>? environment,
+    bool includeParentEnvironment = true,
+    bool allowFailure = false,
+    Duration timeout = const Duration(minutes: 5),
+    String? stdinText,
+  }) async {
+    if (executable == 'git') {
+      return DesktopCommandResult(exitCode: 0, output: '$sourceRef\n');
+    }
+    if (executable == 'cargo') {
+      cargoEnvironment = Map<String, String>.from(environment!);
+      final target = Directory(cargoEnvironment['CARGO_TARGET_DIR']!);
+      final binary = File(
+        '${target.path}/debug/${Platform.isWindows ? 'awiki-cli.exe' : 'awiki-cli'}',
+      )..createSync(recursive: true);
+      binary.writeAsBytesSync(const <int>[0x45, 0x32, 0x45]);
+      return const DesktopCommandResult(exitCode: 0, output: 'built');
+    }
+    fail(
+      'Unexpected versioned CLI build command: $executable ${args.join(' ')}',
+    );
+  }
 }
 
 class _FailingFlutterCommandRunner extends DesktopCommandRunner {
