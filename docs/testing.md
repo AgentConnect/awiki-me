@@ -638,6 +638,9 @@ Required configuration values:
   registers a fresh account instead of entering Device Join for an identity
   owned by an earlier run. Set `AWIKI_E2E_CLI_HANDLE` only when an operator
   intentionally provides a prepared fixed identity/root pair.
+- Keep the checked-in example prefixes beginning with `e1`: this is valid
+  Handle text, not a DID credential segment, and the Direct/full product E2E
+  intentionally protects canonical Handle-history lookup for that boundary.
 - `cliPeer.binary`: fallback `awiki-cli` binary path used by dry-run planning.
   Real App + CLI peer runs build a stable-versioned artifact from
   `daemon.rustRepo` in a content-addressed `.e2e/cli-build-cache` Cargo target,

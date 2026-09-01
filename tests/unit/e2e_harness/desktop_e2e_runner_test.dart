@@ -1532,16 +1532,17 @@ void main() {
       'derives a bounded run-unique CLI Handle from the configured prefix',
       () {
         final first = desktopE2eRunHandle(
-          'me2e-cli-prefix-that-is-longer-than-needed',
+          'e1-cli-prefix-that-is-longer-than-needed',
           '20260901020347-hlvgpfpa5j',
         );
         final second = desktopE2eRunHandle(
-          'me2e-cli-prefix-that-is-longer-than-needed',
+          'e1-cli-prefix-that-is-longer-than-needed',
           '20260901020348-hlvgpfpa6k',
         );
 
         expect(first, hasLength(32));
         expect(first, matches(RegExp(r'^[a-z0-9]+$')));
+        expect(first, startsWith('e1'));
         expect(first, isNot(second));
         expect(first, endsWith('hlvgpfpa5j'));
       },

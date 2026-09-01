@@ -20,13 +20,13 @@ otp:
 
 accounts:
   appUser:
-    handle: awiki-e2e-app
+    handle: e1awikie2eapp
   # Required only by `--case identity-switch`. Keep this as a second account
   # owned by the configured non-production OTP credential.
   appSecondaryUser:
-    handle: awiki-e2e-app-secondary
+    handle: e1awikie2eappsecondary
   cliPeer:
-    handle: awiki-e2e-cli
+    handle: e1awikie2ecli
 
 # For --case display-name-fallback, use a separate ignored *.local.yaml whose
 # cliPeer is a dedicated awiki.info actor with no nickname and one stable full
