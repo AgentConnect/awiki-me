@@ -91,23 +91,17 @@ class AppTenantStore {
     if (!await file.exists()) {
       return _createInitialRegistry();
     }
-    final registry = await _readRegistryFile(file);
-    await _validateRegistryScopes(registry);
-    final migrated = _upgradeLegacyPublicHttpBackends(registry);
-    if (identical(migrated, registry)) {
-      _validateRegistryBackendPolicy(registry);
-      return registry;
-    }
     return StorageScopeProcessLock('${file.path}.lock').synchronized(() async {
       final current = await _readRegistryFile(file);
       await _validateRegistryScopes(current);
-      final currentMigrated = _upgradeLegacyPublicHttpBackends(current);
-      _validateRegistryBackendPolicy(currentMigrated);
-      if (identical(currentMigrated, current)) {
+      final backendMigrated = _upgradeLegacyPublicHttpBackends(current);
+      final reconciled = await _reconcileOfficialTenants(backendMigrated);
+      _validateRegistryBackendPolicy(reconciled);
+      if (identical(reconciled, current)) {
         return current;
       }
-      await _writeRegistryAtomic(file, currentMigrated);
-      return currentMigrated;
+      await _writeRegistryAtomic(file, reconciled);
+      return reconciled;
     });
   }
 
@@ -159,6 +153,7 @@ class AppTenantStore {
     await _provision(tenant);
     final next = AppTenantRegistry(
       revision: registry.revision + 1,
+      officialCatalogVersion: registry.officialCatalogVersion,
       activeTenantProfileId: registry.activeTenantProfileId,
       tenants: _sort(<AppTenantProfile>[...registry.tenants, tenant]),
     );
@@ -231,6 +226,7 @@ class AppTenantStore {
     );
     final next = AppTenantRegistry(
       revision: registry.revision + 1,
+      officialCatalogVersion: registry.officialCatalogVersion,
       activeTenantProfileId: registry.activeTenantProfileId,
       tenants: _sort(tenants),
     );
@@ -262,6 +258,7 @@ class AppTenantStore {
         .toList();
     final next = AppTenantRegistry(
       revision: registry.revision + 1,
+      officialCatalogVersion: registry.officialCatalogVersion,
       activeTenantProfileId: registry.activeTenantProfileId,
       tenants: tenants,
     );
@@ -329,17 +326,83 @@ class AppTenantStore {
     final normalizedBackend = normalizeTenantBackendBaseUrl(
       initial.backendBaseUrl,
     );
-    final tenant = normalizedBackend == initial.backendBaseUrl
+    final normalizedInitial = normalizedBackend == initial.backendBaseUrl
         ? initial
         : initial.copyWith(backendBaseUrl: normalizedBackend);
-    await _provision(tenant);
+    final tenant = _normalizeOfficialProfile(normalizedInitial);
+    final tenants = <AppTenantProfile>[tenant];
+    for (final key in AppTenantOfficialKey.values) {
+      if (tenant.officialKey != key) {
+        tenants.add(officialTenantProfile(key));
+      }
+    }
+    for (final profile in tenants) {
+      await _provision(profile);
+    }
     final registry = AppTenantRegistry(
       revision: 1,
+      officialCatalogVersion: officialTenantCatalogVersion,
       activeTenantProfileId: tenant.tenantProfileId,
-      tenants: <AppTenantProfile>[tenant],
+      tenants: _sort(tenants),
     );
     await saveRegistry(registry, expectedRevision: 0);
     return registry;
+  }
+
+  Future<AppTenantRegistry> _reconcileOfficialTenants(
+    AppTenantRegistry registry,
+  ) async {
+    var changed =
+        registry.officialCatalogVersion != officialTenantCatalogVersion;
+    final tenants = registry.tenants.map((tenant) {
+      final key = tenant.officialKey;
+      if (key == null || _sameEndpoint(tenant, officialTenantProfile(key))) {
+        return tenant;
+      }
+      changed = true;
+      return tenant.copyWith(clearOfficialKey: true);
+    }).toList();
+    final updatedAt = DateTime.now().toUtc().toIso8601String();
+    for (final key in AppTenantOfficialKey.values) {
+      final expected = officialTenantProfile(key);
+      final matches = <int>[];
+      for (var index = 0; index < tenants.length; index += 1) {
+        if (_sameEndpoint(tenants[index], expected)) matches.add(index);
+      }
+      if (matches.length > 1) {
+        throw const FormatException('tenant_official_endpoint_ambiguous');
+      }
+      if (matches.isEmpty) {
+        await _provision(expected);
+        tenants.add(expected);
+        changed = true;
+        continue;
+      }
+      final index = matches.single;
+      final current = tenants[index];
+      if (current.kind == AppTenantKind.builtInAwiki &&
+          current.officialKey == key &&
+          current.name == expected.name &&
+          current.lifecycle == AppTenantLifecycle.active) {
+        continue;
+      }
+      tenants[index] = current.copyWith(
+        kind: AppTenantKind.builtInAwiki,
+        officialKey: key,
+        name: expected.name,
+        lifecycle: AppTenantLifecycle.active,
+        updatedAt: updatedAt,
+      );
+      changed = true;
+    }
+    if (!changed) return registry;
+    final next = registry.copyWith(
+      revision: registry.revision + 1,
+      officialCatalogVersion: officialTenantCatalogVersion,
+      tenants: _sort(tenants),
+    );
+    next.validate();
+    return next;
   }
 
   Future<void> _provision(AppTenantProfile tenant) async {
@@ -602,6 +665,14 @@ AppTenantProfile _findAny(AppTenantRegistry registry, String id) {
 
 List<AppTenantProfile> _sort(List<AppTenantProfile> tenants) {
   tenants.sort((a, b) {
+    final aOfficial = a.officialKey;
+    final bOfficial = b.officialKey;
+    if (aOfficial != bOfficial) {
+      if (aOfficial == AppTenantOfficialKey.china) return -1;
+      if (bOfficial == AppTenantOfficialKey.china) return 1;
+      if (aOfficial == AppTenantOfficialKey.global) return -1;
+      if (bOfficial == AppTenantOfficialKey.global) return 1;
+    }
     if (a.isPrimaryTenant != b.isPrimaryTenant) {
       return a.isPrimaryTenant ? -1 : 1;
     }
@@ -609,6 +680,25 @@ List<AppTenantProfile> _sort(List<AppTenantProfile> tenants) {
   });
   return tenants;
 }
+
+AppTenantProfile _normalizeOfficialProfile(AppTenantProfile tenant) {
+  for (final key in AppTenantOfficialKey.values) {
+    final expected = officialTenantProfile(key);
+    if (_sameEndpoint(tenant, expected)) {
+      return tenant.copyWith(
+        kind: AppTenantKind.builtInAwiki,
+        officialKey: key,
+        name: expected.name,
+        lifecycle: AppTenantLifecycle.active,
+      );
+    }
+  }
+  return tenant.copyWith(clearOfficialKey: true);
+}
+
+bool _sameEndpoint(AppTenantProfile left, AppTenantProfile right) =>
+    left.backendBaseUrl.toLowerCase() == right.backendBaseUrl.toLowerCase() &&
+    left.didHost.toLowerCase() == right.didHost.toLowerCase();
 
 Future<bool> _hasData(File file) async =>
     await file.exists() && await file.length() > 0;

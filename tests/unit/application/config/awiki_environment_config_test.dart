@@ -4,13 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('keeps awiki.ai as the default primary tenant domain', () {
+  test('uses awiki.me as the default primary tenant domain', () {
     const hasBuildOverride = bool.hasEnvironment(
       primaryTenantDomainEnvironmentKey,
     );
 
     if (!hasBuildOverride) {
-      expect(primaryTenantDomain, 'awiki.ai');
+      expect(primaryTenantDomain, 'awiki.me');
     }
   });
 
