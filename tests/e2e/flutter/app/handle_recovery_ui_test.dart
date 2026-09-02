@@ -46,7 +46,6 @@ import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
-import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -5701,8 +5700,9 @@ String _safeCoreFailureDetail(String message) {
   if (normalized.contains('canonical') || normalized.contains('subject')) {
     return 'canonical_identity_missing';
   }
-  if (normalized.contains('conversation'))
+  if (normalized.contains('conversation')) {
     return 'conversation_identity_missing';
+  }
   return 'other';
 }
 

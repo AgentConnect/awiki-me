@@ -10,8 +10,9 @@ class _DesktopAppRobot {
   final WidgetTester tester;
   String? failureCaseId;
 
-  ProviderContainer get container =>
-      ProviderScope.containerOf(tester.element(find.byType(AppShell)));
+  ProviderContainer get container => ProviderScope.containerOf(
+    tester.element(find.byType(AppShell, skipOffstage: false)),
+  );
 
   ConversationSummary get selectedConversation {
     final selectedId = container.read(selectedConversationProvider);
