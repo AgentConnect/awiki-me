@@ -22,7 +22,33 @@ const List<String> reviewedAccountStateOperatorCommand = <String>[
   '--apply',
 ];
 
-List<String> parseAccountStateOperatorCommand(String encoded) {
+const List<String> reviewedLocalAccountStateOperatorCommand = <String>[
+  'sudo',
+  '-n',
+  '/usr/bin/env',
+  'PYTHONDONTWRITEBYTECODE=1',
+  'PYTHONPATH=/opt/awiki/services/user-service/current/src',
+  '/opt/awiki/services/user-service/current/.venv/bin/python',
+  '/opt/awiki/services/user-service/current/scripts/'
+      'run_account_state_sync_test_action.py',
+  '--env-file',
+  '/etc/awiki/user-service.env',
+  '--apply',
+];
+
+List<String> reviewedAccountStateOperatorCommandForMode(String mode) =>
+    switch (mode) {
+      'ali' => reviewedAccountStateOperatorCommand,
+      'local' => reviewedLocalAccountStateOperatorCommand,
+      _ => throw const FormatException(
+        'The App-pair Account State operator mode is not reviewed.',
+      ),
+    };
+
+List<String> parseAccountStateOperatorCommand(
+  String encoded, {
+  String mode = 'ali',
+}) {
   Object? decoded;
   try {
     decoded = jsonDecode(encoded);
@@ -39,7 +65,10 @@ List<String> parseAccountStateOperatorCommand(String encoded) {
     );
   }
   final command = List<String>.unmodifiable(decoded.cast<String>());
-  if (!_sameCommand(command, reviewedAccountStateOperatorCommand)) {
+  if (!_sameCommand(
+    command,
+    reviewedAccountStateOperatorCommandForMode(mode),
+  )) {
     throw const FormatException(
       'The App-pair Account State operator command is not reviewed.',
     );

@@ -1017,6 +1017,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Device revoked. Affected groups are synchronizing their security state.';
 
   @override
+  String get deviceRevokeSucceededGroupsRepairPartial =>
+      'Device revoked. Some affected groups could not update their security state in this attempt; messaging remains available.';
+
+  @override
   String get deviceRevokeOutcomeUnknown =>
       'The revocation result is not confirmed yet. Refresh the device list.';
 

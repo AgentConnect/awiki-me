@@ -507,6 +507,8 @@ String _deviceRevokeNoticeLabel(
   DeviceRevokeNotice.revoked => context.l10n.deviceRevokeSucceeded,
   DeviceRevokeNotice.revokedGroupsSyncing =>
     context.l10n.deviceRevokeSucceededGroupsSyncing,
+  DeviceRevokeNotice.revokedGroupsRepairPartial =>
+    context.l10n.deviceRevokeSucceededGroupsRepairPartial,
   DeviceRevokeNotice.outcomeUnknown => context.l10n.deviceRevokeOutcomeUnknown,
   DeviceRevokeNotice.rejected => context.l10n.deviceRevokeRejected,
 };

@@ -209,6 +209,21 @@ List<File> _repoFiles(bool Function(String path) include) {
           '${Platform.pathSeparator}.omx${Platform.pathSeparator}',
         ),
       )
+      .where(
+        (file) => !file.path.contains(
+          '${Platform.pathSeparator}.e2e${Platform.pathSeparator}',
+        ),
+      )
+      .where(
+        (file) => !file.path.contains(
+          '${Platform.pathSeparator}build${Platform.pathSeparator}',
+        ),
+      )
+      .where(
+        (file) => !file.path.contains(
+          '${Platform.pathSeparator}.dart_tool${Platform.pathSeparator}',
+        ),
+      )
       .where((file) => include(file.path))
       .toList();
 }

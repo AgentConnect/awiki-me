@@ -7297,7 +7297,12 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
     try {
       await sync.syncNow(reason: 'handle-recovery-rejoin-e2e', limit: 100);
     } on MessageSyncCoreFailure catch (error) {
-      if (error.code != 'transport_unavailable') rethrow;
+      if (!const <String>{
+        'local_state_unavailable',
+        'transport_unavailable',
+      }.contains(error.code)) {
+        rethrow;
+      }
       await tester.pump(const Duration(milliseconds: 200));
       await Future<void>.delayed(const Duration(milliseconds: 550));
       continue;

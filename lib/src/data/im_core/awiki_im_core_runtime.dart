@@ -247,6 +247,19 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   }
 
   @override
+  Future<void> clearIdentity() async {
+    final transition = await _beginClientTransition();
+    try {
+      await _waitForClientOperations();
+      final client = _currentClient;
+      _currentClient = null;
+      await client?.dispose();
+    } finally {
+      _endClientTransition(transition);
+    }
+  }
+
+  @override
   Future<void> dispose() async {
     final transition = await _beginClientTransition();
     try {

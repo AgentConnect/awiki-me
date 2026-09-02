@@ -32,7 +32,10 @@ String desktopE2eRunHandle(String prefix, String runId) {
     );
   }
   const maxHandleLength = 32;
-  final suffix = normalizedRunId.substring(normalizedRunId.length - 10);
+  final suffixLength = min(10, normalizedRunId.length);
+  final suffix = normalizedRunId.substring(
+    normalizedRunId.length - suffixLength,
+  );
   final prefixLength = min(
     normalizedPrefix.length,
     maxHandleLength - suffix.length,
@@ -48,6 +51,11 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
         Platform.environment[_e2eCliHandleEnv]?.trim().isNotEmpty == true;
     final explicitAppHandle =
         Platform.environment[_e2eAppHandleEnv]?.trim().isNotEmpty == true;
+    if (preparedArtifactsRequired(Platform.environment) && !explicitCliBinary) {
+      throw E2eFailure(
+        'Prepared artifact required mode requires AWIKI_E2E_CLI_BINARY.',
+      );
+    }
     final preparedCli =
         !options.dryRun && !commands.dryRun && !explicitCliBinary
         ? await _timed('Preparing versioned CLI artifact', () {
@@ -620,25 +628,15 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
   }
 
   bool _supportsPreparedDesktopPeerExecutable(DesktopE2eCase e2eCase) =>
-      e2eCase != DesktopE2eCase.restart &&
-      e2eCase != DesktopE2eCase.personalAgent;
+      e2eCase != DesktopE2eCase.restart;
 
   Future<_IsolatedAppArtifact> _prepareDesktopPeerExecutable(
     DesktopCliPeerConfig peerConfig,
   ) {
     final caseName = peerConfig.e2eCase.caseName;
-    final bundleSuffix = caseName.replaceAll('-', '.');
     return _prepareIntegrationExecutable(
       name: caseName,
-      target: peerConfig.e2eCase.testFile,
-      bundleId: 'ai.awiki.awikime.dev.e2e.$bundleSuffix',
       stateRoot: appStateRootDir,
-      dartDefines: <String>[
-        for (final argument in _multiDeviceProductDartDefines(
-          peerConfig.e2eCase,
-        ))
-          argument.substring('--dart-define='.length),
-      ],
     );
   }
 
@@ -652,21 +650,14 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
   _prepareRestartIntegrationExecutables() async {
     final phaseA = await _prepareIntegrationExecutable(
       name: 'restart-a',
-      target: 'integration_test/desktop_cli_peer_restart_phase_a_test.dart',
-      bundleId: 'ai.awiki.awikime.dev.e2e.restart.a',
       stateRoot: appStateRootDir,
     );
     final phaseB = await _prepareIntegrationExecutable(
       name: 'restart-b',
-      target: 'integration_test/desktop_cli_peer_restart_phase_b_test.dart',
-      bundleId: 'ai.awiki.awikime.dev.e2e.restart.b',
       stateRoot: appStateRootDir,
     );
     final phaseC = await _prepareIntegrationExecutable(
       name: 'restart-c',
-      target:
-          'integration_test/desktop_cli_peer_credential_delete_phase_c_test.dart',
-      bundleId: 'ai.awiki.awikime.dev.e2e.restart.c',
       stateRoot: appStateRootDir,
     );
     return (phaseA: phaseA, phaseB: phaseB, phaseC: phaseC);

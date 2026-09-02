@@ -167,12 +167,17 @@ class AppTestCatalog {
       }
       parsed.add(value);
     }
-    final active = parsed
-        .where((value) => value.catalogStatus == 'active')
+    final executableOrDormant = parsed
+        .where(
+          (value) =>
+              value.catalogStatus == 'active' ||
+              value.catalogStatus == 'unsupported',
+        )
         .map((value) => value.caseId)
         .toSet();
-    final missing = expectedByCaseId.keys.toSet().difference(active).toList()
-      ..sort();
+    final missing =
+        expectedByCaseId.keys.toSet().difference(executableOrDormant).toList()
+          ..sort();
     if (missing.isNotEmpty) {
       throw FormatException(
         'case catalog is missing manifest caseIds: ${missing.join(', ')}',
@@ -390,7 +395,7 @@ class AppTestCatalog {
         'CLI foreground contract, fixed member authorization, CLI listener '
         'host wake, App global review entry, and exactly one E2E-only '
         'user-presence decision where the App approves. The DSH direction '
-        'requires published Node v10 0.1.8, opaque Host refs, explicit '
+        'requires published Node package 0.2.3, opaque Host refs, explicit '
         'APPROVE/REVOKE, and public Handle cleanup with a protected factor. '
         'Production continues '
         'to use macOS LocalAuthentication and is not attested by this suite. '
@@ -479,14 +484,14 @@ class AppTestCatalog {
         'TTL or time bypass.',
       )
       ..writeln(
-        '- Personal Agent, Codex and Claude Code remain `optional_nightly`. A '
-        'missing provider/configuration is reported as skipped/not-run, never passed.',
+        '- Personal Agent is currently not a supported product capability. Its '
+        'four cases are explicitly unsupported and absent from execution profiles. Codex and '
+        'Claude Code remain independent `optional_nightly` suites.',
       )
       ..writeln(
-        '- `PERSONALAGENT-E2E-003` is cataloged as planned, not executable: the '
-        'supporting confirmation/draft step does not yet have its own accepted '
-        'case attestation. The runnable Personal Agent suite attests enable, '
-        'receive/process and exact revoke convergence.',
+        '- `PERSONALAGENT-E2E-001/002/003/004` are cataloged as unsupported and '
+        'excluded from the current supported denominator. The dormant suite, implementation '
+        'and migrations stay available for a later product decision.',
       )
       ..writeln(
         '- The latest recorded `awiki.info` conversation-correctness evidence '
@@ -663,8 +668,14 @@ class AppTestCatalogCase {
     final exactOracles = _stringList(json, 'exactOracles', label: label);
     final negativeChecks = _stringList(json, 'negativeChecks', label: label);
     final catalogStatus = _requiredString(json, 'catalogStatus', label: label);
-    if (!const <String>{'active', 'planned'}.contains(catalogStatus)) {
-      throw FormatException('$label catalogStatus must be active or planned');
+    if (!const <String>{
+      'active',
+      'planned',
+      'unsupported',
+    }.contains(catalogStatus)) {
+      throw FormatException(
+        '$label catalogStatus must be active, planned, or unsupported',
+      );
     }
     if (requiredFor.isEmpty || exactOracles.isEmpty || negativeChecks.isEmpty) {
       throw FormatException(
@@ -705,6 +716,10 @@ class AppTestCatalogCase {
     );
     final expectedEnvironment = expected.allowedHosts.isEmpty
         ? 'no_service'
+        : expected.allowedHosts.toSet().difference(const <String>{
+            'rwiki.cn',
+          }).isEmpty
+        ? 'rwiki_cn_remote'
         : 'awiki_info_remote';
     if (layer != expectedLayer ||
         cleanupPolicy != expectedCleanup ||

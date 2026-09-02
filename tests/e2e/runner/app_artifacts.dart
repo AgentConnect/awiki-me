@@ -14,6 +14,7 @@ class _IsolatedAppArtifact {
     required this.fingerprint,
     required this.cacheHit,
     required this.artifactSha256,
+    required this.consumerSuites,
   });
 
   final String role;
@@ -24,8 +25,12 @@ class _IsolatedAppArtifact {
   final String fingerprint;
   final bool cacheHit;
   final String artifactSha256;
+  final List<String> consumerSuites;
 
-  static _IsolatedAppArtifact fromBuilderOutput(String output) {
+  static _IsolatedAppArtifact fromBuilderOutput(
+    String output, {
+    required Directory projectRoot,
+  }) {
     Object? decoded;
     try {
       decoded = jsonDecode(output.trim());
@@ -42,11 +47,15 @@ class _IsolatedAppArtifact {
     final role = decoded['name'];
     final target = decoded['target'];
     final bundleId = decoded['bundleId'];
-    final appPath = decoded['appPath'];
-    final executablePath = decoded['executablePath'];
+    final projectRelativeAppPath = decoded['projectRelativeAppPath'];
+    final executableRelativePath = decoded['executableRelativePath'];
     final fingerprint = decoded['fingerprint'];
+    final compileKey = decoded['compileKey'];
     final cacheHit = decoded['cacheHit'];
     final artifactSha256 = decoded['artifactSha256'];
+    final rawConsumerSuites = decoded['consumerSuites'];
+    final cachePrunedEntries = decoded['cachePrunedEntries'];
+    final cachePrunedBytes = decoded['cachePrunedBytes'];
     if (role is! String ||
         !RegExp(r'^[a-z][a-z0-9-]{0,31}$').hasMatch(role) ||
         target is! String ||
@@ -57,32 +66,71 @@ class _IsolatedAppArtifact {
         !RegExp(
           r'^[a-z][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+$',
         ).hasMatch(bundleId) ||
-        appPath is! String ||
-        appPath.trim().isEmpty ||
-        executablePath is! String ||
-        executablePath.trim().isEmpty ||
+        projectRelativeAppPath is! String ||
+        !_safeRelativeArtifactPath(projectRelativeAppPath) ||
+        executableRelativePath is! String ||
+        !_safeRelativeArtifactPath(executableRelativePath) ||
         fingerprint is! String ||
         !RegExp(r'^[0-9a-f]{64}$').hasMatch(fingerprint) ||
+        decoded['compileKeySchemaVersion'] != 1 ||
+        compileKey != fingerprint ||
         cacheHit is! bool ||
+        decoded['compileKeyPayload'] is! Map ||
+        decoded['provenance'] is! Map ||
+        rawConsumerSuites is! List ||
+        rawConsumerSuites.any(
+          (value) =>
+              value is! String ||
+              !RegExp(r'^[a-z][a-z0-9-]{0,79}$').hasMatch(value),
+        ) ||
+        rawConsumerSuites.toSet().length != rawConsumerSuites.length ||
+        cachePrunedEntries is! int ||
+        cachePrunedEntries < 0 ||
+        cachePrunedBytes is! int ||
+        cachePrunedBytes < 0 ||
         artifactSha256 is! String ||
         !RegExp(r'^[0-9a-f]{64}$').hasMatch(artifactSha256)) {
       throw E2eFailure('The isolated App artifact manifest is incomplete.');
     }
-    final executable = File(executablePath);
-    if (!executable.existsSync()) {
+    final appDirectory = Directory(
+      '${projectRoot.absolute.path}/$projectRelativeAppPath',
+    );
+    final executable = File('${appDirectory.path}/$executableRelativePath');
+    if (!appDirectory.existsSync() || !executable.existsSync()) {
       throw E2eFailure('The isolated App executable was not produced.');
+    }
+    final canonicalProject = projectRoot.absolute.resolveSymbolicLinksSync();
+    final canonicalApp = appDirectory.resolveSymbolicLinksSync();
+    final canonicalExecutable = executable.resolveSymbolicLinksSync();
+    if (!canonicalApp.startsWith('$canonicalProject/') ||
+        !canonicalExecutable.startsWith('$canonicalApp/')) {
+      throw E2eFailure(
+        'The isolated App artifact escaped the project cache boundary.',
+      );
     }
     return _IsolatedAppArtifact(
       role: role,
       target: target,
       bundleId: bundleId,
-      appDirectory: Directory(appPath),
+      appDirectory: appDirectory,
       executable: executable,
       fingerprint: fingerprint,
       cacheHit: cacheHit,
       artifactSha256: artifactSha256,
+      consumerSuites: List<String>.unmodifiable(
+        rawConsumerSuites.cast<String>(),
+      ),
     );
   }
+}
+
+bool _safeRelativeArtifactPath(String value) {
+  final normalized = value.trim();
+  return normalized.isNotEmpty &&
+      !normalized.startsWith('/') &&
+      !normalized.startsWith(r'\') &&
+      !RegExp(r'^[A-Za-z]:[\\/]').hasMatch(normalized) &&
+      !normalized.split(RegExp(r'[\\/]')).contains('..');
 }
 
 class _RunningIsolatedApp {
@@ -329,10 +377,30 @@ void resetAppPairRuntimeDirectories({
     if (functional || contentSync) ...<Directory>[cliWorkspace, cliHome],
   ];
   for (final directory in directories) {
-    if (directory.existsSync()) {
+    final type = FileSystemEntity.typeSync(directory.path, followLinks: false);
+    if (type == FileSystemEntityType.link) {
+      throw E2eFailure(
+        'App-pair runtime isolation refuses a symbolic-link state root.',
+      );
+    }
+    if (type != FileSystemEntityType.notFound &&
+        type != FileSystemEntityType.directory) {
+      throw E2eFailure(
+        'App-pair runtime isolation requires directory state roots.',
+      );
+    }
+    if (type == FileSystemEntityType.directory) {
       directory.deleteSync(recursive: true);
     }
     directory.createSync(recursive: true);
+    if (!Platform.isWindows) {
+      final chmod = Process.runSync('chmod', <String>['700', directory.path]);
+      if (chmod.exitCode != 0) {
+        throw E2eFailure(
+          'App-pair runtime isolation could not protect a state root.',
+        );
+      }
+    }
   }
 }
 

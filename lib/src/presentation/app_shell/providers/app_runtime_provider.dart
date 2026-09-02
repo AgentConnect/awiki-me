@@ -534,10 +534,24 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
             throw StateError('joined_identity_did_mismatch');
           }
           await activateCommittedSession(session);
+          final activeSession = ref.read(sessionProvider).session;
           if (state.activatedDid != normalizedDid ||
-              ref.read(sessionProvider).session?.did != normalizedDid) {
+              activeSession?.did != normalizedDid) {
             throw StateError('joined_identity_activation_incomplete');
           }
+          final credentials = await _localCredentialsFor(ref);
+          final stillActive = ref.read(sessionProvider).session;
+          if (state.activatedDid != normalizedDid ||
+              stillActive?.did != normalizedDid) {
+            throw StateError('joined_identity_activation_superseded');
+          }
+          if (activeSession == null ||
+              !credentials.any(
+                (identity) => _sameLocalIdentity(identity, activeSession),
+              )) {
+            throw StateError('joined_identity_inventory_missing');
+          }
+          ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
         })().whenComplete(() {
           if (identical(_joinedMemberActivation, operation)) {
             _joinedMemberActivation = null;

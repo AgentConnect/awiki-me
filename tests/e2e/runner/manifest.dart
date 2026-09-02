@@ -88,6 +88,7 @@ class DesktopE2eSuiteManifest {
 class DesktopE2eSuiteDefinition {
   DesktopE2eSuiteDefinition({
     required this.name,
+    required this.catalogStatus,
     required this.tier,
     required this.requiredFor,
     required this.owner,
@@ -105,6 +106,7 @@ class DesktopE2eSuiteDefinition {
   });
 
   final String name;
+  final String catalogStatus;
   final String tier;
   final List<String> requiredFor;
   final String owner;
@@ -130,12 +132,16 @@ class DesktopE2eSuiteDefinition {
     }
 
     final tier = raw['tier'];
+    final catalogStatus = (raw['catalogStatus'] ?? 'active').toString().trim();
     final owner = raw['owner'];
     final estimatedMinutes = raw['estimatedMinutes'];
     final timeoutMinutes = raw['timeoutMinutes'];
     final cleanupPolicy = raw['cleanupPolicy'];
     if (tier is! String || tier.trim().isEmpty) {
       throw E2eFailure('E2E suite "$name" has no tier.');
+    }
+    if (!const <String>{'active', 'unsupported'}.contains(catalogStatus)) {
+      throw E2eFailure('E2E suite "$name" has invalid catalogStatus.');
     }
     final canonicalTier = tier.trim();
     try {
@@ -211,6 +217,7 @@ class DesktopE2eSuiteDefinition {
     }
     return DesktopE2eSuiteDefinition(
       name: name,
+      catalogStatus: catalogStatus,
       tier: canonicalTier,
       requiredFor: requiredFor,
       owner: owner.trim(),

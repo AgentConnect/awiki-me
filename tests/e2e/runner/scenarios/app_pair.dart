@@ -55,7 +55,9 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
         await commands.requireExecutable('xvfb-run');
         await commands.requireFile('tool/ensure_linux_im_core.dart');
         if (!options.dryRun && !commands.dryRun) {
-          await LinuxImCoreArtifactGuard(projectRoot: root).ensure();
+          await LinuxImCoreArtifactGuard(projectRoot: root).ensure(
+            rebuildIfStale: !preparedArtifactsRequired(Platform.environment),
+          );
         }
       }
       await commands.requireFile('tool/build_isolated_e2e_app.dart');
@@ -123,10 +125,7 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
               'desktop build environment.',
             );
           }
-          await _buildAndValidateAppPairRoles(
-            flutterBin: flutterBin,
-            platform: pairConfig.platform,
-          );
+          await _prepareAndValidateAppPairRoles();
         });
       }
       _section('Prepare-only completed');
@@ -162,10 +161,7 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
         _RunningIsolatedApp? joinerApp;
         try {
           await _writeAppPairRunConfig(pairConfig, coordinator, token);
-          final artifacts = await _buildAndValidateAppPairRoles(
-            flutterBin: flutterBin,
-            platform: pairConfig.platform,
-          );
+          final artifacts = await _prepareAndValidateAppPairRoles();
           final productEnvironment = <String, String>{
             _multiDeviceRemoteJoinGateEnv: '1',
             'AWIKI_MULTI_DEVICE_APP_PAIR_CONFIG': appPairRunConfigFile.path,
@@ -323,50 +319,23 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
     }
   }
 
-  Future<_IsolatedAppArtifact> _buildAppPairRole({
-    required String role,
-    required String bundleId,
-    required String flutterBin,
-    required DesktopE2ePlatform platform,
-  }) async {
-    final roleWorkRoot = Directory('${appPairBuildRootDir.path}/$role');
-    final result = await commands.captureResult('dart', <String>[
-      'tool/build_isolated_e2e_app.dart',
-      '--name=$role',
-      '--target=$_multiDeviceAppPairTarget',
-      '--state-root=${role == 'admin' ? appPairAdminStateRootDir.path : appPairJoinerStateRootDir.path}',
-      '--work-root=${roleWorkRoot.path}',
-      '--artifact-root=${appPairArtifactRootDir.path}',
-      '--bundle-id=$bundleId',
-      '--platform=${platform.name}',
-      '--flutter-bin=$flutterBin',
-      '--dart-define=AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=$role',
-    ], timeout: const Duration(minutes: 12));
-    return _IsolatedAppArtifact.fromBuilderOutput(result.output);
-  }
+  Future<_IsolatedAppArtifact> _prepareAppPairRole({required String role}) =>
+      _prepareIntegrationExecutable(
+        name: role,
+        stateRoot: role == 'admin'
+            ? appPairAdminStateRootDir
+            : appPairJoinerStateRootDir,
+      );
 
   Future<({_IsolatedAppArtifact admin, _IsolatedAppArtifact joiner})>
-  _buildAndValidateAppPairRoles({
-    required String flutterBin,
-    required DesktopE2ePlatform platform,
-  }) async {
+  _prepareAndValidateAppPairRoles() async {
     final admin = await _timed(
-      'Building isolated App-pair admin artifact',
-      () => _buildAppPairRole(
-        role: 'admin',
-        bundleId: 'ai.awiki.awikime.dev.e2e.pair.admin',
-        flutterBin: flutterBin,
-        platform: platform,
-      ),
+      'Preparing isolated App-pair admin artifact',
+      () => _prepareAppPairRole(role: 'admin'),
     );
     final joiner = await _timed(
-      'Building isolated App-pair joiner artifact',
-      () => _buildAppPairRole(
-        role: 'joiner',
-        bundleId: 'ai.awiki.awikime.dev.e2e.pair.joiner',
-        flutterBin: flutterBin,
-        platform: platform,
-      ),
+      'Preparing isolated App-pair joiner artifact',
+      () => _prepareAppPairRole(role: 'joiner'),
     );
     if (admin.bundleId == joiner.bundleId ||
         admin.executable.path == joiner.executable.path ||

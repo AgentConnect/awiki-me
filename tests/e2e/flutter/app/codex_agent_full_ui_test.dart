@@ -11,6 +11,7 @@ import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
+import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
@@ -65,6 +66,7 @@ void main() {
 
         final session = await _prepareRealAppIdentity(
           bootstrap.onboardingService!,
+          bootstrap.onboardingSupportService!,
           config,
         );
         await ProviderScope.containerOf(
@@ -225,8 +227,15 @@ void main() {
 
 Future<AppSession> _prepareRealAppIdentity(
   OnboardingService onboarding,
+  OnboardingSupportService onboardingSupport,
   _CodexAgentRealBackendConfig config,
 ) async {
+  await onboardingSupport.sendRegistrationOtp(
+    phone: config.otpPhone,
+    handle: config.appHandle,
+    domain: config.environment.didDomain,
+    fullHandle: '${config.appHandle}.${config.environment.didDomain}',
+  );
   final register = await _tryAppIdentityAction(
     () => onboarding.registerHandleWithPhone(
       phone: config.otpPhone,

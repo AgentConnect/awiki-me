@@ -701,7 +701,15 @@ class ImCoreAppSessionService
             (deleted.handle != null &&
                 _matchesIdentity(current, deleted.handle!)))) {
       _current = null;
-      unawaited(_cleanupRetiredRuntimeBestEffort(realtimeCleanup));
+      if (deleteOwnerData) {
+        await _cleanupRetiredRuntimeBestEffort(realtimeCleanup);
+      } else {
+        // Local credential retirement must leave the owner-scoped Core open.
+        // The signed-out onboarding flow immediately reuses it to classify
+        // the same Handle as Join or Recovery. Only the selected identity
+        // client is no longer valid after deletion.
+        await _runtime.clearIdentity();
+      }
     } else {
       final activeIdentityId = await _activeSessionStore
           ?.readActiveIdentityId();

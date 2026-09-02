@@ -17,22 +17,11 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
     if (identityDeletion) {
       artifacts['identity-deletion-a'] = await _prepareIntegrationExecutable(
         name: 'identity-deletion-a',
-        target: 'integration_test/handle_recovery_ui_test.dart',
-        bundleId: 'ai.awiki.awikime.dev.e2e.identity.deletion.a',
         stateRoot: appStateRootDir,
-        dartDefines: const <String>[
-          'AWIKI_HANDLE_RECOVERY_E2E_PHASE=identity_deletion_a',
-          'AWIKI_E2E_IDENTITY_DELETION_CRASH_AFTER_PRODUCT_DELETE=true',
-        ],
       );
       artifacts['identity-deletion-b'] = await _prepareIntegrationExecutable(
         name: 'identity-deletion-b',
-        target: 'integration_test/handle_recovery_ui_test.dart',
-        bundleId: 'ai.awiki.awikime.dev.e2e.identity.deletion.b',
         stateRoot: appStateRootDir,
-        dartDefines: const <String>[
-          'AWIKI_HANDLE_RECOVERY_E2E_PHASE=identity_deletion_b',
-        ],
       );
       return artifacts;
     }
@@ -40,62 +29,35 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
         (registrationRejoin || freshOnly || !localDataOnly)) {
       artifacts['recovery-main'] = await _prepareIntegrationExecutable(
         name: 'recovery-main',
-        target: 'integration_test/handle_recovery_ui_test.dart',
-        bundleId: 'ai.awiki.awikime.dev.e2e.recovery.main',
         stateRoot: appStateRootDir,
-        dartDefines: const <String>[],
       );
     }
     if (registrationResume) {
       artifacts['recovery-registration-resume-a'] =
           await _prepareIntegrationExecutable(
             name: 'recovery-registration-resume-a',
-            target: 'integration_test/handle_recovery_ui_test.dart',
-            bundleId: 'ai.awiki.awikime.dev.e2e.recovery.registration.a',
             stateRoot: appStateRootDir,
-            dartDefines: const <String>[
-              'AWIKI_HANDLE_RECOVERY_E2E_PHASE=registration_resume_a',
-            ],
           );
       artifacts['recovery-registration-resume-b'] =
           await _prepareIntegrationExecutable(
             name: 'recovery-registration-resume-b',
-            target: 'integration_test/handle_recovery_ui_test.dart',
-            bundleId: 'ai.awiki.awikime.dev.e2e.recovery.registration.b',
             stateRoot: appStateRootDir,
-            dartDefines: const <String>[
-              'AWIKI_HANDLE_RECOVERY_E2E_PHASE=registration_resume_b',
-            ],
           );
     }
     if (!registrationRejoin && !freshOnly) {
       artifacts['recovery-crash-a'] = await _prepareIntegrationExecutable(
         name: 'recovery-crash-a',
-        target: 'integration_test/handle_recovery_ui_test.dart',
-        bundleId: 'ai.awiki.awikime.dev.e2e.recovery.crash.a',
         stateRoot: appStateRootDir,
-        dartDefines: const <String>[
-          'AWIKI_HANDLE_RECOVERY_E2E_PHASE=crash_a',
-          'AWIKI_E2E_HANDLE_RECOVERY_CRASH_BEFORE_PRODUCT_RESET=true',
-        ],
       );
       artifacts['recovery-crash-b'] = await _prepareIntegrationExecutable(
         name: 'recovery-crash-b',
-        target: 'integration_test/handle_recovery_ui_test.dart',
-        bundleId: 'ai.awiki.awikime.dev.e2e.recovery.crash.b',
         stateRoot: appStateRootDir,
-        dartDefines: const <String>['AWIKI_HANDLE_RECOVERY_E2E_PHASE=crash_b'],
       );
     }
     if (freshOnly) {
       artifacts['recovery-fresh-restart'] = await _prepareIntegrationExecutable(
         name: 'recovery-fresh-restart',
-        target: 'integration_test/handle_recovery_ui_test.dart',
-        bundleId: 'ai.awiki.awikime.dev.e2e.recovery.fresh.restart',
         stateRoot: appStateRootDir,
-        dartDefines: const <String>[
-          'AWIKI_HANDLE_RECOVERY_E2E_PHASE=fresh_restart',
-        ],
       );
     }
     return artifacts;

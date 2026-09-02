@@ -3244,11 +3244,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return localizeAgentTitle(context.l10n, runtimeAgent);
     }
     return ref.watch(
-      peerDisplayNameProvider(
-        PeerDisplayNameRequest(
-          peerPersonaId: message.senderPeerPersonaId,
+      publicIdentityDisplayNameProvider(
+        PublicIdentityDisplayNameRequest(
           did: senderDid,
-          senderNameSnapshot: message.senderName,
           unknownLabel: context.l10n.chatUnknownUser,
         ),
       ),

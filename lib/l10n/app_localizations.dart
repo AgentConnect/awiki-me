@@ -1932,6 +1932,12 @@ abstract class AppLocalizations {
   /// **'设备已撤销，受影响的群正在同步安全状态。'**
   String get deviceRevokeSucceededGroupsSyncing;
 
+  /// No description provided for @deviceRevokeSucceededGroupsRepairPartial.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备已撤销；部分相关群本次未能更新安全状态，但不影响继续收发消息。'**
+  String get deviceRevokeSucceededGroupsRepairPartial;
+
   /// No description provided for @deviceRevokeOutcomeUnknown.
   ///
   /// In zh, this message translates to:

@@ -190,8 +190,15 @@ void main() {
         RegExp(
           "if \\(error\\.code != 'transport_unavailable'\\) rethrow;",
         ).allMatches(source),
-        hasLength(3),
+        hasLength(2),
       );
+      expect(
+        source,
+        contains(
+          "'local_state_unavailable',\n        'transport_unavailable',",
+        ),
+      );
+      expect(source, contains("syncNow(reason: 'handle-recovery-rejoin-e2e'"));
     },
   );
 

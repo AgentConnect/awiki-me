@@ -910,6 +910,7 @@
       ]
     },
     "personal-agent": {
+      "catalogStatus": "unsupported",
       "tier": "optional_provider_product_ui",
       "supportedPlatforms": ["macos","linux"],
       "requiredTools": ["flutter","awiki-cli","awiki-daemon"],

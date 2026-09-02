@@ -158,7 +158,8 @@ sender-side reliable sync 收敛同一 `message_id`。这里的 canonical conver
 只是 App 展示/存储路由；Core 仍须把普通 Direct 历史保存为 `direct + peer DID` wire
 identity，再与发送设备的本地投影合并，不能通过放宽 wire-conflict 校验让用例通过。
 重复使用同一个 `run-id` 时，runner 会先重置双 App、Daemon 和 CLI 的隔离运行态目录，
-但保留 App-pair build/artifact 目录，以便增量编译且不会继承上一次的身份状态。
+但保留内容寻址的App artifact cache；Functional、Content Sync和Paging都复用同一组
+admin/joiner编译制品，且不会继承上一次的身份状态。
 
 `DEVICE-JOIN-E2E-003`、`ROOT-TRANSFER-E2E-002` 和
 `MLS-MULTI-DEVICE-E2E-001` 为 planned、不可执行边界。`ROOT-TRANSFER-E2E-001`
@@ -408,19 +409,18 @@ dart run tests/e2e/runner.dart \
 ```
 
 Unlike `multi-device-remote-join`, the YAML for this mode does not require a CLI
-binary or source revision. `tool/build_isolated_e2e_app.dart` owns reusable
-Debug App construction, while the runner owns the ephemeral loopback
+binary or source revision. The product-owned artifact spec and isolated builder
+own reusable Debug App construction, while the runner owns the ephemeral loopback
 coordinator, two direct App launches on macOS or Xvfb launches on Linux, two
 concurrent existing-App drivers, and cleanup. Failed driver output is bounded to 80 lines and redacted in memory
 before it can enter diagnostics; raw driver output is neither streamed nor
 persisted. See
 [multi-device-app-pair-e2e.md](multi-device-app-pair-e2e.md).
 
-Admin and Joiner use stable work roots under
-`.e2e/build-cache/multi-device-app-pair/`. macOS uses separate role build
-caches; Linux builds the roles sequentially through Flutter's standard
-`build/linux` cache, then copies each role bundle before building the next.
-A rerun therefore performs only the required incremental recompile. Run config and case-attestation values are launch-time environment
+Admin and Joiner are two compile-keyed artifacts in `.e2e/build-cache/v2/`.
+Prepare builds each unique role once; all App-pair suites import that same pair,
+and required execution fails instead of rebuilding when either artifact is
+missing or mismatched. Run config, coordinator fixture and case-attestation values are launch-time environment
 inputs rather than run-specific Dart defines. Identity state, E2E credential
 storage, reports, and copied App bundles remain isolated under the current run
 directory; production Keychain state is not reused.
@@ -698,7 +698,6 @@ Supported E2E cases:
 - `direct`: App and CLI peer direct-message flow.
 - `group`: App and CLI peer group-message flow.
 - `attachment`: App and CLI peer attachment flow.
-- `personal-agent`: full App UI Personal Agent real-backend gate.
 - `contacts`: App and CLI peer follow/contact flow，包含从可见联系人行打开 canonical Direct 的发送、restart 和 unread/read 闭环。
 - `restart`: release-only two-Flutter-process cold restart using one isolated App state root; the second process must restore the active identity, canonical Direct/Group rows, exact messages, unread state, and cached display names without in-memory Provider reuse.
 - `full`: all App + CLI peer flows.
@@ -781,44 +780,12 @@ receive their own case IDs and vertical slices; `full` does not imply those
 features are covered. The focused identity-switch suite covers the runtime and
 message lifecycle, while account-picker visual acceptance remains manual.
 
-Personal Agent UI changes must keep coverage in both active test domains:
-
-- Focused widget/provider/layout coverage under `tests/unit/`, including Settings entry visibility, daemon readiness, missing bootstrap key, and feature-disabled no-op behavior.
-- Durable App flow coverage under `tests/e2e/flutter/app/personal_agent_full_ui_test.dart`, with root `integration_test/personal_agent_full_ui_test.dart` kept as a thin Flutter shim.
-- The fake-backed Personal Agent App shim expects `--dart-define=AWIKI_E2E=true` when tests assert semantics identifiers such as `personal-agent-settings-entry`.
-- The product full chain is owned by `flutter pub run tests/e2e/runner.dart --case personal-agent`; `dart run` is acceptable only in environments where native assets can build through the Dart entrypoint. Selected runs must fail fast when backend, daemon, CLI, OTP, or Hermes prerequisites are missing and must not convert the case into a silent skip.
-- Product gate evidence must include passed attestations for `PERSONALAGENT-E2E-001`, `PERSONALAGENT-E2E-002`, and `PERSONALAGENT-E2E-004`; `uiEnabled`, `runtimeFinalReceived`, and `authorizationRevoked` must be derived from those individual case results, not overall runner success. `PERSONALAGENT-E2E-003` remains planned, and there is no executable `PERSONALAGENT-E2E-005` in the current suite.
-- Treat `status: success` as the first required report condition. Failed Personal Agent reports now keep evidence flags false, so old failed reports with true-looking flags must not be reused as pass evidence.
-
-Run the Personal Agent full UI real-backend gate:
-
-```bash
-flutter pub run tests/e2e/runner.dart \
-  --case personal-agent \
-  --config tests/e2e/configs/e2e.local.yaml
-```
-
-`personal-agent` requires the normal backend/OTP/account/CLI values plus:
-
-- `service.messageServiceUrl`
-- `service.messageServiceWsUrl`
-- `daemon.rustRepo`
-- `daemon.binary`
-- `daemon.stateRoot`
-- `daemon.readyFile`
-- `daemon.fakeHermesGatewayCommand`
-- `personalAgent.runtimeProvider: hermes`
-- `personalAgent.realBackend: true`
-
-When `--case personal-agent` is selected, omitted `personalAgent.realBackend`
-defaults to true. Setting it to false, omitting any required backend/daemon field,
-or using a provider other than `hermes` is a configuration failure. This gate uses
-the real Settings / Personal Agent UI, isolates the product scenario with the
-plain-name `Personal Agent full UI drives real backend daemon and recovery`, sends
-a CLI peer direct text, waits for daemon `runtime_final`, confirms the App draft
-action, checks a redacted `awiki.app.action.result.v1`, and revokes Daemon message
-authorization. Focused fake-backed shim tests can diagnose UI behavior, but they
-are not sufficient release evidence for the product chain.
+Personal Agent is not a supported product capability in the current release.
+`personalAgentFeatureVisibleByDefault=false` keeps its user-facing surfaces hidden;
+`PERSONALAGENT-E2E-001/002/003/004` are marked unsupported and are absent from every
+execution profile and prepared-artifact DAG. Existing dormant suite, implementation, unit fixtures,
+data tables and migrations are retained for a later product decision. They must not
+be reported as passed or as a runtime skip in the current supported denominator.
 
 All E2E runtime state and reports go under `.e2e/` and must remain untracked.
 Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and
@@ -958,19 +925,27 @@ Keychain item.
 The native im-core smoke now follows the production lifecycle: explicit scope
 provision, runtime `openExisting`, native `VaultRequired` open, same-process
 runtime reopen with the same root, and missing-key fail-closed without recreate.
-The release-only `NATIVE-E2E-002` gate builds and signs the production bundle
-three times, launches three independent App processes for provision/reopen/cleanup,
-rejects the development service, proves `createExclusive` cannot replace the item,
-and verifies the signing Team/bundle identity before every launch. Before those
-three phases it builds and validates one universal macOS `awiki_im_core` from
-the sibling `awiki-cli-rs2` checkout, refreshes CocoaPods once, and removes the
-stale Release XCFramework intermediate. Set `AWIKI_IM_CORE_REPO_DIR` only when
-the Core checkout is not the default sibling:
+The release-only `NATIVE-E2E-002` gate has a strict prepare/execute split.
+Prepare builds and validates one universal macOS `awiki_im_core`, refreshes
+CocoaPods, builds one Release App, signs it, and writes a relative-path manifest
+with source/dirty/architecture/digest evidence. Execute verifies that immutable
+bundle and launches the same App three times with runtime-only
+provision/reopen/cleanup arguments. Execute performs no native, Flutter, Pod, or
+codesign build and writes schema-v2 attestation, timings, and resource ledger.
+The phases reject the development service and prove `createExclusive` cannot
+replace the item. Set `AWIKI_IM_CORE_REPO_DIR` only when the Core checkout is
+not the default sibling:
 
 ```bash
 AWIKI_MACOS_SIGNING_IDENTITY="<stable identity>" \
 AWIKI_MACOS_DEVELOPMENT_TEAM="<matching team id>" \
-scripts/run_macos_production_scope_restart_gate.sh
+scripts/run_macos_production_scope_restart_gate.sh \
+  --prepare-only --artifact-root=<private-prepared-root>
+
+AWIKI_MACOS_DEVELOPMENT_TEAM="<matching team id>" \
+scripts/run_macos_production_scope_restart_gate.sh \
+  --execute --artifact-manifest=<private-prepared-root>/manifest.json \
+  --report-dir=<run-report-root> --run-id=<run-id>
 ```
 
 The script never prints the Keychain value and deletes its run-unique production
@@ -1100,16 +1075,41 @@ still required before the conversation-correctness plan is complete.
 
 On macOS and Linux, `--prepare-only` builds content-addressed integration
 executables without creating identities or starting remote business flows.
-The smoke, desktop-core/focused, Join, restart, and Handle Recovery runners then
-launch those verified executables with run-owned state and attestation paths.
+`tests/e2e/app_artifact_specs.json` is the product-owned suite-to-artifact
+contract used by both this runner and the cross-repository orchestrator. The
+smoke, desktop-core/focused, Join, App-pair, Agent, restart, and Handle Recovery
+runners then launch those verified executables with run-owned state and
+attestation paths.
 Run ID, state root, scenario, and case IDs are runtime E2E inputs and do not
 change the build fingerprint; true fault-injection or product-capability flavors
 remain compile-time inputs. A warm prepared execution must not invoke
 `flutter build` or `flutter test`.
 
+Artifact identity is the canonical compile key, not the human-readable artifact
+name. The key includes the selected integration target's transitive Dart source
+graph, product sources/assets/platform files, sorted compile-time defines,
+native Core and toolchain/architecture inputs. It excludes unrelated E2E
+targets and runtime secrets. Import recomputes and verifies that key plus the
+complete bundle digest against the current working tree; required mode never
+falls back to a build. App-pair Functional, Content and Paging share exactly one
+admin/joiner pair because their differences are runtime coordinator fixtures,
+while compile-time Recovery phase variants remain separate.
+
+Export manifests contain only project-relative bundle/executable paths and
+record consumer suites, canonical compile-key payload, Git source ref, dirty
+state, Flutter/Dart/Rust identity, and native Core provenance. A dirty candidate
+is executable for local validation but carries `evidenceEligible=false`, so it
+cannot produce a formal release lane PASS. Cache governance pins the current
+DAG and previous successful DAG, refreshes last-used metadata, and only prunes
+other complete entries by LRU when the next-job free-space budget requires it;
+dead-PID temporary entries are recovered without touching reports or runtime
+state.
+
 Multi-phase scenarios keep distinct artifacts when their compiled behavior is
 different: restart uses `restart-a/b/c`, Handle Recovery uses main/crash/fresh
-variants, and `full` prepares both `full` and `remote-join`. The runner validates
+variants, and Join/Root Transfer/Step4 share `remote-join`. Personal Agent uses
+the real-backend-only integration target so the prepared acceptance executable
+cannot accidentally enter fake Widget coverage. The runner validates
 the artifact name, target, bundle ID, host architecture, fingerprint, executable
 containment, and complete bundle digest before launch. Set
 `AWIKI_E2E_USE_FLUTTER_TEST=1` only as a legacy debugging fallback; it is not the
@@ -1123,14 +1123,9 @@ live under `tests/e2e/runner/scenarios/`. These files are one Dart library so
 the split does not duplicate case membership or expose private runtime state.
 Business actions and assertions remain in the existing Flutter/Core tests.
 
-Personal Agent fake Widget coverage is not product acceptance. The optional real
-`personal-agent` suite currently attests only implemented vertical slices:
-`PERSONALAGENT-E2E-001` enable/binding, `PERSONALAGENT-E2E-002` CLI message plus runtime
-result, and `PERSONALAGENT-E2E-004` UI revoke plus exact User Service/daemon
-convergence. `PERSONALAGENT-E2E-003` (visible action/draft confirmation) is planned
-in the catalog because the supporting action step does not yet have its own
-accepted case attestation. Missing provider/configuration or any non-attested
-runnable case remains failed/not-run, never passed.
+Personal Agent fake Widget coverage only preserves dormant implementation safety;
+it is not product acceptance. The dormant suite is not selected by any current
+execution profile or release denominator.
 
 ## Maintenance Rules
 

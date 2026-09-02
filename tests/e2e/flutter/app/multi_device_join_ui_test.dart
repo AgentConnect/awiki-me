@@ -18,6 +18,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/e2e_semantics.dart';
+import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
@@ -34,7 +35,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
-import 'package:awiki_me/src/domain/entities/group_identity.dart';
+import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
@@ -53,10 +54,9 @@ import 'package:awiki_me/src/presentation/devices/device_join_approval_sheet.dar
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
-import 'package:awiki_me/src/presentation/group/group_encryption_provider.dart';
-import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
+import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
@@ -570,9 +570,7 @@ void main() {
       bootstrap = await AppBootstrap.create(
         environment: _joinOnlyEnvironment(
           config,
-          enableRootTransfer:
-              _invocationExpects(_rootTransferCaseId) ||
-              _invocationExpects(_deviceRevokeCaseId),
+          enableRootTransfer: _invocationExpects(_rootTransferCaseId),
           enableStep4: _invocationExpects(_deviceRevokeCaseId),
         ),
         appStateRoot: config.appStateRoot,
@@ -620,6 +618,9 @@ void main() {
         tester,
         expectedDid: adminSession.did,
       );
+      final step4Groups = _invocationExpects(_deviceRevokeCaseId)
+          ? await _prepareStep4Groups(container)
+          : null;
 
       final joinOperationId = 'app-join-${_nonce(10)}';
       final joinOtp = await _requestAndResolveOtp(
@@ -828,8 +829,7 @@ void main() {
           ],
         );
       }
-      if (_invocationExpects(_rootTransferCaseId) ||
-          _invocationExpects(_deviceRevokeCaseId)) {
+      if (_invocationExpects(_rootTransferCaseId)) {
         if (bootstrap.rootKeyTransferPort == null) {
           fail('The real App bootstrap did not compose root transfer.');
         }
@@ -854,6 +854,7 @@ void main() {
           did: adminSession.did,
           currentDeviceId: bootstrapAdminDeviceId,
           targetDeviceId: started.protocolDeviceId,
+          preparedGroups: step4Groups!,
         );
       }
     },
@@ -881,28 +882,15 @@ Future<void> _verifyStep4RevokeAndMls({
   required String did,
   required String currentDeviceId,
   required String targetDeviceId,
+  required ({GroupSummary group, GroupSummary pageGroup}) preparedGroups,
 }) async {
   if (find.byType(DeviceJoinApprovalSheet).evaluate().isNotEmpty) {
     Navigator.of(tester.element(find.byType(DeviceJoinApprovalSheet))).pop();
     await tester.pumpAndSettle();
   }
   await cli.startRealtimeListener();
-  final groups = container.read(groupApplicationServiceProvider);
-  final nonce = _nonce(8);
-  final group = await groups.createGroup(
-    name: 'Step4 revoke $nonce',
-    slug: 'step4-$nonce',
-    description: 'Step4 exact-device convergence',
-    goal: 'Verify revoke convergence',
-    rules: 'E2E only',
-  );
-  final pageGroup = await groups.createGroup(
-    name: 'Step4 page $nonce',
-    slug: 'step4-page-$nonce',
-    description: 'Step4 cursor projection',
-    goal: 'Verify pagination',
-    rules: 'E2E only',
-  );
+  final group = preparedGroups.group;
+  final pageGroup = preparedGroups.pageGroup;
   final groupController = container.read(groupProvider.notifier);
   await groupController.refresh(limit: 1);
   final firstPageState = container.read(groupProvider);
@@ -926,6 +914,55 @@ Future<void> _verifyStep4RevokeAndMls({
       'Explicit App provider load-more lost, duplicated, or reused a group.',
     );
   }
+
+  await _continueStep4RevokeAndMls(
+    tester: tester,
+    container: container,
+    bootstrap: bootstrap,
+    cli: cli,
+    presence: presence,
+    did: did,
+    currentDeviceId: currentDeviceId,
+    targetDeviceId: targetDeviceId,
+    group: group,
+  );
+}
+
+Future<({GroupSummary group, GroupSummary pageGroup})> _prepareStep4Groups(
+  ProviderContainer container,
+) async {
+  final groups = container.read(groupApplicationServiceProvider);
+  final nonce = _nonce(8);
+  final group = await groups.createGroup(
+    name: 'Step4 revoke $nonce',
+    slug: 'step4-$nonce',
+    description: 'Step4 exact-device convergence',
+    goal: 'Verify revoke convergence',
+    rules: 'E2E only',
+  );
+  final pageGroup = await groups.createGroup(
+    name: 'Step4 page $nonce',
+    slug: 'step4-page-$nonce',
+    description: 'Step4 cursor projection',
+    goal: 'Verify pagination',
+    rules: 'E2E only',
+  );
+  return (group: group, pageGroup: pageGroup);
+}
+
+Future<void> _continueStep4RevokeAndMls({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required AppBootstrap bootstrap,
+  required _JoinCli cli,
+  required E2eUserPresencePort presence,
+  required String did,
+  required String currentDeviceId,
+  required String targetDeviceId,
+  required GroupSummary group,
+}) async {
+  final groups = container.read(groupApplicationServiceProvider);
+  final groupController = container.read(groupProvider.notifier);
   await groupController.loadGroupMembers(group.groupId, limit: 1);
   final memberPage = container.read(groupProvider).memberPages[group.groupId];
   if (memberPage?.pageGroupDid != group.groupId ||
@@ -953,31 +990,37 @@ Future<void> _verifyStep4RevokeAndMls({
             device.status == DeviceStatus.active,
       )
       .toList(growable: false);
-  final targetReadyAdmin = registryBeforeRepair.devices
+  final targetMember = registryBeforeRepair.devices
       .where(
         (device) =>
             device.protocolDeviceId == targetDeviceId &&
             !device.isCurrent &&
-            device.role == DeviceRole.admin &&
-            device.managementReady &&
+            device.role == DeviceRole.member &&
+            !device.managementReady &&
             device.status == DeviceStatus.active,
       )
       .toList(growable: false);
   if (registryBeforeRepair.devices.length != 2 ||
       currentReadyAdmin.length != 1 ||
-      targetReadyAdmin.length != 1) {
-    fail('Fresh Registry did not bind the two exact ready device principals.');
+      targetMember.length != 1) {
+    fail('Fresh Registry did not bind the admin and member device principals.');
   }
 
   final secure = container.read(groupEncryptionCorePortProvider);
   var appReady = await secure.retry(group.groupId);
+  await Future<void>.delayed(const Duration(seconds: 2));
+  await cli.stopRealtimeListener();
+  await cli.waitForGroupReady(group.groupId);
   final appReadyDeadline = DateTime.now().add(const Duration(seconds: 45));
   while (!appReady.canSendSecure && DateTime.now().isBefore(appReadyDeadline)) {
     await Future<void>.delayed(const Duration(milliseconds: 750));
     appReady = await secure.retry(group.groupId);
   }
   if (!appReady.canSendSecure) {
-    fail('The App controller did not reconcile the CLI Manifest device.');
+    fail(
+      'The App controller did not reconcile the CLI Manifest device '
+      '(readiness=${appReady.readiness.name}, retryable=${appReady.retryable}).',
+    );
   }
   final twoLeafEvidence = await cli.repairGroupUntilReady(group.groupId);
   final cliReadinessFailure = twoLeafEvidence.repairGroup != group.groupId
@@ -1078,53 +1121,19 @@ Future<void> _verifyStep4RevokeAndMls({
   );
 
   var status = await secure.status(group.groupId);
-  final maintenanceDeadline = DateTime.now().add(const Duration(seconds: 45));
-  while (status.canSendSecure && DateTime.now().isBefore(maintenanceDeadline)) {
+  final repairDeadline = DateTime.now().add(const Duration(seconds: 45));
+  while ((!status.canSendSecure ||
+          container.read(devicesProvider).revokeNotice ==
+              DeviceRevokeNotice.revokedGroupsSyncing) &&
+      DateTime.now().isBefore(repairDeadline)) {
     await Future<void>.delayed(const Duration(milliseconds: 750));
     status = await secure.status(group.groupId);
   }
-  if (status.canSendSecure) {
-    fail('The group reported ready before revoke convergence repair.');
-  }
-  container.read(groupProvider.notifier).upsertGroup(group);
-  unawaited(
-    Navigator.of(tester.element(find.byType(DevicesPage))).push<void>(
-      CupertinoPageRoute<void>(
-        builder: (_) => GroupDetailPage(initialGroup: group),
-      ),
-    ),
-  );
-  await _pumpUntil(
-    tester,
-    () => find
-        .byKey(const Key('group-encryption-retry-button'))
-        .hitTestable()
-        .evaluate()
-        .isNotEmpty,
-    failure:
-        'The current controller group did not expose an actionable repair.',
-  );
-  await _tapOne(
-    tester,
-    find.byKey(const Key('group-encryption-retry-button')),
-    failure: 'The explicit group repair action was unavailable.',
-  );
-  await _pumpUntil(
-    tester,
-    () =>
-        container
-            .read(groupEncryptionProvider(group.groupId))
-            .status
-            ?.canSendSecure ==
-        true,
-    timeout: const Duration(seconds: 45),
-    failure:
-        'The surviving App did not become ready after exact Remove repair.',
-  );
-  status =
-      container.read(groupEncryptionProvider(group.groupId)).status ?? status;
-  if (!status.canSendSecure) {
-    fail('The surviving App did not become ready after exact Remove repair.');
+  final revokeNotice = container.read(devicesProvider).revokeNotice;
+  if (!status.canSendSecure || revokeNotice != DeviceRevokeNotice.revoked) {
+    fail(
+      'The App immediate one-shot group repair did not complete successfully.',
+    );
   }
   final members = await groups.listMembers(group.groupId);
   if (members.items.where((member) => member.did == did).length != 1) {
@@ -1150,7 +1159,7 @@ Future<void> _verifyStep4RevokeAndMls({
     _mlsRevokeCaseId,
     phases: const <String>[
       'exact_device_revoked_with_remove_commit',
-      'app_ready_only_after_remove_convergence',
+      'app_immediate_one_shot_repair_completed',
       'revoked_endpoint_rejected_future_group_data',
       'surviving_app_leaf_and_business_member_retained',
     ],
@@ -1689,6 +1698,7 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
     required this.cliAdminHome,
     required this.dshRepoRoot,
     required this.dshStateRoot,
+    required this.dshAppStateRoot,
     required this.appStateRoot,
     required this.appJoiningStateRoot,
   });
@@ -1731,6 +1741,7 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
   final String cliAdminHome;
   final String dshRepoRoot;
   final String dshStateRoot;
+  final String dshAppStateRoot;
   final String appStateRoot;
   final String appJoiningStateRoot;
 
@@ -1779,6 +1790,7 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
       cliAdminHome: _required(adminCli, 'home'),
       dshRepoRoot: _required(dsh, 'repoRoot'),
       dshStateRoot: _required(dsh, 'stateRoot'),
+      dshAppStateRoot: _required(dsh, 'appStateRoot'),
       appStateRoot: _required(app, 'stateRoot'),
       appJoiningStateRoot: _required(joiningApp, 'stateRoot'),
     );
@@ -1810,9 +1822,11 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
         _required(adminCli, 'sourceRef') != config.cliSourceRef) {
       throw StateError('Remote multi-device CLI build is not auditable.');
     }
-    if (_required(dsh, 'nodePackageVersion') != '0.1.8' ||
+    if (_required(dsh, 'nodePackageVersion') != '0.2.3' ||
         Directory(config.dshRepoRoot).absolute.path != config.dshRepoRoot ||
-        Directory(config.dshStateRoot).absolute.path != config.dshStateRoot) {
+        Directory(config.dshStateRoot).absolute.path != config.dshStateRoot ||
+        Directory(config.dshAppStateRoot).absolute.path !=
+            config.dshAppStateRoot) {
       throw StateError('Remote multi-device DSH build is not auditable.');
     }
     return config;
@@ -2684,6 +2698,58 @@ class _JoinCli {
       hasLocalState: hasLocalState,
       hasActiveMembership: hasActiveMembership,
     );
+  }
+
+  Future<void> waitForGroupReady(String groupDid) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 45));
+    while (DateTime.now().isBefore(deadline)) {
+      final inbox = _data(
+        await _run(const <String>[
+          '--format',
+          'json',
+          'msg',
+          'inbox',
+          '--scope',
+          'group',
+          '--limit',
+          '20',
+        ]),
+        action: null,
+      );
+      if (inbox['messages'] is! List) {
+        fail('CLI did not expose its group Inbox projection.');
+      }
+      final statusRaw = _data(
+        await _run(<String>[
+          '--format',
+          'json',
+          'group',
+          'secure',
+          'status',
+          '--group',
+          groupDid,
+        ]),
+        action: null,
+      )['status'];
+      if (statusRaw is! Map) {
+        fail('CLI group status returned no public status projection.');
+      }
+      final status = _stringMap(statusRaw);
+      final localRaw = status['local_readiness'];
+      if (localRaw is! Map) {
+        fail('CLI group status omitted local readiness.');
+      }
+      final local = _stringMap(localRaw);
+      if (status['group'] == groupDid &&
+          status['state']?.toString().toLowerCase() == 'ready' &&
+          status['can_send_secure'] == true &&
+          local['has_local_state'] == true &&
+          local['has_active_membership'] == true) {
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 750));
+    }
+    fail('CLI did not consume its group Welcome through public sync.');
   }
 
   Future<void> requireRootlessCurrentMember({
@@ -3596,23 +3662,31 @@ void _requireAccountStateOperatorEnvironment(List<String> configuredCommand) {
   try {
     environmentCommand = parseAccountStateOperatorCommand(
       Platform.environment[_accountStateOperatorCommandEnv] ?? '',
+      mode: Platform.environment[_accountStateOperatorModeEnv]?.trim() ?? '',
     );
   } on FormatException {
     environmentCommand = null;
   }
   if (Platform.environment[_accountStateEnableEnv]?.trim() != '1' ||
-      Platform.environment[_accountStateOperatorModeEnv]?.trim() != 'ali' ||
+      !const <String>{
+        'ali',
+        'local',
+      }.contains(Platform.environment[_accountStateOperatorModeEnv]?.trim()) ||
       Platform.environment[_syncRecoveryTargetEnv]?.trim() !=
           _syncRecoveryTarget ||
       Platform.environment[_accountStateFailpointEnableEnv]?.trim() != '1' ||
       environmentCommand == null ||
       !_sameOrderedText(
         environmentCommand,
-        reviewedAccountStateOperatorCommand,
+        reviewedAccountStateOperatorCommandForMode(
+          Platform.environment[_accountStateOperatorModeEnv]?.trim() ?? '',
+        ),
       ) ||
       !_sameOrderedText(
         configuredCommand,
-        reviewedAccountStateOperatorCommand,
+        reviewedAccountStateOperatorCommandForMode(
+          Platform.environment[_accountStateOperatorModeEnv]?.trim() ?? '',
+        ),
       )) {
     throw StateError('The App-pair Account State operator gate is incomplete.');
   }

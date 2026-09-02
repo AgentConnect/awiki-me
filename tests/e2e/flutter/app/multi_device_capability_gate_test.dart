@@ -21,6 +21,7 @@ const String _unreachableLoopback = 'http://127.0.0.1:1';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(E2eInvocationCompletionWriter.markFinished);
 
   testWidgets(
     'production bootstrap keeps E2EE available but defaults ordinary messaging to plain',

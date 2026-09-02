@@ -28,4 +28,22 @@ void main() {
       isNot(contains('ACCOUNT_ALLOWLIST')),
     );
   });
+
+  test(
+    'recovery operator supports the reviewed same-host release boundary',
+    () {
+      expect(
+        reviewedSyncRecoveryOperatorCommandForMode('local'),
+        reviewedLocalSyncRecoveryOperatorCommand,
+      );
+      expect(
+        reviewedLocalSyncRecoveryOperatorCommand.join(' '),
+        isNot(contains('/home/ecs-user/awiki-space')),
+      );
+      expect(
+        () => reviewedSyncRecoveryOperatorCommandForMode('unknown'),
+        throwsArgumentError,
+      );
+    },
+  );
 }

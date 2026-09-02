@@ -13,7 +13,7 @@ void _registerDshDeviceJoinInteropTest() {
       }
       final dshStateRoot = config.dshStateRoot;
       _requireIndependentEmptyPaths(<String>[
-        config.appJoiningStateRoot,
+        config.dshAppStateRoot,
         dshStateRoot,
       ]);
       final dsh = await _DshE2eDriver.start(
@@ -33,7 +33,7 @@ void _registerDshDeviceJoinInteropTest() {
           handleRevoked = await dsh.cleanupHandle(handle, revokeOtp);
         }
         await dsh.close();
-        await _deleteDirectory(config.appJoiningStateRoot);
+        await _deleteDirectory(config.dshAppStateRoot);
         await _deleteDirectory(dshStateRoot);
         await tester.binding.setSurfaceSize(null);
         if (handle.isNotEmpty && !handleRevoked) {
@@ -62,7 +62,7 @@ void _registerDshDeviceJoinInteropTest() {
 
       bootstrap = await AppBootstrap.create(
         environment: _joinOnlyEnvironment(config),
-        appStateRoot: config.appJoiningStateRoot,
+        appStateRoot: config.dshAppStateRoot,
       );
       await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
       await _pumpUntil(
@@ -70,6 +70,17 @@ void _registerDshDeviceJoinInteropTest() {
         () => find.byType(OnboardingPage).evaluate().length == 1,
         timeout: const Duration(seconds: 45),
         failure: 'The joining App did not open onboarding.',
+      );
+      await _pumpUntil(
+        tester,
+        () =>
+            find.bySemanticsIdentifier('e2e-phone-input').evaluate().length ==
+                1 &&
+            find.bySemanticsIdentifier('e2e-handle-input').evaluate().length ==
+                1 &&
+            find.bySemanticsIdentifier('e2e-otp-input').evaluate().length == 1,
+        timeout: const Duration(seconds: 45),
+        failure: 'The joining App onboarding phone form was unavailable.',
       );
       await _enterText(tester, 'e2e-phone-input', account.phone);
       await _enterText(tester, 'e2e-handle-input', handle);
@@ -281,6 +292,9 @@ class _DshE2eDriver {
       'messageServiceUrl': config.messageServiceUrl,
       'messageServicePublicUrl': config.messageServiceUrl,
       'messageServiceDid': 'did:wba:awiki.info',
+      'realtimeEnabled': true,
+      'listenerEnabled': false,
+      'listenerAllowedPeers': <String>[],
     });
     final ready = await instance._read();
     if (ready['ok'] != true || ready['ready'] != true) {
@@ -335,16 +349,22 @@ class _DshE2eDriver {
 
   Future<Map<String, Object?>> waitForSingleRequest() async {
     final deadline = DateTime.now().add(const Duration(seconds: 60));
+    var lastRequests = const <Map<String, Object?>>[];
     while (DateTime.now().isBefore(deadline)) {
       final snapshot = await hostValue('device_refresh');
       final requests = maps(snapshot, 'requests');
+      lastRequests = requests;
       if (requests.length == 1 &&
-          requests.single['canStartVerification'] == true) {
+          (requests.single['canStartVerification'] == true ||
+              requests.single['claimedByCurrentDevice'] == true)) {
         return requests.single;
       }
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
-    fail('DSH did not discover exactly one local Join request.');
+    fail(
+      'DSH did not discover exactly one local Join request '
+      '(count=${lastRequests.length}, states=${lastRequests.map((request) => <String, Object?>{'canStart': request['canStartVerification'] == true, 'claimed': request['claimedByCurrentDevice'] == true}).toList()}).',
+    );
   }
 
   Future<String> waitForSas(String requestRef) async {

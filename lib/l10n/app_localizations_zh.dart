@@ -971,6 +971,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceRevokeSucceededGroupsSyncing => '设备已撤销，受影响的群正在同步安全状态。';
 
   @override
+  String get deviceRevokeSucceededGroupsRepairPartial =>
+      '设备已撤销；部分相关群本次未能更新安全状态，但不影响继续收发消息。';
+
+  @override
   String get deviceRevokeOutcomeUnknown => '撤销结果暂未确认，请刷新设备列表。';
 
   @override

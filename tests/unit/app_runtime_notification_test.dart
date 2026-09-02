@@ -1172,12 +1172,15 @@ void main() {
 
     test('已授权成员设备按精确 DID 单飞激活一次', () async {
       const joinedDid = 'did:test:joined-member';
-      gateway.loginResult = const SessionIdentity(
+      const joinedIdentity = SessionIdentity(
         did: joinedDid,
         credentialName: 'joined-local',
+        localIdentityId: 'joined-owner',
         displayName: 'Joined',
         handle: 'joined',
       );
+      gateway.loginResult = joinedIdentity;
+      gateway.localCredentials = const <SessionIdentity>[joinedIdentity];
       final runtime = container.read(appRuntimeProvider.notifier);
 
       await Future.wait(<Future<void>>[
@@ -1189,6 +1192,10 @@ void main() {
       expect(gateway.lastLoginCredentialName, joinedDid);
       expect(container.read(sessionProvider).session?.did, joinedDid);
       expect(container.read(appRuntimeProvider).activatedDid, joinedDid);
+      expect(
+        container.read(sessionProvider).localCredentials.single.localIdentityId,
+        'joined-owner',
+      );
     });
 
     test('成员设备激活遇到错误 DID 时失败关闭并登出', () async {

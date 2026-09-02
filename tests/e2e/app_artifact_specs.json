@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "2026-09-01.prepared-app-artifacts-v1",
+  "artifacts": [
+    {
+      "name": "smoke-app",
+      "target": "integration_test/app_smoke_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.smoke.app",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["smoke"]
+    },
+    {
+      "name": "smoke-core",
+      "target": "integration_test/im_core_open_smoke_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.smoke.core",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["smoke"]
+    },
+    {
+      "name": "full",
+      "target": "integration_test/desktop_cli_peer_smoke_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.full",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": ["AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true"],
+      "consumerSuites": ["full"]
+    },
+    {
+      "name": "direct",
+      "target": "integration_test/desktop_cli_peer_direct_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.direct",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["direct"]
+    },
+    {
+      "name": "group",
+      "target": "integration_test/desktop_cli_peer_group_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.group",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["group"]
+    },
+    {
+      "name": "attachment",
+      "target": "integration_test/desktop_cli_peer_attachment_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.attachment",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["attachment"]
+    },
+    {
+      "name": "contacts",
+      "target": "integration_test/desktop_cli_peer_contacts_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.contacts",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["contacts"]
+    },
+    {
+      "name": "contact-first",
+      "target": "integration_test/desktop_cli_peer_contact_first_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.contact.first",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["contact-first"]
+    },
+    {
+      "name": "inbound",
+      "target": "integration_test/desktop_cli_peer_inbound_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.inbound",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["inbound"]
+    },
+    {
+      "name": "identity-switch",
+      "target": "integration_test/desktop_identity_switch_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.identity.switch",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["identity-switch"]
+    },
+    {
+      "name": "display-name-fallback",
+      "target": "integration_test/desktop_cli_peer_display_name_fallback_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.display.name.fallback",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["display-name-fallback"]
+    },
+    {
+      "name": "performance",
+      "target": "integration_test/desktop_cli_peer_performance_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.performance",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["performance"]
+    },
+    {
+      "name": "multi-device",
+      "target": "integration_test/multi_device_capability_gate_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.multi.device",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["multi-device"]
+    },
+    {
+      "name": "remote-join",
+      "target": "integration_test/multi_device_join_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.remote.join",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["multi-device-remote-join", "root-transfer", "step4-revoke-mls"]
+    },
+    {
+      "name": "admin",
+      "target": "integration_test/multi_device_app_pair_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.pair.admin",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": ["AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=admin"],
+      "consumerSuites": ["multi-device-app-pair", "multi-device-app-pair-functional", "multi-device-app-pair-content-sync", "multi-device-app-pair-paging-recovery"]
+    },
+    {
+      "name": "joiner",
+      "target": "integration_test/multi_device_app_pair_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.pair.joiner",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": ["AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=joiner"],
+      "consumerSuites": ["multi-device-app-pair", "multi-device-app-pair-functional", "multi-device-app-pair-content-sync", "multi-device-app-pair-paging-recovery"]
+    },
+    {
+      "name": "recovery-main",
+      "target": "integration_test/handle_recovery_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.main",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["multi-device-remote-recovery", "multi-device-remote-recovery-fresh", "multi-device-app-pair-recovery-registration-rejoin-management-transfer", "multi-device-app-pair-recovery-retirement-ordinary-rejoin"]
+    },
+    {
+      "name": "recovery-crash-a",
+      "target": "integration_test/handle_recovery_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.crash.a",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": ["AWIKI_E2E_HANDLE_RECOVERY_CRASH_BEFORE_PRODUCT_RESET=true", "AWIKI_HANDLE_RECOVERY_E2E_PHASE=crash_a"],
+      "consumerSuites": ["multi-device-remote-recovery", "handle-recovery-local-data"]
+    },
+    {
+      "name": "recovery-crash-b",
+      "target": "integration_test/handle_recovery_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.crash.b",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": ["AWIKI_HANDLE_RECOVERY_E2E_PHASE=crash_b"],
+      "consumerSuites": ["multi-device-remote-recovery", "handle-recovery-local-data"]
+    },
+    {
+      "name": "recovery-fresh-restart",
+      "target": "integration_test/handle_recovery_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.fresh.restart",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": ["AWIKI_HANDLE_RECOVERY_E2E_PHASE=fresh_restart"],
+      "consumerSuites": ["multi-device-remote-recovery-fresh"]
+    },
+    {
+      "name": "recovery-registration-resume-a",
+      "target": "integration_test/handle_recovery_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.registration.a",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": ["AWIKI_HANDLE_RECOVERY_E2E_PHASE=registration_resume_a"],
+      "consumerSuites": ["multi-device-app-pair-recovery-registration-resume"]
+    },
+    {
+      "name": "recovery-registration-resume-b",
+      "target": "integration_test/handle_recovery_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.registration.b",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": ["AWIKI_HANDLE_RECOVERY_E2E_PHASE=registration_resume_b"],
+      "consumerSuites": ["multi-device-app-pair-recovery-registration-resume"]
+    },
+    {
+      "name": "identity-deletion-a",
+      "target": "integration_test/handle_recovery_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.identity.deletion.a",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": ["AWIKI_E2E_IDENTITY_DELETION_CRASH_AFTER_PRODUCT_DELETE=true", "AWIKI_HANDLE_RECOVERY_E2E_PHASE=identity_deletion_a"],
+      "consumerSuites": ["identity-deletion-recovery-guard"]
+    },
+    {
+      "name": "identity-deletion-b",
+      "target": "integration_test/handle_recovery_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.identity.deletion.b",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": ["AWIKI_HANDLE_RECOVERY_E2E_PHASE=identity_deletion_b"],
+      "consumerSuites": ["identity-deletion-recovery-guard"]
+    },
+    {
+      "name": "restart-a",
+      "target": "integration_test/desktop_cli_peer_restart_phase_a_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.restart.a",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["restart"]
+    },
+    {
+      "name": "restart-b",
+      "target": "integration_test/desktop_cli_peer_restart_phase_b_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.restart.b",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["restart"]
+    },
+    {
+      "name": "restart-c",
+      "target": "integration_test/desktop_cli_peer_credential_delete_phase_c_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.restart.c",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["restart"]
+    },
+    {
+      "name": "personal-agent",
+      "target": "integration_test/personal_agent_real_backend_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.personal.agent",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["personal-agent"]
+    },
+    {
+      "name": "codex-agent",
+      "target": "integration_test/codex_agent_full_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.codex.agent",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["codex-agent"]
+    },
+    {
+      "name": "claude-code-agent",
+      "target": "integration_test/claude_code_agent_full_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.claude.code.agent",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["claude-code-agent"]
+    }
+  ]
+}

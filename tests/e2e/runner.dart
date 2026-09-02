@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:yaml/yaml.dart';
 
 import 'account_state_operator_contract.dart';
+import 'app_artifact_spec.dart';
 import 'app_pair_protocol.dart';
 import 'case_attestation.dart';
 import 'host_platform.dart';
@@ -19,7 +20,12 @@ import 'runner/platform.dart';
 import 'runner/process_runner.dart';
 import 'runner/redaction.dart';
 import '../../tool/ensure_linux_im_core.dart';
-import '../../tool/isolated_e2e_app_builder.dart' show directorySha256;
+import '../../tool/isolated_e2e_app_builder.dart'
+    show
+        IsolatedE2eAppBuildRequest,
+        IsolatedE2eAppPlatform,
+        directorySha256,
+        isolatedBuildFingerprint;
 
 export 'runner/failure.dart';
 export 'runner/flutter_build_isolation.dart';
@@ -108,9 +114,12 @@ const String _preparedAppArtifactDirectoryEnv =
     'AWIKI_E2E_PREPARED_APP_ARTIFACT_DIR';
 const String _requiredPreparedAppArtifactsEnv =
     'AWIKI_E2E_REQUIRED_PREPARED_APP_ARTIFACTS';
+const String _preparedArtifactsModeEnv = 'AWIKI_E2E_PREPARED_ARTIFACTS_MODE';
 const String _e2eCliBinaryEnv = 'AWIKI_E2E_CLI_BINARY';
 const String _e2eCliSourceRefEnv = 'AWIKI_E2E_CLI_SOURCE_REF';
 const String _e2eDaemonBinaryEnv = 'AWIKI_E2E_DAEMON_BINARY';
+const String _e2eDaemonStateRootEnv = 'AWIKI_E2E_DAEMON_STATE_ROOT';
+const String _e2eDaemonReadyFileEnv = 'AWIKI_E2E_DAEMON_READY_FILE';
 const String _e2eOtpPhoneEnv = 'AWIKI_E2E_OTP_PHONE';
 const String _e2eOtpCodeEnv = 'AWIKI_E2E_OTP_CODE';
 const String _e2eAppHandleEnv = 'AWIKI_E2E_APP_HANDLE';
@@ -118,6 +127,21 @@ const String _e2eSecondaryAppHandleEnv = 'AWIKI_E2E_SECONDARY_APP_HANDLE';
 const String _e2eCliHandleEnv = 'AWIKI_E2E_CLI_HANDLE';
 const String _defaultRemoteTargetManifestPath =
     '../awiki-system-test/suites/remote-test-targets.json';
+final E2eAppArtifactSpecManifest _appArtifactSpecs =
+    E2eAppArtifactSpecManifest.load(File('tests/e2e/app_artifact_specs.json'));
+
+bool preparedArtifactsRequired(Map<String, String> environment) =>
+    environment[_preparedArtifactsModeEnv]?.trim() == 'required';
+
+void validatePreparedArtifactExecutionPolicy(Map<String, String> environment) {
+  if (preparedArtifactsRequired(environment) &&
+      environment['AWIKI_E2E_USE_FLUTTER_TEST']?.trim() == '1') {
+    throw E2eFailure(
+      'Prepared artifact required mode forbids AWIKI_E2E_USE_FLUTTER_TEST.',
+    );
+  }
+}
+
 const Set<String> _accountStateRequiredTargetCapabilities = <String>{
   'multi-device-v1',
   'message-sync-v2',
@@ -408,6 +432,8 @@ class DesktopE2eRunner {
   late final Directory cliHomeDir;
   late final Directory multiDeviceCliAdminWorkspaceDir;
   late final Directory multiDeviceCliAdminHomeDir;
+  late final Directory dshStateRootDir;
+  late final Directory dshAppStateRootDir;
   late final Directory rootTransferCliMemberWorkspaceDir;
   late final Directory rootTransferCliMemberHomeDir;
   late final Directory appStateRootDir;
@@ -461,6 +487,7 @@ class DesktopE2eRunner {
     platform = fileConfig.platform ?? DesktopE2ePlatform.fromHost();
     hostPlatform = await E2eHostPlatform.detect();
     suiteDefinition.validatePlatform(platform.name);
+    validatePreparedArtifactExecutionPolicy(Platform.environment);
     if (!options.dryRun && !commands.dryRun) {
       try {
         hostPlatform.requireOperatingSystem(platform.name);
@@ -485,6 +512,12 @@ class DesktopE2eRunner {
     multiDeviceCliAdminHomeDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/cli-admin-home',
     );
+    dshStateRootDir = Directory(
+      '${root.path}/.e2e/$runScope/$runId/dsh-device',
+    );
+    dshAppStateRootDir = Directory(
+      '${root.path}/.e2e/$runScope/$runId/dsh-app',
+    );
     rootTransferCliMemberWorkspaceDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/root-transfer-cli-member',
     );
@@ -504,7 +537,10 @@ class DesktopE2eRunner {
     appPairJoinerStateRootDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/app-pair/joiner-state',
     );
-    appPairDaemonStateRootDir = Directory('${root.path}/.e2e/apf/$runId/d');
+    appPairDaemonStateRootDir = shortAppPairDaemonStateRoot(
+      runId,
+      environment: Platform.environment,
+    );
     appPairDaemonReadyFile = File(
       '${appPairDaemonStateRootDir.path}/ready.json',
     );
@@ -544,6 +580,8 @@ class DesktopE2eRunner {
     _addRuntimeSecret(cliHomeDir.path);
     _addRuntimeSecret(multiDeviceCliAdminWorkspaceDir.path);
     _addRuntimeSecret(multiDeviceCliAdminHomeDir.path);
+    _addRuntimeSecret(dshStateRootDir.path);
+    _addRuntimeSecret(dshAppStateRootDir.path);
     _addRuntimeSecret(rootTransferCliMemberWorkspaceDir.path);
     _addRuntimeSecret(rootTransferCliMemberHomeDir.path);
     _addRuntimeSecret(appStateRootDir.path);
@@ -610,6 +648,8 @@ class DesktopE2eRunner {
           options.e2eCase == DesktopE2eCase.step4RevokeMls) {
         multiDeviceCliAdminWorkspaceDir.createSync(recursive: true);
         multiDeviceCliAdminHomeDir.createSync(recursive: true);
+        dshStateRootDir.createSync(recursive: true);
+        dshAppStateRootDir.createSync(recursive: true);
         multiDeviceAppJoiningStateRootDir.createSync(recursive: true);
       }
       if (options.e2eCase == DesktopE2eCase.rootTransfer) {
@@ -769,8 +809,6 @@ class DesktopE2eRunner {
         'Preparing App smoke executable',
         () => _prepareIntegrationExecutable(
           name: 'smoke-app',
-          target: 'integration_test/app_smoke_test.dart',
-          bundleId: 'ai.awiki.awikime.dev.e2e.smoke.app',
           stateRoot: appStateRootDir,
         ),
       );
@@ -778,8 +816,6 @@ class DesktopE2eRunner {
         'Preparing native Core smoke executable',
         () => _prepareIntegrationExecutable(
           name: 'smoke-core',
-          target: 'integration_test/im_core_open_smoke_test.dart',
-          bundleId: 'ai.awiki.awikime.dev.e2e.smoke.core',
           stateRoot: appStateRootDir,
         ),
       );
@@ -824,11 +860,14 @@ class DesktopE2eRunner {
 
   Future<_IsolatedAppArtifact> _prepareIntegrationExecutable({
     required String name,
-    required String target,
-    required String bundleId,
     required Directory stateRoot,
-    List<String> dartDefines = const <String>[],
   }) async {
+    final spec = _appArtifactSpecs.requireSpec(name);
+    if (!spec.supportedPlatforms.contains(platform.name)) {
+      throw E2eFailure(
+        'Prepared integration artifact $name does not support ${platform.name}.',
+      );
+    }
     final preparedDirectory =
         Platform.environment[_preparedAppArtifactDirectoryEnv]?.trim() ?? '';
     if (preparedDirectory.isNotEmpty) {
@@ -849,12 +888,48 @@ class DesktopE2eRunner {
       } else {
         final artifact = _IsolatedAppArtifact.fromBuilderOutput(
           manifest.readAsStringSync(),
+          projectRoot: root,
         );
         if (artifact.role != name ||
-            artifact.target != target ||
-            artifact.bundleId != bundleId) {
+            artifact.target != spec.target ||
+            artifact.bundleId != spec.bundleId ||
+            artifact.consumerSuites
+                .toSet()
+                .difference(spec.consumerSuites.toSet())
+                .isNotEmpty ||
+            spec.consumerSuites
+                .toSet()
+                .difference(artifact.consumerSuites.toSet())
+                .isNotEmpty) {
           throw E2eFailure(
             'Prepared integration artifact identity does not match $name.',
+          );
+        }
+        final expectedFingerprint = await isolatedBuildFingerprint(
+          request: IsolatedE2eAppBuildRequest(
+            projectRoot: root,
+            name: spec.name,
+            target: spec.target,
+            stateRoot: stateRoot,
+            workRoot: Directory(
+              '${root.path}/.e2e/build-cache/prepared-integration/'
+              '${platform.name}/${spec.name}',
+            ),
+            artifactRoot: Directory(preparedDirectory),
+            bundleId: spec.bundleId,
+            platform: platform == DesktopE2ePlatform.macos
+                ? IsolatedE2eAppPlatform.macos
+                : IsolatedE2eAppPlatform.linux,
+            flutterBin: 'flutter',
+            dartDefines: spec.dartDefines,
+            dryRun: false,
+            consumerSuites: spec.consumerSuites,
+          ),
+          hostPlatform: hostPlatform,
+        );
+        if (artifact.fingerprint != expectedFingerprint) {
+          throw E2eFailure(
+            'Prepared integration artifact compile key is stale for $name.',
           );
         }
         final appRoot = artifact.appDirectory.resolveSymbolicLinksSync();
@@ -873,6 +948,11 @@ class DesktopE2eRunner {
         return artifact;
       }
     }
+    if (preparedArtifactsRequired(Platform.environment)) {
+      throw E2eFailure(
+        'Prepared integration artifact is required for $name; build fallback is disabled.',
+      );
+    }
     final workRoot = Directory(
       '${root.path}/.e2e/build-cache/prepared-integration/'
       '${platform.name}/$name',
@@ -885,16 +965,19 @@ class DesktopE2eRunner {
     final result = await commands.captureResult('dart', <String>[
       'tool/build_isolated_e2e_app.dart',
       '--name=$name',
-      '--target=$target',
+      '--target=${spec.target}',
       '--state-root=${stateRoot.path}',
       '--work-root=${workRoot.path}',
       '--artifact-root=${artifactRoot.path}',
-      '--bundle-id=$bundleId',
+      '--bundle-id=${spec.bundleId}',
       '--platform=${platform.name}',
       '--flutter-bin=flutter',
-      for (final define in dartDefines) '--dart-define=$define',
+      for (final define in spec.dartDefines) '--dart-define=$define',
     ], timeout: const Duration(minutes: 12));
-    return _IsolatedAppArtifact.fromBuilderOutput(result.output);
+    return _IsolatedAppArtifact.fromBuilderOutput(
+      result.output,
+      projectRoot: root,
+    );
   }
 
   Future<void> _executePreparedIntegration({
@@ -944,12 +1027,32 @@ class DesktopE2eRunner {
         await commands.requireExecutable('xvfb-run');
       }
     });
-    await _timed('Flutter multi-device capability gate', () {
-      return _runFlutterTest(
-        'integration_test/multi_device_capability_gate_test.dart',
-        caseIds: _multiDeviceCapabilityGateCaseIds,
+    if (!options.dryRun &&
+        !commands.dryRun &&
+        Platform.environment['AWIKI_E2E_USE_FLUTTER_TEST']?.trim() != '1') {
+      final artifact = await _timed(
+        'Preparing multi-device capability executable',
+        () => _prepareIntegrationExecutable(
+          name: 'multi-device',
+          stateRoot: appStateRootDir,
+        ),
       );
-    });
+      if (options.prepareOnly) return;
+      await _timed('Executing prepared multi-device capability gate', () {
+        return _executePreparedIntegration(
+          artifact: artifact,
+          caseIds: _multiDeviceCapabilityGateCaseIds,
+          stateRoot: appStateRootDir,
+        );
+      });
+    } else {
+      await _timed('Flutter multi-device capability gate', () {
+        return _runFlutterTest(
+          'integration_test/multi_device_capability_gate_test.dart',
+          caseIds: _multiDeviceCapabilityGateCaseIds,
+        );
+      });
+    }
   }
 
   Future<void> _runFlutterTest(
@@ -1040,6 +1143,31 @@ class DesktopE2eRunner {
 
 Directory appPairBuildCacheRoot(Directory root) =>
     Directory('${root.absolute.path}/.e2e/build-cache/multi-device-app-pair');
+
+Directory shortAppPairDaemonStateRoot(
+  String runId, {
+  required Map<String, String> environment,
+  Directory? systemTemporaryDirectory,
+}) {
+  final normalized = runId.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+  final safeRunId = normalized.isEmpty ? 'run' : normalized;
+  final suffixLength = min(12, safeRunId.length);
+  final suffix = safeRunId.substring(safeRunId.length - suffixLength);
+  final configured = environment['XDG_RUNTIME_DIR']?.trim() ?? '';
+  final candidates = <Directory>[
+    if (configured.startsWith('/')) Directory(configured),
+    systemTemporaryDirectory ?? Directory.systemTemp,
+  ];
+  for (final base in candidates) {
+    final candidate = Directory(
+      '${base.absolute.path}/aw-e2e-${pid.toRadixString(36)}-$suffix',
+    );
+    if (daemonStateRootFitsUnixSocket(candidate.path)) return candidate;
+  }
+  throw E2eFailure(
+    'No bounded Unix-domain socket root is available for the App-pair Daemon.',
+  );
+}
 
 ({String code, String summary}) classifyDesktopE2eFailureMessage(
   String message,
@@ -1295,18 +1423,19 @@ void _requireAppPairRecoveryOperatorEnvironment(
   final mode = environment[_syncRecoveryOperatorModeEnv]?.trim();
   if (environment[_syncRecoveryEnableEnv]?.trim() != '1' ||
       environment[_syncRecoveryTargetEnv]?.trim() != _syncRecoveryTarget ||
-      mode != 'ali') {
+      !const <String>{'ali', 'local'}.contains(mode)) {
     throw E2eFailure(
       'The functional App-pair suite requires the reviewed sync-recovery '
-      'operator opt-in, target, and managed Ali mode.',
+      'operator opt-in, target, and reviewed managed mode.',
     );
   }
 }
 
 List<String> _accountStateOperatorCommand(Map<String, String> environment) {
   final raw = environment[_accountStateOperatorCommandEnv]?.trim() ?? '';
+  final mode = environment[_syncRecoveryOperatorModeEnv]?.trim() ?? '';
   try {
-    return parseAccountStateOperatorCommand(raw);
+    return parseAccountStateOperatorCommand(raw, mode: mode);
   } on FormatException catch (error) {
     throw E2eFailure(error.message);
   }
@@ -1318,7 +1447,10 @@ void _requireAppPairAccountStateOperatorEnvironment({
 }) {
   if (environment[_accountStateEnableEnv]?.trim() != '1' ||
       environment[_syncRecoveryTargetEnv]?.trim() != _syncRecoveryTarget ||
-      environment[_syncRecoveryOperatorModeEnv]?.trim() != 'ali' ||
+      !const <String>{
+        'ali',
+        'local',
+      }.contains(environment[_syncRecoveryOperatorModeEnv]?.trim()) ||
       environment[_accountStateFailpointEnableEnv]?.trim() != '1') {
     throw E2eFailure(
       'The App-pair Account State capability, failpoint, target, and mode '

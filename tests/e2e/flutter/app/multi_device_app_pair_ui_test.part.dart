@@ -713,6 +713,28 @@ Future<void> _deleteJoinedCredentialAndOpenFreshJoin({
     timeout: const Duration(seconds: 60),
     failure: 'Deleting the joined credential did not return to onboarding.',
   );
+  final onboardingContainer = ProviderScope.containerOf(
+    tester.element(find.byType(OnboardingPage)),
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      final runtime = onboardingContainer.read(appRuntimeProvider);
+      final session = onboardingContainer.read(sessionProvider);
+      return !runtime.isBusy &&
+          session.session == null &&
+          session.localCredentials.isEmpty &&
+          find.byType(SettingsPage).evaluate().isEmpty &&
+          find.byType(AppConfirmationDialog).evaluate().isEmpty;
+    },
+    timeout: const Duration(seconds: 60),
+    failure: 'The joined identity deletion did not finish its local cleanup.',
+  );
+  await tester.pump(const Duration(milliseconds: 500));
+  if (find.byType(SettingsPage).evaluate().isNotEmpty ||
+      find.byType(AppConfirmationDialog).evaluate().isNotEmpty) {
+    fail('The joined identity deletion route did not settle.');
+  }
 
   final localSessions = await bootstrap.deviceManagementCorePort!
       .localDeviceJoinSessions();
@@ -804,31 +826,58 @@ Future<void> _requireRetiredIdentityOnboardingChoice({
     failure: 'The retired identity registration OTP was not accepted.',
   );
   await _enterText(tester, 'e2e-otp-input', account.fixedOtp);
+  final onboardingContainer = ProviderScope.containerOf(
+    tester.element(find.byType(OnboardingPage)),
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      final state = onboardingContainer.read(onboardingProvider);
+      return !state.isBusy &&
+          state.canSubmitPhoneOtp &&
+          find.bySemanticsIdentifier('e2e-otp-complete').evaluate().length == 1;
+    },
+    timeout: const Duration(seconds: 30),
+    failure: 'The retired identity OTP was not ready for registration.',
+  );
   final macSubmit = find.byKey(const Key('onboarding-mac-phone-submit-action'));
+  final macSubmitPressable = find.descendant(
+    of: macSubmit,
+    matching: find.byType(AppPressable),
+  );
+  final feedbackBeforeSubmit = onboardingContainer.read(uiFeedbackProvider)?.id;
   await _tapOne(
     tester,
-    macSubmit.evaluate().isNotEmpty
-        ? macSubmit
+    macSubmitPressable.evaluate().length == 1
+        ? macSubmitPressable
         : find.byKey(const Key('onboarding-phone-submit-action')),
     failure: 'The retired identity registration action was unavailable.',
   );
   await _pumpUntil(
     tester,
-    () =>
-        find
-                .byKey(const Key('existing-handle-join-action'))
-                .evaluate()
-                .length ==
-            1 &&
-        find
-                .byKey(const Key('existing-handle-recovery-action'))
-                .evaluate()
-                .length ==
-            1,
-    timeout: const Duration(seconds: 60),
-    failure:
-        'The retired identity did not route the same Handle to Join or Recovery.',
+    () {
+      final state = onboardingContainer.read(onboardingProvider);
+      final feedback = onboardingContainer.read(uiFeedbackProvider);
+      return state.isBusy ||
+          state.isPhoneOtpConsumed ||
+          feedback?.id != feedbackBeforeSubmit;
+    },
+    timeout: const Duration(seconds: 10),
+    failure: 'The retired identity registration action did not start.',
   );
+  bool choiceVisible() =>
+      find.byKey(const Key('existing-handle-join-action')).evaluate().length ==
+          1 &&
+      find
+              .byKey(const Key('existing-handle-recovery-action'))
+              .evaluate()
+              .length ==
+          1;
+  final deadline = DateTime.now().add(const Duration(seconds: 60));
+  while (!choiceVisible() && DateTime.now().isBefore(deadline)) {
+    await tester.pump(const Duration(milliseconds: 200));
+  }
+  if (!choiceVisible()) fail(_retiredIdentityChoiceFailure(tester));
   await _tapOne(
     tester,
     find.byKey(const Key('existing-handle-cancel-action')),
@@ -840,6 +889,31 @@ Future<void> _requireRetiredIdentityOnboardingChoice({
         find.byKey(const Key('existing-handle-join-action')).evaluate().isEmpty,
     failure: 'The retired identity Join-or-Recovery dialog remained open.',
   );
+}
+
+String _retiredIdentityChoiceFailure(WidgetTester tester) {
+  final page = find.byType(OnboardingPage);
+  if (page.evaluate().length != 1) {
+    return 'The retired identity did not return to one onboarding page.';
+  }
+  final container = ProviderScope.containerOf(tester.element(page));
+  final state = container.read(onboardingProvider);
+  final feedback = container.read(uiFeedbackProvider);
+  final session = container.read(sessionProvider);
+  return 'The retired identity did not route the same Handle to Join or '
+      'Recovery (joinActions=${find.byKey(const Key('existing-handle-join-action')).evaluate().length}, '
+      'recoveryActions=${find.byKey(const Key('existing-handle-recovery-action')).evaluate().length}, '
+      'mode=${state.existingHandleJoinMode?.name ?? 'none'}, '
+      'serverInfo=${state.serverInfoStatus.name}, '
+      'recoveryCapability=${state.serverInfo?.supportsPhoneHandleRecovery ?? false}, '
+      'busy=${state.isBusy}, otpConsumed=${state.isPhoneOtpConsumed}, '
+      'registrationOutcome=${state.phoneRegistrationOutcome.name}, '
+      'registrationFailure=${state.phoneRegistrationFailureCode ?? 'none'}, '
+      'canSubmitOtp=${state.canSubmitPhoneOtp}, '
+      'feedback=${feedback?.message.id ?? 'none'}, '
+      'feedbackDanger=${feedback?.danger ?? false}, '
+      'session=${session.session != null}, '
+      'credentials=${session.localCredentials.length}).';
 }
 
 void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
@@ -1037,7 +1111,6 @@ Future<void> _runAppPairAdminFunctional({
     container: container,
     peer: peer,
     accountDid: adminDid,
-    accountHandle: adminHandle,
     peerDid: peerDid,
     conversationId: canonicalConversationId,
     joinedDeviceId: joinedDeviceId,
@@ -2388,6 +2461,22 @@ Future<void> _runAppPairJoinerAccountStateDomains({
       currentRegistry.currentDevice?.status != DeviceStatus.active) {
     fail('The joining App did not start Registry observation as active.');
   }
+  await _pumpUntil(
+    tester,
+    () {
+      final sync = container.read(messageSyncCoordinatorProvider);
+      return !sync.isSyncing && sync.pendingReason == null;
+    },
+    timeout: const Duration(seconds: 30),
+    failure: 'The joining App sync queue did not quiesce before revoke.',
+  );
+  container
+      .read(appLifecycleProvider.notifier)
+      .setLifecycle(AppLifecycleState.paused);
+  await container.read(realtimeApplicationServiceProvider).stop();
+  if (container.read(realtimeApplicationServiceProvider).isRunning) {
+    fail('The joining App realtime transport remained online before revoke.');
+  }
   await config.coordinator.publish(
     'joiner',
     'account_state_registry_observer_ready',
@@ -2604,29 +2693,82 @@ Future<void> _waitForAppPairProfile({
   required String displayName,
   String? bio,
 }) async {
-  await _pumpUntil(
-    tester,
-    () {
-      final profile = container.read(profileProvider).profile;
-      final sessionState = container.read(sessionProvider);
-      final session = sessionState.session;
-      final identityId = session?.ownerIdentityId ?? session?.localIdentityId;
-      final localIdentityMatches =
-          identityId != null &&
-          sessionState.localCredentials.any(
-            (identity) =>
-                identity.localIdentityId == identityId &&
-                identity.displayName == displayName,
-          );
-      return profile?.displayName == displayName &&
-          session?.displayName == displayName &&
-          localIdentityMatches &&
-          (bio == null || profile?.bio == bio);
-    },
-    timeout: const Duration(seconds: 60),
-    failure:
-        'The App-pair Profile, active session, and local identity projections '
-        'did not converge exactly.',
+  final deadline = DateTime.now().add(const Duration(seconds: 60));
+  while (DateTime.now().isBefore(deadline)) {
+    final state = _appPairProfileProjectionState(
+      container: container,
+      displayName: displayName,
+      bio: bio,
+    );
+    if (state.matches) {
+      return;
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+  }
+  final state = _appPairProfileProjectionState(
+    container: container,
+    displayName: displayName,
+    bio: bio,
+  );
+  fail(
+    'The App-pair Profile, active session, and local identity projections '
+    'did not converge exactly '
+    '(profile=${state.profileMatches}, session=${state.sessionMatches}, '
+    'localIdentity=${state.localIdentityMatches}, bio=${state.bioMatches}, '
+    'credentials=${state.credentialCount}, ownerId=${state.hasOwnerIdentityId}, '
+    'localId=${state.hasLocalIdentityId}, '
+    'ownerLocalSame=${state.ownerAndLocalIdentityMatch}).',
+  );
+}
+
+({
+  bool matches,
+  bool profileMatches,
+  bool sessionMatches,
+  bool localIdentityMatches,
+  bool bioMatches,
+  int credentialCount,
+  bool hasOwnerIdentityId,
+  bool hasLocalIdentityId,
+  bool ownerAndLocalIdentityMatch,
+})
+_appPairProfileProjectionState({
+  required ProviderContainer container,
+  required String displayName,
+  required String? bio,
+}) {
+  final profile = container.read(profileProvider).profile;
+  final sessionState = container.read(sessionProvider);
+  final session = sessionState.session;
+  final ownerIdentityId = session?.ownerIdentityId?.trim() ?? '';
+  final localIdentityId = session?.localIdentityId?.trim() ?? '';
+  final identityId = ownerIdentityId.isNotEmpty
+      ? ownerIdentityId
+      : localIdentityId;
+  final localIdentityMatches =
+      identityId.isNotEmpty &&
+      sessionState.localCredentials.any(
+        (identity) =>
+            identity.localIdentityId?.trim() == identityId &&
+            identity.displayName == displayName,
+      );
+  final profileMatches = profile?.displayName == displayName;
+  final sessionMatches = session?.displayName == displayName;
+  final bioMatches = bio == null || profile?.bio == bio;
+  return (
+    matches:
+        profileMatches && sessionMatches && localIdentityMatches && bioMatches,
+    profileMatches: profileMatches,
+    sessionMatches: sessionMatches,
+    localIdentityMatches: localIdentityMatches,
+    bioMatches: bioMatches,
+    credentialCount: sessionState.localCredentials.length,
+    hasOwnerIdentityId: ownerIdentityId.isNotEmpty,
+    hasLocalIdentityId: localIdentityId.isNotEmpty,
+    ownerAndLocalIdentityMatch:
+        ownerIdentityId.isNotEmpty &&
+        localIdentityId.isNotEmpty &&
+        ownerIdentityId == localIdentityId,
   );
 }
 
@@ -3366,7 +3508,6 @@ Future<void> _runAppPairAdminReadAndRecovery({
   required ProviderContainer container,
   required _JoinCli peer,
   required String accountDid,
-  required String accountHandle,
   required String peerDid,
   required String conversationId,
   required String joinedDeviceId,
@@ -3446,20 +3587,12 @@ Future<void> _runAppPairAdminReadAndRecovery({
   if (groups == null) {
     fail('The admin App did not expose its Group application service.');
   }
-  final groupOwnerHandle = groupHandleForDid(
-    handle: accountHandle,
-    did: accountDid,
-  );
-  if (groupOwnerHandle == null) {
-    fail('The admin App did not expose a domain-qualified Group Handle.');
-  }
   final group = await groups.createGroup(
     name: 'Read sync ${_nonce(8)}',
     slug: 'read-sync-${_nonce(10)}',
     description: 'App-pair Group read-state convergence',
     goal: 'Verify sibling Group unread synchronization',
     rules: 'E2E only',
-    identity: GroupIdentitySelection.handle(groupOwnerHandle),
   );
   await groups.addMember(groupDid: group.groupId, memberRef: peerDid);
   await config.coordinator.publish(
@@ -3543,6 +3676,7 @@ Future<void> _runAppPairAdminReadAndRecovery({
     conversationId: conversationId,
     runId: config.runId,
   );
+  await _openAppPairAgentsPage(tester);
 
   await config.coordinator.waitFor(
     'joiner',
@@ -4146,10 +4280,10 @@ Future<void> _runAppPairRecoveryOperator({
   final mode = environment[_syncRecoveryOperatorModeEnv]?.trim();
   if (environment[_syncRecoveryEnableEnv] != '1' ||
       environment[_syncRecoveryTargetEnv] != _syncRecoveryTarget ||
-      mode != 'ali') {
+      !const <String>{'ali', 'local'}.contains(mode)) {
     fail('The fixed recovery operator gate is incomplete.');
   }
-  const command = reviewedSyncRecoveryOperatorCommand;
+  final command = reviewedSyncRecoveryOperatorCommandForMode(mode!);
   final process = await Process.start(
     command.first,
     command.skip(1).toList(growable: false),
@@ -4292,6 +4426,8 @@ Future<void> _waitForAppPairConversation({
     'idMatches=$idMatches, targetMatches=$targetMatches, '
     'previewMatches=$previewMatches, routeMatches=${routeMatches.length}, '
     'routePreviewLengths=${routeMatches.map((item) => item.lastMessagePreview.length).toList()}, '
+    'routeSequences=${routeMatches.map((item) => item.lastMessageSnapshot?.serverSequence).toList()}, '
+    'routeLastAt=${routeMatches.map((item) => item.lastMessageAt.toUtc().toIso8601String()).toList()}, '
     '$historyDiagnostic).',
   );
 }
@@ -4312,7 +4448,8 @@ Future<String> _appPairHistoryDiagnostic({
           limit: 20,
         );
     return 'history=${messages.length}, '
-        'historyContentMatches=${messages.where((item) => item.content == preview).length}';
+        'historyContentMatches=${messages.where((item) => item.content == preview).length}, '
+        'historyFacts=${messages.map((item) => <String, Object?>{'matches': item.content == preview, 'sequence': item.serverSequence, 'createdAt': item.createdAt.toUtc().toIso8601String(), 'mine': item.isMine}).toList()}';
   } on Object catch (error) {
     return 'historyError=${_appPairErrorDiagnostic(error)}';
   }
@@ -4536,11 +4673,13 @@ Future<void> _expectAppPairConversationUnreadBadge({
   );
 }
 
-String _appPairRuntimeHandle(String runId, String kind) =>
-    'pair-${_safeId(kind, 8)}-${_safeId(runId, 14)}'.toLowerCase().replaceAll(
-      RegExp(r'[^a-z0-9-]'),
-      '-',
-    );
+String _appPairRuntimeHandle(String runId, String kind) {
+  final runDigest = sha256
+      .convert(utf8.encode(runId))
+      .toString()
+      .substring(0, 14);
+  return 'pair-${_safeId(kind, 8)}-$runDigest';
+}
 
 String _appPairMessage(String runId, String phase) =>
     'app-pair-${_safeId(runId, 20)}-$phase';

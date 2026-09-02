@@ -1337,6 +1337,40 @@ void main() {
     );
   });
 
+  test('App-pair Daemon root is independent of a long workspace path', () {
+    final selected = shortAppPairDaemonStateRoot(
+      '20260901-functional-abcdef123456',
+      environment: const <String, String>{'XDG_RUNTIME_DIR': '/run/user/1000'},
+      systemTemporaryDirectory: Directory('/tmp'),
+    );
+
+    expect(selected.path, startsWith('/run/user/1000/aw-e2e-'));
+    expect(selected.path, isNot(contains('/workspace/')));
+    expect(daemonStateRootFitsUnixSocket(selected.path), isTrue);
+  });
+
+  test('App-pair runtime reset refuses a symbolic-link state root', () {
+    if (Platform.isWindows) return;
+    final root = Directory.systemTemp.createTempSync('app_pair_symlink_');
+    addTearDown(() {
+      if (root.existsSync()) root.deleteSync(recursive: true);
+    });
+    final target = Directory('${root.path}/target')..createSync();
+    final link = Link('${root.path}/state')..createSync(target.path);
+
+    expect(
+      () => resetAppPairRuntimeDirectories(
+        functional: false,
+        adminStateRoot: Directory(link.path),
+        joinerStateRoot: Directory('${root.path}/joiner'),
+        daemonStateRoot: Directory('${root.path}/daemon'),
+        cliWorkspace: Directory('${root.path}/cli'),
+        cliHome: Directory('${root.path}/home'),
+      ),
+      throwsA(isA<E2eFailure>()),
+    );
+  });
+
   group('desktopE2eUtf8Locale', () {
     test('replaces an ASCII macOS shell locale for CocoaPods', () {
       expect(
@@ -1547,6 +1581,15 @@ void main() {
         expect(first, endsWith('hlvgpfpa5j'));
       },
     );
+
+    test('accepts the documented 8 and 9 character run ID boundary', () {
+      expect(desktopE2eRunHandle('agent', 'runid008'), 'agentrunid008');
+      expect(desktopE2eRunHandle('agent', 'runid0009'), 'agentrunid0009');
+      expect(
+        () => desktopE2eRunHandle('agent', 'short07'),
+        throwsA(isA<E2eFailure>()),
+      );
+    });
 
     test('bounds and re-normalizes long run IDs', () {
       final tenant = desktopE2eTenantName(
@@ -1786,6 +1829,8 @@ otp:
             'AWIKI_E2E_CLI_SOURCE_REF':
                 '2222222222222222222222222222222222222222',
             'AWIKI_E2E_DAEMON_BINARY': '/cache/awiki-daemon',
+            'AWIKI_E2E_DAEMON_STATE_ROOT': '/tmp/aw-pa-state',
+            'AWIKI_E2E_DAEMON_READY_FILE': '/tmp/aw-pa-state/ready.json',
             'AWIKI_E2E_OTP_PHONE': 'deployed-phone',
             'AWIKI_E2E_OTP_CODE': 'deployed-code',
             'AWIKI_E2E_APP_HANDLE': 'runtime-app',
@@ -1797,6 +1842,8 @@ otp:
         expect(config.cliBin, '/cache/awiki-cli');
         expect(config.cliSourceRef, '2222222222222222222222222222222222222222');
         expect(config.daemonBinary, '/cache/awiki-daemon');
+        expect(config.daemonStateRoot, '/tmp/aw-pa-state');
+        expect(config.daemonReadyFile, '/tmp/aw-pa-state/ready.json');
         expect(config.otpPhone, 'deployed-phone');
         expect(config.otpCode, 'deployed-code');
         expect(config.appHandle, 'runtime-app');
@@ -2334,6 +2381,31 @@ cliHandle: legacy-cli
   });
 
   group('Desktop E2E gate governance', () {
+    test(
+      'DSH cleanup reuses the protected fixed OTP unless explicitly set',
+      () {
+        expect(dshRevokeOtpForJoin(explicit: '', fixed: '123456'), '123456');
+        expect(
+          dshRevokeOtpForJoin(explicit: '654321', fixed: '123456'),
+          '654321',
+        );
+      },
+    );
+    test('required prepared mode rejects Flutter build fallback', () {
+      expect(
+        () => validatePreparedArtifactExecutionPolicy(<String, String>{
+          'AWIKI_E2E_PREPARED_ARTIFACTS_MODE': 'required',
+          'AWIKI_E2E_USE_FLUTTER_TEST': '1',
+        }),
+        throwsA(isA<E2eFailure>()),
+      );
+      expect(
+        () => validatePreparedArtifactExecutionPolicy(<String, String>{
+          'AWIKI_E2E_PREPARED_ARTIFACTS_MODE': 'required',
+        }),
+        returnsNormally,
+      );
+    });
     test('suite timeout cannot be shorter than its estimate', () {
       expect(
         () => DesktopE2eSuiteDefinition.fromJson('full', <String, Object?>{
@@ -2391,6 +2463,10 @@ cliHandle: legacy-cli
       expect(step4.supportedPlatforms, containsAll(<String>['macos', 'linux']));
       expect(step4.requiredTargetCapabilities, <String>['lanes.p5_device.v1']);
       expect(step4.missingCapabilityPolicy, 'fail');
+      final personalAgent = manifest.definitionFor(
+        DesktopE2eCase.personalAgent,
+      );
+      expect(personalAgent.catalogStatus, 'unsupported');
     });
 
     test(

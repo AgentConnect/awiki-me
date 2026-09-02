@@ -171,6 +171,19 @@ void main() {
         data: const <String, Object?>{'messageId': 'msg-2'},
       );
       await client.publish('joiner', 'functional_reply_visible');
+      await client.publish(
+        'admin',
+        'functional_group_read_ready',
+        data: const <String, Object?>{'conversationId': 'group-conv-1'},
+      );
+      await client.publish('joiner', 'functional_group_read_observer_ready');
+      await client.publish(
+        'admin',
+        'functional_group_read_message_sent',
+        data: const <String, Object?>{'messageId': 'group-msg-1'},
+      );
+      await client.publish('joiner', 'functional_group_read_committed');
+      await client.publish('admin', 'functional_group_read_converged');
       await client.publish('joiner', 'functional_agent_observer_ready');
 
       await expectLater(

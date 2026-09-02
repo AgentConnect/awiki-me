@@ -21,18 +21,19 @@ The two roles are product processes, not two widget trees in one test process:
 | Boundary | Admin App | Joining App |
 | --- | --- | --- |
 | Artifact identity | macOS bundle ID or Linux manifest role `admin` | macOS bundle ID or Linux manifest role `joiner` |
-| Flutter build directory | macOS stable role cache; Linux standard shared build cache used sequentially | macOS separate stable role cache; Linux standard shared build cache used sequentially |
-| App bundle | `AWikiMe-admin.app` or `AWikiMe-admin-linux/` | `AWikiMe-joiner.app` or `AWikiMe-joiner-linux/` |
+| Compiled artifact | compile-keyed `admin` bundle | compile-keyed `joiner` bundle |
+| Immutable cache | `.e2e/build-cache/v2/<platform>/<arch>/<compile-key>/` | same store, distinct role compile key |
 | App/native Core state | fresh admin Storage Scope | fresh joiner Storage Scope |
 | Simulated desktop | Linux-only isolated Xvfb display | Linux-only separate Xvfb display |
 | Flutter driver | attaches to the admin VM service | attaches to the joiner VM service |
 
-The runner builds the roles sequentially, launches both bundles directly on
+Prepare builds the two role artifacts once. Required execution imports and
+verifies them, launches both bundles directly on
 macOS or under separate Xvfb displays on Linux, then attaches two
-`flutter drive --use-existing-app` processes concurrently. Stable per-role
-macOS build roots and the sequential Linux build preserve role-specific Dart
-defines before each artifact is copied; the two runtime artifacts and state
-roots remain separate. Build roots may reuse only compiler intermediates;
+`flutter drive --use-existing-app --no-build` processes concurrently. The
+role is a compile-time input, while Functional, Content Sync and Paging fixture
+differences stay runtime inputs and reuse the same pair. The two runtime state
+roots remain separate. The immutable store contains no run identity;
 per-run state roots and E2E scope-secret repositories prevent either role from
 reusing another run's product data or credential material.
 The Linux GTK runner is explicitly non-unique, so both processes may coexist
@@ -70,25 +71,18 @@ before surfacing that bounded diagnostic.
 
 ## Reusable builder
 
-`tool/build_isolated_e2e_app.dart` is the generic build boundary. It accepts an
-`integration_test/*_test.dart` target, isolated state/work/artifact roots, a
-platform, an App identity, and repeated Dart defines. It makes a Debug macOS or
-Linux build with `--no-pub`; each work root owns its Flutter XDG settings.
-The App-pair runner keeps one stable work root per role under
-`.e2e/build-cache/multi-device-app-pair/`. macOS keeps separate role build
-directories. Linux uses Flutter's standard `build/linux` directory
-sequentially because Linux native build hooks resolve compiler configuration
-from that location, then copies each completed role bundle to its isolated
-artifact directory before building the next role. Only the fixed E2E gate and
-role are compile-time inputs. Run config, attestation paths, scenario IDs, and
-run IDs are supplied to the launched processes, so a new run does not
-invalidate the role build. Runtime state, E2E credential storage, and copied
-App artifacts remain per-run, and the Admin and Joiner retain distinct
-identities. All three roots must be non-overlapping descendants of the
-repository so the cleanup boundary remains auditable. macOS still requires the
-signed x86_64 Debug bundle; Linux does not claim macOS signing or
-LocalAuthentication evidence. The output is one JSON artifact manifest
-containing the copied App and executable paths.
+`tool/isolated_e2e_app_builder.dart` is the generic build boundary, and
+`tool/prepare_e2e_app_artifacts.dart` prepares the product-owned specs from
+`tests/e2e/app_artifact_specs.json`. The compile key includes the selected
+integration target's transitive Dart source graph, product sources/assets,
+platform files, sorted compile defines, native Core and host/toolchain inputs;
+artifact names and run-time values do not create extra builds. Run config,
+coordinator fixtures, attestation paths, scenario IDs, OTP and run IDs are
+supplied only to launched processes. Required import recomputes the key and
+complete bundle digest before launch and fails closed instead of invoking the
+builder. The Admin and Joiner retain distinct runtime identities and state.
+macOS native evidence remains platform-specific; Linux does not claim signing,
+Keychain or LocalAuthentication attestation.
 
 The App-pair runner is the supported caller today. Future E2E modes may reuse
 the builder, but must define their own orchestration, isolation oracle, secret

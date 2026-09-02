@@ -370,6 +370,7 @@
   "deviceRevokeConfirmingAction": "Confirm again",
   "deviceRevokeSucceeded": "Device revoked.",
   "deviceRevokeSucceededGroupsSyncing": "Device revoked. Affected groups are synchronizing their security state.",
+  "deviceRevokeSucceededGroupsRepairPartial": "Device revoked. Some affected groups could not update their security state in this attempt; messaging remains available.",
   "deviceRevokeOutcomeUnknown": "The revocation result is not confirmed yet. Refresh the device list.",
   "deviceRevokeRejected": "The device could not be revoked. Try again later.",
   "deviceRevokeConfirmTitle": "Revoke this device?",

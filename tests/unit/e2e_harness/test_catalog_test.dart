@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(122));
+      expect(catalog.cases, hasLength(125));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -216,42 +216,16 @@ void main() {
     expect(source, contains('have been deleted'));
   });
 
-  test('every active conversation-correctness case has claim mapping', () {
+  test('every active case has a machine-checkable claim mapping', () {
     final catalog = AppTestCatalog.load(Directory.current);
-    const caseIds = <String>{
-      'CONTACT-E2E-001',
-      'CONTACT-E2E-002',
-      'CONTACT-FIRST-CONV-E2E-001',
-      'CONTACT-MSG-E2E-001',
-      'CONTACT-REG-001',
-      'CONV-CANON-E2E-001',
-      'CONV-LIST-E2E-001',
-      'DISPLAY-NAME-E2E-001',
-      'DISPLAY-NAME-E2E-002',
-      'DISPLAY-NAME-E2E-004',
-      'DISPLAY-NAME-REG-001',
-      'GROUP-CANON-E2E-001',
-      'GROUP-E2E-001',
-      'GROUP-E2E-002',
-      'GROUP-P9-001',
-      'GROUP-P9-002',
-      'GROUP-REG-001',
-      'INBOUND-FIRST-CONV-E2E-001',
-      'MSG-E2E-001',
-      'MSG-E2E-002',
-      'MSG-REG-001',
-      'MSG-SEQUENCE-E2E-001',
-      'PROCESS-RESTART-E2E-001',
-      'UNREAD-MULTI-E2E-001',
-    };
-
-    for (final caseId in caseIds) {
-      final catalogCase = catalog.caseById[caseId];
-      expect(catalogCase, isNotNull, reason: '$caseId must remain cataloged');
+    for (final catalogCase in catalog.cases.where(
+      (value) => value.catalogStatus == 'active',
+    )) {
       expect(
-        catalogCase!.assertionContract,
+        catalogCase.assertionContract,
         isNotNull,
-        reason: '$caseId must map every claim to executable evidence',
+        reason:
+            '${catalogCase.caseId} must map every claim to executable evidence',
       );
     }
   });

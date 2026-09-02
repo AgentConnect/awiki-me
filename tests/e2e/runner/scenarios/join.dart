@@ -4,6 +4,11 @@
 
 part of '../../runner.dart';
 
+String dshRevokeOtpForJoin({required String explicit, required String fixed}) {
+  final selected = explicit.trim();
+  return selected.isNotEmpty ? selected : fixed.trim();
+}
+
 extension DesktopE2eJoinScenario on DesktopE2eRunner {
   Future<void> _runRemoteMultiDeviceJoin({List<String>? caseIds}) async {
     final fullRootTransfer = options.e2eCase == DesktopE2eCase.rootTransfer;
@@ -33,8 +38,12 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
     _addRuntimeSecret(joinConfig.phone);
     _addRuntimeSecret(joinConfig.fixedOtp);
     _addRuntimeSecret(joinConfig.cliBin);
-    final dshRevokeOtp =
+    final configuredDshRevokeOtp =
         Platform.environment['AWIKI_DSH_HANDLE_REVOKE_OTP']?.trim() ?? '';
+    final dshRevokeOtp = dshRevokeOtpForJoin(
+      explicit: configuredDshRevokeOtp,
+      fixed: joinConfig.fixedOtp,
+    );
     if (dshRevokeOtp.isNotEmpty) _addRuntimeSecret(dshRevokeOtp);
     if (!options.dryRun && !commands.dryRun) {
       suiteDefinition.validateRemoteTargetValues(
@@ -77,8 +86,8 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
         );
         if (manifest is! Map ||
             (manifest['dependencies'] as Map?)?['@awiki/im-core-node'] !=
-                '0.1.8') {
-          throw E2eFailure('DSH E2E requires @awiki/im-core-node 0.1.8.');
+                '0.2.3') {
+          throw E2eFailure('DSH E2E requires @awiki/im-core-node 0.2.3.');
         }
         if (!options.dryRun &&
             !commands.dryRun &&
@@ -126,8 +135,6 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
         'Preparing remote Join integration executable',
         () => _prepareIntegrationExecutable(
           name: 'remote-join',
-          target: 'integration_test/multi_device_join_ui_test.dart',
-          bundleId: 'ai.awiki.awikime.dev.e2e.remote.join',
           stateRoot: appStateRootDir,
         ),
       );
@@ -159,8 +166,10 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
             artifact: preparedJoinArtifact,
             caseIds: joiningAppCases,
             stateRoot: multiDeviceAppJoiningStateRootDir,
-            environment: const <String, String>{
+            environment: <String, String>{
               _multiDeviceRemoteJoinGateEnv: '1',
+              if (includesDshInterop)
+                'AWIKI_DSH_HANDLE_REVOKE_OTP': dshRevokeOtp,
             },
           );
         }
@@ -245,8 +254,9 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
         'repoRoot': Directory(
           '../dsh-awiki',
         ).absolute.resolveSymbolicLinksSync(),
-        'stateRoot': multiDeviceCliAdminWorkspaceDir.path,
-        'nodePackageVersion': '0.1.8',
+        'stateRoot': dshStateRootDir.path,
+        'appStateRoot': dshAppStateRootDir.path,
+        'nodePackageVersion': '0.2.3',
       },
       'app': <String, Object?>{
         'stateRoot': fullRootTransferOnly

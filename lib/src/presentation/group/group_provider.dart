@@ -874,13 +874,9 @@ GroupMemberSummary _mergeMemberProfile(
   GroupMemberSummary member,
   UserProfile profile,
 ) {
-  final did = member.did.trim();
   final profileHandle =
       _trimToNull(profile.fullHandle) ?? _trimToNull(profile.handle);
-  final memberHandle = _trimToNull(member.handle);
-  final mergedHandle = memberHandle == null || memberHandle == did
-      ? profileHandle ?? member.handle
-      : member.handle;
+  final mergedHandle = profileHandle ?? member.handle;
   final subjectType = member.subjectType == GroupMemberSubjectType.unknown
       ? GroupMemberSubjectType.parse(profile.subjectType)
       : member.subjectType;

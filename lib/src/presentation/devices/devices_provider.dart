@@ -29,6 +29,7 @@ typedef _RootTransferTarget = ({
 enum DeviceRevokeNotice {
   revoked,
   revokedGroupsSyncing,
+  revokedGroupsRepairPartial,
   outcomeUnknown,
   rejected,
 }
@@ -212,6 +213,7 @@ class DevicesController extends StateNotifier<DevicesState> {
   int _registryReadGeneration = 0;
   int _lastAppliedRegistryReadGeneration = 0;
   int _revokeOperationGeneration = 0;
+  int _revokeRepairGeneration = 0;
   int? _revokeClosedOperationGeneration;
   int _revokePostRpcRegistryGenerationFloor = 0;
   String? _revokeOperationTargetDeviceId;
@@ -245,6 +247,7 @@ class DevicesController extends StateNotifier<DevicesState> {
     _registryReadGeneration += 1;
     _lastAppliedRegistryReadGeneration = 0;
     _revokeOperationGeneration += 1;
+    _revokeRepairGeneration += 1;
     _revokeClosedOperationGeneration = null;
     _revokePostRpcRegistryGenerationFloor = 0;
     _revokeOperationTargetDeviceId = null;
@@ -1105,6 +1108,7 @@ class DevicesController extends StateNotifier<DevicesState> {
               .read(accountStateSyncRequestBusProvider)
               .request('device_revoked', force: true),
         );
+        _startRevokedDeviceGroupRepairOnce();
         return true;
       }
       if (freshTarget?.status == DeviceStatus.active &&
@@ -1232,6 +1236,7 @@ class DevicesController extends StateNotifier<DevicesState> {
         revokeNotice: DeviceRevokeNotice.revokedGroupsSyncing,
         clearError: true,
       );
+      _startRevokedDeviceGroupRepairOnce();
       return;
     }
     if (target?.status == DeviceStatus.active) {
@@ -1320,6 +1325,63 @@ class DevicesController extends StateNotifier<DevicesState> {
     _revokeClosedOutcomeCategory = null;
     _revokeRpcCompleted = false;
     _revokePostRpcRegistryGenerationFloor = 0;
+  }
+
+  void _startRevokedDeviceGroupRepairOnce() {
+    final sessionEpoch = _sessionEpoch;
+    final repairGeneration = ++_revokeRepairGeneration;
+    unawaited(
+      _attemptRevokedDeviceGroupRepairOnce(
+        sessionEpoch: sessionEpoch,
+        repairGeneration: repairGeneration,
+      ),
+    );
+  }
+
+  Future<void> _attemptRevokedDeviceGroupRepairOnce({
+    required int sessionEpoch,
+    required int repairGeneration,
+  }) async {
+    var partial = false;
+    String? cursor;
+    final seenCursors = <String>{};
+    try {
+      while (true) {
+        final page = await ref
+            .read(groupApplicationServiceProvider)
+            .listGroups(limit: 100, cursor: cursor);
+        for (final group in page.items) {
+          try {
+            await ref
+                .read(groupEncryptionCorePortProvider)
+                .retry(group.groupId);
+          } catch (_) {
+            partial = true;
+          }
+        }
+        if (!page.hasMore) break;
+        final nextCursor = page.nextCursor?.trim();
+        if (nextCursor == null ||
+            nextCursor.isEmpty ||
+            !seenCursors.add(nextCursor)) {
+          partial = true;
+          break;
+        }
+        cursor = nextCursor;
+      }
+    } catch (_) {
+      partial = true;
+    }
+    if (!mounted ||
+        sessionEpoch != _sessionEpoch ||
+        repairGeneration != _revokeRepairGeneration) {
+      return;
+    }
+    state = state.copyWith(
+      revokeNotice: partial
+          ? DeviceRevokeNotice.revokedGroupsRepairPartial
+          : DeviceRevokeNotice.revoked,
+    );
   }
 
   Future<void> cancelNewDeviceActive() async {

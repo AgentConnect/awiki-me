@@ -11,6 +11,10 @@ abstract interface class ImCoreRuntimePort {
 
   Future<void> switchIdentity(String identityIdOrAlias);
 
+  /// Releases only the selected identity client while keeping Core available
+  /// for signed-out registration and Join/Recovery continuation.
+  Future<void> clearIdentity();
+
   Future<void> dispose();
 }
 

@@ -365,6 +365,12 @@ void main() {
   );
 }
 
+void realBackendMain() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(E2eInvocationCompletionWriter.markFinished);
+  runPersonalAgentRealBackendE2e();
+}
+
 void runPersonalAgentRealBackendE2e() {
   testWidgets(
     'Personal Agent full UI drives real backend daemon and recovery',

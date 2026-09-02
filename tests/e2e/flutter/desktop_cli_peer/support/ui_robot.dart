@@ -892,6 +892,32 @@ class _DesktopAppRobot {
         : unreadCount > 99
         ? '99+'
         : '$unreadCount';
+    await pumpUntilFinder(
+      find.descendant(
+        of: find.byKey(Key('conversation-row-title:$conversationId')),
+        matching: find.text(expectedTitle, findRichText: true),
+      ),
+      description: 'conversation row title $conversationId',
+      timeout: const Duration(seconds: 90),
+    );
+    await pumpUntilFinder(
+      find.descendant(
+        of: find.byKey(Key('conversation-row-preview:$conversationId')),
+        matching: find.text(visiblePreview, findRichText: true),
+      ),
+      description: 'conversation row preview $conversationId',
+      timeout: const Duration(seconds: 90),
+    );
+    if (unreadLabel != null) {
+      await pumpUntilFinder(
+        find.descendant(
+          of: row,
+          matching: find.text(unreadLabel, findRichText: true),
+        ),
+        description: 'conversation row unread $conversationId',
+        timeout: const Duration(seconds: 90),
+      );
+    }
     expectExactConversationRowUi(
       conversationId: conversationId,
       expectedTitle: expectedTitle,

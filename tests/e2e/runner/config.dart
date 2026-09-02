@@ -564,11 +564,6 @@ class DesktopCliPeerConfig implements DesktopRemoteTargetContract {
     _requiredConfig(daemonBinary, 'daemon.binary', sourcePath);
     _requiredConfig(daemonStateRoot, 'daemon.stateRoot', sourcePath);
     _requiredConfig(daemonReadyFile, 'daemon.readyFile', sourcePath);
-    _requiredConfig(
-      daemonFakeHermesGatewayCommand,
-      'daemon.fakeHermesGatewayCommand',
-      sourcePath,
-    );
     if (personalAgentRuntimeProvider.trim().toLowerCase() != 'hermes') {
       throw E2eFailure(
         'personalAgent.runtimeProvider must be hermes for --case personal-agent in $sourcePath.',
@@ -866,6 +861,10 @@ class DesktopE2eFileConfig {
     final environmentCliBinary = environment[_e2eCliBinaryEnv]?.trim();
     final environmentCliSourceRef = environment[_e2eCliSourceRefEnv]?.trim();
     final environmentDaemonBinary = environment[_e2eDaemonBinaryEnv]?.trim();
+    final environmentDaemonStateRoot = environment[_e2eDaemonStateRootEnv]
+        ?.trim();
+    final environmentDaemonReadyFile = environment[_e2eDaemonReadyFileEnv]
+        ?.trim();
     final rustRepo = environmentRustRepo?.isNotEmpty == true
         ? environmentRustRepo!
         : configuredRustRepo ?? '../awiki-cli-rs2';
@@ -898,11 +897,15 @@ class DesktopE2eFileConfig {
       daemonBinary: _resolvePath(root, daemonBinary),
       daemonStateRoot: _resolveOptionalPath(
         root,
-        _stringAt(daemon, 'stateRoot'),
+        environmentDaemonStateRoot?.isNotEmpty == true
+            ? environmentDaemonStateRoot
+            : _stringAt(daemon, 'stateRoot'),
       ),
       daemonReadyFile: _resolveOptionalPath(
         root,
-        _stringAt(daemon, 'readyFile'),
+        environmentDaemonReadyFile?.isNotEmpty == true
+            ? environmentDaemonReadyFile
+            : _stringAt(daemon, 'readyFile'),
       ),
       daemonHandle: _stringAt(daemon, 'handle'),
       daemonEnvFile: _resolveOptionalPath(root, _stringAt(daemon, 'envFile')),

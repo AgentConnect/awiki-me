@@ -636,11 +636,15 @@ void main() {
         .loadGroupMembers(groupDid);
 
     expect(members.single.displayName, '李智诚');
-    expect(members.single.handle, 'lzc');
+    expect(members.single.handle, 'lzc.awiki.ai');
     expect(members.single.avatarUri, 'https://example.test/lzc.png');
     expect(
       container.read(groupMembersProvider(groupDid)).single.displayName,
       '李智诚',
+    );
+    expect(
+      container.read(groupMembersProvider(groupDid)).single.handle,
+      'lzc.awiki.ai',
     );
   });
 

@@ -370,6 +370,7 @@
   "deviceRevokeConfirmingAction": "再次确认",
   "deviceRevokeSucceeded": "设备已撤销。",
   "deviceRevokeSucceededGroupsSyncing": "设备已撤销，受影响的群正在同步安全状态。",
+  "deviceRevokeSucceededGroupsRepairPartial": "设备已撤销；部分相关群本次未能更新安全状态，但不影响继续收发消息。",
   "deviceRevokeOutcomeUnknown": "撤销结果暂未确认，请刷新设备列表。",
   "deviceRevokeRejected": "未能撤销设备，请稍后重试。",
   "deviceRevokeConfirmTitle": "撤销此设备？",

@@ -318,7 +318,33 @@
       "owner": "awiki-me-attachments+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "ATTACH-E2E-001:app_attachment_staged_and_sent_through_drop_ui",
+          "ATTACH-E2E-001:cli_attachment_bytes_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "ATTACH-E2E-001:app_attachment_staged_and_sent_through_drop_ui",
+            "ATTACH-E2E-001:cli_attachment_bytes_verified"
+          ],
+          [
+            "ATTACH-E2E-001:app_attachment_staged_and_sent_through_drop_ui",
+            "ATTACH-E2E-001:cli_attachment_bytes_verified"
+          ],
+          [
+            "ATTACH-E2E-001:app_attachment_staged_and_sent_through_drop_ui",
+            "ATTACH-E2E-001:cli_attachment_bytes_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "ATTACH-E2E-001:app_attachment_staged_and_sent_through_drop_ui",
+            "ATTACH-E2E-001:cli_attachment_bytes_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "ATTACH-E2E-002",
@@ -343,7 +369,38 @@
       "owner": "awiki-me-attachments+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "ATTACH-E2E-002:cli_attachment_sent",
+          "ATTACH-E2E-002:attachment_unread_read_watermark_persisted_after_rebuild",
+          "ATTACH-E2E-002:app_attachment_bytes_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "ATTACH-E2E-002:cli_attachment_sent",
+            "ATTACH-E2E-002:attachment_unread_read_watermark_persisted_after_rebuild",
+            "ATTACH-E2E-002:app_attachment_bytes_verified"
+          ],
+          [
+            "ATTACH-E2E-002:cli_attachment_sent",
+            "ATTACH-E2E-002:attachment_unread_read_watermark_persisted_after_rebuild",
+            "ATTACH-E2E-002:app_attachment_bytes_verified"
+          ],
+          [
+            "ATTACH-E2E-002:cli_attachment_sent",
+            "ATTACH-E2E-002:attachment_unread_read_watermark_persisted_after_rebuild",
+            "ATTACH-E2E-002:app_attachment_bytes_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "ATTACH-E2E-002:cli_attachment_sent",
+            "ATTACH-E2E-002:attachment_unread_read_watermark_persisted_after_rebuild",
+            "ATTACH-E2E-002:app_attachment_bytes_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "ATTACH-REG-001",
@@ -366,7 +423,22 @@
       "owner": "awiki-me-attachments+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "ATTACH-REG-001:attachment_digest_regression_checked"
+        ],
+        "exactOracleAssertions": [
+          [
+            "ATTACH-REG-001:attachment_digest_regression_checked"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "ATTACH-REG-001:attachment_digest_regression_checked"
+          ]
+        ]
+      }
     },
     {
       "caseId": "AUTH-E2E-001",
@@ -391,7 +463,33 @@
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "AUTH-E2E-001:app_identity_prepared",
+          "AUTH-E2E-001:authenticated_app_shell_visible"
+        ],
+        "exactOracleAssertions": [
+          [
+            "AUTH-E2E-001:app_identity_prepared",
+            "AUTH-E2E-001:authenticated_app_shell_visible"
+          ],
+          [
+            "AUTH-E2E-001:app_identity_prepared",
+            "AUTH-E2E-001:authenticated_app_shell_visible"
+          ],
+          [
+            "AUTH-E2E-001:app_identity_prepared",
+            "AUTH-E2E-001:authenticated_app_shell_visible"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "AUTH-E2E-001:app_identity_prepared",
+            "AUTH-E2E-001:authenticated_app_shell_visible"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CLAUDECODEAGENT-E2E-001",
@@ -415,7 +513,43 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CLAUDECODEAGENT-E2E-001:daemon_selected",
+          "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
+          "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
+          "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-001:daemon_selected",
+            "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
+            "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
+          ],
+          [
+            "CLAUDECODEAGENT-E2E-001:daemon_selected",
+            "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
+            "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
+          ],
+          [
+            "CLAUDECODEAGENT-E2E-001:daemon_selected",
+            "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
+            "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-001:daemon_selected",
+            "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
+            "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CLAUDECODEAGENT-E2E-002",
@@ -437,7 +571,25 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CLAUDECODEAGENT-E2E-002:prompt_entered_through_ui",
+          "CLAUDECODEAGENT-E2E-002:send_action_completed"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-002:prompt_entered_through_ui",
+            "CLAUDECODEAGENT-E2E-002:send_action_completed"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-002:prompt_entered_through_ui",
+            "CLAUDECODEAGENT-E2E-002:send_action_completed"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CLAUDECODEAGENT-E2E-003",
@@ -459,7 +611,25 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CLAUDECODEAGENT-E2E-003:runtime_run_finished",
+          "CLAUDECODEAGENT-E2E-003:runtime_final_outbox_sent"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-003:runtime_run_finished",
+            "CLAUDECODEAGENT-E2E-003:runtime_final_outbox_sent"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-003:runtime_run_finished",
+            "CLAUDECODEAGENT-E2E-003:runtime_final_outbox_sent"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CLAUDECODEAGENT-E2E-004",
@@ -481,7 +651,25 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CLAUDECODEAGENT-E2E-004:app_history_exact_reply_verified",
+          "CLAUDECODEAGENT-E2E-004:visible_reply_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-004:app_history_exact_reply_verified",
+            "CLAUDECODEAGENT-E2E-004:visible_reply_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-004:app_history_exact_reply_verified",
+            "CLAUDECODEAGENT-E2E-004:visible_reply_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CODEXAGENT-E2E-001",
@@ -505,7 +693,43 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CODEXAGENT-E2E-001:daemon_selected",
+          "CODEXAGENT-E2E-001:runtime_agent_created",
+          "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
+          "CODEXAGENT-E2E-001:runtime_chat_opened"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CODEXAGENT-E2E-001:daemon_selected",
+            "CODEXAGENT-E2E-001:runtime_agent_created",
+            "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CODEXAGENT-E2E-001:runtime_chat_opened"
+          ],
+          [
+            "CODEXAGENT-E2E-001:daemon_selected",
+            "CODEXAGENT-E2E-001:runtime_agent_created",
+            "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CODEXAGENT-E2E-001:runtime_chat_opened"
+          ],
+          [
+            "CODEXAGENT-E2E-001:daemon_selected",
+            "CODEXAGENT-E2E-001:runtime_agent_created",
+            "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CODEXAGENT-E2E-001:runtime_chat_opened"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CODEXAGENT-E2E-001:daemon_selected",
+            "CODEXAGENT-E2E-001:runtime_agent_created",
+            "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CODEXAGENT-E2E-001:runtime_chat_opened"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CODEXAGENT-E2E-002",
@@ -527,7 +751,25 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CODEXAGENT-E2E-002:prompt_entered_through_ui",
+          "CODEXAGENT-E2E-002:send_action_completed"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CODEXAGENT-E2E-002:prompt_entered_through_ui",
+            "CODEXAGENT-E2E-002:send_action_completed"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CODEXAGENT-E2E-002:prompt_entered_through_ui",
+            "CODEXAGENT-E2E-002:send_action_completed"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CODEXAGENT-E2E-003",
@@ -549,7 +791,25 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CODEXAGENT-E2E-003:runtime_run_finished",
+          "CODEXAGENT-E2E-003:runtime_final_outbox_sent"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CODEXAGENT-E2E-003:runtime_run_finished",
+            "CODEXAGENT-E2E-003:runtime_final_outbox_sent"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CODEXAGENT-E2E-003:runtime_run_finished",
+            "CODEXAGENT-E2E-003:runtime_final_outbox_sent"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CODEXAGENT-E2E-004",
@@ -571,7 +831,25 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CODEXAGENT-E2E-004:app_history_exact_reply_verified",
+          "CODEXAGENT-E2E-004:visible_reply_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CODEXAGENT-E2E-004:app_history_exact_reply_verified",
+            "CODEXAGENT-E2E-004:visible_reply_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CODEXAGENT-E2E-004:app_history_exact_reply_verified",
+            "CODEXAGENT-E2E-004:visible_reply_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CONTACT-E2E-001",
@@ -1647,7 +1925,28 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "unsupported",
+      "assertionContract": {
+        "assertionIds": [
+          "PERSONALAGENT-E2E-001:daemon_selected_in_ui",
+          "PERSONALAGENT-E2E-001:personal_agent_enabled_in_ui",
+          "PERSONALAGENT-E2E-001:binding_active_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERSONALAGENT-E2E-001:daemon_selected_in_ui",
+            "PERSONALAGENT-E2E-001:personal_agent_enabled_in_ui",
+            "PERSONALAGENT-E2E-001:binding_active_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERSONALAGENT-E2E-001:daemon_selected_in_ui",
+            "PERSONALAGENT-E2E-001:personal_agent_enabled_in_ui",
+            "PERSONALAGENT-E2E-001:binding_active_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERSONALAGENT-E2E-002",
@@ -1669,7 +1968,28 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "unsupported",
+      "assertionContract": {
+        "assertionIds": [
+          "PERSONALAGENT-E2E-002:cli_peer_message_sent",
+          "PERSONALAGENT-E2E-002:app_history_exact_source_verified",
+          "PERSONALAGENT-E2E-002:runtime_final_visible_in_app"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERSONALAGENT-E2E-002:cli_peer_message_sent",
+            "PERSONALAGENT-E2E-002:app_history_exact_source_verified",
+            "PERSONALAGENT-E2E-002:runtime_final_visible_in_app"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERSONALAGENT-E2E-002:cli_peer_message_sent",
+            "PERSONALAGENT-E2E-002:app_history_exact_source_verified",
+            "PERSONALAGENT-E2E-002:runtime_final_visible_in_app"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERSONALAGENT-E2E-003",
@@ -1691,7 +2011,7 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "planned"
+      "catalogStatus": "unsupported"
     },
     {
       "caseId": "PERSONALAGENT-E2E-004",
@@ -1713,7 +2033,28 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "unsupported",
+      "assertionContract": {
+        "assertionIds": [
+          "PERSONALAGENT-E2E-004:revoke_action_confirmed_in_ui",
+          "PERSONALAGENT-E2E-004:user_service_binding_revoked",
+          "PERSONALAGENT-E2E-004:daemon_binding_revoked"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERSONALAGENT-E2E-004:revoke_action_confirmed_in_ui",
+            "PERSONALAGENT-E2E-004:user_service_binding_revoked",
+            "PERSONALAGENT-E2E-004:daemon_binding_revoked"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERSONALAGENT-E2E-004:revoke_action_confirmed_in_ui",
+            "PERSONALAGENT-E2E-004:user_service_binding_revoked",
+            "PERSONALAGENT-E2E-004:daemon_binding_revoked"
+          ]
+        ]
+      }
     },
     {
       "caseId": "NATIVE-E2E-001",
@@ -1738,7 +2079,58 @@
       "owner": "awiki-me",
       "implementationPath": "tests/e2e/flutter/native/im_core_open_smoke_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "NATIVE-E2E-001:scope_provisioned_exclusive",
+          "NATIVE-E2E-001:real_app_bootstrap_open_existing",
+          "NATIVE-E2E-001:same_process_reopen_same_root",
+          "NATIVE-E2E-001:legacy_public_http_tenant_upgraded_in_place",
+          "NATIVE-E2E-001:tenant_sms_cooldown_restored_after_restart",
+          "NATIVE-E2E-001:missing_key_failed_without_recreate",
+          "NATIVE-E2E-001:native_paths_validated"
+        ],
+        "exactOracleAssertions": [
+          [
+            "NATIVE-E2E-001:scope_provisioned_exclusive",
+            "NATIVE-E2E-001:real_app_bootstrap_open_existing",
+            "NATIVE-E2E-001:same_process_reopen_same_root",
+            "NATIVE-E2E-001:legacy_public_http_tenant_upgraded_in_place",
+            "NATIVE-E2E-001:tenant_sms_cooldown_restored_after_restart",
+            "NATIVE-E2E-001:missing_key_failed_without_recreate",
+            "NATIVE-E2E-001:native_paths_validated"
+          ],
+          [
+            "NATIVE-E2E-001:scope_provisioned_exclusive",
+            "NATIVE-E2E-001:real_app_bootstrap_open_existing",
+            "NATIVE-E2E-001:same_process_reopen_same_root",
+            "NATIVE-E2E-001:legacy_public_http_tenant_upgraded_in_place",
+            "NATIVE-E2E-001:tenant_sms_cooldown_restored_after_restart",
+            "NATIVE-E2E-001:missing_key_failed_without_recreate",
+            "NATIVE-E2E-001:native_paths_validated"
+          ],
+          [
+            "NATIVE-E2E-001:scope_provisioned_exclusive",
+            "NATIVE-E2E-001:real_app_bootstrap_open_existing",
+            "NATIVE-E2E-001:same_process_reopen_same_root",
+            "NATIVE-E2E-001:legacy_public_http_tenant_upgraded_in_place",
+            "NATIVE-E2E-001:tenant_sms_cooldown_restored_after_restart",
+            "NATIVE-E2E-001:missing_key_failed_without_recreate",
+            "NATIVE-E2E-001:native_paths_validated"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "NATIVE-E2E-001:scope_provisioned_exclusive",
+            "NATIVE-E2E-001:real_app_bootstrap_open_existing",
+            "NATIVE-E2E-001:same_process_reopen_same_root",
+            "NATIVE-E2E-001:legacy_public_http_tenant_upgraded_in_place",
+            "NATIVE-E2E-001:tenant_sms_cooldown_restored_after_restart",
+            "NATIVE-E2E-001:missing_key_failed_without_recreate",
+            "NATIVE-E2E-001:native_paths_validated"
+          ]
+        ]
+      }
     },
     {
       "caseId": "NATIVE-E2E-002",
@@ -1763,7 +2155,67 @@
       "owner": "awiki-me-identity",
       "implementationPath": "scripts/run_macos_production_scope_restart_gate.sh",
       "evidenceType": "signed_process_command_log",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "NATIVE-E2E-002:native_dependency_built_once",
+          "NATIVE-E2E-002:architecture_matrix_validated",
+          "NATIVE-E2E-002:podfile_lock_stable",
+          "NATIVE-E2E-002:production_scope_provisioned",
+          "NATIVE-E2E-002:independent_reopen_preserved_revision",
+          "NATIVE-E2E-002:create_exclusive_already_exists",
+          "NATIVE-E2E-002:cleanup_deleted_and_missing"
+        ],
+        "exactOracleAssertions": [
+          [
+            "NATIVE-E2E-002:native_dependency_built_once",
+            "NATIVE-E2E-002:architecture_matrix_validated",
+            "NATIVE-E2E-002:podfile_lock_stable",
+            "NATIVE-E2E-002:production_scope_provisioned",
+            "NATIVE-E2E-002:independent_reopen_preserved_revision",
+            "NATIVE-E2E-002:create_exclusive_already_exists",
+            "NATIVE-E2E-002:cleanup_deleted_and_missing"
+          ],
+          [
+            "NATIVE-E2E-002:native_dependency_built_once",
+            "NATIVE-E2E-002:architecture_matrix_validated",
+            "NATIVE-E2E-002:podfile_lock_stable",
+            "NATIVE-E2E-002:production_scope_provisioned",
+            "NATIVE-E2E-002:independent_reopen_preserved_revision",
+            "NATIVE-E2E-002:create_exclusive_already_exists",
+            "NATIVE-E2E-002:cleanup_deleted_and_missing"
+          ],
+          [
+            "NATIVE-E2E-002:native_dependency_built_once",
+            "NATIVE-E2E-002:architecture_matrix_validated",
+            "NATIVE-E2E-002:podfile_lock_stable",
+            "NATIVE-E2E-002:production_scope_provisioned",
+            "NATIVE-E2E-002:independent_reopen_preserved_revision",
+            "NATIVE-E2E-002:create_exclusive_already_exists",
+            "NATIVE-E2E-002:cleanup_deleted_and_missing"
+          ],
+          [
+            "NATIVE-E2E-002:native_dependency_built_once",
+            "NATIVE-E2E-002:architecture_matrix_validated",
+            "NATIVE-E2E-002:podfile_lock_stable",
+            "NATIVE-E2E-002:production_scope_provisioned",
+            "NATIVE-E2E-002:independent_reopen_preserved_revision",
+            "NATIVE-E2E-002:create_exclusive_already_exists",
+            "NATIVE-E2E-002:cleanup_deleted_and_missing"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "NATIVE-E2E-002:native_dependency_built_once",
+            "NATIVE-E2E-002:architecture_matrix_validated",
+            "NATIVE-E2E-002:podfile_lock_stable",
+            "NATIVE-E2E-002:production_scope_provisioned",
+            "NATIVE-E2E-002:independent_reopen_preserved_revision",
+            "NATIVE-E2E-002:create_exclusive_already_exists",
+            "NATIVE-E2E-002:cleanup_deleted_and_missing"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-001",
@@ -1785,7 +2237,22 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-001:real_backend_flow_completed"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-001:real_backend_flow_completed"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-001:real_backend_flow_completed"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-002",
@@ -1807,7 +2274,22 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-002:multi_conversation_dataset_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-002:multi_conversation_dataset_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-002:multi_conversation_dataset_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-003",
@@ -1830,7 +2312,25 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-003:cold_shell_visibility_measured"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-003:cold_shell_visibility_measured"
+          ],
+          [
+            "PERF-E2E-003:cold_shell_visibility_measured"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-003:cold_shell_visibility_measured"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-004",
@@ -1852,7 +2352,22 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-004:snapshot_and_hydration_timings_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-004:snapshot_and_hydration_timings_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-004:snapshot_and_hydration_timings_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-005",
@@ -1874,7 +2389,22 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-005:app_to_cli_latency_measured"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-005:app_to_cli_latency_measured"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-005:app_to_cli_latency_measured"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-006",
@@ -1896,7 +2426,22 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-006:cli_to_app_latency_measured"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-006:cli_to_app_latency_measured"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-006:cli_to_app_latency_measured"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-007",
@@ -1918,7 +2463,22 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-007:full_refresh_regression_checked"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-007:full_refresh_regression_checked"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-007:full_refresh_regression_checked"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-008",
@@ -1940,7 +2500,22 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-008:long_thread_open_timing_measured"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-008:long_thread_open_timing_measured"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-008:long_thread_open_timing_measured"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-009",
@@ -1962,7 +2537,22 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-009:product_timing_schema_written"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-009:product_timing_schema_written"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-009:product_timing_schema_written"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-010",
@@ -1984,7 +2574,22 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-010:hard_budget_semantics_checked"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-010:hard_budget_semantics_checked"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-010:hard_budget_semantics_checked"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-011",
@@ -2006,7 +2611,22 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-011:soft_budget_semantics_checked"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-011:soft_budget_semantics_checked"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-011:soft_budget_semantics_checked"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-012",
@@ -2028,7 +2648,22 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-012:failure_diagnostics_retained"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-012:failure_diagnostics_retained"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-012:failure_diagnostics_retained"
+          ]
+        ]
+      }
     },
     {
       "caseId": "IDENTITY-DELETE-E2E-001",
@@ -2210,7 +2845,69 @@
       "owner": "awiki-me",
       "implementationPath": "tests/e2e/flutter/app/app_smoke_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "SMOKE-E2E-001:app_shell_visible",
+          "SMOKE-E2E-001:onboarding_visible",
+          "SMOKE-E2E-001:onboarding_auth_entry_visible",
+          "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
+          "SMOKE-E2E-001:phone_single_stage_submit_visible",
+          "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
+        ],
+        "exactOracleAssertions": [
+          [
+            "SMOKE-E2E-001:app_shell_visible",
+            "SMOKE-E2E-001:onboarding_visible",
+            "SMOKE-E2E-001:onboarding_auth_entry_visible",
+            "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
+          ],
+          [
+            "SMOKE-E2E-001:app_shell_visible",
+            "SMOKE-E2E-001:onboarding_visible",
+            "SMOKE-E2E-001:onboarding_auth_entry_visible",
+            "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
+          ],
+          [
+            "SMOKE-E2E-001:app_shell_visible",
+            "SMOKE-E2E-001:onboarding_visible",
+            "SMOKE-E2E-001:onboarding_auth_entry_visible",
+            "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
+          ],
+          [
+            "SMOKE-E2E-001:app_shell_visible",
+            "SMOKE-E2E-001:onboarding_visible",
+            "SMOKE-E2E-001:onboarding_auth_entry_visible",
+            "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
+          ],
+          [
+            "SMOKE-E2E-001:app_shell_visible",
+            "SMOKE-E2E-001:onboarding_visible",
+            "SMOKE-E2E-001:onboarding_auth_entry_visible",
+            "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "SMOKE-E2E-001:app_shell_visible",
+            "SMOKE-E2E-001:onboarding_visible",
+            "SMOKE-E2E-001:onboarding_auth_entry_visible",
+            "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
+          ]
+        ]
+      }
     },
     {
       "caseId": "UNREAD-MULTI-E2E-001",
@@ -2975,7 +3672,28 @@
       "owner": "awiki-me-groups",
       "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "STEP4-GROUP-PAGINATION-E2E-001:real_group_first_page_has_opaque_cursor",
+          "STEP4-GROUP-PAGINATION-E2E-001:explicit_next_cursor_loaded",
+          "STEP4-GROUP-PAGINATION-E2E-001:stable_group_projection_retained"
+        ],
+        "exactOracleAssertions": [
+          [
+            "STEP4-GROUP-PAGINATION-E2E-001:real_group_first_page_has_opaque_cursor",
+            "STEP4-GROUP-PAGINATION-E2E-001:explicit_next_cursor_loaded",
+            "STEP4-GROUP-PAGINATION-E2E-001:stable_group_projection_retained"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "STEP4-GROUP-PAGINATION-E2E-001:real_group_first_page_has_opaque_cursor",
+            "STEP4-GROUP-PAGINATION-E2E-001:explicit_next_cursor_loaded",
+            "STEP4-GROUP-PAGINATION-E2E-001:stable_group_projection_retained"
+          ]
+        ]
+      }
     },
     {
       "caseId": "DEVICE-REVOKE-E2E-001",
@@ -4946,6 +5664,7 @@
         "assertionIds": [
           "HANDLE-RECOVERY-V1-E2E-003:old_app_peer_joined_before_recovery",
           "HANDLE-RECOVERY-V1-E2E-003:old_principal_remote_action_fenced",
+          "HANDLE-RECOVERY-V1-E2E-003:old_app_returned_to_login_after_auth_fence",
           "HANDLE-RECOVERY-V1-E2E-003:fresh_ordinary_rejoin_authorized_to_recovery_did",
           "HANDLE-RECOVERY-V1-E2E-003:two_app_registry_session_converged",
           "HANDLE-RECOVERY-V1-E2E-003:app_to_external_direct_exact_one",
@@ -4954,7 +5673,8 @@
         "exactOracleAssertions": [
           [
             "HANDLE-RECOVERY-V1-E2E-003:old_app_peer_joined_before_recovery",
-            "HANDLE-RECOVERY-V1-E2E-003:old_principal_remote_action_fenced"
+            "HANDLE-RECOVERY-V1-E2E-003:old_principal_remote_action_fenced",
+            "HANDLE-RECOVERY-V1-E2E-003:old_app_returned_to_login_after_auth_fence"
           ],
           [
             "HANDLE-RECOVERY-V1-E2E-003:fresh_ordinary_rejoin_authorized_to_recovery_did",
@@ -4969,6 +5689,7 @@
           [
             "HANDLE-RECOVERY-V1-E2E-003:old_app_peer_joined_before_recovery",
             "HANDLE-RECOVERY-V1-E2E-003:old_principal_remote_action_fenced",
+            "HANDLE-RECOVERY-V1-E2E-003:old_app_returned_to_login_after_auth_fence",
             "HANDLE-RECOVERY-V1-E2E-003:fresh_ordinary_rejoin_authorized_to_recovery_did",
             "HANDLE-RECOVERY-V1-E2E-003:two_app_registry_session_converged",
             "HANDLE-RECOVERY-V1-E2E-003:app_to_external_direct_exact_one",
@@ -5005,6 +5726,7 @@
         "assertionIds": [
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_peer_joined_before_recovery",
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_principal_remote_action_fenced",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_returned_to_login_after_auth_fence",
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_returned_opaque_recovery_join_continuation",
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_continuation_rejoined_recovery_did",
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:two_app_registry_session_converged",
@@ -5026,6 +5748,7 @@
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:root_promotion_authorization_converged_without_logout"
           ],
           [
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_returned_to_login_after_auth_fence",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:app_to_external_direct_exact_one",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:external_to_app_and_sibling_direct_exact_one"
           ]
@@ -5034,6 +5757,7 @@
           [
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_peer_joined_before_recovery",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_principal_remote_action_fenced",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_returned_to_login_after_auth_fence",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_returned_opaque_recovery_join_continuation",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_continuation_rejoined_recovery_did",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:two_app_registry_session_converged",
@@ -5131,7 +5855,7 @@
       "negativeChecks": [
         "Automatic discard/resume, Product deletion before ticket, changed Recovery authority, missing identity or sentinel, second ticket, same-process-only simulation, awiki.info target, leaked secret, or skipped step prevents pass attestation."
       ],
-      "environment": "awiki_info_remote",
+      "environment": "rwiki_cn_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
       "requiredFor": [
         "release"
@@ -5180,7 +5904,7 @@
       "negativeChecks": [
         "A widget rebuild, same process, new ticket, cancellation, non-idempotent Product delete, session restoration before resume, retained target identity, awiki.info target, leaked raw handoff in reports, or skipped step prevents pass attestation."
       ],
-      "environment": "awiki_info_remote",
+      "environment": "rwiki_cn_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
       "requiredFor": [
         "release"
@@ -5239,7 +5963,7 @@
       "negativeChecks": [
         "Settings data deletion, scope reset, direct SQLite/Vault/marker mutation, old OTP or device reuse, Recovery-rebind mode, any user-presence call, non-null reset authority, changed stable owner, additional Recovery operation, sibling mutation, duplicate local identity/binding, failed cold reopen, non-Linux/macOS execution, implicit or non-rwiki.cn config, secret-bearing evidence, or a skipped business step prevents pass attestation."
       ],
-      "environment": "awiki_info_remote",
+      "environment": "rwiki_cn_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
       "requiredFor": [
         "optional_nightly",
@@ -5302,7 +6026,7 @@
       "caseId": "DEVICE-JOIN-E2E-006",
       "feature": "AWiki Me joins a Handle created and managed by DSH",
       "layer": "remote_product_ui_security",
-      "preconditions": "The protected awiki.info config provides the fixed registration OTP and reviewed Handle-revoke factor; dsh-awiki is built against published @awiki/im-core-node 0.1.8; AWiki Me and DSH use independent empty Core roots; all service URLs resolve exactly to HTTPS awiki.info.",
+      "preconditions": "The protected awiki.info config provides the fixed registration OTP and reviewed Handle-revoke factor; dsh-awiki is built against published @awiki/im-core-node 0.2.3; AWiki Me and DSH use independent empty Core roots; all service URLs resolve exactly to HTTPS awiki.info.",
       "action": "Start the real DSH Host driver, create a fresh Handle and prove DSH bootstrap admin_ready, use visible AWiki Me onboarding to choose ordinary Join, let DSH reliable sync/local inbox discover an opaque requestRef, start verification, compare independently rendered SAS, approve with APPROVE, wait for AWiki Me member activation, revoke the App through opaque deviceRef with REVOKE, then call public Handle revoke through DSH DID auth.",
       "exactOracles": [
         "DSH is the unique ready-admin and AWiki Me remains pending without SAS before explicit DSH verification.",
@@ -5310,7 +6034,7 @@
         "DSH Registry contains exactly admin+member, then the non-current member is revoked and public Handle revoke completes so the fresh Handle does not remain active."
       ],
       "negativeChecks": [
-        "Missing published Node v10/DSH build, awiki.ai or mixed endpoint, copied state, missing protected factor, Recovery instead of ordinary Join, raw native IDs at the Browser boundary, early/mismatched/persisted SAS, missing APPROVE/REVOKE, admin-role join, automatic approval, failed member revoke, residual active Handle, mock, or skip prevents attestation."
+        "Missing published Node v11/DSH build, awiki.ai or mixed endpoint, copied state, missing protected factor, Recovery instead of ordinary Join, raw native IDs at the Browser boundary, early/mismatched/persisted SAS, missing APPROVE/REVOKE, admin-role join, automatic approval, failed member revoke, residual active Handle, mock, or skip prevents attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
@@ -21,6 +22,16 @@ const Object _unset = Object();
 
 enum OnboardingServerInfoStatus { loading, ready, failed }
 
+enum OnboardingPhoneRegistrationOutcome {
+  idle,
+  inFlight,
+  joinRequired,
+  registered,
+  superseded,
+  timedOut,
+  failed,
+}
+
 class OnboardingState {
   const OnboardingState({
     this.entryMode = 'register',
@@ -39,6 +50,8 @@ class OnboardingState {
     this.serverInfoStatus = OnboardingServerInfoStatus.loading,
     this.serverInfo,
     this.serverInfoError,
+    this.phoneRegistrationOutcome = OnboardingPhoneRegistrationOutcome.idle,
+    this.phoneRegistrationFailureCode,
   });
 
   final String entryMode;
@@ -57,6 +70,8 @@ class OnboardingState {
   final OnboardingServerInfoStatus serverInfoStatus;
   final OnboardingServerInfo? serverInfo;
   final String? serverInfoError;
+  final OnboardingPhoneRegistrationOutcome phoneRegistrationOutcome;
+  final String? phoneRegistrationFailureCode;
 
   bool get isEmailResendCoolingDown => emailResendCountdown > 0;
   bool get isServerInfoLoading =>
@@ -130,6 +145,8 @@ class OnboardingState {
     OnboardingServerInfoStatus? serverInfoStatus,
     Object? serverInfo = _unset,
     Object? serverInfoError = _unset,
+    OnboardingPhoneRegistrationOutcome? phoneRegistrationOutcome,
+    Object? phoneRegistrationFailureCode = _unset,
   }) {
     return OnboardingState(
       entryMode: entryMode ?? this.entryMode,
@@ -166,6 +183,12 @@ class OnboardingState {
       serverInfoError: identical(serverInfoError, _unset)
           ? this.serverInfoError
           : serverInfoError as String?,
+      phoneRegistrationOutcome:
+          phoneRegistrationOutcome ?? this.phoneRegistrationOutcome,
+      phoneRegistrationFailureCode:
+          identical(phoneRegistrationFailureCode, _unset)
+          ? this.phoneRegistrationFailureCode
+          : phoneRegistrationFailureCode as String?,
     );
   }
 }
@@ -186,6 +209,8 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   Timer? _emailResendTimer;
   int _busyGeneration = 0;
   AppSessionTransition? _activeSessionTransition;
+  OnboardingPhoneRegistrationOutcome? _lastBusyFailureOutcome;
+  String? _lastBusyFailureCode;
 
   @override
   void dispose() {
@@ -445,7 +470,11 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       return null;
     }
     final transition = _sessionService.beginSessionTransition();
-    return _runBusy(() async {
+    state = state.copyWith(
+      phoneRegistrationOutcome: OnboardingPhoneRegistrationOutcome.inFlight,
+      phoneRegistrationFailureCode: null,
+    );
+    final status = await _runBusy(() async {
       try {
         final result = await ref
             .read(onboardingServiceProvider)
@@ -459,6 +488,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
             );
         state = state.copyWith(isPhoneOtpConsumed: true);
         final status = await _activateRegistrationResult(result, transition);
+        state = state.copyWith(
+          phoneRegistrationOutcome:
+              status == IdentityRegistrationStatus.joinRequired
+              ? OnboardingPhoneRegistrationOutcome.joinRequired
+              : OnboardingPhoneRegistrationOutcome.registered,
+        );
         return status;
       } catch (error) {
         if (const <String>{
@@ -472,6 +507,18 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         rethrow;
       }
     }, sessionTransition: transition);
+    if (status == null &&
+        mounted &&
+        state.phoneRegistrationOutcome ==
+            OnboardingPhoneRegistrationOutcome.inFlight) {
+      state = state.copyWith(
+        phoneRegistrationOutcome:
+            _lastBusyFailureOutcome ??
+            OnboardingPhoneRegistrationOutcome.failed,
+        phoneRegistrationFailureCode: _lastBusyFailureCode,
+      );
+    }
+    return status;
   }
 
   Future<IdentityRegistrationStatus?> registerWithEmail({
@@ -735,6 +782,8 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     if (state.isBusy) {
       return null;
     }
+    _lastBusyFailureOutcome = null;
+    _lastBusyFailureCode = null;
     final generation = ++_busyGeneration;
     if (sessionTransition != null) {
       _activeSessionTransition = sessionTransition;
@@ -743,6 +792,8 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     try {
       return await action().timeout(_requestTimeout);
     } on TimeoutException {
+      _lastBusyFailureOutcome = OnboardingPhoneRegistrationOutcome.timedOut;
+      _lastBusyFailureCode = 'request_timeout';
       await _cancelOrAbortSessionTransition(sessionTransition);
       if (generation != _busyGeneration) {
         return null;
@@ -751,9 +802,23 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.requestTimeoutRetry());
     } on AppSessionTransitionSuperseded {
+      _lastBusyFailureOutcome = OnboardingPhoneRegistrationOutcome.superseded;
+      _lastBusyFailureCode = 'session_transition_superseded';
       await _cancelOrAbortSessionTransition(sessionTransition);
       return null;
     } catch (error) {
+      _lastBusyFailureOutcome = OnboardingPhoneRegistrationOutcome.failed;
+      _lastBusyFailureCode =
+          structuredAppErrorCode(error) ??
+          switch (error) {
+            core.AwikiImCoreException(:final serviceCode, :final code) =>
+              _stableRegistrationFailureCode(serviceCode) ??
+                  _stableRegistrationFailureCode(code) ??
+                  'im_core_error',
+            StateError() => 'state_error',
+            ArgumentError() => 'invalid_argument',
+            _ => 'unclassified_error',
+          };
       await _cancelOrAbortSessionTransition(sessionTransition);
       if (generation != _busyGeneration) {
         return null;
@@ -851,6 +916,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
     return state.serverInfo?.registrationMethod(id);
   }
+}
+
+String? _stableRegistrationFailureCode(String? value) {
+  final code = value?.trim();
+  if (code == null || code.isEmpty || code.length > 96) return null;
+  return RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(code) ? code : null;
 }
 
 String? _normalizePhoneForOtpCooldown(String phone) {

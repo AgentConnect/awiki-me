@@ -3061,6 +3061,26 @@ ConversationSummary _mergeConversationLastMessage({
       lastMessageSnapshot: local.lastMessageSnapshot,
     );
   }
+  final localSequence = local.lastMessageSnapshot?.serverSequence;
+  final refreshedSequence = refreshed.lastMessageSnapshot?.serverSequence;
+  if (localSequence != null && refreshedSequence != null) {
+    if (localSequence <= refreshedSequence) {
+      return refreshed;
+    }
+    return refreshed.copyWith(
+      lastMessagePreview: local.lastMessagePreview,
+      lastMessageAt: local.lastMessageAt,
+      lastMessagePayloadJson: local.lastMessagePayloadJson,
+      lastMessageSnapshot: local.lastMessageSnapshot,
+    );
+  }
+  final localSnapshot = local.lastMessageSnapshot;
+  if (localSequence == null &&
+      refreshedSequence != null &&
+      localSnapshot?.sendState == MessageSendState.sent &&
+      localSnapshot?.remoteId?.trim().isNotEmpty == true) {
+    return refreshed;
+  }
   if (!local.lastMessageAt.isAfter(refreshed.lastMessageAt)) {
     return refreshed;
   }
