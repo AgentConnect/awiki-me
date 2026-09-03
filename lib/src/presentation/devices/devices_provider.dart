@@ -11,10 +11,12 @@ import 'package:flutter/widgets.dart' show AppLifecycleState;
 
 import '../../app/app_services.dart';
 import '../../application/device_management_service.dart';
+import '../../application/models/app_session.dart';
 import '../../application/models/product_local_models.dart';
 import '../../application/models/device_revoke_outcome.dart';
 import '../../application/ports/root_key_transfer_port.dart';
 import '../../application/root_key_transfer_service.dart';
+import '../../core/app_error_classifier.dart';
 import '../../domain/entities/device_management.dart';
 import '../../domain/entities/handle_recovery.dart';
 import '../app_shell/providers/session_provider.dart';
@@ -294,6 +296,7 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
     final generation = ++_generation;
     final registryReadGeneration = ++_registryReadGeneration;
+    final hadAuthoritativeRegistry = state.registry != null;
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final service = ref.read(deviceManagementServiceProvider);
@@ -327,6 +330,7 @@ class DevicesController extends StateNotifier<DevicesState> {
         joinRequests: joinRequests,
         localJoins: localJoins,
         activeJoin: state.activeJoin,
+        isActionPending: state.isActionPending,
         rootTransfer: state.rootTransfer,
         revokeSubmittingDeviceId: state.revokeSubmittingDeviceId,
         revokeConfirmingDeviceId: state.revokeConfirmingDeviceId,
@@ -336,6 +340,14 @@ class DevicesController extends StateNotifier<DevicesState> {
       _lastAppliedRegistryReadGeneration = registryReadGeneration;
       if (securityFactsChanged) {
         ref.read(deviceSecurityFactsRevisionProvider.notifier).bump();
+      }
+      if (hadAuthoritativeRegistry && securityFactsChanged) {
+        await _refreshCurrentIdentityClientAfterDeviceMutation(selector);
+        if (!mounted ||
+            generation != _generation ||
+            registryReadGeneration != _registryReadGeneration) {
+          return;
+        }
       }
       _reduceRevokeConfirmation(
         registry: registry,
@@ -730,8 +742,10 @@ class DevicesController extends StateNotifier<DevicesState> {
             presenceReason: presenceReason,
           );
       if (!mounted) return false;
-      state = state.copyWith(activeJoin: next, isActionPending: false);
+      state = state.copyWith(activeJoin: next);
       await loadManagement();
+      if (!mounted) return false;
+      state = state.copyWith(isActionPending: false);
       unawaited(
         ref
             .read(accountStateSyncRequestBusProvider)
@@ -924,6 +938,35 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
   }
 
+  Future<void> _refreshCurrentIdentityClientAfterDeviceMutation(
+    String expectedDid,
+  ) async {
+    final registry = state.registry;
+    if (registry == null || registry.did != expectedDid) {
+      throw StateError('identity_binding_refresh_registry_unavailable');
+    }
+    try {
+      final refreshed = await ref
+          .read(appSessionServiceProvider)
+          .refreshCurrentIdentityClientAfterDeviceMutation();
+      if (refreshed.did != expectedDid || !refreshed.authenticated) {
+        throw StateError('identity_binding_refresh_result_mismatch');
+      }
+      if (!ref
+          .read(sessionProvider.notifier)
+          .updateSessionMetadataIfCurrent(
+            refreshed.toLegacySessionIdentity(),
+          )) {
+        throw StateError('identity_binding_refresh_session_changed');
+      }
+    } catch (error) {
+      throw AppStructuredError(
+        code: 'identity.binding_refresh_failed',
+        cause: error,
+      );
+    }
+  }
+
   _RootTransferTarget? _activeRootTransferTarget() {
     final selector = _selector;
     final registry = state.registry;
@@ -1095,12 +1138,22 @@ class DevicesController extends StateNotifier<DevicesState> {
       final registry = applied.registry;
       final freshTarget = _findDevice(registry, targetDeviceId);
       if (freshTarget?.status == DeviceStatus.revoked) {
+        final bindingReady = await _tryRefreshCurrentIdentityClientAfterRevoke(
+          selector,
+        );
+        if (!mounted ||
+            sessionEpoch != _sessionEpoch ||
+            operationGeneration != _revokeOperationGeneration) {
+          return false;
+        }
         _finishRevokeOperation(operationGeneration);
         state = state.copyWith(
           clearRevokeSubmitting: true,
           clearRevokeConfirming: true,
           clearRevokeRetryAllowed: true,
-          revokeNotice: DeviceRevokeNotice.revokedGroupsSyncing,
+          revokeNotice: bindingReady
+              ? DeviceRevokeNotice.revokedGroupsSyncing
+              : DeviceRevokeNotice.revokedGroupsRepairPartial,
           clearError: true,
         );
         unawaited(
@@ -1108,7 +1161,9 @@ class DevicesController extends StateNotifier<DevicesState> {
               .read(accountStateSyncRequestBusProvider)
               .request('device_revoked', force: true),
         );
-        _startRevokedDeviceGroupRepairOnce();
+        if (bindingReady) {
+          _startRevokedDeviceGroupRepairOnce();
+        }
         return true;
       }
       if (freshTarget?.status == DeviceStatus.active &&
@@ -1187,6 +1242,11 @@ class DevicesController extends StateNotifier<DevicesState> {
     try {
       final applied = await _loadFreshRegistry(selector, sessionEpoch);
       if (!mounted || sessionEpoch != _sessionEpoch) return;
+      if (applied.bindingRefreshRequired &&
+          state.revokeConfirmingDeviceId == null) {
+        await _refreshCurrentIdentityClientAfterDeviceMutation(selector);
+        if (!mounted || sessionEpoch != _sessionEpoch) return;
+      }
       _reduceRevokeConfirmation(
         registry: applied.registry,
         registryReadGeneration: applied.registryReadGeneration,
@@ -1236,7 +1296,7 @@ class DevicesController extends StateNotifier<DevicesState> {
         revokeNotice: DeviceRevokeNotice.revokedGroupsSyncing,
         clearError: true,
       );
-      _startRevokedDeviceGroupRepairOnce();
+      unawaited(_refreshBindingAndStartRevokedDeviceGroupRepair());
       return;
     }
     if (target?.status == DeviceStatus.active) {
@@ -1282,6 +1342,7 @@ class DevicesController extends StateNotifier<DevicesState> {
     int sessionEpoch,
   ) async {
     final registryReadGeneration = ++_registryReadGeneration;
+    final hadAuthoritativeRegistry = state.registry != null;
     late final DeviceRegistrySnapshot registry;
     try {
       registry = await ref
@@ -1314,6 +1375,7 @@ class DevicesController extends StateNotifier<DevicesState> {
     return _AppliedDeviceRegistry(
       registry: registry,
       registryReadGeneration: registryReadGeneration,
+      bindingRefreshRequired: hadAuthoritativeRegistry && securityFactsChanged,
     );
   }
 
@@ -1336,6 +1398,33 @@ class DevicesController extends StateNotifier<DevicesState> {
         repairGeneration: repairGeneration,
       ),
     );
+  }
+
+  Future<bool> _tryRefreshCurrentIdentityClientAfterRevoke(
+    String expectedDid,
+  ) async {
+    try {
+      await _refreshCurrentIdentityClientAfterDeviceMutation(expectedDid);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _refreshBindingAndStartRevokedDeviceGroupRepair() async {
+    final expectedDid = _selector;
+    if (expectedDid == null ||
+        !await _tryRefreshCurrentIdentityClientAfterRevoke(expectedDid)) {
+      if (mounted) {
+        state = state.copyWith(
+          revokeNotice: DeviceRevokeNotice.revokedGroupsRepairPartial,
+        );
+      }
+      return;
+    }
+    if (mounted) {
+      _startRevokedDeviceGroupRepairOnce();
+    }
   }
 
   Future<void> _attemptRevokedDeviceGroupRepairOnce({
@@ -1470,10 +1559,12 @@ class _AppliedDeviceRegistry {
   const _AppliedDeviceRegistry({
     required this.registry,
     required this.registryReadGeneration,
+    required this.bindingRefreshRequired,
   });
 
   final DeviceRegistrySnapshot registry;
   final int registryReadGeneration;
+  final bool bindingRefreshRequired;
 }
 
 String _registrySecurityFingerprint(DeviceRegistrySnapshot? registry) {
@@ -1489,11 +1580,13 @@ String _registrySecurityFingerprint(DeviceRegistrySnapshot? registry) {
               device.role.name,
               '${device.managementReady}',
               '${device.isCurrent}',
+              device.authGeneration,
             ].join('\u0001'),
           )
           .toList()
         ..sort();
-  return '${registry.did}\u0002${deviceFacts.join('\u0003')}';
+  return '${registry.did}\u0001${registry.registryVersion}'
+      '\u0002${deviceFacts.join('\u0003')}';
 }
 
 List<DeviceJoinProgress> _replaceJoin(

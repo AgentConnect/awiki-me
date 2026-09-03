@@ -1390,6 +1390,53 @@ void main() {
     );
 
     test(
+      'device mutation refresh atomically replaces the same identity client and binding',
+      () async {
+        final identity = _session('id-default');
+        final initialBinding = _bindingForGeneration(identity, '1');
+        final refreshedBinding = SessionAccountBinding(
+          ownerIdentityId: identity.identityId,
+          accountId: initialBinding.accountId,
+          currentDid: identity.did,
+          protocolDeviceId: initialBinding.protocolDeviceId,
+          identityGeneration: '2',
+          deviceAuthGeneration: '3',
+        );
+        final runtime = _FakeRuntime();
+        final realtime = _FakeRealtime();
+        final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+          runtime: runtime,
+          identities: _FakeIdentities(
+            defaultIdentity: identity,
+            activeBindings: <SessionAccountBinding>[
+              initialBinding,
+              refreshedBinding,
+            ],
+          ),
+          auth: _FakeAuth(),
+          activeSessionStore: _FakeActiveSessionStore(identity.identityId),
+          realtime: realtime,
+        );
+
+        await service.restoreSession();
+        await realtime.start();
+        final refreshed = await service
+            .refreshCurrentIdentityClientAfterDeviceMutation();
+
+        expect(runtime.switchedIdentities, <String>[
+          identity.identityId,
+          identity.identityId,
+        ]);
+        expect(refreshed.accountBinding?.identityGeneration, '2');
+        expect(refreshed.accountBinding?.deviceAuthGeneration, '3');
+        expect(refreshed.authenticated, isTrue);
+        expect(realtime.stopCount, 1);
+        expect(realtime.isRunning, isTrue);
+      },
+    );
+
+    test(
       'deleteLocalIdentity keeps Core open and does not block the next session operation on realtime cleanup',
       () async {
         final realtimeStop = Completer<void>();
@@ -1553,10 +1600,7 @@ AppSession _session(String id) {
 }
 
 class _FakeRuntime implements ImCoreRuntimePort {
-  _FakeRuntime({
-    this.vaultError,
-    this.vaultErrorsByIdentity = const {},
-  });
+  _FakeRuntime({this.vaultError, this.vaultErrorsByIdentity = const {}});
 
   final Object? vaultError;
   final Map<String, Object> vaultErrorsByIdentity;

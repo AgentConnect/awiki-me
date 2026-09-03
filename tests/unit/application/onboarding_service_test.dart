@@ -319,6 +319,12 @@ class _FakeSessions
       activated.isEmpty ? null : activated.last;
 
   @override
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation() async =>
+      activated.isEmpty
+      ? throw StateError('identity_binding_refresh_unavailable')
+      : activated.last;
+
+  @override
   Future<AppSession?> restoreSession() async =>
       activated.isEmpty ? null : activated.last;
 }

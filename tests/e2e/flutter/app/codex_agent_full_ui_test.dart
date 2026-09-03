@@ -33,6 +33,9 @@ const String _codexAgentRunConfigPath =
     '.e2e/codex-agent/current/run_config.json';
 const Duration _codexRuntimeFinalTimeout = Duration(minutes: 5);
 const String _codexDaemonMaxRuntimeMs = '780000';
+const String _daemonCliProxyPassthrough =
+    'HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY '
+    'http_proxy https_proxy all_proxy no_proxy';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -341,6 +344,15 @@ Future<Process> _startRealDaemon({
 
 Map<String, String> _daemonEnvironment(_CodexAgentRealBackendConfig config) {
   final environment = _loadDaemonEnvFile(config);
+  final parentPassthrough = Platform
+      .environment['AWIKI_DAEMON_CLI_ENV_PASSTHROUGH']
+      ?.trim();
+  environment.putIfAbsent(
+    'AWIKI_DAEMON_CLI_ENV_PASSTHROUGH',
+    () => parentPassthrough?.isNotEmpty == true
+        ? parentPassthrough!
+        : _daemonCliProxyPassthrough,
+  );
   environment.addAll(<String, String>{
     'AWIKI_DAEMON_SERVICE_BASE_URL': config.environment.baseUrl,
     'AWIKI_DAEMON_USER_SERVICE_BASE_URL': config.environment.userServiceUrl,

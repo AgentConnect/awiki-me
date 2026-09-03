@@ -157,6 +157,11 @@ class _FakeSessions
   Future<AppSession?> refreshSession() async => _defaultSession;
 
   @override
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation() async =>
+      _defaultSession ??
+      (throw StateError('identity_binding_refresh_unavailable'));
+
+  @override
   Future<AppSession?> restoreSession() async => _defaultSession;
 }
 

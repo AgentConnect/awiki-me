@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
-import '../../application/config/awiki_environment_config.dart';
 import '../../application/models/group_collection_page.dart';
 import '../../application/ports/group_core_port.dart';
 import '../../domain/entities/chat_message.dart';
@@ -31,6 +30,7 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     required String rules,
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+    bool secureRequired = false,
   }) async {
     if ((_runtime.config.anpServiceDid ?? '').trim().isEmpty) {
       throw StateError('Group creation requires an ANP service DID.');
@@ -45,7 +45,7 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
           rules: rules,
           messagePrompt: messagePrompt,
           identity: identity,
-          secureRequired: defaultGroupCreationE2eeRequired,
+          secureRequired: secureRequired,
         ),
       ),
     );

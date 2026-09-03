@@ -939,6 +939,7 @@ Future<({GroupSummary group, GroupSummary pageGroup})> _prepareStep4Groups(
     description: 'Step4 exact-device convergence',
     goal: 'Verify revoke convergence',
     rules: 'E2E only',
+    secureRequired: true,
   );
   final pageGroup = await groups.createGroup(
     name: 'Step4 page $nonce',
@@ -1008,7 +1009,6 @@ Future<void> _continueStep4RevokeAndMls({
 
   final secure = container.read(groupEncryptionCorePortProvider);
   var appReady = await secure.retry(group.groupId);
-  await Future<void>.delayed(const Duration(seconds: 2));
   await cli.stopRealtimeListener();
   await cli.waitForGroupReady(group.groupId);
   final appReadyDeadline = DateTime.now().add(const Duration(seconds: 45));
@@ -1392,6 +1392,19 @@ Future<void> _verifyRootTransferCompletion({
   if (grantAction.evaluate().isNotEmpty) {
     fail('The Devices later-grant action remained after Registry readiness.');
   }
+  final postTransferNonce = _nonce(8);
+  final postTransferGroup = await container
+      .read(groupApplicationServiceProvider)
+      .createGroup(
+        name: 'Root transfer barrier $postTransferNonce',
+        slug: 'root-transfer-$postTransferNonce',
+        description: 'Verify refreshed identity binding',
+        goal: 'Reject stale post-transfer binding',
+        rules: 'E2E only',
+      );
+  if (postTransferGroup.groupId.trim().isEmpty) {
+    fail('Group create returned no identity-bound result after Root transfer.');
+  }
 
   if (_invocationExpects(_rootTransferCaseId)) {
     await E2eCaseAttestationWriter.markPassed(
@@ -1404,6 +1417,7 @@ Future<void> _verifyRootTransferCompletion({
         'sender_accepted_terminal',
         'receiver_completion_ready',
         'root_p5_not_projected',
+        'post_transfer_group_create_used_refreshed_binding',
       ],
     );
   }
@@ -2710,7 +2724,7 @@ class _JoinCli {
           'msg',
           'inbox',
           '--scope',
-          'group',
+          'direct',
           '--limit',
           '20',
         ]),
@@ -3722,7 +3736,8 @@ String _safeId(String value, int maxLength) {
       .replaceAll(RegExp(r'-+'), '-')
       .replaceAll(RegExp(r'^-|-$'), '');
   if (safe.isEmpty) return 'run';
-  return safe.length <= maxLength ? safe : safe.substring(0, maxLength);
+  if (safe.length <= maxLength) return safe;
+  return safe.substring(0, maxLength).replaceFirst(RegExp(r'-$'), '');
 }
 
 bool _validSas(String value) => RegExp(r'^\d{6}$').hasMatch(value);

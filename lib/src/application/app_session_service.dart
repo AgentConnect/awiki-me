@@ -43,6 +43,8 @@ abstract interface class AppSessionService {
 
   Future<AppSession?> refreshSession();
 
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation();
+
   Future<void> logout();
 
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias);
@@ -361,6 +363,7 @@ class ImCoreAppSessionService
     AppSession identity, {
     required AppSessionTransition transition,
     Future<void> Function(AppSession session)? initializeIdentitySession,
+    bool allowTransientAuth = true,
   }) async {
     _requireCurrentTransition(transition);
     if (!_runtime.isOpen) {
@@ -416,7 +419,7 @@ class ImCoreAppSessionService
       );
     } catch (error) {
       _requireCurrentTransition(transition);
-      if (!isTransientNetworkAppError(error)) {
+      if (!allowTransientAuth || !isTransientNetworkAppError(error)) {
         await _clearFailedActivationState();
         rethrow;
       }
@@ -464,6 +467,37 @@ class ImCoreAppSessionService
   Future<AppSession?> refreshSession() {
     final transition = _committedSessionTransition;
     return _runSessionTransition(() => _refreshSession(transition));
+  }
+
+  @override
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation() {
+    final transition = _committedSessionTransition;
+    return _runSessionTransition(() async {
+      final current = _current;
+      if (current == null ||
+          transition == null ||
+          !isSessionTransitionCurrent(transition)) {
+        throw StateError('identity_binding_refresh_unavailable');
+      }
+      final realtimeWasRunning = _realtime?.isRunning ?? false;
+      final refreshed = await _activateIdentity(
+        current,
+        transition: transition,
+        allowTransientAuth: false,
+      );
+      if (!refreshed.authenticated) {
+        throw StateError('identity_binding_refresh_unauthenticated');
+      }
+      if (realtimeWasRunning) {
+        try {
+          await _realtime?.start();
+        } catch (_) {
+          // The identity client is already current. The App realtime
+          // supervisor owns connection recovery independently.
+        }
+      }
+      return refreshed;
+    });
   }
 
   Future<AppSession?> _refreshSession(AppSessionTransition? transition) async {

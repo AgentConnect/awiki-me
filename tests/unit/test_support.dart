@@ -1706,6 +1706,7 @@ class FakeAppSessionService
 
   final FakeAwikiGateway gateway;
   AppSession? _current;
+  int deviceMutationRefreshCalls = 0;
 
   @override
   Future<AppSession> activateIdentity(
@@ -1728,6 +1729,18 @@ class FakeAppSessionService
 
   @override
   Future<AppSession?> currentSession() async => _current;
+
+  @override
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation() async {
+    deviceMutationRefreshCalls += 1;
+    final current =
+        _current ??
+        switch (await gateway.currentSession()) {
+          final SessionIdentity legacy => _appSessionFromLegacy(legacy),
+          null => throw StateError('identity_binding_refresh_unavailable'),
+        };
+    return _current = current.copyWith(authenticated: true);
+  }
 
   @override
   Future<AppSessionLease?> currentSessionLease() async =>
@@ -3821,6 +3834,7 @@ class FakeGroupApplicationService implements GroupApplicationService {
     required String rules,
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+    bool secureRequired = false,
   }) {
     gateway.lastGroupIdentityMode = identity.mode;
     gateway.lastGroupIdentityHandle = identity.handle;

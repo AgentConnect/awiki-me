@@ -14,6 +14,7 @@ abstract interface class GroupApplicationService {
     required String rules,
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+    bool secureRequired = false,
   });
 
   Future<GroupSummary> joinGroup(
@@ -69,6 +70,7 @@ class ImCoreGroupApplicationService implements GroupApplicationService {
     required String rules,
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+    bool secureRequired = false,
   }) {
     return _groups.createGroup(
       name: name,
@@ -78,6 +80,7 @@ class ImCoreGroupApplicationService implements GroupApplicationService {
       rules: rules,
       messagePrompt: messagePrompt,
       identity: identity,
+      secureRequired: secureRequired,
     );
   }
 

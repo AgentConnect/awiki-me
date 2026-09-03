@@ -340,6 +340,10 @@ class _FakeSessions
     return _current;
   }
 
+  @override
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation() async =>
+      _current ?? (throw StateError('identity_binding_refresh_unavailable'));
+
   void replaceCommittedSession(AppSession session) {
     final transition = beginSessionTransition();
     _current = session;

@@ -399,6 +399,37 @@ void main() {
   });
 
   testWidgets(
+    'fresh management load refreshes one changed external Registry binding',
+    (tester) async {
+      final core = FakeDeviceManagementCore()
+        ..registry = _rootTransferRegistry(registryVersion: '7');
+      final gateway = FakeAwikiGateway()..loginResult = _session;
+      final sessions = FakeAppSessionService(gateway);
+      await tester.pumpWidget(
+        _app(
+          const DevicesPage(),
+          core,
+          gateway: gateway,
+          appSessions: sessions,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(sessions.deviceMutationRefreshCalls, 0);
+      core.registry = _rootTransferRegistry(registryVersion: '8');
+      final controller = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('devices-page'))),
+      ).read(devicesProvider.notifier);
+
+      await controller.loadManagement();
+      expect(sessions.deviceMutationRefreshCalls, 1);
+
+      await controller.loadManagement();
+      expect(sessions.deviceMutationRefreshCalls, 1);
+    },
+  );
+
+  testWidgets(
     'permanent revoke requires explicit intent then one user-presence prompt',
     (tester) async {
       final core = FakeDeviceManagementCore()
@@ -2331,13 +2362,18 @@ Widget _app(
   FakeRootKeyTransferPort? rootTransfer,
   HandleRecoveryCorePort? recovery,
   FakeAwikiGateway? gateway,
+  FakeAppSessionService? appSessions,
   bool deviceRevokeEnabled = false,
   SessionIdentity? session = _session,
   DateTime Function()? deviceJoinNow,
 }) {
+  final resolvedGateway = gateway ?? FakeAwikiGateway();
+  if (session != null && resolvedGateway.loginResult == null) {
+    resolvedGateway.loginResult = session;
+  }
   return buildLocalizedTestApp(
     home: home,
-    gateway: gateway,
+    gateway: resolvedGateway,
     session: session,
     providerOverrides: <Override>[
       multiDeviceDeviceRevokeEnabledProvider.overrideWithValue(
@@ -2358,6 +2394,8 @@ Widget _app(
       handleRecoveryCorePortProvider.overrideWithValue(
         recovery ?? _OrdinaryJoinRecoveryCore(core),
       ),
+      if (appSessions != null)
+        appSessionServiceProvider.overrideWithValue(appSessions),
     ],
   );
 }
@@ -2491,9 +2529,13 @@ core.AuthorizedJoinActivationProgress _pendingRecoveryJoin() =>
       ),
     );
 
-DeviceRegistrySnapshot _rootTransferRegistry({bool recipientReady = false}) {
+DeviceRegistrySnapshot _rootTransferRegistry({
+  bool recipientReady = false,
+  String registryVersion = '0',
+}) {
   return DeviceRegistrySnapshot(
     did: testDid,
+    registryVersion: registryVersion,
     devices: <DeviceSummary>[
       _device(
         id: 'admin-current',

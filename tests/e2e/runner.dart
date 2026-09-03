@@ -1084,13 +1084,15 @@ class DesktopE2eRunner {
   }) async {
     await _withFlutterExecutionLease(platform, runId, () async {
       flutterBuildIsolation.prepare(dryRun: options.dryRun || commands.dryRun);
-      final competingPids = await competingFlutterIntegrationTestPids();
-      if (competingPids.isNotEmpty) {
-        throw E2eFailure(
-          'Another Flutter integration test is already running '
-          '(pids=${competingPids.join(',')}); refusing to share the desktop '
-          'device and application bundle.',
-        );
+      if (!options.dryRun && !commands.dryRun) {
+        final competingPids = await competingFlutterIntegrationTestPids();
+        if (competingPids.isNotEmpty) {
+          throw E2eFailure(
+            'Another Flutter integration test is already running '
+            '(pids=${competingPids.join(',')}); refusing to share the desktop '
+            'device and application bundle.',
+          );
+        }
       }
       final locale = desktopE2eUtf8Locale(
         platform: platform,

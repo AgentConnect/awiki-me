@@ -21,6 +21,7 @@ abstract interface class GroupCorePort {
     required String rules,
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+    bool secureRequired = false,
   });
 
   Future<GroupSummary> joinGroup(

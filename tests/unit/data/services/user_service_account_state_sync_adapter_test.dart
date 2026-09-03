@@ -221,6 +221,10 @@ class _Sessions with AppSessionTransitionGuard implements AppSessionService {
   Future<AppSession?> refreshSession() async => session;
 
   @override
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation() async =>
+      session;
+
+  @override
   Future<AppSession> activateIdentity(
     AppSession identity, {
     AppSessionTransition? transition,

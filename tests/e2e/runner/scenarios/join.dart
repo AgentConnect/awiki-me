@@ -4,11 +4,6 @@
 
 part of '../../runner.dart';
 
-String dshRevokeOtpForJoin({required String explicit, required String fixed}) {
-  final selected = explicit.trim();
-  return selected.isNotEmpty ? selected : fixed.trim();
-}
-
 extension DesktopE2eJoinScenario on DesktopE2eRunner {
   Future<void> _runRemoteMultiDeviceJoin({List<String>? caseIds}) async {
     final fullRootTransfer = options.e2eCase == DesktopE2eCase.rootTransfer;
@@ -38,13 +33,6 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
     _addRuntimeSecret(joinConfig.phone);
     _addRuntimeSecret(joinConfig.fixedOtp);
     _addRuntimeSecret(joinConfig.cliBin);
-    final configuredDshRevokeOtp =
-        Platform.environment['AWIKI_DSH_HANDLE_REVOKE_OTP']?.trim() ?? '';
-    final dshRevokeOtp = dshRevokeOtpForJoin(
-      explicit: configuredDshRevokeOtp,
-      fixed: joinConfig.fixedOtp,
-    );
-    if (dshRevokeOtp.isNotEmpty) _addRuntimeSecret(dshRevokeOtp);
     if (!options.dryRun && !commands.dryRun) {
       suiteDefinition.validateRemoteTargetValues(
         didDomain: joinConfig.didDomain,
@@ -88,13 +76,6 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
             (manifest['dependencies'] as Map?)?['@awiki/im-core-node'] !=
                 '0.2.3') {
           throw E2eFailure('DSH E2E requires @awiki/im-core-node 0.2.3.');
-        }
-        if (!options.dryRun &&
-            !commands.dryRun &&
-            !isSixDigitAsciiOtp(dshRevokeOtp)) {
-          throw E2eFailure(
-            'The reviewed DSH Handle-revoke factor fixture is unavailable.',
-          );
         }
       }
       if (joinConfig.platform == DesktopE2ePlatform.linux) {
@@ -166,10 +147,8 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
             artifact: preparedJoinArtifact,
             caseIds: joiningAppCases,
             stateRoot: multiDeviceAppJoiningStateRootDir,
-            environment: <String, String>{
+            environment: const <String, String>{
               _multiDeviceRemoteJoinGateEnv: '1',
-              if (includesDshInterop)
-                'AWIKI_DSH_HANDLE_REVOKE_OTP': dshRevokeOtp,
             },
           );
         }

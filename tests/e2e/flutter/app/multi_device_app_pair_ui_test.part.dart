@@ -2964,6 +2964,12 @@ Future<void> _leaveCompletedAppPairJoin(WidgetTester tester) async {
   final done = find.text(
     tester.element(find.byType(DeviceJoinPage)).l10n.commonDone,
   );
+  await _pumpUntil(
+    tester,
+    () => done.hitTestable().evaluate().length == 1,
+    timeout: const Duration(seconds: 30),
+    failure: 'The completed joining-device Done action was unavailable.',
+  );
   await _tapOne(
     tester,
     done,

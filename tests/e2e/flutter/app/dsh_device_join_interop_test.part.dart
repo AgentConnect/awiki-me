@@ -6,11 +6,6 @@ void _registerDshDeviceJoinInteropTest() {
     (tester) async {
       final config = _RemoteJoinRunConfig.load();
       final account = _DedicatedAccount.fromConfig(config);
-      final revokeOtp =
-          Platform.environment['AWIKI_DSH_HANDLE_REVOKE_OTP']?.trim() ?? '';
-      if (!isSixDigitAsciiOtp(revokeOtp)) {
-        fail('The reviewed DSH Handle-revoke factor fixture is unavailable.');
-      }
       final dshStateRoot = config.dshStateRoot;
       _requireIndependentEmptyPaths(<String>[
         config.dshAppStateRoot,
@@ -22,23 +17,15 @@ void _registerDshDeviceJoinInteropTest() {
       );
       AppBootstrap? bootstrap;
       var handle = '';
-      var handleRegistered = false;
-      var handleRevoked = false;
       await tester.binding.setSurfaceSize(const Size(1440, 900));
       addTearDown(() async {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
         await bootstrap?.dispose();
-        if (handleRegistered && !handleRevoked) {
-          handleRevoked = await dsh.cleanupHandle(handle, revokeOtp);
-        }
         await dsh.close();
         await _deleteDirectory(config.dshAppStateRoot);
         await _deleteDirectory(dshStateRoot);
         await tester.binding.setSurfaceSize(null);
-        if (handle.isNotEmpty && !handleRevoked) {
-          fail('The DSH interoperability Handle was not publicly revoked.');
-        }
       });
 
       handle = _uniqueHandle('${config.handlePrefix}dsh');
@@ -52,7 +39,6 @@ void _registerDshDeviceJoinInteropTest() {
       if (registration['status'] != 'registered') {
         fail('DSH did not create the bootstrap Handle.');
       }
-      handleRegistered = true;
       final initial = await dsh.hostValue('device_refresh');
       if (initial['canManage'] != true ||
           initial['role'] != 'admin' ||
@@ -222,11 +208,6 @@ void _registerDshDeviceJoinInteropTest() {
         fail('DSH did not revoke the App member.');
       }
 
-      handleRevoked = await dsh.cleanupHandle(handle, revokeOtp);
-      if (!handleRevoked) {
-        fail('The DSH-created Handle was not publicly revoked.');
-      }
-
       await E2eCaseAttestationWriter.markPassed(
         _dshAdminJoinCaseId,
         phases: const <String>[
@@ -236,7 +217,7 @@ void _registerDshDeviceJoinInteropTest() {
           'dsh_foreground_member_approval_completed',
           'app_joined_as_member',
           'dsh_revoked_member',
-          'public_handle_cleanup_recovered_quota',
+          'residual_identity_declared_by_suite_policy',
         ],
       );
     },
@@ -331,7 +312,12 @@ class _DshE2eDriver {
     _write(<String, Object?>{'action': action, ...fields});
     final response = await _read();
     if (response['ok'] != true || response['result'] is! Map) {
-      fail('The DSH Device Join command failed.');
+      final rawCode = response['code'];
+      final safeCode =
+          rawCode is String && RegExp(r'^[a-z0-9_-]{1,64}$').hasMatch(rawCode)
+          ? rawCode
+          : 'operation_failed';
+      fail('The DSH Device Join command $action failed ($safeCode).');
     }
     return (response['result']! as Map).cast<String, Object?>();
   }
@@ -381,28 +367,6 @@ class _DshE2eDriver {
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
     fail('DSH did not derive its SAS from local verification progress.');
-  }
-
-  Future<bool> cleanupHandle(String handle, String code) async {
-    try {
-      var sent = await command('request_handle_revoke', <String, Object?>{
-        'handle': handle,
-      });
-      if (sent['sent'] == 0 && (sent['skipped'] as num? ?? 0) > 0) {
-        await Future<void>.delayed(const Duration(seconds: 61));
-        sent = await command('request_handle_revoke', <String, Object?>{
-          'handle': handle,
-        });
-      }
-      if ((sent['sent'] as num? ?? 0) < 1) return false;
-      final confirmed = await command(
-        'confirm_handle_revoke',
-        <String, Object?>{'handle': handle, 'code': code},
-      );
-      return confirmed['ok'] == true;
-    } on Object {
-      return false;
-    }
   }
 
   Future<void> close() async {

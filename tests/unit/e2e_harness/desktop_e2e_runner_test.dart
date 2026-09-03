@@ -2381,16 +2381,6 @@ cliHandle: legacy-cli
   });
 
   group('Desktop E2E gate governance', () {
-    test(
-      'DSH cleanup reuses the protected fixed OTP unless explicitly set',
-      () {
-        expect(dshRevokeOtpForJoin(explicit: '', fixed: '123456'), '123456');
-        expect(
-          dshRevokeOtpForJoin(explicit: '654321', fixed: '123456'),
-          '654321',
-        );
-      },
-    );
     test('required prepared mode rejects Flutter build fallback', () {
       expect(
         () => validatePreparedArtifactExecutionPolicy(<String, String>{

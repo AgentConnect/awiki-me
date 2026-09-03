@@ -11,6 +11,7 @@ import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../test_support.dart';
 import 'device_test_support.dart';
 
 const _session = SessionIdentity(
@@ -30,7 +31,15 @@ void main() {
         _group('group-b'),
       ]);
       final encryption = _FakeGroupEncryption();
-      final container = _container(core, groups, encryption);
+      final sessions = FakeAppSessionService(
+        FakeAwikiGateway()..loginResult = _session,
+      );
+      final container = _container(
+        core,
+        groups,
+        encryption,
+        sessions: sessions,
+      );
       addTearDown(container.dispose);
 
       final controller = container.read(devicesProvider.notifier);
@@ -50,6 +59,7 @@ void main() {
       );
       await _drainMicrotasks();
 
+      expect(sessions.deviceMutationRefreshCalls, 1);
       expect(encryption.repairCalls, <String>['group-a', 'group-b']);
       expect(
         container.read(devicesProvider).revokeNotice,
@@ -99,14 +109,19 @@ void main() {
 ProviderContainer _container(
   FakeDeviceManagementCore core,
   GroupApplicationService groups,
-  GroupEncryptionCorePort encryption,
-) => ProviderContainer(
+  GroupEncryptionCorePort encryption, {
+  FakeAppSessionService? sessions,
+}) => ProviderContainer(
   overrides: <Override>[
     multiDeviceDeviceRevokeEnabledProvider.overrideWithValue(true),
     deviceManagementCorePortProvider.overrideWithValue(core),
     userPresencePortProvider.overrideWithValue(FakeUserPresence()),
     groupApplicationServiceProvider.overrideWithValue(groups),
     groupEncryptionCorePortProvider.overrideWithValue(encryption),
+    appSessionServiceProvider.overrideWithValue(
+      sessions ??
+          FakeAppSessionService(FakeAwikiGateway()..loginResult = _session),
+    ),
     sessionProvider.overrideWith(
       (ref) => SessionController()..setSession(_session),
     ),

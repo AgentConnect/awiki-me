@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
@@ -811,10 +810,6 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       _lastBusyFailureCode =
           structuredAppErrorCode(error) ??
           switch (error) {
-            core.AwikiImCoreException(:final serviceCode, :final code) =>
-              _stableRegistrationFailureCode(serviceCode) ??
-                  _stableRegistrationFailureCode(code) ??
-                  'im_core_error',
             StateError() => 'state_error',
             ArgumentError() => 'invalid_argument',
             _ => 'unclassified_error',
@@ -916,12 +911,6 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
     return state.serverInfo?.registrationMethod(id);
   }
-}
-
-String? _stableRegistrationFailureCode(String? value) {
-  final code = value?.trim();
-  if (code == null || code.isEmpty || code.length > 96) return null;
-  return RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(code) ? code : null;
 }
 
 String? _normalizePhoneForOtpCooldown(String phone) {

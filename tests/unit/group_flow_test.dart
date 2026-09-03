@@ -71,6 +71,7 @@ class _DelayedCreateGroupService extends FakeGroupApplicationService {
     required String rules,
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+    bool secureRequired = false,
   }) {
     started.complete();
     return result.future;

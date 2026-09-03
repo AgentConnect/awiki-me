@@ -97,6 +97,7 @@ void main() {
         goal: 'goal',
         rules: 'rules',
         identity: GroupIdentitySelection.handle('alice.example.com'),
+        secureRequired: true,
       );
       await service.joinGroup(
         'did:group',
@@ -116,6 +117,7 @@ void main() {
         'handle/alice.example.com',
         'handle/alice.example.com',
       ]);
+      expect(groups.secureRequirements, [isTrue]);
       expect(groups.listLimit, 10);
       expect(groups.addedMembers, ['did:group/alice.awiki.ai/admin']);
       expect(groups.removedMembers, ['did:group/did:alice']);
@@ -214,6 +216,7 @@ class _FakeGroups implements GroupCorePort {
   final List<String> removedMembers = <String>[];
   int? listLimit;
   final List<String> identities = <String>[];
+  final List<bool> secureRequirements = <bool>[];
 
   @override
   Future<GroupSummary> createGroup({
@@ -224,9 +227,11 @@ class _FakeGroups implements GroupCorePort {
     required String rules,
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+    bool secureRequired = false,
   }) async {
     createdNames.add(name);
     identities.add('${identity.mode.name}/${identity.handle ?? ''}');
+    secureRequirements.add(secureRequired);
     return _group();
   }
 
