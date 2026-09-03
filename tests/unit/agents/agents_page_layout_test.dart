@@ -3012,18 +3012,18 @@ void main() {
       await tester.pumpWidget(
         buildLocalizedTestApp(
           home: const AgentsWorkspacePage(),
-          session: const SessionIdentity(
-            did: 'did:wba:awiki.info:user:alice',
+          session: SessionIdentity(
+            did: 'did:wba:$primaryTenantDomain:user:alice',
             credentialName: 'alice',
             displayName: 'Alice',
-            handle: 'alice.awiki.info',
+            handle: 'alice.$primaryTenantDomain',
           ),
           providerOverrides: <Override>[
             agentControlServiceProvider.overrideWithValue(control),
             awikiEnvironmentConfigProvider.overrideWithValue(
               AwikiEnvironmentConfig(
-                baseUrl: 'https://awiki.info',
-                didDomain: 'awiki.info',
+                baseUrl: primaryTenantBaseUrl,
+                didDomain: primaryTenantDomain,
               ),
             ),
             onboardingSupportServiceProvider.overrideWithValue(
@@ -3046,8 +3046,8 @@ void main() {
       await tester.tap(find.byKey(const Key('agent-skill-regenerate-button')));
       await tester.pumpAndSettle();
 
-      expect(find.text('alice.awiki.info'), findsOneWidget);
-      expect(find.text('skill-widget.awiki.info'), findsOneWidget);
+      expect(find.text('alice.$primaryTenantDomain'), findsOneWidget);
+      expect(find.text('skill-widget.$primaryTenantDomain'), findsOneWidget);
       expect(find.byKey(const Key('agent-skill-copy-button')), findsOneWidget);
       expect(
         find.byKey(const Key('agent-skill-copy-button')).hitTestable(),
@@ -3058,7 +3058,10 @@ void main() {
           .data!;
       expect(prompt, contains('AWIKI_SKILL_ONBOARDING_V1'));
       expect(prompt, contains('awsk1_widget_secret_value'));
-      expect(prompt, isNot(contains('did:wba:awiki.info:user:alice')));
+      expect(
+        prompt,
+        isNot(contains('did:wba:$primaryTenantDomain:user:alice')),
+      );
       expect(control.lastInstallCommand, isNull);
       expect(skillPort.displayNames, <String>['Research Copilot']);
 
@@ -3330,9 +3333,9 @@ class _SkillOnboardingPortStub implements SkillOnboardingPort {
       token: 'awsk1_widget_secret_value',
       tokenId: 'agtok_widget_$calls',
       controllerHandle: controllerHandle,
-      agentHandle: 'skill-widget.awiki.info',
+      agentHandle: 'skill-widget.$primaryTenantDomain',
       displayName: displayName,
-      serviceOrigin: 'https://awiki.info',
+      serviceOrigin: primaryTenantBaseUrl,
       expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
     );
   }

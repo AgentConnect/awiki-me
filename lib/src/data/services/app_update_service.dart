@@ -2,15 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:auto_updater/auto_updater.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/config/awiki_environment_config.dart';
+import '../../application/tenant/app_tenant.dart';
 import '../../domain/entities/app_update_manifest.dart';
 import '../../domain/services/update_service.dart';
 import 'app_key_value_store.dart';
@@ -62,9 +61,6 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
   final bool _allowLoopbackHttp;
   final bool officialTenant;
 
-  bool _macOsUpdaterConfigured = false;
-  bool _disposed = false;
-
   String get policyOrigin => _origin(_policyUri);
   String get policyUrl => _policyUri.toString();
   String get _cacheNamespace {
@@ -88,9 +84,7 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
       '${manifest.version}+${manifest.buildNumber}';
 
   @override
-  void dispose() {
-    _disposed = true;
-  }
+  void dispose() {}
 
   @override
   Future<AppVersion> getCurrentVersion() async {
@@ -119,12 +113,16 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
       _validateNetworkUri(_policyUri, label: 'update policy');
       final response = await _sendBounded(_policyUri);
       if (response.statusCode == 404 && !officialTenant) {
+        await _storage.delete(key: _lastManifestKey);
+        await _storage.delete(key: _lastManifestCachedAtKey);
+        await _storage.write(
+          key: _lastCheckAtKey,
+          value: DateTime.now().toUtc().toIso8601String(),
+        );
         return _result(
           currentVersion: currentVersion,
-          manifest: cached.manifest,
-          cachedAt: cached.cachedAt,
-          usedCache: cached.manifest != null,
-          policyUnavailable: cached.manifest == null,
+          manifest: null,
+          policyUnavailable: true,
           failureReason: 'This tenant does not provide an update policy.',
         );
       }
@@ -137,11 +135,21 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
       if (decoded is! Map) {
         throw const FormatException('Update policy must be an object.');
       }
-      final manifest = AppUpdateManifest.fromJson(
-        decoded.map<String, Object?>(
-          (key, value) => MapEntry(key.toString(), value),
-        ),
+      final document = decoded.map<String, Object?>(
+        (key, value) => MapEntry(key.toString(), value),
       );
+      final manifestJson = _appManifestFromResponse(document);
+      if (manifestJson == null) {
+        await _storage.delete(key: _lastManifestKey);
+        await _storage.delete(key: _lastManifestCachedAtKey);
+        return _result(
+          currentVersion: currentVersion,
+          manifest: null,
+          policyUnavailable: true,
+          failureReason: 'This tenant does not provide an App update policy.',
+        );
+      }
+      final manifest = AppUpdateManifest.fromJson(manifestJson);
       if (manifest.policyOrigin != policyOrigin) {
         throw const FormatException(
           'Update policy origin does not match the selected tenant.',
@@ -189,8 +197,8 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
     AppOfficialUpdateSource source,
   ) async {
     final origin = switch (source) {
-      AppOfficialUpdateSource.china => 'https://awiki.me',
-      AppOfficialUpdateSource.global => 'https://awiki.ai',
+      AppOfficialUpdateSource.primary => primaryBuiltinTenantBackendBaseUrl,
+      AppOfficialUpdateSource.secondary => secondaryBuiltinTenantBackendBaseUrl,
     };
     await _storage.write(key: _preferredOfficialSourceKey, value: source.name);
     final service = AppUpdateService(
@@ -220,9 +228,9 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
   @override
   Future<AppOfficialUpdateSource> loadPreferredOfficialSource() async {
     final raw = await _storage.read(key: _preferredOfficialSourceKey);
-    return raw == AppOfficialUpdateSource.global.name
-        ? AppOfficialUpdateSource.global
-        : AppOfficialUpdateSource.china;
+    return raw == AppOfficialUpdateSource.secondary.name
+        ? AppOfficialUpdateSource.secondary
+        : AppOfficialUpdateSource.primary;
   }
 
   @override
@@ -299,18 +307,6 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
 
   @override
   Future<void> installUpdate(AppUpdateManifest manifest) async {
-    if (Platform.isAndroid) {
-      await _installAndroidUpdate(manifest);
-      return;
-    }
-    if (Platform.isMacOS) {
-      await _installMacOsUpdate(manifest);
-      return;
-    }
-    if (Platform.isWindows) {
-      await _installWindowsUpdate(manifest);
-      return;
-    }
     await openDownloadPage(manifest);
   }
 
@@ -361,123 +357,6 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
     if (!await _urlLauncher(uri)) {
       throw UpdateInstallFailed('Unable to open URL: $rawUrl');
     }
-  }
-
-  Future<void> _installMacOsUpdate(AppUpdateManifest manifest) async {
-    final appcastUrl = manifest.platforms.macos.appcastUrl;
-    if (appcastUrl == null) {
-      await openDownloadPage(manifest);
-      return;
-    }
-    _validateNetworkUri(Uri.parse(appcastUrl), label: 'appcast');
-    try {
-      await autoUpdater.setFeedURL(appcastUrl);
-      if (!_macOsUpdaterConfigured) {
-        await autoUpdater.setScheduledCheckInterval(24 * 60 * 60);
-        _macOsUpdaterConfigured = true;
-      }
-      await autoUpdater.checkForUpdates(inBackground: false);
-    } catch (_) {
-      await openDownloadPage(manifest);
-    }
-  }
-
-  Future<void> _installAndroidUpdate(AppUpdateManifest manifest) async {
-    final artifact = manifest.platforms.android;
-    if (artifact.downloadCandidates.isEmpty) {
-      await openDownloadPage(manifest);
-      return;
-    }
-    if (!await _platformBridge.canRequestPackageInstalls()) {
-      throw const UpdateInstallPermissionRequired();
-    }
-    final file = await _downloadArtifact(
-      artifact: artifact,
-      filename:
-          'awiki-me-${_tenantFileLabel()}-'
-          '${manifest.version}+${manifest.buildNumber}.apk',
-    );
-    if (_disposed) return;
-    await _platformBridge.installApk(file.path);
-  }
-
-  Future<void> _installWindowsUpdate(AppUpdateManifest manifest) async {
-    final artifact = manifest.platforms.windows;
-    if (artifact.downloadCandidates.isEmpty) {
-      await openDownloadPage(manifest);
-      return;
-    }
-    final file = await _downloadArtifact(
-      artifact: artifact,
-      filename:
-          'awiki-me-${_tenantFileLabel()}-'
-          '${manifest.version}+${manifest.buildNumber}.exe',
-    );
-    if (_disposed) return;
-    final process = await Process.start(
-      file.path,
-      const <String>[],
-      mode: ProcessStartMode.detached,
-    );
-    if (process.pid <= 0) {
-      throw const UpdateInstallFailed('Unable to start Windows installer.');
-    }
-  }
-
-  String _tenantFileLabel() {
-    return sha256.convert(utf8.encode(_tenantId)).toString().substring(0, 12);
-  }
-
-  Future<File> _downloadArtifact({
-    required AppUpdatePlatformManifest artifact,
-    required String filename,
-  }) async {
-    Object? lastError;
-    for (final rawUrl in artifact.downloadCandidates) {
-      File? outputFile;
-      try {
-        final uri = Uri.parse(rawUrl);
-        _validateNetworkUri(uri, label: 'update artifact');
-        final temporaryDirectory = await getTemporaryDirectory();
-        final updateDirectory = Directory('${temporaryDirectory.path}/updates');
-        await updateDirectory.create(recursive: true);
-        outputFile = File('${updateDirectory.path}/$filename');
-        if (await outputFile.exists()) await outputFile.delete();
-
-        final request = http.Request('GET', uri)..followRedirects = false;
-        final response = await _httpClient.send(request);
-        if (response.isRedirect ||
-            response.statusCode < 200 ||
-            response.statusCode >= 300) {
-          throw UpdateInstallFailed(
-            'Artifact download failed with status ${response.statusCode}',
-          );
-        }
-        final sink = outputFile.openWrite();
-        try {
-          await response.stream.pipe(sink);
-        } finally {
-          await sink.close();
-        }
-        if (await outputFile.length() != artifact.sizeBytes) {
-          throw const UpdateInstallFailed('Artifact size verification failed.');
-        }
-        final digest = (await sha256.bind(outputFile.openRead()).first)
-            .toString();
-        if (digest.toLowerCase() != artifact.sha256!.toLowerCase()) {
-          throw const UpdateInstallFailed(
-            'Artifact checksum verification failed.',
-          );
-        }
-        return outputFile;
-      } catch (error) {
-        lastError = error;
-        if (outputFile != null && await outputFile.exists()) {
-          await outputFile.delete();
-        }
-      }
-    }
-    throw UpdateInstallFailed('All artifact mirrors failed: $lastError');
   }
 
   Future<http.Response> _sendBounded(Uri uri) async {
@@ -547,8 +426,88 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
 Uri _buildPolicyUri(String backendBaseUrl, String? override) {
   if (override != null) return Uri.parse(override);
   final base = Uri.parse(backendBaseUrl);
-  return Uri.parse('${_origin(base)}/downloads/awiki-me/latest.json');
+  return Uri.parse(
+    '${_origin(base)}/user-service/v1/server-info?client_platform=app',
+  );
 }
+
+Map<String, Object?>? _appManifestFromResponse(Map<String, Object?> response) {
+  if (!response.containsKey('client_versions')) return response;
+  if (response['schema_version'] != 1) {
+    throw const FormatException('Invalid server-info response.');
+  }
+  final releases = _mapOrNull(response['client_versions']);
+  if (releases == null) return null;
+  final products = _mapOrNull(releases['products']);
+  final app = _mapOrNull(products?['app']);
+  if (releases['schema_version'] != 1 ||
+      releases['channel'] != 'stable' ||
+      app == null) {
+    throw const FormatException('Invalid App release policy.');
+  }
+  if (app['enabled'] == false) return null;
+  if (app['enabled'] != true) {
+    throw const FormatException('Invalid App release policy.');
+  }
+  final platforms = _mapOrNull(app['platforms']);
+  if (platforms == null) {
+    throw const FormatException('Invalid App platform policy.');
+  }
+  final currentPlatform = Platform.isAndroid
+      ? 'android'
+      : Platform.isMacOS
+      ? 'macos'
+      : Platform.isWindows
+      ? 'windows'
+      : null;
+  final current = currentPlatform == null
+      ? null
+      : _mapOrNull(platforms[currentPlatform]);
+  final downloadPage = current?['download_page_url']?.toString();
+  Map<String, Object?> platform(String name) {
+    final policy = _mapOrNull(platforms[name]);
+    if (policy == null || policy['enabled'] != true) {
+      return <String, Object?>{};
+    }
+    final artifact = _mapOrNull(policy['artifact']);
+    return <String, Object?>{
+      if (artifact != null) ...<String, Object?>{
+        'downloadUrl': artifact['url'],
+        'sha256': artifact['sha256'],
+        'sizeBytes': artifact['size_bytes'],
+        'mirrors': (artifact['mirrors'] as List<Object?>? ?? const <Object?>[])
+            .map((url) => <String, Object?>{'url': url})
+            .toList(growable: false),
+      },
+      if (policy['appcast_url'] != null) 'appcastUrl': policy['appcast_url'],
+      if (policy['minimum_supported_build_number'] != null)
+        'minSupportedBuildNumber': policy['minimum_supported_build_number'],
+    };
+  }
+
+  return <String, Object?>{
+    'product': 'awiki-me',
+    'channel': releases['channel'],
+    'policy_origin': releases['policy_origin'],
+    'policy_revision': releases['policy_revision'],
+    'version': app['recommended_version'],
+    'buildNumber': app['recommended_build_number'],
+    'minimum_supported_version': app['minimum_supported_version'],
+    'minimum_supported_build_number': app['minimum_supported_build_number'],
+    'published_at': releases['published_at'],
+    'release_notes_url': app['release_notes_url'],
+    'githubReleaseUrl': downloadPage ?? app['release_notes_url'],
+    'platforms': <String, Object?>{
+      'android': platform('android'),
+      'macos': platform('macos'),
+      'windows-x64': platform('windows'),
+    },
+  };
+}
+
+Map<String, Object?>? _mapOrNull(Object? value) => value is Map
+    ? value.map((key, item) => MapEntry(key.toString(), item))
+    : null;
 
 String _origin(Uri uri) => uri.origin;
 

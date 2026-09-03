@@ -731,8 +731,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(chinaTenantName), findsOneWidget);
-    expect(find.text(globalTenantName), findsOneWidget);
+    expect(find.text(primaryBuiltinTenantName), findsOneWidget);
+    expect(find.text(secondaryBuiltinTenantName), findsOneWidget);
     expect(find.text('官方租户'), findsNWidgets(2));
     for (final tenant in registry.tenants) {
       final card = find.byKey(Key('settings-tenant-option:${tenant.id}'));

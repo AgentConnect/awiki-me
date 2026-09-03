@@ -410,7 +410,6 @@ jobs:
           flutter build windows `
             --debug `
             --no-pub `
-            --dart-define=AWIKI_PRIMARY_TENANT_DOMAIN=awiki.ai `
             --dart-define=AWIKI_APP_SOURCE_REF=${{ github.sha }} `
             --dart-define=AWIKI_IM_CORE_SOURCE_REF=${{ env.WINDOWS_CORE_REF }}
 
@@ -421,7 +420,6 @@ jobs:
           flutter build windows `
             --release `
             --no-pub `
-            --dart-define=AWIKI_PRIMARY_TENANT_DOMAIN=awiki.ai `
             --dart-define=AWIKI_APP_SOURCE_REF=${{ github.sha }} `
             --dart-define=AWIKI_IM_CORE_SOURCE_REF=${{ env.WINDOWS_CORE_REF }}
 

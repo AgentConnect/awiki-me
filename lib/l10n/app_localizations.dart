@@ -869,7 +869,7 @@ abstract class AppLocalizations {
   /// No description provided for @tenantValidationBackendHttpsRequired.
   ///
   /// In zh, this message translates to:
-  /// **'公网租户地址必须使用 HTTPS，例如 https://anpclaw.com。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。'**
+  /// **'公网租户地址必须使用 HTTPS，例如 https://tenant.example。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。'**
   String get tenantValidationBackendHttpsRequired;
 
   /// No description provided for @tenantValidationDidHostInvalid.
@@ -2315,18 +2315,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'检查更新'**
   String get settingsCheckForUpdates;
-
-  /// No description provided for @settingsCheckChinaUpdateSource.
-  ///
-  /// In zh, this message translates to:
-  /// **'检查中国官方更新源'**
-  String get settingsCheckChinaUpdateSource;
-
-  /// No description provided for @settingsCheckGlobalUpdateSource.
-  ///
-  /// In zh, this message translates to:
-  /// **'检查全球官方更新源'**
-  String get settingsCheckGlobalUpdateSource;
 
   /// No description provided for @settingsViewReleaseNotes.
   ///
@@ -5763,7 +5751,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateRestrictedMessage.
   ///
   /// In zh, this message translates to:
-  /// **'{tenantName} 要求 AWiki Me {minimumVersion} 或更高版本，当前版本为 {currentVersion}。本地数据和租户管理仍可使用。'**
+  /// **'{tenantName} 要求 AWiki Me {minimumVersion} 或更高版本，当前版本为 {currentVersion}。请更新客户端后继续使用；你也可以切换租户。'**
   String updateRestrictedMessage(
     Object tenantName,
     Object minimumVersion,
@@ -5773,7 +5761,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateRestrictedInstall.
   ///
   /// In zh, this message translates to:
-  /// **'下载并安装更新'**
+  /// **'打开官方下载页面'**
   String get updateRestrictedInstall;
 
   /// No description provided for @updateRestrictedSwitchTenant.

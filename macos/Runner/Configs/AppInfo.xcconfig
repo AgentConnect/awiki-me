@@ -10,10 +10,6 @@ PRODUCT_NAME = AWikiMe
 // The application's bundle identifier
 PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikime
 
-// The compile-time built-in tenant. Packaging overrides this together with the
-// matching Dart define and records the value in the signed App Info.plist.
-AWIKI_PRIMARY_TENANT_DOMAIN = awiki.ai
-
 // Fallback CocoaPods paths for direct Xcode builds.
 //
 // Xcode resolves the [CP] file-list paths before it can print the manifest
@@ -27,10 +23,3 @@ PODS_PODFILE_DIR_PATH = ${SRCROOT}
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 ai.awiki. All rights reserved.
-
-// Sparkle feed configuration for auto-updates. The URL uses `$()` to prevent
-// xcconfig from treating `//` as a comment while still expanding to `https://`.
-// Do not inject an empty SUPublicEDKey into Info.plist; unsigned development
-// builds should omit that key until CI provides a real EdDSA public key for
-// signed update artifacts.
-SPARKLE_FEED_URL = https:/$()/agentconnect.github.io/awiki-me/updates/appcast.xml

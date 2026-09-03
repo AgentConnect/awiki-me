@@ -55,6 +55,7 @@ class PackageArtifactMetadata {
     required this.version,
     required this.buildNumber,
     required this.sourceRefs,
+    required this.tenantConfigSha256,
     this.runtimeFiles = const <String>[],
   });
 
@@ -64,6 +65,7 @@ class PackageArtifactMetadata {
   final String version;
   final int buildNumber;
   final PackageSourceRefs sourceRefs;
+  final String tenantConfigSha256;
   final List<String> runtimeFiles;
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -74,6 +76,7 @@ class PackageArtifactMetadata {
     'version': version,
     'buildNumber': buildNumber,
     'sourceRefs': sourceRefs.toJson(),
+    'tenantConfigSha256': tenantConfigSha256,
     if (runtimeFiles.isNotEmpty) 'runtimeFiles': runtimeFiles,
   };
 
@@ -90,6 +93,7 @@ class PackageArtifactMetadata {
       sourceRefs: PackageSourceRefs.fromJson(
         _requiredObject(json, 'sourceRefs'),
       ),
+      tenantConfigSha256: _requiredString(json, 'tenantConfigSha256'),
       runtimeFiles: _optionalStringList(json, 'runtimeFiles'),
     );
   }
@@ -135,6 +139,7 @@ class PackageArtifactMetadata {
       }
     }
     sourceRefs.validate();
+    _validateSha256(tenantConfigSha256, 'tenant config SHA-256');
   }
 }
 
@@ -144,6 +149,7 @@ class PackageManifestBuilder {
     required this.buildNumber,
     required this.requestId,
     required this.sourceRefs,
+    required this.tenantConfigSha256,
     required this.targets,
     required this.downloadBaseUrl,
     required this.downloadPageUrl,
@@ -157,6 +163,7 @@ class PackageManifestBuilder {
   final int buildNumber;
   final String requestId;
   final PackageSourceRefs sourceRefs;
+  final String tenantConfigSha256;
   final Set<String> targets;
   final String downloadBaseUrl;
   final String downloadPageUrl;
@@ -212,6 +219,11 @@ class PackageManifestBuilder {
       if (!metadata.sourceRefs.matches(sourceRefs)) {
         throw FormatException(
           '${metadata.target} sourceRefs do not match the aggregate request',
+        );
+      }
+      if (metadata.tenantConfigSha256 != tenantConfigSha256) {
+        throw FormatException(
+          '${metadata.target} tenant config does not match the aggregate request',
         );
       }
       if (metadataByTarget.containsKey(metadata.target)) {
@@ -290,6 +302,7 @@ class PackageManifestBuilder {
       'published_at': (publishedAt ?? DateTime.now()).toUtc().toIso8601String(),
       'publishedAt': (publishedAt ?? DateTime.now()).toUtc().toIso8601String(),
       'sourceRefs': sourceRefs.toJson(),
+      'tenantConfigSha256': tenantConfigSha256,
       'releaseNotesUrl': downloadPageUrl,
       'release_notes_url': downloadPageUrl,
       'githubReleaseUrl': downloadPageUrl,
@@ -333,6 +346,7 @@ class PackageManifestBuilder {
       throw const FormatException('requestId must be a UUID');
     }
     sourceRefs.validate();
+    _validateSha256(tenantConfigSha256, 'tenant config SHA-256');
     if (targets.isEmpty ||
         targets.any((target) => !packageTargetOrder.contains(target))) {
       throw const FormatException(
@@ -427,6 +441,7 @@ Future<void> main(List<String> args) async {
             version: version,
             buildNumber: buildNumber,
             sourceRefs: refs,
+            tenantConfigSha256: _option(options, '--tenant-config-sha256'),
             runtimeFiles: _parseOptionalList(options['--runtime-files']),
           ),
           output: File(_option(options, '--output')),
@@ -445,6 +460,7 @@ Future<void> main(List<String> args) async {
           buildNumber: buildNumber,
           requestId: _option(options, '--request-id'),
           sourceRefs: refs,
+          tenantConfigSha256: _option(options, '--tenant-config-sha256'),
           targets: targets,
           downloadBaseUrl: _option(options, '--download-base-url'),
           downloadPageUrl: _option(options, '--download-page-url'),
@@ -540,6 +556,12 @@ void _validateSha(String value, String label) {
   }
 }
 
+void _validateSha256(String value, String label) {
+  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(value)) {
+    throw FormatException('$label must be a lowercase 64-character SHA-256');
+  }
+}
+
 String _requiredSha(Map<String, Object?> json, String key) {
   final value = _requiredString(json, key);
   _validateSha(value, key);
@@ -595,7 +617,8 @@ Metadata:
   dart run tool/package_manifest.dart metadata \\
     --target TARGET --filename FILE --signing-state signed|unsigned \\
     --version VERSION --build-number NUMBER \\
-    --app-ref SHA --core-ref SHA --anp-ref SHA --output FILE
+    --app-ref SHA --core-ref SHA --anp-ref SHA \\
+    --tenant-config-sha256 SHA --output FILE
     [--runtime-files COMMA_SEPARATED_FILES]
 
 Aggregate:
@@ -603,6 +626,7 @@ Aggregate:
     --targets TARGETS --artifacts-root DIR --output-dir DIR \\
     --version VERSION --build-number NUMBER --request-id UUID \\
     --app-ref SHA --core-ref SHA --anp-ref SHA \\
+    --tenant-config-sha256 SHA \\
     --download-base-url URL --download-page-url URL \\
     [--published-at ISO8601]
 ''';

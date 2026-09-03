@@ -110,12 +110,12 @@ void main() {
 
       await container
           .read(appUpdateProvider.notifier)
-          .checkOfficialSource(AppOfficialUpdateSource.global);
+          .checkOfficialSource(AppOfficialUpdateSource.secondary);
 
       expect(container.read(appUpdateProvider), isA<AppUpdateState>());
       expect(
         container.read(appUpdateProvider).manualOfficialSource,
-        AppOfficialUpdateSource.global,
+        AppOfficialUpdateSource.secondary,
       );
       expect(container.read(appUpdateProvider).versionUnsupported, isFalse);
     });

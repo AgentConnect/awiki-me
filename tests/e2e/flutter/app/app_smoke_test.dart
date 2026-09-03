@@ -1283,10 +1283,10 @@ void main() {
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    const session = SessionIdentity(
-      did: 'did:wba:awiki.info:user:alice',
+    final session = SessionIdentity(
+      did: 'did:wba:$primaryTenantDomain:user:alice',
       credentialName: 'alice',
-      handle: 'alice.awiki.info',
+      handle: 'alice.$primaryTenantDomain',
       displayName: 'Alice',
       jwtToken: 'test-jwt',
     );
@@ -1316,8 +1316,8 @@ void main() {
             ...harness.providerOverrides,
             awikiEnvironmentConfigProvider.overrideWithValue(
               AwikiEnvironmentConfig(
-                baseUrl: 'https://awiki.info',
-                didDomain: 'awiki.info',
+                baseUrl: primaryTenantBaseUrl,
+                didDomain: primaryTenantDomain,
               ),
             ),
             agentImEnabledProvider.overrideWithValue(true),
@@ -2013,9 +2013,9 @@ class _SmokeSkillOnboardingPort implements SkillOnboardingPort {
       token: 'awsk1_smoke_secret_value',
       tokenId: 'agtok_smoke_$calls',
       controllerHandle: controllerHandle,
-      agentHandle: 'skill-smoke.awiki.info',
+      agentHandle: 'skill-smoke.$primaryTenantDomain',
       displayName: displayName,
-      serviceOrigin: 'https://awiki.info',
+      serviceOrigin: primaryTenantBaseUrl,
       expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
     );
   }

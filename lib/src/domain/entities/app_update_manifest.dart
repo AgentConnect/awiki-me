@@ -237,21 +237,70 @@ class AppUpdateManifest {
 }
 
 int compareAppVersions(String left, String right) {
-  List<int> parts(String value) =>
-      value.split('-').first.split('.').map(int.parse).toList(growable: false);
-  final a = parts(_validatedVersion(left));
-  final b = parts(_validatedVersion(right));
+  final a = _SemanticVersion.parse(left);
+  final b = _SemanticVersion.parse(right);
   for (var index = 0; index < 3; index += 1) {
-    final compared = a[index].compareTo(b[index]);
+    final compared = a.core[index].compareTo(b.core[index]);
     if (compared != 0) return compared;
   }
-  return 0;
+  if (a.prerelease == null && b.prerelease == null) return 0;
+  if (a.prerelease == null) return 1;
+  if (b.prerelease == null) return -1;
+  final shared = a.prerelease!.length < b.prerelease!.length
+      ? a.prerelease!.length
+      : b.prerelease!.length;
+  for (var index = 0; index < shared; index += 1) {
+    final leftPart = a.prerelease![index];
+    final rightPart = b.prerelease![index];
+    if (leftPart == rightPart) continue;
+    final leftNumber = int.tryParse(leftPart);
+    final rightNumber = int.tryParse(rightPart);
+    if (leftNumber != null && rightNumber != null) {
+      return leftNumber.compareTo(rightNumber);
+    }
+    if (leftNumber != null) return -1;
+    if (rightNumber != null) return 1;
+    return leftPart.compareTo(rightPart);
+  }
+  return a.prerelease!.length.compareTo(b.prerelease!.length);
+}
+
+class _SemanticVersion {
+  const _SemanticVersion(this.core, this.prerelease);
+
+  final List<int> core;
+  final List<String>? prerelease;
+
+  static _SemanticVersion parse(String value) {
+    final validated = _validatedVersion(value);
+    final withoutBuild = validated.split('+').first;
+    final dash = withoutBuild.indexOf('-');
+    final coreText = dash < 0 ? withoutBuild : withoutBuild.substring(0, dash);
+    final prerelease = dash < 0
+        ? null
+        : withoutBuild.substring(dash + 1).split('.');
+    return _SemanticVersion(
+      coreText.split('.').map(int.parse).toList(growable: false),
+      prerelease,
+    );
+  }
 }
 
 String _validatedVersion(String value) {
-  if (!RegExp(
-    r'^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$',
-  ).hasMatch(value)) {
+  final match = RegExp(
+    r'^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$',
+  ).firstMatch(value);
+  final prerelease = match?.group(4);
+  if (match == null ||
+      (prerelease != null &&
+          prerelease
+              .split('.')
+              .any(
+                (part) =>
+                    int.tryParse(part) != null &&
+                    part.length > 1 &&
+                    part.startsWith('0'),
+              ))) {
     throw FormatException('Invalid semantic version: $value');
   }
   return value;

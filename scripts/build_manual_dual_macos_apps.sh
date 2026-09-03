@@ -15,7 +15,8 @@ Environment:
   FLUTTER_BIN                         Flutter executable (default: flutter)
   AWIKI_IM_CORE_REPO_DIR              awiki-cli-rs2 checkout
                                       (default: ../awiki-cli-rs2)
-  AWIKI_PRIMARY_TENANT_DOMAIN         Shared tenant domain (default: awiki.info)
+  AWIKI_TENANT_CONFIG_PATH            Complete two-slot tenant JSON
+                                      (default: assets/config/builtin-tenants.default.json)
 USAGE
   exit 0
 fi
@@ -82,11 +83,20 @@ prepare_native_dependency() {
   }
 }
 
-tenant_domain="${AWIKI_PRIMARY_TENANT_DOMAIN:-awiki.info}"
-[[ "$tenant_domain" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$ ]] || {
-  echo "error: AWIKI_PRIMARY_TENANT_DOMAIN must be a lowercase hostname" >&2
+tenant_config_path="${AWIKI_TENANT_CONFIG_PATH:-$ROOT_DIR/assets/config/builtin-tenants.default.json}"
+[[ -f "$tenant_config_path" ]] || {
+  echo "error: AWIKI_TENANT_CONFIG_PATH is unavailable: $tenant_config_path" >&2
   exit 2
 }
+tenant_config_metadata="$(python3 - "$tenant_config_path" <<'PY'
+import base64, hashlib, pathlib, sys
+raw = pathlib.Path(sys.argv[1]).read_bytes()
+print(base64.b64encode(raw).decode("ascii"))
+print(hashlib.sha256(raw).hexdigest())
+PY
+)"
+tenant_config_base64="$(printf '%s\n' "$tenant_config_metadata" | sed -n '1p')"
+tenant_config_sha256="$(printf '%s\n' "$tenant_config_metadata" | sed -n '2p')"
 manual_root="$ROOT_DIR/build/manual-multi-device"
 admin_cache="$manual_root/admin-cache"
 joiner_cache="$manual_root/joiner-cache"
@@ -109,12 +119,10 @@ printf '{"build-dir":"%s","enable-macos-desktop":true}\n' "$joiner_build_rel" \
 cat > "$admin_cache/ManualAdmin.xcconfig" <<EOF
 AWIKI_MACOS_DEV_BUNDLE_ID = ai.awiki.awikime.dev
 AWIKI_APP_DISPLAY_NAME = AWikiMe (Development)
-AWIKI_PRIMARY_TENANT_DOMAIN = $tenant_domain
 EOF
 cat > "$joiner_cache/ManualJoiner.xcconfig" <<EOF
 AWIKI_MACOS_DEV_BUNDLE_ID = ai.awiki.awikime.dev.manual.joiner
 AWIKI_APP_DISPLAY_NAME = AWikiMe Joiner
-AWIKI_PRIMARY_TENANT_DOMAIN = $tenant_domain
 EOF
 
 lock_snapshot="$(mktemp)"
@@ -139,7 +147,8 @@ build_app() {
       --debug \
       --no-pub \
       --target=lib/main.dart \
-      --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$tenant_domain"
+      --dart-define="AWIKI_BUILTIN_TENANTS_BASE64=$tenant_config_base64" \
+      --dart-define="AWIKI_BUILTIN_TENANTS_SHA256=$tenant_config_sha256"
 }
 
 verify_native_intermediate() {
@@ -204,10 +213,6 @@ verify_app() {
     echo "error: unexpected bundle ID: $app" >&2
     exit 1
   }
-  [[ "$(/usr/libexec/PlistBuddy -c 'Print :AWikiPrimaryTenantDomain' "$app/Contents/Info.plist")" == "$tenant_domain" ]] || {
-    echo "error: tenant domain mismatch: $app" >&2
-    exit 1
-  }
   [[ "$(/usr/bin/lipo -archs "$app/Contents/MacOS/AWikiMe")" == "x86_64" ]] || {
     echo "error: App must be x86_64-only: $app" >&2
     exit 1
@@ -219,7 +224,7 @@ verify_app "$admin_app" 'ai.awiki.awikime.dev'
 verify_app "$joiner_app" 'ai.awiki.awikime.dev.manual.joiner'
 
 cat <<EOF
-Built two standalone Debug Apps for $tenant_domain:
+Built two standalone Debug Apps with tenant config $tenant_config_sha256:
   Admin:  $admin_app
   Joiner: $joiner_app
 

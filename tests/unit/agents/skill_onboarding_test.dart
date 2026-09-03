@@ -184,14 +184,14 @@ void main() {
   test(
     'controller keeps the instruction in memory and clears on session change',
     () async {
-      final port = _FakeSkillOnboardingPort();
+      final port = _FakeSkillOnboardingPort(domain: primaryTenantDomain);
       final gateway = FakeAwikiGateway()..serverInfo = _skillServerInfo();
       final container = ProviderContainer(
         overrides: <Override>[
           awikiEnvironmentConfigProvider.overrideWithValue(
             AwikiEnvironmentConfig(
-              baseUrl: 'https://awiki.info',
-              didDomain: 'awiki.info',
+              baseUrl: primaryTenantBaseUrl,
+              didDomain: primaryTenantDomain,
             ),
           ),
           onboardingSupportServiceProvider.overrideWithValue(
@@ -204,11 +204,11 @@ void main() {
       container
           .read(sessionProvider.notifier)
           .setSession(
-            const SessionIdentity(
-              did: 'did:wba:awiki.info:user:alice',
+            SessionIdentity(
+              did: 'did:wba:$primaryTenantDomain:user:alice',
               credentialName: 'alice',
               displayName: 'Alice',
-              handle: 'alice.awiki.info',
+              handle: 'alice.$primaryTenantDomain',
             ),
           );
 
@@ -217,8 +217,8 @@ void main() {
           .generate(displayName: 'Research Copilot');
 
       expect(port.calls, 1);
-      expect(port.controllerDid, 'did:wba:awiki.info:user:alice');
-      expect(port.controllerHandle, 'alice.awiki.info');
+      expect(port.controllerDid, 'did:wba:$primaryTenantDomain:user:alice');
+      expect(port.controllerHandle, 'alice.$primaryTenantDomain');
       expect(port.displayName, 'Research Copilot');
       expect(container.read(skillOnboardingProvider).instruction, isNotNull);
 
@@ -227,58 +227,55 @@ void main() {
     },
   );
 
-  test(
-    'controller issues a token for the advertised Singapore tenant',
-    () async {
-      final port = _FakeSkillOnboardingPort(domain: 'anpclaw.com');
-      final gateway = FakeAwikiGateway()..serverInfo = _skillServerInfo();
-      final container = ProviderContainer(
-        overrides: <Override>[
-          awikiEnvironmentConfigProvider.overrideWithValue(
-            AwikiEnvironmentConfig(
-              baseUrl: 'https://anpclaw.com',
-              didDomain: 'anpclaw.com',
-            ),
+  test('controller issues a token for the packaged primary tenant', () async {
+    final port = _FakeSkillOnboardingPort(domain: primaryTenantDomain);
+    final gateway = FakeAwikiGateway()..serverInfo = _skillServerInfo();
+    final container = ProviderContainer(
+      overrides: <Override>[
+        awikiEnvironmentConfigProvider.overrideWithValue(
+          AwikiEnvironmentConfig(
+            baseUrl: primaryTenantBaseUrl,
+            didDomain: primaryTenantDomain,
           ),
-          onboardingSupportServiceProvider.overrideWithValue(
-            FakeOnboardingSupportService(gateway),
+        ),
+        onboardingSupportServiceProvider.overrideWithValue(
+          FakeOnboardingSupportService(gateway),
+        ),
+        skillOnboardingPortProvider.overrideWithValue(port),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          SessionIdentity(
+            did: 'did:wba:$primaryTenantDomain:user:newhandle1:e1_controller',
+            credentialName: 'newhandle1',
+            displayName: 'newhandle1',
+            handle: 'newhandle1.$primaryTenantDomain',
           ),
-          skillOnboardingPortProvider.overrideWithValue(port),
-        ],
-      );
-      addTearDown(container.dispose);
-      container
-          .read(sessionProvider.notifier)
-          .setSession(
-            const SessionIdentity(
-              did: 'did:wba:anpclaw.com:user:newhandle1:e1_controller',
-              credentialName: 'newhandle1',
-              displayName: 'newhandle1',
-              handle: 'newhandle1.anpclaw.com',
-            ),
-          );
+        );
 
-      await container
-          .read(skillOnboardingProvider.notifier)
-          .generate(displayName: 'Research Copilot');
+    await container
+        .read(skillOnboardingProvider.notifier)
+        .generate(displayName: 'Research Copilot');
 
-      expect(container.read(skillOnboardingProvider).error, isNull);
-      expect(container.read(skillOnboardingProvider).instruction, isNotNull);
-    },
-  );
+    expect(container.read(skillOnboardingProvider).error, isNull);
+    expect(container.read(skillOnboardingProvider).instruction, isNotNull);
+  });
 
   test(
     'controller rejects a server without display-name binding before issue',
     () async {
-      final port = _FakeSkillOnboardingPort();
+      final port = _FakeSkillOnboardingPort(domain: primaryTenantDomain);
       final gateway = FakeAwikiGateway()
         ..serverInfo = _skillServerInfo(displayNameBinding: false);
       final container = ProviderContainer(
         overrides: <Override>[
           awikiEnvironmentConfigProvider.overrideWithValue(
             AwikiEnvironmentConfig(
-              baseUrl: 'https://awiki.info',
-              didDomain: 'awiki.info',
+              baseUrl: primaryTenantBaseUrl,
+              didDomain: primaryTenantDomain,
             ),
           ),
           onboardingSupportServiceProvider.overrideWithValue(
@@ -291,11 +288,11 @@ void main() {
       container
           .read(sessionProvider.notifier)
           .setSession(
-            const SessionIdentity(
-              did: 'did:wba:awiki.info:user:alice',
+            SessionIdentity(
+              did: 'did:wba:$primaryTenantDomain:user:alice',
               credentialName: 'alice',
               displayName: 'Alice',
-              handle: 'alice.awiki.info',
+              handle: 'alice.$primaryTenantDomain',
             ),
           );
 
@@ -358,13 +355,13 @@ void main() {
   test(
     'controller rejects a trusted tenant that has not enabled Skill',
     () async {
-      final port = _FakeSkillOnboardingPort(domain: 'anpclaw.com');
+      final port = _FakeSkillOnboardingPort(domain: primaryTenantDomain);
       final gateway = FakeAwikiGateway()
         ..serverInfo = _skillServerInfo(enabled: false);
       final container = ProviderContainer(
         overrides: <Override>[
           awikiEnvironmentConfigProvider.overrideWithValue(
-            AwikiEnvironmentConfig(baseUrl: 'https://anpclaw.com'),
+            AwikiEnvironmentConfig(baseUrl: primaryTenantBaseUrl),
           ),
           onboardingSupportServiceProvider.overrideWithValue(
             FakeOnboardingSupportService(gateway),
@@ -376,11 +373,11 @@ void main() {
       container
           .read(sessionProvider.notifier)
           .setSession(
-            const SessionIdentity(
-              did: 'did:wba:anpclaw.com:user:alice',
+            SessionIdentity(
+              did: 'did:wba:$primaryTenantDomain:user:alice',
               credentialName: 'alice',
               displayName: 'Alice',
-              handle: 'alice.anpclaw.com',
+              handle: 'alice.$primaryTenantDomain',
             ),
           );
 
@@ -398,13 +395,13 @@ void main() {
   );
 
   test('session changes cancel an in-flight capability request', () async {
-    final port = _FakeSkillOnboardingPort(domain: 'anpclaw.com');
+    final port = _FakeSkillOnboardingPort(domain: primaryTenantDomain);
     final capability = Completer<OnboardingServerInfo>();
     final gateway = FakeAwikiGateway()..serverInfoCompleter = capability;
     final container = ProviderContainer(
       overrides: <Override>[
         awikiEnvironmentConfigProvider.overrideWithValue(
-          AwikiEnvironmentConfig(baseUrl: 'https://anpclaw.com'),
+          AwikiEnvironmentConfig(baseUrl: primaryTenantBaseUrl),
         ),
         onboardingSupportServiceProvider.overrideWithValue(
           FakeOnboardingSupportService(gateway),
@@ -416,11 +413,11 @@ void main() {
     container
         .read(sessionProvider.notifier)
         .setSession(
-          const SessionIdentity(
-            did: 'did:wba:anpclaw.com:user:alice',
+          SessionIdentity(
+            did: 'did:wba:$primaryTenantDomain:user:alice',
             credentialName: 'alice',
             displayName: 'Alice',
-            handle: 'alice.anpclaw.com',
+            handle: 'alice.$primaryTenantDomain',
           ),
         );
 
@@ -439,7 +436,7 @@ void main() {
 
   test('a server-side rollout race maps to unsupported tenant', () async {
     final port = _FakeSkillOnboardingPort(
-      domain: 'anpclaw.com',
+      domain: primaryTenantDomain,
       error: const AwikiOnboardingUtilityError(
         rpcCode: -32001,
         message: 'disabled',
@@ -452,7 +449,7 @@ void main() {
     final container = ProviderContainer(
       overrides: <Override>[
         awikiEnvironmentConfigProvider.overrideWithValue(
-          AwikiEnvironmentConfig(baseUrl: 'https://anpclaw.com'),
+          AwikiEnvironmentConfig(baseUrl: primaryTenantBaseUrl),
         ),
         onboardingSupportServiceProvider.overrideWithValue(
           FakeOnboardingSupportService(gateway),
@@ -464,11 +461,11 @@ void main() {
     container
         .read(sessionProvider.notifier)
         .setSession(
-          const SessionIdentity(
-            did: 'did:wba:anpclaw.com:user:alice',
+          SessionIdentity(
+            did: 'did:wba:$primaryTenantDomain:user:alice',
             credentialName: 'alice',
             displayName: 'Alice',
-            handle: 'alice.anpclaw.com',
+            handle: 'alice.$primaryTenantDomain',
           ),
         );
 
@@ -483,12 +480,12 @@ void main() {
   });
 
   test('regeneration limit preserves the current usable instruction', () async {
-    final port = _FakeSkillOnboardingPort(domain: 'anpclaw.com');
+    final port = _FakeSkillOnboardingPort(domain: primaryTenantDomain);
     final gateway = FakeAwikiGateway()..serverInfo = _skillServerInfo();
     final container = ProviderContainer(
       overrides: <Override>[
         awikiEnvironmentConfigProvider.overrideWithValue(
-          AwikiEnvironmentConfig(baseUrl: 'https://anpclaw.com'),
+          AwikiEnvironmentConfig(baseUrl: primaryTenantBaseUrl),
         ),
         onboardingSupportServiceProvider.overrideWithValue(
           FakeOnboardingSupportService(gateway),
@@ -500,11 +497,11 @@ void main() {
     container
         .read(sessionProvider.notifier)
         .setSession(
-          const SessionIdentity(
-            did: 'did:wba:anpclaw.com:user:alice',
+          SessionIdentity(
+            did: 'did:wba:$primaryTenantDomain:user:alice',
             credentialName: 'alice',
             displayName: 'Alice',
-            handle: 'alice.anpclaw.com',
+            handle: 'alice.$primaryTenantDomain',
           ),
         );
 

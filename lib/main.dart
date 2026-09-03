@@ -2,12 +2,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'src/core/performance_logger.dart';
+import 'src/application/tenant/builtin_tenant_config.dart';
 import 'src/presentation/shared/awiki_me_design.dart';
 import 'src/app/tenant_aware_awiki_me_app.dart';
 
 Future<void> main() async {
   final startupWatch = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeBuiltinTenantCatalog();
   AwikiPerformanceLogger.registerFrameTimings();
   AwikiPerformanceLogger.log(
     'main.start',

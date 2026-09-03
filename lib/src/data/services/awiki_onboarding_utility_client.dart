@@ -151,7 +151,8 @@ class AwikiOnboardingUtilityClient {
 
   static const String handleRpcEndpoint = '/user-service/v1/handle/rpc';
   static const String profileRpcEndpoint = '/user-service/v1/did/profile/rpc';
-  static const String serverInfoEndpoint = '/user-service/v1/server-info';
+  static const String serverInfoEndpoint =
+      '/user-service/v1/server-info?client_platform=app';
   static const String emailSendEndpoint = '/user-service/v1/auth/email-send';
   static const String emailStatusEndpoint =
       '/user-service/v1/auth/email-status';

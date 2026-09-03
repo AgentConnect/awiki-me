@@ -2,12 +2,13 @@
 // [OUTPUT]: Normalized runtime endpoints, independent capability gates, and default-plain product policy.
 // [POS]: Application configuration boundary shared by bootstrap and feature providers.
 
-const String primaryTenantDomainEnvironmentKey = 'AWIKI_PRIMARY_TENANT_DOMAIN';
-const String primaryTenantDomain = String.fromEnvironment(
-  primaryTenantDomainEnvironmentKey,
-  defaultValue: 'awiki.me',
-);
-const String primaryTenantBaseUrl = 'https://$primaryTenantDomain';
+import '../tenant/builtin_tenant_config.dart';
+
+String get primaryTenantDomain =>
+    builtinTenantCatalog.forSlot(builtinTenantCatalog.defaultSlot).didHost;
+String get primaryTenantBaseUrl => builtinTenantCatalog
+    .forSlot(builtinTenantCatalog.defaultSlot)
+    .backendOrigin;
 const bool defaultMultiDeviceDeviceRevokeEnabled = bool.fromEnvironment(
   'AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED',
   defaultValue: true,
@@ -30,12 +31,9 @@ const bool defaultMessageSyncV2ReadEnabled = bool.fromEnvironment(
   'AWIKI_SYNC_V2_READ',
   defaultValue: true,
 );
-const Set<String> agentDaemonTenantDomainAllowlist = <String>{
-  'awiki.me',
-  'awiki.ai',
-  'agent-connect.cn',
-  'anpclaw.com',
-  'awiki.info',
+Set<String> get agentDaemonTenantDomainAllowlist => <String>{
+  builtinTenantCatalog.primary.didHost,
+  builtinTenantCatalog.secondary.didHost,
 };
 
 class AwikiEnvironmentConfig {
@@ -89,7 +87,10 @@ class AwikiEnvironmentConfig {
     );
     this.updateManifestUrl = _normalizeBaseUrl(
       updateManifestUrl,
-      fallback: _joinUrl(normalizedBase, '/downloads/awiki-me/latest.json'),
+      fallback: _joinUrl(
+        normalizedBase,
+        '/user-service/v1/server-info?client_platform=app',
+      ),
     );
     this.releasesUrl = _normalizeBaseUrl(
       releasesUrl,
