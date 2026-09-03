@@ -488,7 +488,7 @@ class FakeUpdateService implements UpdateService {
   Object? installError;
   bool ignored = false;
   AppOfficialUpdateSource preferredOfficialSource =
-      AppOfficialUpdateSource.china;
+      AppOfficialUpdateSource.primary;
 
   @override
   Future<AppUpdateCheckResult> checkForUpdates({required bool force}) async {

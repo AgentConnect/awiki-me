@@ -444,7 +444,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tenantValidationBackendHttpsRequired =>
-      'Public tenant addresses must use HTTPS. For example: https://anpclaw.com. HTTP is allowed only for local development addresses such as localhost and 127.0.0.1.';
+      'Public tenant addresses must use HTTPS. For example: https://tenant.example. HTTP is allowed only for local development addresses such as localhost and 127.0.0.1.';
 
   @override
   String get tenantValidationDidHostInvalid =>
@@ -1234,14 +1234,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsCheckForUpdates => 'Check for updates';
-
-  @override
-  String get settingsCheckChinaUpdateSource =>
-      'Check the China official update source';
-
-  @override
-  String get settingsCheckGlobalUpdateSource =>
-      'Check the Global official update source';
 
   @override
   String get settingsViewReleaseNotes => 'View release notes';
@@ -3234,11 +3226,11 @@ class AppLocalizationsEn extends AppLocalizations {
     Object minimumVersion,
     Object currentVersion,
   ) {
-    return '$tenantName requires AWiki Me $minimumVersion or later. You are using $currentVersion. Local data and tenant controls remain available.';
+    return '$tenantName requires AWiki Me $minimumVersion or later. You are using $currentVersion. Update the app to continue, or switch tenants.';
   }
 
   @override
-  String get updateRestrictedInstall => 'Download and install update';
+  String get updateRestrictedInstall => 'Open official download page';
 
   @override
   String get updateRestrictedSwitchTenant => 'Switch tenant';

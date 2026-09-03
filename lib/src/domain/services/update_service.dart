@@ -33,7 +33,7 @@ class AppUpdateCheckResult {
   }
 }
 
-enum AppOfficialUpdateSource { china, global }
+enum AppOfficialUpdateSource { primary, secondary }
 
 abstract interface class DisposableUpdateService {
   void dispose();

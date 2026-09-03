@@ -424,7 +424,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get tenantValidationBackendHttpsRequired =>
-      '公网租户地址必须使用 HTTPS，例如 https://anpclaw.com。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。';
+      '公网租户地址必须使用 HTTPS，例如 https://tenant.example。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。';
 
   @override
   String get tenantValidationDidHostInvalid =>
@@ -1173,12 +1173,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsCheckForUpdates => '检查更新';
-
-  @override
-  String get settingsCheckChinaUpdateSource => '检查中国官方更新源';
-
-  @override
-  String get settingsCheckGlobalUpdateSource => '检查全球官方更新源';
 
   @override
   String get settingsViewReleaseNotes => '查看更新日志';
@@ -3050,11 +3044,11 @@ class AppLocalizationsZh extends AppLocalizations {
     Object minimumVersion,
     Object currentVersion,
   ) {
-    return '$tenantName 要求 AWiki Me $minimumVersion 或更高版本，当前版本为 $currentVersion。本地数据和租户管理仍可使用。';
+    return '$tenantName 要求 AWiki Me $minimumVersion 或更高版本，当前版本为 $currentVersion。请更新客户端后继续使用；你也可以切换租户。';
   }
 
   @override
-  String get updateRestrictedInstall => '下载并安装更新';
+  String get updateRestrictedInstall => '打开官方下载页面';
 
   @override
   String get updateRestrictedSwitchTenant => '切换租户';

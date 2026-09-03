@@ -15,10 +15,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('default update URLs follow the default AWiki environment', () {
-    const baseUrl = primaryTenantBaseUrl;
+    final baseUrl = primaryTenantBaseUrl;
     expect(
       kDefaultUpdateManifestUrl,
-      '$baseUrl/downloads/awiki-me/latest.json',
+      '$baseUrl/user-service/v1/server-info?client_platform=app',
     );
     expect(kDefaultReleasesUrl, '$baseUrl/#download');
   });
@@ -185,6 +185,35 @@ void main() {
     expect(result.versionUnsupported, isFalse);
   });
 
+  test('custom tenant 404 clears an earlier minimum-version cache', () async {
+    final service = _service(
+      storage: _MemoryKeyValueStore(),
+      httpClient: _QueueHttpClient(<_HttpFixture>[
+        _HttpFixture.json(
+          'https://updates.example/latest.json',
+          _manifestJson(minimumVersion: '2.0.0'),
+        ),
+        _HttpFixture.text(
+          'https://updates.example/latest.json',
+          404,
+          'missing',
+        ),
+      ]),
+      officialTenant: false,
+    );
+    expect(
+      (await service.checkForUpdates(force: true)).versionUnsupported,
+      isTrue,
+    );
+
+    final result = await service.checkForUpdates(force: true);
+
+    expect(result.policyUnavailable, isTrue);
+    expect(result.versionUnsupported, isFalse);
+    expect(result.latestManifest, isNull);
+    expect(result.usedCache, isFalse);
+  });
+
   test(
     'custom tenant can explicitly check either isolated official source',
     () async {
@@ -193,11 +222,10 @@ void main() {
         storage: storage,
         httpClient: _QueueHttpClient(<_HttpFixture>[
           _HttpFixture.json(
-            'https://awiki.ai/downloads/awiki-me/latest.json',
-            _manifestJson(
+            'https://awiki.ai/user-service/v1/server-info?client_platform=app',
+            _serverInfoJson(
               origin: 'https://awiki.ai',
               minimumVersion: '2.0.0',
-              macosAppcastUrl: null,
             ),
           ),
         ]),
@@ -205,17 +233,47 @@ void main() {
       );
 
       final result = await service.checkOfficialSource(
-        AppOfficialUpdateSource.global,
+        AppOfficialUpdateSource.secondary,
       );
 
       expect(result.latestManifest?.policyOrigin, 'https://awiki.ai');
       expect(result.versionUnsupported, isFalse);
       expect(
         await service.loadPreferredOfficialSource(),
-        AppOfficialUpdateSource.global,
+        AppOfficialUpdateSource.secondary,
       );
     },
   );
+
+  test('unified server-info maps the current platform download page', () async {
+    final storage = _MemoryKeyValueStore();
+    final client = _QueueHttpClient(<_HttpFixture>[
+      _HttpFixture.json(
+        'https://updates.example/user-service/v1/server-info?client_platform=app',
+        _serverInfoJson(),
+      ),
+    ]);
+    final service = AppUpdateService(
+      storage: storage,
+      tenantId: 'tenant-test',
+      backendBaseUrl: 'https://updates.example/backend',
+      httpClient: client,
+      platformBridge: _FakePlatformUpdateBridge(),
+      packageInfoLoader: () async => PackageInfo(
+        appName: 'AWiki Me',
+        packageName: 'ai.awiki.awikime',
+        version: '1.0.0',
+        buildNumber: '10',
+      ),
+      urlLauncher: (_) async => true,
+    );
+
+    final result = await service.checkForUpdates(force: true);
+
+    expect(result.latestManifest?.version, '1.2.0');
+    expect(result.latestManifest?.githubReleaseUrl, isNotEmpty);
+    expect(result.hasUpdate, isTrue);
+  });
 
   test(
     'ignored recommendation state is isolated by tenant and version',
@@ -384,6 +442,51 @@ Map<String, Object?> _manifestJson({
         'sha256':
             'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
         'sizeBytes': 789,
+      },
+    },
+  };
+}
+
+Map<String, Object?> _serverInfoJson({
+  String origin = 'https://updates.example',
+  String minimumVersion = '1.0.0',
+}) {
+  Map<String, Object?> platform(String name) => <String, Object?>{
+    'enabled': true,
+    'download_page_url': '$origin/downloads/$name',
+    'artifact': <String, Object?>{
+      'url': '$origin/downloads/awiki-me.$name',
+      'mirrors': <String>[],
+      'sha256':
+          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      'size_bytes': 123,
+    },
+  };
+  return <String, Object?>{
+    'schema_version': 1,
+    'client_versions': <String, Object?>{
+      'schema_version': 1,
+      'channel': 'stable',
+      'policy_origin': origin,
+      'policy_revision': 4,
+      'published_at': '2026-06-15T01:02:03.000Z',
+      'products': <String, Object?>{
+        'app': <String, Object?>{
+          'enabled': true,
+          'recommended_version': '1.2.0',
+          'recommended_build_number': 12,
+          'minimum_supported_version': minimumVersion,
+          'minimum_supported_build_number': 1,
+          'minimum_release': '0903',
+          'release_notes_url': '$origin/releases/1.2.0',
+          'platforms': <String, Object?>{
+            'android': platform('android'),
+            'macos': platform('macos'),
+            'windows': platform('windows'),
+          },
+        },
+        'cli': <String, Object?>{'enabled': false},
+        'dsh': <String, Object?>{'enabled': false},
       },
     },
   };

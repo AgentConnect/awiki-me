@@ -38,12 +38,12 @@ void main() {
       expect(registry.visibleTenants, hasLength(2));
       expect(tenant.backendBaseUrl, primaryTenantBaseUrl);
       expect(tenant.didHost, primaryTenantDomain);
-      expect(tenant.officialKey, AppTenantOfficialKey.china);
+      expect(tenant.officialKey, AppTenantOfficialKey.primary);
       expect(
         registry.visibleTenants.map((item) => item.officialKey),
         <AppTenantOfficialKey>[
-          AppTenantOfficialKey.china,
-          AppTenantOfficialKey.global,
+          AppTenantOfficialKey.primary,
+          AppTenantOfficialKey.secondary,
         ],
       );
       expect(tenant.tenantProfileId.value, isNot(tenant.storageScopeId.value));
@@ -229,7 +229,7 @@ void main() {
         appStateRoot: root.path,
         secretRepository: secrets,
         initialTenantFactory: () =>
-            officialTenantProfile(AppTenantOfficialKey.global),
+            officialTenantProfile(AppTenantOfficialKey.secondary),
       );
       final original = await originalStore.loadRegistry();
       final originalTenant = original.activeTenant;
@@ -257,10 +257,10 @@ void main() {
       legacyTenants.removeWhere(
         (item) =>
             (item! as Map<String, Object?>)['official_key'] ==
-            AppTenantOfficialKey.china.wireName,
+            AppTenantOfficialKey.primary.wireName,
       );
       final legacyGlobal = legacyTenants.single as Map<String, Object?>;
-      legacyGlobal.remove('official_key');
+      legacyGlobal['official_key'] = 'global';
       await registryFile.writeAsString(jsonEncode(legacy), flush: true);
 
       final upgradedStore = AppTenantStore(
@@ -279,7 +279,7 @@ void main() {
         originalTenant.storageScopeId,
       );
       expect(reopened.activeTenant.backendBaseUrl, 'https://awiki.ai');
-      expect(reopened.activeTenant.officialKey, AppTenantOfficialKey.global);
+      expect(reopened.activeTenant.officialKey, AppTenantOfficialKey.secondary);
       expect(reopened.visibleTenants, hasLength(2));
       expect(await imCoreSentinel.readAsBytes(), <int>[1, 2, 3, 4]);
       expect(await productSentinel.readAsBytes(), <int>[5, 6, 7, 8]);
@@ -297,7 +297,7 @@ void main() {
     () async {
       final original = await store.loadRegistry();
       final global = original.tenants.singleWhere(
-        (item) => item.officialKey == AppTenantOfficialKey.global,
+        (item) => item.officialKey == AppTenantOfficialKey.secondary,
       );
       final registryFile = File(
         p.join(
@@ -324,20 +324,70 @@ void main() {
 
       final migrated = await store.loadRegistry();
       final promoted = migrated.tenants.singleWhere(
-        (item) => item.officialKey == AppTenantOfficialKey.global,
+        (item) => item.officialKey == AppTenantOfficialKey.secondary,
       );
 
       expect(promoted.tenantProfileId, global.tenantProfileId);
       expect(promoted.storageScopeId, global.storageScopeId);
       expect(promoted.kind, AppTenantKind.builtInAwiki);
-      expect(promoted.name, globalTenantName);
+      expect(promoted.name, secondaryBuiltinTenantName);
       expect(
         migrated.tenants.where(
-          (item) => item.backendBaseUrl == globalTenantBackendBaseUrl,
+          (item) => item.backendBaseUrl == secondaryBuiltinTenantBackendBaseUrl,
         ),
         hasLength(1),
       );
       expect((await store.loadRegistry()).toJson(), migrated.toJson());
+    },
+  );
+
+  test(
+    'changed package slot origin preserves the old active scope as custom',
+    () async {
+      final original = await store.loadRegistry();
+      final originalTenant = original.activeTenant;
+      final registryFile = File(
+        p.join(
+          root.path,
+          'support',
+          'awiki-me',
+          'control',
+          'tenant-registry.json',
+        ),
+      );
+      final previousPackageRegistry = original.toJson();
+      final tenants = previousPackageRegistry['tenants']! as List<Object?>;
+      final oldPrimary =
+          tenants.singleWhere(
+                (item) =>
+                    (item! as Map<String, Object?>)['tenant_profile_id'] ==
+                    originalTenant.id,
+              )!
+              as Map<String, Object?>;
+      oldPrimary['backend_base_url'] = 'https://previous-primary.example';
+      oldPrimary['did_host'] = 'previous-primary.example';
+      await registryFile.writeAsString(
+        jsonEncode(previousPackageRegistry),
+        flush: true,
+      );
+
+      final migrated = await store.loadRegistry();
+      final preserved = migrated.activeTenant;
+      final replacement = migrated.tenants.singleWhere(
+        (item) => item.officialKey == AppTenantOfficialKey.primary,
+      );
+
+      expect(preserved.tenantProfileId, originalTenant.tenantProfileId);
+      expect(preserved.storageScopeId, originalTenant.storageScopeId);
+      expect(preserved.kind, AppTenantKind.custom);
+      expect(preserved.officialKey, isNull);
+      expect(preserved.backendBaseUrl, 'https://previous-primary.example');
+      expect(
+        replacement.tenantProfileId,
+        isNot(originalTenant.tenantProfileId),
+      );
+      expect(replacement.storageScopeId, isNot(originalTenant.storageScopeId));
+      expect(replacement.backendBaseUrl, primaryBuiltinTenantBackendBaseUrl);
     },
   );
 

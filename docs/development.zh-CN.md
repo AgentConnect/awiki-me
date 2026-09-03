@@ -104,14 +104,15 @@ tests/e2e/             E2E runner 与平台实现
 
 普通开发使用 App 内租户切换器。不要为每个服务 URL 增加新的 Flutter flag。
 
-唯一的内置主租户编译覆盖：
+如需测试另一组内置租户，复制默认 JSON、完整替换两个槽位，然后将该文件
+传给统一打包入口：
 
 ```bash
-flutter build macos --debug \
-  --dart-define=AWIKI_PRIMARY_TENANT_DOMAIN=awiki.info
+scripts/package_app.sh --tenant-config /absolute/path/to/test-tenants.json
 ```
 
-该值只影响新 tenant registry 的初始内置租户，不是运行时选择器，也不会重写已有 scope。
+覆盖文件会被校验，并将 JSON 与其 SHA-256 一起嵌入所有平台制品。它不是
+运行时选择器；已有数据 Scope 继续绑定原 Origin，端点替换会创建新的内置 Scope。
 
 ## 8. 打包
 

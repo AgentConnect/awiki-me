@@ -137,25 +137,27 @@ class SettingsPage extends ConsumerWidget {
           if (!activeTenant.isOfficialTenant) ...<Widget>[
             const AppSectionDivider(),
             AppListTile(
-              key: const Key('settings-check-china-update-source-row'),
-              title: l10n.settingsCheckChinaUpdateSource,
+              key: const Key('settings-check-primary-update-source-row'),
+              title:
+                  '${l10n.settingsCheckForUpdates} · $primaryBuiltinTenantName',
               leading: leading(const _SettingsIcon(icon: CupertinoIcons.globe)),
               onTap: updateState.status == AppUpdateStatus.checking
                   ? null
                   : () => ref
                         .read(appUpdateProvider.notifier)
-                        .checkOfficialSource(AppOfficialUpdateSource.china),
+                        .checkOfficialSource(AppOfficialUpdateSource.primary),
             ),
             const AppSectionDivider(),
             AppListTile(
-              key: const Key('settings-check-global-update-source-row'),
-              title: l10n.settingsCheckGlobalUpdateSource,
+              key: const Key('settings-check-secondary-update-source-row'),
+              title:
+                  '${l10n.settingsCheckForUpdates} · $secondaryBuiltinTenantName',
               leading: leading(const _SettingsIcon(icon: CupertinoIcons.globe)),
               onTap: updateState.status == AppUpdateStatus.checking
                   ? null
                   : () => ref
                         .read(appUpdateProvider.notifier)
-                        .checkOfficialSource(AppOfficialUpdateSource.global),
+                        .checkOfficialSource(AppOfficialUpdateSource.secondary),
             ),
           ],
           const AppSectionDivider(),
@@ -349,27 +351,31 @@ class SettingsPage extends ConsumerWidget {
             ),
             if (!activeTenant.isOfficialTenant)
               _QuietSettingsRow(
-                key: const Key('settings-check-china-update-source-row'),
+                key: const Key('settings-check-primary-update-source-row'),
                 icon: CupertinoIcons.globe,
-                title: l10n.settingsCheckChinaUpdateSource,
+                title:
+                    '${l10n.settingsCheckForUpdates} · $primaryBuiltinTenantName',
                 height: optionRowHeight,
                 onTap: updateState.status == AppUpdateStatus.checking
                     ? null
                     : () => ref
                           .read(appUpdateProvider.notifier)
-                          .checkOfficialSource(AppOfficialUpdateSource.china),
+                          .checkOfficialSource(AppOfficialUpdateSource.primary),
               ),
             if (!activeTenant.isOfficialTenant)
               _QuietSettingsRow(
-                key: const Key('settings-check-global-update-source-row'),
+                key: const Key('settings-check-secondary-update-source-row'),
                 icon: CupertinoIcons.globe,
-                title: l10n.settingsCheckGlobalUpdateSource,
+                title:
+                    '${l10n.settingsCheckForUpdates} · $secondaryBuiltinTenantName',
                 height: optionRowHeight,
                 onTap: updateState.status == AppUpdateStatus.checking
                     ? null
                     : () => ref
                           .read(appUpdateProvider.notifier)
-                          .checkOfficialSource(AppOfficialUpdateSource.global),
+                          .checkOfficialSource(
+                            AppOfficialUpdateSource.secondary,
+                          ),
               ),
             _QuietSettingsRow(
               key: const Key('settings-language-row'),

@@ -135,8 +135,8 @@ awiki_sign_macos_distribution_app() (
   macho_list="$work_dir/macho.list"
   bundle_list="$work_dir/bundle.list"
 
-  # Sign every executable Mach-O first. This includes helper binaries such as
-  # Sparkle's Autoupdate that are nested inside a framework but are not bundles.
+  # Sign every executable Mach-O first, including helper binaries nested inside
+  # a framework that are not bundles themselves.
   find "$app/Contents" -type f -perm -111 -print0 > "$macho_list"
   while IFS= read -r -d '' item; do
     if file -b "$item" | grep -Fq 'Mach-O'; then

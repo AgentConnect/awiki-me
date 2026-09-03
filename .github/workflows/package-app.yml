@@ -32,8 +32,12 @@ on:
         description: Positive App build number already committed to pubspec.yaml
         required: true
         type: string
-      primary_tenant_domain:
-        description: Built-in primary tenant hostname
+      tenant_config_base64:
+        description: Complete UTF-8 two-slot tenant config encoded as base64
+        required: true
+        type: string
+      tenant_config_sha256:
+        description: SHA-256 of the decoded tenant config
         required: true
         type: string
       download_base_url:
@@ -142,12 +146,13 @@ jobs:
           REQUEST_ID: ${{ inputs.request_id }}
           VERSION: ${{ inputs.version }}
           BUILD_NUMBER: ${{ inputs.build_number }}
-          PRIMARY_TENANT_DOMAIN: ${{ inputs.primary_tenant_domain }}
+          TENANT_CONFIG_BASE64: ${{ inputs.tenant_config_base64 }}
+          TENANT_CONFIG_SHA256: ${{ inputs.tenant_config_sha256 }}
           DOWNLOAD_BASE_URL: ${{ inputs.download_base_url }}
           DOWNLOAD_PAGE_URL: ${{ inputs.download_page_url }}
         run: |
           python3 - <<'PY'
-          import os, re, urllib.parse, uuid
+          import base64, hashlib, json, os, re, urllib.parse, uuid
 
           for name in ("APP_REF", "CORE_REF", "ANP_REF"):
               if not re.fullmatch(r"[0-9a-f]{40}", os.environ[name]):
@@ -160,11 +165,19 @@ jobs:
               raise SystemExit("version must use semantic version format")
           if not re.fullmatch(r"[1-9]\d*", os.environ["BUILD_NUMBER"]):
               raise SystemExit("build_number must be positive")
-          if not re.fullmatch(
-              r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*",
-              os.environ["PRIMARY_TENANT_DOMAIN"],
-          ):
-              raise SystemExit("primary_tenant_domain must be a lowercase hostname")
+          try:
+              tenant_raw = base64.b64decode(os.environ["TENANT_CONFIG_BASE64"], validate=True)
+          except ValueError as error:
+              raise SystemExit("tenant_config_base64 is invalid") from error
+          if len(tenant_raw) > 16 * 1024:
+              raise SystemExit("tenant config exceeds 16 KiB")
+          if not re.fullmatch(r"[0-9a-f]{64}", os.environ["TENANT_CONFIG_SHA256"]):
+              raise SystemExit("tenant_config_sha256 must be lowercase SHA-256")
+          if hashlib.sha256(tenant_raw).hexdigest() != os.environ["TENANT_CONFIG_SHA256"]:
+              raise SystemExit("tenant config SHA-256 mismatch")
+          tenant_config = json.loads(tenant_raw)
+          if tenant_config.get("schema_version") != 1 or tenant_config.get("default_slot") not in ("primary", "secondary"):
+              raise SystemExit("invalid tenant config schema")
           for name in ("DOWNLOAD_BASE_URL", "DOWNLOAD_PAGE_URL"):
               parsed = urllib.parse.urlparse(os.environ[name])
               if parsed.scheme not in ("http", "https") or not parsed.netloc:
@@ -452,7 +465,8 @@ jobs:
             --app-ref "${{ inputs.app_ref }}" \
             --core-ref "${{ inputs.core_ref }}" \
             --anp-ref "${{ inputs.anp_ref }}" \
-            --primary-tenant-domain "${{ inputs.primary_tenant_domain }}" \
+            --tenant-config-base64 "${{ inputs.tenant_config_base64 }}" \
+            --tenant-config-sha256 "${{ inputs.tenant_config_sha256 }}" \
             --android-startup-smoke-test "$ANDROID_STARTUP_SMOKE_TEST" \
             --core-dir ../awiki-cli-rs2 \
             --anp-dir ../anp/anp \
@@ -470,7 +484,8 @@ jobs:
             -AppRef '${{ inputs.app_ref }}' `
             -CoreRef '${{ inputs.core_ref }}' `
             -AnpRef '${{ inputs.anp_ref }}' `
-            -PrimaryTenantDomain '${{ inputs.primary_tenant_domain }}' `
+            -TenantConfigBase64 '${{ inputs.tenant_config_base64 }}' `
+            -TenantConfigSha256 '${{ inputs.tenant_config_sha256 }}' `
             -CoreDir ../awiki-cli-rs2 `
             -AnpDir ../anp/anp `
             -OutputDir "../package-output/${{ matrix.target }}"
@@ -570,6 +585,7 @@ jobs:
           APP_REF: ${{ inputs.app_ref }}
           CORE_REF: ${{ inputs.core_ref }}
           ANP_REF: ${{ inputs.anp_ref }}
+          TENANT_CONFIG_SHA256: ${{ inputs.tenant_config_sha256 }}
           DOWNLOAD_BASE_URL: ${{ inputs.download_base_url }}
           DOWNLOAD_PAGE_URL: ${{ inputs.download_page_url }}
         run: |
@@ -583,6 +599,7 @@ jobs:
             --app-ref "$APP_REF" \
             --core-ref "$CORE_REF" \
             --anp-ref "$ANP_REF" \
+            --tenant-config-sha256 "$TENANT_CONFIG_SHA256" \
             --download-base-url "$DOWNLOAD_BASE_URL" \
             --download-page-url "$DOWNLOAD_PAGE_URL"
 

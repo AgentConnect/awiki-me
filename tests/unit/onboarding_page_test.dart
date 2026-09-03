@@ -1046,7 +1046,7 @@ void main() {
     expect(tenantActions.createTenantCalls, 0);
     expect(
       find.text(
-        '公网租户地址必须使用 HTTPS，例如 https://anpclaw.com。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。',
+        '公网租户地址必须使用 HTTPS，例如 https://tenant.example。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。',
       ),
       findsOneWidget,
     );

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_services.dart';
@@ -51,19 +49,6 @@ class AppUpdateState {
       latestManifest!.buildNumber > currentVersion!.buildNumber;
 
   bool get supportsDirectInstall {
-    if (!hasUpdate) {
-      return false;
-    }
-    if (Platform.isAndroid) {
-      return latestManifest!.platforms.android.downloadUrl?.isNotEmpty == true;
-    }
-    if (Platform.isMacOS) {
-      return latestManifest!.platforms.macos.appcastUrl?.isNotEmpty == true ||
-          latestManifest!.platforms.macos.downloadUrl?.isNotEmpty == true;
-    }
-    if (Platform.isWindows) {
-      return latestManifest!.platforms.windows.downloadUrl?.isNotEmpty == true;
-    }
     return false;
   }
 
@@ -284,19 +269,12 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
       return;
     }
     state = state.copyWith(
-      status: Platform.isAndroid
-          ? AppUpdateStatus.downloading
-          : AppUpdateStatus.installing,
+      status: AppUpdateStatus.installing,
       clearErrorMessage: true,
     );
     try {
       await ref.read(updateServiceProvider).installUpdate(manifest);
       state = state.copyWith(status: AppUpdateStatus.installing);
-      if (Platform.isAndroid) {
-        ref
-            .read(uiFeedbackProvider.notifier)
-            .showInfo(AppMessage.updateReadyToInstall());
-      }
     } on UpdateInstallPermissionRequired {
       state = state.copyWith(status: AppUpdateStatus.updateAvailable);
       await ref.read(updateServiceProvider).openInstallPermissionSettings();

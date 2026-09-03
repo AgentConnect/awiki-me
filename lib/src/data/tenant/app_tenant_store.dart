@@ -360,7 +360,10 @@ class AppTenantStore {
         return tenant;
       }
       changed = true;
-      return tenant.copyWith(clearOfficialKey: true);
+      return tenant.copyWith(
+        kind: AppTenantKind.custom,
+        clearOfficialKey: true,
+      );
     }).toList();
     final updatedAt = DateTime.now().toUtc().toIso8601String();
     for (final key in AppTenantOfficialKey.values) {
@@ -668,10 +671,10 @@ List<AppTenantProfile> _sort(List<AppTenantProfile> tenants) {
     final aOfficial = a.officialKey;
     final bOfficial = b.officialKey;
     if (aOfficial != bOfficial) {
-      if (aOfficial == AppTenantOfficialKey.china) return -1;
-      if (bOfficial == AppTenantOfficialKey.china) return 1;
-      if (aOfficial == AppTenantOfficialKey.global) return -1;
-      if (bOfficial == AppTenantOfficialKey.global) return 1;
+      if (aOfficial == AppTenantOfficialKey.primary) return -1;
+      if (bOfficial == AppTenantOfficialKey.primary) return 1;
+      if (aOfficial == AppTenantOfficialKey.secondary) return -1;
+      if (bOfficial == AppTenantOfficialKey.secondary) return 1;
     }
     if (a.isPrimaryTenant != b.isPrimaryTenant) {
       return a.isPrimaryTenant ? -1 : 1;
@@ -693,7 +696,7 @@ AppTenantProfile _normalizeOfficialProfile(AppTenantProfile tenant) {
       );
     }
   }
-  return tenant.copyWith(clearOfficialKey: true);
+  return tenant.copyWith(kind: AppTenantKind.custom, clearOfficialKey: true);
 }
 
 bool _sameEndpoint(AppTenantProfile left, AppTenantProfile right) =>

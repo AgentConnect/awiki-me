@@ -3,17 +3,23 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config/awiki_environment_config.dart';
+import 'builtin_tenant_config.dart';
 
-const int officialTenantCatalogVersion = 1;
-const String chinaTenantName = 'AWiki 中国（上海）';
-const String chinaTenantBackendBaseUrl = 'https://awiki.me';
-const String chinaTenantDidHost = 'awiki.me';
-const String globalTenantName = 'AWiki 全球（硅谷）';
-const String globalTenantBackendBaseUrl = 'https://awiki.ai';
-const String globalTenantDidHost = 'awiki.ai';
-const String primaryTenantName = chinaTenantName;
-const String primaryTenantBackendBaseUrl = primaryTenantBaseUrl;
-const String primaryTenantDidHost = primaryTenantDomain;
+const int officialTenantCatalogVersion = 2;
+String get primaryBuiltinTenantName => builtinTenantCatalog.primary.displayName;
+String get primaryBuiltinTenantBackendBaseUrl =>
+    builtinTenantCatalog.primary.backendOrigin;
+String get primaryBuiltinTenantDidHost => builtinTenantCatalog.primary.didHost;
+String get secondaryBuiltinTenantName =>
+    builtinTenantCatalog.secondary.displayName;
+String get secondaryBuiltinTenantBackendBaseUrl =>
+    builtinTenantCatalog.secondary.backendOrigin;
+String get secondaryBuiltinTenantDidHost =>
+    builtinTenantCatalog.secondary.didHost;
+String get primaryTenantName =>
+    builtinTenantCatalog.forSlot(builtinTenantCatalog.defaultSlot).displayName;
+String get primaryTenantBackendBaseUrl => primaryTenantBaseUrl;
+String get primaryTenantDidHost => primaryTenantDomain;
 
 final RegExp _canonicalUuidV4 = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -65,18 +71,19 @@ enum AppTenantKind {
 }
 
 enum AppTenantOfficialKey {
-  china('china'),
-  global('global');
+  primary('builtin-primary'),
+  secondary('builtin-secondary');
 
   const AppTenantOfficialKey(this.wireName);
   final String wireName;
 
   static AppTenantOfficialKey? parseOptional(Object? value) {
     if (value == null) return null;
-    return values.firstWhere(
-      (item) => item.wireName == value,
-      orElse: () => throw const FormatException('tenant_official_key_invalid'),
-    );
+    return switch (value) {
+      'builtin-primary' || 'china' => AppTenantOfficialKey.primary,
+      'builtin-secondary' || 'global' => AppTenantOfficialKey.secondary,
+      _ => throw const FormatException('tenant_official_key_invalid'),
+    };
   }
 }
 
@@ -363,15 +370,13 @@ final appTenantActionsProvider = Provider<AppTenantActions>(
 );
 
 AppTenantProfile defaultTenantProfile({DateTime? now}) {
-  const officialKey = primaryTenantDomain == globalTenantDidHost
-      ? AppTenantOfficialKey.global
-      : primaryTenantDomain == chinaTenantDidHost
-      ? AppTenantOfficialKey.china
-      : null;
+  final officialKey =
+      builtinTenantCatalog.defaultSlot == BuiltinTenantSlot.primary
+      ? AppTenantOfficialKey.primary
+      : AppTenantOfficialKey.secondary;
   final name = switch (officialKey) {
-    AppTenantOfficialKey.china => chinaTenantName,
-    AppTenantOfficialKey.global => globalTenantName,
-    null => 'AWiki',
+    AppTenantOfficialKey.primary => primaryBuiltinTenantName,
+    AppTenantOfficialKey.secondary => secondaryBuiltinTenantName,
   };
   final timestamp = (now ?? DateTime.now()).toUtc().toIso8601String();
   return AppTenantProfile(
@@ -398,15 +403,15 @@ AppTenantProfile officialTenantProfile(
     storageScopeId: StorageScopeId.generate(),
     kind: AppTenantKind.builtInAwiki,
     officialKey: key,
-    name: key == AppTenantOfficialKey.china
-        ? chinaTenantName
-        : globalTenantName,
-    backendBaseUrl: key == AppTenantOfficialKey.china
-        ? chinaTenantBackendBaseUrl
-        : globalTenantBackendBaseUrl,
-    didHost: key == AppTenantOfficialKey.china
-        ? chinaTenantDidHost
-        : globalTenantDidHost,
+    name: key == AppTenantOfficialKey.primary
+        ? primaryBuiltinTenantName
+        : secondaryBuiltinTenantName,
+    backendBaseUrl: key == AppTenantOfficialKey.primary
+        ? primaryBuiltinTenantBackendBaseUrl
+        : secondaryBuiltinTenantBackendBaseUrl,
+    didHost: key == AppTenantOfficialKey.primary
+        ? primaryBuiltinTenantDidHost
+        : secondaryBuiltinTenantDidHost,
     lifecycle: AppTenantLifecycle.active,
     createdAt: timestamp,
     updatedAt: timestamp,

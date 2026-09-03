@@ -540,16 +540,9 @@ class _AppUpdateRestrictedPage extends ConsumerWidget {
                   ),
                   CupertinoButton(
                     key: const Key('restricted-update-switch-tenant'),
-                    onPressed: () => showTenantManagementDialog(context),
+                    onPressed: () =>
+                        showTenantManagementDialog(context, switchOnly: true),
                     child: Text(context.l10n.updateRestrictedSwitchTenant),
-                  ),
-                  CupertinoButton(
-                    key: const Key('restricted-update-settings'),
-                    onPressed: () => AppNavigator.push<void>(
-                      context,
-                      (_) => const SettingsPage(),
-                    ),
-                    child: Text(context.l10n.updateRestrictedSettings),
                   ),
                 ],
               ),

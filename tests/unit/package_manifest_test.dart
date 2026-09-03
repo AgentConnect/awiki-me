@@ -158,6 +158,7 @@ PackageManifestBuilder _builder(Set<String> targets) => PackageManifestBuilder(
   buildNumber: 42,
   requestId: _requestId,
   sourceRefs: _refs,
+  tenantConfigSha256: 'd' * 64,
   targets: targets,
   downloadBaseUrl: 'https://awiki.ai/downloads/awiki-me',
   downloadPageUrl: 'https://awiki.ai/#download',
@@ -188,6 +189,7 @@ Future<void> _writeFixture(
       version: '1.2.3',
       buildNumber: 42,
       sourceRefs: refs,
+      tenantConfigSha256: 'd' * 64,
       runtimeFiles: target == 'windows-x64'
           ? const <String>[
               'AWikiMe.exe',
