@@ -2630,7 +2630,10 @@ Future<AccountStateSyncCoordinatorState> _requestAppPairAccountState({
   if (!allowPartialFailure &&
       (state.status != AccountStateSyncCoordinatorStatus.ready ||
           state.domainErrors.isNotEmpty)) {
-    fail('The Account State coordinator failed safely for $reason.');
+    fail(
+      'The Account State coordinator failed safely for $reason '
+      '(${_appPairAccountStateFailureSummary(state)}).',
+    );
   }
   if (allowPartialFailure && state.domainErrors.isEmpty) {
     fail('The Account State failure injection was not observed for $reason.');
@@ -2642,6 +2645,32 @@ Future<AccountStateSyncCoordinatorState> _requestAppPairAccountState({
     }
   }
   return state;
+}
+
+String _appPairAccountStateFailureSummary(
+  AccountStateSyncCoordinatorState state,
+) {
+  final errors =
+      state.domainErrors.entries
+          .map((entry) {
+            final error = entry.value;
+            final detail = switch (error) {
+              AccountStateSyncProtocolException value => value.code,
+              AwikiOnboardingUtilityError value =>
+                'http_${value.statusCode ?? 0}_rpc_${value.rpcCode ?? 0}',
+              _ => error.runtimeType.toString(),
+            };
+            return '${entry.key.name}:$detail';
+          })
+          .toList(growable: false)
+        ..sort();
+  final unmet =
+      state.unmetMinimumVersions.keys
+          .map((domain) => domain.name)
+          .toList(growable: false)
+        ..sort();
+  return 'status=${state.status.name}, errors=${errors.join(',')}, '
+      'unmet=${unmet.join(',')}';
 }
 
 bool _isWireDecimal(String value) =>

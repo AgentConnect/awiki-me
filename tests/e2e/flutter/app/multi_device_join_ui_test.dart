@@ -20,6 +20,7 @@ import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/e2e_semantics.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/account_state_sync_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';

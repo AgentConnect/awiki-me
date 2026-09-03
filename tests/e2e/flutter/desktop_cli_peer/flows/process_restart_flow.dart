@@ -294,16 +294,17 @@ void runDesktopCliPeerProcessRestartPhaseB() {
     expect(find.byType(AppShell), findsOneWidget);
     final robot = _DesktopAppRobot(tester);
     await robot.awaitRestoredSession(restored);
-    final startupPatchObservation = robot.container
-        .read(conversationListProvider.notifier)
-        .patchStartupObservation;
-    if (startupPatchObservation == null ||
-        !startupPatchObservation.provesSubscribeBeforeFirstReliableSync) {
-      fail(
-        'Phase B did not prove Patch subscription and reset before startup '
-        'reliable sync.',
-      );
-    }
+    await robot.pumpUntil(
+      description:
+          'Phase B Patch subscription and reset before startup reliable sync',
+      condition: () =>
+          robot.container
+              .read(conversationListProvider.notifier)
+              .patchStartupObservation
+              ?.provesSubscribeBeforeFirstReliableSync ==
+          true,
+      timeout: const Duration(seconds: 30),
+    );
 
     await _waitForUiConversationUnread(
       robot: robot,

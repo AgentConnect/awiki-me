@@ -1087,10 +1087,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   ) {
     final status = next.valueOrNull;
     final previousStatus = previous?.valueOrNull;
+    final isForeground =
+        ref.read(appLifecycleProvider) == AppLifecycleState.resumed;
     if (status == RealtimeConnectionStatus.reconnecting ||
         status == RealtimeConnectionStatus.failed ||
         status == RealtimeConnectionStatus.disconnected) {
-      if (!_isLoggingOut && !_syncAuthRevoked) {
+      if (isForeground && !_isLoggingOut && !_syncAuthRevoked) {
         _scheduleReliableSync(
           'realtime_connection_interrupted',
           immediate: true,
@@ -1099,7 +1101,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     if (status == RealtimeConnectionStatus.failed ||
         status == RealtimeConnectionStatus.disconnected) {
-      if (_isLoggingOut || _syncAuthRevoked) {
+      if (!isForeground || _isLoggingOut || _syncAuthRevoked) {
         return;
       }
       final session = ref.read(sessionProvider).session;
@@ -1109,6 +1111,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       return;
     }
     if (status != RealtimeConnectionStatus.connected) {
+      return;
+    }
+    if (!isForeground) {
       return;
     }
     if (previousStatus != RealtimeConnectionStatus.reconnecting &&

@@ -1119,6 +1119,28 @@ void main() {
       },
     );
 
+    test(
+      'background realtime stop does not schedule interruption sync',
+      () async {
+        await activateBound();
+        await pumpEventQueue();
+        messageSyncService.syncReasons.clear();
+
+        container
+            .read(appLifecycleProvider.notifier)
+            .setLifecycle(AppLifecycleState.paused);
+        realtimeGateway.setStatus(RealtimeConnectionStatus.disconnected);
+        await pumpEventQueue();
+
+        expect(
+          messageSyncService.syncReasons,
+          isNot(contains('realtime_connection_interrupted')),
+        );
+        expect(container.read(sessionProvider).session, isNotNull);
+        expect(container.read(appRuntimeProvider).authRevoked, isFalse);
+      },
+    );
+
     test('系统通知变化独立刷新可信 Join 收件箱，不依赖消息同步成功', () async {
       await activate();
       await pumpEventQueue();
