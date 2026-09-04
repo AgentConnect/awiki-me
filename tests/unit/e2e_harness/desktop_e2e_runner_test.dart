@@ -2952,6 +2952,7 @@ cliPeer:
         'AGENT-NOTIFY-SMOKE-E2E-001',
         'AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001',
         'SMOKE-E2E-001',
+        'TENANT-SWITCH-SMOKE-E2E-001',
         'NATIVE-E2E-001',
       ]);
     });

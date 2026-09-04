@@ -9,6 +9,7 @@ import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/thread_message_patch.dart';
 import 'package:awiki_me/src/application/ports/skill_onboarding_port.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
+import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/skill_onboarding_instruction.dart';
@@ -33,13 +34,24 @@ import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/startup_splash.dart';
+import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
 import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 import 'package:flutter/services.dart'
     show JSONMessageCodec, LogicalKeyboardKey, SystemChannels;
 import 'package:flutter/widgets.dart'
-    show AppLifecycleState, Container, Key, ListView, MediaQuery, Size, Text;
+    show
+        AppLifecycleState,
+        Container,
+        Key,
+        ListView,
+        MediaQuery,
+        Size,
+        StateSetter,
+        StatefulBuilder,
+        Text,
+        Widget;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -323,6 +335,91 @@ void main() {
       ],
     );
   });
+
+  testWidgets(
+    'official tenant switch survives an app rebuild and stays immutable',
+    (tester) async {
+      final initialRegistry = defaultTenantRegistry(
+        now: DateTime.utc(2026, 9, 4),
+      );
+      final actions = test_support.FakeAppTenantActions(
+        initialRegistry: initialRegistry,
+      );
+      late StateSetter refreshApp;
+      actions.onChanged = () => refreshApp(() {});
+
+      Widget buildApp() {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            refreshApp = setState;
+            final harness = createFakeAwikiMeAppHarness(
+              tenantRegistry: actions.registry,
+              tenantActions: actions,
+            );
+            return AwikiMeApp(
+              bootstrap: harness.bootstrap,
+              providerOverrides: harness.providerOverrides,
+            );
+          },
+        );
+      }
+
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('onboarding-tenant-switcher-button')),
+      );
+      await tester.pumpAndSettle();
+
+      final secondary = initialRegistry.tenants.singleWhere(
+        (tenant) => tenant.officialKey == AppTenantOfficialKey.secondary,
+      );
+      final secondaryRow = find.byKey(
+        Key('settings-tenant-option:${secondary.id}'),
+      );
+      expect(find.byType(TenantManagementDialog), findsOneWidget);
+      expect(
+        find.descendant(
+          of: secondaryRow,
+          matching: find.byKey(Key('tenant-primary-managed:${secondary.id}')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: secondaryRow, matching: find.byTooltip('编辑租户')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: secondaryRow, matching: find.byTooltip('删除')),
+        findsNothing,
+      );
+
+      await tester.tap(
+        find.descendant(of: secondaryRow, matching: find.byTooltip('使用')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(actions.useTenantCalls, 1);
+      expect(actions.registry.activeTenant.id, secondary.id);
+      expect(find.byType(TenantManagementDialog), findsNothing);
+
+      await tester.pumpWidget(Container());
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      expect(actions.registry.activeTenant.id, secondary.id);
+      expect(find.text(secondary.name), findsWidgets);
+      await E2eCaseAttestationWriter.markPassed(
+        'TENANT-SWITCH-SMOKE-E2E-001',
+        phases: const <String>[
+          'official_tenant_visible_and_immutable',
+          'official_tenant_switched_through_product_ui',
+          'active_tenant_preserved_after_app_rebuild',
+        ],
+      );
+    },
+  );
 
   testWidgets('AwikiMeApp starts authenticated shell', (tester) async {
     const session = SessionIdentity(

@@ -1451,6 +1451,7 @@ class _MacOnboardingFooter extends StatelessWidget {
           ),
           const Spacer(),
           _MacFooterButton(
+            key: const Key('onboarding-tenant-switcher-button'),
             icon: CupertinoIcons.globe,
             label: tenant.name,
             tooltip: context.l10n.tenantSwitcherLabel,

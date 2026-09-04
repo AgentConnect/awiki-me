@@ -291,8 +291,8 @@ class AppBootstrap {
         }
       },
     );
-    await runtime.openAndValidate();
     try {
+      await runtime.openAndValidate();
       final productLocalStore = AwikiProductLocalStoreSqlite(
         databasePath: storageScopeLayout.productDatabasePath,
       );
@@ -520,6 +520,7 @@ class AppBootstrap {
         httpClient: remotePushHttpClientForTesting,
       );
     } on Object {
+      userServiceHttpClient.close();
       await runtime.dispose();
       rethrow;
     }
@@ -558,12 +559,14 @@ class AppBootstrap {
         client: remotePushClient,
         installations: pushInstallations,
       ),
+      httpClient: pushHttpClient,
     );
   }
 
   AppBootstrap _copyWithRemotePush({
     required RemotePushClient client,
     required RemotePushInstallationCoordinator coordinator,
+    required AwikiOnboardingUtilityHttpClient httpClient,
   }) {
     return AppBootstrap(
       environment: environment,
@@ -601,7 +604,7 @@ class AppBootstrap {
       productLocalStore: productLocalStore,
       peerIdentityService: peerIdentityService,
       attachmentCacheService: attachmentCacheService,
-      userServiceHttpClient: userServiceHttpClient,
+      userServiceHttpClient: userServiceHttpClient ?? httpClient,
       storageScopeLayout: storageScopeLayout,
       remotePushClient: client,
       remotePushInstallationCoordinator: coordinator,
@@ -645,6 +648,10 @@ class AppBootstrap {
       if (realtime != null) {
         await disposeStep(realtime.stop);
       }
+    }
+    final httpClient = userServiceHttpClient;
+    if (httpClient != null) {
+      await disposeStep(() async => httpClient.close());
     }
     final localStore = productLocalStore;
     if (localStore is AwikiProductLocalStoreSqlite) {

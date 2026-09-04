@@ -31,9 +31,15 @@ const bool defaultMessageSyncV2ReadEnabled = bool.fromEnvironment(
   'AWIKI_SYNC_V2_READ',
   defaultValue: true,
 );
+const Set<String> agentDaemonCompatibilityTenantDomains = <String>{
+  'agent-connect.cn',
+  'awiki.info',
+  'anpclaw.com',
+};
 Set<String> get agentDaemonTenantDomainAllowlist => <String>{
   builtinTenantCatalog.primary.didHost,
   builtinTenantCatalog.secondary.didHost,
+  ...agentDaemonCompatibilityTenantDomains,
 };
 
 class AwikiEnvironmentConfig {

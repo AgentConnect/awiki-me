@@ -53,11 +53,23 @@ void main() {
     }
   });
 
-  test('non-bundled realms do not gain Agent and Daemon capabilities', () {
-    final config = AwikiEnvironmentConfig(baseUrl: 'https://agent-connect.cn');
+  test('compatibility realms retain Agent and Daemon capabilities', () {
+    expect(
+      agentDaemonTenantDomainAllowlist,
+      containsAll(<String>{
+        'awiki.ai',
+        'awiki.me',
+        'agent-connect.cn',
+        'awiki.info',
+        'anpclaw.com',
+      }),
+    );
+    for (final domain in agentDaemonCompatibilityTenantDomains) {
+      final config = AwikiEnvironmentConfig(baseUrl: 'https://$domain');
 
-    expect(config.didDomain, 'agent-connect.cn');
-    expect(config.agentImEnabled, isFalse);
+      expect(config.didDomain, domain);
+      expect(config.agentImEnabled, isTrue, reason: domain);
+    }
   });
 
   test('Agent and Daemon realm allowlist fails closed', () {

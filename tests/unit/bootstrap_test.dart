@@ -188,6 +188,31 @@ void main() {
   );
 
   test(
+    'bootstrap closes its utility client without closing a borrowed transport',
+    () async {
+      final transport = _CloseTrackingHttpClient();
+      final utilityClient = AwikiOnboardingUtilityHttpClient(
+        baseUrl: 'https://awiki.ai',
+        httpClient: transport,
+      );
+      final gateway = FakeAwikiGateway();
+      final bootstrap = _buildBootstrap(
+        gateway: gateway,
+        userServiceHttpClient: utilityClient,
+      );
+
+      await bootstrap.dispose();
+      await bootstrap.dispose();
+
+      expect(transport.closeCalls, 0);
+      expect(
+        () => utilityClient.get(Uri.parse('https://awiki.ai/health')),
+        throwsStateError,
+      );
+    },
+  );
+
+  test(
     'macOS debug/profile account store avoids unsigned Keychain writes',
     () async {
       if (!Platform.isMacOS) {
@@ -249,6 +274,7 @@ AppBootstrap _buildBootstrap({
   RealtimeApplicationService? realtimeApplicationService,
   RemotePushClient? remotePushClient,
   RemotePushInstallationCoordinator? remotePushInstallationCoordinator,
+  AwikiOnboardingUtilityHttpClient? userServiceHttpClient,
   Duration remotePushDisposeTimeout = const Duration(seconds: 3),
 }) {
   return AppBootstrap(
@@ -260,10 +286,25 @@ AppBootstrap _buildBootstrap({
     updateService: FakeUpdateService(),
     appSessionService: appSessionService,
     realtimeApplicationService: realtimeApplicationService,
+    userServiceHttpClient: userServiceHttpClient,
     remotePushClient: remotePushClient,
     remotePushInstallationCoordinator: remotePushInstallationCoordinator,
     remotePushDisposeTimeout: remotePushDisposeTimeout,
   );
+}
+
+final class _CloseTrackingHttpClient extends http.BaseClient {
+  int closeCalls = 0;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    return http.StreamedResponse(const Stream<List<int>>.empty(), 200);
+  }
+
+  @override
+  void close() {
+    closeCalls += 1;
+  }
 }
 
 final class _FakeRemotePushClient implements RemotePushClient {
