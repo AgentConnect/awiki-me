@@ -287,10 +287,10 @@ void main() {
       await tester.pump();
       expect(harness.gateway.lastRegistrationOtpPhone, '13800138000');
       expect(harness.gateway.lastRegistrationOtpHandle, 'smoke-otp');
-      expect(harness.gateway.lastRegistrationOtpDomain, 'awiki.ai');
+      expect(harness.gateway.lastRegistrationOtpDomain, primaryTenantDomain);
       expect(
         harness.gateway.lastRegistrationOtpFullHandle,
-        'smoke-otp.awiki.ai',
+        'smoke-otp.$primaryTenantDomain',
       );
     } else {
       expect(
