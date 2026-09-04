@@ -492,6 +492,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         profileMarkdown: profileMarkdown,
       );
     }
+    if (!mounted) {
+      return;
+    }
     if (ref.read(onboardingProvider).isPhoneOtpConsumed) {
       otpController.clear();
     }

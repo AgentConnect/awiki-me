@@ -626,6 +626,12 @@ abstract class AppLocalizations {
   /// **'这个验证码已过期或已被使用，请重新发送验证码后再试。'**
   String get registrationVerificationUnavailable;
 
+  /// No description provided for @registrationCommittedActivationPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'账号已创建并安全保存在本机，但登录初始化尚未完成。请在本地账号列表中重新登录，无需重新获取验证码。'**
+  String get registrationCommittedActivationPending;
+
   /// No description provided for @registrationRecoveryStateInvalid.
   ///
   /// In zh, this message translates to:

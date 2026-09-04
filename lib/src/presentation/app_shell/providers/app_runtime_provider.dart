@@ -414,7 +414,10 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   /// Activates one local identity and reports whether the authenticated App
   /// projection committed. Recovery uses this result as a navigation gate.
-  Future<bool> loginWithLocalCredentialAndConfirm(String credentialName) async {
+  Future<bool> loginWithLocalCredentialAndConfirm(
+    String credentialName, {
+    bool reportFailure = true,
+  }) async {
     final currentSession = ref.read(sessionProvider).session;
     if (currentSession != null) {
       ref.read(sessionProvider.notifier).upsertLocalCredential(currentSession);
@@ -437,7 +440,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       onFailure: () async {
         restoredLease = await _cancelOrAbortSessionTransition(transition);
       },
-      shouldReportFailure: () => sessions.isLatestSessionTransition(transition),
+      shouldReportFailure: () =>
+          reportFailure && sessions.isLatestSessionTransition(transition),
     );
     final committed = session;
     if (!loginCompleted || committed == null) {
@@ -446,6 +450,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         await _runBusy(
           () => _activateSession(predecessor),
           enforceTimeout: false,
+          shouldReportFailure: () => reportFailure,
         );
       }
       return false;
@@ -453,6 +458,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     final activationCompleted = await _runBusy(
       () => activateCommittedSession(committed),
       enforceTimeout: false,
+      shouldReportFailure: () => reportFailure,
     );
     if (!activationCompleted || !mounted) {
       return false;
