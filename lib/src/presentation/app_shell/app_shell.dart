@@ -532,6 +532,15 @@ class _AppUpdateRestrictedPage extends ConsumerWidget {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
+                  CupertinoButton(
+                    key: const Key('restricted-update-refresh'),
+                    onPressed: state.status == AppUpdateStatus.checking
+                        ? null
+                        : () => ref
+                              .read(appUpdateProvider.notifier)
+                              .checkForUpdates(force: true),
+                    child: Text(context.l10n.commonRetry),
+                  ),
                   CupertinoButton.filled(
                     key: const Key('restricted-update-install'),
                     onPressed: () =>

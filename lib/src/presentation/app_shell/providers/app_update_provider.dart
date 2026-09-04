@@ -43,10 +43,19 @@ class AppUpdateState {
   final bool recommendationDismissed;
   final AppOfficialUpdateSource? manualOfficialSource;
 
-  bool get hasUpdate =>
-      latestManifest != null &&
-      currentVersion != null &&
-      latestManifest!.buildNumber > currentVersion!.buildNumber;
+  bool get hasUpdate {
+    final manifest = latestManifest;
+    final current = currentVersion;
+    if (manifest == null || current == null) return false;
+    return compareAppVersionBuilds(
+          AppVersion(
+            version: manifest.version,
+            buildNumber: manifest.buildNumber,
+          ),
+          current,
+        ) >
+        0;
+  }
 
   bool get supportsDirectInstall {
     return false;

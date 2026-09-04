@@ -342,6 +342,109 @@ void main() {
   );
 
   test(
+    'archived custom duplicate does not block official endpoint reconciliation',
+    () async {
+      var registry = await store.loadRegistry();
+      registry = await store.createTenant(
+        const AppTenantCreateInput(
+          name: 'Archived legacy tenant',
+          backendBaseUrl: 'https://legacy.example',
+          didHost: 'legacy.example',
+        ),
+      );
+      final legacy = registry.tenants.singleWhere(
+        (item) => item.backendBaseUrl == 'https://legacy.example',
+      );
+      registry = await store.deleteTenant(legacy.id);
+      final registryFile = File(
+        p.join(
+          root.path,
+          'support',
+          'awiki-me',
+          'control',
+          'tenant-registry.json',
+        ),
+      );
+      final raw = registry.toJson()..['official_catalog_version'] = 0;
+      final rawLegacy =
+          (raw['tenants']! as List<Object?>).singleWhere(
+                (item) =>
+                    (item! as Map<String, Object?>)['tenant_profile_id'] ==
+                    legacy.id,
+              )!
+              as Map<String, Object?>;
+      rawLegacy['backend_base_url'] = primaryBuiltinTenantBackendBaseUrl;
+      rawLegacy['did_host'] = primaryBuiltinTenantDidHost;
+      await registryFile.writeAsString(jsonEncode(raw), flush: true);
+
+      final reconciled = await store.loadRegistry();
+
+      expect(
+        reconciled.tenants.where(
+          (item) =>
+              !item.isArchived &&
+              item.officialKey == AppTenantOfficialKey.primary,
+        ),
+        hasLength(1),
+      );
+      final preserved = reconciled.tenants.singleWhere(
+        (item) => item.id == legacy.id,
+      );
+      expect(preserved.isArchived, isTrue);
+      expect(preserved.kind, AppTenantKind.custom);
+      expect(preserved.officialKey, isNull);
+    },
+  );
+
+  test(
+    'unmatched keyless built-in tenant is demoted without moving scope',
+    () async {
+      var registry = await store.loadRegistry();
+      registry = await store.createTenant(
+        const AppTenantCreateInput(
+          name: 'Historical package tenant',
+          backendBaseUrl: 'https://awiki.info',
+          didHost: 'awiki.info',
+        ),
+      );
+      final historical = registry.tenants.singleWhere(
+        (item) => item.backendBaseUrl == 'https://awiki.info',
+      );
+      registry = await store.useTenant(historical.id);
+      final registryFile = File(
+        p.join(
+          root.path,
+          'support',
+          'awiki-me',
+          'control',
+          'tenant-registry.json',
+        ),
+      );
+      final raw = registry.toJson()..['official_catalog_version'] = 0;
+      final rawHistorical =
+          (raw['tenants']! as List<Object?>).singleWhere(
+                (item) =>
+                    (item! as Map<String, Object?>)['tenant_profile_id'] ==
+                    historical.id,
+              )!
+              as Map<String, Object?>;
+      rawHistorical['kind'] = AppTenantKind.builtInAwiki.wireName;
+      rawHistorical.remove('official_key');
+      await registryFile.writeAsString(jsonEncode(raw), flush: true);
+
+      final reconciled = await store.loadRegistry();
+      final preserved = reconciled.tenants.singleWhere(
+        (item) => item.id == historical.id,
+      );
+
+      expect(reconciled.activeTenantProfileId, historical.tenantProfileId);
+      expect(preserved.storageScopeId, historical.storageScopeId);
+      expect(preserved.kind, AppTenantKind.custom);
+      expect(preserved.officialKey, isNull);
+    },
+  );
+
+  test(
     'changed package slot origin preserves the old active scope as custom',
     () async {
       final original = await store.loadRegistry();

@@ -484,6 +484,8 @@ class FakeUpdateService implements UpdateService {
   bool openInstallPermissionSettingsCalled = false;
   int getCurrentVersionCalls = 0;
   int checkForUpdatesCalls = 0;
+  final List<bool> checkForUpdatesForces = <bool>[];
+  bool versionUnsupported = false;
   Object? checkError;
   Object? installError;
   bool ignored = false;
@@ -493,12 +495,14 @@ class FakeUpdateService implements UpdateService {
   @override
   Future<AppUpdateCheckResult> checkForUpdates({required bool force}) async {
     checkForUpdatesCalls += 1;
+    checkForUpdatesForces.add(force);
     if (checkError != null) {
       throw checkError!;
     }
     return AppUpdateCheckResult(
       currentVersion: currentVersion,
       latestManifest: latestManifest,
+      versionUnsupported: versionUnsupported,
     );
   }
 

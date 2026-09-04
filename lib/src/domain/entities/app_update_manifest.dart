@@ -7,6 +7,13 @@ class AppVersion {
   String get displayLabel => '$version+$buildNumber';
 }
 
+int compareAppVersionBuilds(AppVersion left, AppVersion right) {
+  final versionComparison = compareAppVersions(left.version, right.version);
+  return versionComparison != 0
+      ? versionComparison
+      : left.buildNumber.compareTo(right.buildNumber);
+}
+
 class AppUpdateArtifactMirror {
   const AppUpdateArtifactMirror({required this.url});
 

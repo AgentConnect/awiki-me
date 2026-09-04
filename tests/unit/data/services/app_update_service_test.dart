@@ -72,6 +72,37 @@ void main() {
     expect(httpClient.requestedUrls, isEmpty);
   });
 
+  test(
+    'auto check refreshes a cached policy that currently locks the app',
+    () async {
+      final storage = _MemoryKeyValueStore();
+      await _service(
+        storage: storage,
+        httpClient: _QueueHttpClient(<_HttpFixture>[
+          _HttpFixture.json(
+            'https://updates.example/latest.json',
+            _manifestJson(minimumVersion: '2.0.0'),
+          ),
+        ]),
+      ).checkForUpdates(force: true);
+      final httpClient = _QueueHttpClient(<_HttpFixture>[
+        _HttpFixture.json(
+          'https://updates.example/latest.json',
+          _manifestJson(policyRevision: 5, minimumVersion: '1.0.0'),
+        ),
+      ]);
+
+      final result = await _service(
+        storage: storage,
+        httpClient: httpClient,
+      ).checkForUpdates(force: false);
+
+      expect(result.wasSkipped, isFalse);
+      expect(result.versionUnsupported, isFalse);
+      expect(httpClient.requestedUrls, hasLength(1));
+    },
+  );
+
   test('auto check falls back to cached manifest when request fails', () async {
     final storage = _MemoryKeyValueStore();
     await _service(
@@ -374,6 +405,18 @@ void main() {
       throwsA(isA<UpdateInstallFailed>()),
     );
   });
+
+  test('dispose does not close an injected HTTP client', () async {
+    final client = _QueueHttpClient(const <_HttpFixture>[]);
+    final service = _service(
+      storage: _MemoryKeyValueStore(),
+      httpClient: client,
+    );
+
+    service.dispose();
+
+    expect(client.isClosed, isFalse);
+  });
 }
 
 AppUpdateService _service({
@@ -528,6 +571,13 @@ class _QueueHttpClient extends http.BaseClient {
 
   final List<_HttpFixture> _fixtures;
   final List<String> requestedUrls = <String>[];
+  bool isClosed = false;
+
+  @override
+  void close() {
+    isClosed = true;
+    super.close();
+  }
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {

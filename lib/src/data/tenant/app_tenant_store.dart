@@ -356,7 +356,23 @@ class AppTenantStore {
         registry.officialCatalogVersion != officialTenantCatalogVersion;
     final tenants = registry.tenants.map((tenant) {
       final key = tenant.officialKey;
-      if (key == null || _sameEndpoint(tenant, officialTenantProfile(key))) {
+      if (tenant.isArchived &&
+          (key != null || tenant.kind == AppTenantKind.builtInAwiki)) {
+        changed = true;
+        return tenant.copyWith(
+          kind: AppTenantKind.custom,
+          clearOfficialKey: true,
+        );
+      }
+      if (key == null) {
+        if (tenant.kind != AppTenantKind.builtInAwiki) return tenant;
+        changed = true;
+        return tenant.copyWith(
+          kind: AppTenantKind.custom,
+          clearOfficialKey: true,
+        );
+      }
+      if (_sameEndpoint(tenant, officialTenantProfile(key))) {
         return tenant;
       }
       changed = true;
@@ -370,7 +386,10 @@ class AppTenantStore {
       final expected = officialTenantProfile(key);
       final matches = <int>[];
       for (var index = 0; index < tenants.length; index += 1) {
-        if (_sameEndpoint(tenants[index], expected)) matches.add(index);
+        if (!tenants[index].isArchived &&
+            _sameEndpoint(tenants[index], expected)) {
+          matches.add(index);
+        }
       }
       if (matches.length > 1) {
         throw const FormatException('tenant_official_endpoint_ambiguous');

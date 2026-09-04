@@ -24,12 +24,14 @@ class AppUpdateCheckResult {
   bool get hasUpdate {
     final manifest = latestManifest;
     if (manifest == null) return false;
-    final comparison = compareAppVersions(
-      manifest.version,
-      currentVersion.version,
-    );
-    return comparison > 0 ||
-        (comparison == 0 && manifest.buildNumber > currentVersion.buildNumber);
+    return compareAppVersionBuilds(
+          AppVersion(
+            version: manifest.version,
+            buildNumber: manifest.buildNumber,
+          ),
+          currentVersion,
+        ) >
+        0;
   }
 }
 

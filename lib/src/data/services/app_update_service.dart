@@ -37,6 +37,7 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
     String? releasesUrl,
     bool? allowLoopbackHttp,
   }) : _storage = storage,
+       _ownsHttpClient = httpClient == null,
        _httpClient = httpClient ?? http.Client(),
        _platformBridge = platformBridge ?? MethodChannelPlatformUpdateBridge(),
        _packageInfoLoader = packageInfoLoader ?? PackageInfo.fromPlatform,
@@ -51,6 +52,7 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
   static const int _maximumPolicyBytes = 1024 * 1024;
 
   final AppKeyValueStore _storage;
+  final bool _ownsHttpClient;
   final http.Client _httpClient;
   final PlatformUpdateBridge _platformBridge;
   final Future<PackageInfo> Function() _packageInfoLoader;
@@ -84,7 +86,9 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
       '${manifest.version}+${manifest.buildNumber}';
 
   @override
-  void dispose() {}
+  void dispose() {
+    if (_ownsHttpClient) _httpClient.close();
+  }
 
   @override
   Future<AppVersion> getCurrentVersion() async {
@@ -99,7 +103,10 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
   Future<AppUpdateCheckResult> checkForUpdates({required bool force}) async {
     final currentVersion = await getCurrentVersion();
     final cached = await _loadCachedManifest();
-    if (!force && await _shouldSkipAutoCheck()) {
+    final cachedLocksCurrentVersion =
+        cached.manifest != null &&
+        _isUnsupported(currentVersion, cached.manifest!);
+    if (!force && !cachedLocksCurrentVersion && await _shouldSkipAutoCheck()) {
       return _result(
         currentVersion: currentVersion,
         manifest: cached.manifest,
@@ -278,14 +285,14 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
   }
 
   bool _isUnsupported(AppVersion current, AppUpdateManifest manifest) {
-    final versionComparison = compareAppVersions(
-      current.version,
-      manifest.minimumSupportedVersion,
-    );
-    return versionComparison < 0 ||
-        (versionComparison == 0 &&
-            current.buildNumber <
-                manifest.minimumBuildForPlatform(_platformName));
+    return compareAppVersionBuilds(
+          current,
+          AppVersion(
+            version: manifest.minimumSupportedVersion,
+            buildNumber: manifest.minimumBuildForPlatform(_platformName),
+          ),
+        ) <
+        0;
   }
 
   String get _platformName {

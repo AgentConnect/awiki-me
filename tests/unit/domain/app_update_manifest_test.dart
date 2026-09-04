@@ -14,4 +14,24 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test(
+    'compares semantic version before independently assigned build number',
+    () {
+      expect(
+        compareAppVersionBuilds(
+          const AppVersion(version: '1.1.0', buildNumber: 5),
+          const AppVersion(version: '1.0.0', buildNumber: 20),
+        ),
+        greaterThan(0),
+      );
+      expect(
+        compareAppVersionBuilds(
+          const AppVersion(version: '1.0.0', buildNumber: 21),
+          const AppVersion(version: '1.0.0', buildNumber: 20),
+        ),
+        greaterThan(0),
+      );
+    },
+  );
 }
