@@ -819,6 +819,7 @@ class FakeAwikiGateway implements AwikiAccountGateway {
   int onboardingPhoneRegistrationCalls = 0;
   Completer<void>? onboardingPhoneRegistrationCompleter;
   Object? nextOnboardingPhoneRegistrationError;
+  SessionIdentity? committedIdentityBeforePhoneRegistrationError;
   ExistingHandleJoinMode existingHandleJoinMode =
       ExistingHandleJoinMode.ordinary;
   bool existingHandleJoinRequiresUserPresence = false;
@@ -4040,6 +4041,10 @@ class FakeOnboardingService implements OnboardingService {
     final error = gateway.nextOnboardingPhoneRegistrationError;
     gateway.nextOnboardingPhoneRegistrationError = null;
     if (error != null) {
+      final committed = gateway.committedIdentityBeforePhoneRegistrationError;
+      if (committed != null) {
+        gateway.localCredentials = <SessionIdentity>[committed];
+      }
       throw error;
     }
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {

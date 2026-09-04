@@ -117,6 +117,7 @@
   "registrationMethodUnavailable": "This server does not support the selected registration method. Refresh and try again.",
   "registrationVerificationInvalid": "The verification code is incorrect. Check the code and try again.",
   "registrationVerificationUnavailable": "This verification code has expired or has already been used. Send a new code and try again.",
+  "registrationCommittedActivationPending": "Your account was created and saved safely on this device, but sign-in setup did not finish. Select the local account and sign in again; no new verification code is needed.",
   "registrationRecoveryStateInvalid": "This Handle's identity state needs server-side attention. Contact support before trying again.",
   "registrationLocalStateNeedsAttention": "This device has identity state that cannot be reconciled safely. Resolve the local state, then send a new verification code.",
   "registrationContinuityChanged": "Identity continuity changed. Send a new verification code and try again.",

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../application/app_session_service.dart';
+import '../../application/models/app_session.dart';
 import '../../application/models/onboarding_server_info.dart';
 import '../../application/onboarding_support_service.dart';
 import '../../application/ports/identity_core_port.dart';
@@ -14,6 +15,7 @@ import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../l10n/app_message.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
+import '../app_shell/providers/session_provider.dart';
 import '../devices/devices_provider.dart';
 import '../shared/sms_otp_cooldown_provider.dart';
 
@@ -451,18 +453,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .showError(AppMessage.registrationMethodUnavailable());
       return null;
     }
-    if (state.isPhoneOtpConsumed) {
-      ref
-          .read(uiFeedbackProvider.notifier)
-          .showError(AppMessage.registrationVerificationUnavailable());
-      return null;
-    }
     final domain = _normalizeHandleDomain(handleDomain);
     final normalizedHandle = handle.trim().toLowerCase();
+    final fullHandle = '$normalizedHandle.$domain';
     final normalizedPhone = _normalizePhoneForOtpCooldown(phone);
     if (normalizedPhone == null ||
         state.otpTargetPhone != normalizedPhone ||
-        state.otpTargetFullHandle != '$normalizedHandle.$domain') {
+        state.otpTargetFullHandle != fullHandle) {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.operationFailedRetry());
@@ -474,6 +471,17 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       phoneRegistrationFailureCode: null,
     );
     final status = await _runBusy(() async {
+      final existingIdentity = await _localIdentityForFullHandle(fullHandle);
+      if (existingIdentity != null) {
+        state = state.copyWith(isPhoneOtpConsumed: true);
+        return _resumeCommittedPhoneRegistration(existingIdentity, transition);
+      }
+      if (state.isPhoneOtpConsumed) {
+        throw AppStructuredError(
+          code: 'identity.registration_verification_unavailable',
+          cause: StateError('registration_verification_unavailable'),
+        );
+      }
       try {
         final result = await ref
             .read(onboardingServiceProvider)
@@ -486,15 +494,16 @@ class OnboardingController extends StateNotifier<OnboardingState> {
               transition: transition,
             );
         state = state.copyWith(isPhoneOtpConsumed: true);
-        final status = await _activateRegistrationResult(result, transition);
-        state = state.copyWith(
-          phoneRegistrationOutcome:
-              status == IdentityRegistrationStatus.joinRequired
-              ? OnboardingPhoneRegistrationOutcome.joinRequired
-              : OnboardingPhoneRegistrationOutcome.registered,
-        );
-        return status;
+        return _activateRegistrationResult(result, transition);
       } catch (error) {
+        final committedIdentity = await _localIdentityForFullHandle(fullHandle);
+        if (committedIdentity != null) {
+          state = state.copyWith(isPhoneOtpConsumed: true);
+          return _resumeCommittedPhoneRegistration(
+            committedIdentity,
+            transition,
+          );
+        }
         if (const <String>{
           'identity.registration_verification_unavailable',
           'handle_recovery.local_state_conflict',
@@ -506,7 +515,14 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         rethrow;
       }
     }, sessionTransition: transition);
-    if (status == null &&
+    if (status != null && mounted) {
+      state = state.copyWith(
+        phoneRegistrationOutcome:
+            status == IdentityRegistrationStatus.joinRequired
+            ? OnboardingPhoneRegistrationOutcome.joinRequired
+            : OnboardingPhoneRegistrationOutcome.registered,
+      );
+    } else if (status == null &&
         mounted &&
         state.phoneRegistrationOutcome ==
             OnboardingPhoneRegistrationOutcome.inFlight) {
@@ -518,6 +534,51 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       );
     }
     return status;
+  }
+
+  Future<AppSession?> _localIdentityForFullHandle(String fullHandle) async {
+    final expected = _normalizeLocalFullHandle(fullHandle);
+    final matches = (await _sessionService.listLocalIdentities())
+        .where(
+          (identity) => _normalizeLocalFullHandle(identity.handle) == expected,
+        )
+        .toList(growable: false);
+    if (matches.length > 1) {
+      throw AppStructuredError(
+        code: 'handle_recovery.local_state_conflict',
+        cause: StateError('multiple_local_identities_for_handle'),
+      );
+    }
+    return matches.firstOrNull;
+  }
+
+  Future<IdentityRegistrationStatus> _resumeCommittedPhoneRegistration(
+    AppSession identity,
+    AppSessionTransition registrationTransition,
+  ) async {
+    ref
+        .read(sessionProvider.notifier)
+        .upsertLocalCredential(identity.toLegacySessionIdentity());
+    await _cancelOrAbortSessionTransition(registrationTransition);
+    final activated = await ref
+        .read(appRuntimeProvider.notifier)
+        .loginWithLocalCredentialAndConfirm(
+          identity.identityId,
+          reportFailure: false,
+        );
+    if (activated) {
+      return IdentityRegistrationStatus.registered;
+    }
+    state = state.copyWith(
+      entryMode: 'login',
+      otpTargetFullHandle: null,
+      otpTargetPhone: null,
+      isPhoneOtpConsumed: false,
+    );
+    throw AppStructuredError(
+      code: 'identity.registration_committed_activation_pending',
+      cause: StateError('registration_committed_activation_pending'),
+    );
   }
 
   Future<IdentityRegistrationStatus?> registerWithEmail({
@@ -941,6 +1002,14 @@ String _normalizeHandleDomain(String domain) {
     throw ArgumentError('did_domain_invalid');
   }
   return normalized;
+}
+
+String? _normalizeLocalFullHandle(String? value) {
+  var normalized = value?.trim().toLowerCase() ?? '';
+  while (normalized.startsWith('@')) {
+    normalized = normalized.substring(1).trimLeft();
+  }
+  return normalized.isEmpty ? null : normalized;
 }
 
 final onboardingProvider =

@@ -20,6 +20,7 @@ import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
@@ -50,6 +51,23 @@ void _resetTestViewSize(WidgetTester tester) {
   tester.view.resetPhysicalSize();
   tester.view.resetDevicePixelRatio();
 }
+
+const _committedPhoneRegistrationIdentity = SessionIdentity(
+  did: 'did:wba:awiki.me:users:alice:e1_committed',
+  localIdentityId: 'identity-alice',
+  credentialName: 'alice-local',
+  displayName: 'Alice',
+  handle: 'alice.awiki.me',
+  jwtToken: 'registered-token',
+  accountBinding: SessionAccountBinding(
+    ownerIdentityId: 'identity-alice',
+    accountId: 'account-alice',
+    currentDid: 'did:wba:awiki.me:users:alice:e1_committed',
+    protocolDeviceId: 'device-alice',
+    identityGeneration: '1',
+    deviceAuthGeneration: '1',
+  ),
+);
 
 void main() {
   testWidgets('首页不展示独立的加入设备或恢复入口', (tester) async {
@@ -1921,6 +1939,95 @@ void main() {
 
     expect(duplicate, isNull);
     expect(gateway.onboardingPhoneRegistrationCalls, 1);
+  });
+
+  testWidgets('注册已落本地但激活失败时恢复同一身份且不重复注册', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..nextOnboardingPhoneRegistrationError = StateError(
+        'post_registration_activation_failed',
+      )
+      ..committedIdentityBeforePhoneRegistrationError =
+          _committedPhoneRegistrationIdentity
+      ..loginResult = _committedPhoneRegistrationIdentity;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.enterText(fields.at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
+    expect(gateway.loginCalls, 1);
+    expect(gateway.lastLoginCredentialName, 'identity-alice');
+    expect(container.read(onboardingProvider).isPhoneOtpConsumed, isTrue);
+    expect(
+      container.read(sessionProvider).session?.localIdentityId,
+      'identity-alice',
+    );
+
+    final resumed = await container
+        .read(onboardingProvider.notifier)
+        .registerWithPhone(
+          phone: '13800138000',
+          otp: '',
+          handle: 'alice',
+          handleDomain: 'awiki.me',
+          nickName: 'alice',
+          profileMarkdown: '# alice\n\n',
+        );
+
+    expect(resumed, isNull);
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
+  });
+
+  testWidgets('注册已落本地但暂时无法恢复登录时展示本地账号自救入口', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..nextOnboardingPhoneRegistrationError = StateError(
+        'post_registration_activation_failed',
+      )
+      ..committedIdentityBeforePhoneRegistrationError =
+          _committedPhoneRegistrationIdentity;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.enterText(fields.at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
+    expect(gateway.loginCalls, 1);
+    expect(container.read(onboardingProvider).entryMode, 'login');
+    expect(
+      container.read(uiFeedbackProvider)?.message.id,
+      'registrationCommittedActivationPending',
+    );
+    expect(
+      container.read(sessionProvider).localCredentials.single.localIdentityId,
+      'identity-alice',
+    );
+    expect(find.text('Alice'), findsOneWidget);
   });
 
   for (final continuityCase in <String, String>{

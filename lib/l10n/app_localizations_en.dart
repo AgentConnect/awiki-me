@@ -301,6 +301,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'This verification code has expired or has already been used. Send a new code and try again.';
 
   @override
+  String get registrationCommittedActivationPending =>
+      'Your account was created and saved safely on this device, but sign-in setup did not finish. Select the local account and sign in again; no new verification code is needed.';
+
+  @override
   String get registrationRecoveryStateInvalid =>
       'This Handle\'s identity state needs server-side attention. Contact support before trying again.';
 

@@ -289,6 +289,10 @@ class AppLocalizationsZh extends AppLocalizations {
       '这个验证码已过期或已被使用，请重新发送验证码后再试。';
 
   @override
+  String get registrationCommittedActivationPending =>
+      '账号已创建并安全保存在本机，但登录初始化尚未完成。请在本地账号列表中重新登录，无需重新获取验证码。';
+
+  @override
   String get registrationRecoveryStateInvalid =>
       '当前 Handle 的身份状态需要服务器处理，请联系支持后重试。';
 
