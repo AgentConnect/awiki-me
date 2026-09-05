@@ -706,6 +706,54 @@ void main() {
     expect(actions.registry.activeTenant.id, custom.id);
   });
 
+  testWidgets('租户管理同时展示中国与全球官方租户且不提供修改操作', (tester) async {
+    final registry = defaultTenantRegistry(now: DateTime.utc(2026, 7, 1));
+    late StateSetter refresh;
+    final actions = FakeAppTenantActions(initialRegistry: registry)
+      ..onChanged = () => refresh(() {});
+
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) {
+          refresh = setState;
+          return buildLocalizedTestApp(
+            home: const TenantManagementDialog(),
+            providerOverrides: <Override>[
+              appTenantRegistryProvider.overrideWithValue(actions.registry),
+              activeAppTenantProvider.overrideWithValue(
+                actions.registry.activeTenant,
+              ),
+              appTenantActionsProvider.overrideWithValue(actions),
+            ],
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(primaryBuiltinTenantName), findsOneWidget);
+    expect(find.text(secondaryBuiltinTenantName), findsOneWidget);
+    expect(find.text('官方租户'), findsNWidgets(2));
+    for (final tenant in registry.tenants) {
+      final card = find.byKey(Key('settings-tenant-option:${tenant.id}'));
+      expect(
+        find.descendant(
+          of: card,
+          matching: find.byKey(Key('tenant-primary-managed:${tenant.id}')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: card, matching: find.byTooltip('编辑租户')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: card, matching: find.byTooltip('删除')),
+        findsNothing,
+      );
+    }
+  });
+
   testWidgets('移动端租户卡片使用扁平操作按钮且无数据租户只锁定 DID Host', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 844);

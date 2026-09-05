@@ -289,6 +289,10 @@ class AppLocalizationsZh extends AppLocalizations {
       '这个验证码已过期或已被使用，请重新发送验证码后再试。';
 
   @override
+  String get registrationCommittedActivationPending =>
+      '账号已创建并安全保存在本机，但登录初始化尚未完成。请在本地账号列表中重新登录，无需重新获取验证码。';
+
+  @override
   String get registrationRecoveryStateInvalid =>
       '当前 Handle 的身份状态需要服务器处理，请联系支持后重试。';
 
@@ -350,7 +354,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tenantCurrent => '当前';
 
   @override
-  String get tenantDefaultBadge => '默认配置';
+  String get tenantDefaultBadge => '官方租户';
 
   @override
   String get tenantName => '租户名称';
@@ -424,7 +428,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get tenantValidationBackendHttpsRequired =>
-      '公网租户地址必须使用 HTTPS，例如 https://anpclaw.com。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。';
+      '公网租户地址必须使用 HTTPS，例如 https://tenant.example。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。';
 
   @override
   String get tenantValidationDidHostInvalid =>
@@ -3038,6 +3042,27 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get updateInstallFailed => '更新失败，请打开下载页手动安装。';
+
+  @override
+  String get updateRestrictedTitle => '当前租户需要更新';
+
+  @override
+  String updateRestrictedMessage(
+    Object tenantName,
+    Object minimumVersion,
+    Object currentVersion,
+  ) {
+    return '$tenantName 要求 AWiki Me $minimumVersion 或更高版本，当前版本为 $currentVersion。请更新客户端后继续使用；你也可以切换租户。';
+  }
+
+  @override
+  String get updateRestrictedInstall => '打开官方下载页面';
+
+  @override
+  String get updateRestrictedSwitchTenant => '切换租户';
+
+  @override
+  String get updateRestrictedSettings => '设置和本地数据';
 
   @override
   String get daemonUpgradeStarted => '已开始升级代理。';

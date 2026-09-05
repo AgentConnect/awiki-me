@@ -182,6 +182,7 @@ const List<String> _desktopSmokeCaseIds = <String>[
   'AGENT-NOTIFY-SMOKE-E2E-001',
   'AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001',
   'SMOKE-E2E-001',
+  'TENANT-SWITCH-SMOKE-E2E-001',
   'NATIVE-E2E-001',
 ];
 const List<String> _multiDeviceCapabilityGateCaseIds = <String>[
@@ -827,6 +828,7 @@ class DesktopE2eRunner {
             'AGENT-NOTIFY-SMOKE-E2E-001',
             'AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001',
             'SMOKE-E2E-001',
+            'TENANT-SWITCH-SMOKE-E2E-001',
           ],
           stateRoot: appStateRootDir,
         );
@@ -847,6 +849,7 @@ class DesktopE2eRunner {
           'AGENT-NOTIFY-SMOKE-E2E-001',
           'AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001',
           'SMOKE-E2E-001',
+          'TENANT-SWITCH-SMOKE-E2E-001',
         ],
       );
     });

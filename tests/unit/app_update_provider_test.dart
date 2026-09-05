@@ -12,6 +12,36 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
 
+AppUpdateManifest buildManifest() {
+  return AppUpdateManifest(
+    policyOrigin: 'https://example.com',
+    policyRevision: 1,
+    version: '0.2.0',
+    buildNumber: 2,
+    minimumSupportedVersion: '0.1.0',
+    minimumSupportedBuildNumber: 1,
+    publishedAt: DateTime.utc(2026, 4, 5, 8),
+    releaseNotesUrl: 'https://example.com/release-notes',
+    githubReleaseUrl: 'https://example.com/releases/tag/v0.2.0',
+    platforms: const AppUpdatePlatformsManifest(
+      macos: AppUpdatePlatformManifest(
+        downloadUrl: 'https://example.com/app.dmg',
+        appcastUrl: 'https://example.com/appcast.xml',
+        sha256:
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        sizeBytes: 123,
+      ),
+      android: AppUpdatePlatformManifest(
+        downloadUrl: 'https://example.com/app.apk',
+        sha256:
+            'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        sizeBytes: 456,
+        minSupportedBuildNumber: 1,
+      ),
+    ),
+  );
+}
+
 void main() {
   testWidgets('Windows App Shell initializes local and remote version state', (
     tester,
@@ -40,26 +70,27 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  AppUpdateManifest buildManifest() {
-    return AppUpdateManifest(
-      version: '0.2.0',
-      buildNumber: 2,
-      publishedAt: DateTime.utc(2026, 4, 5, 8),
-      releaseNotesUrl: 'https://example.com/release-notes',
-      githubReleaseUrl: 'https://example.com/releases/tag/v0.2.0',
-      platforms: const AppUpdatePlatformsManifest(
-        macos: AppUpdatePlatformManifest(
-          downloadUrl: 'https://example.com/app.dmg',
-          appcastUrl: 'https://example.com/appcast.xml',
-        ),
-        android: AppUpdatePlatformManifest(
-          downloadUrl: 'https://example.com/app.apk',
-          sha256: 'abc',
-          minSupportedBuildNumber: 1,
-        ),
+  testWidgets('restricted update page can force-refresh a cached lock', (
+    tester,
+  ) async {
+    final updateService = FakeUpdateService()
+      ..latestManifest = buildManifest()
+      ..versionUnsupported = true;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        updateService: updateService,
       ),
     );
-  }
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('restricted-update-refresh')));
+    await tester.pump();
+
+    expect(updateService.checkForUpdatesForces, <bool>[false, true]);
+  });
 
   group('AppUpdateController', () {
     late FakeUpdateService updateService;
@@ -84,6 +115,41 @@ void main() {
       expect(state.currentVersion?.version, '0.1.0');
       expect(state.latestManifest?.version, '0.2.0');
       expect(state.status, AppUpdateStatus.updateAvailable);
+    });
+
+    test('横幅按语义版本优先于租户独立 build 号判断更新', () {
+      final manifest = buildManifest();
+      final state = AppUpdateState(
+        currentVersion: const AppVersion(version: '0.1.0', buildNumber: 20),
+        latestManifest: manifest,
+      );
+
+      expect(state.hasUpdate, isTrue);
+    });
+
+    test('忽略推荐版本会持久标记并立即隐藏横幅', () async {
+      updateService.latestManifest = buildManifest();
+      await container.read(appUpdateProvider.notifier).initialize();
+
+      await container.read(appUpdateProvider.notifier).dismissRecommendation();
+
+      expect(container.read(appUpdateProvider).recommendationDismissed, isTrue);
+      expect(updateService.ignored, isTrue);
+    });
+
+    test('手动官方源检查不会对自定义租户施加最低版本门禁', () async {
+      updateService.latestManifest = buildManifest();
+
+      await container
+          .read(appUpdateProvider.notifier)
+          .checkOfficialSource(AppOfficialUpdateSource.secondary);
+
+      expect(container.read(appUpdateProvider), isA<AppUpdateState>());
+      expect(
+        container.read(appUpdateProvider).manualOfficialSource,
+        AppOfficialUpdateSource.secondary,
+      );
+      expect(container.read(appUpdateProvider).versionUnsupported, isFalse);
     });
 
     test('手动检查发现已是最新版本时写入提示', () async {

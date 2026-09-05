@@ -626,6 +626,12 @@ abstract class AppLocalizations {
   /// **'这个验证码已过期或已被使用，请重新发送验证码后再试。'**
   String get registrationVerificationUnavailable;
 
+  /// No description provided for @registrationCommittedActivationPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'账号已创建并安全保存在本机，但登录初始化尚未完成。请在本地账号列表中重新登录，无需重新获取验证码。'**
+  String get registrationCommittedActivationPending;
+
   /// No description provided for @registrationRecoveryStateInvalid.
   ///
   /// In zh, this message translates to:
@@ -737,7 +743,7 @@ abstract class AppLocalizations {
   /// No description provided for @tenantDefaultBadge.
   ///
   /// In zh, this message translates to:
-  /// **'默认配置'**
+  /// **'官方租户'**
   String get tenantDefaultBadge;
 
   /// No description provided for @tenantName.
@@ -869,7 +875,7 @@ abstract class AppLocalizations {
   /// No description provided for @tenantValidationBackendHttpsRequired.
   ///
   /// In zh, this message translates to:
-  /// **'公网租户地址必须使用 HTTPS，例如 https://anpclaw.com。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。'**
+  /// **'公网租户地址必须使用 HTTPS，例如 https://tenant.example。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。'**
   String get tenantValidationBackendHttpsRequired;
 
   /// No description provided for @tenantValidationDidHostInvalid.
@@ -5741,6 +5747,40 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'更新失败，请打开下载页手动安装。'**
   String get updateInstallFailed;
+
+  /// No description provided for @updateRestrictedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前租户需要更新'**
+  String get updateRestrictedTitle;
+
+  /// No description provided for @updateRestrictedMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'{tenantName} 要求 AWiki Me {minimumVersion} 或更高版本，当前版本为 {currentVersion}。请更新客户端后继续使用；你也可以切换租户。'**
+  String updateRestrictedMessage(
+    Object tenantName,
+    Object minimumVersion,
+    Object currentVersion,
+  );
+
+  /// No description provided for @updateRestrictedInstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开官方下载页面'**
+  String get updateRestrictedInstall;
+
+  /// No description provided for @updateRestrictedSwitchTenant.
+  ///
+  /// In zh, this message translates to:
+  /// **'切换租户'**
+  String get updateRestrictedSwitchTenant;
+
+  /// No description provided for @updateRestrictedSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'设置和本地数据'**
+  String get updateRestrictedSettings;
 
   /// No description provided for @daemonUpgradeStarted.
   ///

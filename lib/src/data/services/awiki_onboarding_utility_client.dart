@@ -36,13 +36,16 @@ class AwikiOnboardingUtilityHttpClient {
     this.timeout = const Duration(seconds: 20),
     this.clientVersionHeader,
   }) : _httpClient = httpClient ?? http.Client(),
+       _ownsHttpClient = httpClient == null,
        _baseUri = Uri.parse(baseUrl);
 
   final String baseUrl;
   final http.Client _httpClient;
+  final bool _ownsHttpClient;
   final Uri _baseUri;
   final Duration timeout;
   final String? clientVersionHeader;
+  bool _closed = false;
 
   Future<Map<String, Object?>> rpcCall({
     required String path,
@@ -51,6 +54,7 @@ class AwikiOnboardingUtilityHttpClient {
     String? bearerToken,
     String requestId = 'req-1',
   }) async {
+    _ensureOpen();
     final headers = <String, String>{'Content-Type': 'application/json'};
     _appendClientVersionHeader(headers, Uri.parse(baseUrl).resolve(path));
     final token = bearerToken?.trim();
@@ -114,6 +118,7 @@ class AwikiOnboardingUtilityHttpClient {
   }
 
   Future<http.Response> get(Uri uri) {
+    _ensureOpen();
     final headers = <String, String>{};
     _appendClientVersionHeader(headers, uri);
     return _httpClient.get(uri, headers: headers).timeout(timeout);
@@ -123,11 +128,26 @@ class AwikiOnboardingUtilityHttpClient {
     Uri uri, {
     required Map<String, Object?> body,
   }) {
+    _ensureOpen();
     final headers = <String, String>{'Content-Type': 'application/json'};
     _appendClientVersionHeader(headers, uri);
     return _httpClient
         .post(uri, headers: headers, body: jsonEncode(body))
         .timeout(timeout);
+  }
+
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    if (_ownsHttpClient) {
+      _httpClient.close();
+    }
+  }
+
+  void _ensureOpen() {
+    if (_closed) {
+      throw StateError('awiki_onboarding_utility_http_client_closed');
+    }
   }
 
   void _appendClientVersionHeader(Map<String, String> headers, Uri uri) {
@@ -151,7 +171,8 @@ class AwikiOnboardingUtilityClient {
 
   static const String handleRpcEndpoint = '/user-service/v1/handle/rpc';
   static const String profileRpcEndpoint = '/user-service/v1/did/profile/rpc';
-  static const String serverInfoEndpoint = '/user-service/v1/server-info';
+  static const String serverInfoEndpoint =
+      '/user-service/v1/server-info?client_platform=app';
   static const String emailSendEndpoint = '/user-service/v1/auth/email-send';
   static const String emailStatusEndpoint =
       '/user-service/v1/auth/email-status';

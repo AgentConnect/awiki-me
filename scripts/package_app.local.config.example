@@ -9,3 +9,7 @@
 # dist/validation/<version>+<build>/<request-id>/ with a validation package
 # manifest. It does not generate or replace any latest.json.
 # PACKAGE_TARGETS="windows-x64"
+
+# Optional complete replacement for the two built-in tenants. Relative paths
+# are resolved from the repository root; omitted means the committed default.
+# PACKAGE_TENANT_CONFIG="/absolute/path/to/builtin-tenants.json"

@@ -1,23 +1,24 @@
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/tenant/builtin_tenant_config.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('keeps awiki.ai as the default primary tenant domain', () {
+  test('uses awiki.me as the default primary tenant domain', () {
     const hasBuildOverride = bool.hasEnvironment(
-      primaryTenantDomainEnvironmentKey,
+      builtinTenantsBase64EnvironmentKey,
     );
 
     if (!hasBuildOverride) {
-      expect(primaryTenantDomain, 'awiki.ai');
+      expect(primaryTenantDomain, 'awiki.me');
     }
   });
 
   test('derives default services from the primary tenant domain', () {
     final config = AwikiEnvironmentConfig();
-    const baseUrl = primaryTenantBaseUrl;
-    const domain = primaryTenantDomain;
+    final baseUrl = primaryTenantBaseUrl;
+    final domain = primaryTenantDomain;
 
     expect(config.baseUrl, baseUrl);
     expect(config.userServiceUrl, baseUrl);
@@ -27,7 +28,10 @@ void main() {
     expect(config.anpServiceUrl, '$baseUrl/anp-im/rpc');
     expect(config.anpServiceDid, 'did:wba:$domain');
     expect(config.daemonDownloadBaseUrl, '$baseUrl/daemon');
-    expect(config.updateManifestUrl, '$baseUrl/downloads/awiki-me/latest.json');
+    expect(
+      config.updateManifestUrl,
+      '$baseUrl/user-service/v1/server-info?client_platform=app',
+    );
     expect(config.releasesUrl, '$baseUrl/#download');
     expect(config.agentImEnabled, isTrue);
     expect(config.multiDeviceDeviceRevokeEnabled, isTrue);
@@ -49,11 +53,23 @@ void main() {
     }
   });
 
-  test('agent-connect.cn enables Agent and Daemon capabilities', () {
-    final config = AwikiEnvironmentConfig(baseUrl: 'https://agent-connect.cn');
+  test('compatibility realms retain Agent and Daemon capabilities', () {
+    expect(
+      agentDaemonTenantDomainAllowlist,
+      containsAll(<String>{
+        'awiki.ai',
+        'awiki.me',
+        'agent-connect.cn',
+        'awiki.info',
+        'anpclaw.com',
+      }),
+    );
+    for (final domain in agentDaemonCompatibilityTenantDomains) {
+      final config = AwikiEnvironmentConfig(baseUrl: 'https://$domain');
 
-    expect(config.didDomain, 'agent-connect.cn');
-    expect(config.agentImEnabled, isTrue);
+      expect(config.didDomain, domain);
+      expect(config.agentImEnabled, isTrue, reason: domain);
+    }
   });
 
   test('Agent and Daemon realm allowlist fails closed', () {
@@ -85,7 +101,7 @@ void main() {
     expect(config.daemonDownloadBaseUrl, 'https://anpclaw.com/daemon');
     expect(
       config.updateManifestUrl,
-      'https://anpclaw.com/downloads/awiki-me/latest.json',
+      'https://anpclaw.com/user-service/v1/server-info?client_platform=app',
     );
     expect(config.releasesUrl, 'https://anpclaw.com/#download');
   });

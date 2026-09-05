@@ -8,8 +8,8 @@ void main() {
   test('fromEnvironment maps default service endpoints into SDK config', () {
     final config = AwikiImCoreEnvironmentConfig.fromEnvironment();
     final coreConfig = config.toCoreConfig();
-    const baseUrl = primaryTenantBaseUrl;
-    const domain = primaryTenantDomain;
+    final baseUrl = primaryTenantBaseUrl;
+    final domain = primaryTenantDomain;
 
     expect(config.serviceBaseUrl, baseUrl);
     expect(config.userServiceEndpoint, baseUrl);

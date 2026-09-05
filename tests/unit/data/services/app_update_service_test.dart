@@ -15,10 +15,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('default update URLs follow the default AWiki environment', () {
-    const baseUrl = primaryTenantBaseUrl;
+    final baseUrl = primaryTenantBaseUrl;
     expect(
       kDefaultUpdateManifestUrl,
-      '$baseUrl/downloads/awiki-me/latest.json',
+      '$baseUrl/user-service/v1/server-info?client_platform=app',
     );
     expect(kDefaultReleasesUrl, '$baseUrl/#download');
   });
@@ -42,22 +42,25 @@ void main() {
     expect(httpClient.requestedUrls, <String>[
       'https://updates.example/latest.json',
     ]);
+    expect(storage.values.values, contains(contains('"buildNumber":12')));
     expect(
-      storage.values['awiki_me_update_last_manifest'],
-      contains('"buildNumber":12'),
+      storage.values.keys.any((key) => key.endsWith('_checked_at')),
+      isTrue,
     );
-    expect(storage.values['awiki_me_update_last_checked_at'], isNotNull);
   });
 
   test('auto check uses fresh cached manifest without network', () async {
-    final storage = _MemoryKeyValueStore(<String, String>{
-      'awiki_me_update_last_checked_at': DateTime.now()
-          .toUtc()
-          .toIso8601String(),
-      'awiki_me_update_last_manifest': jsonEncode(
-        AppUpdateManifest.fromJson(_manifestJson(buildNumber: 15)).toJson(),
+    final storage = _MemoryKeyValueStore();
+    final warmClient = _QueueHttpClient(<_HttpFixture>[
+      _HttpFixture.json(
+        'https://updates.example/latest.json',
+        _manifestJson(buildNumber: 15),
       ),
-    });
+    ]);
+    await _service(
+      storage: storage,
+      httpClient: warmClient,
+    ).checkForUpdates(force: true);
     final httpClient = _QueueHttpClient(const <_HttpFixture>[]);
     final service = _service(storage: storage, httpClient: httpClient);
 
@@ -69,12 +72,49 @@ void main() {
     expect(httpClient.requestedUrls, isEmpty);
   });
 
+  test(
+    'auto check refreshes a cached policy that currently locks the app',
+    () async {
+      final storage = _MemoryKeyValueStore();
+      await _service(
+        storage: storage,
+        httpClient: _QueueHttpClient(<_HttpFixture>[
+          _HttpFixture.json(
+            'https://updates.example/latest.json',
+            _manifestJson(minimumVersion: '2.0.0'),
+          ),
+        ]),
+      ).checkForUpdates(force: true);
+      final httpClient = _QueueHttpClient(<_HttpFixture>[
+        _HttpFixture.json(
+          'https://updates.example/latest.json',
+          _manifestJson(policyRevision: 5, minimumVersion: '1.0.0'),
+        ),
+      ]);
+
+      final result = await _service(
+        storage: storage,
+        httpClient: httpClient,
+      ).checkForUpdates(force: false);
+
+      expect(result.wasSkipped, isFalse);
+      expect(result.versionUnsupported, isFalse);
+      expect(httpClient.requestedUrls, hasLength(1));
+    },
+  );
+
   test('auto check falls back to cached manifest when request fails', () async {
-    final storage = _MemoryKeyValueStore(<String, String>{
-      'awiki_me_update_last_manifest': jsonEncode(
-        AppUpdateManifest.fromJson(_manifestJson(buildNumber: 13)).toJson(),
-      ),
-    });
+    final storage = _MemoryKeyValueStore();
+    await _service(
+      storage: storage,
+      httpClient: _QueueHttpClient(<_HttpFixture>[
+        _HttpFixture.json(
+          'https://updates.example/latest.json',
+          _manifestJson(buildNumber: 13),
+        ),
+      ]),
+    ).checkForUpdates(force: true);
+    storage.values.removeWhere((key, _) => key.endsWith('_checked_at'));
     final httpClient = _QueueHttpClient(<_HttpFixture>[
       _HttpFixture.text('https://updates.example/latest.json', 503, 'down'),
     ]);
@@ -85,7 +125,210 @@ void main() {
     expect(result.wasSkipped, isFalse);
     expect(result.latestManifest?.buildNumber, 13);
     expect(result.hasUpdate, isTrue);
+    expect(result.usedCache, isTrue);
+    expect(result.failureReason, contains('503'));
   });
+
+  test('tenant cache cannot satisfy another tenant policy check', () async {
+    final storage = _MemoryKeyValueStore();
+    await _service(
+      storage: storage,
+      httpClient: _QueueHttpClient(<_HttpFixture>[
+        _HttpFixture.json(
+          'https://updates.example/latest.json',
+          _manifestJson(),
+        ),
+      ]),
+      tenantId: 'china',
+    ).checkForUpdates(force: true);
+
+    await expectLater(
+      _service(
+        storage: storage,
+        httpClient: _QueueHttpClient(<_HttpFixture>[
+          _HttpFixture.text('https://updates.example/latest.json', 503, 'down'),
+        ]),
+        tenantId: 'global',
+      ).checkForUpdates(force: true),
+      throwsA(isA<UpdateInstallFailed>()),
+    );
+  });
+
+  test(
+    'revision rollback is rejected and current tenant cache is kept',
+    () async {
+      final storage = _MemoryKeyValueStore();
+      final service = _service(
+        storage: storage,
+        httpClient: _QueueHttpClient(<_HttpFixture>[
+          _HttpFixture.json(
+            'https://updates.example/latest.json',
+            _manifestJson(policyRevision: 9, buildNumber: 15),
+          ),
+          _HttpFixture.json(
+            'https://updates.example/latest.json',
+            _manifestJson(policyRevision: 8, buildNumber: 16),
+          ),
+        ]),
+      );
+      await service.checkForUpdates(force: true);
+
+      final result = await service.checkForUpdates(force: true);
+
+      expect(result.latestManifest?.buildNumber, 15);
+      expect(result.usedCache, isTrue);
+      expect(result.failureReason, contains('revision moved backwards'));
+    },
+  );
+
+  test('minimum version restriction comes only from selected policy', () async {
+    final service = _service(
+      storage: _MemoryKeyValueStore(),
+      httpClient: _QueueHttpClient(<_HttpFixture>[
+        _HttpFixture.json(
+          'https://updates.example/latest.json',
+          _manifestJson(minimumVersion: '1.1.0'),
+        ),
+      ]),
+    );
+
+    final result = await service.checkForUpdates(force: true);
+
+    expect(result.versionUnsupported, isTrue);
+  });
+
+  test('custom tenant 404 means no automatic policy and no gate', () async {
+    final service = _service(
+      storage: _MemoryKeyValueStore(),
+      httpClient: _QueueHttpClient(<_HttpFixture>[
+        _HttpFixture.text(
+          'https://updates.example/latest.json',
+          404,
+          'missing',
+        ),
+      ]),
+      officialTenant: false,
+    );
+
+    final result = await service.checkForUpdates(force: true);
+
+    expect(result.policyUnavailable, isTrue);
+    expect(result.versionUnsupported, isFalse);
+  });
+
+  test('custom tenant 404 clears an earlier minimum-version cache', () async {
+    final service = _service(
+      storage: _MemoryKeyValueStore(),
+      httpClient: _QueueHttpClient(<_HttpFixture>[
+        _HttpFixture.json(
+          'https://updates.example/latest.json',
+          _manifestJson(minimumVersion: '2.0.0'),
+        ),
+        _HttpFixture.text(
+          'https://updates.example/latest.json',
+          404,
+          'missing',
+        ),
+      ]),
+      officialTenant: false,
+    );
+    expect(
+      (await service.checkForUpdates(force: true)).versionUnsupported,
+      isTrue,
+    );
+
+    final result = await service.checkForUpdates(force: true);
+
+    expect(result.policyUnavailable, isTrue);
+    expect(result.versionUnsupported, isFalse);
+    expect(result.latestManifest, isNull);
+    expect(result.usedCache, isFalse);
+  });
+
+  test(
+    'custom tenant can explicitly check either isolated official source',
+    () async {
+      final storage = _MemoryKeyValueStore();
+      final service = _service(
+        storage: storage,
+        httpClient: _QueueHttpClient(<_HttpFixture>[
+          _HttpFixture.json(
+            'https://awiki.ai/user-service/v1/server-info?client_platform=app',
+            _serverInfoJson(
+              origin: 'https://awiki.ai',
+              minimumVersion: '2.0.0',
+            ),
+          ),
+        ]),
+        officialTenant: false,
+      );
+
+      final result = await service.checkOfficialSource(
+        AppOfficialUpdateSource.secondary,
+      );
+
+      expect(result.latestManifest?.policyOrigin, 'https://awiki.ai');
+      expect(result.versionUnsupported, isFalse);
+      expect(
+        await service.loadPreferredOfficialSource(),
+        AppOfficialUpdateSource.secondary,
+      );
+    },
+  );
+
+  test('unified server-info maps the current platform download page', () async {
+    final storage = _MemoryKeyValueStore();
+    final client = _QueueHttpClient(<_HttpFixture>[
+      _HttpFixture.json(
+        'https://updates.example/user-service/v1/server-info?client_platform=app',
+        _serverInfoJson(),
+      ),
+    ]);
+    final service = AppUpdateService(
+      storage: storage,
+      tenantId: 'tenant-test',
+      backendBaseUrl: 'https://updates.example/backend',
+      httpClient: client,
+      platformBridge: _FakePlatformUpdateBridge(),
+      packageInfoLoader: () async => PackageInfo(
+        appName: 'AWiki Me',
+        packageName: 'ai.awiki.awikime',
+        version: '1.0.0',
+        buildNumber: '10',
+      ),
+      urlLauncher: (_) async => true,
+    );
+
+    final result = await service.checkForUpdates(force: true);
+
+    expect(result.latestManifest?.version, '1.2.0');
+    expect(result.latestManifest?.githubReleaseUrl, isNotEmpty);
+    expect(result.hasUpdate, isTrue);
+  });
+
+  test(
+    'ignored recommendation state is isolated by tenant and version',
+    () async {
+      final storage = _MemoryKeyValueStore();
+      final manifest = AppUpdateManifest.fromJson(_manifestJson());
+      final china = _service(
+        storage: storage,
+        httpClient: _QueueHttpClient(const <_HttpFixture>[]),
+        tenantId: 'china',
+      );
+      final global = _service(
+        storage: storage,
+        httpClient: _QueueHttpClient(const <_HttpFixture>[]),
+        tenantId: 'global',
+      );
+
+      await china.markVersionPrompted(manifest);
+      await china.ignoreVersion(manifest);
+
+      expect(await china.isVersionIgnored(manifest), isTrue);
+      expect(await global.isVersionIgnored(manifest), isFalse);
+    },
+  );
 
   test('force check surfaces manifest request errors', () async {
     final service = _service(
@@ -162,12 +405,26 @@ void main() {
       throwsA(isA<UpdateInstallFailed>()),
     );
   });
+
+  test('dispose does not close an injected HTTP client', () async {
+    final client = _QueueHttpClient(const <_HttpFixture>[]);
+    final service = _service(
+      storage: _MemoryKeyValueStore(),
+      httpClient: client,
+    );
+
+    service.dispose();
+
+    expect(client.isClosed, isFalse);
+  });
 }
 
 AppUpdateService _service({
   required AppKeyValueStore storage,
   required http.Client httpClient,
   Future<bool> Function(Uri uri)? urlLauncher,
+  String tenantId = 'tenant-test',
+  bool officialTenant = true,
 }) {
   return AppUpdateService(
     storage: storage,
@@ -180,29 +437,99 @@ AppUpdateService _service({
       buildNumber: '10',
     ),
     urlLauncher: urlLauncher ?? (_) async => true,
+    tenantId: tenantId,
+    backendBaseUrl: 'https://updates.example/backend',
     manifestUrl: 'https://updates.example/latest.json',
     releasesUrl: 'https://updates.example/releases',
+    officialTenant: officialTenant,
   );
 }
 
 Map<String, Object?> _manifestJson({
   int buildNumber = 12,
+  int policyRevision = 4,
+  String minimumVersion = '1.0.0',
   String? macosAppcastUrl = 'https://updates.example/appcast.xml',
+  String origin = 'https://updates.example',
 }) {
   return <String, Object?>{
+    'product': 'awiki-me',
+    'channel': 'stable',
+    'policy_origin': origin,
+    'policy_revision': policyRevision,
     'version': '1.2.0',
     'buildNumber': buildNumber,
+    'minimum_supported_version': minimumVersion,
+    'minimum_supported_build_number': 1,
+    'published_at': '2026-06-15T01:02:03.000Z',
+    'release_notes_url': '$origin/releases/1.2.0',
     'publishedAt': '2026-06-15T01:02:03.000Z',
-    'releaseNotesUrl': 'https://updates.example/releases/1.2.0',
-    'githubReleaseUrl': 'https://updates.example/releases/1.2.0',
+    'releaseNotesUrl': '$origin/releases/1.2.0',
+    'githubReleaseUrl': '$origin/releases/1.2.0',
     'platforms': <String, Object?>{
       'macos': <String, Object?>{
         if (macosAppcastUrl != null) 'appcastUrl': macosAppcastUrl,
-        'downloadUrl': 'https://updates.example/awiki-me.dmg',
+        'downloadUrl': '$origin/awiki-me.dmg',
+        'sha256':
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'sizeBytes': 123,
       },
       'android': <String, Object?>{
-        'downloadUrl': 'https://updates.example/awiki-me.apk',
-        'sha256': 'abc123',
+        'downloadUrl': '$origin/awiki-me.apk',
+        'sha256':
+            'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        'sizeBytes': 456,
+      },
+      'windows-x64': <String, Object?>{
+        'downloadUrl': '$origin/awiki-me.exe',
+        'sha256':
+            'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        'sizeBytes': 789,
+      },
+    },
+  };
+}
+
+Map<String, Object?> _serverInfoJson({
+  String origin = 'https://updates.example',
+  String minimumVersion = '1.0.0',
+}) {
+  Map<String, Object?> platform(String name) => <String, Object?>{
+    'enabled': true,
+    'download_page_url': '$origin/downloads/$name',
+    'artifact': <String, Object?>{
+      'url': '$origin/downloads/awiki-me.$name',
+      'mirrors': <String>[],
+      'sha256':
+          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      'size_bytes': 123,
+    },
+  };
+  return <String, Object?>{
+    'schema_version': 1,
+    'client_versions': <String, Object?>{
+      'schema_version': 1,
+      'channel': 'stable',
+      'policy_origin': origin,
+      'policy_revision': 4,
+      'published_at': '2026-06-15T01:02:03.000Z',
+      'products': <String, Object?>{
+        'app': <String, Object?>{
+          'enabled': true,
+          'recommended_version': '1.2.0',
+          'recommended_build_number': 12,
+          'minimum_supported_version': minimumVersion,
+          'minimum_supported_build_number': 1,
+          'minimum_release': '0903',
+          'release_notes_url': '$origin/releases/1.2.0',
+          'platforms': <String, Object?>{
+            'android': platform('android'),
+            'macos': platform('macos'),
+            'windows': platform('windows'),
+          },
+        },
+        'cli': <String, Object?>{'enabled': false},
+        'dsh': <String, Object?>{'enabled': false},
       },
     },
   };
@@ -244,6 +571,13 @@ class _QueueHttpClient extends http.BaseClient {
 
   final List<_HttpFixture> _fixtures;
   final List<String> requestedUrls = <String>[];
+  bool isClosed = false;
+
+  @override
+  void close() {
+    isClosed = true;
+    super.close();
+  }
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {

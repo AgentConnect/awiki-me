@@ -895,24 +895,24 @@ void main() {
       expect(command.command, isNot(contains('did:human:me')));
       expect(
         command.command,
-        "curl -fsSL 'https://awiki.ai/daemon/install.sh' | "
-        "AWIKI_DAEMON_BASE_URL='https://awiki.ai' "
-        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://awiki.ai/daemon' "
+        "curl -fsSL 'https://awiki.me/daemon/install.sh' | "
+        "AWIKI_DAEMON_BASE_URL='https://awiki.me' "
+        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://awiki.me/daemon' "
         "sh -s -- --token 'daemon-token'",
       );
       expect(
         command.fallbackCommand,
-        'awiki-deamon install --token daemon-token --base-url https://awiki.ai',
+        'awiki-deamon install --token daemon-token --base-url https://awiki.me',
       );
-      expect(command.installerUrl, 'https://awiki.ai/daemon/install.sh');
-      expect(command.cleanupUrl, 'https://awiki.ai/daemon/cleanup.sh');
+      expect(command.installerUrl, 'https://awiki.me/daemon/install.sh');
+      expect(command.cleanupUrl, 'https://awiki.me/daemon/cleanup.sh');
       expect(
         command.cleanupCommand,
-        'curl -fsSL https://awiki.ai/daemon/cleanup.sh | sh',
+        'curl -fsSL https://awiki.me/daemon/cleanup.sh | sh',
       );
       expect(
         command.packageUrlTemplate,
-        'https://awiki.ai/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
+        'https://awiki.me/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
       );
     },
   );
@@ -924,25 +924,25 @@ void main() {
       final service = DefaultAgentControlService(
         inventory: inventory,
         messages: _MessagesStub(),
-        environment: AwikiEnvironmentConfig(baseUrl: 'https://anpclaw.com'),
+        environment: AwikiEnvironmentConfig(baseUrl: primaryTenantBaseUrl),
       );
 
       final command = await service.createDaemonInstallCommand(
         controllerDid: 'did:human:me',
-        controllerHandle: 'alice.anpclaw.com',
+        controllerHandle: 'alice.$primaryTenantDomain',
         clientPlatform: 'macos',
       );
 
       expect(
         command.command,
-        "curl -fsSL 'https://anpclaw.com/daemon/install.sh' | "
-        "AWIKI_DAEMON_BASE_URL='https://anpclaw.com' "
-        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://anpclaw.com/daemon' "
+        "curl -fsSL '$primaryTenantBaseUrl/daemon/install.sh' | "
+        "AWIKI_DAEMON_BASE_URL='$primaryTenantBaseUrl' "
+        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='$primaryTenantBaseUrl/daemon' "
         "sh -s -- --token 'daemon-token'",
       );
       expect(
         command.fallbackCommand,
-        'awiki-deamon install --token daemon-token --base-url https://anpclaw.com',
+        'awiki-deamon install --token daemon-token --base-url $primaryTenantBaseUrl',
       );
     },
   );

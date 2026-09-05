@@ -26,33 +26,46 @@ void main() {
     if (await root.exists()) await root.delete(recursive: true);
   });
 
-  test('creates strict registry v1 and immutable UUID scope layout', () async {
-    final registry = await store.loadRegistry();
-    final tenant = registry.activeTenant;
-    final layout = await store.layoutForScope(tenant.storageScopeId);
+  test(
+    'fresh install creates both official tenants and activates china',
+    () async {
+      final registry = await store.loadRegistry();
+      final tenant = registry.activeTenant;
+      final layout = await store.layoutForScope(tenant.storageScopeId);
 
-    expect(registry.revision, 1);
-    expect(tenant.backendBaseUrl, primaryTenantBaseUrl);
-    expect(tenant.didHost, primaryTenantDomain);
-    expect(tenant.tenantProfileId.value, isNot(tenant.storageScopeId.value));
-    expect(
-      layout.scopeRoot,
-      contains('storage-scopes/${tenant.storageScopeId}'),
-    );
-    expect(await File(layout.manifestPath).exists(), isTrue);
-    expect(await Directory(layout.identityVaultRoot).exists(), isTrue);
-    final raw = await File(
-      p.join(
-        root.path,
-        'support',
-        'awiki-me',
-        'control',
-        'tenant-registry.json',
-      ),
-    ).readAsString();
-    expect(raw, isNot(contains('state_namespace')));
-    expect(raw, isNot(contains('tenant-default')));
-  });
+      expect(registry.revision, 1);
+      expect(registry.officialCatalogVersion, officialTenantCatalogVersion);
+      expect(registry.visibleTenants, hasLength(2));
+      expect(tenant.backendBaseUrl, primaryTenantBaseUrl);
+      expect(tenant.didHost, primaryTenantDomain);
+      expect(tenant.officialKey, AppTenantOfficialKey.primary);
+      expect(
+        registry.visibleTenants.map((item) => item.officialKey),
+        <AppTenantOfficialKey>[
+          AppTenantOfficialKey.primary,
+          AppTenantOfficialKey.secondary,
+        ],
+      );
+      expect(tenant.tenantProfileId.value, isNot(tenant.storageScopeId.value));
+      expect(
+        layout.scopeRoot,
+        contains('storage-scopes/${tenant.storageScopeId}'),
+      );
+      expect(await File(layout.manifestPath).exists(), isTrue);
+      expect(await Directory(layout.identityVaultRoot).exists(), isTrue);
+      final raw = await File(
+        p.join(
+          root.path,
+          'support',
+          'awiki-me',
+          'control',
+          'tenant-registry.json',
+        ),
+      ).readAsString();
+      expect(raw, isNot(contains('state_namespace')));
+      expect(raw, isNot(contains('tenant-default')));
+    },
+  );
 
   test('explicit test realm binds the fresh built-in scope manifest', () async {
     store = AppTenantStore(
@@ -114,8 +127,16 @@ void main() {
   test(
     'existing public HTTP tenant upgrades in place without moving scope data',
     () async {
-      final registry = await store.loadRegistry();
-      final tenant = registry.activeTenant;
+      final registry = await store.createTenant(
+        const AppTenantCreateInput(
+          name: 'Legacy HTTP',
+          backendBaseUrl: 'https://anpclaw.com/api/v1',
+          didHost: 'anpclaw.com',
+        ),
+      );
+      final tenant = registry.tenants.singleWhere(
+        (item) => item.name == 'Legacy HTTP',
+      );
       final layout = await store.layoutForScope(tenant.storageScopeId);
       final sentinel = File(layout.productDatabasePath);
       await sentinel.parent.create(recursive: true);
@@ -131,8 +152,14 @@ void main() {
       );
       final legacy = registry.toJson();
       final tenants = legacy['tenants']! as List<Object?>;
-      final active = tenants.single as Map<String, Object?>;
-      active['backend_base_url'] = 'http://anpclaw.com/api/v1';
+      final rawTenant =
+          tenants.singleWhere(
+                (item) =>
+                    (item! as Map<String, Object?>)['tenant_profile_id'] ==
+                    tenant.id,
+              )!
+              as Map<String, Object?>;
+      rawTenant['backend_base_url'] = 'http://anpclaw.com/api/v1';
       await registryFile.writeAsString(jsonEncode(legacy), flush: true);
 
       final migrated = await store.loadRegistry();
@@ -140,19 +167,28 @@ void main() {
 
       expect(migrated.revision, registry.revision + 1);
       expect(reopened.revision, migrated.revision);
-      expect(migrated.activeTenant.tenantProfileId, tenant.tenantProfileId);
-      expect(migrated.activeTenant.storageScopeId, tenant.storageScopeId);
-      expect(
-        migrated.activeTenant.backendBaseUrl,
-        'https://anpclaw.com/api/v1',
+      final migratedTenant = migrated.tenants.singleWhere(
+        (item) => item.id == tenant.id,
       );
+      expect(migratedTenant.tenantProfileId, tenant.tenantProfileId);
+      expect(migratedTenant.storageScopeId, tenant.storageScopeId);
+      expect(migratedTenant.backendBaseUrl, 'https://anpclaw.com/api/v1');
       expect(await sentinel.readAsBytes(), <int>[8, 0, 8]);
       expect(jsonDecode(await registryFile.readAsString()), migrated.toJson());
     },
   );
 
   test('existing loopback HTTP tenant is not rewritten', () async {
-    final registry = await store.loadRegistry();
+    final registry = await store.createTenant(
+      const AppTenantCreateInput(
+        name: 'Loopback',
+        backendBaseUrl: 'http://localhost:9891',
+        didHost: 'loopback.example.com',
+      ),
+    );
+    final tenant = registry.tenants.singleWhere(
+      (item) => item.name == 'Loopback',
+    );
     final registryFile = File(
       p.join(
         root.path,
@@ -164,27 +200,36 @@ void main() {
     );
     final legacy = registry.toJson();
     final tenants = legacy['tenants']! as List<Object?>;
-    final active = tenants.single as Map<String, Object?>;
-    active['backend_base_url'] = 'http://127.0.0.1:9891';
+    final rawTenant =
+        tenants.singleWhere(
+              (item) =>
+                  (item! as Map<String, Object?>)['tenant_profile_id'] ==
+                  tenant.id,
+            )!
+            as Map<String, Object?>;
+    rawTenant['backend_base_url'] = 'http://127.0.0.1:9891';
     await registryFile.writeAsString(jsonEncode(legacy), flush: true);
 
     final reopened = await store.loadRegistry();
 
     expect(reopened.revision, registry.revision);
-    expect(reopened.activeTenant.backendBaseUrl, 'http://127.0.0.1:9891');
+    expect(
+      reopened.tenants
+          .singleWhere((item) => item.id == tenant.id)
+          .backendBaseUrl,
+      'http://127.0.0.1:9891',
+    );
   });
 
   test(
-    'existing registry ignores new build defaults and preserves scope data',
+    'legacy global install stays active and preserves all scope data',
     () async {
       final secrets = FakeScopeSecretRepository();
       final originalStore = AppTenantStore(
         appStateRoot: root.path,
         secretRepository: secrets,
-        initialTenantFactory: () => defaultTenantProfile().copyWith(
-          backendBaseUrl: 'https://awiki.ai',
-          didHost: 'awiki.ai',
-        ),
+        initialTenantFactory: () =>
+            officialTenantProfile(AppTenantOfficialKey.secondary),
       );
       final original = await originalStore.loadRegistry();
       final originalTenant = original.activeTenant;
@@ -206,7 +251,17 @@ void main() {
           'tenant-registry.json',
         ),
       );
-      final registryBeforeUpgrade = await registryFile.readAsString();
+      final legacy = original.toJson();
+      legacy.remove('official_catalog_version');
+      final legacyTenants = legacy['tenants']! as List<Object?>;
+      legacyTenants.removeWhere(
+        (item) =>
+            (item! as Map<String, Object?>)['official_key'] ==
+            AppTenantOfficialKey.primary.wireName,
+      );
+      final legacyGlobal = legacyTenants.single as Map<String, Object?>;
+      legacyGlobal['official_key'] = 'global';
+      await registryFile.writeAsString(jsonEncode(legacy), flush: true);
 
       final upgradedStore = AppTenantStore(
         appStateRoot: root.path,
@@ -217,22 +272,250 @@ void main() {
       );
       final reopened = await upgradedStore.loadRegistry();
 
-      expect(reopened.revision, original.revision);
+      expect(reopened.revision, original.revision + 1);
       expect(reopened.activeTenantProfileId, original.activeTenantProfileId);
       expect(
         reopened.activeTenant.storageScopeId,
         originalTenant.storageScopeId,
       );
       expect(reopened.activeTenant.backendBaseUrl, 'https://awiki.ai');
-      expect(await registryFile.readAsString(), registryBeforeUpgrade);
+      expect(reopened.activeTenant.officialKey, AppTenantOfficialKey.secondary);
+      expect(reopened.visibleTenants, hasLength(2));
       expect(await imCoreSentinel.readAsBytes(), <int>[1, 2, 3, 4]);
       expect(await productSentinel.readAsBytes(), <int>[5, 6, 7, 8]);
       expect(
         (await secrets.readExisting(originalTenant.storageScopeId)).status,
         ScopeSecretReadStatus.present,
       );
+      final reopenedAgain = await upgradedStore.loadRegistry();
+      expect(reopenedAgain.toJson(), reopened.toJson());
     },
   );
+
+  test(
+    'matching historical custom tenant is promoted without duplicating scope',
+    () async {
+      final original = await store.loadRegistry();
+      final global = original.tenants.singleWhere(
+        (item) => item.officialKey == AppTenantOfficialKey.secondary,
+      );
+      final registryFile = File(
+        p.join(
+          root.path,
+          'support',
+          'awiki-me',
+          'control',
+          'tenant-registry.json',
+        ),
+      );
+      final legacy = original.toJson()..['official_catalog_version'] = 0;
+      final tenants = legacy['tenants']! as List<Object?>;
+      final rawGlobal =
+          tenants.singleWhere(
+                (item) =>
+                    (item! as Map<String, Object?>)['tenant_profile_id'] ==
+                    global.id,
+              )!
+              as Map<String, Object?>;
+      rawGlobal['kind'] = AppTenantKind.custom.wireName;
+      rawGlobal.remove('official_key');
+      rawGlobal['display_name'] = 'Historical Global';
+      await registryFile.writeAsString(jsonEncode(legacy), flush: true);
+
+      final migrated = await store.loadRegistry();
+      final promoted = migrated.tenants.singleWhere(
+        (item) => item.officialKey == AppTenantOfficialKey.secondary,
+      );
+
+      expect(promoted.tenantProfileId, global.tenantProfileId);
+      expect(promoted.storageScopeId, global.storageScopeId);
+      expect(promoted.kind, AppTenantKind.builtInAwiki);
+      expect(promoted.name, secondaryBuiltinTenantName);
+      expect(
+        migrated.tenants.where(
+          (item) => item.backendBaseUrl == secondaryBuiltinTenantBackendBaseUrl,
+        ),
+        hasLength(1),
+      );
+      expect((await store.loadRegistry()).toJson(), migrated.toJson());
+    },
+  );
+
+  test(
+    'archived custom duplicate does not block official endpoint reconciliation',
+    () async {
+      var registry = await store.loadRegistry();
+      registry = await store.createTenant(
+        const AppTenantCreateInput(
+          name: 'Archived legacy tenant',
+          backendBaseUrl: 'https://legacy.example',
+          didHost: 'legacy.example',
+        ),
+      );
+      final legacy = registry.tenants.singleWhere(
+        (item) => item.backendBaseUrl == 'https://legacy.example',
+      );
+      registry = await store.deleteTenant(legacy.id);
+      final registryFile = File(
+        p.join(
+          root.path,
+          'support',
+          'awiki-me',
+          'control',
+          'tenant-registry.json',
+        ),
+      );
+      final raw = registry.toJson()..['official_catalog_version'] = 0;
+      final rawLegacy =
+          (raw['tenants']! as List<Object?>).singleWhere(
+                (item) =>
+                    (item! as Map<String, Object?>)['tenant_profile_id'] ==
+                    legacy.id,
+              )!
+              as Map<String, Object?>;
+      rawLegacy['backend_base_url'] = primaryBuiltinTenantBackendBaseUrl;
+      rawLegacy['did_host'] = primaryBuiltinTenantDidHost;
+      await registryFile.writeAsString(jsonEncode(raw), flush: true);
+
+      final reconciled = await store.loadRegistry();
+
+      expect(
+        reconciled.tenants.where(
+          (item) =>
+              !item.isArchived &&
+              item.officialKey == AppTenantOfficialKey.primary,
+        ),
+        hasLength(1),
+      );
+      final preserved = reconciled.tenants.singleWhere(
+        (item) => item.id == legacy.id,
+      );
+      expect(preserved.isArchived, isTrue);
+      expect(preserved.kind, AppTenantKind.custom);
+      expect(preserved.officialKey, isNull);
+    },
+  );
+
+  test(
+    'unmatched keyless built-in tenant is demoted without moving scope',
+    () async {
+      var registry = await store.loadRegistry();
+      registry = await store.createTenant(
+        const AppTenantCreateInput(
+          name: 'Historical package tenant',
+          backendBaseUrl: 'https://awiki.info',
+          didHost: 'awiki.info',
+        ),
+      );
+      final historical = registry.tenants.singleWhere(
+        (item) => item.backendBaseUrl == 'https://awiki.info',
+      );
+      registry = await store.useTenant(historical.id);
+      final registryFile = File(
+        p.join(
+          root.path,
+          'support',
+          'awiki-me',
+          'control',
+          'tenant-registry.json',
+        ),
+      );
+      final raw = registry.toJson()..['official_catalog_version'] = 0;
+      final rawHistorical =
+          (raw['tenants']! as List<Object?>).singleWhere(
+                (item) =>
+                    (item! as Map<String, Object?>)['tenant_profile_id'] ==
+                    historical.id,
+              )!
+              as Map<String, Object?>;
+      rawHistorical['kind'] = AppTenantKind.builtInAwiki.wireName;
+      rawHistorical.remove('official_key');
+      await registryFile.writeAsString(jsonEncode(raw), flush: true);
+
+      final reconciled = await store.loadRegistry();
+      final preserved = reconciled.tenants.singleWhere(
+        (item) => item.id == historical.id,
+      );
+
+      expect(reconciled.activeTenantProfileId, historical.tenantProfileId);
+      expect(preserved.storageScopeId, historical.storageScopeId);
+      expect(preserved.kind, AppTenantKind.custom);
+      expect(preserved.officialKey, isNull);
+    },
+  );
+
+  test(
+    'changed package slot origin preserves the old active scope as custom',
+    () async {
+      final original = await store.loadRegistry();
+      final originalTenant = original.activeTenant;
+      final registryFile = File(
+        p.join(
+          root.path,
+          'support',
+          'awiki-me',
+          'control',
+          'tenant-registry.json',
+        ),
+      );
+      final previousPackageRegistry = original.toJson();
+      final tenants = previousPackageRegistry['tenants']! as List<Object?>;
+      final oldPrimary =
+          tenants.singleWhere(
+                (item) =>
+                    (item! as Map<String, Object?>)['tenant_profile_id'] ==
+                    originalTenant.id,
+              )!
+              as Map<String, Object?>;
+      oldPrimary['backend_base_url'] = 'https://previous-primary.example';
+      oldPrimary['did_host'] = 'previous-primary.example';
+      await registryFile.writeAsString(
+        jsonEncode(previousPackageRegistry),
+        flush: true,
+      );
+
+      final migrated = await store.loadRegistry();
+      final preserved = migrated.activeTenant;
+      final replacement = migrated.tenants.singleWhere(
+        (item) => item.officialKey == AppTenantOfficialKey.primary,
+      );
+
+      expect(preserved.tenantProfileId, originalTenant.tenantProfileId);
+      expect(preserved.storageScopeId, originalTenant.storageScopeId);
+      expect(preserved.kind, AppTenantKind.custom);
+      expect(preserved.officialKey, isNull);
+      expect(preserved.backendBaseUrl, 'https://previous-primary.example');
+      expect(
+        replacement.tenantProfileId,
+        isNot(originalTenant.tenantProfileId),
+      );
+      expect(replacement.storageScopeId, isNot(originalTenant.storageScopeId));
+      expect(replacement.backendBaseUrl, primaryBuiltinTenantBackendBaseUrl);
+    },
+  );
+
+  test('both official tenants reject edit and archive operations', () async {
+    final registry = await store.loadRegistry();
+    for (final tenant in registry.tenants.where(
+      (item) => item.isOfficialTenant,
+    )) {
+      await expectLater(
+        store.updateTenant(
+          AppTenantUpdateInput(
+            id: tenant.id,
+            name: '${tenant.name} edited',
+            backendBaseUrl: tenant.backendBaseUrl,
+            didHost: tenant.didHost,
+          ),
+        ),
+        throwsA(isA<AppTenantValidationException>()),
+      );
+      await expectLater(
+        store.deleteTenant(tenant.id),
+        throwsA(isA<AppTenantValidationException>()),
+      );
+    }
+  });
 
   test('two tenants have distinct profile IDs scopes and paths', () async {
     final first = await store.loadRegistry();

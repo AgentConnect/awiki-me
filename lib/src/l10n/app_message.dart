@@ -101,6 +101,9 @@ class AppMessage {
   factory AppMessage.registrationVerificationUnavailable() =>
       const AppMessage._('registrationVerificationUnavailable');
 
+  factory AppMessage.registrationCommittedActivationPending() =>
+      const AppMessage._('registrationCommittedActivationPending');
+
   factory AppMessage.registrationRecoveryStateInvalid() =>
       const AppMessage._('registrationRecoveryStateInvalid');
 
@@ -273,6 +276,8 @@ class AppMessage {
         return AppMessage.registrationVerificationInvalid();
       case 'identity.registration_verification_unavailable':
         return AppMessage.registrationVerificationUnavailable();
+      case 'identity.registration_committed_activation_pending':
+        return AppMessage.registrationCommittedActivationPending();
       case 'identity.registration_recovery_state_invalid':
         return AppMessage.registrationRecoveryStateInvalid();
       case 'handle_recovery.local_state_conflict':
@@ -494,6 +499,8 @@ class AppMessage {
         return l10n.registrationVerificationInvalid;
       case 'registrationVerificationUnavailable':
         return l10n.registrationVerificationUnavailable;
+      case 'registrationCommittedActivationPending':
+        return l10n.registrationCommittedActivationPending;
       case 'registrationRecoveryStateInvalid':
         return l10n.registrationRecoveryStateInvalid;
       case 'registrationLocalStateNeedsAttention':

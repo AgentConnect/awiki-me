@@ -6089,6 +6089,56 @@
           ]
         ]
       }
+    },
+    {
+      "caseId": "TENANT-SWITCH-SMOKE-E2E-001",
+      "feature": "Official tenant switch and restart continuity",
+      "layer": "portable_product_ui",
+      "preconditions": "Flutter desktop and the no-service fake application boundary are available with both built-in official tenants.",
+      "action": "Open tenant management from onboarding, switch to the secondary official tenant through the visible product UI, rebuild the app with the persisted registry projection, and inspect the official tenant actions.",
+      "exactOracles": [
+        "Both official tenants are visible as managed entries and expose no edit or delete action.",
+        "The secondary official tenant becomes active after the visible switch action.",
+        "A fresh app widget rebuild restores the same active official tenant."
+      ],
+      "negativeChecks": [
+        "A missing official tenant, editable or deletable official entry, action-only switch without visible UI, or active-tenant rollback after rebuild fails the case."
+      ],
+      "environment": "no_service",
+      "cleanupPolicy": "none",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me",
+      "implementationPath": "tests/e2e/flutter/app/app_smoke_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "TENANT-SWITCH-SMOKE-E2E-001:official_tenant_visible_and_immutable",
+          "TENANT-SWITCH-SMOKE-E2E-001:official_tenant_switched_through_product_ui",
+          "TENANT-SWITCH-SMOKE-E2E-001:active_tenant_preserved_after_app_rebuild"
+        ],
+        "exactOracleAssertions": [
+          [
+            "TENANT-SWITCH-SMOKE-E2E-001:official_tenant_visible_and_immutable"
+          ],
+          [
+            "TENANT-SWITCH-SMOKE-E2E-001:official_tenant_switched_through_product_ui"
+          ],
+          [
+            "TENANT-SWITCH-SMOKE-E2E-001:active_tenant_preserved_after_app_rebuild"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "TENANT-SWITCH-SMOKE-E2E-001:official_tenant_visible_and_immutable",
+            "TENANT-SWITCH-SMOKE-E2E-001:official_tenant_switched_through_product_ui",
+            "TENANT-SWITCH-SMOKE-E2E-001:active_tenant_preserved_after_app_rebuild"
+          ]
+        ]
+      }
     }
   ]
 }

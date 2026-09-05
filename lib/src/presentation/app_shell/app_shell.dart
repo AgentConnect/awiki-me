@@ -12,6 +12,7 @@ import '../../app/e2e_semantics.dart';
 import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
+import '../../application/tenant/app_tenant.dart';
 import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../domain/entities/user_profile.dart';
@@ -38,6 +39,7 @@ import '../shared/desktop_startup_ready_boundary.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/startup_splash.dart';
+import '../shared/tenant_management_dialog.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'providers/app_update_provider.dart';
 import 'providers/app_runtime_provider.dart';
@@ -115,6 +117,13 @@ class _AppShellState extends ConsumerState<AppShell> {
     });
 
     final runtime = ref.watch(appRuntimeProvider);
+    final update = ref.watch(appUpdateProvider);
+    if (update.versionUnsupported && update.latestManifest != null) {
+      return _AppUpdateRestrictedPage(
+        tenant: ref.watch(activeAppTenantProvider),
+        state: update,
+      );
+    }
     final session = ref.watch(sessionProvider);
     final profile = ref.watch(profileProvider.select((state) => state.profile));
     if (!runtime.authRevoked) {
@@ -287,6 +296,10 @@ class _AppShellState extends ConsumerState<AppShell> {
                 deviceId: pendingJoinRequest.protocolDeviceId,
                 onReview: () => _openDeviceJoinRequest(pendingJoinRequest),
               ),
+            if (update.hasUpdate &&
+                !update.recommendationDismissed &&
+                update.manualOfficialSource == null)
+              _AppUpdateRecommendationBanner(state: update),
             if (runtime.isBusy)
               AwikiMeLoadingMask(label: context.l10n.commonPleaseWait),
             if (_shouldShowRealtimeToast(realtimeStatus))
@@ -482,6 +495,153 @@ class _AppShellState extends ConsumerState<AppShell> {
                 ),
               ),
     };
+  }
+}
+
+class _AppUpdateRestrictedPage extends ConsumerWidget {
+  const _AppUpdateRestrictedPage({required this.tenant, required this.state});
+
+  final AppTenantProfile tenant;
+  final AppUpdateState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final manifest = state.latestManifest!;
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(context.l10n.updateRestrictedTitle),
+      ),
+      child: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  const Icon(CupertinoIcons.arrow_down_circle, size: 52),
+                  const SizedBox(height: 20),
+                  Text(
+                    context.l10n.updateRestrictedMessage(
+                      tenant.name,
+                      manifest.minimumSupportedVersion,
+                      state.currentVersion?.displayLabel ?? '--',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  CupertinoButton(
+                    key: const Key('restricted-update-refresh'),
+                    onPressed: state.status == AppUpdateStatus.checking
+                        ? null
+                        : () => ref
+                              .read(appUpdateProvider.notifier)
+                              .checkForUpdates(force: true),
+                    child: Text(context.l10n.commonRetry),
+                  ),
+                  CupertinoButton.filled(
+                    key: const Key('restricted-update-install'),
+                    onPressed: () =>
+                        ref.read(appUpdateProvider.notifier).installUpdate(),
+                    child: Text(context.l10n.updateRestrictedInstall),
+                  ),
+                  CupertinoButton(
+                    key: const Key('restricted-update-switch-tenant'),
+                    onPressed: () =>
+                        showTenantManagementDialog(context, switchOnly: true),
+                    child: Text(context.l10n.updateRestrictedSwitchTenant),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AppUpdateRecommendationBanner extends ConsumerWidget {
+  const _AppUpdateRecommendationBanner({required this.state});
+
+  final AppUpdateState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final manifest = state.latestManifest!;
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: context.awikiTheme.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AwikiMePalette.brandAccentSoft),
+                boxShadow: const <BoxShadow>[
+                  BoxShadow(
+                    color: Color(0x18000000),
+                    blurRadius: 14,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+                child: Row(
+                  children: <Widget>[
+                    const Icon(
+                      CupertinoIcons.arrow_down_circle,
+                      color: AwikiMePalette.brandAccent,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        context.l10n.settingsUpdateAvailable(manifest.version),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    CupertinoButton(
+                      key: const Key('app-update-recommendation-action'),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      onPressed: () => state.supportsDirectInstall
+                          ? ref.read(appUpdateProvider.notifier).installUpdate()
+                          : ref
+                                .read(appUpdateProvider.notifier)
+                                .openDownloadPage(),
+                      child: Text(
+                        state.supportsDirectInstall
+                            ? context.l10n.settingsInstallUpdate
+                            : context.l10n.settingsDownloadUpdate,
+                      ),
+                    ),
+                    CupertinoButton(
+                      key: const Key('app-update-recommendation-dismiss'),
+                      minimumSize: const Size(36, 36),
+                      padding: const EdgeInsets.all(6),
+                      onPressed: () => ref
+                          .read(appUpdateProvider.notifier)
+                          .dismissRecommendation(),
+                      child: Icon(
+                        CupertinoIcons.xmark,
+                        size: 18,
+                        semanticLabel: context.l10n.commonClose,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -301,6 +301,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'This verification code has expired or has already been used. Send a new code and try again.';
 
   @override
+  String get registrationCommittedActivationPending =>
+      'Your account was created and saved safely on this device, but sign-in setup did not finish. Select the local account and sign in again; no new verification code is needed.';
+
+  @override
   String get registrationRecoveryStateInvalid =>
       'This Handle\'s identity state needs server-side attention. Contact support before trying again.';
 
@@ -367,7 +371,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tenantCurrent => 'Current';
 
   @override
-  String get tenantDefaultBadge => 'Default configuration';
+  String get tenantDefaultBadge => 'Official tenant';
 
   @override
   String get tenantName => 'Tenant name';
@@ -444,7 +448,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tenantValidationBackendHttpsRequired =>
-      'Public tenant addresses must use HTTPS. For example: https://anpclaw.com. HTTP is allowed only for local development addresses such as localhost and 127.0.0.1.';
+      'Public tenant addresses must use HTTPS. For example: https://tenant.example. HTTP is allowed only for local development addresses such as localhost and 127.0.0.1.';
 
   @override
   String get tenantValidationDidHostInvalid =>
@@ -3220,6 +3224,27 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get updateInstallFailed =>
       'Update failed. Please install it from the download page.';
+
+  @override
+  String get updateRestrictedTitle => 'Update required for this tenant';
+
+  @override
+  String updateRestrictedMessage(
+    Object tenantName,
+    Object minimumVersion,
+    Object currentVersion,
+  ) {
+    return '$tenantName requires AWiki Me $minimumVersion or later. You are using $currentVersion. Update the app to continue, or switch tenants.';
+  }
+
+  @override
+  String get updateRestrictedInstall => 'Open official download page';
+
+  @override
+  String get updateRestrictedSwitchTenant => 'Switch tenant';
+
+  @override
+  String get updateRestrictedSettings => 'Settings and local data';
 
   @override
   String get daemonUpgradeStarted => 'Daemon upgrade started.';

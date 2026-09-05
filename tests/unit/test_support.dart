@@ -484,18 +484,25 @@ class FakeUpdateService implements UpdateService {
   bool openInstallPermissionSettingsCalled = false;
   int getCurrentVersionCalls = 0;
   int checkForUpdatesCalls = 0;
+  final List<bool> checkForUpdatesForces = <bool>[];
+  bool versionUnsupported = false;
   Object? checkError;
   Object? installError;
+  bool ignored = false;
+  AppOfficialUpdateSource preferredOfficialSource =
+      AppOfficialUpdateSource.primary;
 
   @override
   Future<AppUpdateCheckResult> checkForUpdates({required bool force}) async {
     checkForUpdatesCalls += 1;
+    checkForUpdatesForces.add(force);
     if (checkError != null) {
       throw checkError!;
     }
     return AppUpdateCheckResult(
       currentVersion: currentVersion,
       latestManifest: latestManifest,
+      versionUnsupported: versionUnsupported,
     );
   }
 
@@ -503,6 +510,29 @@ class FakeUpdateService implements UpdateService {
   Future<AppVersion> getCurrentVersion() async {
     getCurrentVersionCalls += 1;
     return currentVersion;
+  }
+
+  @override
+  Future<AppUpdateCheckResult> checkOfficialSource(
+    AppOfficialUpdateSource source,
+  ) async {
+    preferredOfficialSource = source;
+    return checkForUpdates(force: true);
+  }
+
+  @override
+  Future<AppOfficialUpdateSource> loadPreferredOfficialSource() async =>
+      preferredOfficialSource;
+
+  @override
+  Future<bool> isVersionIgnored(AppUpdateManifest manifest) async => ignored;
+
+  @override
+  Future<void> markVersionPrompted(AppUpdateManifest manifest) async {}
+
+  @override
+  Future<void> ignoreVersion(AppUpdateManifest manifest) async {
+    ignored = true;
   }
 
   @override
@@ -793,6 +823,7 @@ class FakeAwikiGateway implements AwikiAccountGateway {
   int onboardingPhoneRegistrationCalls = 0;
   Completer<void>? onboardingPhoneRegistrationCompleter;
   Object? nextOnboardingPhoneRegistrationError;
+  SessionIdentity? committedIdentityBeforePhoneRegistrationError;
   ExistingHandleJoinMode existingHandleJoinMode =
       ExistingHandleJoinMode.ordinary;
   bool existingHandleJoinRequiresUserPresence = false;
@@ -4014,6 +4045,10 @@ class FakeOnboardingService implements OnboardingService {
     final error = gateway.nextOnboardingPhoneRegistrationError;
     gateway.nextOnboardingPhoneRegistrationError = null;
     if (error != null) {
+      final committed = gateway.committedIdentityBeforePhoneRegistrationError;
+      if (committed != null) {
+        gateway.localCredentials = <SessionIdentity>[committed];
+      }
       throw error;
     }
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {

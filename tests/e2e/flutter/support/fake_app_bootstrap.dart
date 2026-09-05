@@ -5,6 +5,7 @@ import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/application/ports/directory_core_port.dart';
 import 'package:awiki_me/src/application/profile_homepage_resolver.dart';
+import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
@@ -39,6 +40,8 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
   UserProfile? profile,
   AppLocaleMode localeMode = AppLocaleMode.zhHans,
   bool messageSyncV2ReadEnabled = false,
+  AppTenantRegistry? tenantRegistry,
+  AppTenantActions? tenantActions,
 }) {
   final gateway = FakeAwikiGateway()
     ..myProfile = profile ?? _defaultProfile(session)
@@ -62,6 +65,7 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
       initialMode: localeMode,
     ),
     updateService: FakeUpdateService(),
+    tenantRegistry: tenantRegistry,
     appSessionService: FakeAppSessionService(gateway),
     identityCorePort: FakeIdentityCorePort(),
     onboardingService: FakeOnboardingService(gateway),
@@ -104,6 +108,8 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
       attachmentCacheServiceProvider.overrideWithValue(
         FakeAttachmentCacheService(),
       ),
+      if (tenantActions != null)
+        appTenantActionsProvider.overrideWithValue(tenantActions),
       if (session != null)
         sessionProvider.overrideWith((ref) {
           final controller = SessionController();
