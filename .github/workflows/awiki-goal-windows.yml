@@ -26,6 +26,7 @@ jobs:
     env:
       WINDOWS_CORE_REF: c2a9a2b6ee80e0668592731b678701d16f6399f6
       WINDOWS_ANP_REF: 45031b698e86e094dfef1f6d05fe9839a600854b
+      WINDOWS_IDENTITY_REF: 8dc65ccc388af0f0622263811776a6aadcd11d18
       GOAL_APP_REF: dbd5421a9eb4a177b09a753f55ae0c2d9e014ea8
     steps:
     - name: Verify source ref and read-only checkout token
@@ -66,6 +67,12 @@ jobs:
         repository: agent-network-protocol/anp
         ref: ${{ env.WINDOWS_ANP_REF }}
         path: anp/anp
+    - name: Checkout pinned ANP Identity path dependency
+      uses: actions/checkout@v6
+      with:
+        repository: agent-network-protocol/anp-identity
+        ref: ${{ env.WINDOWS_IDENTITY_REF }}
+        path: anp/anp-identity
     - name: Setup Flutter 3.44.0
       uses: subosito/flutter-action@v2.23.0
       with:
