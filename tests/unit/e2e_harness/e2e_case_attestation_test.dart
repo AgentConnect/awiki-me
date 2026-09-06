@@ -52,6 +52,24 @@ void main() {
       expect(completion.expectedCaseIds, <String>['CASE-001', 'CASE-002']);
       expect(completion.toJson()['status'], 'test_process_finished');
       expect(completion.toJson(), isNot(contains('passed')));
+      expect(completion.failedTestCount, 0);
+      await E2eInvocationCompletionWriter.markFinished(
+        environment: environment,
+        failedTestCount: 1,
+      );
+      final failed = E2eInvocationCompletion.read(
+        e2eInvocationCompletionFileForAttestation(attestation),
+      );
+      expect(failed.failedTestCount, 1);
+      for (final invalid in <Object>[-1, '1', true]) {
+        expect(
+          () => E2eInvocationCompletion.fromJson(<String, Object?>{
+            ...failed.toJson(),
+            'failedTestCount': invalid,
+          }),
+          throwsFormatException,
+        );
+      }
       await expectLater(
         E2eInvocationCompletionWriter.markFinished(
           environment: <String, String>{...environment, e2eCaseRunIdDefine: ''},

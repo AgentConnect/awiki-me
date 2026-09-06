@@ -143,8 +143,12 @@ const String _joinPurpose = 'awiki.device.join.v1';
 const Duration _remoteTimeout = Duration(seconds: 30);
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  tearDownAll(E2eInvocationCompletionWriter.markFinished);
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets(
     'App new device joins after CLI listener emits a host wake',

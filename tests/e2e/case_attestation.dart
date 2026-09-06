@@ -35,12 +35,14 @@ class E2eInvocationCompletion {
     required this.runId,
     required this.expectedCaseIds,
     required this.finishedAt,
+    this.failedTestCount = 0,
   });
 
   final String scenario;
   final String runId;
   final List<String> expectedCaseIds;
   final String finishedAt;
+  final int failedTestCount;
 
   factory E2eInvocationCompletion.fromJson(Map<String, Object?> json) {
     if (json['schemaVersion'] != 1 ||
@@ -64,11 +66,18 @@ class E2eInvocationCompletion {
         'invocation completion expectedCaseIds contain duplicates',
       );
     }
+    final failedTestCount = json['failedTestCount'] ?? 0;
+    if (failedTestCount is! int || failedTestCount < 0) {
+      throw const FormatException(
+        'invocation completion failure count is invalid',
+      );
+    }
     return E2eInvocationCompletion(
       scenario: _requiredString(json, 'scenario'),
       runId: _requiredString(json, 'runId'),
       expectedCaseIds: List<String>.unmodifiable(caseIds),
       finishedAt: _requiredString(json, 'finishedAt'),
+      failedTestCount: failedTestCount,
     );
   }
 
@@ -89,13 +98,17 @@ class E2eInvocationCompletion {
     'runId': runId,
     'expectedCaseIds': expectedCaseIds,
     'finishedAt': finishedAt,
+    'failedTestCount': failedTestCount,
   };
 }
 
 class E2eInvocationCompletionWriter {
   E2eInvocationCompletionWriter._();
 
-  static Future<void> markFinished({Map<String, String>? environment}) async {
+  static Future<void> markFinished({
+    Map<String, String>? environment,
+    int failedTestCount = 0,
+  }) async {
     final attestationPath = e2eInvocationValue(
       e2eCaseAttestationPathDefine,
       compiledValue: const String.fromEnvironment(e2eCaseAttestationPathDefine),
@@ -137,6 +150,7 @@ class E2eInvocationCompletionWriter {
     final completion = E2eInvocationCompletion.fromJson(<String, Object?>{
       'schemaVersion': 1,
       'status': 'test_process_finished',
+      'failedTestCount': failedTestCount,
       'scenario': scenario,
       'runId': runId,
       'expectedCaseIds': encodedCaseIds

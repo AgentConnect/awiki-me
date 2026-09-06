@@ -1143,3 +1143,17 @@ execution profile or release denominator.
 - A failed real E2E must be classified as product regression, test bug,
   account/OTP problem, backend deployment problem, runner/device problem, or
   unknown. Do not hide a failure by only increasing timeout.
+
+
+### Recovery / Join prepared 测试的失败上报
+
+Recovery 和 remote Join 的 Flutter 入口在 invocation completion 中记录
+`failedTestCount`（框架失败数量，不含敏感异常内容）。`test_process_finished`
+只表示进程达到结束边界；执行器必须在存在 Flutter 失败时抛出受控的 E2E failure，
+不能把该步骤标为成功后仅报告缺少 case attestation。其他未执行分支仍保持 not-run，
+不批量伪造失败或通过证据。旧 completion 的缺省计数为 0，逐用例 attestation gate 保留。
+Fresh Recovery 主流程失败后不执行冷启动阶段，保留主流程错误，不以缺少 handoff 掩盖根因。
+
+DSH remote Join 使用 active-only Host 快照：撤销后要求精确成员消失、唯一原 current
+ready-admin 保留，并再次刷新确认；不能在该过滤快照中要求出现 revoked 条目。
+Core 原始 Registry 的设备状态及授权围栏由其对应测试保持验证。

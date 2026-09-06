@@ -201,12 +201,27 @@ void _registerDshDeviceJoinInteropTest() {
         'deviceRef': _DshE2eDriver.string(appDevices.single, 'deviceRef'),
         'confirmation': 'REVOKE',
       });
-      if (!_DshE2eDriver.maps(revoked, 'devices').any(
-        (device) =>
-            device['isCurrent'] == false && device['status'] == 'revoked',
-      )) {
-        fail('DSH did not revoke the App member.');
+      final admins = devices
+          .where((device) => device['isCurrent'] == true)
+          .toList();
+      if (admins.length != 1)
+        fail('DSH Registry did not contain one current admin.');
+      void requireExactSurvivingAdmin(Map<String, Object?> snapshot) {
+        final remaining = _DshE2eDriver.maps(snapshot, 'devices');
+        if (remaining.length != 1 ||
+            remaining.single['deviceRef'] != admins.single['deviceRef'] ||
+            remaining.single['isCurrent'] != true ||
+            remaining.single['status'] != 'active' ||
+            remaining.single['role'] != 'admin' ||
+            remaining.single['managementReady'] != true) {
+          fail(
+            'DSH active-device projection did not remove the member and preserve the exact ready admin.',
+          );
+        }
       }
+
+      requireExactSurvivingAdmin(revoked);
+      requireExactSurvivingAdmin(await dsh.hostValue('device_refresh'));
 
       await E2eCaseAttestationWriter.markPassed(
         _dshAdminJoinCaseId,

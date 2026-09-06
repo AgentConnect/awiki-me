@@ -992,24 +992,29 @@ class DesktopE2eRunner {
     if (platform == DesktopE2ePlatform.linux) {
       await commands.requireExecutable('setsid');
     }
-    final execution = await runPreparedIntegrationExecutable(
-      executable: artifact.executable,
-      operatingSystem: platform.name,
-      environment: <String, String>{
-        'AWIKI_E2E_APP_STATE_ROOT': stateRoot.path,
-        e2eCaseAttestationPathDefine: caseAttestationFile.path,
-        e2eCaseScenarioDefine: options.e2eCase.scenario,
-        e2eCaseRunIdDefine: runId,
-        e2eCaseIdsDefine: caseIds.join(','),
-        ...environment,
-      },
-      completionFile: invocationCompletionFile,
-      expectedScenario: options.e2eCase.scenario,
-      expectedRunId: runId,
-      expectedCaseIds: caseIds,
-      timeout: suiteDefinition.timeout,
-      outputLine: (line) => _line(redactor.redact(line)),
-    );
+    final PreparedIntegrationExecution execution;
+    try {
+      execution = await runPreparedIntegrationExecutable(
+        executable: artifact.executable,
+        operatingSystem: platform.name,
+        environment: <String, String>{
+          'AWIKI_E2E_APP_STATE_ROOT': stateRoot.path,
+          e2eCaseAttestationPathDefine: caseAttestationFile.path,
+          e2eCaseScenarioDefine: options.e2eCase.scenario,
+          e2eCaseRunIdDefine: runId,
+          e2eCaseIdsDefine: caseIds.join(','),
+          ...environment,
+        },
+        completionFile: invocationCompletionFile,
+        expectedScenario: options.e2eCase.scenario,
+        expectedRunId: runId,
+        expectedCaseIds: caseIds,
+        timeout: suiteDefinition.timeout,
+        outputLine: (line) => _line(redactor.redact(line)),
+      );
+    } on PreparedIntegrationProcessException catch (error) {
+      throw E2eFailure(error.message);
+    }
     if (!execution.terminatedAfterCompletion) {
       throw E2eFailure(
         'Prepared integration process did not reach its completion boundary.',

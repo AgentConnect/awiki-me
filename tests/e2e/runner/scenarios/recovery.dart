@@ -84,6 +84,7 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
     } catch (error) {
       freshFailure = error;
     }
+    if (freshFailure != null) throw freshFailure;
     try {
       await _timed('Flutter Fresh Root cold restart verification', () {
         if (preparedArtifacts.isNotEmpty) {

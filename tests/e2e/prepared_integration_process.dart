@@ -98,6 +98,11 @@ Future<PreparedIntegrationExecution> runPreparedIntegrationExecutable({
           operatingSystem: operatingSystem,
           exitFuture: exitFuture,
         );
+        if (completion.failedTestCount > 0) {
+          throw PreparedIntegrationProcessException(
+            'Prepared integration reported ${completion.failedTestCount} failed Flutter tests; inspect the captured Flutter log.',
+          );
+        }
         return PreparedIntegrationExecution(
           elapsed: watch.elapsed,
           processExitCode: exitCode,
