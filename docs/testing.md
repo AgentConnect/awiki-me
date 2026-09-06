@@ -1,12 +1,13 @@
 # Testing AWiki Me
 
-AWiki Me keeps two active test domains plus Flutter tooling shims:
+AWiki Me keeps three active test domains plus Flutter tooling shims:
 
 ```text
-tests/unit/         # fast unit, widget, provider, and pure Dart tests
-tests/e2e/          # desktop user-flow runner plus Flutter platform shims/support
-integration_test/   # Flutter tooling shims only; do not put test logic here
-.e2e/               # local E2E reports/state; ignored by Git
+tests/unit/           # fast unit, widget, provider, and pure Dart tests
+tests/e2e/            # desktop user-flow runner plus Flutter platform shims/support
+tests/computer-use/   # screen-using AI/human playbooks; not a Dart runner
+integration_test/     # Flutter tooling shims only; do not put test logic here
+.e2e/                 # local E2E reports/state; ignored by Git
 ```
 
 Root files under `integration_test/` are Flutter-tooling shims. Each shim imports
@@ -21,6 +22,7 @@ Use the smallest deterministic test that answers the question:
 | --- | --- | --- | --- |
 | `tests/unit/` | Does this Dart logic, mapper, provider, service, or widget state behave correctly? | No | Pure Dart unit tests, widget/provider tests, fake service-client tests, parser tests, E2E runner plan/redaction tests. |
 | `tests/e2e/` | Does the user/business chain work through the App runner, platform shims, native plugin, CLI peer, backend, or devices? | Case-dependent | E2E runners, scenario orchestration, local/example configs, Flutter shim implementations, App + CLI peer/backend reports. |
+| `tests/computer-use/` | Can a screen-using AI or human complete the visible App path in two real macOS windows? | Yes, against the selected tenant (default `awiki.info`) | Playbooks, selector maps, and on-screen oracles. Authority: `tests/computer-use/README.md`. Do not register these cases in `tests/e2e/suite_manifest.json`. |
 | `integration_test/` | Can Flutter tooling discover and launch the test entrypoint? | No business ownership | Thin imports only. Keep orchestration in `tests/e2e/`. |
 
 Do not use the root `integration_test/` directory as the owner of a real

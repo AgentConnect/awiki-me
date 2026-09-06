@@ -6,7 +6,9 @@
 `lib/src/data/`, and UI/providers live in `lib/src/presentation/`.
 `tests/unit/` contains fast Dart logic, widget, provider, and fake-backed
 harness tests. `tests/e2e/` contains E2E runners, configs, Flutter shim
-implementations, and App + CLI peer/backend/device validation assets. Root
+implementations, and App + CLI peer/backend/device validation assets.
+`tests/computer-use/` contains playbooks for a screen-using AI or human; it is
+not a Dart runner and does not replace `tests/e2e/`. Root
 `integration_test/*.dart` files are Flutter-tooling shims only. Platform runners live under
 `android/`, `ios/`, `macos/`, and `web/`. Static assets live in `assets/`.
 
@@ -67,6 +69,10 @@ correct active test domain:
   smoke tests, real App + CLI peer/backend/device flows, reports, and redaction
   rules. Root `integration_test/*.dart` files must stay thin Flutter tooling
   shims that import implementations from `tests/e2e/flutter/`.
+- `tests/computer-use/`: operator/AI playbooks for visible App actions on two
+  real macOS Debug windows. Do not add a `--case` to `tests/e2e/runner.dart`
+  for this domain, and do not treat a computer-use pass as Dart E2E
+  attestation. Start at `tests/computer-use/README.md`.
 
 When running AWiki Me E2E, select the desktop strategy from the current host
 instead of treating macOS as a universal prerequisite. On macOS, use the macOS

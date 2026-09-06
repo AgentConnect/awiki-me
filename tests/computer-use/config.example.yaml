@@ -1,0 +1,45 @@
+# Computer-use 环境模板。复制到 gitignore 的本地文件后再填真实值。
+# 不要把 otp.phone、otp.code、token 提交进仓库。
+#
+# 解析顺序见 playbook.md：提示词覆盖 > 本机 tests/e2e/configs/*.local.yaml > 本文件。
+# 占位符不是可登录账号。
+
+platform: macos
+tenant: awiki.info
+
+service:
+  baseUrl: https://awiki.info
+  userServiceUrl: https://awiki.info
+  messageServiceUrl: https://awiki.info
+  messageServiceWsUrl: wss://awiki.info/im/ws
+  didDomain: awiki.info
+  anpServiceUrl: https://awiki.info/anp-im/rpc
+  anpServiceDid: did:wba:awiki.info
+  daemonDownloadBaseUrl: https://awiki.info/daemon
+
+otp:
+  phone: "+86XXXXXXXXXXX"
+  code: "XXXXXX"
+
+accounts:
+  # 双窗口互发、联系人、建群用两个不同 Handle。
+  # 不要复用 tests/e2e/configs/*.local.yaml 里的固定 E2E 账号池，除非提示词明确要求。
+  appA:
+    handle: "<fresh-handle-a>"
+  appB:
+    handle: "<fresh-handle-b>"
+
+apps:
+  admin:
+    displayName: "AWikiMe (Development)"
+    bundleId: ai.awiki.awikime.dev
+    path: build/macos/Build/Products/Debug/AWikiMe.app
+  joiner:
+    displayName: "AWikiMe Joiner"
+    bundleId: ai.awiki.awikime.dev.manual.joiner
+    path: build/manual-multi-device/AWikiMe-Joiner.app
+
+daemon:
+  rustRepo: ../awiki-cli-rs2
+  binary: ../awiki-cli-rs2/target/debug/awiki-deamon
+  officialInstallUrl: https://awiki.info/daemon/install.sh
