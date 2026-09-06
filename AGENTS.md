@@ -1,5 +1,12 @@
 # Repository Guidelines
 
+## Shared rules
+
+Engineering work follows [AI Coding Rules](../awiki-harness/rules/ai-coding-rules.md).
+Behavior changes and verification follow the relevant [Verification Policy](../awiki-harness/rules/verification-policy.md)
+sections; production behavior needs owning unit coverage and applicable System/product E2E review.
+If Harness is absent, use local docs/tests/CI and disclose missing acceptance evidence.
+
 ## Project Structure & Module Organization
 `lib/` contains the Flutter application. Domain contracts live in
 `lib/src/domain/`, Dart service clients and persistence live in
@@ -16,12 +23,24 @@ not a Dart runner and does not replace `tests/e2e/`. Root
 Follow this file, [`CLAUDE.md`](CLAUDE.md), and `docs/`. Do not apply the GEB fractal protocol, and do not add a `CLAUDE.md` to every directory.
 
 ## Architecture Guardrail
-Before changing conversation identity, list/detail/profile projection,
-read/send/realtime behavior, or release/0710 upgrade behavior, read
-[`docs/conversation-presentation-ownership.md`](docs/conversation-presentation-ownership.md),
-[`docs/storage-scope-vault-contract.md`](docs/storage-scope-vault-contract.md), and
-[`../awiki-cli-rs2/docs/architecture/im-core-sdk-architecture.md`](../awiki-cli-rs2/docs/architecture/im-core-sdk-architecture.md).
-Do not implement conflicting ownership, canonical-identity, fallback, or migration logic; update the authoritative documents first if the architecture itself must change.
+Preserve Core ownership, canonical identity, fail-closed behavior and migration
+constraints. Locate the affected contract or section before editing:
+
+- Conversation/list/detail/profile display, rendering and overlays: use the relevant
+  owner, mapping, preview or timeline sections of
+  [presentation ownership](docs/conversation-presentation-ownership.md).
+- Storage Scope, tenant switch, vault lifecycle or upgrade: use the corresponding
+  ownership, provision/open, route/switch or upgrade sections of
+  [storage contract](docs/storage-scope-vault-contract.md).
+- Core-owned identity, read/send/sync or realtime behavior: use the affected sections
+  of [Core architecture](../awiki-cli-rs2/docs/architecture/im-core-sdk-architecture.md),
+  such as `Host vs SDK Responsibilities`, `Identity Model`, `Reliable Message Sync`
+  and `Conversation Read State`.
+
+Read additional sections when the change crosses those boundaries or leaves a
+contract question unresolved. Reuse established context; these links are not a
+mandatory full-document reading sequence. Update the affected authoritative contract
+before implementing a change to the architecture itself.
 
 ## Build, Test, and Development Commands
 Use Flutter/Dart tooling only. When installing dependencies, prefer the
@@ -94,23 +113,13 @@ build/native-smoke CI remains authoritative for that lane. The Mac/Linux E2E
 runner must not silently treat Windows as an unknown platform or delete that
 gate.
 
-Every new feature or behavior change must add or update the corresponding test
-coverage in the same change. Prefer focused unit/provider/widget tests first;
-add or update integration smoke when App bootstrap, routing, platform bindings,
-native plugins, or visual surfaces change; add or update E2E scenarios or runner
-assertions when the feature spans the real backend, CLI peer, account/OTP,
-multi-client messaging, or mobile-device flows. If coverage cannot be added in
-the current change, document the reason, skipped case ID, owner, and follow-up
-in the relevant test docs or plan before merging.
-
-Every production behavior change must add or update the corresponding unit
-tests in the same task. If an existing test already covers the exact behavior
-and failure mode, identify it and record the result. Before completion, review
-the corresponding `../awiki-system-test` suite/catalog and this repository's
-`tests/e2e/` product coverage; update either layer in the same task when it is
-incomplete, or record a concrete non-applicable reason. Keep unit tests in this
-repository, cross-service System Tests in `../awiki-system-test`, and all
-product E2E implementations exclusively under `tests/e2e/`.
+Use focused unit/provider/widget coverage for App behavior. Review native/bootstrap
+smoke coverage when routing, platform bindings, native plugins or visual surfaces
+change, and product E2E when real backend, CLI peer, account/OTP, multi-client or
+device flows change. Reuse exact existing coverage and add only missing coverage
+for this change, following Verification Policy. Cross-service System Tests remain
+in `../awiki-system-test`; product E2E implementations exclusively belong to
+`tests/e2e/` in this repository.
 
 For development/test OTP flows, load the protected phone and code only from
 the ignored, permission-restricted local E2E configuration. Never place those
@@ -126,13 +135,19 @@ runtime behavior unless the task explicitly requires it. If a tool regenerates
 unrelated platform files, inspect and revert those unrelated changes before
 committing.
 
-## ANP SDK Direction
-The app is Dart-only. Do not add Python CLI tools, Python dependency manifests,
-legacy credential migrations, or old RPC gateway paths. Account creation,
-DID-WBA authentication, message proof generation, IM, and User Service calls
-must use the Dart ANP SDK and Dart service clients.
+## App and Core Responsibilities
+
+The App uses Dart/Flutter for UI, navigation, application orchestration and platform
+adapters. Identity/vault, DID-WBA authentication, message proofs, IM and reliable
+sync use the existing `awiki_im_core` facade backed by Rust Core. Keep User Service
+calls in their established owning adapter/facade; do not move Core-owned contracts
+into a parallel Dart protocol implementation. The current ownership contracts and
+[repository context](CLAUDE.md) define the boundaries.
+
+Do not add Python CLI tools, Python dependency manifests, legacy credential
+migrations or old RPC gateway paths.
 
 ## Security & Configuration Tips
 Do not commit real credentials, generated local state, signing keys, or custom
-runtime configuration. Account credentials are e1 DID-only and stored through
-the app's Dart account service and platform secure storage.
+runtime configuration. Account identities remain e1 DID-only. Credential and key
+storage follow the existing Core vault and platform secret-provider contracts.
