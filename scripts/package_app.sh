@@ -196,6 +196,7 @@ def platform_entry(target):
     return {
         "downloadUrl": f"{download_base_url}/{expected['version']}/{artifact['filename']}",
         "sha256": artifact["sha256"],
+        "sizeBytes": artifact["sizeBytes"],
     }
 
 expected_platforms = {}

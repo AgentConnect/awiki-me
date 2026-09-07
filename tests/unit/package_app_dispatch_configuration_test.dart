@@ -552,6 +552,14 @@ ${{
               expectedError: 'platforms do not match selected artifacts',
               mutate: (manifest) => manifest['platforms'] = <String, Object?>{},
             ),
+            (
+              expectedError: 'platforms do not match selected artifacts',
+              mutate: (manifest) {
+                final platforms = manifest['platforms']! as Map<String, Object?>;
+                final android = platforms['android']! as Map<String, Object?>;
+                android['sizeBytes'] = 1;
+              },
+            ),
           ];
 
       for (var index = 0; index < cases.length; index++) {
@@ -670,6 +678,7 @@ Future<void> _writeAggregate(
           'https://awiki.ai/downloads/awiki-me/1.2.3/'
           '${artifact['filename']}',
       'sha256': artifact['sha256'],
+      'sizeBytes': artifact['sizeBytes'],
     };
   }
 
