@@ -1156,6 +1156,49 @@ void main() {
                   .isNotEmpty) {
             fail('The recovered App did not complete public local retirement.');
           }
+          await expectLater(
+            bootstrap.appSessionService!.loginWithIdentity(
+              stableOwnerIdentityId,
+            ),
+            throwsA(
+              isA<StateError>().having(
+                (error) => error.message,
+                'missing local identity',
+                startsWith('local_identity_not_found:'),
+              ),
+            ),
+          );
+          // Reenter the same provider tree without sending a new OTP: an old
+          // applied audit is not a credential or a new Recovery operation.
+          final recoveryNavigator = tester.state<NavigatorState>(
+            find.byType(Navigator).first,
+          );
+          unawaited(
+            recoveryNavigator.push<void>(
+              CupertinoPageRoute<void>(
+                builder: (_) => HandleRecoveryPage(
+                  initialHandle: fullHandle,
+                  initialPhone: account.phone,
+                  autoRequestOtp: false,
+                ),
+              ),
+            ),
+          );
+          await _pumpUntil(
+            tester,
+            () =>
+                find.byType(HandleRecoveryPage).evaluate().isNotEmpty &&
+                recoveredContainer.read(handleRecoveryProvider).progress ==
+                    null,
+            failure: 'Recovery reused the retired owner completed state.',
+          );
+          expect(
+            find.byKey(const Key('handle-recovery-enter-messages')),
+            findsNothing,
+          );
+          expect(recoveredContainer.read(handleRecoveryProvider).error, isNull);
+          recoveryNavigator.pop();
+          await tester.pump();
           await tester.pumpWidget(const SizedBox.shrink());
           await tester.pump();
 

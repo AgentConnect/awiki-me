@@ -51,10 +51,16 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
     super.initState();
     _phoneController = TextEditingController(text: widget.initialPhone);
     _phoneController.addListener(_handlePhoneInputChanged);
-    if (widget.localIdentityId != null) {
-      ref.read(handleRecoveryProvider.notifier).reset();
-    }
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      // Core owns resumable operations. A previous page's completed result may
+      // belong to a credential that has since been deleted, including onboarding.
+      final progress = ref.read(handleRecoveryProvider).progress;
+      if (widget.localIdentityId != null ||
+          progress?.handle != widget.initialHandle ||
+          progress?.isCompleted == true) {
+        ref.read(handleRecoveryProvider.notifier).reset();
+      }
       if (widget.autoRequestOtp) await _requestOtp();
     });
   }

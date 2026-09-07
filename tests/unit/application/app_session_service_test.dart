@@ -512,11 +512,15 @@ void main() {
     );
 
     test(
-      'explicit local identity login can resolve a non-listed identity',
+      'local login rejects a deleted identity without resolving an alias placeholder',
       () async {
         final runtime = _FakeRuntime();
         final identities = _FakeIdentities(
-          resolvedIdentity: _session('id-resolved'),
+          resolvedIdentity: const AppSession(
+            did: 'did:awiki:id-deleted',
+            identityId: 'id-deleted',
+            displayName: 'Deleted',
+          ),
         );
         final service = ImCoreAppSessionService(
           bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
@@ -524,13 +528,21 @@ void main() {
           identities: identities,
           auth: _FakeAuth(),
           activeSessionStore: _FakeActiveSessionStore(),
+          expectedDidDomain: 'awiki.ai',
         );
 
-        final session = await service.loginWithIdentity('id-resolved');
-
-        expect(session.identityId, 'id-resolved');
-        expect(identities.resolvedSelectors, ['id-resolved']);
-        expect(runtime.switchedIdentities, ['id-resolved']);
+        await expectLater(
+          service.loginWithIdentity('id-deleted'),
+          throwsA(
+            isA<StateError>().having(
+              (error) => error.message,
+              'message',
+              'local_identity_not_found: id-deleted',
+            ),
+          ),
+        );
+        expect(identities.resolvedSelectors, isEmpty);
+        expect(runtime.switchedIdentities, isEmpty);
       },
     );
 

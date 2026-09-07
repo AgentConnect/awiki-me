@@ -50,6 +50,14 @@ Core；恢复前不退出、不删除凭证或本地数据，因此 Direct、Gro
   确认 `sessionProvider` 与 runtime 都提交了同一个恢复身份，才允许退出页面并进入消息主界面；
   本地会话激活失败时保留完成页面和“继续进入消息”按钮，只重试本地身份激活，不新建 Recovery、
   不再次替换 DID，也不得误退回普通登录/注册流程。
+- 上述继续登录只适用于本地凭证仍存在的身份。用户随后完成“退出并删除本地凭证”后，
+  历史 `applied` 记录不能作为当前登录凭证；重新进入 Recovery 页必须清除上次已完成的
+  presentation 状态和风险确认，再由 Core 创建或选择当前操作。相同 Handle 尚未结束的
+  操作仍保留精确续跑入口，不能为了清理旧页面状态丢弃已提交但结果未明的操作。
+  本地登录只接受 Core 当前身份列表中的 ID、DID、alias 或 Handle；列表缺失时返回
+  `local_identity_not_found`，不得回退到 alias 占位 DID 后误报域名不匹配。
+  Core 新建操作时还必须依据持久化 transition/retirement 历史排除旧 DID；即使 Vault pending
+  已随凭证删除，残留的历史多设备 custody 也不能被误选为新恢复身份。
 - 已登录用户从设置发起 Recovery 时，App 在不可逆提交前先暂停旧会话的实时连接和后台同步，
   防止旧 DID 被围栏后的迟到回调清除恢复后的新会话；提交前取消或失败则恢复原会话，提交后只
   激活 Core 返回的新身份并进入消息主界面。
@@ -72,6 +80,12 @@ Recovery 或 Join 找回。App 只有在 App overlay 与 Core owner 数据均删
   `awiki.device.recovery.finalize.v1`、旧管理设备通知或冷静期取消流程。
 
 ## UI E2E
+
+删除后重新进入的回归由 `tests/unit/handle_recovery_flow_test.dart` 和
+`tests/unit/application/app_session_service_test.dart` 覆盖。真实 Core 的删除后新建恢复操作
+门禁在 sibling Core 的 `identity_handle_recovery_runtime/tests/retirement.rs`。
+`HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001` 在真实本地退役后额外验证旧 owner
+不能登录、同一 provider 树重开恢复页不展示旧完成按钮；该检查不重新提交 Recovery。
 
 `HANDLE-RECOVERY-V1-E2E-001` 先创建远端 ready-admin fixture，再销毁 setup root，并用一个
 没有任何本地身份的 fresh App/native Core root 打开统一 onboarding。用同一 Handle 和手机号

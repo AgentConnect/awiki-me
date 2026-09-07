@@ -590,6 +590,128 @@ void main() {
     );
   });
 
+  for (final otpFails in <bool>[false, true]) {
+    testWidgets(
+      'reopening Recovery drops a deleted owner result when OTP ${otpFails ? 'fails' : 'starts a new operation'}',
+      (tester) async {
+        final core = _FakeHandleRecoveryCore(
+          operation: _operation(
+            lifecycleClass: HandleRecoveryLifecycleClass.applied,
+            commitAttempted: true,
+          ),
+          otpResponseOperation: _operation(
+            operationId: 'operation-core-new',
+            accountUserId: null,
+            stateRootFingerprint: null,
+          ),
+          otpError: otpFails ? StateError('otp_failed') : null,
+        );
+        await tester.pumpWidget(
+          buildLocalizedTestApp(
+            locale: const Locale('zh'),
+            home: const SizedBox(key: Key('recovery-launcher')),
+            gateway: FakeAwikiGateway(),
+            providerOverrides: <Override>[
+              handleRecoveryCorePortProvider.overrideWithValue(core),
+              userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        final context = tester.element(
+          find.byKey(const Key('recovery-launcher')),
+        );
+        final container = ProviderScope.containerOf(context);
+        await container
+            .read(handleRecoveryProvider.notifier)
+            .restoreForOwner(
+              scope: const HandleRecoveryIdentityScope(
+                localIdentityId: 'identity-alice',
+              ),
+              handle: 'alice.awiki.info',
+            );
+        expect(
+          container.read(handleRecoveryProvider).progress?.isCompleted,
+          isTrue,
+        );
+        unawaited(
+          Navigator.of(context).push<void>(
+            CupertinoPageRoute<void>(
+              builder: (_) => const HandleRecoveryPage(
+                initialHandle: 'alice.awiki.info',
+                initialPhone: '+8613800138000',
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('handle-recovery-enter-messages')),
+          findsNothing,
+        );
+        final state = container.read(handleRecoveryProvider);
+        expect(state.progress?.isCompleted ?? false, isFalse);
+        expect(state.riskConfirmed, isFalse);
+        if (otpFails) {
+          expect(state.progress, isNull);
+          expect(state.error, HandleRecoveryUiError.failed);
+        } else {
+          expect(state.progress?.operationId, 'operation-core-new');
+          expect(state.error, isNull);
+        }
+      },
+    );
+  }
+
+  testWidgets('reopening the same Handle preserves an unresolved operation', (
+    tester,
+  ) async {
+    final core = _FakeHandleRecoveryCore(
+      operation: _operation(
+        lifecycleClass: HandleRecoveryLifecycleClass.remoteUnresolved,
+        commitAttempted: true,
+      ),
+    );
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SizedBox(key: Key('recovery-launcher')),
+        gateway: FakeAwikiGateway(),
+        providerOverrides: <Override>[
+          handleRecoveryCorePortProvider.overrideWithValue(core),
+          userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final context = tester.element(find.byKey(const Key('recovery-launcher')));
+    final container = ProviderScope.containerOf(context);
+    await container
+        .read(handleRecoveryProvider.notifier)
+        .restoreForOwner(
+          scope: const HandleRecoveryIdentityScope(
+            localIdentityId: 'identity-alice',
+          ),
+          handle: 'alice.awiki.info',
+        );
+    unawaited(
+      Navigator.of(context).push<void>(
+        CupertinoPageRoute<void>(
+          builder: (_) => const HandleRecoveryPage(
+            initialHandle: 'alice.awiki.info',
+            initialPhone: '+8613800138000',
+            autoRequestOtp: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final progress = container.read(handleRecoveryProvider).progress;
+    expect(progress?.operationId, 'operation-core-1');
+    expect(progress?.canResume, isTrue);
+    expect(core.lastPhone, isNull);
+  });
+
   testWidgets('completed Recovery opens the authenticated message workspace', (
     tester,
   ) async {
@@ -1311,6 +1433,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   _FakeHandleRecoveryCore({
     HandleRecoveryProgress? operation,
     this.otpResponseOperation,
+    this.otpError,
     this.activateResult,
     this.activateProgressOnError,
     this.activateError,
@@ -1324,6 +1447,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
 
   HandleRecoveryProgress operation;
   final HandleRecoveryProgress? otpResponseOperation;
+  final Object? otpError;
   final HandleRecoveryProgress? activateResult;
   final HandleRecoveryProgress? activateProgressOnError;
   final Object? activateError;
@@ -1358,6 +1482,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
       handle: handle,
     );
     lastPhone = phone;
+    if (otpError != null) throw otpError!;
     operation =
         otpResponseOperation ??
         _operation(accountUserId: null, stateRootFingerprint: null);

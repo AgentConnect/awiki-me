@@ -334,7 +334,12 @@ class ImCoreAppSessionService
       await _runtime.open();
     }
     _requireCurrentTransition(transition);
-    final identity = await _localIdentityFor(identityIdOrAlias);
+    // Local login must use an identity that still exists in the Core registry.
+    // Alias resolution can synthesize a placeholder when the registry is empty.
+    final identity = await _localIdentityFor(
+      identityIdOrAlias,
+      allowResolve: false,
+    );
     _requireCurrentTransition(transition);
     if (identity == null) {
       throw StateError('local_identity_not_found: $identityIdOrAlias');
