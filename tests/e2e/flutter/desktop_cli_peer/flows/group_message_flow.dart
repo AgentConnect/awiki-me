@@ -40,7 +40,8 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     fail('App Handle cannot be qualified from its authenticated DID.');
   }
   final cliFullHandle = config.cliPeerFullHandle;
-  final groupName = 'AWiki E2E ${config.runId} $nonce';
+  // Long suite run IDs can exceed the group-name input's 80-character limit.
+  final groupName = 'AWiki E2E $nonce';
   final conversation = await robot.createGroup(groupName);
   final groupDid = conversation.groupId!.trim();
   expect(groupDid, isNotEmpty);
