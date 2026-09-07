@@ -6213,6 +6213,18 @@ _startAppPeerRegistrationJoin({
     failure: expectedOrdinaryRetirement
         ? 'Registration did not return one opaque ordinary continuation.'
         : 'Registration did not return one opaque Recovery rebind continuation.',
+    safeDiagnostic: () {
+      final state = container.read(onboardingProvider);
+      return 'join_action_count=${joinAction.evaluate().length}, '
+          'otp_consumed=${state.isPhoneOtpConsumed}, '
+          'can_submit_otp=${state.canSubmitPhoneOtp}, '
+          'continuation_present=${state.existingHandleContinuationId != null}, '
+          'join_mode=${state.existingHandleJoinMode?.name ?? "none"}, '
+          'presence_required=${state.existingHandleJoinRequiresUserPresence}, '
+          'busy=${state.isBusy}, '
+          'registration_outcome=${state.phoneRegistrationOutcome.name}, '
+          'failure_code=${_safeDiagnosticToken(state.phoneRegistrationFailureCode)}';
+    },
   );
   if (!expectedOrdinaryRetirement &&
       find

@@ -136,8 +136,15 @@ existing Handle registration，并选择 Core 返回的 opaque continuation。Ap
 `preparation_id/mode/requires_user_presence`，不接触 account verification token、Recovery
 transition 或 owner 选择；一次 user presence 后由 Core 在同一进程消费 preparation 并建立
 Recovery-aware Join。审批和激活后执行标准 Root/P5，要求 rejoined peer 成为
-management-ready admin，且 P5 不进入普通消息历史，随后双向 Direct 各精确一次。该 case 在
-显式 Linux/Xvfb 或 macOS `awiki.info` 配置下运行：
+management-ready admin，且 P5 不进入普通消息历史，随后双向 Direct 各精确一次。
+
+被围栏的旧设备仍保留本地同 Handle 身份，这不代表本次手机号注册已经提交。App 必须调用
+Core 注册入口取得它判定的 continuation，不能仅凭本地身份存在就转去登录旧身份。
+只有本次注册调用期间出现了新的本地身份（精确 identity ID 或 DID 改变），而调用在激活
+阶段失败时，App 才续跑该次已落盘身份；原有身份不能把注册失败改写为成功。OTP 单次消费、
+Core 决定 Join mode、系统 user presence 和 opaque continuation 的边界保持不变。
+
+该 case 在显式 Linux/Xvfb 或 macOS `awiki.info` 配置下运行：
 
 ```bash
 dart run tests/e2e/runner.dart \

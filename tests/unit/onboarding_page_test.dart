@@ -1941,6 +1941,47 @@ void main() {
     expect(gateway.onboardingPhoneRegistrationCalls, 1);
   });
 
+  testWidgets('旧本地身份不能把注册失败改写成本次提交成功', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..localCredentials = const <SessionIdentity>[
+        _committedPhoneRegistrationIdentity,
+      ]
+      ..nextOnboardingPhoneRegistrationError = AppStructuredError(
+        code: 'handle_recovery.transition_missing',
+        cause: StateError('transition_missing'),
+      )
+      ..loginResult = _committedPhoneRegistrationIdentity;
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('登录或注册'));
+    await tester.pumpAndSettle();
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.enterText(fields.at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
+    expect(gateway.loginCalls, 0);
+    expect(container.read(onboardingProvider).isPhoneOtpConsumed, isTrue);
+    expect(
+      container.read(onboardingProvider).existingHandleContinuationId,
+      isNull,
+    );
+    expect(container.read(sessionProvider).session, isNull);
+    expect(
+      gateway.localCredentials.single,
+      _committedPhoneRegistrationIdentity,
+    );
+  });
+
   testWidgets('注册已落本地但激活失败时恢复同一身份且不重复注册', (tester) async {
     final gateway = FakeAwikiGateway()
       ..nextOnboardingPhoneRegistrationError = StateError(
@@ -2126,6 +2167,9 @@ void main() {
     tester,
   ) async {
     final gateway = FakeAwikiGateway()
+      ..localCredentials = const <SessionIdentity>[
+        _committedPhoneRegistrationIdentity,
+      ]
       ..registrationStatus = IdentityRegistrationStatus.joinRequired
       ..existingHandleJoinMode = ExistingHandleJoinMode.handleRecoveryRebind
       ..existingHandleJoinRequiresUserPresence = true;
@@ -2158,6 +2202,9 @@ void main() {
     await tester.pump();
     await _tapVisible(tester, find.text('登录/注册'));
     await tester.pumpAndSettle();
+
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
+    expect(gateway.loginCalls, 0);
 
     expect(
       find.byKey(const Key('existing-handle-recovery-action')),

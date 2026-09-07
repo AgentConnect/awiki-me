@@ -472,10 +472,6 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     );
     final status = await _runBusy(() async {
       final existingIdentity = await _localIdentityForFullHandle(fullHandle);
-      if (existingIdentity != null) {
-        state = state.copyWith(isPhoneOtpConsumed: true);
-        return _resumeCommittedPhoneRegistration(existingIdentity, transition);
-      }
       if (state.isPhoneOtpConsumed) {
         throw AppStructuredError(
           code: 'identity.registration_verification_unavailable',
@@ -497,7 +493,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         return _activateRegistrationResult(result, transition);
       } catch (error) {
         final committedIdentity = await _localIdentityForFullHandle(fullHandle);
-        if (committedIdentity != null) {
+        // A fenced device still has its old local identity. Only a new local
+        // identity observed during this attempt is evidence of registration
+        // having committed; Core must decide how an existing Handle rejoins.
+        if (committedIdentity != null &&
+            (committedIdentity.identityId != existingIdentity?.identityId ||
+                committedIdentity.did != existingIdentity?.did)) {
           state = state.copyWith(isPhoneOtpConsumed: true);
           return _resumeCommittedPhoneRegistration(
             committedIdentity,
