@@ -278,7 +278,7 @@ build_android() {
   python3 "$ANDROID_EMAS_CONFIG_TOOL" validate \
     --path android/emas.properties || fail "Android Release EMAS configuration is invalid"
   (cd "$CORE_DIR" &&
-    scripts/flutter/build-sdk-native.sh \
+    AWIKI_RELEASE_REGISTRY=1 scripts/flutter/build-sdk-native.sh \
       --android-only \
       --android-abi arm64-v8a \
       --skip-codegen-check)
@@ -488,7 +488,7 @@ build_macos() {
     arch_label="x64"
   fi
   (cd "$CORE_DIR" &&
-    scripts/flutter/build-sdk-native.sh \
+    AWIKI_RELEASE_REGISTRY=1 scripts/flutter/build-sdk-native.sh \
       --macos-only \
       --macos-arch "$arch" \
       --skip-codegen-check)

@@ -16,6 +16,18 @@ const _allTargets = <String>[
 ];
 
 void main() {
+  test('release workers select published SDK dependencies', () {
+    final unix = File('scripts/package_unix_worker.sh').readAsStringSync();
+    final windows = File('scripts/package_windows.ps1').readAsStringSync();
+    expect(
+      RegExp(r'AWIKI_RELEASE_REGISTRY=1 scripts/flutter/build-sdk-native.sh')
+          .allMatches(unix)
+          .length,
+      2,
+    );
+    expect(windows, contains(r'$env:AWIKI_RELEASE_REGISTRY = "1"'));
+  });
+
   test('package dispatch separates the controller from source revisions', () {
     final script = File('scripts/package_app.sh').readAsStringSync();
     final workflowSource = File(
