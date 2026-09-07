@@ -123,6 +123,18 @@ ${{
       'Checkout exact CLI / IM Core source',
     );
     final anpCheckout = _stepNamed(steps, 'Checkout exact ANP source');
+    for (final job in [validate, build]) {
+      final identityCheckout = _stepNamed(
+        job['steps'] as YamlList, 'Checkout pinned ANP Identity source',
+      );
+      final identityConfig = identityCheckout['with'] as YamlMap;
+      expect(identityConfig['repository'], 'agent-network-protocol/anp-identity');
+      expect(identityConfig['path'], 'anp/anp-identity');
+      expect(identityConfig['ref'], r'${{ steps.identity.outputs.revision }}');
+      final pin = _stepNamed(job['steps'] as YamlList, 'Read pinned ANP Identity revision');
+      expect(pin['run'].toString(), contains('anp_identity_commit'));
+      expect(pin['run'].toString(), contains('[0-9a-f]{40}'));
+    }
     final verification = _stepNamed(
       steps,
       'Verify source refs and committed version',

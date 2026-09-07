@@ -205,6 +205,28 @@ jobs:
           path: awiki-cli-rs2
           persist-credentials: false
 
+      - name: Read pinned ANP Identity revision
+        id: identity
+        shell: bash
+        run: |
+          python3 - <<'PYTHON'
+          import json, os, re
+          with open("awiki-cli-rs2/scripts/release/cli/release-config.json", encoding="utf-8") as source:
+              revision = json.load(source)["anp_identity_commit"]
+          if not re.fullmatch(r"[0-9a-f]{40}", revision):
+              raise SystemExit("ANP Identity must be pinned to an exact commit")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"revision={revision}\n")
+          PYTHON
+
+      - name: Checkout pinned ANP Identity source
+        uses: actions/checkout@v6
+        with:
+          repository: agent-network-protocol/anp-identity
+          ref: ${{ steps.identity.outputs.revision }}
+          path: anp/anp-identity
+          persist-credentials: false
+
       - name: Checkout exact ANP source
         uses: actions/checkout@v6
         with:
@@ -298,6 +320,28 @@ jobs:
           ref: ${{ inputs.core_ref }}
           token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
           path: awiki-cli-rs2
+          persist-credentials: false
+
+      - name: Read pinned ANP Identity revision
+        id: identity
+        shell: bash
+        run: |
+          python3 - <<'PYTHON'
+          import json, os, re
+          with open("awiki-cli-rs2/scripts/release/cli/release-config.json", encoding="utf-8") as source:
+              revision = json.load(source)["anp_identity_commit"]
+          if not re.fullmatch(r"[0-9a-f]{40}", revision):
+              raise SystemExit("ANP Identity must be pinned to an exact commit")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"revision={revision}\n")
+          PYTHON
+
+      - name: Checkout pinned ANP Identity source
+        uses: actions/checkout@v6
+        with:
+          repository: agent-network-protocol/anp-identity
+          ref: ${{ steps.identity.outputs.revision }}
+          path: anp/anp-identity
           persist-credentials: false
 
       - name: Checkout exact ANP source
