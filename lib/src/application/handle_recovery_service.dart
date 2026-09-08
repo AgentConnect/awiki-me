@@ -56,7 +56,9 @@ class HandleRecoveryService {
         operation.lifecycleClass == HandleRecoveryLifecycleClass.preCommit &&
         !operation.commitAttempted &&
         operation.keyState == HandleRecoveryKeyState.available &&
-        operation.phase == HandleRecoveryProgressPhase.otpRequested;
+        (operation.phase == HandleRecoveryProgressPhase.otpRequested ||
+            operation.failureCode ==
+                HandleRecoveryFailureCode.factorRetryRequired);
     final postAttemptFactorRetry =
         (expected == null || operation.operationId == expected) &&
         operation.lifecycleClass ==
@@ -114,6 +116,27 @@ class HandleRecoveryService {
     required String handle,
   }) async {
     final operations = await listOperations(scope: scope, handle: handle);
+    return _restoreOperation(operations);
+  }
+
+  Future<HandleRecoveryProgress?> restoreForHandle(String handle) async {
+    final normalized = _normalizedHandle(handle);
+    final operations = await _core.listOperationsForHandle(normalized);
+    final seen = <String>{};
+    for (final operation in operations) {
+      _validateOperation(operation);
+      if (operation.handle != normalized || !seen.add(operation.operationId)) {
+        throw const HandleRecoveryFailure(
+          HandleRecoveryFailureCode.transitionMismatch,
+        );
+      }
+    }
+    return _restoreOperation(operations);
+  }
+
+  Future<HandleRecoveryProgress?> _restoreOperation(
+    List<HandleRecoveryProgress> operations,
+  ) async {
     final actionable = operations.where((item) => item.isActionable).toList();
     if (actionable.length > 1) {
       throw const HandleRecoveryFailure(
@@ -121,7 +144,16 @@ class HandleRecoveryService {
       );
     }
     if (actionable.length == 1) {
-      return status(actionable.single.operationId);
+      final selected = actionable.single;
+      final result = await status(selected.operationId);
+      _validateOperation(
+        result,
+        expectedOwner: HandleRecoveryOwner(
+          localIdentityId: selected.ownerIdentityId,
+          handle: selected.handle,
+        ),
+      );
+      return result;
     }
     // Reopening the latest applied operation closes the crash window between
     // Core transition and central App activation. Timestamps are Core-owned
@@ -139,20 +171,38 @@ class HandleRecoveryService {
         latestApplied = operation;
       }
     }
-    return latestApplied == null ? null : status(latestApplied.operationId);
+    if (latestApplied == null) return null;
+    final result = await status(latestApplied.operationId);
+    _validateOperation(
+      result,
+      expectedOwner: HandleRecoveryOwner(
+        localIdentityId: latestApplied.ownerIdentityId,
+        handle: latestApplied.handle,
+      ),
+    );
+    return result;
   }
 
   Future<HandleRecoveryProgress> activate({
     required String operationId,
     required String presenceReason,
+    Future<void> Function()? beforeCommit,
   }) async {
     final normalizedOperationId = _validatedOperationId(operationId);
     final current = await status(normalizedOperationId);
     if (current.isCompleted) {
+      await beforeCommit?.call();
       return current;
     }
     if (current.canResume) {
+      await beforeCommit?.call();
       return _core.reconcile(normalizedOperationId);
+    }
+    if (current.failureCode == HandleRecoveryFailureCode.factorRetryRequired) {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.factorRetryRequired,
+        retryable: true,
+      );
     }
     if (!current.canActivate) {
       throw HandleRecoveryFailure(
@@ -168,6 +218,7 @@ class HandleRecoveryService {
         HandleRecoveryFailureCode.userPresenceRequired,
       );
     }
+    await beforeCommit?.call();
     final progress = await _core.activate(
       operationId: normalizedOperationId,
       userPresenceConfirmed: true,

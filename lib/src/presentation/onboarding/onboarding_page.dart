@@ -16,6 +16,8 @@ import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../devices/device_join_page.dart';
 import '../recovery/handle_recovery_page.dart';
+import '../recovery/handle_recovery_provider.dart';
+import '../recovery/pending_handle_recovery_entry.dart';
 import '../shared/app_language_menu.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
@@ -41,6 +43,8 @@ class OnboardingPage extends ConsumerStatefulWidget {
 class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   static const int _e2eOtpMaxAttempts = 15;
   static const Duration _e2eOtpRetryInterval = Duration(seconds: 5);
+
+  bool _checkingLocalRecovery = false;
 
   final phoneController = TextEditingController();
   final otpController = TextEditingController();
@@ -323,6 +327,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           placeholder: context.l10n.onboardingHandlePlaceholder,
           semanticsIdentifier: 'e2e-handle-input',
         ),
+        PendingHandleRecoveryEntry(
+          handleController: handleController,
+          phoneController: phoneController,
+        ),
         SizedBox(height: responsive.spacing(20)),
         _OnboardingAlignedAction(
           key: const Key('onboarding-no-verification-complete-action'),
@@ -369,6 +377,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           showLabel: !responsive.isPhone,
           semanticsIdentifier: 'e2e-handle-input',
         ),
+        PendingHandleRecoveryEntry(
+          handleController: handleController,
+          phoneController: phoneController,
+        ),
         SizedBox(height: responsive.spacing(14)),
         AppTextField(
           controller: otpController,
@@ -411,6 +423,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           placeholder: context.l10n.onboardingHandlePlaceholder,
           showLabel: !responsive.isPhone,
           semanticsIdentifier: 'e2e-handle-input',
+        ),
+        PendingHandleRecoveryEntry(
+          handleController: handleController,
+          phoneController: phoneController,
         ),
         SizedBox(height: responsive.spacing(14)),
         AppTextField(
@@ -465,6 +481,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   Future<void> _submitRegister(BuildContext context) async {
     final notifier = ref.read(onboardingProvider.notifier);
     final handle = handleController.text.trim();
+    if (_checkingLocalRecovery) return;
+    if (handle.isNotEmpty && await _openPendingRecovery(handle)) return;
+    if (!mounted) return;
     final profileMarkdown = '# $handle\n\n';
     final onboarding = ref.read(onboardingProvider);
     IdentityRegistrationStatus? result;
@@ -507,6 +526,49 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             '${handle.toLowerCase()}.${ref.read(activeAppTenantProvider).didHost.toLowerCase()}',
         phone: verifiedOnboarding.otpTargetPhone ?? _normalizedPhone,
       );
+    }
+  }
+
+  Future<bool> _openPendingRecovery(String handle) async {
+    if (!(ref
+            .read(onboardingProvider)
+            .serverInfo
+            ?.supportsPhoneHandleRecovery ??
+        false)) {
+      return false;
+    }
+    _checkingLocalRecovery = true;
+    final tenant = ref.read(activeAppTenantProvider);
+    final fullHandle =
+        '${handle.toLowerCase()}.${tenant.didHost.toLowerCase()}';
+    final phone = _normalizedPhone;
+    try {
+      final pending = await ref
+          .read(handleRecoveryServiceProvider)
+          .restoreForHandle(fullHandle);
+      if (!mounted || ref.read(activeAppTenantProvider) != tenant) return true;
+      if (pending == null) return false;
+      otpController.clear();
+      await AppNavigator.push<void>(
+        context,
+        (_) => HandleRecoveryPage(
+          initialHandle: fullHandle,
+          initialPhone: phone,
+          autoRequestOtp: false,
+        ),
+      );
+      return true;
+    } catch (_) {
+      if (mounted) {
+        await showAwikiMeErrorDetailDialog(
+          context,
+          message: context.l10n.handleRecoveryErrorLocalStateUnavailable,
+          detail: context.l10n.handleRecoveryErrorLocalStateUnavailable,
+        );
+      }
+      return true;
+    } finally {
+      _checkingLocalRecovery = false;
     }
   }
 

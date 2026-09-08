@@ -18,6 +18,47 @@ Recovery OTP、风险确认和 activate 流程，但必须把当前会话的 exa
 Core；恢复前不退出、不删除凭证或本地数据，因此 Direct、Group、Agent 历史和智能体库存继续
 归属于同一 stable owner。恢复完成后同样直接返回消息主界面。
 
+## 本地未完成恢复与页面重进
+
+登录/注册提交前，App 先按当前租户的完整 Handle 查询 Core 持久化恢复列表。
+存在可继续操作时直接打开恢复页；不重复注册 DID，也不依赖新身份已进入公开身份列表。
+Core 同时在注册候选创建前返回 `handle_recovery.resume_required`，保护其他宿主入口。
+
+恢复控制器按 `(canonical Handle, localIdentityId)` 隔离，空闲时随页面关闭销毁；在途命令结束前保留实例，重进复用同一命令。
+每次进入先从 Core 重建状态，风险确认、OTP 和旧异步响应均不跨路由继承。
+查询失败时禁止创建新 OTP 操作，提供重试读取入口。pre-commit 可以重新发码验证；
+post-commit 不自动发码，继续相同 operation；继续恢复前与首次激活一样暂停旧会话。
+仍在使用的 applied 身份可重试会话激活；已删除身份的 applied 记录仅保留为审计历史，
+Core 的 Handle 查询依据精确退役凭据将其排除，避免历史结果阻断新的恢复。
+
+## 按阶段交互与执行归属
+
+页面由 Core 的持久化进度、稳定错误和 App 当前动作共同投影；不持久化第二套恢复状态。
+读取时只展示检查进度；需要 factor 时展示验证码；prepared 展示已验证与风险确认；
+remote-unresolved 展示结果待确认；remote-committed/local-transition-pending 展示继续完成；
+applied 只展示会话激活。服务端已确认提交后的页面不展示验证码、风险开关或首次提交按钮。
+只有实际命令运行时显示“正在”，等待用户续接不得冒充迁移正在执行。
+
+factor_retry_required 必须引导同 operation 重新验证。pre-commit 的 prepared 授权过期由
+Core 投影并受控刷新，不能产生新 DID 或替换冻结 intent；post-attempt 先确认原结果。
+终止性错误屏蔽推进操作，临时密钥不可用提供重新读取入口，永久缺钥仅走 Core 隔离流程。
+Core 返回进度中的 failureCode 与异常具有相同的交互优先级；无异常不代表恢复完成。
+
+恢复执行从系统确认、暂停旧会话到 Core 推进与会话激活保持同一忙碌边界；页面在命令期间
+保留 provider，重新打开复用在途执行，结束后才释放。提交前取消/失败恢复原会话，提交后
+不得回到旧身份。迟到回调不能写入其他 Handle/Storage Scope。自动续跑最多一次，手动
+再次继续刷新同一操作的状态；不通过 UI timeout 放开仍在运行的命令。
+
+登录页输入完整有效的 Handle 后只读查询本机恢复记录，提供无需普通登录 OTP 的续接入口；
+查询失败提供重试，切换目标立即失效旧结果。设置仍限定 exact owner。恢复页面重进不自动
+续跑不可逆提交，不自动为已有操作发送短信。风险确认只用于尚未提交的本轮用户确认。
+
+## 恢复兼容边界
+
+本轮保留正式 Release 0714 的既有升级路径，以及新版本产生的正常中断恢复状态。
+未发布临时版本遗留的缺失首次发布标记、旧 proof 草稿不增加特殊接管分支；此类测试数据
+需要操作者显式清理后重新开始。App 不自动删除数据，也不放宽 Core/Identity 的校验。
+
 ## 当前协议边界
 
 - 当前 OTP purpose 固定为 `awiki.identity.handle-recovery.v1`。

@@ -1522,5 +1522,21 @@
   "handleRecoveryJoinLocalMigration": "Local data on this device will be migrated.",
   "handleRecoveryJoinE2eeUnsupported": "Encrypted groups do not support identity recovery yet. Old E2EE private keys do not migrate.",
   "handleRecoveryJoinDidOnlyUnsupported": "DID-only contacts and groups do not migrate.",
-  "legacyIdentityUpgradeFailed": "The legacy identity upgrade failed. Please try again."
+  "legacyIdentityUpgradeFailed": "The legacy identity upgrade failed. Please try again.",
+  "handleRecoveryFactorExpired": "Verification has expired. Request a new code to continue the same recovery.",
+  "handleRecoveryFreshDataNotice": "No previous identity data is available on this device. Earlier direct messages will not be restored automatically.",
+  "handleRecoveryEncryptionNotice": "Previous end-to-end encryption keys will not be restored. Some encrypted messages and groups will remain unavailable.",
+  "handleRecoveryDetails": "View detailed effects",
+  "handleRecoveryNeedsAttention": "Recovery needs attention. Your progress has been preserved.",
+  "handleRecoveryAwaitingResult": "The recovery result is not yet confirmed. Continue checking the existing recovery.",
+  "handleRecoveryAwaitingLocal": "Account recovery has taken effect. Continue setup on this device; no new SMS code is needed.",
+  "handleRecoveryChecking": "Checking recovery progress…",
+  "handleRecoverySendingOtp": "Sending verification code…",
+  "handleRecoveryVerifying": "Verifying phone number…",
+  "handleRecoveryAuthenticating": "Complete system authentication.",
+  "handleRecoveryRunning": "Continuing recovery…",
+  "handleRecoveryEntering": "Recovery is complete. Opening messages…",
+  "handleRecoveryContinueExisting": "Continue previous recovery",
+  "handleRecoverySlowOperation": "This step is taking longer than usual. Check your connection and system prompts. The current operation is still running; do not submit again.",
+  "handleRecoveryCancelBeforeCommit": "Cancel this recovery"
 }

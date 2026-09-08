@@ -34,6 +34,14 @@ void main() {
         environment: environment,
         appStateRoot: root.path,
       );
+      // Handle recovery discovery must cross the real Dart/native boundary
+      // without requiring a projected local identity or sending any OTP.
+      expect(
+        await first.handleRecoveryCorePort!.listOperationsForHandle(
+          'native-recovery-unprojected.awiki.info',
+        ),
+        isEmpty,
+      );
       final repository = buildScopeSecretRepository(appStateRoot: root.path);
       final store = AppTenantStore(
         appStateRoot: root.path,
@@ -74,6 +82,12 @@ void main() {
       final second = await AppBootstrap.create(
         environment: environment,
         appStateRoot: root.path,
+      );
+      expect(
+        await second.handleRecoveryCorePort!.listOperationsForHandle(
+          'native-recovery-unprojected.awiki.info',
+        ),
+        isEmpty,
       );
       final migratedRegistry = await store.loadRegistry();
       expect(
