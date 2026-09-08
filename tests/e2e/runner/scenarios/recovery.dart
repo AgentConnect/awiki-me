@@ -12,8 +12,16 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
     required bool freshOnly,
     required bool localDataOnly,
     required bool identityDeletion,
+    bool stateMachineOnly = false,
   }) async {
     final artifacts = <String, _IsolatedAppArtifact>{};
+    if (stateMachineOnly) {
+      artifacts['recovery-main'] = await _prepareIntegrationExecutable(
+        name: 'recovery-main',
+        stateRoot: appStateRootDir,
+      );
+      return artifacts;
+    }
     if (identityDeletion) {
       artifacts['identity-deletion-a'] = await _prepareIntegrationExecutable(
         name: 'identity-deletion-a',
@@ -198,6 +206,8 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
         : _multiDeviceAppPairRecoveryRegistrationCaseIds;
     final freshOnly =
         options.e2eCase == DesktopE2eCase.multiDeviceRemoteRecoveryFresh;
+    final stateMachineOnly =
+        options.e2eCase == DesktopE2eCase.handleRecoveryStateMachine;
     final localDataOnly =
         options.e2eCase == DesktopE2eCase.handleRecoveryLocalData;
     final recoveryConfig = RemoteHandleRecoveryConfig.from(
@@ -291,6 +301,7 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
           freshOnly: freshOnly,
           localDataOnly: localDataOnly,
           identityDeletion: identityDeletion,
+          stateMachineOnly: stateMachineOnly,
         ),
       );
     }
@@ -300,6 +311,22 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
       return;
     }
     _resourceSideEffectsPossible = true;
+    if (stateMachineOnly) {
+      await _timed(
+        'Flutter Recovery state-machine target, resume and repeat lifecycle',
+        () => preparedRecoveryArtifacts.isNotEmpty
+            ? _executePreparedIntegration(
+                artifact: preparedRecoveryArtifacts['recovery-main']!,
+                caseIds: _handleRecoveryStateMachineCaseIds,
+                stateRoot: appStateRootDir,
+              )
+            : _runFlutterTest(
+                'integration_test/handle_recovery_ui_test.dart',
+                caseIds: _handleRecoveryStateMachineCaseIds,
+              ),
+      );
+      return;
+    }
     if (identityDeletion) {
       await _timed('Flutter identity deletion guard phase A', () {
         if (preparedRecoveryArtifacts.isNotEmpty) {

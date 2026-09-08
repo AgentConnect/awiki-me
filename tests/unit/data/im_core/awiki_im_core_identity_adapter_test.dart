@@ -108,6 +108,30 @@ void main() {
     },
   );
 
+  test(
+    'Core recovery admission returns typed continuation instead of registration',
+    () async {
+      final sdk = _IdentityErrorCore()
+        ..registrationError = const core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'safe',
+          handleRecoveryFailureCode:
+              core.HandleRecoveryFailureCode.recoveryInProgress,
+        );
+      final adapter = AwikiImCoreIdentityAdapter.withCoreInstance(
+        coreInstance: () async => sdk,
+      );
+      final result = await adapter.registerHandleWithPhone(
+        phone: '+8613800138000',
+        otp: '123456',
+        handle: 'alice',
+      );
+      expect(result.status, IdentityRegistrationStatus.recoveryRequired);
+      expect(result.identity, isNull);
+      expect(result.existingHandleContinuationId, isNull);
+    },
+  );
+
   test('adapter preserves structured errors through prepared Join', () async {
     final sdk = _IdentityErrorCore();
     final adapter = AwikiImCoreIdentityAdapter.withCoreInstance(

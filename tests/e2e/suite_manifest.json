@@ -112,6 +112,41 @@
         "HANDLE-RECOVERY-V1-E2E-003"
       ]
     },
+    "handle-recovery-state-machine": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "requiredTools": [
+        "flutter",
+        "script"
+      ],
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 15,
+      "timeoutMinutes": 25,
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "handle_recovery_operation",
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001",
+        "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001",
+        "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001"
+      ]
+    },
     "handle-recovery-local-data": {
       "tier": "remote_product_ui_security",
       "supportedPlatforms": ["macos","linux"],

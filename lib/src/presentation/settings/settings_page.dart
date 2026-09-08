@@ -601,6 +601,7 @@ class SettingsPage extends ConsumerWidget {
     AppNavigator.push<void>(
       context,
       (_) => HandleRecoveryPage(
+        startNew: true,
         initialHandle: identity.handle!.trim(),
         initialPhone: '',
         autoRequestOtp: false,

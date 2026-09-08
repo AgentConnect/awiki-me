@@ -465,6 +465,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   Future<void> _submitRegister(BuildContext context) async {
     final notifier = ref.read(onboardingProvider.notifier);
     final handle = handleController.text.trim();
+    final tenant = ref.read(activeAppTenantProvider);
+    final phone = _normalizedPhone;
     final profileMarkdown = '# $handle\n\n';
     final onboarding = ref.read(onboardingProvider);
     IdentityRegistrationStatus? result;
@@ -497,6 +499,23 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
     if (ref.read(onboardingProvider).isPhoneOtpConsumed) {
       otpController.clear();
+    }
+    if (result == IdentityRegistrationStatus.recoveryRequired &&
+        context.mounted &&
+        ref.read(activeAppTenantProvider).id == tenant.id &&
+        handleController.text.trim() == handle &&
+        _normalizedPhone == phone) {
+      await AppNavigator.push<void>(
+        context,
+        (_) => HandleRecoveryPage(
+          initialHandle:
+              '${handle.toLowerCase()}.${tenant.didHost.toLowerCase()}',
+          initialPhone: phone,
+          autoRequestOtp: false,
+          allowPhoneInput: phone.isEmpty,
+        ),
+      );
+      return;
     }
     if (result == IdentityRegistrationStatus.joinRequired && context.mounted) {
       final verifiedOnboarding = ref.read(onboardingProvider);
@@ -575,6 +594,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           await AppNavigator.push<void>(
             context,
             (_) => HandleRecoveryPage(
+              startNew: true,
               initialHandle: fullHandle,
               initialPhone: phone,
             ),

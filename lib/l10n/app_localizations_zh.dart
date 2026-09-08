@@ -3300,6 +3300,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get handleRecoveryUnavailable => '当前版本不支持 Handle 恢复，未对身份做任何更改。';
 
   @override
+  String get handleRecoveryFactorRequired =>
+      '恢复资格需要重新验证。请为同一操作获取新的验证码，验证后重新确认风险。';
+
+  @override
+  String get handleRecoveryLocalSuperseded =>
+      '远端恢复已经提交，但本机恢复身份已被新的绑定或授权状态取代。已停止旧操作；恢复记录和材料仍保留。请返回登录页加入当前身份，或明确开始新的恢复。';
+
+  @override
   String get handleRecoveryTitle => '恢复 Handle';
 
   @override

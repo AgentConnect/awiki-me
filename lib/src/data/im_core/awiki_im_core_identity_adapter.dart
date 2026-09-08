@@ -245,7 +245,8 @@ class AwikiImCoreIdentityAdapter
     String? displayName,
   }) async {
     final coreInstance = await _coreInstance();
-    final result = await _withMappedAppError(
+    return _registerWithRecoveryAdmission(
+      coreInstance,
       () => coreInstance.registerHandleWithPhone(
         localAlias: handle,
         requestedHandle: handle,
@@ -256,7 +257,6 @@ class AwikiImCoreIdentityAdapter
         makeDefault: true,
       ),
     );
-    return _registrationResult(coreInstance, result);
   }
 
   @override
@@ -267,7 +267,8 @@ class AwikiImCoreIdentityAdapter
     String? displayName,
   }) async {
     final coreInstance = await _coreInstance();
-    final result = await _withMappedAppError(
+    return _registerWithRecoveryAdmission(
+      coreInstance,
       () => coreInstance.registerHandleWithEmail(
         localAlias: handle,
         requestedHandle: handle,
@@ -277,7 +278,6 @@ class AwikiImCoreIdentityAdapter
         makeDefault: true,
       ),
     );
-    return _registrationResult(coreInstance, result);
   }
 
   @override
@@ -287,7 +287,8 @@ class AwikiImCoreIdentityAdapter
     String? displayName,
   }) async {
     final coreInstance = await _coreInstance();
-    final result = await _withMappedAppError(
+    return _registerWithRecoveryAdmission(
+      coreInstance,
       () => coreInstance.registerHandleWithoutContactVerification(
         localAlias: handle,
         requestedHandle: handle,
@@ -296,7 +297,28 @@ class AwikiImCoreIdentityAdapter
         makeDefault: true,
       ),
     );
-    return _registrationResult(coreInstance, result);
+  }
+
+  Future<IdentityRegistrationResult> _registerWithRecoveryAdmission(
+    core.AwikiImCore instance,
+    Future<core.HandleRegistrationResult> Function() register,
+  ) async {
+    try {
+      return await _registrationResult(
+        instance,
+        await _withMappedAppError(register),
+      );
+    } on core.AwikiImCoreException catch (error) {
+      if (error.handleRecoveryFailureCode !=
+          core.HandleRecoveryFailureCode.recoveryInProgress) {
+        rethrow;
+      }
+      // Core refused candidate admission. This is not a registration success
+      // or a reusable Join grant; the Recovery page must inspect its own target.
+      return const IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.recoveryRequired,
+      );
+    }
   }
 
   Future<IdentityRegistrationResult> _registrationResult(

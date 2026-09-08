@@ -2273,6 +2273,42 @@ void main() {
     );
   });
 
+  testWidgets('Core 在途 Recovery 阻止误注册并进入默认续跑页', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..registrationStatus = IdentityRegistrationStatus.recoveryRequired;
+    final recoveryCore = _RecordingHandleRecoveryCorePort();
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          handleRecoveryCorePortProvider.overrideWithValue(recoveryCore),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'Alice');
+    await tester.enterText(fields.at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pumpAndSettle();
+    final page = tester.widget<HandleRecoveryPage>(
+      find.byType(HandleRecoveryPage),
+    );
+    expect(page.initialHandle, 'alice.awiki.me');
+    expect(page.startNew, isFalse);
+    expect(page.autoRequestOtp, isFalse);
+    expect(recoveryCore.handle, isNull);
+    expect(gateway.registerHandleCalls, 0);
+    expect(
+      find.byKey(const Key('existing-handle-recovery-action')),
+      findsNothing,
+    );
+  });
+
   testWidgets('已有 Handle 可进入新机器恢复且复用已验证的 Handle 和手机号', (tester) async {
     final defaultInfo = OnboardingServerInfo.userServiceDefault();
     final gateway = FakeAwikiGateway()
@@ -2564,6 +2600,16 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
   String? handle;
   String? phone;
   String? localIdentityId;
+
+  @override
+  Future<HandleRecoveryContext> inspectContext({
+    required String handle,
+    String? localIdentityId,
+  }) async => HandleRecoveryContext(
+    handle: handle,
+    localIdentityId: localIdentityId,
+    allowedActions: const [HandleRecoveryAction.startNew],
+  );
 
   @override
   Future<HandleRecoveryOtpResult> requestOtp({

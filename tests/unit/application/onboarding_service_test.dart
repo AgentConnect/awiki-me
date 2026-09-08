@@ -50,6 +50,35 @@ void main() {
     },
   );
 
+  test(
+    'Recovery continuation does not activate registration or patch profile',
+    () async {
+      final identities = _FakeIdentities()
+        ..registrationStatus = IdentityRegistrationStatus.recoveryRequired;
+      final sessions = _FakeSessions();
+      final profiles = _FakeProfiles();
+      final service = ImCoreOnboardingService(
+        identities: identities,
+        legacyUpgrades: identities,
+        sessions: sessions,
+        profiles: profiles,
+      );
+      final transition = sessions.beginSessionTransition();
+      final result = await service.registerHandleWithPhone(
+        phone: '+8613800138000',
+        otp: '123456',
+        handle: 'alice',
+        profileMarkdown: '# Alice',
+        transition: transition,
+      );
+      expect(result.status, IdentityRegistrationStatus.recoveryRequired);
+      expect(result.identity, isNull);
+      expect(sessions.activated, isEmpty);
+      expect(profiles.patches, isEmpty);
+      expect(sessions.isSessionTransitionCurrent(transition), isFalse);
+    },
+  );
+
   test('joinRequired does not activate identity or patch profile', () async {
     final identities = _FakeIdentities()
       ..registrationStatus = IdentityRegistrationStatus.joinRequired;

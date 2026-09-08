@@ -12,6 +12,37 @@ const _stateRoot =
     'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 void main() {
+  test(
+    'context is read once and its Core actions are not inferred from phase',
+    () async {
+      final sdk = _FakeRecoveryCore();
+      await sdk.prepareHandleRecovery(
+        operationId: 'recover-op-1',
+        phone: 'fixture',
+        code: 'fixture',
+      );
+      sdk.calls.clear();
+      final adapter = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+        coreInstance: () async => sdk,
+      );
+      final context = await adapter.inspectContext(
+        handle: _owner.handle,
+        localIdentityId: _owner.localIdentityId,
+      );
+      expect(sdk.calls, ['inspect']);
+      expect(context.progress?.canActivate, isTrue);
+      expect(context.allowedActions, [
+        HandleRecoveryAction.activate,
+        HandleRecoveryAction.discardPreAttempt,
+      ]);
+      sdk.actionsOverride = const [];
+      final denied = await adapter.inspectContext(handle: _owner.handle);
+      expect(denied.progress?.readyToCommit, isTrue);
+      expect(denied.progress?.canActivate, isFalse);
+      expect(denied.allowedActions, isEmpty);
+    },
+  );
+
   test('V4 adapter uses the Core-owned operation journal end to end', () async {
     final sdk = _FakeRecoveryCore();
     final adapter = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
@@ -187,9 +218,14 @@ void main() {
       core.HandleRecoveryFailureCode.resultAbsent: true,
       core.HandleRecoveryFailureCode.outcomeUnknown: true,
       core.HandleRecoveryFailureCode.localTransitionPending: true,
+      core.HandleRecoveryFailureCode.localTransitionSuperseded: false,
       core.HandleRecoveryFailureCode.localKeyUnavailable: false,
       core.HandleRecoveryFailureCode.localMigrationUnsupported: false,
       core.HandleRecoveryFailureCode.unknownEpoch: false,
+      core.HandleRecoveryFailureCode.activationRequired: false,
+      core.HandleRecoveryFailureCode.recoveryInProgress: false,
+      core.HandleRecoveryFailureCode.actionNotAllowed: false,
+      core.HandleRecoveryFailureCode.stateChanged: false,
     };
     for (final entry in cases.entries) {
       sdk.error = core.AwikiImCoreException(
@@ -281,6 +317,7 @@ class _FakeRecoveryCore implements core.AwikiImCore {
   final List<String> calls = <String>[];
   core.IdentitySelector? selector;
   Object? error;
+  List<core.HandleRecoveryAction>? actionsOverride;
   String receiptSourceId = 'recover-op-1';
   core.HandleRecoveryPhase phase = core.HandleRecoveryPhase.awaitingFactor;
   late core.HandleRecoveryOperationSummary summary = _summary();
@@ -296,6 +333,25 @@ class _FakeRecoveryCore implements core.AwikiImCore {
   }) {
     phase = core.HandleRecoveryPhase.awaitingFactor;
     summary = _summary(keyState: keyState);
+  }
+
+  @override
+  Future<core.HandleRecoveryContext> inspectHandleRecoveryContext({
+    required String fullHandle,
+    core.IdentitySelector? selector,
+  }) async {
+    calls.add('inspect');
+    this.selector = selector;
+    final progress = _progress(
+      stateRootFingerprint: summary.stateRootFingerprint,
+    );
+    return core.HandleRecoveryContext(
+      fullHandle: fullHandle,
+      localIdentityId: _owner.localIdentityId,
+      operation: summary,
+      progress: progress,
+      allowedActions: progress.allowedActions,
+    );
   }
 
   @override
@@ -437,6 +493,23 @@ class _FakeRecoveryCore implements core.AwikiImCore {
 
   core.HandleRecoveryProgress _progress({String? stateRootFingerprint}) =>
       core.HandleRecoveryProgress(
+        allowedActions:
+            actionsOverride ??
+            switch (phase) {
+              core.HandleRecoveryPhase.awaitingFactor => const [
+                core.HandleRecoveryAction.requestOtp,
+                core.HandleRecoveryAction.prepare,
+                core.HandleRecoveryAction.discardPreAttempt,
+              ],
+              core.HandleRecoveryPhase.readyToCommit => const [
+                core.HandleRecoveryAction.activate,
+                core.HandleRecoveryAction.discardPreAttempt,
+              ],
+              core.HandleRecoveryPhase.applied => const [
+                core.HandleRecoveryAction.activateIdentity,
+              ],
+              _ => const [core.HandleRecoveryAction.resume],
+            },
         operationId: 'recover-op-1',
         ownerIdentityId: _owner.localIdentityId,
         accountUserId: summary.accountUserId,

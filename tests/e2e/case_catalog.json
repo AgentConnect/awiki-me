@@ -3,6 +3,153 @@
   "sourceRevision": "2026-08-31.compact-recovery-paging-v1",
   "cases": [
     {
+      "caseId": "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001",
+      "feature": "Real late Recovery error/finally cannot affect another Handle",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Reviewed awiki.info, isolated production AppBootstrap/native Core roots and a protected dedicated fixed-OTP account; two fixture Handles and E2E-only user presence.",
+      "action": "Drive Settings Recovery, deterministic native Commit/local-authority cut and delayed App port returns; switch to another visible Handle, reopen the same native scope, use unified onboarding and perform a second Recovery after visible data deletion.",
+      "exactOracles": [
+        "The exact real Core and visible App lifecycle checkpoints all complete without transferring operation, risk confirmation, session or routing authority."
+      ],
+      "negativeChecks": [
+        "Synthetic backend results, an unconfirmed first Commit, mixed Handle state, old callback feedback/navigation, login from deleted audit, a new factor for resume, or deletion of unresolved recovery material prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_state_machine_test.part.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:real_a_commit_held_after_local_cut",
+          "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:visible_b_login_and_recovery",
+          "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:late_a_error_finally_preserved_b_busy_target",
+          "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:b_session_feedback_navigation_unchanged"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:real_a_commit_held_after_local_cut",
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:visible_b_login_and_recovery",
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:late_a_error_finally_preserved_b_busy_target",
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:b_session_feedback_navigation_unchanged"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:real_a_commit_held_after_local_cut",
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:visible_b_login_and_recovery",
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:late_a_error_finally_preserved_b_busy_target",
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:b_session_feedback_navigation_unchanged"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001",
+      "feature": "Cold Core reentry routes blocked registration to exact committed Recovery",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Reviewed awiki.info, isolated production AppBootstrap/native Core roots and a protected dedicated fixed-OTP account; two fixture Handles and E2E-only user presence.",
+      "action": "Drive Settings Recovery, deterministic native Commit/local-authority cut and delayed App port returns; switch to another visible Handle, reopen the same native scope, use unified onboarding and perform a second Recovery after visible data deletion.",
+      "exactOracles": [
+        "The exact real Core and visible App lifecycle checkpoints all complete without transferring operation, risk confirmation, session or routing authority."
+      ],
+      "negativeChecks": [
+        "Synthetic backend results, an unconfirmed first Commit, mixed Handle state, old callback feedback/navigation, login from deleted audit, a new factor for resume, or deletion of unresolved recovery material prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_state_machine_test.part.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:core_reopened_same_scope_with_committed_result",
+          "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:registration_redirected_to_exact_recovery",
+          "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:resume_without_new_factor_or_presence",
+          "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:recovered_session_entered_messages"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:core_reopened_same_scope_with_committed_result",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:registration_redirected_to_exact_recovery",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:resume_without_new_factor_or_presence",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:recovered_session_entered_messages"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:core_reopened_same_scope_with_committed_result",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:registration_redirected_to_exact_recovery",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:resume_without_new_factor_or_presence",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:recovered_session_entered_messages"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001",
+      "feature": "Visible credential deletion followed by a second Recovery in the same App process",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Reviewed awiki.info, isolated production AppBootstrap/native Core roots and a protected dedicated fixed-OTP account; two fixture Handles and E2E-only user presence.",
+      "action": "Drive Settings Recovery, deterministic native Commit/local-authority cut and delayed App port returns; switch to another visible Handle, reopen the same native scope, use unified onboarding and perform a second Recovery after visible data deletion.",
+      "exactOracles": [
+        "The exact real Core and visible App lifecycle checkpoints all complete without transferring operation, risk confirmation, session or routing authority."
+      ],
+      "negativeChecks": [
+        "Synthetic backend results, an unconfirmed first Commit, mixed Handle state, old callback feedback/navigation, login from deleted audit, a new factor for resume, or deletion of unresolved recovery material prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_state_machine_test.part.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:visible_current_data_deletion",
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:same_process_provider_tree_reentered",
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:historical_applied_not_login",
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_operation_and_confirmation_distinct",
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_recovery_entered_messages",
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_handle_preserved"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:visible_current_data_deletion",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:same_process_provider_tree_reentered",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:historical_applied_not_login",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_operation_and_confirmation_distinct",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_recovery_entered_messages",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_handle_preserved"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:visible_current_data_deletion",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:same_process_provider_tree_reentered",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:historical_applied_not_login",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_operation_and_confirmation_distinct",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_recovery_entered_messages",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_handle_preserved"
+          ]
+        ]
+      }
+    },
+    {
       "caseId": "AGENT-NOTIFY-E2E-001",
       "feature": "Real Coding Agent terminal delivery to AWiki Me",
       "layer": "remote_product_ui",

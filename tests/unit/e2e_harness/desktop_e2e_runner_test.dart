@@ -435,6 +435,29 @@ void main() {
       expect(hyphen.e2eCase.reportScope, 'handle-recovery-local-data');
     });
 
+    test(
+      'state-machine Recovery has an independent three-case source-backed lane',
+      () {
+        final options = DesktopE2eOptions.parse(const [
+          '--case',
+          'handle-recovery-state-machine',
+          '--dry-run',
+        ]);
+        expect(options.e2eCase, DesktopE2eCase.handleRecoveryStateMachine);
+        expect(options.e2eCase.requiresCliPeer, isFalse);
+        expect(
+          options.e2eCase.testFile,
+          'integration_test/handle_recovery_ui_test.dart',
+        );
+        expect(options.e2eCase.flutterTimeout, const Duration(minutes: 25));
+        expect(options.e2eCase.caseIds, const [
+          'HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001',
+          'HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001',
+          'HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001',
+        ]);
+      },
+    );
+
     test('parses Fresh Root Handle Recovery case aliases', () {
       final hyphen = DesktopE2eOptions.parse(const <String>[
         '--case',

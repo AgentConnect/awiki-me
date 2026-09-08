@@ -3508,6 +3508,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Handle Recovery is not supported in this version. No identity state was changed.';
 
   @override
+  String get handleRecoveryFactorRequired =>
+      'Recovery verification must be renewed. Request a new code for this operation, verify it, then confirm the risks again.';
+
+  @override
+  String get handleRecoveryLocalSuperseded =>
+      'Remote recovery was committed, but this local identity has been superseded by a newer binding or authorization state. The old operation is stopped; its records and materials are preserved. Return to login to join the current identity, or explicitly start a new recovery.';
+
+  @override
   String get handleRecoveryTitle => 'Recover Handle';
 
   @override

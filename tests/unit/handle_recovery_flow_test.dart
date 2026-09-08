@@ -23,7 +23,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
 
+part 'handle_recovery_state_machine_test.part.dart';
+
 void main() {
+  _registerHandleRecoveryStateMachineTests();
   group('Handle Recovery V4 application boundary', () {
     test(
       'Core creates operation and App never supplies an operation id',
@@ -140,30 +143,35 @@ void main() {
       );
     });
 
-    test('restored post-attempt operation requests OTP before prepare', () {
-      final operation = _operation(
-        lifecycleClass: HandleRecoveryLifecycleClass.remoteUnresolved,
-        commitAttempted: true,
-      );
-      final restored = HandleRecoveryState(
-        owner: const HandleRecoveryOwner(
-          localIdentityId: 'identity-alice',
-          handle: 'alice.awiki.info',
-        ),
-        progress: operation,
-      );
+    test(
+      'restored post-attempt operation uses Core factor actions without persisted phone',
+      () {
+        final operation = _operation(
+          lifecycleClass: HandleRecoveryLifecycleClass.remoteUnresolved,
+          commitAttempted: true,
+        );
+        final restored = HandleRecoveryState(
+          authoritative: true,
+          allowedActions: operation.allowedActions,
+          owner: const HandleRecoveryOwner(
+            localIdentityId: 'identity-alice',
+            handle: 'alice.awiki.info',
+          ),
+          progress: operation,
+        );
 
-      expect(restored.canRequestOtp, isTrue);
-      expect(restored.otpRequested, isFalse);
+        expect(restored.canRequestOtp, isTrue);
+        expect(restored.otpRequested, isTrue);
 
-      final afterSend = restored.copyWith(otpPhone: '+8613800138000');
-      expect(afterSend.otpOperationId, operation.operationId);
-      expect(afterSend.otpRequested, isTrue);
-      expect(afterSend.progress?.canDiscard, isFalse);
-    });
+        final afterSend = restored.copyWith(otpPhone: '+8613800138000');
+        expect(afterSend.otpOperationId, operation.operationId);
+        expect(afterSend.otpRequested, isTrue);
+        expect(afterSend.progress?.canDiscard, isFalse);
+      },
+    );
 
     test(
-      'restart enumerates by stable owner and queries exact operation',
+      'restart queries Core context by stable owner and exact Handle',
       () async {
         final core = _FakeHandleRecoveryCore(
           operation: _operation(
@@ -185,7 +193,7 @@ void main() {
         );
 
         expect(core.listCalls, 1);
-        expect(core.statusCalls, 1);
+        expect(core.statusCalls, 0);
         expect(restored?.operationId, 'operation-core-1');
         expect(restored?.isStillConfirming, isTrue);
         expect(restored?.canResume, isTrue);
@@ -215,7 +223,7 @@ void main() {
         );
 
         expect(restored?.isCompleted, isTrue);
-        expect(core.statusCalls, 1);
+        expect(core.statusCalls, 0);
       },
     );
 
@@ -547,6 +555,11 @@ void main() {
     final core = _FakeHandleRecoveryCore(
       operation: operation,
       otpResponseOperation: operation,
+      reconcileProgressOnError: _operation(
+        lifecycleClass: HandleRecoveryLifecycleClass.remoteUnresolved,
+        commitAttempted: true,
+        keyState: HandleRecoveryKeyState.permanentlyUnavailable,
+      ),
       reconcileError: const HandleRecoveryFailure(
         HandleRecoveryFailureCode.localKeyUnavailable,
       ),
@@ -634,10 +647,12 @@ void main() {
           container.read(handleRecoveryProvider).progress?.isCompleted,
           isTrue,
         );
+        core.credentialAvailable = false;
         unawaited(
           Navigator.of(context).push<void>(
             CupertinoPageRoute<void>(
               builder: (_) => const HandleRecoveryPage(
+                startNew: true,
                 initialHandle: 'alice.awiki.info',
                 initialPhone: '+8613800138000',
               ),
@@ -650,11 +665,15 @@ void main() {
           find.byKey(const Key('handle-recovery-enter-messages')),
           findsNothing,
         );
-        final state = container.read(handleRecoveryProvider);
-        expect(state.progress?.isCompleted ?? false, isFalse);
+        final pageContainer = ProviderScope.containerOf(
+          tester.element(find.byKey(const Key('handle-recovery-page'))),
+        );
+        final state = pageContainer.read(handleRecoveryProvider);
+        expect(state.allows(HandleRecoveryAction.activateIdentity), isFalse);
         expect(state.riskConfirmed, isFalse);
         if (otpFails) {
-          expect(state.progress, isNull);
+          expect(state.progress?.isCompleted, isTrue);
+          expect(state.allows(HandleRecoveryAction.startNew), isTrue);
           expect(state.error, HandleRecoveryUiError.failed);
         } else {
           expect(state.progress?.operationId, 'operation-core-new');
@@ -706,7 +725,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final progress = container.read(handleRecoveryProvider).progress;
+    final pageContainer = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('handle-recovery-page'))),
+    );
+    final progress = pageContainer.read(handleRecoveryProvider).progress;
     expect(progress?.operationId, 'operation-core-1');
     expect(progress?.canResume, isTrue);
     expect(core.lastPhone, isNull);
@@ -1407,6 +1429,37 @@ HandleRecoveryProgress _operation({
   HandleRecoveryLocalMigration localMigration =
       HandleRecoveryLocalMigration.supported,
 }) => HandleRecoveryProgress(
+  allowedActions: [
+    if (lifecycleClass == HandleRecoveryLifecycleClass.preCommit &&
+        !commitAttempted) ...[
+      HandleRecoveryAction.discardPreAttempt,
+      if (readyToCommit &&
+          localMigration != HandleRecoveryLocalMigration.preCommitUnsupported &&
+          keyState == HandleRecoveryKeyState.available)
+        HandleRecoveryAction.activate,
+      if (!readyToCommit) ...[
+        HandleRecoveryAction.requestOtp,
+        HandleRecoveryAction.prepare,
+      ],
+    ],
+    if (commitAttempted &&
+        keyState == HandleRecoveryKeyState.available &&
+        [
+          HandleRecoveryLifecycleClass.remoteUnresolved,
+          HandleRecoveryLifecycleClass.remoteCommitted,
+          HandleRecoveryLifecycleClass.localTransitionPending,
+        ].contains(lifecycleClass))
+      HandleRecoveryAction.resume,
+    if (lifecycleClass == HandleRecoveryLifecycleClass.remoteUnresolved &&
+        keyState == HandleRecoveryKeyState.available) ...[
+      HandleRecoveryAction.requestOtp,
+      HandleRecoveryAction.prepare,
+    ],
+    if (lifecycleClass == HandleRecoveryLifecycleClass.applied)
+      HandleRecoveryAction.activateIdentity,
+    if (keyState == HandleRecoveryKeyState.permanentlyUnavailable)
+      HandleRecoveryAction.quarantineKeyUnavailable,
+  ],
   operationId: operationId,
   ownerIdentityId: 'identity-alice',
   accountUserId: accountUserId,
@@ -1438,7 +1491,9 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
     this.activateProgressOnError,
     this.activateError,
     this.activateCompleter,
+    this.prepareCompleter,
     this.reconcileResult,
+    this.reconcileProgressOnError,
     this.receipt,
     this.statusError,
     this.reconcileError,
@@ -1452,9 +1507,12 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   final HandleRecoveryProgress? activateProgressOnError;
   final Object? activateError;
   final Completer<HandleRecoveryProgress>? activateCompleter;
+  final Completer<HandleRecoveryProgress>? prepareCompleter;
   final HandleRecoveryProgress? reconcileResult;
+  final HandleRecoveryProgress? reconcileProgressOnError;
+  bool credentialAvailable = true;
   final HandleRecoveryRegistryEpochReset? receipt;
-  final Object? statusError;
+  Object? statusError;
   final Object? reconcileError;
   final FutureOr<void> Function()? beforeActivate;
   HandleRecoveryOwner? lastOwner;
@@ -1468,6 +1526,32 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   int activateCalls = 0;
   int reconcileCalls = 0;
   int receiptCalls = 0;
+
+  @override
+  Future<HandleRecoveryContext> inspectContext({
+    required String handle,
+    String? localIdentityId,
+  }) async {
+    listCalls++;
+    lastOwner = HandleRecoveryOwner(
+      localIdentityId: localIdentityId ?? operation.ownerIdentityId,
+      handle: handle,
+    );
+    if (statusError != null) throw statusError!;
+    return HandleRecoveryContext(
+      handle: handle,
+      localIdentityId: localIdentityId ?? operation.ownerIdentityId,
+      progress: operation,
+      allowedActions: [
+        ...operation.allowedActions.where(
+          (action) =>
+              credentialAvailable ||
+              action != HandleRecoveryAction.activateIdentity,
+        ),
+        if (!operation.isActionable) HandleRecoveryAction.startNew,
+      ],
+    );
+  }
 
   @override
   Future<HandleRecoveryOtpResult> requestOtp({
@@ -1500,7 +1584,9 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
     required String phone,
     required String otp,
   }) async {
-    operation = _operation(readyToCommit: true);
+    operation =
+        await (prepareCompleter?.future ??
+            Future.value(_operation(readyToCommit: true)));
     return operation;
   }
 
@@ -1545,7 +1631,10 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   Future<HandleRecoveryProgress> reconcile(String operationId) async {
     reconcileCalls += 1;
     final error = reconcileError;
-    if (error != null) throw error;
+    if (error != null) {
+      operation = reconcileProgressOnError ?? operation;
+      throw error;
+    }
     operation = reconcileResult ?? operation;
     return operation;
   }
@@ -1597,11 +1686,13 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
 }
 
 class _FakeUserPresence implements UserPresencePort {
+  _FakeUserPresence({this.completer});
+  final Completer<bool>? completer;
   int calls = 0;
 
   @override
   Future<bool> confirm({required String reason}) async {
     calls += 1;
-    return true;
+    return await (completer?.future ?? Future.value(true));
   }
 }

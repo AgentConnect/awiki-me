@@ -70,6 +70,8 @@ const String _multiDeviceRemoteRecoveryScenario =
 const String _multiDeviceRemoteRecoveryFreshScenario =
     'multi-device-handle-recovery-fresh-v1';
 const String _handleRecoveryLocalDataScenario = 'handle-recovery-local-data-v1';
+const String _handleRecoveryStateMachineScenario =
+    'handle-recovery-state-machine-v1';
 const String _multiDeviceAppPairRecoveryRegistrationScenario =
     'multi-device-app-pair-recovery-registration-rejoin-management-transfer';
 const String _multiDeviceAppPairRecoveryResumeScenario =
@@ -198,6 +200,11 @@ const List<String> _multiDeviceRemoteRecoveryCaseIds = <String>[
   'HANDLE-RECOVERY-V1-E2E-001',
   'HANDLE-RECOVERY-V1-E2E-002',
   'HANDLE-RECOVERY-V1-E2E-003',
+];
+const List<String> _handleRecoveryStateMachineCaseIds = <String>[
+  'HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001',
+  'HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001',
+  'HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001',
 ];
 const List<String> _handleRecoveryLocalDataCaseIds = <String>[
   'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
@@ -663,6 +670,7 @@ class DesktopE2eRunner {
     if (!options.dryRun &&
         (options.e2eCase == DesktopE2eCase.multiDeviceRemoteRecovery ||
             options.e2eCase == DesktopE2eCase.handleRecoveryLocalData ||
+            options.e2eCase == DesktopE2eCase.handleRecoveryStateMachine ||
             options.e2eCase == DesktopE2eCase.multiDeviceRemoteRecoveryFresh ||
             options.e2eCase ==
                 DesktopE2eCase.multiDeviceAppPairRecoveryRegistration ||
@@ -702,6 +710,8 @@ class DesktopE2eRunner {
         case DesktopE2eCase.multiDeviceRemoteJoin:
           await _runRemoteMultiDeviceJoin();
         case DesktopE2eCase.multiDeviceRemoteRecovery:
+          await _runRemoteHandleRecovery();
+        case DesktopE2eCase.handleRecoveryStateMachine:
           await _runRemoteHandleRecovery();
         case DesktopE2eCase.handleRecoveryLocalData:
           await _runRemoteHandleRecovery();

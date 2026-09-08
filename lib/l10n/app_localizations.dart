@@ -6190,6 +6190,18 @@ abstract class AppLocalizations {
   /// **'当前版本不支持 Handle 恢复，未对身份做任何更改。'**
   String get handleRecoveryUnavailable;
 
+  /// No description provided for @handleRecoveryFactorRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复资格需要重新验证。请为同一操作获取新的验证码，验证后重新确认风险。'**
+  String get handleRecoveryFactorRequired;
+
+  /// No description provided for @handleRecoveryLocalSuperseded.
+  ///
+  /// In zh, this message translates to:
+  /// **'远端恢复已经提交，但本机恢复身份已被新的绑定或授权状态取代。已停止旧操作；恢复记录和材料仍保留。请返回登录页加入当前身份，或明确开始新的恢复。'**
+  String get handleRecoveryLocalSuperseded;
+
   /// No description provided for @handleRecoveryTitle.
   ///
   /// In zh, this message translates to:

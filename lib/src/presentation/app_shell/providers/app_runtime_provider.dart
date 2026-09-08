@@ -383,12 +383,15 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
   }
 
-  Future<void> prepareIdentityActivation() async {
+  Future<void> prepareIdentityActivation({bool Function()? isCurrent}) async {
+    if (!mounted || isCurrent?.call() == false) return;
     _isLoggingOut = true;
     _syncAuthRevoked = false;
     final pushSession = _currentRemotePushInstallationSession();
     _deactivateRemotePushLocally(pushSession);
     await _disableRemotePushBestEffort(pushSession);
+    if (!mounted || isCurrent?.call() == false) return;
+    _beginBusyOperation();
     _clearAuthenticatedUiState();
     state = state.copyWith(
       isBusy: true,
@@ -399,8 +402,11 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     try {
       await ref.read(realtimeApplicationServiceProvider).stop();
     } catch (error, stackTrace) {
+      if (!mounted || isCurrent?.call() == false) return;
       await _rollbackSessionActivationBestEffort();
       Error.throwWithStackTrace(error, stackTrace);
+    } finally {
+      _endBusyOperation();
     }
   }
 
@@ -417,19 +423,25 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   Future<bool> loginWithLocalCredentialAndConfirm(
     String credentialName, {
     bool reportFailure = true,
+    bool Function()? isCurrent,
   }) async {
+    bool requestIsCurrent() => mounted && (isCurrent?.call() ?? true);
+    if (!requestIsCurrent()) return false;
     final currentSession = ref.read(sessionProvider).session;
     if (currentSession != null) {
       ref.read(sessionProvider.notifier).upsertLocalCredential(currentSession);
       final pushSession = _currentRemotePushInstallationSession();
       _deactivateRemotePushLocally(pushSession);
       await _disableRemotePushBestEffort(pushSession);
+      if (!requestIsCurrent()) return false;
       _clearAuthenticatedUiState();
     }
     AppSession? session;
     AppSessionLease? restoredLease;
     final sessions = ref.read(appSessionServiceProvider);
-    final transition = sessions.beginSessionTransition();
+    final transition = sessions.beginSessionTransition(
+      isCurrent: requestIsCurrent,
+    );
     final loginCompleted = await _runBusy(
       () async {
         session = await sessions.loginWithIdentity(
@@ -438,31 +450,46 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         );
       },
       onFailure: () async {
-        restoredLease = await _cancelOrAbortSessionTransition(transition);
+        transition.releaseRequestGuard();
+        if (mounted) {
+          restoredLease = await _cancelOrAbortSessionTransition(transition);
+        }
       },
       shouldReportFailure: () =>
-          reportFailure && sessions.isLatestSessionTransition(transition),
+          reportFailure &&
+          requestIsCurrent() &&
+          sessions.isLatestSessionTransition(transition),
     );
+    if (!requestIsCurrent()) {
+      transition.releaseRequestGuard();
+      if (mounted) await _cancelOrAbortSessionTransition(transition);
+      return false;
+    }
     final committed = session;
     if (!loginCompleted || committed == null) {
+      transition.releaseRequestGuard();
       final predecessor = restoredLease;
       if (predecessor != null) {
         await _runBusy(
           () => _activateSession(predecessor),
           enforceTimeout: false,
-          shouldReportFailure: () => reportFailure,
+          shouldReportFailure: () => reportFailure && requestIsCurrent(),
         );
       }
       return false;
     }
     final activationCompleted = await _runBusy(
-      () => activateCommittedSession(committed),
+      () => activateCommittedSession(committed, expectedTransition: transition),
       enforceTimeout: false,
-      shouldReportFailure: () => reportFailure,
+      shouldReportFailure: () => reportFailure && requestIsCurrent(),
     );
-    if (!activationCompleted || !mounted) {
+    final stillCurrent = requestIsCurrent();
+    transition.releaseRequestGuard();
+    if (!stillCurrent) {
+      if (mounted) await _cancelOrAbortSessionTransition(transition);
       return false;
     }
+    if (!activationCompleted) return false;
     final active = ref.read(sessionProvider).session;
     return active != null &&
         active.localIdentityId == committed.identityId &&

@@ -3995,6 +3995,8 @@ void main() {
           .prepareIdentityActivation();
 
       expect(pushInstallations.calls, <String>['deactivate', 'disable']);
+      // Recovery may outlive its page; quiescing must release the global mask.
+      expect(container.read(appRuntimeProvider).isBusy, isFalse);
       expect(container.read(sessionProvider).session, isNull);
 
       await activateBound();

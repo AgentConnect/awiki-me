@@ -27,6 +27,7 @@ enum OnboardingPhoneRegistrationOutcome {
   idle,
   inFlight,
   joinRequired,
+  recoveryRequired,
   registered,
   superseded,
   timedOut,
@@ -519,7 +520,9 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     if (status != null && mounted) {
       state = state.copyWith(
         phoneRegistrationOutcome:
-            status == IdentityRegistrationStatus.joinRequired
+            status == IdentityRegistrationStatus.recoveryRequired
+            ? OnboardingPhoneRegistrationOutcome.recoveryRequired
+            : status == IdentityRegistrationStatus.joinRequired
             ? OnboardingPhoneRegistrationOutcome.joinRequired
             : OnboardingPhoneRegistrationOutcome.registered,
       );
@@ -654,6 +657,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     IdentityRegistrationResult result,
     AppSessionTransition transition,
   ) async {
+    if (result.status == IdentityRegistrationStatus.recoveryRequired) {
+      if (!_sessionService.isLatestSessionTransition(transition)) {
+        throw const AppSessionTransitionSuperseded();
+      }
+      return IdentityRegistrationStatus.recoveryRequired;
+    }
     if (result.status == IdentityRegistrationStatus.joinRequired) {
       if (!_sessionService.isLatestSessionTransition(transition)) {
         throw const AppSessionTransitionSuperseded();

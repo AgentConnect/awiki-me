@@ -508,3 +508,11 @@ Production不读取或迁移：
 - `awiki-cli-rs2/docs/architecture/identity-secret-storage.md`
 - `awiki-harness/features/identity-secret-vault.md`
 - `awiki-harness/features/multi-tenant-federated-identity.md`
+
+### Recovery 在途调用的 runtime 与会话边界
+
+已 dispose 的 `AwikiImCoreRuntime` 不可再次 open；在途 open 完成时关闭其新实例，不重新发布到旧租户。Recovery 会话激活复用现有 `AppSessionTransition` 的临时 caller-validity 检查，在每个既有 transition 检查点拒绝失效页面。完成后解除该临时检查，正常会话不依赖 Recovery 页存活；失败清理仍按 exact transition，不清除新页面的会话。
+
+### 单身份删除与 Scope 生命周期
+
+删除当前身份数据由 Core 按 stable owner 完成 durable purge，App 停止该身份 realtime 并释放 selected client，但保留同 Scope runtime，供其他身份和统一登录/Recovery 继续使用。它不是租户/Scope dispose；真正的 dispose 永久禁止迟到 adapter 重开旧 runtime。两者不能混用，否则删除后同进程的新 Recovery 会错误地使用已销毁 runtime。

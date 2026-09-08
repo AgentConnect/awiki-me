@@ -15,6 +15,11 @@ class HandleRecoveryOtpRateLimited implements Exception {
 }
 
 abstract interface class HandleRecoveryCorePort {
+  Future<HandleRecoveryContext> inspectContext({
+    required String handle,
+    String? localIdentityId,
+  });
+
   /// Core creates and durably indexes the operation before sending the OTP.
   Future<HandleRecoveryOtpResult> requestOtp({
     required String handle,

@@ -4,7 +4,7 @@ import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 
-enum IdentityRegistrationStatus { registered, joinRequired }
+enum IdentityRegistrationStatus { registered, joinRequired, recoveryRequired }
 
 enum ExistingHandleJoinMode { ordinary, handleRecoveryRebind }
 

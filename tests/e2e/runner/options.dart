@@ -100,7 +100,7 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair-recovery-registration-resume|multi-device-app-pair-recovery-retirement-ordinary-rejoin|identity-deletion-recovery-guard|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|multi-device-app-pair-paging-recovery|step4-revoke-mls|multi-device-app-pair-later-admin-grant|root-transfer|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
+  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|handle-recovery-state-machine|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair-recovery-registration-resume|multi-device-app-pair-recovery-retirement-ordinary-rejoin|identity-deletion-recovery-guard|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|multi-device-app-pair-paging-recovery|step4-revoke-mls|multi-device-app-pair-later-admin-grant|root-transfer|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
                                unattended real App/CLI message-driven
@@ -169,6 +169,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   multiDeviceRemoteJoin(_multiDeviceRemoteJoinCaseIds),
   multiDeviceRemoteRecovery(_multiDeviceRemoteRecoveryCaseIds),
   handleRecoveryLocalData(_handleRecoveryLocalDataCaseIds),
+  handleRecoveryStateMachine(_handleRecoveryStateMachineCaseIds),
   multiDeviceRemoteRecoveryFresh(_handleRecoveryFreshCaseIds),
   multiDeviceAppPairRecoveryRegistration(
     _multiDeviceAppPairRecoveryRegistrationCaseIds,
@@ -214,6 +215,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         'integration_test/handle_recovery_ui_test.dart',
       DesktopE2eCase.handleRecoveryLocalData =>
+        'integration_test/handle_recovery_ui_test.dart',
+      DesktopE2eCase.handleRecoveryStateMachine =>
         'integration_test/handle_recovery_ui_test.dart',
       DesktopE2eCase.multiDeviceRemoteRecoveryFresh =>
         'integration_test/handle_recovery_ui_test.dart',
@@ -279,6 +282,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         'multi-device-remote-recovery',
       DesktopE2eCase.handleRecoveryLocalData => 'handle-recovery-local-data',
+      DesktopE2eCase.handleRecoveryStateMachine =>
+        'handle-recovery-state-machine',
       DesktopE2eCase.multiDeviceRemoteRecoveryFresh =>
         'multi-device-remote-recovery-fresh',
       DesktopE2eCase.multiDeviceAppPairRecoveryRegistration =>
@@ -313,6 +318,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       this != DesktopE2eCase.multiDevice &&
       this != DesktopE2eCase.multiDeviceRemoteRecovery &&
       this != DesktopE2eCase.handleRecoveryLocalData &&
+      this != DesktopE2eCase.handleRecoveryStateMachine &&
       this != DesktopE2eCase.multiDeviceRemoteRecoveryFresh &&
       this != DesktopE2eCase.multiDeviceAppPairRecoveryRegistration &&
       this != DesktopE2eCase.multiDeviceAppPairRecoveryResume &&
@@ -332,6 +338,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         'multi-device-remote-recovery',
       DesktopE2eCase.handleRecoveryLocalData => 'handle-recovery-local-data',
+      DesktopE2eCase.handleRecoveryStateMachine =>
+        'handle-recovery-state-machine',
       DesktopE2eCase.multiDeviceRemoteRecoveryFresh =>
         'multi-device-remote-recovery-fresh',
       DesktopE2eCase.multiDeviceAppPairRecoveryRegistration =>
@@ -370,6 +378,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.multiDeviceRemoteJoin => const Duration(minutes: 40),
       DesktopE2eCase.multiDeviceRemoteRecovery => const Duration(minutes: 20),
       DesktopE2eCase.handleRecoveryLocalData => const Duration(minutes: 45),
+      DesktopE2eCase.handleRecoveryStateMachine => const Duration(minutes: 25),
       DesktopE2eCase.multiDeviceRemoteRecoveryFresh => const Duration(
         minutes: 45,
       ),
@@ -413,6 +422,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         _multiDeviceRemoteRecoveryScenario,
       DesktopE2eCase.handleRecoveryLocalData =>
         _handleRecoveryLocalDataScenario,
+      DesktopE2eCase.handleRecoveryStateMachine =>
+        _handleRecoveryStateMachineScenario,
       DesktopE2eCase.multiDeviceRemoteRecoveryFresh =>
         _multiDeviceRemoteRecoveryFreshScenario,
       DesktopE2eCase.multiDeviceAppPairRecoveryRegistration =>
@@ -446,6 +457,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         _multiDeviceRemoteRecoveryRunConfigPath,
       DesktopE2eCase.handleRecoveryLocalData =>
+        _multiDeviceRemoteRecoveryRunConfigPath,
+      DesktopE2eCase.handleRecoveryStateMachine =>
         _multiDeviceRemoteRecoveryRunConfigPath,
       DesktopE2eCase.multiDeviceRemoteRecoveryFresh =>
         _multiDeviceRemoteRecoveryRunConfigPath,
@@ -491,6 +504,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       'remote-multi-device-recovery-fresh' ||
       'remote_multi_device_recovery_fresh' =>
         DesktopE2eCase.multiDeviceRemoteRecoveryFresh,
+      'handle-recovery-state-machine' || 'handle_recovery_state_machine' =>
+        DesktopE2eCase.handleRecoveryStateMachine,
       'handle-recovery-local-data' ||
       'handle_recovery_local_data' ||
       'local-data-recovery' ||

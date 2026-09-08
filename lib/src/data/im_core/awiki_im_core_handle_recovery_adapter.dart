@@ -25,6 +25,46 @@ class AwikiImCoreHandleRecoveryAdapter
   final AwikiImCoreInstance _coreInstance;
 
   @override
+  Future<HandleRecoveryContext> inspectContext({
+    required String handle,
+    String? localIdentityId,
+  }) => _runRecovery(() async {
+    final instance = await _coreInstance();
+    final context = await instance.inspectHandleRecoveryContext(
+      fullHandle: handle,
+      selector: localIdentityId == null
+          ? null
+          : core.IdentitySelector.id(localIdentityId),
+    );
+    final summary = context.operation;
+    final progress = context.progress;
+    return HandleRecoveryContext(
+      handle: context.fullHandle,
+      localIdentityId: context.localIdentityId,
+      progress: summary == null
+          ? null
+          : progress == null
+          ? _operationFromSummary(
+              summary,
+              allowedActions: context.allowedActions
+                  .map(_actionFromCore)
+                  .toList(growable: false),
+            )
+          : progress.allowedActions.contains(
+              core.HandleRecoveryAction.activateIdentity,
+            )
+          ? await _operationFromCoreWithReceipt(instance, progress, summary)
+          : _operationFromCore(progress, summary),
+      allowedActions: context.allowedActions
+          .map(_actionFromCore)
+          .toList(growable: false),
+      blockedReason: context.blockedReason == null
+          ? null
+          : handleRecoveryFailureCodeFromCore(context.blockedReason!),
+    );
+  });
+
+  @override
   Future<LegacyRegistryEpochAdoptionAuthority?>
   legacyRegistryEpochAdoptionAuthority(String identitySelector) async {
     if (identitySelector.isEmpty ||
@@ -285,7 +325,10 @@ Future<HandleRecoveryProgress> _loadOperation(
   // OTP send/re-send must not immediately reconcile an unresolved remote
   // outcome. The authoritative summary already carries the lifecycle,
   // commit-attempt, key, and operation identity needed by the App boundary.
-  return _operationFromSummary(matches.single);
+  return _operationFromCore(
+    await instance.handleRecoveryStatus(operationId),
+    matches.single,
+  );
 }
 
 Future<HandleRecoveryProgress> _mergeOperation(
@@ -390,14 +433,19 @@ HandleRecoveryProgress _operationFromCore(
     registryEpochReset: registryEpochReset,
     failureCode: failureCode,
     retryable: _isRetryableFailure(failureCode),
+    allowedActions: progress.allowedActions
+        .map(_actionFromCore)
+        .toList(growable: false),
   );
 }
 
 HandleRecoveryProgress _operationFromSummary(
-  core.HandleRecoveryOperationSummary summary,
-) {
+  core.HandleRecoveryOperationSummary summary, {
+  List<HandleRecoveryAction> allowedActions = const [],
+}) {
   final failureCode = _failureCodeFromStableString(summary.lastErrorCode);
   return HandleRecoveryProgress(
+    allowedActions: allowedActions,
     operationId: summary.operationId,
     ownerIdentityId: summary.ownerIdentityId,
     accountUserId: summary.accountUserId,
@@ -508,10 +556,17 @@ HandleRecoveryFailureCode? _failureCodeFromStableString(String? value) =>
       'result_absent' => HandleRecoveryFailureCode.resultAbsent,
       'outcome_unknown' => HandleRecoveryFailureCode.outcomeUnknown,
       'local_key_unavailable' => HandleRecoveryFailureCode.localKeyUnavailable,
+      'local_transition_superseded' =>
+        HandleRecoveryFailureCode.localTransitionSuperseded,
       'local_transition_pending' =>
         HandleRecoveryFailureCode.localTransitionPending,
       'local_migration_unsupported' =>
         HandleRecoveryFailureCode.localMigrationUnsupported,
+      'activation_required' => HandleRecoveryFailureCode.activationRequired,
+      'recovery_in_progress' => HandleRecoveryFailureCode.recoveryInProgress,
+      'action_not_allowed' => HandleRecoveryFailureCode.actionNotAllowed,
+      'state_changed_requires_new_operation' =>
+        HandleRecoveryFailureCode.stateChanged,
       'unknown_epoch' => HandleRecoveryFailureCode.unknownEpoch,
       _ => null,
     };
@@ -521,6 +576,11 @@ bool _isRetryableFailure(HandleRecoveryFailureCode? value) => switch (value) {
   HandleRecoveryFailureCode.resultAbsent ||
   HandleRecoveryFailureCode.outcomeUnknown ||
   HandleRecoveryFailureCode.localTransitionPending => true,
+  HandleRecoveryFailureCode.localTransitionSuperseded ||
+  HandleRecoveryFailureCode.activationRequired ||
+  HandleRecoveryFailureCode.recoveryInProgress ||
+  HandleRecoveryFailureCode.actionNotAllowed ||
+  HandleRecoveryFailureCode.stateChanged ||
   HandleRecoveryFailureCode.notPrepared ||
   HandleRecoveryFailureCode.userPresenceRequired ||
   HandleRecoveryFailureCode.transitionMismatch ||
@@ -652,10 +712,35 @@ HandleRecoveryFailureCode handleRecoveryFailureCodeFromCore(
     HandleRecoveryFailureCode.outcomeUnknown,
   core.HandleRecoveryFailureCode.localKeyUnavailable =>
     HandleRecoveryFailureCode.localKeyUnavailable,
+  core.HandleRecoveryFailureCode.localTransitionSuperseded =>
+    HandleRecoveryFailureCode.localTransitionSuperseded,
   core.HandleRecoveryFailureCode.localTransitionPending =>
     HandleRecoveryFailureCode.localTransitionPending,
   core.HandleRecoveryFailureCode.localMigrationUnsupported =>
     HandleRecoveryFailureCode.localMigrationUnsupported,
+  core.HandleRecoveryFailureCode.activationRequired =>
+    HandleRecoveryFailureCode.activationRequired,
+  core.HandleRecoveryFailureCode.recoveryInProgress =>
+    HandleRecoveryFailureCode.recoveryInProgress,
+  core.HandleRecoveryFailureCode.actionNotAllowed =>
+    HandleRecoveryFailureCode.actionNotAllowed,
+  core.HandleRecoveryFailureCode.stateChanged =>
+    HandleRecoveryFailureCode.stateChanged,
   core.HandleRecoveryFailureCode.unknownEpoch =>
     HandleRecoveryFailureCode.unknownEpoch,
 };
+
+HandleRecoveryAction _actionFromCore(core.HandleRecoveryAction action) =>
+    switch (action) {
+      core.HandleRecoveryAction.startNew => HandleRecoveryAction.startNew,
+      core.HandleRecoveryAction.requestOtp => HandleRecoveryAction.requestOtp,
+      core.HandleRecoveryAction.prepare => HandleRecoveryAction.prepare,
+      core.HandleRecoveryAction.activate => HandleRecoveryAction.activate,
+      core.HandleRecoveryAction.resume => HandleRecoveryAction.resume,
+      core.HandleRecoveryAction.discardPreAttempt =>
+        HandleRecoveryAction.discardPreAttempt,
+      core.HandleRecoveryAction.quarantineKeyUnavailable =>
+        HandleRecoveryAction.quarantineKeyUnavailable,
+      core.HandleRecoveryAction.activateIdentity =>
+        HandleRecoveryAction.activateIdentity,
+    };

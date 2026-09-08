@@ -12,7 +12,7 @@ import '../core/app_error_classifier.dart';
 import '../domain/entities/session_identity.dart';
 
 abstract interface class AppSessionService {
-  AppSessionTransition beginSessionTransition();
+  AppSessionTransition beginSessionTransition({bool Function()? isCurrent});
 
   bool isSessionTransitionCurrent(AppSessionTransition transition);
 
@@ -65,7 +65,16 @@ abstract interface class LocalIdentityDataDeletionSessionService {
 }
 
 final class AppSessionTransition {
-  AppSessionTransition._(this._previousCommittedTransition);
+  AppSessionTransition._(
+    this._previousCommittedTransition, [
+    this._requestIsCurrent,
+  ]);
+
+  bool Function()? _requestIsCurrent;
+
+  /// Detach after activation succeeds, or before exact-transition cleanup.
+  /// A committed App session must not depend on the lifetime of its old page.
+  void releaseRequestGuard() => _requestIsCurrent = null;
 
   final AppSessionTransition? _previousCommittedTransition;
 
@@ -86,15 +95,19 @@ mixin AppSessionTransitionGuard {
   AppSessionTransition? _committedSessionTransition;
   AppSessionTransition? _latestSessionTransition;
 
-  AppSessionTransition beginSessionTransition() {
-    final transition = AppSessionTransition._(_committedSessionTransition);
+  AppSessionTransition beginSessionTransition({bool Function()? isCurrent}) {
+    final transition = AppSessionTransition._(
+      _committedSessionTransition,
+      isCurrent,
+    );
     _activeSessionTransition = transition;
     _latestSessionTransition = transition;
     return transition;
   }
 
   bool isSessionTransitionCurrent(AppSessionTransition transition) {
-    return identical(_activeSessionTransition, transition);
+    return identical(_activeSessionTransition, transition) &&
+        (transition._requestIsCurrent?.call() ?? true);
   }
 
   bool isLatestSessionTransition(AppSessionTransition transition) {
@@ -740,15 +753,10 @@ class ImCoreAppSessionService
             (deleted.handle != null &&
                 _matchesIdentity(current, deleted.handle!)))) {
       _current = null;
-      if (deleteOwnerData) {
-        await _cleanupRetiredRuntimeBestEffort(realtimeCleanup);
-      } else {
-        // Local credential retirement must leave the owner-scoped Core open.
-        // The signed-out onboarding flow immediately reuses it to classify
-        // the same Handle as Join or Recovery. Only the selected identity
-        // client is no longer valid after deletion.
-        await _runtime.clearIdentity();
-      }
+      // Deletion retires this owner/client, not the shared Storage Scope.
+      // Core has already purged the exact owner's durable data; the signed-out
+      // flow and independent identities must keep using the same live runtime.
+      await _runtime.clearIdentity();
     } else {
       final activeIdentityId = await _activeSessionStore
           ?.readActiveIdentityId();
@@ -875,23 +883,6 @@ class ImCoreAppSessionService
         rethrow;
       }
     });
-  }
-
-  Future<void> _disposeRuntimeBestEffort() async {
-    try {
-      await _runtime.dispose().timeout(_realtimeCleanupTimeout);
-    } on TimeoutException {
-      return;
-    } catch (_) {
-      return;
-    }
-  }
-
-  Future<void> _cleanupRetiredRuntimeBestEffort(
-    Future<void>? realtimeCleanup,
-  ) async {
-    await (realtimeCleanup ?? _stopRealtimeBestEffort());
-    await _disposeRuntimeBestEffort();
   }
 
   Future<void> _clearFailedActivationState() async {

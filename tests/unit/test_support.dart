@@ -4005,6 +4005,12 @@ class FakeOnboardingService implements OnboardingService {
     String? profileMarkdown,
     AppSessionTransition? transition,
   }) async {
+    if (gateway.registrationStatus ==
+        IdentityRegistrationStatus.recoveryRequired) {
+      return const IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.recoveryRequired,
+      );
+    }
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
       return const IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
@@ -4051,6 +4057,12 @@ class FakeOnboardingService implements OnboardingService {
       }
       throw error;
     }
+    if (gateway.registrationStatus ==
+        IdentityRegistrationStatus.recoveryRequired) {
+      return const IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.recoveryRequired,
+      );
+    }
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
       return IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
@@ -4088,6 +4100,12 @@ class FakeOnboardingService implements OnboardingService {
     String? profileMarkdown,
     AppSessionTransition? transition,
   }) async {
+    if (gateway.registrationStatus ==
+        IdentityRegistrationStatus.recoveryRequired) {
+      return const IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.recoveryRequired,
+      );
+    }
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
       return const IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,

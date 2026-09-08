@@ -8,7 +8,7 @@ AWiki Me 的基线能力，不使用 Debug/Release 或平台编译开关；当�
 能力时，弹窗只展示加入设备和取消，并使用 join-only 文案，不显示无法点击的恢复按钮。
 
 选择 Recovery 后，Handle 和手机号以只读方式沿用已验证的 onboarding 上下文，页面不会
-要求再次输入；注册授权会被丢弃，并立即请求 purpose 为
+要求再次输入；注册授权会被丢弃；页面先查询 Core 的 `inspectHandleRecoveryContext`，存在未完成操作时精确恢复，只有用户明确开始且 Core 允许时才请求 purpose 为
 `awiki.identity.handle-recovery.v1` 的独立 Recovery OTP。注册/Join 与 Recovery 的重发
 边界按 purpose 隔离，避免注册冷却阻止专用 Recovery OTP，同时仍分别遵守服务端返回的
 `retry_at`。Recovery 不绑定当前激活身份，也不要求本机曾保存目标 Handle。
@@ -215,3 +215,17 @@ fixture 失败被误记为 passed。
 
 缺少专用账号、固定 OTP 配置、远端 capability 或短信请求成功时，只能报告未执行/失败，
 不能把编译通过当作远端 Recovery 已通过。
+
+## 页面重入与动作准入
+
+每个 Recovery 页面拥有独立 Controller，只有一个请求代次用于使 reset、换目标和离页后的异步结果失效。Core 操作不随页面销毁。入口先读取 Handle 与可选 exact selector 的上下文，App 不从历史列表猜测可激活凭证。`allowedActions` 仅由 Core 提供；错误后的重读失败保留证据但禁用动作。首次进入所携带的新建目的仅消费一次，未完成操作优先续跑；已完成且凭证存在时默认可以继续登录，明确再次 Recovery 仍需 Core 允许。重新验证 factor 会清除风险确认。
+
+`resume` 不能首次 Commit，系统认证完成后仍检查页面请求是否有效。远端已提交而本地未完成显示本地收尾，不回退为结果未知；过期 factor 显示重新验证入口。
+
+注册被 Core `recovery_in_progress` 拒绝时，adapter 返回 typed `recoveryRequired` 而不是注册成功/Join continuation。Onboarding 不根据 DID 文本或错误正文猜测，不激活新注册身份；仅在提交时的租户、Handle、手机号仍匹配时进入默认续跑页，禁止重放注册 OTP/Grant 或自动再次 Recovery。
+
+### 状态机专项产品 E2E
+
+`dart run tests/e2e/runner.dart --case handle-recovery-state-machine --config <受保护配置>` 复用现有单 App runner，登记 TARGET/RESUME/REPEAT 三项独立 attestation。两个隔离测试 Handle 通过真实 Settings/统一登录入口验证迟到 error/finally、B 在途 busy 和会话/反馈/路由保持、Core 同 Scope 重开后精确续跑、UI 删除后同进程第二次完整 Recovery。故障 seam 仅在 `tests/e2e/`：为同一已经准备并确认的 operation 用公开 native Core+相同测试 Vault 打开一次 Commit-only loopback proxy；Commit 的成功响应来自真实服务，之后故意阻断 WNS 本地收尾前检查，不合成业务结果。测试认证使用已有 E2E `UserPresencePort`，不代表真实 OS 认证通过。失败时保留可能未决的隔离恢复材料，不自动删除。
+
+页面 scoped provider 销毁后，旧 E2E 观察器只能保存 Core 实际返回的完成投影供后续会话/导航断言，不能从根容器读取已不存在的全局 Recovery UI 状态；仍可见的阶段必须检查当前页面的实际 scoped state。
