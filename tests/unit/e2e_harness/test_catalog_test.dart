@@ -26,7 +26,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(126));
+      expect(catalog.cases, hasLength(129));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -51,6 +51,9 @@ void main() {
           'MLS-MULTI-DEVICE-E2E-001',
           'MLS-MULTI-DEVICE-E2E-002',
           'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
+          'HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001',
+          'HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001',
+          'HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001',
           'HANDLE-RECOVERY-V1-E2E-001',
           'HANDLE-RECOVERY-V1-E2E-002',
           'HANDLE-RECOVERY-V1-E2E-003',

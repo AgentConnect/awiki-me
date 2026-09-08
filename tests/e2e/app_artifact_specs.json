@@ -136,7 +136,7 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.recovery.main",
       "supportedPlatforms": ["macos", "linux"],
       "dartDefines": [],
-      "consumerSuites": ["multi-device-remote-recovery", "multi-device-remote-recovery-fresh", "multi-device-app-pair-recovery-registration-rejoin-management-transfer", "multi-device-app-pair-recovery-retirement-ordinary-rejoin"]
+      "consumerSuites": ["multi-device-remote-recovery", "multi-device-remote-recovery-fresh", "handle-recovery-state-machine", "multi-device-app-pair-recovery-registration-rejoin-management-transfer", "multi-device-app-pair-recovery-retirement-ordinary-rejoin"]
     },
     {
       "name": "recovery-crash-a",

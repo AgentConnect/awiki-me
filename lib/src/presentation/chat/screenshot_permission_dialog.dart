@@ -142,7 +142,7 @@ class _ScreenshotPermissionDialogState
                       l10n.screenshotCurrentApplication,
                       style: TextStyle(
                         color: theme.title,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                     SizedBox(height: responsive.spacing(6)),
