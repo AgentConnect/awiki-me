@@ -170,6 +170,7 @@ class PeerDisplayProfileController
   Future<void> refreshDisplayProfiles({
     required String ownerDid,
     required Iterable<String> dids,
+    Map<String, String> peerPersonaIdsByDid = const <String, String>{},
     bool force = false,
     SessionEpoch? expectedEpoch,
   }) async {
@@ -178,6 +179,7 @@ class PeerDisplayProfileController
       expectedEpoch: expectedEpoch,
     );
     if (operation == null) return;
+    _registerPersonaRoutes(peerPersonaIdsByDid);
     final peers =
         dids
             .map((did) => did.trim())

@@ -92,6 +92,30 @@ void main() {
     );
   });
 
+  test('展示刷新保留调用方已知的 Persona 路由并更新统一投影', () async {
+    final directory = _DisplayRefreshDirectoryService();
+    final container = ProviderContainer(
+      overrides: [
+        directoryApplicationServiceProvider.overrideWithValue(directory),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(peerDisplayProfileProvider.notifier);
+    final pending = controller.refreshDisplayProfiles(
+      ownerDid: _ownerDid,
+      dids: ['did:test:guest'],
+      peerPersonaIdsByDid: {'did:test:guest': 'persona:guest'},
+    );
+    directory.result.complete([
+      const PeerDisplayProfile(did: 'did:test:guest', displayName: 'Guest'),
+    ]);
+    await pending;
+    final state = container.read(peerDisplayProfileProvider);
+    expect(state.forPeer(peerPersonaId: 'persona:guest')?.displayName, 'Guest');
+    expect(state.forDid('did:test:guest')?.peerPersonaId, 'persona:guest');
+    expect(state.unresolvedProfilesByDid, isEmpty);
+  });
+
   test('本地 profile 投影按 owner 隔离且同一 DID 不重复读取', () async {
     final directory = _CachedDirectoryService();
     final container = ProviderContainer(

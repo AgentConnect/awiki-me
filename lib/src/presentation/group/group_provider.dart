@@ -541,6 +541,10 @@ class GroupController extends StateNotifier<GroupState> {
     await controller.refreshDisplayProfiles(
       ownerDid: ownerOperation.epoch.ownerDid,
       dids: members.map((member) => member.did),
+      peerPersonaIdsByDid: {
+        for (final member in members)
+          if (member.peerPersonaId != null) member.did: member.peerPersonaId!,
+      },
       expectedEpoch: ownerOperation.epoch,
     );
     if (!_isGroupOwnerOperationCurrent(ownerOperation)) return members;

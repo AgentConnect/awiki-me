@@ -2656,6 +2656,15 @@ class _ChatViewState extends ConsumerState<ChatView> {
               ...messages.map((message) => message.senderDid),
               ...members.map((member) => member.did),
             },
+            peerPersonaIdsByDid: {
+              for (final member in members)
+                if (member.peerPersonaId != null)
+                  member.did: member.peerPersonaId!,
+              if (widget.conversation.targetDid != null &&
+                  widget.conversation.peerPersonaId != null)
+                widget.conversation.targetDid!:
+                    widget.conversation.peerPersonaId!,
+            },
             expectedEpoch: epoch,
           ),
     );
