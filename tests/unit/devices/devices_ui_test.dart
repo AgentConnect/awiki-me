@@ -6,6 +6,7 @@ import 'package:awiki_me/src/application/models/device_revoke_outcome.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
 import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
+import 'package:awiki_me/src/application/root_key_transfer_service.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_handle_recovery_adapter.dart';
 import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
@@ -1535,86 +1536,110 @@ void main() {
     },
   );
 
-  testWidgets(
-    'just-completed Join prepares before one root-transfer confirmation',
-    (tester) async {
-      final request = _request(
-        state: DeviceJoinRemoteState.responseVerified,
-        claimedByCurrentDevice: true,
-        canStartVerification: false,
-      );
-      final recipient = _device(id: 'device-new', role: DeviceRole.member);
-      final core = FakeDeviceManagementCore()
-        ..registry = DeviceRegistrySnapshot(
-          did: testDid,
-          devices: <DeviceSummary>[
-            _device(
-              id: 'admin-current',
-              role: DeviceRole.admin,
-              managementReady: true,
-              isCurrent: true,
-            ),
-            recipient,
-          ],
-        )
-        ..joinRequests = <DeviceJoinRequestNotice>[request]
-        ..verificationProgress = testJoinProgress()
-        ..confirmResult = DeviceJoinProgress(
-          joinSessionId: 'join-1',
-          did: testDid,
-          protocolDeviceId: 'device-new',
-          side: DeviceJoinSide.admin,
-          phase: DeviceJoinPhase.authorized,
-          remoteState: DeviceJoinRemoteState.consumed,
-          expiresAt: DateTime.utc(2030),
-          authorizedDevice: recipient,
+  for (final retryable in <bool?>[null, true, false]) {
+    testWidgets(
+      'just-completed Join prepares before confirmation (retryable=$retryable)',
+      (tester) async {
+        final request = _request(
+          state: DeviceJoinRemoteState.responseVerified,
+          claimedByCurrentDevice: true,
+          canStartVerification: false,
         );
-      final transfer = FakeRootKeyTransferPort();
-      final presence = FakeUserPresence();
-      await tester.pumpWidget(
-        _app(
-          DeviceJoinApprovalSheet(request: request),
-          core,
-          presence: presence,
-          rootTransfer: transfer,
-        ),
-      );
-      await tester.pumpAndSettle();
+        final recipient = _device(id: 'device-new', role: DeviceRole.member);
+        final core = FakeDeviceManagementCore()
+          ..registry = DeviceRegistrySnapshot(
+            did: testDid,
+            devices: <DeviceSummary>[
+              _device(
+                id: 'admin-current',
+                role: DeviceRole.admin,
+                managementReady: true,
+                isCurrent: true,
+              ),
+              recipient,
+            ],
+          )
+          ..joinRequests = <DeviceJoinRequestNotice>[request]
+          ..verificationProgress = testJoinProgress()
+          ..confirmResult = DeviceJoinProgress(
+            joinSessionId: 'join-1',
+            did: testDid,
+            protocolDeviceId: 'device-new',
+            side: DeviceJoinSide.admin,
+            phase: DeviceJoinPhase.authorized,
+            remoteState: DeviceJoinRemoteState.consumed,
+            expiresAt: DateTime.utc(2030),
+            authorizedDevice: recipient,
+          );
+        final transfer = FakeRootKeyTransferPort();
+        if (retryable != null) {
+          transfer.error = RootKeyTransferException(
+            retryable
+                ? 'root_transfer.prekey_unavailable'
+                : 'root_transfer.prekey_invalid',
+            retryable: retryable,
+          );
+        }
+        final presence = FakeUserPresence();
+        await tester.pumpWidget(
+          _app(
+            DeviceJoinApprovalSheet(request: request),
+            core,
+            presence: presence,
+            rootTransfer: transfer,
+          ),
+        );
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.byType(CupertinoSwitch).first);
-      await tester.pump();
-      await tester.tap(find.text('确认并授权'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.byType(CupertinoSwitch).first);
+        await tester.pump();
+        await tester.tap(find.text('确认并授权'));
+        await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const Key('root-transfer-grant-management')),
-        findsOneWidget,
-      );
-      expect(transfer.prepareCalls, 0);
-      expect(presence.calls, 1);
+        expect(
+          find.byKey(const Key('root-transfer-grant-management')),
+          findsOneWidget,
+        );
+        expect(transfer.prepareCalls, 0);
+        expect(presence.calls, 1);
 
-      await tester.tap(find.byKey(const Key('root-transfer-grant-management')));
-      await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const Key('root-transfer-grant-management')),
+        );
+        await tester.pumpAndSettle();
 
-      expect(transfer.prepareCalls, 1);
-      expect(transfer.confirmCalls, 0);
-      expect(presence.calls, 1);
-      expect(
-        find.byKey(const Key('root-transfer-recipient-summary')),
-        findsOneWidget,
-      );
+        if (retryable != null) {
+          expect(find.byKey(const Key('root-transfer-failed')), findsOneWidget);
+          expect(transfer.prepareCalls, 1);
+          expect(transfer.confirmCalls, 0);
+          expect(presence.calls, 1);
+          final retry = find.byKey(const Key('root-transfer-retry'));
+          expect(retry, retryable ? findsOneWidget : findsNothing);
+          if (!retryable) return;
+          transfer.error = null;
+          await tester.tap(retry);
+          await tester.pumpAndSettle();
+        }
+        expect(transfer.prepareCalls, retryable == true ? 2 : 1);
+        expect(transfer.confirmCalls, 0);
+        expect(presence.calls, 1);
+        expect(
+          find.byKey(const Key('root-transfer-recipient-summary')),
+          findsOneWidget,
+        );
 
-      await tester.tap(find.byKey(const Key('root-transfer-confirm-send')));
-      await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('root-transfer-confirm-send')));
+        await tester.pumpAndSettle();
 
-      expect(presence.calls, 2);
-      expect(transfer.confirmCalls, 1);
-      expect(transfer.lastUserPresenceConfirmed, isTrue);
-      expect(find.byKey(const Key('root-transfer-sent')), findsOneWidget);
-      expect(find.textContaining('root_private_key'), findsNothing);
-      expect(find.textContaining('authorization_handle'), findsNothing);
-    },
-  );
+        expect(presence.calls, 2);
+        expect(transfer.confirmCalls, 1);
+        expect(transfer.lastUserPresenceConfirmed, isTrue);
+        expect(find.byKey(const Key('root-transfer-sent')), findsOneWidget);
+        expect(find.textContaining('root_private_key'), findsNothing);
+        expect(find.textContaining('authorization_handle'), findsNothing);
+      },
+    );
+  }
 
   testWidgets('slow root preparation cannot return into a closed Join', (
     tester,

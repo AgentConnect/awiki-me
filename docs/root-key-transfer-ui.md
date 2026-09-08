@@ -44,8 +44,13 @@ idle -> preparing -> awaitingConfirmation -> sending -> sent
                                              \-------> failed
 ```
 
-发送期间按钮禁用，防止重复确认。失败只显示“设备已加入，新设备未获得管理权限，请稍后
-重试。”；不会把 Core 诊断、PreKey、proof、nonce、密文、checkpoint 或 handle 投影到 UI。
+发送期间按钮禁用，防止重复确认。失败显示“设备已加入，新设备未获得管理权限，请稍后
+重试。”；只有 Core 明确返回 `retryable=true` 时，Join 审批页才同时提供“重试”。重试重新
+prepare 同一 eligible 目标，成功后仍须显式确认和系统认证；不复用旧 handle，也不自动发送。
+审批完成不表示新设备已完成激活或发布首个 PreKey；此时服务端 bundle-not-found 由 Core
+映射为 `root_transfer.prekey_unavailable`，而非不可重试的 `prekey_invalid`。签名、绑定或
+认证校验失败仍 fail closed。不会把 Core 诊断、PreKey、proof、nonce、密文、checkpoint
+或 handle 投影到 UI。
 
 ## 3. App/Core 边界
 
@@ -67,3 +72,5 @@ flutter test \
 
 专项验证覆盖精确 Join 目标、设备列表 eligible member、prepare 先于 user-presence、一次确认、
 pending 不在确认前发网、opaque handle、无秘密 DTO／错误映射和接受回执校验。
+真实 `root-transfer` E2E 在接收端激活前验证缺少 PreKey 的可重试状态，激活后通过审批页
+重试至重新确认，再取消准备，继续保留原设备列表入口的完整发送及接收端 readiness 验收。

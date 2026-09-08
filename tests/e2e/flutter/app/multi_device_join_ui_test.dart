@@ -10,6 +10,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import '../../root_transfer_fixture_state.dart';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -555,6 +557,7 @@ void main() {
       final presence = E2eUserPresencePort();
       final cli = _JoinCli.joining(config);
       AppBootstrap? bootstrap;
+      var completedScenario = false;
       await tester.binding.setSurfaceSize(const Size(1440, 900));
       _requireIndependentEmptyPaths(<String>[
         config.appStateRoot,
@@ -566,8 +569,12 @@ void main() {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
         await bootstrap?.dispose();
-        await cli.deleteLocalState();
-        await _deleteDirectory(config.appStateRoot);
+        if (completedScenario || !_invocationExpects(_rootTransferCaseId)) {
+          await cli.deleteLocalState();
+          await _deleteDirectory(config.appStateRoot);
+        } else {
+          await cli.retainLocalState();
+        }
         await tester.binding.setSurfaceSize(null);
       });
 
@@ -799,6 +806,14 @@ void main() {
         fail('The App did not complete exactly one user-presence check.');
       }
 
+      if (_invocationExpects(_rootTransferCaseId)) {
+        await _verifyActiveJoinWaitsForRecipientPrekey(
+          tester,
+          container,
+          presence,
+        );
+      }
+
       final authorized = await cli.pollUntilAuthorized(
         started.joinSessionId,
         expectedDeviceId: started.protocolDeviceId,
@@ -838,6 +853,7 @@ void main() {
         if (bootstrap.rootKeyTransferPort == null) {
           fail('The real App bootstrap did not compose root transfer.');
         }
+        await _retryActiveJoinRootPreparation(tester, container, presence);
         await _verifyRootTransferCompletion(
           tester: tester,
           container: container,
@@ -862,6 +878,7 @@ void main() {
           preparedGroups: step4Groups!,
         );
       }
+      completedScenario = true;
     },
     skip:
         !_RemoteJoinRunConfig.exists() ||
@@ -1171,6 +1188,102 @@ Future<void> _continueStep4RevokeAndMls({
   );
 }
 
+Future<void> _verifyActiveJoinWaitsForRecipientPrekey(
+  WidgetTester tester,
+  ProviderContainer container,
+  E2eUserPresencePort presence,
+) async {
+  final callsBefore = presence.calls;
+  await _pumpUntil(
+    tester,
+    () => !container.read(devicesProvider).isActionPending,
+    failure: 'The sender Join approval did not finish its Registry refresh.',
+  );
+  await _pumpUntil(
+    tester,
+    () =>
+        find
+            .byKey(const Key('root-transfer-grant-management'))
+            .hitTestable()
+            .evaluate()
+            .length ==
+        1,
+    failure: 'The approved-device management grant entry is missing.',
+  );
+  await _tapOne(
+    tester,
+    find.byKey(const Key('root-transfer-grant-management')),
+    failure: 'The approved-device management grant entry is missing.',
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      final transfer = container.read(devicesProvider).rootTransfer;
+      final phase = transfer.phase;
+      if (phase == RootKeyTransferPhase.idle) {
+        fail('The active Join management grant did not start preparation.');
+      }
+      return phase == RootKeyTransferPhase.failed ||
+          phase == RootKeyTransferPhase.awaitingConfirmation;
+    },
+    timeout: const Duration(seconds: 45),
+    failure: 'The active Join root preparation did not finish.',
+  );
+  final transfer = container.read(devicesProvider).rootTransfer;
+  if (presence.calls != callsBefore || transfer.receipt != null) {
+    fail(
+      'Root preparation sent material or requested presence before confirmation.',
+    );
+  }
+  final code = _appPairSafeToken(transfer.errorCode ?? 'missing');
+  // Closed code only: never record a handle, DID, key, or transport body.
+  debugPrint(
+    '[root-transfer-e2e] origin=active_join stage=prepare code=$code retryable=${transfer.retryable}',
+  );
+  if (transfer.phase != RootKeyTransferPhase.failed ||
+      transfer.errorCode != 'root_transfer.prekey_unavailable' ||
+      !transfer.retryable) {
+    fail(
+      'An unactivated recipient did not produce a retryable PreKey wait ($code).',
+    );
+  }
+  if (find.byKey(const Key('root-transfer-failed')).evaluate().length != 1 ||
+      find.byKey(const Key('root-transfer-retry')).evaluate().length != 1) {
+    fail('The approved sender did not offer an explicit retry.');
+  }
+}
+
+Future<void> _retryActiveJoinRootPreparation(
+  WidgetTester tester,
+  ProviderContainer container,
+  E2eUserPresencePort presence,
+) async {
+  final callsBefore = presence.calls;
+  await _tapOne(
+    tester,
+    find.byKey(const Key('root-transfer-retry')),
+    failure: 'The active Join retry action was unavailable.',
+  );
+  await _pumpUntil(tester, () {
+    final transfer = container.read(devicesProvider).rootTransfer;
+    if (transfer.phase == RootKeyTransferPhase.failed) {
+      fail(
+        'Active Join retry failed (${_appPairSafeToken(transfer.errorCode ?? 'missing')}).',
+      );
+    }
+    return transfer.phase == RootKeyTransferPhase.awaitingConfirmation;
+  }, failure: 'Active Join retry did not prepare the now-active recipient.');
+  if (presence.calls != callsBefore ||
+      container.read(devicesProvider).rootTransfer.receipt != null ||
+      find.byKey(const Key('root-transfer-confirm-send')).evaluate().length !=
+          1) {
+    fail('Active Join retry crossed the explicit confirmation boundary.');
+  }
+  // Keep the existing later-grant delivery/completion oracle independent.
+  await container.read(devicesProvider.notifier).cancelRootTransfer();
+  await tester.pump();
+}
+
 Future<void> _verifyRootTransferCompletion({
   required WidgetTester tester,
   required ProviderContainer container,
@@ -1415,6 +1528,8 @@ Future<void> _verifyRootTransferCompletion({
     await E2eCaseAttestationWriter.markPassed(
       _rootTransferCaseId,
       phases: const <String>[
+        'active_join_missing_prekey_retryable',
+        'active_join_retry_requires_fresh_confirmation',
         'member_not_ready_before_completion',
         'join_sheet_closed_before_later_grant',
         'device_list_fresh_prepare',
@@ -1908,6 +2023,11 @@ class _JoinCli {
   final DesktopProcessHost _processHost = DesktopProcessHost.current();
   Process? _joinRequestListener;
   String? _hostNotificationPath;
+
+  Future<void> retainLocalState() async {
+    await stopRealtimeListener();
+    await retainRootTransferFixtureKey(home, _vaultRootKeyB64);
+  }
 
   Future<void> initialize() async {
     await Directory(workspace).create(recursive: true);

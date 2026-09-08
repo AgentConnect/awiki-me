@@ -6,6 +6,21 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/test_catalog.dart';
 
 void main() {
+  test('root-transfer retains retry and full completion attestations', () {
+    final catalog = AppTestCatalog.load(Directory.current);
+    expect(
+      catalog
+          .caseById['ROOT-TRANSFER-E2E-001']!
+          .assertionContract!
+          .assertionIds,
+      containsAll(<String>[
+        'ROOT-TRANSFER-E2E-001:active_join_missing_prekey_retryable',
+        'ROOT-TRANSFER-E2E-001:active_join_retry_requires_fresh_confirmation',
+        'ROOT-TRANSFER-E2E-001:receiver_completion_ready',
+      ]),
+    );
+  });
+
   test(
     'checked-in catalog matches every audited suite case and implementation',
     () {

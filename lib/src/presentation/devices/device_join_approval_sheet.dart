@@ -337,6 +337,16 @@ class _DeviceJoinApprovalSheetState
             style: TextStyle(color: context.awikiTheme.danger),
           ),
           const SizedBox(height: 16),
+          if (transfer.retryable) ...<Widget>[
+            AppPrimaryButton(
+              key: const Key('root-transfer-retry'),
+              label: context.l10n.commonRetry,
+              onPressed: () => ref
+                  .read(devicesProvider.notifier)
+                  .prepareRootTransferForActiveJoin(),
+            ),
+            const SizedBox(height: 16),
+          ],
           AppPrimaryButton(
             label: context.l10n.commonDone,
             onPressed: () => Navigator.of(context).maybePop(),
