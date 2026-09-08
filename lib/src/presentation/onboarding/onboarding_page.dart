@@ -45,6 +45,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   static const Duration _e2eOtpRetryInterval = Duration(seconds: 5);
 
   bool _checkingLocalRecovery = false;
+  int _recoveryLookupGeneration = 0;
+  (String, String, String) _lastRecoveryLookupInputs = ('', '', '');
 
   final phoneController = TextEditingController();
   final otpController = TextEditingController();
@@ -65,12 +67,20 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     handleController.addListener(_resetEmailActivationTarget);
     handleController.addListener(_resetPhoneOtpTarget);
     phoneController.addListener(_updatePhoneOtpState);
+    for (final controller in [
+      handleController,
+      phoneController,
+      emailController,
+    ]) {
+      controller.addListener(_onRecoveryLookupInputsChanged);
+    }
     _tenantSubscription = ref.listenManual<AppTenantProfile>(
       activeAppTenantProvider,
       (previous, next) {
         if (previous?.id == next.id) {
           return;
         }
+        _invalidateRecoveryLookup();
         unawaited(
           ref.read(onboardingProvider.notifier).loadServerInfo(force: true),
         );
@@ -92,6 +102,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     handleController.removeListener(_resetEmailActivationTarget);
     handleController.removeListener(_resetPhoneOtpTarget);
     phoneController.removeListener(_updatePhoneOtpState);
+    for (final controller in [
+      handleController,
+      phoneController,
+      emailController,
+    ]) {
+      controller.removeListener(_onRecoveryLookupInputsChanged);
+    }
     phoneController.dispose();
     otpController.dispose();
     emailController.dispose();
@@ -529,6 +546,23 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
   }
 
+  void _invalidateRecoveryLookup() {
+    _recoveryLookupGeneration += 1;
+    _checkingLocalRecovery = false;
+  }
+
+  void _onRecoveryLookupInputsChanged() {
+    final inputs = (
+      handleController.text.trim().toLowerCase(),
+      _normalizedPhone,
+      emailController.text.trim(),
+    );
+    // Text controllers also notify selection/focus changes, which do not change the target.
+    if (inputs == _lastRecoveryLookupInputs) return;
+    _lastRecoveryLookupInputs = inputs;
+    _invalidateRecoveryLookup();
+  }
+
   Future<bool> _openPendingRecovery(String handle) async {
     if (!(ref
             .read(onboardingProvider)
@@ -537,8 +571,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         false)) {
       return false;
     }
+    final generation = ++_recoveryLookupGeneration;
     _checkingLocalRecovery = true;
     final tenant = ref.read(activeAppTenantProvider);
+    bool isCurrent() =>
+        generation == _recoveryLookupGeneration &&
+        ref.read(activeAppTenantProvider) == tenant;
     final fullHandle =
         '${handle.toLowerCase()}.${tenant.didHost.toLowerCase()}';
     final phone = _normalizedPhone;
@@ -546,7 +584,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       final pending = await ref
           .read(handleRecoveryServiceProvider)
           .restoreForHandle(fullHandle);
-      if (!mounted || ref.read(activeAppTenantProvider) != tenant) return true;
+      if (!mounted || !isCurrent()) return true;
       if (pending == null) return false;
       otpController.clear();
       await AppNavigator.push<void>(
@@ -559,7 +597,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       );
       return true;
     } catch (_) {
-      if (mounted) {
+      if (mounted && isCurrent()) {
         await showAwikiMeErrorDetailDialog(
           context,
           message: context.l10n.handleRecoveryErrorLocalStateUnavailable,
@@ -568,7 +606,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       }
       return true;
     } finally {
-      _checkingLocalRecovery = false;
+      if (generation == _recoveryLookupGeneration) {
+        _checkingLocalRecovery = false;
+      }
     }
   }
 
@@ -711,6 +751,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
   void _setAuthMode(String value) {
     final controller = ref.read(onboardingProvider.notifier);
+    if (ref.read(onboardingProvider).authMode != value) {
+      _invalidateRecoveryLookup();
+    }
     controller.setAuthMode(value);
     if (value == 'phone') {
       controller.updateOtpPhone(phoneController.text);
