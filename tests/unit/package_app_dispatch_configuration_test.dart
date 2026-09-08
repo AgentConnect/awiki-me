@@ -16,13 +16,35 @@ const _allTargets = <String>[
 ];
 
 void main() {
+  test('checked-in App ANP input matches Core release provenance', () {
+    final appConfig = File('scripts/package_app.config').readAsStringSync();
+    final appRef = RegExp(
+      r'PACKAGE_ANP_SOURCE_REF="([a-f0-9]{40})"',
+    ).firstMatch(appConfig)!.group(1);
+    final release =
+        jsonDecode(
+              File(
+                '../awiki-cli-rs2/scripts/release/cli/release-config.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, dynamic>;
+    final lock =
+        jsonDecode(
+              File('../awiki-cli-rs2/anp-release.lock.json').readAsStringSync(),
+            )
+            as Map<String, dynamic>;
+    expect(appRef, release['anp_commit']);
+    expect(appRef, (lock['anp'] as Map)['commit']);
+    expect(release['anp_identity_commit'], (lock['identity'] as Map)['commit']);
+  });
+
   test('release workers select published SDK dependencies', () {
     final unix = File('scripts/package_unix_worker.sh').readAsStringSync();
     final windows = File('scripts/package_windows.ps1').readAsStringSync();
     expect(
-      RegExp(r'AWIKI_RELEASE_REGISTRY=1 scripts/flutter/build-sdk-native.sh')
-          .allMatches(unix)
-          .length,
+      RegExp(
+        r'AWIKI_RELEASE_REGISTRY=1 scripts/flutter/build-sdk-native.sh',
+      ).allMatches(unix).length,
       2,
     );
     expect(windows, contains(r'$env:AWIKI_RELEASE_REGISTRY = "1"'));
@@ -137,13 +159,20 @@ ${{
     final anpCheckout = _stepNamed(steps, 'Checkout exact ANP source');
     for (final job in [validate, build]) {
       final identityCheckout = _stepNamed(
-        job['steps'] as YamlList, 'Checkout pinned ANP Identity source',
+        job['steps'] as YamlList,
+        'Checkout pinned ANP Identity source',
       );
       final identityConfig = identityCheckout['with'] as YamlMap;
-      expect(identityConfig['repository'], 'agent-network-protocol/anp-identity');
+      expect(
+        identityConfig['repository'],
+        'agent-network-protocol/anp-identity',
+      );
       expect(identityConfig['path'], 'anp/anp-identity');
       expect(identityConfig['ref'], r'${{ steps.identity.outputs.revision }}');
-      final pin = _stepNamed(job['steps'] as YamlList, 'Read pinned ANP Identity revision');
+      final pin = _stepNamed(
+        job['steps'] as YamlList,
+        'Read pinned ANP Identity revision',
+      );
       expect(pin['run'].toString(), contains('anp_identity_commit'));
       expect(pin['run'].toString(), contains('[0-9a-f]{40}'));
     }
@@ -567,7 +596,8 @@ ${{
             (
               expectedError: 'platforms do not match selected artifacts',
               mutate: (manifest) {
-                final platforms = manifest['platforms']! as Map<String, Object?>;
+                final platforms =
+                    manifest['platforms']! as Map<String, Object?>;
                 final android = platforms['android']! as Map<String, Object?>;
                 android['sizeBytes'] = 1;
               },

@@ -3470,4 +3470,26 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get legacyIdentityUpgradeFailed => '旧身份升级失败，请重试。';
+
+  @override
+  String get handleRecoveryFreshDataNotice => '本机没有可迁移的原身份数据，恢复后不会自动找回此前的私聊历史。';
+
+  @override
+  String get handleRecoveryAwaitingResult => '暂未确认账号恢复结果，请继续确认。不要重新发起恢复。';
+
+  @override
+  String get handleRecoveryAwaitingLocal =>
+      '账号恢复已生效，本机设置尚未完成。请继续恢复，无需再次接收短信验证码。';
+
+  @override
+  String get handleRecoveryChecking => '正在检查恢复进度…';
+
+  @override
+  String get handleRecoveryRunning => '正在处理恢复操作，请稍候…';
+
+  @override
+  String get handleRecoveryEntering => '恢复已完成，正在进入消息…';
+
+  @override
+  String get handleRecoveryContinueExisting => '继续上次恢复';
 }

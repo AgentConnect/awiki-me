@@ -16,6 +16,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.d
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
+import 'package:awiki_me/src/presentation/recovery/handle_recovery_session.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,9 +25,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 part 'handle_recovery_state_machine_test.part.dart';
+part 'handle_recovery_session_test.part.dart';
 
 void main() {
   _registerHandleRecoveryStateMachineTests();
+  _registerHandleRecoverySessionTests();
   group('Handle Recovery V4 application boundary', () {
     test(
       'Core creates operation and App never supplies an operation id',
@@ -1525,6 +1528,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   int quarantineCalls = 0;
   int activateCalls = 0;
   int reconcileCalls = 0;
+  VoidCallback? beforeReconcile;
   int receiptCalls = 0;
 
   @override
@@ -1629,6 +1633,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
 
   @override
   Future<HandleRecoveryProgress> reconcile(String operationId) async {
+    beforeReconcile?.call();
     reconcileCalls += 1;
     final error = reconcileError;
     if (error != null) {

@@ -288,7 +288,9 @@ void _registerHandleRecoveryStateMachineTests() {
             find.byKey(const Key('handle-recovery-activate')),
           );
           await tester.tap(find.byKey(const Key('handle-recovery-activate')));
-          await tester.pumpAndSettle();
+          // A live activity indicator must not be settled while Core is held.
+          await tester.pump();
+          expect(containerA.read(handleRecoveryProvider).isBusy, isTrue);
           expect(coreA.activateCalls, 1);
           unawaited(
             Navigator.of(contextA).push<void>(

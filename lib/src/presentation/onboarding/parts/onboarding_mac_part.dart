@@ -985,6 +985,10 @@ class _MacRegisterForm extends StatelessWidget {
             placeholder: context.l10n.onboardingHandlePlaceholder,
             icon: CupertinoIcons.at,
           ),
+          PendingHandleRecoveryEntry(
+            handleController: handleController,
+            phoneController: phoneController,
+          ),
           const SizedBox(height: 22),
           _MacPrimaryAction(
             label: context.l10n.onboardingCompleteRegister,
@@ -1013,6 +1017,10 @@ class _MacRegisterForm extends StatelessWidget {
             label: context.l10n.onboardingHandle,
             placeholder: context.l10n.onboardingHandlePlaceholder,
             icon: CupertinoIcons.at,
+          ),
+          PendingHandleRecoveryEntry(
+            handleController: handleController,
+            phoneController: phoneController,
           ),
           const SizedBox(height: 16),
           _MacOutlinedField(
@@ -1060,6 +1068,10 @@ class _MacRegisterForm extends StatelessWidget {
           label: context.l10n.onboardingHandle,
           placeholder: context.l10n.onboardingHandlePlaceholder,
           icon: CupertinoIcons.at,
+        ),
+        PendingHandleRecoveryEntry(
+          handleController: handleController,
+          phoneController: phoneController,
         ),
         const SizedBox(height: 16),
         _MacOutlinedField(

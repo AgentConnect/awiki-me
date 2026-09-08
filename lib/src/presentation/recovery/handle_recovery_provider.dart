@@ -9,6 +9,7 @@ import '../../application/handle_recovery_service.dart';
 import '../../application/ports/handle_recovery_core_port.dart';
 import '../../domain/entities/handle_recovery.dart';
 import '../shared/sms_otp_cooldown_provider.dart';
+import 'handle_recovery_session.dart';
 
 final handleRecoveryCorePortProvider = Provider<HandleRecoveryCorePort>(
   (ref) => throw UnimplementedError(
@@ -232,10 +233,13 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
   HandleRecoveryController(
     this._service,
     this._otpCooldown, {
+    required HandleRecoverySession session,
     bool Function()? isPageCurrent,
-  }) : _isPageCurrent = isPageCurrent,
+  }) : _session = session,
+       _isPageCurrent = isPageCurrent,
        super(const HandleRecoveryState());
 
+  final HandleRecoverySession _session;
   final HandleRecoveryService _service;
   final SmsOtpCooldownController _otpCooldown;
   final bool Function()? _isPageCurrent;
@@ -306,7 +310,10 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
     );
   }
 
-  Future<void> _run(Future<void> Function(int epoch) action) async {
+  Future<void> _run(
+    Future<void> Function(int epoch) action, {
+    Future<void> Function(int epoch)? onSettled,
+  }) async {
     if (state.isBusy) return;
     final epoch = ++_epoch;
     final expectedOperationId = state.progress?.operationId;
@@ -329,7 +336,17 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
         state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
       }
     } finally {
-      if (isCurrent(epoch)) state = state.copyWith(isBusy: false);
+      if (isCurrent(epoch)) {
+        try {
+          await onSettled?.call(epoch);
+        } catch (error) {
+          if (isCurrent(epoch)) {
+            state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
+          }
+        } finally {
+          if (isCurrent(epoch)) state = state.copyWith(isBusy: false);
+        }
+      }
     }
   }
 
@@ -454,36 +471,94 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
       );
       return;
     }
-    await _run((epoch) async {
-      try {
-        _accept(
-          await _service.activate(
-            operationId: progress.operationId,
-            presenceReason: presenceReason,
-            isCurrent: () => isCurrent(epoch),
-          ),
-          epoch,
-        );
-      } catch (_) {
-        if (!isCurrent(epoch)) return;
-        await _refresh(epoch, expectedOperationId: progress.operationId);
-        if (!isCurrent(epoch)) return;
-        if (state.allows(HandleRecoveryAction.activateIdentity)) return;
-        if (!state.allows(HandleRecoveryAction.resume)) rethrow;
-        _accept(await _service.resume(progress.operationId), epoch);
-      }
-    });
+    await _advance(activate: true, presenceReason: presenceReason);
   }
 
-  Future<void> resume() => _run((epoch) async {
-    final progress = state.progress;
-    if (progress == null || !state.allows(HandleRecoveryAction.resume)) {
-      throw const HandleRecoveryFailure(
-        HandleRecoveryFailureCode.actionNotAllowed,
-      );
-    }
-    _accept(await _service.resume(progress.operationId), epoch);
-  });
+  Future<void> resume() => _advance(activate: false);
+
+  Future<void> _advance({
+    required bool activate,
+    String presenceReason = '',
+  }) async {
+    String? previousIdentityId;
+    String? operationId;
+    var pauseAttempted = false;
+    var paused = false;
+    await _run(
+      (epoch) async {
+        final progress = state.progress;
+        final action = activate
+            ? HandleRecoveryAction.activate
+            : HandleRecoveryAction.resume;
+        if (progress == null || !state.allows(action)) {
+          throw const HandleRecoveryFailure(
+            HandleRecoveryFailureCode.actionNotAllowed,
+          );
+        }
+        operationId = progress.operationId;
+        previousIdentityId = _session.currentIdentityId;
+        bool current() => isCurrent(epoch);
+        Future<void> pause() async {
+          if (paused) return;
+          pauseAttempted = true;
+          await _session.pauseCurrent(isCurrent: current);
+          paused = current();
+        }
+
+        if (!activate) {
+          await pause();
+          _accept(
+            await _service.resume(progress.operationId, isCurrent: current),
+            epoch,
+          );
+          return;
+        }
+        try {
+          _accept(
+            await _service.activate(
+              operationId: progress.operationId,
+              presenceReason: presenceReason,
+              isCurrent: current,
+              beforeAdvance: pause,
+            ),
+            epoch,
+          );
+        } catch (_) {
+          if (!current()) return;
+          await _refresh(epoch, expectedOperationId: progress.operationId);
+          if (!current()) return;
+          if (state.allows(HandleRecoveryAction.activateIdentity)) return;
+          if (!state.allows(HandleRecoveryAction.resume)) rethrow;
+          await pause();
+          _accept(
+            await _service.resume(progress.operationId, isCurrent: current),
+            epoch,
+          );
+        }
+      },
+      onSettled: (epoch) async {
+        final previous = previousIdentityId;
+        final progress = state.progress;
+        // An unreadable outcome must never inherit the old prepared projection's
+        // permission to restore a session. Restoration remains inside busy scope.
+        if (pauseAttempted &&
+            previous != null &&
+            previous.isNotEmpty &&
+            state.authoritative &&
+            progress != null &&
+            progress.operationId == operationId &&
+            !progress.commitAttempted) {
+          final restored = await _session.restorePrevious(
+            previous,
+            isCurrent: () => isCurrent(epoch),
+          );
+          if (isCurrent(epoch) && !restored) {
+            throw StateError('previous_session_activation_failed');
+          }
+        }
+      },
+    );
+  }
 
   Future<void> discardPreAttempt() => _run((epoch) async {
     final progress = state.progress;
@@ -534,5 +609,6 @@ final handleRecoveryProvider =
       (ref) => HandleRecoveryController(
         ref.watch(handleRecoveryServiceProvider),
         ref.watch(handleRecoverySmsOtpCooldownProvider.notifier),
+        session: ref.watch(handleRecoverySessionProvider),
       ),
     );

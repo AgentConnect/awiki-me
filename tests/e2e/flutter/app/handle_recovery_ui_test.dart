@@ -811,6 +811,8 @@ void main() {
               1) {
         fail('The prepared Recovery risks were not visibly presented.');
       }
+      expect(find.byKey(const Key('handle-recovery-otp')), findsNothing);
+      expect(find.byKey(const Key('handle-recovery-send-otp')), findsNothing);
 
       await _tapOne(
         tester,
@@ -5705,6 +5707,14 @@ Future<void> _waitForCompletedRecovery(
         'error=${error?.safeCode ?? 'absent'}).',
       );
     }
+    if (!state.allows(HandleRecoveryAction.prepare)) {
+      expect(find.byKey(const Key('handle-recovery-otp')), findsNothing);
+    }
+    expect(
+      find.byKey(const Key('handle-recovery-risk-confirmation')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('handle-recovery-activate')), findsNothing);
     await _tapOne(
       tester,
       find.bySemanticsIdentifier('handle-recovery-resume'),
