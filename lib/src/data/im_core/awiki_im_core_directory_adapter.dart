@@ -14,6 +14,47 @@ class AwikiImCoreDirectoryAdapter implements DirectoryCorePort {
   final AwikiImCoreMappers _mappers;
 
   @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  }) async {
+    final peers = dids
+        .map((did) => did.trim())
+        .where((did) => did.startsWith('did:'))
+        .toSet()
+        .toList();
+    if (peers.isEmpty) return const [];
+    // Bind every batch to the same client/owner, including during account switches.
+    return _runtime.withCurrentClient((client) async {
+      final results = <PeerDisplayProfile>[];
+      for (var start = 0; start < peers.length; start += 100) {
+        final batch = peers.skip(start).take(100).toList();
+        final profiles = await client.directory.refreshDisplayProfiles(
+          batch,
+          force: force,
+        );
+        results.addAll(
+          profiles
+              .where((p) => p.cacheHit && p.did != null)
+              .map(
+                (p) => PeerDisplayProfile(
+                  did: p.did!,
+                  displayName: p.displayName,
+                  handle: p.handle,
+                  avatarUri: p.avatarUri ?? p.avatarUrl,
+                  profileUri: p.profileUri,
+                  subjectType: p.subjectType,
+                  isStale: p.isStale,
+                  legacyFallback: p.legacyFallback,
+                ),
+              ),
+        );
+      }
+      return results;
+    });
+  }
+
+  @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
   ) async {
@@ -36,6 +77,8 @@ class AwikiImCoreDirectoryAdapter implements DirectoryCorePort {
             displayName: profile.displayName,
             handle: profile.handle,
             avatarUri: profile.avatarUri ?? profile.avatarUrl,
+            profileUri: profile.profileUri,
+            subjectType: profile.subjectType,
             isStale: profile.isStale,
             legacyFallback: profile.legacyFallback,
           ),

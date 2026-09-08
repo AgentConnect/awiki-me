@@ -784,6 +784,8 @@ class FakeAwikiGateway implements AwikiAccountGateway {
       const <PeerDisplayProfile>[];
   Completer<void>? cachedPeerDisplayProfilesCompleter;
   int loadCachedDisplayProfilesCalls = 0;
+  final List<String> refreshDisplayProfileQueries = [];
+  Completer<List<PeerDisplayProfile>>? refreshDisplayProfilesCompleter;
   Map<String, UserProfile> publicProfilesByQuery = <String, UserProfile>{};
   final List<String> loadPublicProfileQueries = <String>[];
   Map<String, String> directoryConversationIdsByQuery = <String, String>{};
@@ -1174,11 +1176,13 @@ class FakeAwikiGateway implements AwikiAccountGateway {
       ...(groupMembersByGroupId[groupId] ?? const <GroupMemberSummary>[]),
     ];
     if (!members.any((item) => item.did == memberRef)) {
-      final profile = _profileForDid(memberRef);
+      final profile =
+          publicProfilesByQuery[normalizeTestIdentity(memberRef)] ??
+          _profileForDid(memberRef);
       members.add(
         GroupMemberSummary(
-          userId: memberRef,
-          did: memberRef,
+          userId: profile?.did ?? memberRef,
+          did: profile?.did ?? memberRef,
           handle: profile?.fullHandle ?? profile?.handle ?? memberRef,
           role: role,
           profileUrl: null,
@@ -1693,6 +1697,36 @@ class FakeDirectoryApplicationService implements DirectoryApplicationService {
   const FakeDirectoryApplicationService(this.gateway);
 
   final FakeAwikiGateway gateway;
+
+  @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  }) async {
+    gateway.refreshDisplayProfileQueries.addAll(dids);
+    if (gateway.refreshDisplayProfilesCompleter != null) {
+      return gateway.refreshDisplayProfilesCompleter!.future;
+    }
+    final requested = dids.toSet();
+    final profiles = <String, UserProfile>{
+      for (final profile in gateway.publicProfilesByQuery.values)
+        profile.did: profile,
+      if (gateway.publicProfile case final profile?) profile.did: profile,
+    };
+    return profiles.values
+        .where((p) => requested.contains(p.did))
+        .map(
+          (p) => PeerDisplayProfile(
+            did: p.did,
+            displayName: p.nickName,
+            handle: p.fullHandle ?? p.handle,
+            avatarUri: p.avatarUri,
+            profileUri: p.profileUri,
+            subjectType: p.subjectType,
+          ),
+        )
+        .toList();
+  }
 
   @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(

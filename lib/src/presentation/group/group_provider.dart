@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
@@ -6,7 +8,6 @@ import '../../core/group_display_name.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_identity.dart';
 import '../../domain/entities/group_summary.dart';
-import '../../domain/entities/user_profile.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../profile/peer_display_profile_provider.dart';
 
@@ -314,6 +315,16 @@ class GroupController extends StateNotifier<GroupState> {
       return members;
     }
     if (!hydrateProfiles) {
+      unawaited(
+        _hydrateMemberProfiles(members, ownerOperation: ownerOperation).then((
+          hydrated,
+        ) {
+          if (_isGroupOwnerOperationCurrent(ownerOperation) &&
+              generation == _memberLoadGenerations[groupId]) {
+            _publishGroupMembers(groupId, hydrated);
+          }
+        }),
+      );
       return members;
     }
     final hydratedMembers = await _hydrateMemberProfiles(
@@ -526,34 +537,40 @@ class GroupController extends StateNotifier<GroupState> {
     if (members.isEmpty) {
       return members;
     }
-    final profiles = ref.read(profileApplicationServiceProvider);
-    return Future.wait<GroupMemberSummary>(
-      members.map((member) async {
-        final subject = _memberProfileSubject(member);
-        if (subject == null) {
-          return member;
-        }
-        try {
-          final profile = await profiles.loadPublicProfile(subject);
-          if (!_isGroupOwnerOperationCurrent(ownerOperation)) {
-            return member;
-          }
-          ref
-              .read(peerDisplayProfileProvider.notifier)
-              .updateFromRemote(
-                ownerDid: ownerOperation.epoch.ownerDid,
-                profile: profile,
-                peerPersonaId: member.peerPersonaId,
-              );
-          return _mergeMemberProfile(member, profile);
-        } catch (_) {
-          // Profile hydration is best-effort. The group membership snapshot is
-          // still authoritative for DID/role/status, so keep the raw member if
-          // a public profile is unavailable.
-          return member;
-        }
-      }),
+    final controller = ref.read(peerDisplayProfileProvider.notifier);
+    await controller.refreshDisplayProfiles(
+      ownerDid: ownerOperation.epoch.ownerDid,
+      dids: members.map((member) => member.did),
+      peerPersonaIdsByDid: {
+        for (final member in members)
+          if (member.peerPersonaId != null) member.did: member.peerPersonaId!,
+      },
+      expectedEpoch: ownerOperation.epoch,
     );
+    if (!_isGroupOwnerOperationCurrent(ownerOperation)) return members;
+    final profiles = ref.read(peerDisplayProfileProvider);
+    return members
+        .map((member) {
+          final profile = profiles.forDid(member.did);
+          if (profile == null) return member;
+          return GroupMemberSummary(
+            userId: member.userId,
+            did: member.did,
+            handle: profile.handle ?? member.handle,
+            role: member.role,
+            membershipId: member.membershipId,
+            peerPersonaId: member.peerPersonaId,
+            credentialDid: member.credentialDid,
+            profileUrl: profile.profileUri ?? member.profileUrl,
+            displayName: profile.displayName,
+            avatarUri: profile.avatarUri ?? member.avatarUri,
+            subjectType: member.subjectType == GroupMemberSubjectType.unknown
+                ? GroupMemberSubjectType.parse(profile.subjectType)
+                : member.subjectType,
+            membershipStatus: member.membershipStatus,
+          );
+        })
+        .toList(growable: false);
   }
 
   bool _isOwnerOperationCurrent(int generation, SessionEpoch epoch) {
@@ -860,60 +877,4 @@ String? _trimToNull(String? value) {
 
 bool _isKnownGroupRole(String? role) {
   return role == 'owner' || role == 'admin' || role == 'member';
-}
-
-String? _memberProfileSubject(GroupMemberSummary member) {
-  final did = _trimToNull(member.did);
-  if (did != null) {
-    return did;
-  }
-  return _trimToNull(member.handle);
-}
-
-GroupMemberSummary _mergeMemberProfile(
-  GroupMemberSummary member,
-  UserProfile profile,
-) {
-  final profileHandle =
-      _trimToNull(profile.fullHandle) ?? _trimToNull(profile.handle);
-  final mergedHandle = profileHandle ?? member.handle;
-  final subjectType = member.subjectType == GroupMemberSubjectType.unknown
-      ? GroupMemberSubjectType.parse(profile.subjectType)
-      : member.subjectType;
-  return GroupMemberSummary(
-    userId: member.userId,
-    did: member.did,
-    handle: mergedHandle,
-    role: member.role,
-    membershipId: member.membershipId,
-    peerPersonaId: member.peerPersonaId,
-    credentialDid: member.credentialDid,
-    profileUrl: _preferNonEmptyOptional(member.profileUrl, profile.profileUri),
-    displayName: _preferNonEmptyOptional(
-      member.displayName,
-      _profileDisplayName(profile),
-    ),
-    avatarUri: _preferNonEmptyOptional(member.avatarUri, profile.avatarUri),
-    subjectType: subjectType,
-    membershipStatus: member.membershipStatus,
-  );
-}
-
-String? _profileDisplayName(UserProfile profile) {
-  final displayName = _trimToNull(profile.displayName);
-  final did = _trimToNull(profile.did);
-  if (displayName == null || did == null) {
-    return displayName;
-  }
-  if (displayName == did || displayName.startsWith('did:')) {
-    return null;
-  }
-  if (did.length > 18) {
-    final compactDid =
-        '${did.substring(0, 10)}…${did.substring(did.length - 6)}';
-    if (displayName == compactDid) {
-      return null;
-    }
-  }
-  return displayName;
 }

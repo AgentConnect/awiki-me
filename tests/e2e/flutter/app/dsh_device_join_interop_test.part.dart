@@ -204,8 +204,9 @@ void _registerDshDeviceJoinInteropTest() {
       final admins = devices
           .where((device) => device['isCurrent'] == true)
           .toList();
-      if (admins.length != 1)
+      if (admins.length != 1) {
         fail('DSH Registry did not contain one current admin.');
+      }
       void requireExactSurvivingAdmin(Map<String, Object?> snapshot) {
         final remaining = _DshE2eDriver.maps(snapshot, 'devices');
         if (remaining.length != 1 ||

@@ -64,6 +64,7 @@ class PeerDisplayProfileController
   final Map<String, Future<void>> _remoteLoads = <String, Future<void>>{};
   final Set<String> _completedRemoteLoads = <String>{};
   int _stateGeneration = 0;
+  final Map<String, DateTime> _displayRefreshCheckedAt = {};
 
   Future<void> loadCached({
     required String ownerDid,
@@ -159,8 +160,61 @@ class PeerDisplayProfileController
       displayName: nickname,
       handle: profile.fullHandle ?? profile.handle,
       avatarUri: profile.avatarUri,
+      profileUri: profile.profileUri,
+      subjectType: profile.subjectType,
     );
     _merge(<PeerDisplayProfile>[projection]);
+  }
+
+  /// Group display enrichment has no contact/conversation mutation side effects.
+  Future<void> refreshDisplayProfiles({
+    required String ownerDid,
+    required Iterable<String> dids,
+    Map<String, String> peerPersonaIdsByDid = const <String, String>{},
+    bool force = false,
+    SessionEpoch? expectedEpoch,
+  }) async {
+    final operation = _beginOwnerOperation(
+      ownerDid.trim(),
+      expectedEpoch: expectedEpoch,
+    );
+    if (operation == null) return;
+    _registerPersonaRoutes(peerPersonaIdsByDid);
+    final peers =
+        dids
+            .map((did) => did.trim())
+            .where((did) => did.startsWith('did:'))
+            .toSet()
+            .toList()
+          ..sort();
+    if (peers.isEmpty) return;
+    final key = 'display:${_remoteLoadKey(operation, peers.join(","))}:$force';
+    final existing = _remoteLoads[key];
+    if (existing != null) return existing;
+    final checkedAt = _displayRefreshCheckedAt[key];
+    if (!force &&
+        checkedAt != null &&
+        DateTime.now().difference(checkedAt) < const Duration(seconds: 5)) {
+      return;
+    }
+    if (_displayRefreshCheckedAt.length > 256) _displayRefreshCheckedAt.clear();
+    _displayRefreshCheckedAt[key] = DateTime.now();
+    late final Future<void> load;
+    load =
+        (() async {
+          try {
+            final profiles = await ref
+                .read(directoryApplicationServiceProvider)
+                .refreshDisplayProfiles(peers, force: force);
+            if (_isOwnerOperationCurrent(operation)) _merge(profiles);
+          } catch (_) {
+            // Retain the current projection; foreground reconciliation can retry.
+          }
+        })().whenComplete(() {
+          if (identical(_remoteLoads[key], load)) _remoteLoads.remove(key);
+        });
+    _remoteLoads[key] = load;
+    await load;
   }
 
   Future<void> refreshRemoteProfilesIfNeeded({
@@ -266,6 +320,7 @@ class PeerDisplayProfileController
     _stateGeneration += 1;
     _remoteLoads.clear();
     _completedRemoteLoads.clear();
+    _displayRefreshCheckedAt.clear();
     state = const PeerDisplayProfileState();
   }
 
@@ -276,6 +331,7 @@ class PeerDisplayProfileController
     _stateGeneration += 1;
     _remoteLoads.clear();
     _completedRemoteLoads.clear();
+    _displayRefreshCheckedAt.clear();
     state = PeerDisplayProfileState(ownerDid: ownerDid);
   }
 
@@ -283,6 +339,7 @@ class PeerDisplayProfileController
     String ownerDid, {
     SessionEpoch? expectedEpoch,
   }) {
+    if (!mounted || ownerDid.isEmpty) return null;
     final currentEpoch = ref.read(sessionProvider).activeEpoch;
     if (expectedEpoch != null && currentEpoch != expectedEpoch) {
       return null;
@@ -342,6 +399,8 @@ class PeerDisplayProfileController
             displayName: unresolved.displayName,
             handle: unresolved.handle,
             avatarUri: unresolved.avatarUri,
+            profileUri: unresolved.profileUri,
+            subjectType: unresolved.subjectType,
             isStale: unresolved.isStale,
             legacyFallback: unresolved.legacyFallback,
           );
@@ -360,6 +419,7 @@ class PeerDisplayProfileController
     Iterable<PeerDisplayProfile> profiles, {
     Map<String, String> peerPersonaIdsByDid = const <String, String>{},
   }) {
+    if (profiles.isEmpty) return;
     final byPersona = <String, PeerDisplayProfile>{
       ...state.profilesByPersonaId,
     };
@@ -384,6 +444,8 @@ class PeerDisplayProfileController
           displayName: profile.displayName,
           handle: profile.handle,
           avatarUri: profile.avatarUri,
+          profileUri: profile.profileUri,
+          subjectType: profile.subjectType,
           isStale: profile.isStale,
           legacyFallback: profile.legacyFallback,
         );
@@ -506,13 +568,15 @@ String _resolvePeerDisplayName({
   required PeerDisplayNameRequest request,
 }) {
   return const PeerDisplayNameResolver().resolve(
-    nickname: profile?.displayName?.trim().isNotEmpty == true
-        ? profile!.displayName
-        : request.nickname,
+    nickname: profile != null && !profile.legacyFallback
+        ? profile.displayName
+        : profile?.displayName ?? request.nickname,
     fullHandle: profile?.handle?.trim().isNotEmpty == true
         ? profile!.handle
         : request.fullHandle,
-    senderNameSnapshot: request.senderNameSnapshot,
+    senderNameSnapshot: profile == null || profile.legacyFallback
+        ? request.senderNameSnapshot
+        : null,
     did: request.did,
     unknownLabel: request.unknownLabel,
     compactQualifiedHandle: true,
@@ -553,9 +617,9 @@ final publicIdentityDisplayNameProvider =
         peerDisplayProfileProvider.select((state) => state.forDid(request.did)),
       );
       return const PeerDisplayNameResolver().resolve(
-        nickname: profile?.displayName?.trim().isNotEmpty == true
-            ? profile!.displayName
-            : request.nickname,
+        nickname: profile != null && !profile.legacyFallback
+            ? profile.displayName
+            : profile?.displayName ?? request.nickname,
         fullHandle: profile?.handle?.trim().isNotEmpty == true
             ? profile!.handle
             : request.fullHandle,

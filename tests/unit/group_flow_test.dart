@@ -1,8 +1,8 @@
+import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/group_collection_page.dart';
-import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/application/ports/group_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -12,7 +12,6 @@ import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/identity_type.dart';
-import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
@@ -34,27 +33,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
-
-class _DelayedPublicProfileService implements ProfileApplicationService {
-  final Completer<UserProfile> profile = Completer<UserProfile>();
-  int loadCalls = 0;
-
-  @override
-  Future<UserProfile> loadPublicProfile(String didOrHandle) {
-    loadCalls += 1;
-    return profile.future;
-  }
-
-  @override
-  Future<UserProfile> loadMyProfile() {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<UserProfile> updateProfile(ProfilePatch patch) {
-    throw UnimplementedError();
-  }
-}
 
 class _DelayedCreateGroupService extends FakeGroupApplicationService {
   _DelayedCreateGroupService(super.gateway);
@@ -600,6 +578,48 @@ void main() {
     expect(find.textContaining('join-code'), findsNothing);
   });
 
+  test('先进入群聊时成员先显示，展示资料后台补齐且不调用公开资料业务入口', () async {
+    const groupDid = 'did:wba:awiki.ai:group:cold';
+    const guestDid = 'did:wba:awiki.ai:user:guest:e1';
+    final completion = Completer<List<PeerDisplayProfile>>();
+    final gateway = FakeAwikiGateway()
+      ..refreshDisplayProfilesCompleter = completion
+      ..groupMembersByGroupId = const {
+        groupDid: [
+          GroupMemberSummary(
+            userId: guestDid,
+            did: guestDid,
+            handle: '',
+            role: 'member',
+          ),
+        ],
+      };
+    final container = ProviderContainer(
+      overrides: fakeApplicationServiceOverrides(gateway),
+    );
+    addTearDown(container.dispose);
+    container.read(sessionProvider.notifier).setSession(session);
+    final members = await container
+        .read(groupProvider.notifier)
+        .ensureGroupMembersLoaded(groupDid);
+    expect(members.single.did, guestDid);
+    expect(members.single.displayName, isNull);
+    expect(gateway.loadPublicProfileQueries, isEmpty);
+    completion.complete(const [
+      PeerDisplayProfile(did: guestDid, displayName: 'AWiki Guest 7K3M'),
+    ]);
+    await pumpEventQueue();
+    expect(
+      container.read(groupMembersProvider(groupDid)).single.displayName,
+      'AWiki Guest 7K3M',
+    );
+    expect(
+      container.read(peerDisplayProfileProvider).forDid(guestDid)?.displayName,
+      'AWiki Guest 7K3M',
+    );
+    expect(gateway.refreshDisplayProfileQueries, [guestDid]);
+  });
+
   test('群成员加载会用公开 Profile Display Name 补全展示名', () async {
     const groupDid = 'did:wba:awiki.ai:group:e1_group';
     const memberDid = 'did:wba:awiki.ai:user:lzc:e1_member';
@@ -652,21 +672,9 @@ void main() {
   test('旧身份群成员 Profile 慢请求不会写入新身份投影', () async {
     const groupDid = 'did:wba:awiki.ai:group:e1_group';
     const memberDid = 'did:wba:awiki.ai:user:lzc:e1_member';
-    final profiles = _DelayedPublicProfileService();
-    addTearDown(() {
-      if (!profiles.profile.isCompleted) {
-        profiles.profile.complete(
-          const UserProfile(
-            did: memberDid,
-            nickName: 'Old member',
-            bio: '',
-            tags: <String>[],
-            profileMarkdown: '',
-          ),
-        );
-      }
-    });
+    final profiles = Completer<List<PeerDisplayProfile>>();
     final gateway = FakeAwikiGateway()
+      ..refreshDisplayProfilesCompleter = profiles
       ..groupMembersByGroupId = const <String, List<GroupMemberSummary>>{
         groupDid: <GroupMemberSummary>[
           GroupMemberSummary(
@@ -679,10 +687,7 @@ void main() {
         ],
       };
     final container = ProviderContainer(
-      overrides: <Override>[
-        ...fakeApplicationServiceOverrides(gateway),
-        profileApplicationServiceProvider.overrideWithValue(profiles),
-      ],
+      overrides: <Override>[...fakeApplicationServiceOverrides(gateway)],
     );
     addTearDown(container.dispose);
     container.read(sessionProvider.notifier).setSession(session);
@@ -691,21 +696,15 @@ void main() {
         .read(groupProvider.notifier)
         .loadGroupMembers(groupDid);
     await pumpEventQueue();
-    expect(profiles.loadCalls, 1);
+    expect(gateway.refreshDisplayProfileQueries, [memberDid]);
     final loadFailure = expectLater(load, throwsSessionEpochChanged);
 
     container.read(sessionProvider.notifier).setSession(replacementSession);
     container.read(groupProvider.notifier).clear();
     container.read(peerDisplayProfileProvider.notifier).clear();
-    profiles.profile.complete(
-      const UserProfile(
-        did: memberDid,
-        nickName: 'Old member',
-        bio: '',
-        tags: <String>[],
-        profileMarkdown: '',
-      ),
-    );
+    profiles.complete(const [
+      PeerDisplayProfile(did: memberDid, displayName: 'Old member'),
+    ]);
     await loadFailure;
 
     final peerState = container.read(peerDisplayProfileProvider);
