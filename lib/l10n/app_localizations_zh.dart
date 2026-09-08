@@ -3462,4 +3462,55 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get legacyIdentityUpgradeFailed => '旧身份升级失败，请重试。';
+
+  @override
+  String get handleRecoveryFactorExpired => '验证授权已失效，请重新接收短信并验证。原恢复进度会保留。';
+
+  @override
+  String get handleRecoveryFreshDataNotice => '本机没有可迁移的原身份数据，恢复后不会自动找回此前的私聊历史。';
+
+  @override
+  String get handleRecoveryEncryptionNotice =>
+      '原有端到端加密密钥不会恢复，部分加密消息和群聊将无法继续使用。';
+
+  @override
+  String get handleRecoveryDetails => '查看详细影响';
+
+  @override
+  String get handleRecoveryNeedsAttention => '恢复需要处理以下问题，原进度已保留。';
+
+  @override
+  String get handleRecoveryAwaitingResult => '暂未确认账号恢复结果，请继续确认。不要重新发起恢复。';
+
+  @override
+  String get handleRecoveryAwaitingLocal =>
+      '账号恢复已生效，本机设置尚未完成。请继续恢复，无需再次接收短信验证码。';
+
+  @override
+  String get handleRecoveryChecking => '正在检查恢复进度…';
+
+  @override
+  String get handleRecoverySendingOtp => '正在发送验证码…';
+
+  @override
+  String get handleRecoveryVerifying => '正在验证手机号…';
+
+  @override
+  String get handleRecoveryAuthenticating => '请完成系统身份验证。';
+
+  @override
+  String get handleRecoveryRunning => '正在继续恢复，请稍候…';
+
+  @override
+  String get handleRecoveryEntering => '恢复已完成，正在进入消息…';
+
+  @override
+  String get handleRecoveryContinueExisting => '继续上次恢复';
+
+  @override
+  String get handleRecoverySlowOperation =>
+      '此步骤耗时较长，请检查网络及系统授权提示。当前操作仍在处理中，请勿重复提交。';
+
+  @override
+  String get handleRecoveryCancelBeforeCommit => '取消本次恢复';
 }

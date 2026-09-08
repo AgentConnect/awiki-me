@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
+import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
+import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
 
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/agent/agent_control_service.dart';
@@ -309,6 +312,7 @@ Widget buildLocalizedTestApp({
           homepageMarkdownLoader,
         ),
       appRuntimeProvider.overrideWith((ref) => AppRuntimeController(ref)),
+      handleRecoveryCorePortProvider.overrideWithValue(_EmptyRecoveryLookup()),
       ...providerOverrides,
     ],
     child: Consumer(
@@ -4720,4 +4724,15 @@ PersonalAgentBinding _personalAgentBinding({
     delegatedKeyVerificationMethod: 'did:human:me#daemon-key-1',
     status: status,
   );
+}
+
+// Most product tests have no local recovery. A recovery-specific fake overrides
+// this lookup and owns the operations it exposes.
+class _EmptyRecoveryLookup implements HandleRecoveryCorePort {
+  @override
+  Future<List<HandleRecoveryProgress>> listOperationsForHandle(
+    String handle,
+  ) async => [];
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

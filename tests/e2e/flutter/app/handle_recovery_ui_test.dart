@@ -697,11 +697,20 @@ void main() {
           );
         }
       }
+      final recoveryProvider = handleRecoveryProvider((
+        handle: fullHandle,
+        localIdentityId: expectedRecoveryLocalIdentityId,
+      ));
+      final recoverySubscription = container.listen(
+        recoveryProvider,
+        (_, _) {},
+      );
+      addTearDown(recoverySubscription.close);
       var recoveryOtpRateLimitRetries = 0;
       await _pumpUntil(
         tester,
         () {
-          final state = container.read(handleRecoveryProvider);
+          final state = container.read(recoveryProvider);
           return !state.isBusy &&
               ((state.otpRequested && state.otpOperationId != null) ||
                   state.error == HandleRecoveryUiError.rateLimited);
@@ -709,7 +718,7 @@ void main() {
         timeout: const Duration(seconds: 45),
         failure: 'The UI did not accept an operation-bound Recovery OTP.',
       );
-      if (container.read(handleRecoveryProvider).error ==
+      if (container.read(recoveryProvider).error ==
           HandleRecoveryUiError.rateLimited) {
         recoveryOtpRateLimitRetries = 1;
         await _retryRecoveryOtpAfterRateLimit(tester, container);
@@ -717,7 +726,7 @@ void main() {
       await _pumpUntil(
         tester,
         () {
-          final state = container.read(handleRecoveryProvider);
+          final state = container.read(recoveryProvider);
           _failOnRecoveryError(
             state,
             'OTP request',
@@ -730,9 +739,7 @@ void main() {
         timeout: const Duration(seconds: 45),
         failure: 'The UI did not accept an operation-bound Recovery OTP.',
       );
-      final operationId = container
-          .read(handleRecoveryProvider)
-          .otpOperationId!;
+      final operationId = container.read(recoveryProvider).otpOperationId!;
       if (recordingRecoveryCore.requestOtpCalls !=
               1 + recoveryOtpRateLimitRetries ||
           recordingRecoveryCore.requestedHandle != fullHandle ||
@@ -766,7 +773,7 @@ void main() {
       await _pumpUntil(
         tester,
         () {
-          final state = container.read(handleRecoveryProvider);
+          final state = container.read(recoveryProvider);
           _failOnRecoveryError(
             state,
             'OTP verification',
@@ -793,6 +800,38 @@ void main() {
         fail('The prepared Recovery risks were not visibly presented.');
       }
 
+      expect(find.byKey(const Key('handle-recovery-otp')), findsNothing);
+      expect(find.byKey(const Key('handle-recovery-send-otp')), findsNothing);
+
+      // A route restart must discover the same durable prepared operation.
+      // Keep the observer only for assertions; presentation consent still resets.
+      final otpCountBeforeReopen = recordingRecoveryCore.requestOtpCalls;
+      final navigator = tester.state<NavigatorState>(
+        find.byType(Navigator).first,
+      );
+      navigator.pop();
+      await tester.pumpAndSettle();
+      unawaited(
+        navigator.push<void>(
+          CupertinoPageRoute<void>(
+            builder: (_) => HandleRecoveryPage(
+              initialHandle: fullHandle,
+              initialPhone: account.phone,
+              localIdentityId: expectedRecoveryLocalIdentityId,
+            ),
+          ),
+        ),
+      );
+      await _pumpUntil(tester, () {
+        final state = container.read(recoveryProvider);
+        return find.byType(HandleRecoveryPage).evaluate().isNotEmpty &&
+            !state.isBusy &&
+            state.progress?.operationId == operationId &&
+            (state.progress?.canActivate ?? false) &&
+            !state.riskConfirmed;
+      }, failure: 'Reopening Recovery lost its durable prepared operation.');
+      expect(recordingRecoveryCore.requestOtpCalls, otpCountBeforeReopen);
+
       await _tapOne(
         tester,
         find.byKey(const Key('handle-recovery-risk-confirmation')),
@@ -800,7 +839,7 @@ void main() {
       );
       await _pumpUntil(
         tester,
-        () => container.read(handleRecoveryProvider).riskConfirmed,
+        () => container.read(recoveryProvider).riskConfirmed,
         failure: 'The UI did not retain explicit risk confirmation.',
       );
       await _tapOne(
@@ -811,6 +850,7 @@ void main() {
       await _waitForCompletedRecovery(
         tester,
         container,
+        recoveryProvider: recoveryProvider,
         coreDiagnostic: () => recordingRecoveryCore.lastSafeFailure,
       );
       if (presence.calls != 1 ||
@@ -819,7 +859,7 @@ void main() {
         fail('Recovery did not use exactly one E2E user-presence decision.');
       }
 
-      final completed = container.read(handleRecoveryProvider).progress!;
+      final completed = container.read(recoveryProvider).progress!;
       final reset = completed.registryEpochReset;
       if (completed.handle != fullHandle ||
           reset == null ||
@@ -1188,7 +1228,14 @@ void main() {
             tester,
             () =>
                 find.byType(HandleRecoveryPage).evaluate().isNotEmpty &&
-                recoveredContainer.read(handleRecoveryProvider).progress ==
+                recoveredContainer
+                        .read(
+                          handleRecoveryProvider((
+                            handle: fullHandle,
+                            localIdentityId: null,
+                          )),
+                        )
+                        .progress ==
                     null,
             failure: 'Recovery reused the retired owner completed state.',
           );
@@ -1196,7 +1243,17 @@ void main() {
             find.byKey(const Key('handle-recovery-enter-messages')),
             findsNothing,
           );
-          expect(recoveredContainer.read(handleRecoveryProvider).error, isNull);
+          expect(
+            recoveredContainer
+                .read(
+                  handleRecoveryProvider((
+                    handle: fullHandle,
+                    localIdentityId: null,
+                  )),
+                )
+                .error,
+            isNull,
+          );
           recoveryNavigator.pop();
           await tester.pump();
           await tester.pumpWidget(const SizedBox.shrink());
@@ -3638,6 +3695,12 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
     () => find.byType(SettingsPage).evaluate().length == 1,
     failure: 'Crash-cut setup did not open Settings.',
   );
+  final recoveryProvider = handleRecoveryProvider((
+    handle: oldSession.handle!.trim().toLowerCase(),
+    localIdentityId: oldSession.identityId,
+  ));
+  final recoverySubscription = appContainer.listen(recoveryProvider, (_, _) {});
+  addTearDown(recoverySubscription.close);
   final recoveryRow = find.byKey(const Key('settings-recover-handle-did-row'));
   await tester.ensureVisible(recoveryRow);
   await _tapOne(
@@ -3664,7 +3727,7 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
               .length !=
           1 ||
       recordingCore.requestOtpCalls != 0 ||
-      container.read(handleRecoveryProvider).error != null) {
+      container.read(recoveryProvider).error != null) {
     fail(
       'Blank Settings Recovery phone reached Core or reported a state error.',
     );
@@ -3682,7 +3745,7 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
   await _pumpUntil(
     tester,
     () {
-      final state = container.read(handleRecoveryProvider);
+      final state = container.read(recoveryProvider);
       _failOnRecoveryError(state, 'Crash-cut OTP request');
       return state.otpRequested &&
           state.otpOperationId != null &&
@@ -3697,7 +3760,7 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
       recordingCore.requestedPhone != account.phone) {
     fail('Settings Recovery did not target the exact active local identity.');
   }
-  final operationId = container.read(handleRecoveryProvider).otpOperationId!;
+  final operationId = container.read(recoveryProvider).otpOperationId!;
   final otp = await _resolveOtp(
     account: account,
     purpose: _recoveryPurpose,
@@ -3714,7 +3777,7 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
   await _pumpUntil(
     tester,
     () {
-      final state = container.read(handleRecoveryProvider);
+      final state = container.read(recoveryProvider);
       _failOnRecoveryError(state, 'Crash-cut prepare');
       return state.progress?.phase == HandleRecoveryProgressPhase.prepared &&
           !state.isBusy;
@@ -3729,7 +3792,7 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
   );
   await _pumpUntil(
     tester,
-    () => container.read(handleRecoveryProvider).riskConfirmed,
+    () => container.read(recoveryProvider).riskConfirmed,
     failure: 'Crash-cut Recovery did not retain risk confirmation.',
   );
   await _tapOne(
@@ -3737,8 +3800,12 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
     find.bySemanticsIdentifier('handle-recovery-activate'),
     failure: 'Crash-cut activation was unavailable.',
   );
-  await _waitForCompletedRecovery(tester, container);
-  final completed = container.read(handleRecoveryProvider).progress!;
+  await _waitForCompletedRecovery(
+    tester,
+    container,
+    recoveryProvider: recoveryProvider,
+  );
+  final completed = container.read(recoveryProvider).progress!;
   final reset = completed.registryEpochReset;
   if (reset == null ||
       reset.previousDid != oldSession.did ||
@@ -5611,14 +5678,15 @@ Future<void> _writeRegistrationJoinResumeHandoff({
 Future<void> _waitForCompletedRecovery(
   WidgetTester tester,
   ProviderContainer container, {
+  required ProviderListenable<HandleRecoveryState> recoveryProvider,
   String? Function()? coreDiagnostic,
 }) async {
-  final initial = container.read(handleRecoveryProvider);
+  final initial = container.read(recoveryProvider);
   if (initial.progress?.canActivate ?? false) {
     await _pumpUntil(
       tester,
       () {
-        final state = container.read(handleRecoveryProvider);
+        final state = container.read(recoveryProvider);
         return state.isBusy ||
             state.error != null ||
             !(state.progress?.canActivate ?? false);
@@ -5630,14 +5698,14 @@ Future<void> _waitForCompletedRecovery(
   for (var attempt = 0; attempt < 8; attempt += 1) {
     await _pumpUntil(
       tester,
-      () => !container.read(handleRecoveryProvider).isBusy,
+      () => !container.read(recoveryProvider).isBusy,
       timeout: const Duration(minutes: 2),
       failure: 'A Recovery transition did not return control to the UI.',
     );
-    final state = container.read(handleRecoveryProvider);
+    final state = container.read(recoveryProvider);
     final progress = state.progress;
     if (progress?.isCompleted ?? false) return;
-    final error = state.error;
+    final error = state.effectiveError;
     if (error != null &&
         !(error.action == HandleRecoveryUiAction.exactResume &&
             (progress?.canResume ?? false))) {
@@ -5647,7 +5715,7 @@ Future<void> _waitForCompletedRecovery(
         coreDiagnostic: coreDiagnostic?.call(),
       );
     }
-    if (progress == null || !progress.canResume) {
+    if (progress == null || !state.canResume) {
       fail(
         'Recovery stopped in a non-resumable non-terminal phase '
         '(phase=${progress?.phase.name ?? 'absent'}, '
@@ -5657,6 +5725,12 @@ Future<void> _waitForCompletedRecovery(
         'error=${error?.safeCode ?? 'absent'}).',
       );
     }
+    expect(find.byKey(const Key('handle-recovery-otp')), findsNothing);
+    expect(
+      find.byKey(const Key('handle-recovery-risk-confirmation')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('handle-recovery-activate')), findsNothing);
     await _tapOne(
       tester,
       find.bySemanticsIdentifier('handle-recovery-resume'),
@@ -5671,7 +5745,7 @@ void _failOnRecoveryError(
   String action, {
   String? coreDiagnostic,
 }) {
-  final error = state.error;
+  final error = state.effectiveError;
   if (error != null) {
     final diagnostic = coreDiagnostic == null
         ? ''
@@ -5754,6 +5828,10 @@ String _safeCoreFailureDetail(String message) {
 }
 
 class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
+  @override
+  Future<List<HandleRecoveryProgress>> listOperationsForHandle(String handle) =>
+      _record(() => _delegate.listOperationsForHandle(handle));
+
   _RecordingHandleRecoveryCorePort(this._delegate);
 
   final HandleRecoveryCorePort _delegate;

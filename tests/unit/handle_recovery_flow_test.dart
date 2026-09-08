@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/app_bootstrap_epoch_barrier.dart';
 import 'package:awiki_me/src/application/handle_recovery_service.dart';
+import 'package:awiki_me/src/application/sms_otp_cooldown_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
@@ -24,6 +25,597 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
+  group('Recovery stage presentation', () {
+    for (final entry in [
+      (
+        HandleRecoveryLifecycleClass.preCommit,
+        false,
+        HandleRecoveryViewStage.verification,
+      ),
+      (
+        HandleRecoveryLifecycleClass.preCommit,
+        true,
+        HandleRecoveryViewStage.confirmation,
+      ),
+      (
+        HandleRecoveryLifecycleClass.remoteUnresolved,
+        false,
+        HandleRecoveryViewStage.continuation,
+      ),
+      (
+        HandleRecoveryLifecycleClass.remoteCommitted,
+        false,
+        HandleRecoveryViewStage.continuation,
+      ),
+      (
+        HandleRecoveryLifecycleClass.localTransitionPending,
+        false,
+        HandleRecoveryViewStage.continuation,
+      ),
+      (
+        HandleRecoveryLifecycleClass.applied,
+        false,
+        HandleRecoveryViewStage.completed,
+      ),
+    ]) {
+      testWidgets('${entry.$1} shows only the relevant controls', (
+        tester,
+      ) async {
+        final core = _FakeHandleRecoveryCore(
+          exposeDurableOperation: true,
+          operation: _operation(
+            lifecycleClass: entry.$1,
+            readyToCommit: entry.$2,
+            commitAttempted: entry.$1 != HandleRecoveryLifecycleClass.preCommit,
+          ),
+        );
+        await tester.pumpWidget(
+          buildLocalizedTestApp(
+            home: const HandleRecoveryPage(
+              initialHandle: 'alice.awiki.info',
+              initialPhone: '+8613800138000',
+              autoRequestOtp: false,
+            ),
+            providerOverrides: [
+              handleRecoveryCorePortProvider.overrideWithValue(core),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('handle-recovery-busy')), findsNothing);
+        expect(
+          find.byKey(const Key('handle-recovery-otp')),
+          entry.$3 == HandleRecoveryViewStage.verification
+              ? findsOneWidget
+              : findsNothing,
+        );
+        expect(
+          find.byKey(const Key('handle-recovery-risk-confirmation')),
+          entry.$3 == HandleRecoveryViewStage.confirmation
+              ? findsOneWidget
+              : findsNothing,
+        );
+        expect(
+          find.byKey(const Key('handle-recovery-activate')),
+          entry.$3 == HandleRecoveryViewStage.confirmation
+              ? findsOneWidget
+              : findsNothing,
+        );
+        expect(
+          find.byKey(const Key('handle-recovery-resume')),
+          entry.$3 == HandleRecoveryViewStage.continuation
+              ? findsOneWidget
+              : findsNothing,
+        );
+        expect(
+          find.byKey(const Key('handle-recovery-cancel-otp')),
+          entry.$1 == HandleRecoveryLifecycleClass.preCommit
+              ? findsOneWidget
+              : findsNothing,
+        );
+        expect(core.otpCalls, 0);
+      });
+    }
+
+    testWidgets(
+      'expired prepared authorization exposes verification, not confirmation',
+      (tester) async {
+        final core = _FakeHandleRecoveryCore(
+          exposeDurableOperation: true,
+          operation: _operation(
+            readyToCommit: true,
+            failureCode: HandleRecoveryFailureCode.factorRetryRequired,
+          ),
+        );
+        await tester.pumpWidget(
+          buildLocalizedTestApp(
+            home: const HandleRecoveryPage(
+              initialHandle: 'alice.awiki.info',
+              initialPhone: '+8613800138000',
+              autoRequestOtp: false,
+            ),
+            providerOverrides: [
+              handleRecoveryCorePortProvider.overrideWithValue(core),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.textContaining('验证授权已失效'), findsOneWidget);
+        expect(find.byKey(const Key('handle-recovery-otp')), findsOneWidget);
+        expect(find.byKey(const Key('handle-recovery-activate')), findsNothing);
+        expect(
+          find.byKey(const Key('handle-recovery-risk-confirmation')),
+          findsNothing,
+        );
+        expect(core.otpCalls, 0);
+      },
+    );
+
+    testWidgets(
+      'slow OTP gives feedback without unlocking or duplicating the request',
+      (tester) async {
+        final done = Completer<HandleRecoveryOtpResult>();
+        final core = _FakeHandleRecoveryCore(otpCompleter: done);
+        await tester.pumpWidget(
+          buildLocalizedTestApp(
+            home: const HandleRecoveryPage(
+              initialHandle: 'alice.awiki.info',
+              initialPhone: '+8613800138000',
+            ),
+            providerOverrides: [
+              handleRecoveryCorePortProvider.overrideWithValue(core),
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 21));
+        expect(find.byKey(const Key('handle-recovery-slow')), findsOneWidget);
+        expect(core.otpCalls, 1);
+        final input = tester.widget<CupertinoTextField>(
+          find.descendant(
+            of: find.byKey(const Key('handle-recovery-otp')),
+            matching: find.byType(CupertinoTextField),
+          ),
+        );
+        expect(input.enabled, isFalse);
+        done.complete(
+          HandleRecoveryOtpResult(
+            operation: _operation(),
+            accepted: true,
+            retryAfterSeconds: 0,
+            retryAt: DateTime.utc(2026, 8, 7),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('handle-recovery-slow')), findsNothing);
+        expect(find.byKey(const Key('handle-recovery-busy')), findsNothing);
+      },
+    );
+
+    test(
+      'OTP delivery failure does not erase the need to refresh expired authorization',
+      () {
+        final state = HandleRecoveryState(
+          progress: _operation(
+            readyToCommit: true,
+            failureCode: HandleRecoveryFailureCode.factorRetryRequired,
+          ),
+          error: HandleRecoveryUiError.failed,
+        );
+        expect(state.canRequestOtp, isTrue);
+        expect(state.canActivate, isFalse);
+        expect(state.viewStage, HandleRecoveryViewStage.verification);
+      },
+    );
+
+    test(
+      'state advanced since confirmation still pauses the old session before continuation',
+      () async {
+        final core = _FakeHandleRecoveryCore(
+          operation: _operation(
+            lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+            commitAttempted: true,
+          ),
+        );
+        final presence = _FakeUserPresence();
+        final service = HandleRecoveryService(
+          core: core,
+          userPresence: presence,
+        );
+        var paused = false;
+        await service.activate(
+          operationId: 'operation-core-1',
+          presenceReason: 'test',
+          beforeCommit: () async {
+            expect(core.reconcileCalls, 0);
+            paused = true;
+          },
+        );
+        expect(paused, isTrue);
+        expect(core.activateCalls, 0);
+        expect(core.reconcileCalls, 1);
+      },
+    );
+
+    testWidgets(
+      'an executing recovery shows activity instead of another action',
+      (tester) async {
+        final done = Completer<HandleRecoveryProgress>();
+        final core = _FakeHandleRecoveryCore(
+          exposeDurableOperation: true,
+          operation: _operation(readyToCommit: true),
+          activateCompleter: done,
+        );
+        await tester.pumpWidget(
+          buildLocalizedTestApp(
+            home: const HandleRecoveryPage(
+              initialHandle: 'alice.awiki.info',
+              initialPhone: '',
+              autoRequestOtp: false,
+            ),
+            providerOverrides: [
+              handleRecoveryCorePortProvider.overrideWithValue(core),
+              userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(HandleRecoveryPage)),
+        );
+        const target = (handle: 'alice.awiki.info', localIdentityId: null);
+        final controller = container.read(
+          handleRecoveryProvider(target).notifier,
+        );
+        controller.setRiskConfirmed(true);
+        final task = controller.activate(
+          presenceReason: 'test',
+          stopBeforeSession: true,
+        );
+        await tester.pump();
+        expect(find.byKey(const Key('handle-recovery-busy')), findsOneWidget);
+        expect(find.byKey(const Key('handle-recovery-activate')), findsNothing);
+        expect(find.byKey(const Key('handle-recovery-resume')), findsNothing);
+        expect(
+          find.byKey(const Key('handle-recovery-risk-confirmation')),
+          findsNothing,
+        );
+        done.complete(
+          _operation(
+            lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+            commitAttempted: true,
+          ),
+        );
+        await task;
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('handle-recovery-busy')), findsNothing);
+        expect(find.byKey(const Key('handle-recovery-resume')), findsOneWidget);
+      },
+    );
+
+    test('terminal errors override an otherwise resumable projection', () {
+      final state = HandleRecoveryState(
+        progress: _operation(
+          lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+          commitAttempted: true,
+        ),
+        error: HandleRecoveryUiError.transitionMismatch,
+      );
+      expect(state.viewStage, HandleRecoveryViewStage.blocked);
+      expect(state.canActivate, isFalse);
+      expect(state.canResume, isFalse);
+      expect(state.canRequestOtp, isFalse);
+    });
+
+    test(
+      'returned factor failure is handled even without an exception',
+      () async {
+        final core = _FakeHandleRecoveryCore(
+          exposeDurableOperation: true,
+          operation: _operation(readyToCommit: true),
+          activateResult: _operation(
+            readyToCommit: true,
+            failureCode: HandleRecoveryFailureCode.factorRetryRequired,
+          ),
+        );
+        final container = ProviderContainer(
+          overrides: [
+            handleRecoveryCorePortProvider.overrideWithValue(core),
+            userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+            smsOtpCooldownServiceProvider.overrideWithValue(
+              const NoopSmsOtpCooldownService(),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        const target = (handle: 'alice.awiki.info', localIdentityId: null);
+        final sub = container.listen(handleRecoveryProvider(target), (_, _) {});
+        addTearDown(sub.close);
+        final controller = container.read(
+          handleRecoveryProvider(target).notifier,
+        );
+        await controller.open(target);
+        controller.setRiskConfirmed(true);
+        await controller.activate(presenceReason: 'test');
+        final state = container.read(handleRecoveryProvider(target));
+        expect(state.isBusy, isFalse);
+        expect(state.riskConfirmed, isFalse);
+        expect(state.viewStage, HandleRecoveryViewStage.verification);
+        expect(core.activateCalls, 1);
+        expect(core.reconcileCalls, 0);
+      },
+    );
+
+    test('closing and reopening retains one in-flight activation', () async {
+      final done = Completer<HandleRecoveryProgress>();
+      final core = _FakeHandleRecoveryCore(
+        exposeDurableOperation: true,
+        operation: _operation(readyToCommit: true),
+        activateCompleter: done,
+      );
+      final container = ProviderContainer(
+        overrides: [
+          handleRecoveryCorePortProvider.overrideWithValue(core),
+          userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+          smsOtpCooldownServiceProvider.overrideWithValue(
+            const NoopSmsOtpCooldownService(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      const target = (handle: 'alice.awiki.info', localIdentityId: null);
+      final sub = container.listen(handleRecoveryProvider(target), (_, _) {});
+      final controller = container.read(
+        handleRecoveryProvider(target).notifier,
+      );
+      await controller.open(target);
+      controller.setRiskConfirmed(true);
+      final task = controller.activate(
+        presenceReason: 'test',
+        stopBeforeSession: true,
+      );
+      await Future<void>.delayed(Duration.zero);
+      sub.close();
+      await Future<void>.delayed(Duration.zero);
+      final reopened = container.listen(
+        handleRecoveryProvider(target),
+        (_, _) {},
+      );
+      addTearDown(reopened.close);
+      expect(
+        container.read(handleRecoveryProvider(target).notifier),
+        same(controller),
+      );
+      await controller.open(target);
+      await controller.activate(presenceReason: 'duplicate');
+      expect(core.activateCalls, 1);
+      done.complete(
+        _operation(
+          lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+          commitAttempted: true,
+        ),
+      );
+      await task;
+      expect(container.read(handleRecoveryProvider(target)).canResume, isTrue);
+      expect(container.read(handleRecoveryProvider(target)).isBusy, isFalse);
+    });
+  });
+
+  test(
+    'separate Handle scopes never inherit an old operation or risk consent',
+    () async {
+      final core = _FakeHandleRecoveryCore(
+        exposeDurableOperation: true,
+        operation: _operation(
+          lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+          commitAttempted: true,
+        ),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          handleRecoveryCorePortProvider.overrideWithValue(core),
+          userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+          smsOtpCooldownServiceProvider.overrideWithValue(
+            const NoopSmsOtpCooldownService(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      const alice = (handle: 'alice.awiki.info', localIdentityId: null);
+      const bob = (handle: 'bob.awiki.info', localIdentityId: null);
+      final a = container.listen(handleRecoveryProvider(alice), (_, _) {});
+      final b = container.listen(handleRecoveryProvider(bob), (_, _) {});
+      addTearDown(a.close);
+      addTearDown(b.close);
+      await container.read(handleRecoveryProvider(alice).notifier).open(alice);
+      container
+          .read(handleRecoveryProvider(alice).notifier)
+          .setRiskConfirmed(true);
+      await container.read(handleRecoveryProvider(bob).notifier).open(bob);
+      expect(container.read(handleRecoveryProvider(bob)).progress, isNull);
+      expect(
+        container.read(handleRecoveryProvider(bob)).riskConfirmed,
+        isFalse,
+      );
+      await container
+          .read(handleRecoveryProvider(bob).notifier)
+          .requestOtp(handle: bob.handle, phone: '+8613800138000');
+      expect(container.read(handleRecoveryProvider(bob)).error, isNull);
+      expect(
+        container.read(handleRecoveryProvider(bob)).progress?.handle,
+        bob.handle,
+      );
+      expect(
+        container.read(handleRecoveryProvider(alice)).progress?.canResume,
+        isTrue,
+      );
+      expect(core.otpCalls, 1);
+    },
+  );
+
+  test(
+    'late OTP receipt after closing a scope cannot update another Handle',
+    () async {
+      final pending = Completer<HandleRecoveryOtpResult>();
+      final core = _FakeHandleRecoveryCore(otpCompleter: pending);
+      final container = ProviderContainer(
+        overrides: [
+          handleRecoveryCorePortProvider.overrideWithValue(core),
+          userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+          smsOtpCooldownServiceProvider.overrideWithValue(
+            const NoopSmsOtpCooldownService(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      const alice = (handle: 'alice.awiki.info', localIdentityId: null);
+      const bob = (handle: 'bob.awiki.info', localIdentityId: null);
+      final a = container.listen(handleRecoveryProvider(alice), (_, _) {});
+      final send = container
+          .read(handleRecoveryProvider(alice).notifier)
+          .requestOtp(handle: alice.handle, phone: '+8613800138000');
+      await Future<void>.delayed(Duration.zero);
+      a.close();
+      await Future<void>.delayed(Duration.zero);
+      final b = container.listen(handleRecoveryProvider(bob), (_, _) {});
+      addTearDown(b.close);
+      await container.read(handleRecoveryProvider(bob).notifier).open(bob);
+      pending.complete(
+        HandleRecoveryOtpResult(
+          operation: _operation(),
+          accepted: true,
+          retryAfterSeconds: 0,
+          retryAt: DateTime.utc(2026, 8, 7),
+        ),
+      );
+      await send;
+      expect(container.read(handleRecoveryProvider(bob)).progress, isNull);
+      expect(container.read(handleRecoveryProvider(bob)).error, isNull);
+    },
+  );
+
+  testWidgets('durable post-commit recovery reopens without another OTP', (
+    tester,
+  ) async {
+    final core = _FakeHandleRecoveryCore(
+      exposeDurableOperation: true,
+      operation: _operation(
+        lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+        commitAttempted: true,
+      ),
+    );
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const HandleRecoveryPage(
+          initialHandle: 'alice.awiki.info',
+          initialPhone: '+8613800138000',
+        ),
+        providerOverrides: [
+          handleRecoveryCorePortProvider.overrideWithValue(core),
+          userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(core.otpCalls, 0);
+    expect(core.statusCalls, 1);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('handle-recovery-resume')),
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('handle-recovery-page')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(find.byKey(const Key('handle-recovery-resume')), findsOneWidget);
+    expect(find.text('恢复上下文不匹配；为安全起见本次流程已终止。'), findsNothing);
+  });
+
+  test('lookup failure blocks new OTP and remains retryable', () async {
+    final core = _FakeHandleRecoveryCore(
+      exposeDurableOperation: true,
+      statusError: StateError('unavailable'),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        handleRecoveryCorePortProvider.overrideWithValue(core),
+        userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+        smsOtpCooldownServiceProvider.overrideWithValue(
+          const NoopSmsOtpCooldownService(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    const target = (handle: 'alice.awiki.info', localIdentityId: null);
+    final subscription = container.listen(
+      handleRecoveryProvider(target),
+      (_, _) {},
+    );
+    addTearDown(subscription.close);
+    final controller = container.read(handleRecoveryProvider(target).notifier);
+    await controller.open(target);
+    expect(container.read(handleRecoveryProvider(target)).lookupFailed, isTrue);
+    controller.setRiskConfirmed(true);
+    await controller.requestOtp(handle: target.handle, phone: '+8613800138000');
+    expect(core.otpCalls, 0);
+    core.exposeDurableOperation = false;
+    await controller.open(target);
+    expect(
+      container.read(handleRecoveryProvider(target)).lookupFailed,
+      isFalse,
+    );
+    expect(
+      container.read(handleRecoveryProvider(target)).canRequestOtp,
+      isTrue,
+    );
+  });
+
+  test('duplicate OTP and reopen keep the same in-flight operation', () async {
+    final receipt = Completer<HandleRecoveryOtpResult>();
+    final core = _FakeHandleRecoveryCore(otpCompleter: receipt);
+    final container = ProviderContainer(
+      overrides: [
+        handleRecoveryCorePortProvider.overrideWithValue(core),
+        userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+        smsOtpCooldownServiceProvider.overrideWithValue(
+          const NoopSmsOtpCooldownService(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    const target = (handle: 'alice.awiki.info', localIdentityId: null);
+    final subscription = container.listen(
+      handleRecoveryProvider(target),
+      (_, _) {},
+    );
+    addTearDown(subscription.close);
+    final controller = container.read(handleRecoveryProvider(target).notifier);
+    final first = controller.requestOtp(
+      handle: target.handle,
+      phone: '+8613800138000',
+    );
+    await Future<void>.delayed(Duration.zero);
+    await controller.requestOtp(handle: target.handle, phone: '+8613800138000');
+    expect(core.otpCalls, 1);
+    await controller.open(target);
+    receipt.complete(
+      HandleRecoveryOtpResult(
+        operation: _operation(),
+        accepted: true,
+        retryAfterSeconds: 0,
+        retryAt: DateTime.utc(2026, 8, 7),
+      ),
+    );
+    await first;
+    expect(
+      container.read(handleRecoveryProvider(target)).progress?.operationId,
+      'operation-core-1',
+    );
+    expect(container.read(handleRecoveryProvider(target)).isBusy, isFalse);
+  });
+
   group('Handle Recovery V4 application boundary', () {
     test(
       'Core creates operation and App never supplies an operation id',
@@ -140,10 +732,11 @@ void main() {
       );
     });
 
-    test('restored post-attempt operation requests OTP before prepare', () {
+    test('Core factor retry projection enables operation-bound OTP', () {
       final operation = _operation(
         lifecycleClass: HandleRecoveryLifecycleClass.remoteUnresolved,
         commitAttempted: true,
+        failureCode: HandleRecoveryFailureCode.factorRetryRequired,
       );
       final restored = HandleRecoveryState(
         owner: const HandleRecoveryOwner(
@@ -504,7 +1097,7 @@ void main() {
       );
       final core = _FakeHandleRecoveryCore(
         operation: operation,
-        otpResponseOperation: operation,
+        exposeDurableOperation: true,
       );
       await tester.pumpWidget(
         buildLocalizedTestApp(
@@ -522,16 +1115,13 @@ void main() {
 
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('handle-recovery-handle')), findsOneWidget);
-      expect(find.byKey(const Key('handle-recovery-phone')), findsOneWidget);
-      expect(find.byKey(const Key('handle-recovery-otp')), findsOneWidget);
+      expect(find.byKey(const Key('handle-recovery-phone')), findsNothing);
+      expect(find.byKey(const Key('handle-recovery-otp')), findsNothing);
       await tester.drag(find.byType(Scrollable).first, const Offset(0, -700));
       await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const Key('handle-recovery-still-confirming')),
-        findsOneWidget,
-      );
-      expect(find.textContaining('still being confirmed'), findsOneWidget);
+      expect(find.byKey(const Key('handle-recovery-progress')), findsOneWidget);
+      expect(find.textContaining('not yet confirmed'), findsOneWidget);
       expect(find.byKey(const Key('handle-recovery-cancel-otp')), findsNothing);
       expect(find.byKey(const Key('handle-recovery-resume')), findsOneWidget);
     },
@@ -623,7 +1213,12 @@ void main() {
         );
         final container = ProviderScope.containerOf(context);
         await container
-            .read(handleRecoveryProvider.notifier)
+            .read(
+              handleRecoveryProvider((
+                handle: 'alice.awiki.info',
+                localIdentityId: null,
+              )).notifier,
+            )
             .restoreForOwner(
               scope: const HandleRecoveryIdentityScope(
                 localIdentityId: 'identity-alice',
@@ -631,7 +1226,15 @@ void main() {
               handle: 'alice.awiki.info',
             );
         expect(
-          container.read(handleRecoveryProvider).progress?.isCompleted,
+          container
+              .read(
+                handleRecoveryProvider((
+                  handle: 'alice.awiki.info',
+                  localIdentityId: null,
+                )),
+              )
+              .progress
+              ?.isCompleted,
           isTrue,
         );
         unawaited(
@@ -650,7 +1253,12 @@ void main() {
           find.byKey(const Key('handle-recovery-enter-messages')),
           findsNothing,
         );
-        final state = container.read(handleRecoveryProvider);
+        final state = container.read(
+          handleRecoveryProvider((
+            handle: 'alice.awiki.info',
+            localIdentityId: null,
+          )),
+        );
         expect(state.progress?.isCompleted ?? false, isFalse);
         expect(state.riskConfirmed, isFalse);
         if (otpFails) {
@@ -668,6 +1276,7 @@ void main() {
     tester,
   ) async {
     final core = _FakeHandleRecoveryCore(
+      exposeDurableOperation: true,
       operation: _operation(
         lifecycleClass: HandleRecoveryLifecycleClass.remoteUnresolved,
         commitAttempted: true,
@@ -687,7 +1296,12 @@ void main() {
     final context = tester.element(find.byKey(const Key('recovery-launcher')));
     final container = ProviderScope.containerOf(context);
     await container
-        .read(handleRecoveryProvider.notifier)
+        .read(
+          handleRecoveryProvider((
+            handle: 'alice.awiki.info',
+            localIdentityId: null,
+          )).notifier,
+        )
         .restoreForOwner(
           scope: const HandleRecoveryIdentityScope(
             localIdentityId: 'identity-alice',
@@ -706,8 +1320,20 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final progress = container.read(handleRecoveryProvider).progress;
-    expect(progress?.operationId, 'operation-core-1');
+    final progress = container
+        .read(
+          handleRecoveryProvider((
+            handle: 'alice.awiki.info',
+            localIdentityId: null,
+          )),
+        )
+        .progress;
+    expect(
+      progress?.operationId,
+      'operation-core-1',
+      reason:
+          'lookup=${core.exposeDurableOperation}, statusCalls=${core.statusCalls}, error=${container.read(handleRecoveryProvider((handle: 'alice.awiki.info', localIdentityId: null))).error}',
+    );
     expect(progress?.canResume, isTrue);
     expect(core.lastPhone, isNull);
   });
@@ -1395,12 +2021,15 @@ ProductDeviceRegistrySnapshot _registrySnapshot({
 
 HandleRecoveryProgress _operation({
   String operationId = 'operation-core-1',
+  String handle = 'alice.awiki.info',
+  String ownerIdentityId = 'identity-alice',
   HandleRecoveryLifecycleClass lifecycleClass =
       HandleRecoveryLifecycleClass.preCommit,
   bool commitAttempted = false,
   HandleRecoveryKeyState keyState = HandleRecoveryKeyState.available,
   bool resultAbsent = false,
   bool readyToCommit = false,
+  HandleRecoveryFailureCode? failureCode,
   String? accountUserId = 'account-1',
   String? stateRootFingerprint =
       'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -1408,9 +2037,9 @@ HandleRecoveryProgress _operation({
       HandleRecoveryLocalMigration.supported,
 }) => HandleRecoveryProgress(
   operationId: operationId,
-  ownerIdentityId: 'identity-alice',
+  ownerIdentityId: ownerIdentityId,
   accountUserId: accountUserId,
-  handle: 'alice.awiki.info',
+  handle: handle,
   lifecycleClass: lifecycleClass,
   impact: const HandleRecoveryImpact(
     localOrdinaryDataWillMigrate: true,
@@ -1420,6 +2049,7 @@ HandleRecoveryProgress _operation({
   keyState: keyState,
   resultAbsent: resultAbsent,
   readyToCommit: readyToCommit,
+  failureCode: failureCode,
   localMigration: localMigration,
   discardAllowed:
       lifecycleClass == HandleRecoveryLifecycleClass.preCommit &&
@@ -1430,8 +2060,16 @@ HandleRecoveryProgress _operation({
 );
 
 class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
+  @override
+  Future<List<HandleRecoveryProgress>> listOperationsForHandle(
+    String handle,
+  ) async =>
+      exposeDurableOperation && operation.handle == handle ? [operation] : [];
+
   _FakeHandleRecoveryCore({
     HandleRecoveryProgress? operation,
+    this.exposeDurableOperation = false,
+    this.otpCompleter,
     this.otpResponseOperation,
     this.otpError,
     this.activateResult,
@@ -1445,6 +2083,9 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
     this.beforeActivate,
   }) : operation = operation ?? _operation();
 
+  bool exposeDurableOperation;
+  final Completer<HandleRecoveryOtpResult>? otpCompleter;
+  int otpCalls = 0;
   HandleRecoveryProgress operation;
   final HandleRecoveryProgress? otpResponseOperation;
   final Object? otpError;
@@ -1475,6 +2116,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
     required String phone,
     String? localIdentityId,
   }) async {
+    otpCalls += 1;
     lastHandle = handle;
     lastLocalIdentityId = localIdentityId;
     lastOwner = HandleRecoveryOwner(
@@ -1483,9 +2125,14 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
     );
     lastPhone = phone;
     if (otpError != null) throw otpError!;
+    if (otpCompleter != null) return otpCompleter!.future;
     operation =
         otpResponseOperation ??
-        _operation(accountUserId: null, stateRootFingerprint: null);
+        _operation(
+          handle: handle,
+          accountUserId: null,
+          stateRootFingerprint: null,
+        );
     return HandleRecoveryOtpResult(
       operation: operation,
       accepted: true,

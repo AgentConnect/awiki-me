@@ -32,6 +32,9 @@ abstract interface class HandleRecoveryCorePort {
     HandleRecoveryOwner owner,
   );
 
+  /// Includes unprojected owners; the Core index owns Handle lookup.
+  Future<List<HandleRecoveryProgress>> listOperationsForHandle(String handle);
+
   /// Read-only projection. Implementations must not advance Core state.
   Future<HandleRecoveryProgress> getStatus(String operationId);
 

@@ -86,6 +86,17 @@ class AwikiImCoreHandleRecoveryAdapter
   }
 
   @override
+  Future<List<HandleRecoveryProgress>> listOperationsForHandle(String handle) {
+    return _runRecovery(() async {
+      final instance = await _coreInstance();
+      final operations = await instance.listHandleRecoveryOperations(
+        core.IdentitySelector.handle(handle),
+      );
+      return operations.map(_operationFromSummary).toList(growable: false);
+    });
+  }
+
+  @override
   Future<HandleRecoveryProgress> prepare({
     required String operationId,
     required String phone,

@@ -3690,4 +3690,60 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get legacyIdentityUpgradeFailed =>
       'The legacy identity upgrade failed. Please try again.';
+
+  @override
+  String get handleRecoveryFactorExpired =>
+      'Verification has expired. Request a new code to continue the same recovery.';
+
+  @override
+  String get handleRecoveryFreshDataNotice =>
+      'No previous identity data is available on this device. Earlier direct messages will not be restored automatically.';
+
+  @override
+  String get handleRecoveryEncryptionNotice =>
+      'Previous end-to-end encryption keys will not be restored. Some encrypted messages and groups will remain unavailable.';
+
+  @override
+  String get handleRecoveryDetails => 'View detailed effects';
+
+  @override
+  String get handleRecoveryNeedsAttention =>
+      'Recovery needs attention. Your progress has been preserved.';
+
+  @override
+  String get handleRecoveryAwaitingResult =>
+      'The recovery result is not yet confirmed. Continue checking the existing recovery.';
+
+  @override
+  String get handleRecoveryAwaitingLocal =>
+      'Account recovery has taken effect. Continue setup on this device; no new SMS code is needed.';
+
+  @override
+  String get handleRecoveryChecking => 'Checking recovery progress…';
+
+  @override
+  String get handleRecoverySendingOtp => 'Sending verification code…';
+
+  @override
+  String get handleRecoveryVerifying => 'Verifying phone number…';
+
+  @override
+  String get handleRecoveryAuthenticating => 'Complete system authentication.';
+
+  @override
+  String get handleRecoveryRunning => 'Continuing recovery…';
+
+  @override
+  String get handleRecoveryEntering =>
+      'Recovery is complete. Opening messages…';
+
+  @override
+  String get handleRecoveryContinueExisting => 'Continue previous recovery';
+
+  @override
+  String get handleRecoverySlowOperation =>
+      'This step is taking longer than usual. Check your connection and system prompts. The current operation is still running; do not submit again.';
+
+  @override
+  String get handleRecoveryCancelBeforeCommit => 'Cancel this recovery';
 }

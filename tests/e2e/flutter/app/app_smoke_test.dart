@@ -35,6 +35,11 @@ import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/startup_splash.dart';
 import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
+import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
+import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
+import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
+import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPageRoute, Navigator;
 import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
@@ -202,6 +207,40 @@ Future<void> _activateRuntimeSession(
       .activateCommittedSession(committed);
 }
 
+class _PendingRecoverySmokeCore implements HandleRecoveryCorePort {
+  final progress = HandleRecoveryProgress(
+    operationId: 'smoke-pending-recovery',
+    ownerIdentityId: 'smoke-owner',
+    accountUserId: 'smoke-account',
+    handle: 'smoke.awiki.me',
+    lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+    impact: const HandleRecoveryImpact(
+      localOrdinaryDataWillMigrate: true,
+      otherDevicesMustRejoin: true,
+    ),
+    commitAttempted: true,
+    keyState: HandleRecoveryKeyState.available,
+    resultAbsent: false,
+    readyToCommit: false,
+    localMigration: HandleRecoveryLocalMigration.supported,
+    discardAllowed: false,
+    stateRootFingerprint:
+        'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    createdAt: DateTime.utc(2026),
+    updatedAt: DateTime.utc(2026),
+  );
+  @override
+  Future<List<HandleRecoveryProgress>> listOperationsForHandle(
+    String handle,
+  ) async => handle == progress.handle ? [progress] : [];
+  @override
+  Future<HandleRecoveryProgress> getStatus(String operationId) async =>
+      progress;
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw StateError('smoke_does_not_authorize_recovery_mutations');
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   tearDownAll(E2eInvocationCompletionWriter.markFinished);
@@ -254,6 +293,46 @@ void main() {
     expect(presentation.callCount, 1);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'Recovery continuation renders without verification or commit controls',
+    (tester) async {
+      final harness = createFakeAwikiMeAppHarness();
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: harness.bootstrap,
+          providerOverrides: [
+            ...harness.providerOverrides,
+            handleRecoveryCorePortProvider.overrideWithValue(
+              _PendingRecoverySmokeCore(),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      unawaited(
+        Navigator.of(tester.element(find.byType(OnboardingPage))).push<void>(
+          CupertinoPageRoute(
+            builder: (_) => const HandleRecoveryPage(
+              initialHandle: 'smoke.awiki.me',
+              initialPhone: '',
+              autoRequestOtp: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('handle-recovery-resume')), findsOneWidget);
+      expect(find.byKey(const Key('handle-recovery-otp')), findsNothing);
+      expect(find.byKey(const Key('handle-recovery-activate')), findsNothing);
+      expect(
+        find.byKey(const Key('handle-recovery-risk-confirmation')),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('handle-recovery-busy')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('AwikiMeApp starts with fake bootstrap and shows onboarding', (
     tester,

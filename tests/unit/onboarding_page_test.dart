@@ -2273,6 +2273,109 @@ void main() {
     );
   });
 
+  testWidgets('本地未完成恢复优先进入续跑，不再次注册或发送恢复验证码', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final recovery = _RecordingHandleRecoveryCorePort(
+      operation: HandleRecoveryProgress(
+        operationId: 'durable-operation',
+        ownerIdentityId: 'unprojected-owner',
+        accountUserId: 'test-account',
+        handle: 'alice.awiki.me',
+        lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+        impact: const HandleRecoveryImpact(
+          localOrdinaryDataWillMigrate: true,
+          otherDevicesMustRejoin: true,
+        ),
+        commitAttempted: true,
+        keyState: HandleRecoveryKeyState.available,
+        resultAbsent: false,
+        readyToCommit: false,
+        localMigration: HandleRecoveryLocalMigration.supported,
+        discardAllowed: false,
+        stateRootFingerprint:
+            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        createdAt: DateTime.utc(2026, 8, 7),
+        updatedAt: DateTime.utc(2026, 8, 7),
+      ),
+    );
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        gateway: gateway,
+        providerOverrides: [
+          handleRecoveryCorePortProvider.overrideWithValue(recovery),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.enterText(fields.at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pumpAndSettle();
+    expect(find.byType(HandleRecoveryPage), findsOneWidget);
+    expect(gateway.registerHandleCalls, 0);
+    expect(recovery.handle, isNull); // No recovery OTP request.
+    expect(
+      recovery.statusCalls,
+      3,
+    ); // Proactive lookup, submit guard, route reopen.
+  });
+
+  testWidgets('输入 Handle 后可直接继续恢复，无需普通登录短信', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final recovery = _RecordingHandleRecoveryCorePort(
+      operation: HandleRecoveryProgress(
+        operationId: 'durable-operation',
+        ownerIdentityId: 'unprojected-owner',
+        accountUserId: 'test-account',
+        handle: 'alice.awiki.me',
+        lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+        impact: const HandleRecoveryImpact(
+          localOrdinaryDataWillMigrate: true,
+          otherDevicesMustRejoin: true,
+        ),
+        commitAttempted: true,
+        keyState: HandleRecoveryKeyState.available,
+        resultAbsent: false,
+        readyToCommit: false,
+        localMigration: HandleRecoveryLocalMigration.supported,
+        discardAllowed: false,
+        stateRootFingerprint:
+            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        createdAt: DateTime.utc(2026, 8, 7),
+        updatedAt: DateTime.utc(2026, 8, 7),
+      ),
+    );
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        gateway: gateway,
+        providerOverrides: [
+          handleRecoveryCorePortProvider.overrideWithValue(recovery),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('onboarding-continue-recovery')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(HandleRecoveryPage), findsOneWidget);
+    expect(gateway.registerHandleCalls, 0);
+    expect(recovery.handle, isNull); // No recovery OTP request.
+    expect(recovery.statusCalls, 2); // Login discovery and route reopen.
+  });
+
   testWidgets('已有 Handle 可进入新机器恢复且复用已验证的 Handle 和手机号', (tester) async {
     final defaultInfo = OnboardingServerInfo.userServiceDefault();
     final gateway = FakeAwikiGateway()
@@ -2561,6 +2664,20 @@ class _RecordingUserPresence implements UserPresencePort {
 }
 
 class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
+  @override
+  Future<List<HandleRecoveryProgress>> listOperationsForHandle(
+    String handle,
+  ) async => operation?.handle == handle ? [operation!] : [];
+
+  _RecordingHandleRecoveryCorePort({this.operation});
+  final HandleRecoveryProgress? operation;
+  int statusCalls = 0;
+  @override
+  Future<HandleRecoveryProgress> getStatus(String operationId) async {
+    statusCalls += 1;
+    return operation!;
+  }
+
   String? handle;
   String? phone;
   String? localIdentityId;
