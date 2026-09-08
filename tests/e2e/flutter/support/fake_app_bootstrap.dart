@@ -131,6 +131,21 @@ class FakeDirectoryApplicationService implements DirectoryApplicationService {
   final FakeAwikiGateway gateway;
 
   @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  }) async => [
+    for (final did in dids)
+      if (gateway.publicProfilesByQuery[did] case final profile?)
+        PeerDisplayProfile(
+          did: did,
+          displayName: profile.displayName,
+          handle: profile.fullHandle ?? profile.handle,
+          avatarUri: profile.avatarUri,
+        ),
+  ];
+
+  @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
   ) async => const <PeerDisplayProfile>[];

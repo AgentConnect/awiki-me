@@ -303,6 +303,9 @@ class _RelationshipService implements RelationshipApplicationService {
 
 class _EmptyDirectoryService implements DirectoryApplicationService {
   @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(Iterable<String> dids, {bool force = false}) async => const <PeerDisplayProfile>[];
+
+  @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
   ) async {

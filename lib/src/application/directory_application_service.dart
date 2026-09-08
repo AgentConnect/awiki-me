@@ -2,6 +2,11 @@ import '../domain/entities/peer_display_profile.dart';
 import 'ports/directory_core_port.dart';
 
 abstract interface class DirectoryApplicationService {
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  });
+
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
   );
@@ -17,6 +22,14 @@ class ImCoreDirectoryApplicationService implements DirectoryApplicationService {
   }) : _directory = directory;
 
   final DirectoryCorePort _directory;
+
+  @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  }) {
+    return _directory.refreshDisplayProfiles(dids, force: force);
+  }
 
   @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(

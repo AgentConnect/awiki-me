@@ -190,6 +190,9 @@ class _FakeDirectory implements DirectoryCorePort {
   final List<List<String>> cachedProfileRequests = <List<String>>[];
 
   @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(Iterable<String> dids, {bool force = false}) async => const <PeerDisplayProfile>[];
+
+  @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
   ) async {

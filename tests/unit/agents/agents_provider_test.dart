@@ -4826,6 +4826,9 @@ class _BlockingDirectoryApplicationService
   }
 
   @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(Iterable<String> dids, {bool force = false}) async => const <PeerDisplayProfile>[];
+
+  @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
   ) async => const <PeerDisplayProfile>[];
@@ -4853,6 +4856,9 @@ class _EventuallyAvailableDirectoryApplicationService
 
   final int failuresBeforeSuccess;
   int resolveAttempts = 0;
+
+  @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(Iterable<String> dids, {bool force = false}) async => const <PeerDisplayProfile>[];
 
   @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(

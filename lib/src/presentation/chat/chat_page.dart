@@ -721,6 +721,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
   @override
   void initState() {
     super.initState();
+    _groupDisplayRefreshTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _refreshVisibleGroupProfiles(),
+    );
     _displayThreadId = _timelineDisplayThreadId(widget.conversation);
     scrollController = _ChatTimelineScrollController(
       onUserScrollStart: _handleUserScrollStart,
@@ -753,6 +757,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   @override
   void dispose() {
+    _groupDisplayRefreshTimer?.cancel();
     _conversationVisibilityToken += 1;
     _cancelPendingScrollRequests();
     if (_messagesDestinationActive) {
@@ -996,12 +1001,18 @@ class _ChatViewState extends ConsumerState<ChatView> {
           _handleThreadChanged(previous, next, currentConversation),
     );
     final messages = thread.messages;
+
     final mentionGroupDid = _mentionGroupDidForConversation(
       currentConversation,
     );
     final mentionGroupMembers = mentionGroupDid == null
         ? const <GroupMemberSummary>[]
         : ref.watch(groupMembersProvider(mentionGroupDid));
+    if (currentConversation.isGroup) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _refreshVisibleGroupProfiles(),
+      );
+    }
     final peerDisplayProfiles = ref.watch(peerDisplayProfileProvider);
     final currentSession = ref.watch(sessionProvider).session;
     final currentSessionDid = currentSession?.did.trim();
@@ -2617,6 +2628,37 @@ class _ChatViewState extends ConsumerState<ChatView> {
       });
       _acknowledgeCurrentVisibleConversationRead(reason: 'scroll_bottom');
     }
+  }
+
+  Timer? _groupDisplayRefreshTimer;
+
+  void _refreshVisibleGroupProfiles() {
+    if (!mounted ||
+        !_messagesDestinationActive ||
+        !widget.conversation.isGroup ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.paused ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.hidden) {
+      return;
+    }
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (epoch == null) return;
+    final messages = ref.read(chatThreadProvider(_displayThreadId)).messages;
+    final groupDid = _mentionGroupDidForConversation(widget.conversation);
+    final members = groupDid == null
+        ? const <GroupMemberSummary>[]
+        : ref.read(groupMembersProvider(groupDid));
+    unawaited(
+      ref
+          .read(peerDisplayProfileProvider.notifier)
+          .refreshDisplayProfiles(
+            ownerDid: epoch.ownerDid,
+            dids: {
+              ...messages.map((message) => message.senderDid),
+              ...members.map((member) => member.did),
+            },
+            expectedEpoch: epoch,
+          ),
+    );
   }
 
   void _handleThreadChanged(

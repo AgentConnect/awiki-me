@@ -24,6 +24,74 @@ SessionIdentity _ownerSession() {
 }
 
 void main() {
+  test('群展示刷新合并请求，失败保留缓存，成功空名称清除旧值', () async {
+    final directory = _DisplayRefreshDirectoryService();
+    final container = ProviderContainer(
+      overrides: [
+        directoryApplicationServiceProvider.overrideWithValue(directory),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(peerDisplayProfileProvider.notifier);
+    controller.updateFromRemote(
+      ownerDid: _ownerDid,
+      profile: const UserProfile(
+        did: 'did:test:guest',
+        nickName: 'Old Guest',
+        bio: '',
+        tags: [],
+        profileMarkdown: '',
+      ),
+    );
+    final first = controller.refreshDisplayProfiles(
+      ownerDid: _ownerDid,
+      dids: ['did:test:guest'],
+    );
+    final same = controller.refreshDisplayProfiles(
+      ownerDid: _ownerDid,
+      dids: ['did:test:guest'],
+    );
+    expect(directory.calls, 1);
+    directory.result.completeError(StateError('offline'));
+    await Future.wait([first, same]);
+    expect(
+      container
+          .read(peerDisplayProfileProvider)
+          .forDid('did:test:guest')
+          ?.displayName,
+      'Old Guest',
+    );
+    directory.result = Completer<List<PeerDisplayProfile>>();
+    final retry = controller.refreshDisplayProfiles(
+      ownerDid: _ownerDid,
+      dids: ['did:test:guest'],
+      force: true,
+    );
+    directory.result.complete([
+      const PeerDisplayProfile(did: 'did:test:guest', handle: 'guest.test'),
+    ]);
+    await retry;
+    expect(directory.calls, 2);
+    expect(
+      resolvePeerDisplayName(
+        container.read(peerDisplayProfileProvider),
+        const PeerDisplayNameRequest(
+          did: 'did:test:guest',
+          nickname: 'Old Guest',
+          senderNameSnapshot: 'Old Guest',
+        ),
+      ),
+      'guest',
+    );
+    expect(
+      container
+          .read(peerDisplayProfileProvider)
+          .forDid('did:test:guest')
+          ?.displayName,
+      isNull,
+    );
+  });
+
   test('本地 profile 投影按 owner 隔离且同一 DID 不重复读取', () async {
     final directory = _CachedDirectoryService();
     final container = ProviderContainer(
@@ -592,6 +660,12 @@ class _CachedDirectoryService implements DirectoryApplicationService {
   final List<Set<String>> requests = <Set<String>>[];
 
   @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  }) async => const <PeerDisplayProfile>[];
+
+  @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
   ) async {
@@ -703,6 +777,12 @@ class _BlockingRemoteProfileService implements ProfileApplicationService {
 
 class _EmptyCachedDirectoryService implements DirectoryApplicationService {
   @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  }) async => const <PeerDisplayProfile>[];
+
+  @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
   ) async => const <PeerDisplayProfile>[];
@@ -726,6 +806,12 @@ class _FallbackCachedDirectoryService implements DirectoryApplicationService {
 
   final bool isStale;
   final bool legacyFallback;
+
+  @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  }) async => const <PeerDisplayProfile>[];
 
   @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
@@ -768,6 +854,12 @@ class _DelayedCachedDirectoryService implements DirectoryApplicationService {
   }
 
   @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  }) async => const <PeerDisplayProfile>[];
+
+  @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
   ) => _profiles.future;
@@ -780,5 +872,19 @@ class _DelayedCachedDirectoryService implements DirectoryApplicationService {
   @override
   Future<DirectoryPeerResolution> resolvePeer(String peer) {
     throw UnimplementedError();
+  }
+}
+
+class _DisplayRefreshDirectoryService extends _EmptyCachedDirectoryService {
+  int calls = 0;
+  Completer<List<PeerDisplayProfile>> result =
+      Completer<List<PeerDisplayProfile>>();
+  @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  }) {
+    calls += 1;
+    return result.future;
   }
 }

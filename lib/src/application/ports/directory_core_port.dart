@@ -20,6 +20,11 @@ class DirectoryPeerResolution {
 }
 
 abstract interface class DirectoryCorePort {
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  });
+
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
   );
