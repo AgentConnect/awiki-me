@@ -329,6 +329,9 @@ final class _Sessions
       sessionLeaseFor(session);
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) =>
       throw UnimplementedError();
 

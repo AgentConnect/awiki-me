@@ -7,6 +7,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  const defaultChannel = MethodChannel('ai.awiki.awikime/attachment_picker');
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          defaultChannel,
+          (call) async =>
+              call.method == 'preflightScreenCapturePermission' ? true : null,
+        );
+  });
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(defaultChannel, null);
+  });
 
   test('Windows Dart capture watchdog runs after the native timeout', () {
     final service = MethodChannelAttachmentPickerService(windowsPlatform: true);
@@ -308,7 +321,9 @@ void main() {
       expect(channelCalls.map((call) => call.method), <String>[
         'preflightScreenCapturePermission',
         'requestScreenCapturePermission',
+        'screenCaptureDiagnostics',
         'preflightScreenCapturePermission',
+        'screenCaptureDiagnostics',
       ]);
     },
   );

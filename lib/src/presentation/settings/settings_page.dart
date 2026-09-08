@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_locale.dart';
 import '../../app/app_router.dart';
+import '../../app/app_services.dart';
 import '../../application/tenant/app_tenant.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../domain/services/update_service.dart';
@@ -244,7 +245,12 @@ class SettingsPage extends ConsumerWidget {
             ),
             onTap: session == null
                 ? null
-                : () => _showDeleteCredentialDialog(context, runtime, session),
+                : () => _showDeleteCredentialDialog(
+                    context,
+                    ref,
+                    runtime,
+                    session,
+                  ),
           ),
         ],
       ),
@@ -448,8 +454,12 @@ class SettingsPage extends ConsumerWidget {
               height: optionRowHeight,
               onTap: session == null
                   ? null
-                  : () =>
-                        _showDeleteCredentialDialog(context, runtime, session),
+                  : () => _showDeleteCredentialDialog(
+                      context,
+                      ref,
+                      runtime,
+                      session,
+                    ),
             ),
           ],
         ),
@@ -572,6 +582,7 @@ class SettingsPage extends ConsumerWidget {
 
   void _showDeleteCredentialDialog(
     BuildContext context,
+    WidgetRef ref,
     AppRuntimeController runtime,
     SessionIdentity identity,
   ) {
@@ -579,6 +590,9 @@ class SettingsPage extends ConsumerWidget {
       context,
       (ctx) => LocalCredentialDeleteDialog(
         identity: identity,
+        loadRecoveryImpact: () => ref
+            .read(appSessionServiceProvider)
+            .hasPendingLocalIdentityRecovery(identity.localIdentitySelector),
         signsOut: true,
         onConfirm: () async {
           Navigator.of(ctx).pop();

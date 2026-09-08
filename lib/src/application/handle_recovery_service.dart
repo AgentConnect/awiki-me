@@ -157,7 +157,9 @@ class HandleRecoveryService {
     final normalizedOperationId = _validatedOperationId(operationId);
     final current = await status(normalizedOperationId);
     if (isCurrent != null && !isCurrent()) {
-      throw const HandleRecoveryFailure(HandleRecoveryFailureCode.actionNotAllowed);
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.actionNotAllowed,
+      );
     }
     if (current.isCompleted) {
       return current;
@@ -414,7 +416,8 @@ void _validateOperation(
     HandleRecoveryLifecycleClass.discardedPreAttempt ||
     HandleRecoveryLifecycleClass.quarantinedKeyUnavailable ||
     HandleRecoveryLifecycleClass.supersededByStateChange ||
-    HandleRecoveryLifecycleClass.failedTerminal => false,
+    HandleRecoveryLifecycleClass.failedTerminal ||
+    HandleRecoveryLifecycleClass.locallyDeleted => false,
   };
   if ((stateRootRequired &&
           !_isSha256Fingerprint(operation.stateRootFingerprint)) ||

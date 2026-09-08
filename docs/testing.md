@@ -204,6 +204,36 @@ requirement 由证书和 identifier 构成而不是 `cdhash`。截图服务还�
 未生效时单进程只请求一次授权，并且不得启动 `/usr/sbin/screencapture` 或接收只有桌面的
 图片。
 
+### macOS 截图权限恢复回归
+
+本地自动化：
+
+```bash
+flutter test tests/unit/screenshot_permission_service_test.dart tests/unit/screenshot_permission_dialog_test.dart tests/unit/chat_screenshot_recovery_test.dart tests/unit/attachment_picker_service_test.dart tests/unit/app_message_test.dart tests/unit/macos_window_configuration_test.dart
+```
+
+覆盖拒绝后授权恢复、并发截图合并、原生接口缺失/异常 fail-closed、取消与执行失败分类、
+可选诊断失败降级、实际应用元数据、中英文、窄窗口、Escape 关闭和设置/复制失败，
+以及默认隐藏技术信息、分层展开、键盘展开/收起、固定底部操作和“暂不设置”无副作用。
+这属于本地平台适配与 UI（L1），不改变服务端、身份、存储或跨服务协议，System Test 无新增合同。
+已有 `tests/e2e/flutter/app/app_smoke_test.dart` 的截图入口使用 fake picker，不能证明真实 TCC 授权。
+
+真实 Mac 手动验收（系统权限只能由操作者确认，不在自动测试中重置）：
+
+1. 启动本次 Debug 构建，进入会话截图。权限未生效时只能出现一个恢复窗口，不能暂存图片。
+2. 首屏不应展示路径、Bundle ID、Debug/Release 或复制入口。展开“已开启权限，仍无法截图？”
+   和“查看排查信息”后核对这些信息；点击复制前不写剪贴板，复制内容不含账号或截图。
+   窄窗口滚动说明时，设置与暂不设置按钮仍可见；暂不设置仅关闭窗口，继续使用聊天。
+3. 点击设置，确认进入屏幕录制页面；自动打开失败时使用窗口中的手动路径。
+4. 授权实际运行的 App，完全退出后重开，再截图应能暂存附件；Esc 取消系统截图不产生附件。
+5. 若开关已开但仍失败，退出 App 后移除旧条目，再添加窗口标明路径的 App、授权并重开。
+   这是一次性系统授权恢复，不是数据迁移；不要清理数据库、Vault 或重置其他应用权限。
+6. 同一稳定签名和 Bundle ID 的新构建覆盖后复测；开发签名切换为正式签名时应允许系统要求重新授权。
+   正式版和 Debug 版分别检查，不能用一个版本的授权证明另一个版本已获授权。
+
+原生 bridge 修改需重新构建 Mac Debug App；热重载不能更新 Swift。稳定签名配置继续复用
+`macos/Runner/Configs/LocalSigning.xcconfig.example`，不将证书或本机配置提交到仓库。
+
 The repository configures `package:sqlite3` to use the system SQLite library
 through `hooks.user_defines.sqlite3.source: system`. This keeps the test gates
 from downloading a prebuilt SQLite dylib from GitHub during native asset build

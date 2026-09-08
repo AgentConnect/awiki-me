@@ -321,14 +321,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'The previous device Join is ending safely. Wait briefly, then send a new verification code and try again.';
 
   @override
-  String get identityDeletionDiscardRecoveryFirst =>
-      'A recovery request is waiting for verification. Discard that recovery request before deleting this identity.';
-
-  @override
-  String get identityDeletionResumeRecoveryFirst =>
-      'Identity recovery has already started. Resume it to a safe result before deleting this identity.';
-
-  @override
   String get identityDeletionCompleteTransitionFirst =>
       'An identity transition is still being applied. Complete it before deleting this identity.';
 
@@ -1898,7 +1890,56 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get screenshotPermissionRequired =>
-      'Screen Recording permission is not active. Allow the current AWiki Me app under Screen & System Audio Recording in System Settings, then quit and reopen it.';
+      'macOS requires Screen Recording permission to take screenshots. Allow AWiki Me in System Settings, then quit and reopen the app.';
+
+  @override
+  String get screenshotPermissionTitle => 'Allow screenshots';
+
+  @override
+  String get screenshotPermissionRecovery =>
+      'Quit AWiki Me completely, reopen it and try taking a screenshot.\n\nIf it still does not work, quit the app and remove the old AWiki Me entry in Screen Recording settings. Add and allow the app at the location below, then reopen it. This only changes system permission, not your chat history.';
+
+  @override
+  String get screenshotPermissionSettings => 'Open System Settings';
+
+  @override
+  String get screenshotPermissionLater => 'Not now';
+
+  @override
+  String get screenshotPermissionHelp =>
+      'Already allowed, but still unable to capture?';
+
+  @override
+  String get screenshotShowDiagnostics => 'Troubleshooting details';
+
+  @override
+  String get screenshotPermissionSettingsFailed =>
+      'Could not open settings automatically. Open System Settings → Privacy & Security → Screen & System Audio Recording manually.';
+
+  @override
+  String get screenshotPermissionCheckFailed =>
+      'Screenshots are temporarily unavailable. Quit and reopen AWiki Me, then try again.';
+
+  @override
+  String get screenshotCaptureFailed =>
+      'Could not complete the screenshot. Try again. If this continues, save an image with the system screenshot tool and add it as an attachment.';
+
+  @override
+  String get screenshotCurrentApplication => 'Currently running app';
+
+  @override
+  String get screenshotApplicationUnavailable =>
+      'Could not read app information. Check which version and installation you are running.';
+
+  @override
+  String get screenshotBuildMode => 'Build mode';
+
+  @override
+  String get screenshotCopyDiagnostics => 'Copy troubleshooting details';
+
+  @override
+  String get screenshotDiagnosticsPrivacy =>
+      'Copied details include the version and app location (which may contain your computer username), but no account or screenshot. Review before sharing.';
 
   @override
   String get chatRemoveAttachment => 'Remove attachment';
@@ -3698,4 +3739,12 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get legacyIdentityUpgradeFailed =>
       'The legacy identity upgrade failed. Please try again.';
+
+  @override
+  String get localCredentialDeleteRecoveryHint =>
+      'This also clears the unfinished recovery progress on this device.';
+
+  @override
+  String get localCredentialDeleteInspectFailed =>
+      'Unable to check the local identity state. Please retry.';
 }

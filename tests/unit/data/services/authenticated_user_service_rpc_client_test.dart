@@ -309,6 +309,9 @@ class _FakeSessions
       sessionLeaseFor(_current);
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async =>
       _current ?? _session(jwtToken: null);
 

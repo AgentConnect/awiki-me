@@ -148,6 +148,9 @@ class _FakeSessions
   Future<void> logout() async {}
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
     deletedIdentities.add(identityIdOrAlias);
     return _defaultSession ?? _session(identityIdOrAlias);

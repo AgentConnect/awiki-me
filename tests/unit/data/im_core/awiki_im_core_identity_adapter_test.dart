@@ -6,6 +6,35 @@ import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'deletion impact reads the exact Core identity and preserves errors',
+    () async {
+      final native = _IdentityErrorCore();
+      final adapter = AwikiImCoreIdentityAdapter.withCoreInstance(
+        coreInstance: () async => native,
+      );
+      expect(
+        await adapter.hasPendingLocalIdentityRecovery('identity-alice'),
+        isFalse,
+      );
+      native.pendingRecovery = true;
+      expect(
+        await adapter.hasPendingLocalIdentityRecovery('identity-alice'),
+        isTrue,
+      );
+      expect(native.impactSelectors, hasLength(2));
+      for (final selector in native.impactSelectors) {
+        expect(selector, isA<core.IdIdentitySelector>());
+        expect((selector as core.IdIdentitySelector).id, 'identity-alice');
+      }
+      native.impactError = StateError('local store unavailable');
+      await expectLater(
+        adapter.hasPendingLocalIdentityRecovery('identity-alice'),
+        throwsStateError,
+      );
+    },
+  );
+
   test('dotless local alias falls back after identity id lookup', () {
     final selectors = identitySelectorCandidates('cgw-038');
 
@@ -243,8 +272,6 @@ void main() {
     'adapter maps every stable guard through all deletion entries',
     () async {
       const codes = <String>[
-        'handle_recovery.precommit_discard_required',
-        'handle_recovery.operation_must_resume',
         'handle_recovery.transition_must_complete',
         'handle_recovery.join_must_complete',
         'identity.local_data_deletion_pending',
@@ -290,6 +317,18 @@ const _recoveryStateError = core.AwikiImCoreException(
 );
 
 class _IdentityErrorCore implements core.AwikiImCore {
+  bool pendingRecovery = false;
+  Object? impactError;
+  final impactSelectors = <core.IdentitySelector>[];
+  @override
+  Future<bool> hasPendingLocalIdentityRecovery(
+    core.IdentitySelector selector,
+  ) async {
+    impactSelectors.add(selector);
+    if (impactError != null) throw impactError!;
+    return pendingRecovery;
+  }
+
   Object? registrationError;
   Object? joinError;
   Object? upgradeError;

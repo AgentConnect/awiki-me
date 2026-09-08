@@ -1854,6 +1854,9 @@ class FakeAppSessionService
   }
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
     final identities = await gateway.listLocalCredentials();
     final deletedIdentity = identities.cast<SessionIdentity?>().firstWhere(
@@ -4360,6 +4363,9 @@ class FakeIdentityCorePort
       displayName: displayName ?? defaultSession.handle ?? defaultSession.did,
     );
   }
+
+  @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async =>

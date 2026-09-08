@@ -244,6 +244,9 @@ class _Sessions with AppSessionTransitionGuard implements AppSessionService {
       sessionLeaseFor(session);
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) =>
       throw UnimplementedError();
 

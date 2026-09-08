@@ -289,6 +289,9 @@ class _FakeIdentities implements IdentityCorePort, LegacyIdentityUpgradePort {
   }
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {
     throw UnsupportedError('unsupported');
   }
@@ -337,6 +340,9 @@ class _FakeSessions
 
   @override
   Future<void> logout() async {}
+
+  @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {

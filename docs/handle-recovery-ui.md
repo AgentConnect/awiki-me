@@ -229,3 +229,23 @@ fixture 失败被误记为 passed。
 `dart run tests/e2e/runner.dart --case handle-recovery-state-machine --config <受保护配置>` 复用现有单 App runner，登记 TARGET/RESUME/REPEAT 三项独立 attestation。两个隔离测试 Handle 通过真实 Settings/统一登录入口验证迟到 error/finally、B 在途 busy 和会话/反馈/路由保持、Core 同 Scope 重开后精确续跑、UI 删除后同进程第二次完整 Recovery。故障 seam 仅在 `tests/e2e/`：为同一已经准备并确认的 operation 用公开 native Core+相同测试 Vault 打开一次 Commit-only loopback proxy；Commit 的成功响应来自真实服务，之后故意阻断 WNS 本地收尾前检查，不合成业务结果。测试认证使用已有 E2E `UserPresencePort`，不代表真实 OS 认证通过。失败时保留可能未决的隔离恢复材料，不自动删除。
 
 页面 scoped provider 销毁后，旧 E2E 观察器只能保存 Core 实际返回的完成投影供后续会话/导航断言，不能从根容器读取已不存在的全局 Recovery UI 状态；仍可见的阶段必须检查当前页面的实际 scoped state。
+
+## 显式本地删除与恢复（2026-09-08）
+
+用户确认删除本地身份时，Core 统一结束关联恢复并清理材料，包括远端结果不明或本地切换尚未完成的操作；不要求先继续恢复，不撤销服务器状态。没有删除的用户仍使用原有精确 operation 续跑。
+
+删除弹窗通过 Core 的只读 owner/完整 Handle 查询获取实际影响：仅存在未完成恢复时附加“同时会清除本机尚未完成的恢复进度”。无恢复及已结束的历史不显示该说明。查询期间禁止确认、允许取消；查询失败可原地重试。
+
+Schema 44 的本地删除终态与幂等清理由 Core 所有；App 不删除 Vault/SQLite 文件、不伪造恢复成功。删除类型与其他身份的隔离保持原有边界。
+
+本地开发验证覆盖弹窗有／无恢复、查询等待／取消／失败重试、Core 删除失败后保留当前会话、恢复已切换 DID 后按同一稳定 owner 的删除单清理，以及删除终态的 SDK 映射。Core 测试使用隔离 Vault 和真实本地 custody，覆盖各恢复阶段、删除中断重开、旧任务写入阻断、其他身份不受影响与删除后新建恢复；不发送真实短信。
+
+对应 System 删除合同、driver 和 App `handle-recovery` E2E 的旧“先 discard 才能删除”断言同步改为直接删除。2026-09-08 本次仅执行本地测试、合同检查及编译；真实后端 System／App E2E 未执行，正式发布前仍须补跑。
+
+本次验证命令与结果（定向集合有重叠，不相加）：
+
+- App：`flutter test tests/unit/local_credential_delete_dialog_test.dart tests/unit/onboarding_page_test.dart tests/unit/application/app_session_service_test.dart tests/unit/app_runtime_archive_actions_test.dart tests/unit/handle_recovery_flow_test.dart tests/unit/data/im_core/awiki_im_core_identity_adapter_test.dart tests/unit/data/im_core/awiki_im_core_handle_recovery_adapter_test.dart tests/unit/settings_page_test.dart`：222 通过。移除旧错误文案后，`flutter test tests/unit/app_message_test.dart tests/unit/data/im_core/awiki_im_core_identity_adapter_test.dart tests/unit/local_credential_delete_dialog_test.dart`：28 通过。
+- App：`flutter analyze` 无问题；`dart run tool/validate_test_catalog.dart` 校验通过。
+- Core：`cargo test -p awiki-im-core --lib deletion --locked`：30 通过；同命令过滤 `identity_handle_recovery`：66 通过；过滤 `local_state::schema::tests`：50 通过。完成态迟到写入防护调整后，`cargo test -p awiki-im-core --lib deleted_recovered_owner --locked` 再次通过。
+- SDK：`cargo check -p awiki-im-core-node --locked`、`cargo check -p im-core-dart --locked`、`bash scripts/flutter/codegen-check.sh` 通过；Dart SDK 的 `dart test test/identity_api_test.dart test/handle_recovery_api_test.dart`：10 通过。
+- System：`uv run pytest tests/non_did/test_case_catalog.py tests/non_did/test_handle_recovery_v1_contract.py -k 'not test_model_recovery_attestation_is_retired_without_removing_v4_or_mail_owner' -q`：40 通过。排除的单项已单独确认失败：Model Proxy 的 HEAD 仍有 `/api/identity-recovery` 路由，而既有合同要求其不存在；本次未修改该服务。

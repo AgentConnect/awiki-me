@@ -220,7 +220,7 @@ class AppConfirmationDialog extends StatelessWidget {
   final String title;
   final String message;
   final String confirmLabel;
-  final VoidCallback onConfirm;
+  final VoidCallback? onConfirm;
   final String? cancelLabel;
   final VoidCallback? onCancel;
   final bool destructive;

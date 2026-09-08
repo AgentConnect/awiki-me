@@ -72,6 +72,7 @@ enum HandleRecoveryLifecycleClass {
   quarantinedKeyUnavailable,
   supersededByStateChange,
   failedTerminal,
+  locallyDeleted,
 }
 
 enum HandleRecoveryKeyState {
@@ -79,6 +80,7 @@ enum HandleRecoveryKeyState {
   temporarilyLocked,
   permanentlyUnavailable,
   destroyedPreAttempt,
+  destroyedByDeletion,
 }
 
 /// V4.0 exposes only the minimum pre-commit migration decision. Transparent
@@ -261,7 +263,8 @@ class HandleRecoveryProgress {
     HandleRecoveryLifecycleClass.discardedPreAttempt ||
     HandleRecoveryLifecycleClass.quarantinedKeyUnavailable ||
     HandleRecoveryLifecycleClass.supersededByStateChange ||
-    HandleRecoveryLifecycleClass.failedTerminal =>
+    HandleRecoveryLifecycleClass.failedTerminal ||
+    HandleRecoveryLifecycleClass.locallyDeleted =>
       HandleRecoveryProgressPhase.blocked,
   };
 

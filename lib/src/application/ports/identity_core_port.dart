@@ -44,6 +44,8 @@ abstract interface class IdentityCorePort {
     String identityIdOrAlias,
   );
 
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias);
+
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias);
 
   Future<IdentityRegistrationResult> registerHandleWithPhone({

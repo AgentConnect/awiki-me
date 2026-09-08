@@ -47,6 +47,8 @@ enum ScopeSecretKeychainPresentation {
 }
 
 class MainFlutterWindow: NSWindow {
+  // TCC prompting is process-owned, not tenant/runtime/window-owned.
+  private static var screenCapturePermissionRequested = false
   private let awikiErrAuthorizationDenied = OSStatus(-60008)
   private let scopeSecretQueue = DispatchQueue(label: "ai.awiki.awikime.scope-secret-keychain")
 
@@ -1165,7 +1167,23 @@ class MainFlutterWindow: NSWindow {
       case "preflightScreenCapturePermission":
         result(CGPreflightScreenCaptureAccess())
       case "requestScreenCapturePermission":
-        result(CGRequestScreenCaptureAccess())
+        if CGPreflightScreenCaptureAccess() {
+          result(true)
+        } else if MainFlutterWindow.screenCapturePermissionRequested {
+          result(false)
+        } else {
+          MainFlutterWindow.screenCapturePermissionRequested = true
+          result(CGRequestScreenCaptureAccess())
+        }
+      case "screenCaptureDiagnostics":
+        let bundle = Bundle.main
+        result([
+          "applicationName": bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+            ?? bundle.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "AWiki Me",
+          "bundleIdentifier": bundle.bundleIdentifier ?? "",
+          "applicationPath": bundle.bundleURL.path,
+          "version": bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
+        ])
       default:
         result(FlutterMethodNotImplemented)
       }

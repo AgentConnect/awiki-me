@@ -1357,6 +1357,9 @@ class _IdentityCoreStub implements IdentityCorePort {
   }
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {
     throw UnimplementedError();
   }

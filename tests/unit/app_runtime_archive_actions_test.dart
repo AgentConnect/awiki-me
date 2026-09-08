@@ -148,6 +148,36 @@ void main() {
       expect(container.read(uiFeedbackProvider), isNull);
     });
 
+    test('恢复已切换 DID 时按删除单的权威范围清理当前数据', () async {
+      const session = SessionIdentity(
+        did: 'did:wba:awiki.info:users:alice-old',
+        localIdentityId: 'identity-alice',
+        credentialName: 'alice-local',
+        displayName: 'Alice',
+        handle: 'alice.awiki.info',
+      );
+      const ticket = LocalIdentityDeletionTicket(
+        deletionId: 'delete-after-recovery',
+        ownerIdentityId: 'identity-alice',
+        currentDid: 'did:wba:awiki.info:users:alice-new',
+      );
+      gateway.localCredentials = [session];
+      gateway.pendingLocalIdentityDeletionTickets.add(ticket);
+      container.read(sessionProvider.notifier).setSession(session);
+      container.read(sessionProvider.notifier).setLocalCredentials([session]);
+
+      await container.read(appRuntimeProvider.notifier).deleteCurrentData();
+
+      expect(
+        productLocalStore.lastDeletedOwnerIdentityId,
+        ticket.ownerIdentityId,
+      );
+      expect(productLocalStore.lastDeletedOwnerDid, ticket.currentDid);
+      expect(gateway.completeLocalIdentityDataDeletionCalls, 1);
+      expect(container.read(sessionProvider).session, isNull);
+      expect(container.read(uiFeedbackProvider), isNull);
+    });
+
     test('退出并删除当前数据在运行时销毁后仍完成已确认的本地删除', () async {
       const session = SessionIdentity(
         did: 'did:wba:awiki.info:users:alice-dispose',
@@ -209,7 +239,7 @@ void main() {
       );
       gateway.localCredentials = const <SessionIdentity>[session];
       gateway.prepareLocalIdentityDataDeletionError = StateError(
-        'handle_recovery.operation_must_resume',
+        'identity.local_deletion_conflict',
       );
       container.read(sessionProvider.notifier).setSession(session);
       container.read(sessionProvider.notifier).setLocalCredentials([session]);

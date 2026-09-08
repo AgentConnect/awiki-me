@@ -116,12 +116,6 @@ class AppMessage {
   factory AppMessage.registrationJoinTerminalWait() =>
       const AppMessage._('registrationJoinTerminalWait');
 
-  factory AppMessage.identityDeletionDiscardRecoveryFirst() =>
-      const AppMessage._('identityDeletionDiscardRecoveryFirst');
-
-  factory AppMessage.identityDeletionResumeRecoveryFirst() =>
-      const AppMessage._('identityDeletionResumeRecoveryFirst');
-
   factory AppMessage.identityDeletionCompleteTransitionFirst() =>
       const AppMessage._('identityDeletionCompleteTransitionFirst');
 
@@ -286,10 +280,6 @@ class AppMessage {
         return AppMessage.registrationContinuityChanged();
       case 'handle_recovery.join_terminal_wait':
         return AppMessage.registrationJoinTerminalWait();
-      case 'handle_recovery.precommit_discard_required':
-        return AppMessage.identityDeletionDiscardRecoveryFirst();
-      case 'handle_recovery.operation_must_resume':
-        return AppMessage.identityDeletionResumeRecoveryFirst();
       case 'handle_recovery.transition_must_complete':
         return AppMessage.identityDeletionCompleteTransitionFirst();
       case 'handle_recovery.join_must_complete':
@@ -425,6 +415,13 @@ class AppMessage {
     if (raw == 'screenshot_screen_recording_permission_required') {
       return AppMessage.screenshotPermissionRequired();
     }
+    if (raw == 'screenshot_permission_check_failed') {
+      return const AppMessage._('screenshotPermissionCheckFailed');
+    }
+    if (raw == 'screenshot_capture_failed' ||
+        raw.startsWith('screenshot_capture_failed:')) {
+      return const AppMessage._('screenshotCaptureFailed');
+    }
     if (raw == '文件选择失败，请稍后重试。') {
       return AppMessage.documentPickerFailed();
     }
@@ -509,10 +506,6 @@ class AppMessage {
         return l10n.registrationContinuityChanged;
       case 'registrationJoinTerminalWait':
         return l10n.registrationJoinTerminalWait;
-      case 'identityDeletionDiscardRecoveryFirst':
-        return l10n.identityDeletionDiscardRecoveryFirst;
-      case 'identityDeletionResumeRecoveryFirst':
-        return l10n.identityDeletionResumeRecoveryFirst;
       case 'identityDeletionCompleteTransitionFirst':
         return l10n.identityDeletionCompleteTransitionFirst;
       case 'identityDeletionCompleteJoinFirst':
@@ -617,6 +610,10 @@ class AppMessage {
         return l10n.attachmentDownloadCancelFailed;
       case 'screenshotPermissionRequired':
         return l10n.screenshotPermissionRequired;
+      case 'screenshotPermissionCheckFailed':
+        return l10n.screenshotPermissionCheckFailed;
+      case 'screenshotCaptureFailed':
+        return l10n.screenshotCaptureFailed;
       case 'raw':
         return detail ?? l10n.operationFailedRetry;
       default:
@@ -662,10 +659,6 @@ class AppMessage {
         return 'Identity continuity changed. Send a new verification code and try again.';
       case 'registrationJoinTerminalWait':
         return 'The previous device Join is ending safely. Wait briefly, then send a new verification code and try again.';
-      case 'identityDeletionDiscardRecoveryFirst':
-        return 'A recovery request is waiting for verification. Discard that recovery request before deleting this identity.';
-      case 'identityDeletionResumeRecoveryFirst':
-        return 'Identity recovery has already started. Resume it to a safe result before deleting this identity.';
       case 'identityDeletionCompleteTransitionFirst':
         return 'An identity transition is still being applied. Complete it before deleting this identity.';
       case 'identityDeletionCompleteJoinFirst':
