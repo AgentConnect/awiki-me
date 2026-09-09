@@ -5874,7 +5874,7 @@
       "action": "Complete visible Handle Recovery, prove the old peer is fenced, submit the recovered Handle through the peer App registration UI, select the Core-owned opaque Join continuation, approve the exact member Join, send standard Root/P5 to that device, and verify bidirectional Direct delivery.",
       "exactOracles": [
         "Registration produces one opaque Recovery-rebind continuation, requests one user-presence decision, and creates one pending joined-device-marked Join for the Recovery DID without exposing grant or transition material to Dart.",
-        "Both App Registry and session views converge after approval, then standard Root/P5 makes the rejoined current peer an active management-ready admin while the recovered sender remains a ready admin; the promoted peer refreshes its same-device authorization generation without being logged out.",
+        "Both App Registry and session views converge after approval, then standard Root/P5 makes the rejoined current peer an active management-ready admin while the recovered sender remains a ready admin; two concurrent explicit recipient syncs alongside App background recovery converge the same-device authorization generation without logout or a spurious permission failure.",
         "The old principal stays fenced, Root/P5 is absent from ordinary message history, and both post-transfer Direct directions project exactly once with correct ownership."
       ],
       "negativeChecks": [

@@ -128,6 +128,29 @@ void main() {
     expect(failure.httpStatus, isNull);
   });
 
+  test(
+    'root completion conflict does not masquerade as revoked permission',
+    () {
+      final conflict = mapper.messageSyncFailure(
+        const core.AwikiImCoreException(
+          code: 'identity_binding_conflict',
+          message:
+              'root import completion phase conflicts with the stored transfer',
+        ),
+      );
+      final denied = mapper.messageSyncFailure(
+        const core.AwikiImCoreException(
+          code: 'permission_denied',
+          message: 'device is not eligible',
+        ),
+      );
+
+      expect(conflict.category, AppMessageSyncFailureCategory.protocol);
+      expect(conflict.code, 'identity_binding_conflict');
+      expect(denied.category, AppMessageSyncFailureCategory.auth);
+    },
+  );
+
   test('sync failure projection rejects unsafe service codes', () {
     final failure = mapper.messageSyncFailure(
       const core.AwikiImCoreException(

@@ -20,6 +20,10 @@ V1 提供两个入口，但二者委托同一个 Core Root Transfer：
 imported-ACK 状态机。每次点击都从 fresh Registry/Manifest/PreKey 或既有 P5 pending 重新
 `prepare`，不复用 Join Session 或旧 handle。
 
+接收端的消息同步与实时恢复可以同时触发 Core 收尾；同一转移由 Core 串行、幂等收敛，
+不会因完成阶段已经前进而误报设备权限失效。App 不吞掉真实权限错误。
+恢复后重新加入的 E2E 会并发发起两次显式同步，并核验管理权限、会话保留和普通历史隔离。
+
 ## 2. 操作顺序
 
 App 严格执行下面的单目标流程：

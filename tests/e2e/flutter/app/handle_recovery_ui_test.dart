@@ -7227,8 +7227,7 @@ Future<void> _transferManagementToRejoinedPeer({
     fail('The App did not accept one exact standard root transfer.');
   }
 
-  final deadline = DateTime.now().add(const Duration(seconds: 90));
-  while (DateTime.now().isBefore(deadline)) {
+  Future<void> reconcileTransfer() async {
     try {
       final outcome = await peerBootstrap.messageSyncService!.syncNow(
         reason: 'handle-recovery-registration-root-transfer',
@@ -7245,6 +7244,12 @@ Future<void> _transferManagementToRejoinedPeer({
       // must still prove the authoritative Registry transition.
       if (error.code != 'secure_inbox_ack_incomplete') rethrow;
     }
+  }
+
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(deadline)) {
+    // Both explicit callers race with the App realtime/background recovery.
+    await Future.wait<void>([reconcileTransfer(), reconcileTransfer()]);
     final peerRegistry = await peerBootstrap.deviceManagementCorePort!
         .identityDeviceRegistry(expectedDid);
     final adminRegistry = await bootstrap.deviceManagementCorePort!
