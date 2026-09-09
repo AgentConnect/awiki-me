@@ -78,7 +78,7 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       final container = ProviderScope.containerOf(
         tester.element(find.byType(OnboardingPage)),
@@ -126,7 +126,7 @@ void main() {
         );
 
         await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-        await tester.pump();
+        await tester.pumpAndSettle();
 
         final container = ProviderScope.containerOf(
           tester.element(find.byType(OnboardingPage)),
@@ -173,7 +173,7 @@ void main() {
           ],
         ),
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       await tester.tap(find.text('Log in or register'));
       await tester.pumpAndSettle();
@@ -202,7 +202,7 @@ void main() {
           ],
         ),
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       await tester.tap(find.text('Log in or register'));
       await tester.pumpAndSettle();

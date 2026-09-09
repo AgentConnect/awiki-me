@@ -29,6 +29,14 @@ void main() {
       expect(coordinator['token'], r'${{ secrets.AWIKI_CI_READ_TOKEN }}');
       expect(coordinator['persist-credentials'], isFalse);
       expect(coordinator.containsKey('ssh-key'), isFalse);
+      final dsh =
+          validateSteps.cast<YamlMap>().singleWhere(
+                (step) => step['name'] == 'Checkout pinned DSH contract source',
+              )['with']
+              as YamlMap;
+      expect(dsh['path'], 'dsh-awiki');
+      expect(dsh['ref'], matches(RegExp(r'^[0-9a-f]{40}$')));
+      expect(dsh['persist-credentials'], isFalse);
 
       for (final job in jobs.values.cast<YamlMap>()) {
         expect(job.containsKey('environment'), isFalse);

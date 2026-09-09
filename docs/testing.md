@@ -1097,6 +1097,10 @@ private-source access fails before builds; fork PRs do not receive this secret.
 The current System Test repository disables deploy keys, so an SSH deploy key
 cannot supply this checkout credential.
 
+The coordinator's portable DSH contracts also read the sibling `dsh-awiki`
+source tree. CI checks out that public repository at an exact reviewed commit;
+keep its Node SDK version aligned with the pinned coordinator and Core wrapper.
+
 Native CI builds/tests use the Core owner's `scripts/release/registry-build.py`
 and committed registry lock in an isolated worktree. The Windows native build
 selects the same entrypoint with `AWIKI_RELEASE_REGISTRY=1`. CI therefore checks
