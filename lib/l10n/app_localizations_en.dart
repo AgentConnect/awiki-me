@@ -3762,4 +3762,29 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get localCredentialDeleteInspectFailed =>
       'Unable to check the local identity state. Please retry.';
+
+  @override
+  String get handleRecoveryFreshDataNotice =>
+      'No previous identity data is available on this device. Earlier direct messages will not be restored automatically.';
+
+  @override
+  String get handleRecoveryAwaitingResult =>
+      'The recovery result is not yet confirmed. Continue checking the existing recovery.';
+
+  @override
+  String get handleRecoveryAwaitingLocal =>
+      'Account recovery has taken effect. Continue setup on this device; no new SMS code is needed.';
+
+  @override
+  String get handleRecoveryChecking => 'Checking recovery progress…';
+
+  @override
+  String get handleRecoveryRunning => 'Processing recovery. Please wait…';
+
+  @override
+  String get handleRecoveryEntering =>
+      'Recovery is complete. Opening messages…';
+
+  @override
+  String get handleRecoveryContinueExisting => 'Continue previous recovery';
 }

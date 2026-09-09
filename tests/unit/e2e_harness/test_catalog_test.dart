@@ -6,6 +6,32 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/test_catalog.dart';
 
 void main() {
+  test('Recovery continuation retains existing and new exact UI attestations', () {
+    final catalog = AppTestCatalog.load(Directory.current);
+    final contract = catalog
+        .caseById['HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001']!
+        .assertionContract!;
+    expect(
+      contract.assertionIds,
+      containsAll(<String>[
+        'HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:local_continuation_without_login_otp',
+        'HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:committed_reentry_hides_factor_and_first_commit',
+        'HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:registration_redirected_to_exact_recovery',
+        'HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:recovered_session_entered_messages',
+      ]),
+    );
+    final source = File(
+      'tests/e2e/flutter/app/handle_recovery_state_machine_test.part.dart',
+    ).readAsStringSync();
+    final tap = source.substring(
+      source.indexOf('Future<void> _smTap('),
+      source.indexOf('Future<void> _smOpenSettingsRecovery('),
+    );
+    expect(tap, contains('finder.hitTestable().evaluate().length == 1'));
+    expect(tap, contains('await _tapOne('));
+    expect(tap, isNot(contains('onPressed')));
+  });
+
   test('root-transfer retains retry and full completion attestations', () {
     final catalog = AppTestCatalog.load(Directory.current);
     expect(

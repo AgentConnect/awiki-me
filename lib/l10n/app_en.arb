@@ -1542,5 +1542,12 @@
   "handleRecoveryJoinDidOnlyUnsupported": "DID-only contacts and groups do not migrate.",
   "legacyIdentityUpgradeFailed": "The legacy identity upgrade failed. Please try again.",
   "localCredentialDeleteRecoveryHint": "This also clears the unfinished recovery progress on this device.",
-  "localCredentialDeleteInspectFailed": "Unable to check the local identity state. Please retry."
+  "localCredentialDeleteInspectFailed": "Unable to check the local identity state. Please retry.",
+  "handleRecoveryFreshDataNotice": "No previous identity data is available on this device. Earlier direct messages will not be restored automatically.",
+  "handleRecoveryAwaitingResult": "The recovery result is not yet confirmed. Continue checking the existing recovery.",
+  "handleRecoveryAwaitingLocal": "Account recovery has taken effect. Continue setup on this device; no new SMS code is needed.",
+  "handleRecoveryChecking": "Checking recovery progress…",
+  "handleRecoveryRunning": "Processing recovery. Please wait…",
+  "handleRecoveryEntering": "Recovery is complete. Opening messages…",
+  "handleRecoveryContinueExisting": "Continue previous recovery"
 }

@@ -18,6 +18,30 @@ Recovery OTP、风险确认和 activate 流程，但必须把当前会话的 exa
 Core；恢复前不退出、不删除凭证或本地数据，因此 Direct、Group、Agent 历史和智能体库存继续
 归属于同一 stable owner。恢复完成后同样直接返回消息主界面。
 
+## 本机续接与会话执行边界
+
+统一登录页可以按当前租户的完整 Handle 检查**本机已经存在**的 Recovery。该查询调用
+Core `inspectContext`，不发普通登录短信、不创建 Recovery，也不自动推进。存在可处理的
+操作时提供“继续上次恢复”；只有 `startNew` 的退役历史不显示为可续接操作。输入、联系方式、
+登录方式或租户改变会使旧查询失效，查询失败提供重新读取，不能当作“没有未完成操作”。
+这不改变首次发起 Recovery 仍需已验证 Handle 和专用 factor 的规则。
+
+恢复页继续使用局部 provider、epoch 和 `isPageCurrent`；不把旧 PR 的生命周期授权表移入
+Dart。验证码区只随 Core factor 动作出现，风险开关和首次提交只在 `activate` 可用时出现；
+提交后等待本机收尾不显示“正在迁移”，只有实际忙碌时显示操作进度。重新读取失败时提供
+明确重试入口，但不自动请求 OTP。
+
+`HandleRecoverySession` 只负责 App 会话副作用。首次推进在新鲜状态与用户认证通过后暂停
+旧会话；手动续跑同样先暂停旧会话。只有重新读取到**同一 operation 的权威未提交状态**，
+才允许恢复原会话，不能使用状态读取失败后保留的旧 prepared 投影。暂停、Core 推进和原会话
+恢复均处于 controller 的忙碌边界内。所有会话调用携带本页 `isCurrent`，旧页面失效后没有
+恢复、激活或导航权限；Core 的在途事务仍按其持久化规则继续。
+
+对应回归包含 [`handle_recovery_session_test.part.dart`](../tests/unit/handle_recovery_session_test.part.dart) 和
+[`onboarding_recovery_lookup_test.dart`](../tests/unit/onboarding_recovery_lookup_test.dart)；产品 `handle-recovery-state-machine` 还验证冷重开后
+从本机入口不发登录 OTP 续接、保持原提交操作、隐藏提交前控件，并保留原注册提交入口和二次
+Recovery 的完整断言。
+
 ## 当前协议边界
 
 - 当前 OTP purpose 固定为 `awiki.identity.handle-recovery.v1`。

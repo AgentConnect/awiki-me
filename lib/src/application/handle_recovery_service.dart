@@ -153,6 +153,7 @@ class HandleRecoveryService {
     required String operationId,
     required String presenceReason,
     bool Function()? isCurrent,
+    Future<void> Function()? beforeAdvance,
   }) async {
     final normalizedOperationId = _validatedOperationId(operationId);
     final current = await status(normalizedOperationId);
@@ -161,11 +162,16 @@ class HandleRecoveryService {
         HandleRecoveryFailureCode.actionNotAllowed,
       );
     }
-    if (current.isCompleted) {
-      return current;
-    }
-    if (current.canResume) {
-      return _core.reconcile(normalizedOperationId);
+    if (current.isCompleted || current.canResume) {
+      await beforeAdvance?.call();
+      if (isCurrent?.call() == false) {
+        throw const HandleRecoveryFailure(
+          HandleRecoveryFailureCode.actionNotAllowed,
+        );
+      }
+      return current.isCompleted
+          ? current
+          : _core.reconcile(normalizedOperationId);
     }
     if (!current.canActivate) {
       throw HandleRecoveryFailure(
@@ -186,6 +192,12 @@ class HandleRecoveryService {
         HandleRecoveryFailureCode.actionNotAllowed,
       );
     }
+    await beforeAdvance?.call();
+    if (isCurrent?.call() == false) {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.actionNotAllowed,
+      );
+    }
     final progress = await _core.activate(
       operationId: normalizedOperationId,
       userPresenceConfirmed: true,
@@ -194,9 +206,17 @@ class HandleRecoveryService {
     return progress;
   }
 
-  Future<HandleRecoveryProgress> resume(String operationId) async {
+  Future<HandleRecoveryProgress> resume(
+    String operationId, {
+    bool Function()? isCurrent,
+  }) async {
     final normalizedOperationId = _validatedOperationId(operationId);
     final current = await status(normalizedOperationId);
+    if (isCurrent?.call() == false) {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.actionNotAllowed,
+      );
+    }
     if (!current.canResume) {
       throw const HandleRecoveryFailure(
         HandleRecoveryFailureCode.activationRequired,

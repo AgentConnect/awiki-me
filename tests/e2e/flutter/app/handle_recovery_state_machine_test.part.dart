@@ -256,6 +256,45 @@ void _registerStateMachineRecoveryE2e() {
         failure: 'B was not preserved across native runtime reopen.',
       );
       await _smLogout(tester, appContainer, delete: false);
+      final localResumeFields = find.descendant(
+        of: find.byType(OnboardingPage),
+        matching: find.byType(CupertinoTextField),
+      );
+      await _pumpUntil(
+        tester,
+        () => localResumeFields.evaluate().length >= 3,
+        failure: 'Local Recovery continuation has no unified Handle field.',
+      );
+      await tester.enterText(localResumeFields.at(1), handleA);
+      await _smTap(
+        tester,
+        find.byKey(const Key('onboarding-continue-recovery')),
+      );
+      await _pumpUntil(tester, () {
+        if (find.byType(HandleRecoveryPage).evaluate().isEmpty) return false;
+        final state = _recoveryUiContainer(tester).read(handleRecoveryProvider);
+        return !state.isBusy && state.progress?.operationId == operationA;
+      }, failure: 'Local continuation did not reopen the exact operation.');
+      if (appContainer.read(onboardingProvider).otpTargetFullHandle != null ||
+          recording.requestOtpCalls != 0) {
+        fail(
+          'Local Recovery continuation requested an unnecessary login/recovery OTP.',
+        );
+      }
+      expect(find.byKey(const Key('handle-recovery-otp')), findsNothing);
+      expect(
+        find.byKey(const Key('handle-recovery-risk-confirmation')),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('handle-recovery-activate')), findsNothing);
+      expect(find.byKey(const Key('handle-recovery-busy')), findsNothing);
+      await tester.pageBack();
+      await _pumpUntil(
+        tester,
+        () => find.byType(OnboardingPage).evaluate().isNotEmpty,
+        failure:
+            'Local continuation could not return to the ordinary submit path.',
+      );
       await _smSubmitHandle(
         tester,
         appContainer,
@@ -265,7 +304,16 @@ void _registerStateMachineRecoveryE2e() {
       );
       await _pumpUntil(
         tester,
-        () => find.byType(HandleRecoveryPage).evaluate().length == 1,
+        () {
+          if (find.byType(HandleRecoveryPage).evaluate().length != 1)
+            return false;
+          final state = _recoveryUiContainer(
+            tester,
+          ).read(handleRecoveryProvider);
+          return !state.isBusy &&
+              state.authoritative &&
+              state.progress?.operationId == operationA;
+        },
         timeout: const Duration(minutes: 1),
         failure: 'Registration did not redirect into the pending Recovery.',
       );
@@ -298,6 +346,8 @@ void _registerStateMachineRecoveryE2e() {
         startedAt: startedAt,
         phases: const [
           'core_reopened_same_scope_with_committed_result',
+          'local_continuation_without_login_otp',
+          'committed_reentry_hides_factor_and_first_commit',
           'registration_redirected_to_exact_recovery',
           'resume_without_new_factor_or_presence',
           'recovered_session_entered_messages',
@@ -542,8 +592,14 @@ Future<void> _smTap(WidgetTester tester, Finder finder) async {
     () => finder.evaluate().length == 1,
     failure: 'The required visible state-machine action is missing.',
   );
-  await tester.ensureVisible(finder);
-  await tester.pump();
+  // Route dismissal and the local lookup can still be changing the layout.
+  // Wait for a real hit target; never invoke the callback as a shortcut.
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  do {
+    await tester.ensureVisible(finder);
+    await tester.pump(const Duration(milliseconds: 100));
+    if (finder.hitTestable().evaluate().length == 1) break;
+  } while (DateTime.now().isBefore(deadline));
   await _tapOne(
     tester,
     finder,
