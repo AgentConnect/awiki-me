@@ -6295,6 +6295,62 @@
           ]
         ]
       }
+    },
+    {
+      "caseId": "APP-UPDATE-SMOKE-E2E-001",
+      "feature": "Cached minimum version gates startup and recovers through the update UI",
+      "layer": "portable_product_ui",
+      "preconditions": "Flutter desktop and the no-service fake application boundary are available with a cached minimum version and a controllable policy response.",
+      "action": "Start the actual App with a cached restriction, open its manual download action, complete an offline refresh, and retry with a confirmed absent policy.",
+      "exactOracles": [
+        "The restriction is visible before business startup and leaves tenant switching available.",
+        "The manual download action is invoked without unlocking the App.",
+        "An offline refresh retains the restriction.",
+        "A confirmed policy removal clears the gate and displays onboarding after retry."
+      ],
+      "negativeChecks": [
+        "Starting business work before applying the cache, unlocking on a download action or network error, or retaining the old restriction after policy removal fails the case."
+      ],
+      "environment": "no_service",
+      "cleanupPolicy": "none",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me",
+      "implementationPath": "tests/e2e/flutter/app/app_smoke_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "APP-UPDATE-SMOKE-E2E-001:cached_gate_precedes_business_startup",
+          "APP-UPDATE-SMOKE-E2E-001:manual_download_action_preserves_gate",
+          "APP-UPDATE-SMOKE-E2E-001:offline_refresh_preserves_gate",
+          "APP-UPDATE-SMOKE-E2E-001:policy_removal_recovers_through_retry"
+        ],
+        "exactOracleAssertions": [
+          [
+            "APP-UPDATE-SMOKE-E2E-001:cached_gate_precedes_business_startup"
+          ],
+          [
+            "APP-UPDATE-SMOKE-E2E-001:manual_download_action_preserves_gate"
+          ],
+          [
+            "APP-UPDATE-SMOKE-E2E-001:offline_refresh_preserves_gate"
+          ],
+          [
+            "APP-UPDATE-SMOKE-E2E-001:policy_removal_recovers_through_retry"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "APP-UPDATE-SMOKE-E2E-001:cached_gate_precedes_business_startup",
+            "APP-UPDATE-SMOKE-E2E-001:manual_download_action_preserves_gate",
+            "APP-UPDATE-SMOKE-E2E-001:offline_refresh_preserves_gate",
+            "APP-UPDATE-SMOKE-E2E-001:policy_removal_recovers_through_retry"
+          ]
+        ]
+      }
     }
   ]
 }

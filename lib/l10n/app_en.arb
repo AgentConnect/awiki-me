@@ -490,6 +490,10 @@
   "settingsUpdateStatusChecking": "Checking for updates...",
   "settingsUpdateStatusDownloading": "Downloading update...",
   "settingsUpdateStatusInstalling": "Preparing installation...",
+  "settingsUpdateStatusUnavailable": "This tenant has not provided update information",
+  "settingsUpdateStatusUnchecked": "Updates have not been checked",
+  "settingsUpdateStatusCached": "Check failed; showing the last verified result",
+  "updatePolicyUnavailable": "This tenant has not provided update information. You can still open the download page.",
   "settingsUpdateStatusFailed": "Update check failed. Please try again later.",
   "settingsUpdateReleaseNotesVersion": "View release notes for {version}",
   "@settingsUpdateReleaseNotesVersion": {

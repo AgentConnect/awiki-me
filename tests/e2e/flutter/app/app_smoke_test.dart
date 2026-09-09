@@ -19,6 +19,7 @@ import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/domain/services/update_service.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/agents/skill_onboarding_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
@@ -57,6 +58,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import '../../../unit/test_support.dart' as test_support;
+import '../../../unit/app_update_provider_test.dart' show buildManifest;
 import '../../case_attestation.dart';
 import '../support/fake_app_bootstrap.dart';
 
@@ -67,6 +69,20 @@ final class _RecordingDesktopStartupPresentationService
   @override
   Future<void> presentReadyContent() async {
     callCount += 1;
+  }
+}
+
+class _StartupUpdateService extends test_support.FakeUpdateService {
+  final firstCheck = Completer<AppUpdateCheckResult>();
+  bool _started = false;
+
+  @override
+  Future<AppUpdateCheckResult> checkForUpdates({required bool force}) {
+    if (!_started) {
+      _started = true;
+      return firstCheck.future;
+    }
+    return super.checkForUpdates(force: force);
   }
 }
 
@@ -205,6 +221,79 @@ Future<void> _activateRuntimeSession(
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   tearDownAll(E2eInvocationCompletionWriter.markFinished);
+
+  testWidgets(
+    'cached update gate survives offline startup and recovers through retry',
+    (tester) async {
+      final harness = createFakeAwikiMeAppHarness();
+      final service = _StartupUpdateService();
+      final manifest = buildManifest();
+      service.cachedUpdate = AppUpdateCheckResult(
+        currentVersion: service.currentVersion,
+        latestManifest: manifest,
+        versionUnsupported: true,
+        usedCache: true,
+      );
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: harness.bootstrap,
+          providerOverrides: [
+            ...harness.providerOverrides,
+            updateServiceProvider.overrideWithValue(service),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.byKey(const Key('restricted-update-install')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('restricted-update-switch-tenant')),
+        findsOneWidget,
+      );
+      expect(find.byType(OnboardingPage), findsNothing);
+      expect(harness.gateway.listLocalCredentialsCalls, 0);
+
+      await tester.tap(find.byKey(const Key('restricted-update-install')));
+      await tester.pump();
+      expect(service.installUpdateCalled, isTrue);
+      expect(find.byType(OnboardingPage), findsNothing);
+
+      service.firstCheck.complete(
+        AppUpdateCheckResult(
+          currentVersion: service.currentVersion,
+          latestManifest: manifest,
+          versionUnsupported: true,
+          usedCache: true,
+          failureReason: 'simulated offline response',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('restricted-update-install')),
+        findsOneWidget,
+      );
+      expect(harness.gateway.listLocalCredentialsCalls, 0);
+
+      service.policyUnavailable = true;
+      await tester.tap(find.byKey(const Key('restricted-update-refresh')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('restricted-update-install')), findsNothing);
+      expect(find.byType(OnboardingPage), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await E2eCaseAttestationWriter.markPassed(
+        'APP-UPDATE-SMOKE-E2E-001',
+        phases: const [
+          'cached_gate_precedes_business_startup',
+          'manual_download_action_preserves_gate',
+          'offline_refresh_preserves_gate',
+          'policy_removal_recovers_through_retry',
+        ],
+      );
+    },
+  );
 
   testWidgets('desktop startup excludes the mobile branded splash', (
     tester,

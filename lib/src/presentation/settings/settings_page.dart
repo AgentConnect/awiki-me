@@ -552,13 +552,21 @@ class SettingsPage extends ConsumerWidget {
     if (state.status == AppUpdateStatus.checking) {
       return l10n.settingsUpdateStatusChecking;
     }
+    if (state.status == AppUpdateStatus.error) {
+      return state.usedCache
+          ? l10n.settingsUpdateStatusCached
+          : l10n.settingsUpdateStatusFailed;
+    }
+    if (state.policyUnavailable) return l10n.settingsUpdateStatusUnavailable;
+    if (state.status == AppUpdateStatus.idle) {
+      return l10n.settingsUpdateStatusUnchecked;
+    }
     if (state.hasUpdate) {
       return l10n.settingsUpdateAvailable(state.latestManifest!.version);
     }
-    if (state.status == AppUpdateStatus.error) {
-      return l10n.settingsUpdateStatusFailed;
-    }
-    return l10n.settingsAlreadyLatestVersion;
+    return state.status == AppUpdateStatus.upToDate
+        ? l10n.settingsAlreadyLatestVersion
+        : l10n.settingsUpdateStatusLoading;
   }
 
   void _showLogoutDialog(BuildContext context, AppRuntimeController runtime) {

@@ -32,6 +32,9 @@ keep the scenario contract, config, runner, reports, and assertions under
 
 ## Required Coverage
 
+For version-policy regression and a local native update UI smoke that needs no
+release or backend, see [client update behavior](client-updates.md#local-verification).
+
 Every new feature or behavior change must ship with matching test coverage in
 the same change:
 

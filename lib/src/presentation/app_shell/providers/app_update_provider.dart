@@ -10,6 +10,7 @@ enum AppUpdateStatus {
   idle,
   checking,
   upToDate,
+  unavailable,
   updateAvailable,
   downloading,
   installing,
@@ -20,6 +21,7 @@ class AppUpdateState {
   const AppUpdateState({
     this.status = AppUpdateStatus.idle,
     this.currentVersion,
+    this.localStateLoaded = false,
     this.latestManifest,
     this.errorMessage,
     this.failureReason,
@@ -33,6 +35,7 @@ class AppUpdateState {
 
   final AppUpdateStatus status;
   final AppVersion? currentVersion;
+  final bool localStateLoaded;
   final AppUpdateManifest? latestManifest;
   final String? errorMessage;
   final String? failureReason;
@@ -64,6 +67,7 @@ class AppUpdateState {
   AppUpdateState copyWith({
     AppUpdateStatus? status,
     AppVersion? currentVersion,
+    bool? localStateLoaded,
     AppUpdateManifest? latestManifest,
     String? errorMessage,
     bool clearErrorMessage = false,
@@ -71,6 +75,7 @@ class AppUpdateState {
     String? failureReason,
     bool clearFailureReason = false,
     DateTime? cachedAt,
+    bool clearCachedAt = false,
     bool? usedCache,
     bool? policyUnavailable,
     bool? versionUnsupported,
@@ -81,6 +86,7 @@ class AppUpdateState {
     return AppUpdateState(
       status: status ?? this.status,
       currentVersion: currentVersion ?? this.currentVersion,
+      localStateLoaded: localStateLoaded ?? this.localStateLoaded,
       latestManifest: clearLatestManifest
           ? null
           : (latestManifest ?? this.latestManifest),
@@ -90,7 +96,7 @@ class AppUpdateState {
       failureReason: clearFailureReason
           ? failureReason
           : (failureReason ?? this.failureReason),
-      cachedAt: cachedAt ?? this.cachedAt,
+      cachedAt: clearCachedAt ? null : (cachedAt ?? this.cachedAt),
       usedCache: usedCache ?? this.usedCache,
       policyUnavailable: policyUnavailable ?? this.policyUnavailable,
       versionUnsupported: versionUnsupported ?? this.versionUnsupported,
@@ -107,77 +113,106 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
   AppUpdateController(this.ref) : super(const AppUpdateState());
 
   final Ref ref;
-  bool _initialized = false;
+  Future<void>? _localStateTask;
+  Future<void>? _initializeTask;
+  int _requestGeneration = 0;
 
-  Future<void> initialize() async {
-    if (_initialized) {
-      return;
+  bool _isCurrent(int generation) =>
+      mounted && generation == _requestGeneration;
+
+  Future<void> initialize() => _initializeTask ??= _initialize();
+
+  Future<void> _initialize() async {
+    final generation = _requestGeneration;
+    await _ensureLocalState();
+    // A user-initiated check made during startup owns the subsequent result.
+    if (_isCurrent(generation)) {
+      await checkForUpdates(force: false, silent: true);
     }
-    _initialized = true;
+  }
+
+  Future<void> _ensureLocalState() => _localStateTask ??= _loadLocalState();
+
+  Future<void> _loadLocalState() async {
     try {
-      final currentVersion = await ref
-          .read(updateServiceProvider)
-          .getCurrentVersion();
+      final cached = await ref.read(updateServiceProvider).loadCachedUpdate();
       if (!mounted) return;
-      state = state.copyWith(currentVersion: currentVersion);
+      _publishResult(cached);
     } catch (error) {
       if (!mounted) return;
+      // Unknown local state is not evidence that the tenant requires an update.
       state = state.copyWith(
+        localStateLoaded: true,
         status: AppUpdateStatus.error,
         errorMessage: error.toString(),
       );
-      return;
     }
-    if (!mounted) return;
-    await checkForUpdates(force: false, silent: true);
   }
 
-  Future<void> checkForUpdates({
+  Future<void> checkForUpdates({required bool force, bool silent = false}) =>
+      _check(force: force, silent: silent);
+
+  Future<void> checkOfficialSource(AppOfficialUpdateSource source) async {
+    if (!mounted) return;
+    await _ensureLocalState();
+    // A disabled fallback action must not cancel the tenant's pending refresh.
+    if (!mounted || state.versionUnsupported) return;
+    await _check(force: true, source: source);
+  }
+
+  Future<void> _check({
     required bool force,
     bool silent = false,
+    AppOfficialUpdateSource? source,
   }) async {
     if (!mounted) return;
-    if (!silent) {
-      state = state.copyWith(
-        status: AppUpdateStatus.checking,
-        clearErrorMessage: true,
-      );
-    }
+    final generation = ++_requestGeneration;
+    await _ensureLocalState();
+    if (!_isCurrent(generation)) return;
+    // An optional official-source lookup cannot lift the active tenant's gate.
+    if (source != null && state.versionUnsupported) return;
+    final service = ref.read(updateServiceProvider);
+    final sourceChanged = state.manualOfficialSource != source;
+    state = state.copyWith(
+      status: AppUpdateStatus.checking,
+      clearErrorMessage: true,
+      clearLatestManifest: sourceChanged,
+      clearCachedAt: sourceChanged,
+      manualOfficialSource: source,
+      clearManualOfficialSource: source == null,
+      recommendationDismissed: true,
+    );
     try {
-      final result = await ref
-          .read(updateServiceProvider)
-          .checkForUpdates(force: force);
+      final result = source == null
+          ? await service.checkForUpdates(force: force)
+          : await service.checkOfficialSource(source);
+      if (!_isCurrent(generation)) return;
+      // Apply compatibility before optional prompt-history I/O.
+      _publishResult(result, source: source);
       final manifest = result.latestManifest;
-      final ignored = manifest != null && result.hasUpdate
-          ? await ref.read(updateServiceProvider).isVersionIgnored(manifest)
-          : false;
-      if (manifest != null && result.hasUpdate && !ignored) {
-        await ref.read(updateServiceProvider).markVersionPrompted(manifest);
+      if (source == null && manifest != null && result.hasUpdate) {
+        var ignored = false;
+        try {
+          ignored = await service.isVersionIgnored(manifest);
+          if (!_isCurrent(generation)) return;
+          if (!ignored) await service.markVersionPrompted(manifest);
+        } catch (_) {
+          /* Prompt persistence cannot invalidate version policy. */
+        }
+        if (!_isCurrent(generation)) return;
+        state = state.copyWith(recommendationDismissed: ignored);
       }
-      if (!mounted) return;
-      state = state.copyWith(
-        currentVersion: result.currentVersion,
-        latestManifest: result.latestManifest,
-        failureReason: result.failureReason,
-        clearFailureReason: result.failureReason == null,
-        cachedAt: result.cachedAt,
-        usedCache: result.usedCache,
-        policyUnavailable: result.policyUnavailable,
-        versionUnsupported: result.versionUnsupported,
-        recommendationDismissed: ignored,
-        clearManualOfficialSource: true,
-        status: result.hasUpdate
-            ? AppUpdateStatus.updateAvailable
-            : AppUpdateStatus.upToDate,
-        clearErrorMessage: true,
-      );
-      if (force && !result.hasUpdate) {
-        ref
-            .read(uiFeedbackProvider.notifier)
-            .showInfo(AppMessage.updateAlreadyLatest());
+      if (!_isCurrent(generation) || silent || !force) return;
+      final feedback = ref.read(uiFeedbackProvider.notifier);
+      if (result.failureReason != null) {
+        feedback.showError(AppMessage.updateCheckFailed());
+      } else if (result.policyUnavailable) {
+        feedback.showInfo(AppMessage.updatePolicyUnavailable());
+      } else if (manifest != null && !result.hasUpdate) {
+        feedback.showInfo(AppMessage.updateAlreadyLatest());
       }
     } catch (error) {
-      if (!mounted) return;
+      if (!_isCurrent(generation)) return;
       state = state.copyWith(
         status: AppUpdateStatus.error,
         errorMessage: error.toString(),
@@ -190,51 +225,39 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
     }
   }
 
-  Future<void> checkOfficialSource(AppOfficialUpdateSource source) async {
-    if (!mounted) return;
+  void _publishResult(
+    AppUpdateCheckResult result, {
+    AppOfficialUpdateSource? source,
+  }) {
+    final status = result.failureReason != null
+        ? AppUpdateStatus.error
+        : result.policyUnavailable
+        ? AppUpdateStatus.unavailable
+        : result.latestManifest == null
+        ? AppUpdateStatus.idle
+        : result.hasUpdate
+        ? AppUpdateStatus.updateAvailable
+        : AppUpdateStatus.upToDate;
     state = state.copyWith(
-      status: AppUpdateStatus.checking,
-      clearErrorMessage: true,
+      localStateLoaded: true,
+      currentVersion: result.currentVersion,
+      latestManifest: result.latestManifest,
+      clearLatestManifest: result.latestManifest == null,
+      failureReason: result.failureReason,
+      clearFailureReason: result.failureReason == null,
+      cachedAt: result.cachedAt,
+      clearCachedAt: result.cachedAt == null,
+      usedCache: result.usedCache,
+      policyUnavailable: result.policyUnavailable,
+      versionUnsupported: source == null
+          ? result.versionUnsupported
+          : state.versionUnsupported,
       recommendationDismissed: true,
+      manualOfficialSource: source,
+      clearManualOfficialSource: source == null,
+      status: status,
+      clearErrorMessage: true,
     );
-    try {
-      final result = await ref
-          .read(updateServiceProvider)
-          .checkOfficialSource(source);
-      if (!mounted) return;
-      state = state.copyWith(
-        currentVersion: result.currentVersion,
-        latestManifest: result.latestManifest,
-        failureReason: result.failureReason,
-        clearFailureReason: result.failureReason == null,
-        cachedAt: result.cachedAt,
-        usedCache: result.usedCache,
-        policyUnavailable: result.policyUnavailable,
-        versionUnsupported: false,
-        recommendationDismissed: true,
-        manualOfficialSource: source,
-        status: result.hasUpdate
-            ? AppUpdateStatus.updateAvailable
-            : AppUpdateStatus.upToDate,
-        clearErrorMessage: true,
-      );
-      if (!result.hasUpdate) {
-        ref
-            .read(uiFeedbackProvider.notifier)
-            .showInfo(AppMessage.updateAlreadyLatest());
-      }
-    } catch (error) {
-      if (!mounted) return;
-      state = state.copyWith(
-        status: AppUpdateStatus.error,
-        errorMessage: error.toString(),
-        recommendationDismissed: true,
-        manualOfficialSource: source,
-      );
-      ref
-          .read(uiFeedbackProvider.notifier)
-          .showError(AppMessage.updateCheckFailed());
-    }
   }
 
   Future<void> dismissRecommendation() async {
@@ -254,6 +277,7 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
           .read(updateServiceProvider)
           .openReleaseNotes(state.latestManifest);
     } catch (_) {
+      if (!mounted) return;
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.updateOpenReleaseNotesFailed());
@@ -266,6 +290,7 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
           .read(updateServiceProvider)
           .openDownloadPage(state.latestManifest);
     } catch (_) {
+      if (!mounted) return;
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.updateOpenDownloadFailed());
@@ -277,20 +302,27 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
     if (manifest == null) {
       return;
     }
+    final generation = _requestGeneration;
+    final previousStatus = state.status;
+    final service = ref.read(updateServiceProvider);
     state = state.copyWith(
       status: AppUpdateStatus.installing,
       clearErrorMessage: true,
     );
     try {
-      await ref.read(updateServiceProvider).installUpdate(manifest);
-      state = state.copyWith(status: AppUpdateStatus.installing);
+      await service.installUpdate(manifest);
+      if (!_isCurrent(generation)) return;
+      state = state.copyWith(status: previousStatus);
     } on UpdateInstallPermissionRequired {
+      if (!_isCurrent(generation)) return;
       state = state.copyWith(status: AppUpdateStatus.updateAvailable);
-      await ref.read(updateServiceProvider).openInstallPermissionSettings();
+      await service.openInstallPermissionSettings();
+      if (!_isCurrent(generation)) return;
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.updatePermissionRequired());
     } catch (error) {
+      if (!_isCurrent(generation)) return;
       state = state.copyWith(
         status: AppUpdateStatus.error,
         errorMessage: error.toString(),

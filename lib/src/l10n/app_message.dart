@@ -48,6 +48,9 @@ class AppMessage {
   factory AppMessage.updateAlreadyLatest() =>
       const AppMessage._('updateAlreadyLatest');
 
+  factory AppMessage.updatePolicyUnavailable() =>
+      const AppMessage._('updatePolicyUnavailable');
+
   factory AppMessage.updateCheckFailed() =>
       const AppMessage._('updateCheckFailed');
 
@@ -460,6 +463,8 @@ class AppMessage {
         return l10n.agentTerminalRuntimeFailed;
       case 'updateAlreadyLatest':
         return l10n.updateAlreadyLatest;
+      case 'updatePolicyUnavailable':
+        return l10n.updatePolicyUnavailable;
       case 'updateCheckFailed':
         return l10n.updateCheckFailed;
       case 'updateOpenReleaseNotesFailed':

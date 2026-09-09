@@ -1214,6 +1214,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsUpdateStatusInstalling => '正在准备安装更新...';
 
   @override
+  String get settingsUpdateStatusUnavailable => '当前租户暂未提供更新信息';
+
+  @override
+  String get settingsUpdateStatusUnchecked => '尚未检查更新';
+
+  @override
+  String get settingsUpdateStatusCached => '检查失败，保留上次确认的版本信息';
+
+  @override
+  String get updatePolicyUnavailable => '当前租户暂未提供更新信息，你仍可打开下载页面。';
+
+  @override
   String get settingsUpdateStatusFailed => '检查更新失败，请稍后重试';
 
   @override

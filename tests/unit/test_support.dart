@@ -478,6 +478,8 @@ class FakeUpdateService implements UpdateService {
     buildNumber: 1,
   );
   AppUpdateManifest? latestManifest;
+  AppUpdateCheckResult? cachedUpdate;
+  bool policyUnavailable = false;
   bool openReleaseNotesCalled = false;
   bool openDownloadPageCalled = false;
   bool installUpdateCalled = false;
@@ -493,6 +495,14 @@ class FakeUpdateService implements UpdateService {
       AppOfficialUpdateSource.primary;
 
   @override
+  Future<AppUpdateCheckResult> loadCachedUpdate() async =>
+      cachedUpdate ??
+      AppUpdateCheckResult(
+        currentVersion: await getCurrentVersion(),
+        wasSkipped: true,
+      );
+
+  @override
   Future<AppUpdateCheckResult> checkForUpdates({required bool force}) async {
     checkForUpdatesCalls += 1;
     checkForUpdatesForces.add(force);
@@ -503,6 +513,7 @@ class FakeUpdateService implements UpdateService {
       currentVersion: currentVersion,
       latestManifest: latestManifest,
       versionUnsupported: versionUnsupported,
+      policyUnavailable: policyUnavailable,
     );
   }
 

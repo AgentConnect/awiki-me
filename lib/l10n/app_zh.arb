@@ -490,6 +490,10 @@
   "settingsUpdateStatusChecking": "正在检查更新...",
   "settingsUpdateStatusDownloading": "正在下载更新...",
   "settingsUpdateStatusInstalling": "正在准备安装更新...",
+  "settingsUpdateStatusUnavailable": "当前租户暂未提供更新信息",
+  "settingsUpdateStatusUnchecked": "尚未检查更新",
+  "settingsUpdateStatusCached": "检查失败，保留上次确认的版本信息",
+  "updatePolicyUnavailable": "当前租户暂未提供更新信息，你仍可打开下载页面。",
   "settingsUpdateStatusFailed": "检查更新失败，请稍后重试",
   "settingsUpdateReleaseNotesVersion": "查看版本 {version} 的更新日志",
   "@settingsUpdateReleaseNotesVersion": {

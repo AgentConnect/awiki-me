@@ -1275,6 +1275,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsUpdateStatusInstalling => 'Preparing installation...';
 
   @override
+  String get settingsUpdateStatusUnavailable =>
+      'This tenant has not provided update information';
+
+  @override
+  String get settingsUpdateStatusUnchecked => 'Updates have not been checked';
+
+  @override
+  String get settingsUpdateStatusCached =>
+      'Check failed; showing the last verified result';
+
+  @override
+  String get updatePolicyUnavailable =>
+      'This tenant has not provided update information. You can still open the download page.';
+
+  @override
   String get settingsUpdateStatusFailed =>
       'Update check failed. Please try again later.';
 

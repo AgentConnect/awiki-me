@@ -26,10 +26,11 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(129));
+      expect(catalog.cases, hasLength(130));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
+          'APP-UPDATE-SMOKE-E2E-001',
           'ROOT-TRANSFER-E2E-001',
           'ROOT-TRANSFER-E2E-002',
           'DEVICE-JOIN-E2E-001',

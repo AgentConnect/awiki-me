@@ -2376,6 +2376,30 @@ abstract class AppLocalizations {
   /// **'正在准备安装更新...'**
   String get settingsUpdateStatusInstalling;
 
+  /// No description provided for @settingsUpdateStatusUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前租户暂未提供更新信息'**
+  String get settingsUpdateStatusUnavailable;
+
+  /// No description provided for @settingsUpdateStatusUnchecked.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未检查更新'**
+  String get settingsUpdateStatusUnchecked;
+
+  /// No description provided for @settingsUpdateStatusCached.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查失败，保留上次确认的版本信息'**
+  String get settingsUpdateStatusCached;
+
+  /// No description provided for @updatePolicyUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前租户暂未提供更新信息，你仍可打开下载页面。'**
+  String get updatePolicyUnavailable;
+
   /// No description provided for @settingsUpdateStatusFailed.
   ///
   /// In zh, this message translates to:

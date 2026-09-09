@@ -406,6 +406,344 @@ void main() {
     );
   });
 
+  test(
+    'reads a cached restriction without starting network discovery',
+    () async {
+      final store = _MemoryKeyValueStore();
+      await _service(
+        storage: store,
+        httpClient: _QueueHttpClient([
+          _HttpFixture.json(
+            'https://updates.example/latest.json',
+            _manifestJson(minimumVersion: '2.0.0'),
+          ),
+        ]),
+      ).checkForUpdates(force: true);
+      final client = _PendingHttpClient();
+      final cached = await _service(
+        storage: store,
+        httpClient: client,
+      ).loadCachedUpdate();
+      expect(cached.versionUnsupported, isTrue);
+      expect(cached.usedCache, isTrue);
+      expect(client.pending, isEmpty);
+    },
+  );
+
+  test('coalesces simultaneous network checks for the same tenant', () async {
+    final client = _PendingHttpClient();
+    final service = _service(
+      storage: _MemoryKeyValueStore(),
+      httpClient: client,
+    );
+    final first = service.checkForUpdates(force: false);
+    final second = service.checkForUpdates(force: true);
+    await client.started(1);
+    client.complete(0, _manifestJson());
+    final results = await Future.wait([first, second]);
+    expect(client.pending, hasLength(1));
+    expect(
+      results.every((value) => value.latestManifest?.policyRevision == 4),
+      isTrue,
+    );
+  });
+
+  test(
+    'a forced check does not settle for a concurrent automatic cache read',
+    () async {
+      final store = _MemoryKeyValueStore();
+      await _service(
+        storage: store,
+        httpClient: _QueueHttpClient([
+          _HttpFixture.json(
+            'https://updates.example/latest.json',
+            _manifestJson(),
+          ),
+        ]),
+      ).checkForUpdates(force: true);
+      final client = _PendingHttpClient();
+      final service = _service(storage: store, httpClient: client);
+      final automatic = service.checkForUpdates(force: false);
+      final forced = service.checkForUpdates(force: true);
+      await client.started(1);
+      client.complete(0, _manifestJson(policyRevision: 5));
+      expect((await automatic).wasSkipped, isTrue);
+      expect((await forced).latestManifest?.policyRevision, 5);
+    },
+  );
+
+  test(
+    'header timeout retains a verified gate and aborts the request',
+    () async {
+      final store = _MemoryKeyValueStore();
+      await _service(
+        storage: store,
+        httpClient: _QueueHttpClient([
+          _HttpFixture.json(
+            'https://updates.example/latest.json',
+            _manifestJson(minimumVersion: '2.0.0'),
+          ),
+        ]),
+      ).checkForUpdates(force: true);
+      final client = _PendingHttpClient();
+      final service = _service(
+        storage: store,
+        httpClient: client,
+        requestTimeout: const Duration(milliseconds: 30),
+      );
+      final task = service.checkForUpdates(force: true);
+      await client.started(1);
+      final result = await task;
+      expect(result.versionUnsupported, isTrue);
+      expect(result.usedCache, isTrue);
+      expect(result.failureReason, contains('TimeoutException'));
+      await expectLater(
+        (client.requests.single as http.AbortableRequest).abortTrigger,
+        completes,
+      );
+      client.complete(0, _manifestJson(policyRevision: 5));
+    },
+  );
+
+  test('stream timeout releases the response subscription', () async {
+    var cancelled = false;
+    final body = StreamController<List<int>>(
+      onCancel: () {
+        cancelled = true;
+      },
+    );
+    final client = _PendingHttpClient();
+    final service = _service(
+      storage: _MemoryKeyValueStore(),
+      httpClient: client,
+      requestTimeout: const Duration(milliseconds: 30),
+    );
+    final task = service.checkForUpdates(force: true);
+    await client.started(1);
+    client.pending.single.complete(http.StreamedResponse(body.stream, 200));
+    await expectLater(task, throwsA(isA<TimeoutException>()));
+    expect(cancelled, isTrue);
+    await body.close();
+  });
+
+  test(
+    'a response after timeout cannot overwrite the next verified policy',
+    () async {
+      final client = _PendingHttpClient();
+      final service = _service(
+        storage: _MemoryKeyValueStore(),
+        httpClient: client,
+        requestTimeout: const Duration(milliseconds: 30),
+      );
+      await expectLater(
+        service.checkForUpdates(force: true),
+        throwsA(isA<TimeoutException>()),
+      );
+      final current = service.checkForUpdates(force: true);
+      await client.started(2);
+      client.complete(
+        1,
+        _manifestJson(policyRevision: 5, minimumVersion: '2.0.0'),
+      );
+      expect((await current).versionUnsupported, isTrue);
+      client.complete(
+        0,
+        _manifestJson(policyRevision: 4, minimumVersion: '1.0.0'),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final cached = await service.loadCachedUpdate();
+      expect(cached.latestManifest?.policyRevision, 5);
+      expect(cached.versionUnsupported, isTrue);
+    },
+  );
+
+  test(
+    'dispose aborts an adapter that ignores cancellation and prevents late cache writes',
+    () async {
+      final store = _MemoryKeyValueStore();
+      final client = _PendingHttpClient();
+      final service = _service(storage: store, httpClient: client);
+      final task = service.checkForUpdates(force: true);
+      await client.started(1);
+      service.dispose();
+      await expectLater(task, throwsA(isA<UpdateInstallFailed>()));
+      client.complete(0, _manifestJson());
+      await Future<void>.delayed(Duration.zero);
+      expect(store.values, isEmpty);
+    },
+  );
+
+  test(
+    'confirmed absence remains absence across restart and offline checks',
+    () async {
+      final store = _MemoryKeyValueStore();
+      final service = _service(
+        storage: store,
+        officialTenant: false,
+        httpClient: _QueueHttpClient([
+          _HttpFixture.json(
+            'https://updates.example/latest.json',
+            _manifestJson(minimumVersion: '2.0.0'),
+          ),
+          _HttpFixture.text(
+            'https://updates.example/latest.json',
+            404,
+            'missing',
+          ),
+        ]),
+      );
+      await service.checkForUpdates(force: true);
+      await service.checkForUpdates(force: true);
+      final restarted = _service(
+        storage: store,
+        officialTenant: false,
+        httpClient: _QueueHttpClient([
+          _HttpFixture.text(
+            'https://updates.example/latest.json',
+            503,
+            'offline',
+          ),
+        ]),
+      );
+      expect((await restarted.loadCachedUpdate()).policyUnavailable, isTrue);
+      final cached = await restarted.checkForUpdates(force: false);
+      expect(cached.policyUnavailable, isTrue);
+      expect(cached.latestManifest, isNull);
+      final offline = await restarted.checkForUpdates(force: true);
+      expect(offline.policyUnavailable, isTrue);
+      expect(offline.versionUnsupported, isFalse);
+      expect(offline.usedCache, isTrue);
+    },
+  );
+
+  for (final wrongOrigin in [false, true]) {
+    test(
+      'disabled policy cannot clear a gate with ${wrongOrigin ? "another origin" : "an older revision"}',
+      () async {
+        final disabled = _serverInfoJson(
+          origin: wrongOrigin
+              ? 'https://wrong.example'
+              : 'https://updates.example',
+        );
+        final releases = disabled['client_versions']! as Map<String, Object?>;
+        releases['policy_revision'] = wrongOrigin ? 10 : 3;
+        (releases['products']! as Map<String, Object?>)['app'] =
+            <String, Object?>{'enabled': false};
+        final service = _service(
+          storage: _MemoryKeyValueStore(),
+          httpClient: _QueueHttpClient([
+            _HttpFixture.json(
+              'https://updates.example/latest.json',
+              _manifestJson(policyRevision: 9, minimumVersion: '2.0.0'),
+            ),
+            _HttpFixture.json('https://updates.example/latest.json', disabled),
+          ]),
+        );
+        await service.checkForUpdates(force: true);
+        final result = await service.checkForUpdates(force: true);
+        expect(result.versionUnsupported, isTrue);
+        expect(result.usedCache, isTrue);
+        expect(result.failureReason, isNotNull);
+      },
+    );
+  }
+
+  test(
+    'cache write failure does not discard a verified live restriction',
+    () async {
+      final service = _service(
+        storage: _ReadOnlyStore(),
+        httpClient: _QueueHttpClient([
+          _HttpFixture.json(
+            'https://updates.example/latest.json',
+            _manifestJson(minimumVersion: '2.0.0'),
+          ),
+          _HttpFixture.text(
+            'https://updates.example/latest.json',
+            503,
+            'offline',
+          ),
+        ]),
+      );
+      expect(
+        (await service.checkForUpdates(force: true)).versionUnsupported,
+        isTrue,
+      );
+      expect(
+        (await service.checkForUpdates(force: true)).versionUnsupported,
+        isTrue,
+      );
+    },
+  );
+
+  test('legacy cached minimum is applied before its first refresh', () async {
+    final store = _MemoryKeyValueStore();
+    final seeded = _service(
+      storage: store,
+      httpClient: _QueueHttpClient([
+        _HttpFixture.json(
+          'https://updates.example/latest.json',
+          _manifestJson(minimumVersion: '2.0.0'),
+        ),
+      ]),
+    );
+    await seeded.checkForUpdates(force: true);
+    seeded.dispose();
+    final key = store.values.keys.singleWhere(
+      (key) => key.endsWith('_policy_v1'),
+    );
+    store.values.remove(key);
+    store.values[key.replaceFirst(RegExp(r'_policy_v1$'), '_manifest')] =
+        jsonEncode(_manifestJson(minimumVersion: '2.0.0'));
+    final restarted = _service(
+      storage: store,
+      httpClient: _QueueHttpClient([]),
+    );
+    addTearDown(restarted.dispose);
+    final cached = await restarted.loadCachedUpdate();
+    expect(cached.versionUnsupported, isTrue);
+    expect(cached.usedCache, isTrue);
+  });
+
+  test(
+    'policy replacement survives failed auxiliary writes and restart',
+    () async {
+      final store = _FailCheckTimestampStore();
+      final service = _service(
+        storage: store,
+        officialTenant: false,
+        httpClient: _QueueHttpClient([
+          _HttpFixture.text(
+            'https://updates.example/latest.json',
+            404,
+            'missing',
+          ),
+          _HttpFixture.json(
+            'https://updates.example/latest.json',
+            _manifestJson(minimumVersion: '2.0.0'),
+          ),
+        ]),
+      );
+      expect(
+        (await service.checkForUpdates(force: true)).policyUnavailable,
+        isTrue,
+      );
+      expect(
+        (await service.checkForUpdates(force: true)).versionUnsupported,
+        isTrue,
+      );
+      service.dispose();
+      final restarted = _service(
+        storage: store,
+        httpClient: _QueueHttpClient([]),
+      );
+      addTearDown(restarted.dispose);
+      final cached = await restarted.loadCachedUpdate();
+      expect(cached.versionUnsupported, isTrue);
+      expect(cached.policyUnavailable, isFalse);
+    },
+  );
+
   test('dispose does not close an injected HTTP client', () async {
     final client = _QueueHttpClient(const <_HttpFixture>[]);
     final service = _service(
@@ -417,6 +755,23 @@ void main() {
 
     expect(client.isClosed, isFalse);
   });
+
+  test(
+    'disposed tenant cannot start an official check after preference I/O',
+    () async {
+      final store = _PendingPreferenceStore();
+      final client = _PendingHttpClient();
+      final service = _service(storage: store, httpClient: client);
+      final check = service.checkOfficialSource(
+        AppOfficialUpdateSource.secondary,
+      );
+      await store.started.future;
+      service.dispose();
+      store.finish.complete();
+      await expectLater(check, throwsStateError);
+      expect(client.requests, isEmpty);
+    },
+  );
 }
 
 AppUpdateService _service({
@@ -425,6 +780,7 @@ AppUpdateService _service({
   Future<bool> Function(Uri uri)? urlLauncher,
   String tenantId = 'tenant-test',
   bool officialTenant = true,
+  Duration requestTimeout = const Duration(seconds: 15),
 }) {
   return AppUpdateService(
     storage: storage,
@@ -442,6 +798,7 @@ AppUpdateService _service({
     manifestUrl: 'https://updates.example/latest.json',
     releasesUrl: 'https://updates.example/releases',
     officialTenant: officialTenant,
+    requestTimeout: requestTimeout,
   );
 }
 
@@ -626,4 +983,56 @@ class _HttpFixture {
   final int statusCode;
   final List<int> bodyBytes;
   final Map<String, String> headers;
+}
+
+class _PendingHttpClient extends http.BaseClient {
+  final pending = <Completer<http.StreamedResponse>>[];
+  final requests = <http.BaseRequest>[];
+  final changes = StreamController<int>.broadcast(sync: true);
+  Future<void> started(int count) async {
+    if (pending.length < count) {
+      await changes.stream.firstWhere((value) => value >= count);
+    }
+  }
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    requests.add(request);
+    pending.add(Completer<http.StreamedResponse>());
+    changes.add(pending.length);
+    return pending.last.future;
+  }
+
+  void complete(int index, Map<String, Object?> value) {
+    pending[index].complete(
+      http.StreamedResponse(Stream.value(utf8.encode(jsonEncode(value))), 200),
+    );
+  }
+}
+
+class _ReadOnlyStore extends _MemoryKeyValueStore {
+  @override
+  Future<void> write({required String key, required String value}) async =>
+      throw StateError('read only');
+}
+
+class _FailCheckTimestampStore extends _MemoryKeyValueStore {
+  @override
+  Future<void> write({required String key, required String value}) async {
+    if (key.endsWith('_checked_at')) throw StateError('timestamp write failed');
+    await super.write(key: key, value: value);
+  }
+}
+
+class _PendingPreferenceStore extends _MemoryKeyValueStore {
+  final started = Completer<void>();
+  final finish = Completer<void>();
+  @override
+  Future<void> write({required String key, required String value}) async {
+    if (key.endsWith('_preferred_official_source')) {
+      started.complete();
+      await finish.future;
+    }
+    await super.write(key: key, value: value);
+  }
 }

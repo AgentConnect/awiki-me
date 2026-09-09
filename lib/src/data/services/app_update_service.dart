@@ -36,6 +36,7 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
     String? manifestUrl,
     String? releasesUrl,
     bool? allowLoopbackHttp,
+    this.requestTimeout = const Duration(seconds: 15),
   }) : _storage = storage,
        _ownsHttpClient = httpClient == null,
        _httpClient = httpClient ?? http.Client(),
@@ -62,6 +63,12 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
   final String _releasesUrl;
   final bool _allowLoopbackHttp;
   final bool officialTenant;
+  final Duration requestTimeout;
+  bool _disposed = false;
+  Future<AppUpdateCheckResult>? _checkTask;
+  _CachedUpdatePolicy? _lastKnownPolicy;
+  final _activeRequests = <Completer<void>>{};
+  final _officialServices = <AppOfficialUpdateSource, AppUpdateService>{};
 
   String get policyOrigin => _origin(_policyUri);
   String get policyUrl => _policyUri.toString();
@@ -74,6 +81,7 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
 
   String get _lastCheckAtKey => '${_cacheNamespace}_checked_at';
   String get _lastManifestKey => '${_cacheNamespace}_manifest';
+  String get _policyCacheKey => '${_cacheNamespace}_policy_v1';
   String get _lastManifestCachedAtKey => '${_cacheNamespace}_cached_at';
   String get _lastPromptedVersionKey => '${_cacheNamespace}_prompted_version';
   String get _ignoredVersionKey => '${_cacheNamespace}_ignored_version';
@@ -87,6 +95,14 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
 
   @override
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    for (final request in _activeRequests.toList()) {
+      if (!request.isCompleted) request.complete();
+    }
+    for (final service in _officialServices.values) {
+      service.dispose();
+    }
     if (_ownsHttpClient) _httpClient.close();
   }
 
@@ -100,37 +116,70 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
   }
 
   @override
-  Future<AppUpdateCheckResult> checkForUpdates({required bool force}) async {
+  Future<AppUpdateCheckResult> loadCachedUpdate() async {
+    final current = await getCurrentVersion();
+    final cached = await _loadCachedPolicy();
+    return _result(
+      currentVersion: current,
+      manifest: cached.manifest,
+      cachedAt: cached.cachedAt,
+      usedCache: cached.isKnown,
+      policyUnavailable: cached.unavailable,
+      wasSkipped: true,
+    );
+  }
+
+  @override
+  Future<AppUpdateCheckResult> checkForUpdates({required bool force}) {
+    if (_disposed) return Future.error(StateError('Update service disposed.'));
+    final pending = _checkTask;
+    if (pending != null) {
+      // A manual check may share a network request, but must not settle for an
+      // automatic check which only read the fresh cache.
+      return pending.then(
+        (result) =>
+            force && result.wasSkipped ? checkForUpdates(force: true) : result,
+      );
+    }
+    late final Future<AppUpdateCheckResult> task;
+    task = _checkForUpdates(force: force).whenComplete(() {
+      if (identical(_checkTask, task)) _checkTask = null;
+    });
+    _checkTask = task;
+    return task;
+  }
+
+  Future<AppUpdateCheckResult> _checkForUpdates({required bool force}) async {
     final currentVersion = await getCurrentVersion();
-    final cached = await _loadCachedManifest();
+    final cached = await _loadCachedPolicy();
     final cachedLocksCurrentVersion =
         cached.manifest != null &&
         _isUnsupported(currentVersion, cached.manifest!);
-    if (!force && !cachedLocksCurrentVersion && await _shouldSkipAutoCheck()) {
+    if (!force &&
+        cached.isKnown &&
+        !cachedLocksCurrentVersion &&
+        await _shouldSkipAutoCheck()) {
       return _result(
         currentVersion: currentVersion,
         manifest: cached.manifest,
         cachedAt: cached.cachedAt,
         wasSkipped: true,
-        usedCache: cached.manifest != null,
+        usedCache: cached.isKnown,
+        policyUnavailable: cached.unavailable,
       );
     }
-
     try {
       _validateNetworkUri(_policyUri, label: 'update policy');
       final response = await _sendBounded(_policyUri);
+      if (_disposed) throw StateError('Update service disposed.');
       if (response.statusCode == 404 && !officialTenant) {
-        await _storage.delete(key: _lastManifestKey);
-        await _storage.delete(key: _lastManifestCachedAtKey);
-        await _storage.write(
-          key: _lastCheckAtKey,
-          value: DateTime.now().toUtc().toIso8601String(),
-        );
-        return _result(
-          currentVersion: currentVersion,
-          manifest: null,
-          policyUnavailable: true,
-          failureReason: 'This tenant does not provide an update policy.',
+        return _acceptPolicy(
+          currentVersion,
+          _CachedUpdatePolicy(
+            unavailable: true,
+            revision: cached.revision,
+            cachedAt: DateTime.now().toUtc(),
+          ),
         );
       }
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -145,53 +194,31 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
       final document = decoded.map<String, Object?>(
         (key, value) => MapEntry(key.toString(), value),
       );
+      // Disabled products must pass the same origin/revision checks as an
+      // enabled product before they are allowed to remove a cached minimum.
+      final revision = _validateResponsePolicy(document, cached.revision);
       final manifestJson = _appManifestFromResponse(document);
-      if (manifestJson == null) {
-        await _storage.delete(key: _lastManifestKey);
-        await _storage.delete(key: _lastManifestCachedAtKey);
-        return _result(
-          currentVersion: currentVersion,
-          manifest: null,
-          policyUnavailable: true,
-          failureReason: 'This tenant does not provide an App update policy.',
-        );
-      }
-      final manifest = AppUpdateManifest.fromJson(manifestJson);
-      if (manifest.policyOrigin != policyOrigin) {
-        throw const FormatException(
-          'Update policy origin does not match the selected tenant.',
-        );
-      }
-      if (cached.manifest != null &&
-          manifest.policyRevision < cached.manifest!.policyRevision) {
-        throw const FormatException('Update policy revision moved backwards.');
-      }
-      _validateManifestUris(manifest);
-      final cachedAt = DateTime.now().toUtc();
-      await _storage.write(
-        key: _lastManifestKey,
-        value: jsonEncode(manifest.toJson()),
-      );
-      await _storage.write(
-        key: _lastManifestCachedAtKey,
-        value: cachedAt.toIso8601String(),
-      );
-      await _storage.write(
-        key: _lastCheckAtKey,
-        value: cachedAt.toIso8601String(),
-      );
-      return _result(
-        currentVersion: currentVersion,
-        manifest: manifest,
-        cachedAt: cachedAt,
+      final manifest = manifestJson == null
+          ? null
+          : AppUpdateManifest.fromJson(manifestJson);
+      if (manifest != null) _validateManifestUris(manifest);
+      return _acceptPolicy(
+        currentVersion,
+        _CachedUpdatePolicy(
+          manifest: manifest,
+          unavailable: manifest == null,
+          revision: revision,
+          cachedAt: DateTime.now().toUtc(),
+        ),
       );
     } catch (error) {
-      if (cached.manifest != null) {
+      if (cached.isKnown) {
         return _result(
           currentVersion: currentVersion,
           manifest: cached.manifest,
           cachedAt: cached.cachedAt,
           usedCache: true,
+          policyUnavailable: cached.unavailable,
           failureReason: error.toString(),
         );
       }
@@ -199,25 +226,100 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
     }
   }
 
+  int _validateResponsePolicy(
+    Map<String, Object?> document,
+    int minimumRevision,
+  ) {
+    Object? raw = document;
+    if (document.containsKey('client_versions')) {
+      if (document['schema_version'] != 1) {
+        throw const FormatException('Invalid server-info response.');
+      }
+      raw = document['client_versions'];
+      if (raw == null) return minimumRevision;
+    }
+    if (raw is! Map || raw['policy_origin'] != policyOrigin) {
+      throw const FormatException(
+        'Update policy origin does not match the selected tenant.',
+      );
+    }
+    final value = raw['policy_revision'];
+    final revision = value is int
+        ? value
+        : value is String
+        ? int.tryParse(value)
+        : null;
+    if (revision == null || revision < 1) {
+      throw const FormatException('Invalid update policy revision.');
+    }
+    if (revision < minimumRevision) {
+      throw const FormatException('Update policy revision moved backwards.');
+    }
+    return revision;
+  }
+
+  Future<AppUpdateCheckResult> _acceptPolicy(
+    AppVersion current,
+    _CachedUpdatePolicy policy,
+  ) async {
+    if (_disposed) throw StateError('Update service disposed.');
+    _lastKnownPolicy = policy;
+    // Persistence is a cache, not authority over a successfully verified live
+    // policy. Retain that policy in memory even when local writes fail.
+    try {
+      // One record replaces the manifest and the explicit absence together;
+      // interrupted auxiliary writes cannot resurrect the previous state.
+      await _storage.write(
+        key: _policyCacheKey,
+        value: jsonEncode({
+          'schema_version': 1,
+          'policy_origin': policyOrigin,
+          'policy_revision': policy.revision,
+          'cached_at': policy.cachedAt?.toIso8601String(),
+          'unavailable': policy.unavailable,
+          'manifest': policy.manifest?.toJson(),
+        }),
+      );
+      await _storage.write(
+        key: _lastCheckAtKey,
+        value: policy.cachedAt!.toIso8601String(),
+      );
+    } catch (_) {
+      /* Keep the current verified in-memory policy. */
+    }
+    return _result(
+      currentVersion: current,
+      manifest: policy.manifest,
+      cachedAt: policy.cachedAt,
+      policyUnavailable: policy.unavailable,
+    );
+  }
+
   @override
   Future<AppUpdateCheckResult> checkOfficialSource(
     AppOfficialUpdateSource source,
   ) async {
+    if (_disposed) throw StateError('Update service disposed.');
     final origin = switch (source) {
       AppOfficialUpdateSource.primary => primaryBuiltinTenantBackendBaseUrl,
       AppOfficialUpdateSource.secondary => secondaryBuiltinTenantBackendBaseUrl,
     };
     await _storage.write(key: _preferredOfficialSourceKey, value: source.name);
-    final service = AppUpdateService(
-      storage: _storage,
-      tenantId: _tenantId,
-      backendBaseUrl: origin,
-      officialTenant: true,
-      httpClient: _httpClient,
-      platformBridge: _platformBridge,
-      packageInfoLoader: _packageInfoLoader,
-      urlLauncher: _urlLauncher,
-      allowLoopbackHttp: _allowLoopbackHttp,
+    if (_disposed) throw StateError('Update service disposed.');
+    final service = _officialServices.putIfAbsent(
+      source,
+      () => AppUpdateService(
+        storage: _storage,
+        tenantId: _tenantId,
+        backendBaseUrl: origin,
+        officialTenant: true,
+        httpClient: _httpClient,
+        platformBridge: _platformBridge,
+        packageInfoLoader: _packageInfoLoader,
+        urlLauncher: _urlLauncher,
+        allowLoopbackHttp: _allowLoopbackHttp,
+        requestTimeout: requestTimeout,
+      ),
     );
     final result = await service.checkForUpdates(force: true);
     return AppUpdateCheckResult(
@@ -323,38 +425,80 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
   }
 
   Future<bool> _shouldSkipAutoCheck() async {
-    final raw = await _storage.read(key: _lastCheckAtKey);
-    final checkedAt = raw == null ? null : DateTime.tryParse(raw);
-    return checkedAt != null &&
-        DateTime.now().toUtc().difference(checkedAt.toUtc()) <
-            _autoCheckInterval;
+    try {
+      final raw = await _storage.read(key: _lastCheckAtKey);
+      final checkedAt = raw == null ? null : DateTime.tryParse(raw);
+      return checkedAt != null &&
+          DateTime.now().toUtc().difference(checkedAt.toUtc()) <
+              _autoCheckInterval;
+    } catch (_) {
+      return false;
+    }
   }
 
-  Future<({AppUpdateManifest? manifest, DateTime? cachedAt})>
-  _loadCachedManifest() async {
-    final raw = await _storage.read(key: _lastManifestKey);
-    final cachedAtRaw = await _storage.read(key: _lastManifestCachedAtKey);
-    if (raw == null || raw.trim().isEmpty) {
-      return (manifest: null, cachedAt: null);
-    }
+  Future<_CachedUpdatePolicy> _loadCachedPolicy() async {
+    if (_lastKnownPolicy != null) return _lastKnownPolicy!;
+    var cached = const _CachedUpdatePolicy();
     try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) return (manifest: null, cachedAt: null);
-      final manifest = AppUpdateManifest.fromJson(
-        decoded.map<String, Object?>(
-          (key, value) => MapEntry(key.toString(), value),
-        ),
-      );
-      if (manifest.policyOrigin != policyOrigin) {
-        return (manifest: null, cachedAt: null);
+      final record = await _storage.read(key: _policyCacheKey);
+      if (record != null) {
+        final value = jsonDecode(record);
+        if (value is Map &&
+            value['schema_version'] == 1 &&
+            value['policy_origin'] == policyOrigin &&
+            value['policy_revision'] is int &&
+            (value['policy_revision'] as int) >= 0) {
+          final rawManifest = _mapOrNull(value['manifest']);
+          final manifest = rawManifest == null
+              ? null
+              : AppUpdateManifest.fromJson(rawManifest);
+          if (manifest != null) {
+            if (manifest.policyOrigin != policyOrigin ||
+                manifest.policyRevision != value['policy_revision']) {
+              throw const FormatException('Inconsistent cached policy.');
+            }
+            _validateManifestUris(manifest);
+          }
+          if (value['unavailable'] != (manifest == null)) {
+            throw const FormatException('Inconsistent cached policy state.');
+          }
+          cached = _CachedUpdatePolicy(
+            manifest: manifest,
+            unavailable: manifest == null,
+            revision: value['policy_revision'] as int,
+            cachedAt: DateTime.tryParse(value['cached_at']?.toString() ?? ''),
+          );
+        }
+        // A present new record supersedes the legacy cache, even if corrupt.
+        return _lastKnownPolicy ??= cached;
       }
-      return (
-        manifest: manifest,
-        cachedAt: cachedAtRaw == null ? null : DateTime.tryParse(cachedAtRaw),
-      );
+      // Read existing installations' cache until a verified refresh replaces it.
+      final raw = await _storage.read(key: _lastManifestKey);
+      if (raw != null && raw.trim().isNotEmpty) {
+        final value = jsonDecode(raw);
+        if (value is Map) {
+          final manifest = AppUpdateManifest.fromJson(
+            value.map<String, Object?>(
+              (key, value) => MapEntry(key.toString(), value),
+            ),
+          );
+          if (manifest.policyOrigin == policyOrigin) {
+            _validateManifestUris(manifest);
+            final timestamp = await _storage.read(
+              key: _lastManifestCachedAtKey,
+            );
+            cached = _CachedUpdatePolicy(
+              manifest: manifest,
+              revision: manifest.policyRevision,
+              cachedAt: DateTime.tryParse(timestamp ?? ''),
+            );
+          }
+        }
+      }
     } catch (_) {
-      return (manifest: null, cachedAt: null);
+      /* An unreadable cache cannot establish a version requirement. */
     }
+    return _lastKnownPolicy ??= cached;
   }
 
   Future<void> _openUrl(String rawUrl) async {
@@ -367,26 +511,63 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
   }
 
   Future<http.Response> _sendBounded(Uri uri) async {
-    final request = http.Request('GET', uri)..followRedirects = false;
-    final streamed = await _httpClient.send(request);
-    if (streamed.isRedirect) {
-      throw const UpdateInstallFailed(
-        'Cross-origin update policy redirects are not allowed.',
-      );
-    }
-    final bytes = <int>[];
-    await for (final chunk in streamed.stream) {
-      bytes.addAll(chunk);
-      if (bytes.length > _maximumPolicyBytes) {
+    if (_disposed) throw StateError('Update service disposed.');
+    final abort = Completer<void>();
+    _activeRequests.add(abort);
+    StreamIterator<List<int>>? iterator;
+    Future<http.Response> read() async {
+      final request = http.AbortableRequest(
+        'GET',
+        uri,
+        abortTrigger: abort.future,
+      )..followRedirects = false;
+      final streamed = await _httpClient.send(request);
+      final body = StreamIterator(streamed.stream);
+      iterator = body;
+      if (abort.isCompleted) {
+        unawaited(body.cancel());
+        throw const UpdateInstallFailed('Update request cancelled.');
+      }
+      if (streamed.isRedirect) {
+        throw const UpdateInstallFailed(
+          'Cross-origin update policy redirects are not allowed.',
+        );
+      }
+      if ((streamed.contentLength ?? 0) > _maximumPolicyBytes) {
         throw const UpdateInstallFailed('Update policy response is too large.');
       }
+      final bytes = <int>[];
+      while (await body.moveNext()) {
+        bytes.addAll(body.current);
+        if (bytes.length > _maximumPolicyBytes) {
+          throw const UpdateInstallFailed(
+            'Update policy response is too large.',
+          );
+        }
+      }
+      return http.Response.bytes(
+        bytes,
+        streamed.statusCode,
+        request: request,
+        headers: streamed.headers,
+      );
     }
-    return http.Response.bytes(
-      bytes,
-      streamed.statusCode,
-      request: request,
-      headers: streamed.headers,
-    );
+
+    try {
+      return await Future.any<http.Response>([
+        read(),
+        abort.future.then<http.Response>(
+          (_) => throw const UpdateInstallFailed('Update request cancelled.'),
+        ),
+      ]).timeout(requestTimeout);
+    } finally {
+      if (!abort.isCompleted) abort.complete();
+      _activeRequests.remove(abort);
+      // Do not let a stalled adapter's cancellation delay the UI timeout.
+      unawaited(
+        iterator?.cancel().catchError((Object _) {}) ?? Future<void>.value(),
+      );
+    }
   }
 
   void _validateManifestUris(AppUpdateManifest manifest) {
@@ -523,4 +704,18 @@ bool _isLoopback(String host) {
   return normalized == 'localhost' ||
       normalized == '127.0.0.1' ||
       normalized == '::1';
+}
+
+class _CachedUpdatePolicy {
+  const _CachedUpdatePolicy({
+    this.manifest,
+    this.cachedAt,
+    this.unavailable = false,
+    this.revision = 0,
+  });
+  final AppUpdateManifest? manifest;
+  final DateTime? cachedAt;
+  final bool unavailable;
+  final int revision;
+  bool get isKnown => manifest != null || unavailable;
 }

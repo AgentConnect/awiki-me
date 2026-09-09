@@ -44,6 +44,9 @@ abstract interface class DisposableUpdateService {
 abstract class UpdateService {
   Future<AppVersion> getCurrentVersion();
 
+  /// Read only this tenant's previously verified policy, without network I/O.
+  Future<AppUpdateCheckResult> loadCachedUpdate();
+
   Future<AppUpdateCheckResult> checkForUpdates({required bool force});
 
   Future<AppUpdateCheckResult> checkOfficialSource(
