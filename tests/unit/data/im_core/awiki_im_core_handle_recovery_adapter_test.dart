@@ -167,6 +167,34 @@ void main() {
     },
   );
 
+  test(
+    'locally deleted recovery stays terminal without reading removed keys',
+    () async {
+      final sdk = _FakeRecoveryCore()
+        ..summary = _summary(
+          lifecycle: core.HandleRecoveryOperationLifecycle.locallyDeleted,
+          commitAttempted: true,
+          keyState: core.HandleRecoveryKeyState.destroyedByDeletion,
+        );
+      final adapter = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+        coreInstance: () async => sdk,
+      );
+
+      final result = (await adapter.listOperations(_owner)).single;
+
+      expect(sdk.calls, ['list']);
+      expect(
+        result.lifecycleClass,
+        HandleRecoveryLifecycleClass.locallyDeleted,
+      );
+      expect(result.keyState, HandleRecoveryKeyState.destroyedByDeletion);
+      expect(result.commitAttempted, isTrue);
+      expect(result.isActionable, isFalse);
+      expect(result.canResume, isFalse);
+      expect(result.canActivate, isFalse);
+    },
+  );
+
   test('progress projection uses the same retryability table', () async {
     final sdk = _FakeRecoveryCore()
       ..phase = core.HandleRecoveryPhase.remoteOutcomeUnknown

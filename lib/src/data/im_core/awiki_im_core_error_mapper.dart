@@ -67,8 +67,6 @@ class AwikiImCoreErrorMapper {
           'handle_recovery.local_state_conflict',
           'handle_recovery.transition_missing',
           'handle_recovery.join_terminal_wait',
-          'handle_recovery.precommit_discard_required',
-          'handle_recovery.operation_must_resume',
           'handle_recovery.transition_must_complete',
           'handle_recovery.join_must_complete',
           'identity.local_data_deletion_pending',

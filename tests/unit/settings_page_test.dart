@@ -24,6 +24,7 @@ import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'app_update_provider_test.dart' show buildManifest;
 import 'test_support.dart';
 
 void main() {
@@ -626,8 +627,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('设置页检查更新调用真实更新服务', (tester) async {
-    final updateService = FakeUpdateService();
+  testWidgets('设置页查询到当前版本时提示已最新', (tester) async {
+    final updateService = FakeUpdateService()
+      ..latestManifest = buildManifest(version: '0.1.0', buildNumber: 1);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(

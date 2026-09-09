@@ -770,11 +770,13 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.byType(OnboardingPage), findsOneWidget);
+    // Keep the current screen until Core has actually accepted/completed deletion.
+    expect(find.byType(OnboardingPage), findsNothing);
     deleteCompleter.complete();
     await deleteFuture;
     await tester.pumpAndSettle();
 
+    expect(find.byType(OnboardingPage), findsOneWidget);
     expect(gateway.deleteLocalCredentialCalls, 1);
     expect(find.text('发送验证码'), findsOneWidget);
     expect(find.text('导入身份凭证'), findsNothing);

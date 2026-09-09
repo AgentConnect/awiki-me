@@ -287,7 +287,8 @@ void main() {
       expect(gateway.loadCachedDisplayProfilesCalls, 1);
 
       profileGate.complete();
-      await tester.pumpAndSettle();
+      // Observe the projection without waiting for unrelated chat animations.
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('@第一个 Codex'), findsOneWidget);
       expect(
@@ -297,7 +298,7 @@ void main() {
       expect(gateway.loadPublicProfileQueries, isEmpty);
 
       await tester.enterText(find.byType(CupertinoTextField), '@cgw');
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('@第一个 Codex'), findsOneWidget);
       expect(gateway.listGroupMembersCalls, 1);
       expect(gateway.loadCachedDisplayProfilesCalls, 1);
@@ -354,7 +355,7 @@ void main() {
           session: session,
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
       final container = ProviderScope.containerOf(
         tester.element(find.byType(ChatView)),
         listen: false,
@@ -925,7 +926,7 @@ void main() {
           session: session,
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
       final container = ProviderScope.containerOf(
         tester.element(find.byType(ChatView)),
         listen: false,
@@ -933,7 +934,7 @@ void main() {
       container
           .read(chatThreadsProvider.notifier)
           .debugSeedMessageForTesting(message);
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
       expect(
         find.byWidgetPredicate(
           (widget) =>
@@ -957,7 +958,7 @@ void main() {
               fullHandle: 'cgw-cx-038.awiki.info',
             ),
           );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(
         find.byWidgetPredicate(

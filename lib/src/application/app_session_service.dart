@@ -47,6 +47,8 @@ abstract interface class AppSessionService {
 
   Future<void> logout();
 
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias);
+
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias);
 }
 
@@ -645,6 +647,12 @@ class ImCoreAppSessionService
   }
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async {
+    if (!_runtime.isOpen) await _runtime.open();
+    return _identities.hasPendingLocalIdentityRecovery(identityIdOrAlias);
+  }
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {
     final transition = beginSessionTransition();
     return _runOwnedSessionTransition(
@@ -726,16 +734,6 @@ class ImCoreAppSessionService
     final current = _current;
     final deletingCurrent =
         current != null && _matchesIdentity(current, selector);
-    Future<void>? realtimeCleanup;
-    if (deletingCurrent) {
-      _current = null;
-      clearCommittedSessionTransition();
-      await _activeSessionStore?.clearActiveIdentityId();
-      realtimeCleanup = _stopRealtimeBestEffort();
-      if (deleteOwnerData) {
-        await realtimeCleanup;
-      }
-    }
     final deleted = deletionId != null
         ? await _localIdentityDataDeletionPort
               .completeLocalIdentityDataDeletion(deletionId)
@@ -744,6 +742,17 @@ class ImCoreAppSessionService
             identityIdOrAlias,
           )
         : await _identities.deleteLocalIdentity(identityIdOrAlias);
+    if (deletingCurrent) {
+      _current = null;
+      clearCommittedSessionTransition();
+      await _activeSessionStore?.clearActiveIdentityId();
+      final cleanup = _stopRealtimeBestEffort();
+      if (deleteOwnerData) {
+        await cleanup;
+      } else {
+        unawaited(cleanup);
+      }
+    }
     if (current != null &&
         (_matchesIdentity(current, selector) ||
             _matchesIdentity(current, deleted.identityId) ||

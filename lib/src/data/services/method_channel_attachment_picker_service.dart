@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../../application/attachment_picker_service.dart';
 import '../../application/models/attachment_models.dart';
+import '../../application/screenshot_failure.dart';
 
 typedef AttachmentProcessRunner =
     Future<ProcessResult> Function(String executable, List<String> arguments);
@@ -127,6 +128,7 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
   final Duration screenCaptureTimeout;
   final int maxAttachmentSizeBytes;
   bool _screenCapturePermissionRequested = false;
+  bool _macScreenshotInProgress = false;
   static const String _fallbackMimeType = 'application/octet-stream';
 
   @override
@@ -196,8 +198,24 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     if (_windowsPlatform) {
       return _captureWindowsScreenshot();
     }
+    // Coalesce repeated clicks without handing the same draft to two callers.
+    if (_macScreenshotInProgress) return null;
+    _macScreenshotInProgress = true;
+    try {
+      return await _captureMacScreenshot();
+    } on FileSystemException {
+      throw ScreenshotFailure(ScreenshotFailureKind.captureFailed);
+    } finally {
+      _macScreenshotInProgress = false;
+    }
+  }
+
+  Future<AttachmentDraft?> _captureMacScreenshot() async {
     if (!await _ensureScreenCapturePermission()) {
-      throw StateError('screenshot_screen_recording_permission_required');
+      throw ScreenshotFailure(
+        ScreenshotFailureKind.permissionRequired,
+        diagnostics: await _screenCaptureDiagnostics(),
+      );
     }
     final directory = await _temporaryDirectoryProvider();
     await directory.create(recursive: true);
@@ -210,12 +228,20 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
         '-x',
         source.path,
       ]);
-      if (result.exitCode != 0 || !await source.exists()) {
+      final exists = await source.exists();
+      // The interactive utility may return 0 or 1 for cancellation. Only a
+      // quiet exit without an image is cancellation, not arbitrary failures.
+      if (!exists &&
+          (result.exitCode == 0 || result.exitCode == 1) &&
+          result.stderr.toString().trim().isEmpty) {
         return null;
+      }
+      if (result.exitCode != 0 || !exists) {
+        throw ScreenshotFailure(ScreenshotFailureKind.captureFailed);
       }
       final sizeBytes = await source.length();
       if (sizeBytes <= 0) {
-        return null;
+        throw ScreenshotFailure(ScreenshotFailureKind.captureFailed);
       }
       return await draftFromExternalSource(
         path: source.path,
@@ -223,8 +249,10 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
         mimeType: 'image/png',
         sizeBytes: sizeBytes,
       );
-    } on ProcessException catch (error) {
-      throw StateError('screenshot_capture_failed: ${error.errorCode}');
+    } on ProcessException {
+      throw ScreenshotFailure(ScreenshotFailureKind.captureFailed);
+    } on FileSystemException {
+      throw ScreenshotFailure(ScreenshotFailureKind.captureFailed);
     } finally {
       try {
         if (await source.exists()) {
@@ -309,28 +337,63 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
 
   Future<bool> _ensureScreenCapturePermission() async {
     try {
-      final granted =
-          await _channel.invokeMethod<bool>(
-            'preflightScreenCapturePermission',
-          ) ??
-          false;
+      final granted = await _channel.invokeMethod<bool>(
+        'preflightScreenCapturePermission',
+      );
+      if (granted == null) {
+        throw ScreenshotFailure(ScreenshotFailureKind.permissionCheckFailed);
+      }
       if (granted) {
         return true;
       }
       if (_screenCapturePermissionRequested) {
         return false;
       }
+      final requested = await _channel.invokeMethod<bool>(
+        'requestScreenCapturePermission',
+      );
+      if (requested == null) {
+        throw ScreenshotFailure(ScreenshotFailureKind.permissionCheckFailed);
+      }
+      // Only remember a valid response. A failed bridge call is not a denial;
+      // the native process-owned guard still prevents repeated system prompts.
       _screenCapturePermissionRequested = true;
-      return await _channel.invokeMethod<bool>(
-            'requestScreenCapturePermission',
-          ) ??
-          false;
+      return requested;
     } on MissingPluginException {
-      // Non-macOS/unit environments do not install the native permission
-      // bridge. Screenshot support is injected explicitly in those tests.
-      return true;
+      throw ScreenshotFailure(ScreenshotFailureKind.permissionCheckFailed);
     } on PlatformException {
-      return false;
+      throw ScreenshotFailure(ScreenshotFailureKind.permissionCheckFailed);
+    } on TypeError {
+      throw ScreenshotFailure(ScreenshotFailureKind.permissionCheckFailed);
+    }
+  }
+
+  Future<ScreenshotAppDiagnostics?> _screenCaptureDiagnostics() async {
+    try {
+      final data = await _channel.invokeMapMethod<String, Object?>(
+        'screenCaptureDiagnostics',
+      );
+      if (data == null ||
+          !const [
+            'applicationName',
+            'bundleIdentifier',
+            'applicationPath',
+            'version',
+          ].every((key) => data[key] is String)) {
+        return null;
+      }
+      return ScreenshotAppDiagnostics(
+        applicationName: data['applicationName']! as String,
+        bundleIdentifier: data['bundleIdentifier']! as String,
+        applicationPath: data['applicationPath']! as String,
+        version: data['version']! as String,
+      );
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    } on TypeError {
+      return null;
     }
   }
 

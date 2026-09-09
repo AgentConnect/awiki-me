@@ -509,6 +509,8 @@ HandleRecoveryLifecycleClass _lifecycleFromCore(
     HandleRecoveryLifecycleClass.quarantinedKeyUnavailable,
   core.HandleRecoveryOperationLifecycle.supersededByStateChange =>
     HandleRecoveryLifecycleClass.supersededByStateChange,
+  core.HandleRecoveryOperationLifecycle.locallyDeleted =>
+    HandleRecoveryLifecycleClass.locallyDeleted,
   core.HandleRecoveryOperationLifecycle.failedTerminal =>
     HandleRecoveryLifecycleClass.failedTerminal,
 };
@@ -520,6 +522,8 @@ HandleRecoveryKeyState _keyStateFromCore(core.HandleRecoveryKeyState value) =>
         HandleRecoveryKeyState.temporarilyLocked,
       core.HandleRecoveryKeyState.permanentlyUnavailable =>
         HandleRecoveryKeyState.permanentlyUnavailable,
+      core.HandleRecoveryKeyState.destroyedByDeletion =>
+        HandleRecoveryKeyState.destroyedByDeletion,
       core.HandleRecoveryKeyState.destroyedPreAttempt =>
         HandleRecoveryKeyState.destroyedPreAttempt,
     };

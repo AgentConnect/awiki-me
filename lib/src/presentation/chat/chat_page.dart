@@ -48,6 +48,8 @@ import '../../app/app_router.dart';
 import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
 import '../../application/attachment_preview_service.dart';
+import '../../application/screenshot_failure.dart';
+import 'screenshot_permission_dialog.dart';
 import '../../application/attachment_image_dimensions.dart';
 import '../../application/attachment_resource_reference.dart';
 import '../../application/models/attachment_models.dart';
@@ -713,6 +715,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   int _openingAnchorToken = 0;
   bool _isOpeningGroupInvite = false;
   bool _isDraggingExternalAttachment = false;
+  bool _screenshotOperationInProgress = false;
   final Set<String> _requestedGroupRoleIds = <String>{};
   final Set<String> _downloadingAttachmentMessageIds = <String>{};
   final Set<String> _activeImageAttachmentActions = <String>{};
@@ -1789,11 +1792,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   Future<void> _captureAndStageScreenshot({required bool hideApp}) async {
+    if (_screenshotOperationInProgress) return;
     final expectedEpoch = ref.read(sessionProvider).activeEpoch;
     final conversation = _currentConversationSnapshot();
     if (expectedEpoch == null || !_canAcceptExternalAttachment(conversation)) {
       return;
     }
+    _screenshotOperationInProgress = true;
     try {
       final draft = await ref
           .read(attachmentPickerServiceProvider)
@@ -1807,9 +1812,20 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (!_isExternalAttachmentOperationCurrent(expectedEpoch, conversation)) {
         return;
       }
+      if (error is ScreenshotFailure &&
+          error.kind == ScreenshotFailureKind.permissionRequired) {
+        if (!mounted) return;
+        await AppNavigator.showDialog<void>(
+          context,
+          (_) => ScreenshotPermissionDialog(diagnostics: error.diagnostics),
+        );
+        return;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));
+    } finally {
+      _screenshotOperationInProgress = false;
     }
   }
 

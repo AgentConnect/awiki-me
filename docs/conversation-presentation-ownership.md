@@ -216,7 +216,18 @@ Flutter 3.44 的 macOS `SelectableRegion` 在每次右键按下时会先按鼠�
 
 文字动作顺序固定为复制、复制全部、全选。复制优先使用冻结的有效选区，未形成可复制选区时（例如直接右键单个 Emoji）兼容回退整条消息全文；复制全部始终从 `ChatMessage` 投影稳定全文，普通消息复制原始 `content`，附件消息复制非空 caption 和本地化文件名，不得把 Markdown 渲染结果、下载进度或操作按钮文案当作全文。全选关闭菜单后必须保留全文高亮和移动端选择句柄，后续复制继续使用更新后的真实选区。
 
-Composer 的附件来源仍统一进入 `AttachmentDraft`：文件选择、拖拽、剪贴板图片和 macOS `/usr/sbin/screencapture -i -x` 交互式截图都只负责暂存，用户点击发送后才调用 canonical attachment send API。截图期间主窗口始终保持可见，不再根据 Shift 或 native 全局 modifier 隐藏 App。App 在启动系统截图前必须通过 native `CGPreflightScreenCaptureAccess` 检查权限，单进程最多调用一次 `CGRequestScreenCaptureAccess`；未授权时禁止继续执行 `screencapture`，避免把只有桌面的错误图片当作有效附件。Debug App 必须使用稳定 Apple Development designated requirement，不能用随构建变化的 ad-hoc CDHash。Emoji 面板只修改当前 `TextEditingValue` 的选区并沿用 draft mention range 转换，不引入新的消息类型。
+Composer 的附件来源仍统一进入 `AttachmentDraft`：文件选择、拖拽、剪贴板图片和 macOS `/usr/sbin/screencapture -i -x` 交互式截图都只负责暂存，用户点击发送后才调用 canonical attachment send API。截图期间主窗口始终保持可见，不再根据 Shift 或 native 全局 modifier 隐藏 App。App 在启动系统截图前必须通过 native `CGPreflightScreenCaptureAccess` 检查权限，native 层单进程最多调用一次 `CGRequestScreenCaptureAccess`，不随 tenant runtime/window 重建；未授权或接口异常时禁止继续执行 `screencapture`，避免把只有桌面的错误图片当作有效附件。需要跨构建保留权限的 Debug 验证应启用本地稳定 Apple Development 签名；共享默认仍为便携 ad-hoc，详见 `macos-signing.md`。Emoji 面板只修改当前 `TextEditingValue` 的选区并沿用 draft mention range 转换，不引入新的消息类型。
+
+macOS 截图错误通过 `ScreenshotFailure` 区分权限未生效、权限接口失败和截图执行失败。
+权限拒绝不持久缓存，每次用户截图重新 preflight；同一进行中的截图和恢复对话框不重复提交。
+权限恢复窗口默认只解释 macOS 截图需要屏幕录制权限，提供固定底部的“打开系统设置”和
+“暂不设置”；故障恢复说明仅在“已开启权限，仍无法截图？”展开后显示，版本、运行模式、
+Bundle ID 和复制入口进一步收进“查看排查信息”。正文可滚动，但主操作不随正文滚走。
+开关已开启仍失败时才展示移除旧条目、重新添加当前应用的指引；普通权限 API 无法证明
+签名不匹配，因此 UI 不把该原因当作事实。普通错误提示不包含原生接口或重新编译等开发术语。
+原生桥只返回当前 Bundle 的名称、Bundle ID、版本和安装路径，诊断仅在用户点击时复制，
+不读取 TCC 数据库、不记录账号或截图、不自动重置权限、重签名、退出或重启应用。
+截图工具无图且退出码 0/1、stderr 为空时按取消处理；其他失败显示本地化错误，不暴露 stderr。
 
 mention 渲染规则：
 

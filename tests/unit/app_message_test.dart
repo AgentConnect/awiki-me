@@ -103,10 +103,6 @@ void main() {
     'maps every stable identity deletion guard to dedicated localized copy',
     () {
       const expected = <String, String>{
-        'handle_recovery.precommit_discard_required':
-            'identityDeletionDiscardRecoveryFirst',
-        'handle_recovery.operation_must_resume':
-            'identityDeletionResumeRecoveryFirst',
         'handle_recovery.transition_must_complete':
             'identityDeletionCompleteTransitionFirst',
         'handle_recovery.join_must_complete':
@@ -189,11 +185,11 @@ void main() {
     expect(message, AppMessage.screenshotPermissionRequired());
     expect(
       message.resolve(AppLocalizationsZh()),
-      '录屏权限尚未生效。请在系统设置的“录屏与系统录音”中允许当前 AWiki Me 应用，然后完全退出并重新打开。',
+      'macOS 要求开启“屏幕录制”权限才能截图。请在系统设置中允许 AWiki Me，完成后退出并重新打开应用。',
     );
     expect(
       message.resolve(AppLocalizationsEn()),
-      'Screen Recording permission is not active. Allow the current AWiki Me app under Screen & System Audio Recording in System Settings, then quit and reopen it.',
+      'macOS requires Screen Recording permission to take screenshots. Allow AWiki Me in System Settings, then quit and reopen the app.',
     );
   });
 }

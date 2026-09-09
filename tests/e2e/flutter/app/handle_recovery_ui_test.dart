@@ -3269,31 +3269,21 @@ Future<void> _runIdentityDeletionPhaseA(WidgetTester tester) async {
     phone: account.phone,
     localIdentityId: identity.identityId,
   );
-  final before = await recovery.getStatus(otp.operationId);
-  await container.read(appRuntimeProvider.notifier).deleteCurrentData();
-  final after = await recovery.getStatus(otp.operationId);
-  final blockedFeedback = container.read(uiFeedbackProvider);
-  final sentinelAfterGuard = await product.loadConversationOverlay(
-    ownerDid: identity.did,
-    threadId: sentinel,
-  );
-  final identitiesAfterGuard = await sessionService.listLocalIdentities();
-  if (before.operationId != after.operationId ||
-      before.ownerIdentityId != after.ownerIdentityId ||
-      before.handle != after.handle ||
-      before.lifecycleClass != after.lifecycleClass ||
-      before.commitAttempted != after.commitAttempted ||
-      before.keyState != after.keyState ||
-      before.readyToCommit != after.readyToCommit ||
-      sentinelAfterGuard == null ||
-      identitiesAfterGuard.length != 1 ||
-      identitiesAfterGuard.single.identityId != identity.identityId ||
-      blockedFeedback?.message.id != 'identityDeletionDiscardRecoveryFirst') {
-    fail('Recovery guard changed App/Core state before deletion admission.');
+  if (!await sessionService.hasPendingLocalIdentityRecovery(identity.identityId)) {
+    fail('Pending recovery was missing from the deletion impact query.');
   }
-
-  await recovery.discardPreAttempt(otp.operationId);
+  // One explicit deletion decision ends the recovery; no separate discard or
+  // resume is required. The deliberate Product/Core cut remains unchanged.
   await container.read(appRuntimeProvider.notifier).deleteCurrentData();
+  final operations = await recovery.listOperations(HandleRecoveryOwner(
+    localIdentityId: identity.identityId, handle: identity.handle!,
+  ));
+  final deletedOperation = operations.singleWhere((item) => item.operationId == otp.operationId);
+  if (deletedOperation.lifecycleClass != HandleRecoveryLifecycleClass.locallyDeleted ||
+      deletedOperation.commitAttempted ||
+      await sessionService.hasPendingLocalIdentityRecovery(identity.identityId)) {
+    fail('Explicit deletion did not end the pending recovery.');
+  }
   final pending = await deletionSessions.pendingLocalIdentityDataDeletions();
   final identitiesAfterCut = await sessionService.listLocalIdentities();
   final sentinelAfterCut = await product.loadConversationOverlay(
@@ -3416,9 +3406,9 @@ Future<void> _runIdentityDeletionPhaseB(WidgetTester tester) async {
     _identityDeletionGuardCaseId,
     startedAt: startedAt,
     phases: const <String>[
-      'active_recovery_blocked_before_product_mutation',
-      'recovery_operation_and_pending_key_preserved_until_explicit_discard',
-      'ticket_created_only_after_guard_resolution',
+      'pending_recovery_reported_before_confirmation',
+      'explicit_deletion_ends_recovery_without_resume',
+      'single_confirmation_creates_one_deletion_ticket',
     ],
   );
   await E2eCaseAttestationWriter.markPassed(

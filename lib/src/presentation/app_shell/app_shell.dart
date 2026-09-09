@@ -79,12 +79,12 @@ class _AppShellState extends ConsumerState<AppShell> {
   bool _desktopIdentityDialogOpen = false;
   bool _authRevokedDialogOpen = false;
   bool _authRevokedDialogAcknowledged = false;
+  bool _runtimeInitializationRequested = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(ref.read(appRuntimeProvider.notifier).initialize());
       unawaited(ref.read(appUpdateProvider.notifier).initialize());
     });
   }
@@ -116,14 +116,26 @@ class _AppShellState extends ConsumerState<AppShell> {
       });
     });
 
-    final runtime = ref.watch(appRuntimeProvider);
     final update = ref.watch(appUpdateProvider);
+    if (!update.localStateLoaded) return const AwikiMeStartupPlaceholder();
     if (update.versionUnsupported && update.latestManifest != null) {
       return _AppUpdateRestrictedPage(
         tenant: ref.watch(activeAppTenantProvider),
         state: update,
       );
     }
+    if (!_runtimeInitializationRequested) {
+      _runtimeInitializationRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (ref.read(appUpdateProvider).versionUnsupported) {
+          _runtimeInitializationRequested = false;
+          return;
+        }
+        unawaited(ref.read(appRuntimeProvider.notifier).initialize());
+      });
+    }
+    final runtime = ref.watch(appRuntimeProvider);
     final session = ref.watch(sessionProvider);
     final profile = ref.watch(profileProvider.select((state) => state.profile));
     if (!runtime.authRevoked) {

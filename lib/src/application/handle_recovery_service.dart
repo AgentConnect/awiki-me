@@ -436,7 +436,8 @@ void _validateOperation(
     HandleRecoveryLifecycleClass.discardedPreAttempt ||
     HandleRecoveryLifecycleClass.quarantinedKeyUnavailable ||
     HandleRecoveryLifecycleClass.supersededByStateChange ||
-    HandleRecoveryLifecycleClass.failedTerminal => false,
+    HandleRecoveryLifecycleClass.failedTerminal ||
+    HandleRecoveryLifecycleClass.locallyDeleted => false,
   };
   if ((stateRootRequired &&
           !_isSha256Fingerprint(operation.stateRootFingerprint)) ||

@@ -12,12 +12,15 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
 
-AppUpdateManifest buildManifest() {
+AppUpdateManifest buildManifest({
+  String version = '0.2.0',
+  int buildNumber = 2,
+}) {
   return AppUpdateManifest(
     policyOrigin: 'https://example.com',
     policyRevision: 1,
-    version: '0.2.0',
-    buildNumber: 2,
+    version: version,
+    buildNumber: buildNumber,
     minimumSupportedVersion: '0.1.0',
     minimumSupportedBuildNumber: 1,
     publishedAt: DateTime.utc(2026, 4, 5, 8),
@@ -48,7 +51,8 @@ void main() {
   ) async {
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
-    final updateService = FakeUpdateService();
+    final updateService = FakeUpdateService()
+      ..latestManifest = buildManifest(version: '0.1.0', buildNumber: 1);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -153,6 +157,10 @@ void main() {
     });
 
     test('手动检查发现已是最新版本时写入提示', () async {
+      updateService.latestManifest = buildManifest(
+        version: '0.1.0',
+        buildNumber: 1,
+      );
       await container.read(appUpdateProvider.notifier).initialize();
       await container
           .read(appUpdateProvider.notifier)

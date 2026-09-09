@@ -6011,17 +6011,17 @@
     },
     {
       "caseId": "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001",
-      "feature": "Recovery-aware App identity deletion admission preserves Product and Core state until explicit discard",
+      "feature": "Explicit App identity deletion ends unfinished recovery and resumes cleanup",
       "layer": "remote_product_ui_security",
       "preconditions": "An explicit Linux/Xvfb or macOS rwiki.cn configuration, protected fixed OTP account, one fresh App/Core root, and the production Settings deletion coordinator are available.",
-      "action": "Register and activate one identity, seed one App product sentinel, create a pre-attempt Recovery through the public Core adapter, invoke the full-data deletion flow, verify the stable discard-required UI result and unchanged operation/Product/identity, explicitly discard Recovery, then invoke deletion again.",
+      "action": "Register and activate one identity, seed a Product sentinel, create a pre-attempt Recovery, check the deletion impact, then confirm deletion once and verify the recovery ends before the deliberate Product/Core cleanup cut.",
       "exactOracles": [
-        "The first deletion attempt is rejected before Product mutation with the mapped discard-required message while operation lifecycle, commit-attempted, key state, identity and sentinel remain unchanged.",
-        "The same pending key remains usable for the explicit public discard, which is the only action that releases deletion admission.",
-        "Only the second confirmed deletion attempt creates one ticket and reaches the deliberate Product-deleted/Core-not-complete process cut."
+        "The read-only impact query reports unfinished recovery before deletion and reports none after the deletion decision.",
+        "Explicit deletion marks the operation locally_deleted without submitting or resuming recovery; the original commit-attempt flag is preserved.",
+        "One confirmed deletion creates one ticket and reaches the deliberate Product-deleted/Core-not-complete process cut."
       ],
       "negativeChecks": [
-        "Automatic discard/resume, Product deletion before ticket, changed Recovery authority, missing identity or sentinel, second ticket, same-process-only simulation, awiki.info target, leaked secret, or skipped step prevents pass attestation."
+        "Unconfirmed deletion, remote recovery submission/resume, Product deletion before ticket, a second ticket, same-process-only simulation, leaked secrets, or skipped steps prevent pass attestation."
       ],
       "environment": "rwiki_cn_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
@@ -6034,26 +6034,26 @@
       "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
-          "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:active_recovery_blocked_before_product_mutation",
-          "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:recovery_operation_and_pending_key_preserved_until_explicit_discard",
-          "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:ticket_created_only_after_guard_resolution"
+          "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:pending_recovery_reported_before_confirmation",
+          "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:explicit_deletion_ends_recovery_without_resume",
+          "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:single_confirmation_creates_one_deletion_ticket"
         ],
         "exactOracleAssertions": [
           [
-            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:active_recovery_blocked_before_product_mutation"
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:pending_recovery_reported_before_confirmation"
           ],
           [
-            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:recovery_operation_and_pending_key_preserved_until_explicit_discard"
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:explicit_deletion_ends_recovery_without_resume"
           ],
           [
-            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:ticket_created_only_after_guard_resolution"
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:single_confirmation_creates_one_deletion_ticket"
           ]
         ],
         "negativeCheckAssertions": [
           [
-            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:active_recovery_blocked_before_product_mutation",
-            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:recovery_operation_and_pending_key_preserved_until_explicit_discard",
-            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:ticket_created_only_after_guard_resolution"
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:pending_recovery_reported_before_confirmation",
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:explicit_deletion_ends_recovery_without_resume",
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:single_confirmation_creates_one_deletion_ticket"
           ]
         ]
       }
@@ -6298,6 +6298,62 @@
             "TENANT-SWITCH-SMOKE-E2E-001:official_tenant_visible_and_immutable",
             "TENANT-SWITCH-SMOKE-E2E-001:official_tenant_switched_through_product_ui",
             "TENANT-SWITCH-SMOKE-E2E-001:active_tenant_preserved_after_app_rebuild"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "APP-UPDATE-SMOKE-E2E-001",
+      "feature": "Cached minimum version gates startup and recovers through the update UI",
+      "layer": "portable_product_ui",
+      "preconditions": "Flutter desktop and the no-service fake application boundary are available with a cached minimum version and a controllable policy response.",
+      "action": "Start the actual App with a cached restriction, open its manual download action, complete an offline refresh, and retry with a confirmed absent policy.",
+      "exactOracles": [
+        "The restriction is visible before business startup and leaves tenant switching available.",
+        "The manual download action is invoked without unlocking the App.",
+        "An offline refresh retains the restriction.",
+        "A confirmed policy removal clears the gate and displays onboarding after retry."
+      ],
+      "negativeChecks": [
+        "Starting business work before applying the cache, unlocking on a download action or network error, or retaining the old restriction after policy removal fails the case."
+      ],
+      "environment": "no_service",
+      "cleanupPolicy": "none",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me",
+      "implementationPath": "tests/e2e/flutter/app/app_smoke_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "APP-UPDATE-SMOKE-E2E-001:cached_gate_precedes_business_startup",
+          "APP-UPDATE-SMOKE-E2E-001:manual_download_action_preserves_gate",
+          "APP-UPDATE-SMOKE-E2E-001:offline_refresh_preserves_gate",
+          "APP-UPDATE-SMOKE-E2E-001:policy_removal_recovers_through_retry"
+        ],
+        "exactOracleAssertions": [
+          [
+            "APP-UPDATE-SMOKE-E2E-001:cached_gate_precedes_business_startup"
+          ],
+          [
+            "APP-UPDATE-SMOKE-E2E-001:manual_download_action_preserves_gate"
+          ],
+          [
+            "APP-UPDATE-SMOKE-E2E-001:offline_refresh_preserves_gate"
+          ],
+          [
+            "APP-UPDATE-SMOKE-E2E-001:policy_removal_recovers_through_retry"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "APP-UPDATE-SMOKE-E2E-001:cached_gate_precedes_business_startup",
+            "APP-UPDATE-SMOKE-E2E-001:manual_download_action_preserves_gate",
+            "APP-UPDATE-SMOKE-E2E-001:offline_refresh_preserves_gate",
+            "APP-UPDATE-SMOKE-E2E-001:policy_removal_recovers_through_retry"
           ]
         ]
       }

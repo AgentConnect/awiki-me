@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_locale.dart';
 import '../../app/app_router.dart';
+import '../../app/app_services.dart';
 import '../../app/e2e_semantics.dart';
 import '../../application/models/onboarding_server_info.dart';
 import '../../application/ports/identity_core_port.dart';
@@ -795,6 +796,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       context,
       (dialogContext) => LocalCredentialDeleteDialog(
         identity: identity,
+        loadRecoveryImpact: () => ref
+            .read(appSessionServiceProvider)
+            .hasPendingLocalIdentityRecovery(identity.localIdentitySelector),
         signsOut: false,
         onConfirm: () {
           Navigator.of(dialogContext).pop();

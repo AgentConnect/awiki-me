@@ -679,8 +679,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       final ticket = await deletionSessions.prepareLocalIdentityDataDeletion(
         selector,
       );
-      if (ticket.ownerIdentityId != ownerIdentityId ||
-          ticket.currentDid != identity.did) {
+      if (ticket.ownerIdentityId != ownerIdentityId) {
         throw StateError('local_identity_deletion_ticket_mismatch');
       }
       _agentTerminalNotificationDeduplicator.clear();
@@ -758,6 +757,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     final deletingCurrent =
         current != null && _sameLocalIdentity(current, identity);
     try {
+      await ref.read(appSessionServiceProvider).deleteLocalIdentity(selector);
       if (deletingCurrent) {
         _isLoggingOut = true;
         _agentTerminalNotificationDeduplicator.clear();
@@ -767,7 +767,6 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         await _disableRemotePushBestEffort(pushSession);
         _clearAuthenticatedUiState();
       }
-      await ref.read(appSessionServiceProvider).deleteLocalIdentity(selector);
       final credentials = await _localCredentialsFor(ref);
       ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
       return true;

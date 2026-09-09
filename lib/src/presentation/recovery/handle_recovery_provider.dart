@@ -283,6 +283,17 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
     final progress = context.progress;
     if (expectedOperationId != null &&
         progress?.operationId != expectedOperationId) {
+      // An authoritative empty context retires the old UI selection as well.
+      // Transport failures still retain evidence with actions disabled.
+      if (progress == null) {
+        state = state.copyWith(
+          clearOperation: true,
+          clearPhone: true,
+          riskConfirmed: false,
+          authoritative: false,
+          allowedActions: const [],
+        );
+      }
       throw const HandleRecoveryFailure(
         HandleRecoveryFailureCode.transitionMismatch,
       );
@@ -581,6 +592,11 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
       _run((epoch) async {
         final progress = state.progress;
         if (progress == null ||
+            !state.allows(HandleRecoveryAction.quarantineKeyUnavailable)) {
+          return;
+        }
+        await _refresh(epoch, expectedOperationId: progress.operationId);
+        if (!isCurrent(epoch) ||
             !state.allows(HandleRecoveryAction.quarantineKeyUnavailable)) {
           return;
         }

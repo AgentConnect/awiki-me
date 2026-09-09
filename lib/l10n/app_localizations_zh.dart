@@ -308,14 +308,6 @@ class AppLocalizationsZh extends AppLocalizations {
       '旧的设备 Join 正在安全结束。请稍候片刻，然后重新发送验证码再试。';
 
   @override
-  String get identityDeletionDiscardRecoveryFirst =>
-      '当前有一条尚未验证的身份恢复请求。请先明确放弃该恢复请求，再删除此身份。';
-
-  @override
-  String get identityDeletionResumeRecoveryFirst =>
-      '身份恢复已经开始。请先继续恢复并收敛到安全结果，再删除此身份。';
-
-  @override
   String get identityDeletionCompleteTransitionFirst =>
       '身份切换仍在落地。请先完成身份切换，再删除此身份。';
 
@@ -1222,6 +1214,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsUpdateStatusInstalling => '正在准备安装更新...';
 
   @override
+  String get settingsUpdateStatusUnavailable => '当前租户暂未提供更新信息';
+
+  @override
+  String get settingsUpdateStatusUnchecked => '尚未检查更新';
+
+  @override
+  String get settingsUpdateStatusCached => '检查失败，保留上次确认的版本信息';
+
+  @override
+  String get updatePolicyUnavailable => '当前租户暂未提供更新信息，你仍可打开下载页面。';
+
+  @override
   String get settingsUpdateStatusFailed => '检查更新失败，请稍后重试';
 
   @override
@@ -1792,7 +1796,53 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get screenshotPermissionRequired =>
-      '录屏权限尚未生效。请在系统设置的“录屏与系统录音”中允许当前 AWiki Me 应用，然后完全退出并重新打开。';
+      'macOS 要求开启“屏幕录制”权限才能截图。请在系统设置中允许 AWiki Me，完成后退出并重新打开应用。';
+
+  @override
+  String get screenshotPermissionTitle => '截图需要屏幕录制权限';
+
+  @override
+  String get screenshotPermissionRecovery =>
+      '先完全退出 AWiki Me，再重新打开并尝试截图。\n\n如果仍然不行，请退出应用，在屏幕录制设置中移除旧的 AWiki Me 条目，再添加下方位置的应用并允许访问，然后重新打开。这里只调整系统权限，不会删除聊天记录。';
+
+  @override
+  String get screenshotPermissionSettings => '打开系统设置';
+
+  @override
+  String get screenshotPermissionLater => '暂不设置';
+
+  @override
+  String get screenshotPermissionHelp => '已开启权限，仍无法截图？';
+
+  @override
+  String get screenshotShowDiagnostics => '查看排查信息';
+
+  @override
+  String get screenshotPermissionSettingsFailed =>
+      '无法自动打开设置。请手动打开系统设置 → 隐私与安全 → 屏幕与系统音频录制（部分系统显示为“录屏与系统录音”）。';
+
+  @override
+  String get screenshotPermissionCheckFailed =>
+      '截图暂时不可用。请退出并重新打开 AWiki Me 后重试。';
+
+  @override
+  String get screenshotCaptureFailed => '截图未完成，请重试。若持续失败，可先用系统截图工具保存图片，再添加为附件。';
+
+  @override
+  String get screenshotCurrentApplication => '当前运行的应用';
+
+  @override
+  String get screenshotApplicationUnavailable => '无法读取当前应用信息，请确认正在使用的版本和安装位置。';
+
+  @override
+  String get screenshotBuildMode => '运行模式';
+
+  @override
+  String get screenshotCopyDiagnostics => '复制排查信息';
+
+  @override
+  String get screenshotDiagnosticsPrivacy =>
+      '复制内容包含版本和应用位置（可能含电脑用户名），不含账号或截图。分享前请检查。';
 
   @override
   String get chatRemoveAttachment => '移除附件';
@@ -3470,6 +3520,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get legacyIdentityUpgradeFailed => '旧身份升级失败，请重试。';
+
+  @override
+  String get localCredentialDeleteRecoveryHint => '同时会清除本机尚未完成的恢复进度。';
+
+  @override
+  String get localCredentialDeleteInspectFailed => '暂时无法确认本机身份状态，请重试。';
 
   @override
   String get handleRecoveryFreshDataNotice => '本机没有可迁移的原身份数据，恢复后不会自动找回此前的私聊历史。';

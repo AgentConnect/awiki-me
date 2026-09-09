@@ -1563,6 +1563,38 @@ void main() {
     );
 
     test(
+      'rejected local deletion preserves the active session and realtime',
+      () async {
+        final identity = _session('id-default');
+        final identities = _FakeIdentities(defaultIdentity: identity)
+          ..deletionError = StateError('delete unavailable');
+        final active = _FakeActiveSessionStore(identity.identityId);
+        final runtime = _FakeRuntime();
+        final realtime = _FakeRealtime();
+        final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+          runtime: runtime,
+          identities: identities,
+          auth: _FakeAuth(),
+          activeSessionStore: active,
+          realtime: realtime,
+        );
+        await service.restoreSession();
+        await expectLater(
+          service.deleteLocalIdentity(identity.identityId),
+          throwsStateError,
+        );
+        expect(
+          (await service.currentSession())?.identityId,
+          identity.identityId,
+        );
+        expect(await active.readActiveIdentityId(), identity.identityId);
+        expect(realtime.stopCount, 0);
+        expect(runtime.clearIdentityCount, 0);
+      },
+    );
+
+    test(
       'deleteLocalIdentity keeps Core open and does not block the next session operation on realtime cleanup',
       () async {
         final realtimeStop = Completer<void>();
@@ -1773,6 +1805,7 @@ class _FakeRuntime implements ImCoreRuntimePort {
 }
 
 class _FakeIdentities implements IdentityCorePort {
+  Object? deletionError;
   _FakeIdentities({
     AppSession? defaultIdentity,
     AppSession? resolvedIdentity,
@@ -1892,7 +1925,13 @@ class _FakeIdentities implements IdentityCorePort {
   }
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(
+    String identityIdOrAlias,
+  ) async => false;
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
+    if (deletionError != null) throw deletionError!;
     deletedSelectors.add(identityIdOrAlias);
     final defaultIdentity = _defaultIdentity;
     final identities = <AppSession>[

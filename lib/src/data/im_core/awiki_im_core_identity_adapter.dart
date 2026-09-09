@@ -143,6 +143,17 @@ class AwikiImCoreIdentityAdapter
   }
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async {
+    final instance = await _coreInstance();
+    return _withMappedAppError(
+      () => _withIdentitySelectorFallback(
+        identityIdOrAlias,
+        instance.hasPendingLocalIdentityRecovery,
+      ),
+    );
+  }
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
     final coreInstance = await _coreInstance();
     final result = await _withMappedAppError(
