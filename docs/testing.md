@@ -1098,8 +1098,12 @@ The current System Test repository disables deploy keys, so an SSH deploy key
 cannot supply this checkout credential.
 
 The coordinator's portable DSH contracts also read the sibling `dsh-awiki`
-source tree. CI checks out that public repository at an exact reviewed commit;
-keep its Node SDK version aligned with the pinned coordinator and Core wrapper.
+source tree. CI checks out that public repository at an exact reviewed commit.
+The coordinator checks DSH's fixed published Node SDK dependency separately from
+the SDK source release; the wrapper and all native platform packages must agree.
+The current coordinator fixes are reviewed in
+https://github.com/AgentConnect/awiki-system-test/pull/16; merge that PR before
+merging this consumer update.
 
 Native CI builds/tests use the Core owner's `scripts/release/registry-build.py`
 and committed registry lock in an isolated worktree. The Windows native build
