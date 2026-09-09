@@ -236,7 +236,9 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
         throw const FormatException('Invalid server-info response.');
       }
       raw = document['client_versions'];
-      if (raw == null) return minimumRevision;
+      if (raw == null) {
+        throw const FormatException('Missing versioned update policy.');
+      }
     }
     if (raw is! Map || raw['policy_origin'] != policyOrigin) {
       throw const FormatException(

@@ -116,18 +116,18 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
   Future<void>? _localStateTask;
   Future<void>? _initializeTask;
   int _requestGeneration = 0;
+  int _tenantRequestGeneration = 0;
 
-  bool _isCurrent(int generation) =>
+  bool _isCurrent(int? generation) =>
       mounted && generation == _requestGeneration;
 
   Future<void> initialize() => _initializeTask ??= _initialize();
 
   Future<void> _initialize() async {
-    final generation = _requestGeneration;
     await _ensureLocalState();
-    // A user-initiated check made during startup owns the subsequent result.
-    if (_isCurrent(generation)) {
-      await checkForUpdates(force: false, silent: true);
+    // Only another tenant check can replace startup's compatibility check.
+    if (mounted && _tenantRequestGeneration == 0) {
+      await _check(force: false, silent: true, startup: true);
     }
   }
 
@@ -163,30 +163,50 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
   Future<void> _check({
     required bool force,
     bool silent = false,
+    bool startup = false,
     AppOfficialUpdateSource? source,
   }) async {
     if (!mounted) return;
-    final generation = ++_requestGeneration;
+    // A background startup check preserves a user's recommendation selection.
+    final generation = startup && _requestGeneration > 0
+        ? null
+        : ++_requestGeneration;
+    final tenantGeneration = source == null ? ++_tenantRequestGeneration : null;
+    bool ownsResult() => tenantGeneration == null
+        ? _isCurrent(generation)
+        : mounted && tenantGeneration == _tenantRequestGeneration;
     await _ensureLocalState();
-    if (!_isCurrent(generation)) return;
+    if (!ownsResult()) return;
     // An optional official-source lookup cannot lift the active tenant's gate.
     if (source != null && state.versionUnsupported) return;
     final service = ref.read(updateServiceProvider);
     final sourceChanged = state.manualOfficialSource != source;
-    state = state.copyWith(
-      status: AppUpdateStatus.checking,
-      clearErrorMessage: true,
-      clearLatestManifest: sourceChanged,
-      clearCachedAt: sourceChanged,
-      manualOfficialSource: source,
-      clearManualOfficialSource: source == null,
-      recommendationDismissed: true,
-    );
+    if (_isCurrent(generation)) {
+      state = state.copyWith(
+        status: AppUpdateStatus.checking,
+        clearErrorMessage: true,
+        clearLatestManifest: sourceChanged,
+        clearCachedAt: sourceChanged,
+        manualOfficialSource: source,
+        clearManualOfficialSource: source == null,
+        recommendationDismissed: true,
+      );
+    }
     try {
       final result = source == null
           ? await service.checkForUpdates(force: force)
           : await service.checkOfficialSource(source);
-      if (!_isCurrent(generation)) return;
+      if (!ownsResult()) return;
+      if (!_isCurrent(generation)) {
+        // Recommendation selection does not own tenant compatibility. A newly
+        // verified minimum takes over the visible policy and download target,
+        // and invalidates a still-pending official recommendation.
+        if (source == null && result.versionUnsupported) {
+          ++_requestGeneration;
+          _publishResult(result);
+        }
+        return;
+      }
       // Apply compatibility before optional prompt-history I/O.
       _publishResult(result, source: source);
       final manifest = result.latestManifest;

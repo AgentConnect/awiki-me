@@ -17,6 +17,132 @@ import 'test_support.dart';
 
 void main() {
   test(
+    'a newer tenant check supersedes older tenant and official results',
+    () async {
+      final service = PendingUpdateService();
+      final container = ProviderContainer(
+        overrides: [updateServiceProvider.overrideWithValue(service)],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(appUpdateProvider.notifier);
+      final oldTenant = controller.initialize();
+      await service.started(1);
+      final official = controller.checkOfficialSource(
+        AppOfficialUpdateSource.secondary,
+      );
+      await service.started(2);
+      final newTenant = controller.checkForUpdates(force: true);
+      await service.started(3);
+      service.complete(2, restricted: false);
+      await newTenant;
+      final state = container.read(appUpdateProvider);
+      service.complete(0, restricted: true);
+      service.complete(1, restricted: false);
+      await Future.wait([oldTenant, official]);
+      expect(container.read(appUpdateProvider), same(state));
+      expect(state.versionUnsupported, isFalse);
+      expect(state.manualOfficialSource, isNull);
+    },
+  );
+
+  test(
+    'a supported tenant result preserves the selected official recommendation',
+    () async {
+      final service = PendingUpdateService();
+      final container = ProviderContainer(
+        overrides: [updateServiceProvider.overrideWithValue(service)],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(appUpdateProvider.notifier);
+      final tenant = controller.initialize();
+      await service.started(1);
+      final official = controller.checkOfficialSource(
+        AppOfficialUpdateSource.secondary,
+      );
+      await service.started(2);
+      service.complete(1, restricted: false);
+      await official;
+      final recommendation = container.read(appUpdateProvider);
+      service.complete(0, restricted: false);
+      await tenant;
+      expect(container.read(appUpdateProvider), same(recommendation));
+      expect(
+        recommendation.manualOfficialSource,
+        AppOfficialUpdateSource.secondary,
+      );
+    },
+  );
+
+  test(
+    'official lookup during startup does not suppress the initial tenant check',
+    () async {
+      final service = PendingUpdateService();
+      final container = ProviderContainer(
+        overrides: [updateServiceProvider.overrideWithValue(service)],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(appUpdateProvider.notifier);
+      final official = controller.checkOfficialSource(
+        AppOfficialUpdateSource.secondary,
+      );
+      final tenant = controller.initialize();
+      await service.started(2);
+      // The official lookup enters first while both callers await local state.
+      service.complete(0, restricted: false);
+      await official;
+      service.complete(1, restricted: true);
+      await tenant;
+      expect(container.read(appUpdateProvider).versionUnsupported, isTrue);
+      expect(container.read(appUpdateProvider).manualOfficialSource, isNull);
+    },
+  );
+
+  for (final officialFirst in [false, true]) {
+    test(
+      'tenant minimum survives an official lookup (official first: $officialFirst)',
+      () async {
+        final service = PendingUpdateService();
+        final container = ProviderContainer(
+          overrides: [updateServiceProvider.overrideWithValue(service)],
+        );
+        addTearDown(container.dispose);
+        final controller = container.read(appUpdateProvider.notifier);
+        final tenant = controller.initialize();
+        await service.started(1);
+        final official = controller.checkOfficialSource(
+          AppOfficialUpdateSource.secondary,
+        );
+        await service.started(2);
+        if (officialFirst) {
+          service.complete(
+            1,
+            restricted: false,
+            manifest: buildManifest(version: '9.0.0'),
+          );
+          await official;
+        }
+        service.complete(0, restricted: true);
+        await tenant;
+        expect(container.read(appUpdateProvider).versionUnsupported, isTrue);
+        if (!officialFirst) {
+          service.complete(
+            1,
+            restricted: false,
+            manifest: buildManifest(version: '9.0.0'),
+          );
+          await official;
+        }
+        final state = container.read(appUpdateProvider);
+        expect(state.versionUnsupported, isTrue);
+        expect(state.manualOfficialSource, isNull);
+        expect(state.latestManifest, isNotNull);
+        expect(state.latestManifest?.version, '0.2.0');
+        expect(state.status, AppUpdateStatus.updateAvailable);
+      },
+    );
+  }
+
+  test(
     'confirmed policy removal clears old recommendation and its target',
     () async {
       final service = FakeUpdateService()..latestManifest = buildManifest();
@@ -289,14 +415,17 @@ class PendingUpdateService extends FakeUpdateService {
     return pending.last.future;
   }
 
-  void complete(int index, {required bool restricted}) =>
-      pending[index].complete(
-        AppUpdateCheckResult(
-          currentVersion: currentVersion,
-          latestManifest: buildManifest(),
-          versionUnsupported: restricted,
-        ),
-      );
+  void complete(
+    int index, {
+    required bool restricted,
+    AppUpdateManifest? manifest,
+  }) => pending[index].complete(
+    AppUpdateCheckResult(
+      currentVersion: currentVersion,
+      latestManifest: manifest ?? buildManifest(),
+      versionUnsupported: restricted,
+    ),
+  );
 }
 
 class CountingRuntime extends AppRuntimeController {

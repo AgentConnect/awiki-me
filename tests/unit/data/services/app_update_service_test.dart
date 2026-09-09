@@ -14,6 +14,61 @@ import 'package:package_info_plus/package_info_plus.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    'null version policy preserves a verified minimum across restart',
+    () async {
+      final storage = _MemoryKeyValueStore();
+      final service = _service(
+        storage: storage,
+        httpClient: _QueueHttpClient([
+          _HttpFixture.json(
+            'https://updates.example/latest.json',
+            _manifestJson(policyRevision: 9, minimumVersion: '2.0.0'),
+          ),
+          _HttpFixture.json(
+            'https://updates.example/latest.json',
+            <String, Object?>{'schema_version': 1, 'client_versions': null},
+          ),
+        ]),
+      );
+      expect(
+        (await service.checkForUpdates(force: true)).versionUnsupported,
+        isTrue,
+      );
+      final result = await service.checkForUpdates(force: true);
+      expect(result.versionUnsupported, isTrue);
+      expect(result.usedCache, isTrue);
+      expect(result.policyUnavailable, isFalse);
+      expect(result.failureReason, isNotNull);
+      final restarted = _service(
+        storage: storage,
+        httpClient: _QueueHttpClient([]),
+      );
+      expect((await restarted.loadCachedUpdate()).versionUnsupported, isTrue);
+    },
+  );
+
+  test(
+    'null version policy without cache is a check failure, not confirmed absence',
+    () async {
+      final storage = _MemoryKeyValueStore();
+      final service = _service(
+        storage: storage,
+        httpClient: _QueueHttpClient([
+          _HttpFixture.json(
+            'https://updates.example/latest.json',
+            <String, Object?>{'schema_version': 1, 'client_versions': null},
+          ),
+        ]),
+      );
+      await expectLater(
+        service.checkForUpdates(force: true),
+        throwsFormatException,
+      );
+      expect(storage.values, isEmpty);
+    },
+  );
+
   test('default update URLs follow the default AWiki environment', () {
     final baseUrl = primaryTenantBaseUrl;
     expect(

@@ -19,6 +19,9 @@ download or install packages on the user's behalf.
   abort pending requests, and stale provider completions cannot update the new UI.
   An optional official-source lookup cannot lift a known current-tenant minimum
   or invalidate its pending refresh.
+  Tenant request generations are independent of recommendation selection. If a
+  tenant minimum arrives during an official lookup, it takes over the visible
+  policy and download target; late official results cannot replace that state.
 
 ## Failure and cache semantics
 
@@ -35,11 +38,13 @@ two policy states. Existing manifest-only caches are still readable. A verified
 live policy remains effective in memory if persistence fails; after restart only
 successfully persisted state is available.
 
-An explicit disabled/absent policy (or a custom tenant's 404) clears previous
+An explicit disabled policy (or a custom tenant's 404) clears previous
 recommendations and requirements. Origin and revision checks apply before an
 enabled or disabled versioned policy can replace the cache. Absence is persisted
 along with the last revision so offline restart does not resurrect an old
 recommendation. A network error is not policy absence.
+`client_versions: null` is malformed, not an explicit removal: it must preserve
+the previous verified policy, or report a failed check when no cache exists.
 
 Settings distinguish unchecked, checking, unavailable, failed/cached, update
 available and up to date. The last state requires a successfully interpreted
@@ -61,3 +66,11 @@ visible restriction, manual download action and recovery through retry. It does
 not attest a real OS package installation, signing or data retention after one.
 
 See [testing.md](testing.md) for platform runner and full-suite requirements.
+
+Review verification on 2026-09-09: the four update test files listed above plus
+`tests/unit/handle_recovery_flow_test.dart` passed 120 tests locally, including
+both response orders, startup overlap, newer tenant requests, authoritative
+download selection, null policies with/without cache, and deleted Recovery UI
+selection. The reproducing update tests failed before the fix. Targeted Dart
+analysis passed. Native platform smoke and real-backend product E2E were not run
+in this local-only review; no package was published or installed.

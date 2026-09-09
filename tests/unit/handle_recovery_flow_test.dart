@@ -1514,6 +1514,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   final HandleRecoveryProgress? reconcileResult;
   final HandleRecoveryProgress? reconcileProgressOnError;
   bool credentialAvailable = true;
+  bool operationDeleted = false;
   final HandleRecoveryRegistryEpochReset? receipt;
   Object? statusError;
   final Object? reconcileError;
@@ -1542,6 +1543,13 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
       handle: handle,
     );
     if (statusError != null) throw statusError!;
+    if (operationDeleted) {
+      return HandleRecoveryContext(
+        handle: handle,
+        localIdentityId: localIdentityId,
+        allowedActions: const [HandleRecoveryAction.startNew],
+      );
+    }
     return HandleRecoveryContext(
       handle: handle,
       localIdentityId: localIdentityId ?? operation.ownerIdentityId,

@@ -2,6 +2,45 @@ part of 'handle_recovery_flow_test.dart';
 
 void _registerHandleRecoveryStateMachineTests() {
   group('Recovery state machine hardening', () {
+    testWidgets('deleted Recovery selection is cleared before quarantine', (
+      tester,
+    ) async {
+      final core = _FakeHandleRecoveryCore(
+        operation: _operation(
+          lifecycleClass: HandleRecoveryLifecycleClass.remoteUnresolved,
+          commitAttempted: true,
+          keyState: HandleRecoveryKeyState.permanentlyUnavailable,
+        ),
+      );
+      final container = await _stateMachineContainer(tester, core);
+      final controller = container.read(handleRecoveryProvider.notifier);
+      await controller.initialize(handle: 'alice.awiki.info');
+      expect(
+        container
+            .read(handleRecoveryProvider)
+            .allows(HandleRecoveryAction.quarantineKeyUnavailable),
+        isTrue,
+      );
+      core.operationDeleted = true;
+      await controller.quarantineKeyUnavailable(presenceReason: 'Test');
+      final state = container.read(handleRecoveryProvider);
+      expect(core.quarantineCalls, 0);
+      expect(state.progress, isNull);
+      expect(state.owner, isNull);
+      expect(state.isBusy, isFalse);
+      expect(
+        state.allows(HandleRecoveryAction.quarantineKeyUnavailable),
+        isFalse,
+      );
+      await controller.initialize(handle: 'alice.awiki.info');
+      expect(
+        container
+            .read(handleRecoveryProvider)
+            .allows(HandleRecoveryAction.startNew),
+        isTrue,
+      );
+    });
+
     testWidgets('late activation cannot replace the next Handle', (
       tester,
     ) async {
