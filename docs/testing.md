@@ -1082,6 +1082,26 @@ workspaces, App state roots, remote logs, screenshots, and device state out of
 Git.
 
 The checked-in workflow requires `AWIKI_CLI_RS2_REF` to be an exact commit SHA.
+The Windows lane uses `AWIKI_CLI_RS2_WINDOWS_REF`, falling back to the same ref;
+update both variables to a reviewed, merged Core consumer commit when its Dart
+facade changes. Public Core checkouts use the job's read-only GitHub token and
+do not require the packaging environment's `AWIKI_CI_READ_TOKEN`.
+
+The private System Test coordinator is pinned to a reviewed exact commit in
+`ci.yml`. Its checkout requires repository secret `AWIKI_CI_READ_TOKEN` with
+Contents read-only access to `AgentConnect/awiki-system-test`. Use a separate
+credential from the packaging environment; ordinary PR jobs must not receive
+release credentials or repository-write permissions. Checkout removes the
+credential before test code executes (`persist-credentials: false`). Missing
+private-source access fails before builds; fork PRs do not receive this secret.
+The current System Test repository disables deploy keys, so an SSH deploy key
+cannot supply this checkout credential.
+
+Native CI builds/tests use the Core owner's `scripts/release/registry-build.py`
+and committed registry lock in an isolated worktree. The Windows native build
+selects the same entrypoint with `AWIKI_RELEASE_REGISTRY=1`. CI therefore checks
+the published ANP/Identity/Core SDKs without undeclared sibling source checkouts.
+
 Its `remote-product` job is schedule/manual only, builds debug/incremental Rust
 artifacts, writes a secret-backed ignored config, and targets only `awiki.info`.
 The PR dry-run is orchestration lint and is never substituted for that real job.

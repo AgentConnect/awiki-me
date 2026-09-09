@@ -29,17 +29,23 @@ concurrency:
 env:
   PUB_HOSTED_URL: https://pub.dev
   FLUTTER_STORAGE_BASE_URL: https://storage.googleapis.com
+  AWIKI_RELEASE_REGISTRY: '1'
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Require exact CLI / SDK source ref
+      - name: Require exact CLI / SDK source ref and System Test read token
         env:
           CLI_REF: ${{ github.event.inputs.cli_ref || vars.AWIKI_CLI_RS2_REF }}
+          SYSTEM_TEST_READ_TOKEN: ${{ secrets.AWIKI_CI_READ_TOKEN }}
         run: |
           [[ "$CLI_REF" =~ ^[0-9a-fA-F]{40}$ ]] || {
             echo "AWIKI_CLI_RS2_REF (or workflow input) must be an exact commit SHA" >&2
+            exit 1
+          }
+          test -n "$SYSTEM_TEST_READ_TOKEN" || {
+            echo "AWIKI_CI_READ_TOKEN must allow read-only System Test checkout" >&2
             exit 1
           }
 
@@ -53,18 +59,26 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
           ref: ${{ github.event.inputs.cli_ref || vars.AWIKI_CLI_RS2_REF }}
-          token: ${{ secrets.AWIKI_CI_READ_TOKEN || github.token }}
+          token: ${{ github.token }}
           path: awiki-cli-rs2
+          persist-credentials: false
 
       - name: Checkout unified System Test coordinator
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-system-test
-          token: ${{ secrets.AWIKI_CI_READ_TOKEN || github.token }}
+          ref: 79146a592dae7117af4c89d0e01c9b7a1dba57e6
+          token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
           path: test-awiki-system-test
+          persist-credentials: false
 
       - name: Record exact CLI / SDK source ref
-        run: git -C awiki-cli-rs2 rev-parse HEAD | tee /tmp/awiki-cli-ref
+        env:
+          CLI_REF: ${{ github.event.inputs.cli_ref || vars.AWIKI_CLI_RS2_REF }}
+        run: |
+          test "$(git -C awiki-cli-rs2 rev-parse HEAD)" = "$CLI_REF"
+          git -C awiki-cli-rs2 rev-parse HEAD | tee /tmp/awiki-cli-ref
+          git -C test-awiki-system-test rev-parse HEAD
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2.23.0
@@ -107,7 +121,7 @@ jobs:
       - name: Build debug native IM Core and CLI
         working-directory: awiki-cli-rs2
         run: |
-          cargo build -p im-core-dart -p awiki-cli --locked
+          python3 scripts/release/registry-build.py -- cargo build -p im-core-dart -p awiki-cli --locked
           mkdir -p packages/awiki_im_core/linux/lib
           cp target/debug/libawiki_im_core.so \
             packages/awiki_im_core/linux/lib/libawiki_im_core.so
@@ -203,8 +217,9 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
           ref: ${{ github.event.inputs.cli_ref || vars.AWIKI_CLI_RS2_REF }}
-          token: ${{ secrets.AWIKI_CI_READ_TOKEN || github.token }}
+          token: ${{ github.token }}
           path: awiki-cli-rs2
+          persist-credentials: false
 
       - uses: subosito/flutter-action@v2.23.0
         with:
@@ -233,7 +248,7 @@ jobs:
       - name: Build audited debug artifacts
         working-directory: awiki-cli-rs2
         run: |
-          cargo build -p im-core-dart -p awiki-cli --locked
+          python3 scripts/release/registry-build.py -- cargo build -p im-core-dart -p awiki-cli --locked
           mkdir -p packages/awiki_im_core/linux/lib
           cp target/debug/libawiki_im_core.so \
             packages/awiki_im_core/linux/lib/libawiki_im_core.so
@@ -307,19 +322,12 @@ jobs:
     timeout-minutes: 75
     env:
       WINDOWS_CORE_REF: ${{ github.event.inputs.cli_ref || vars.AWIKI_CLI_RS2_WINDOWS_REF || vars.AWIKI_CLI_RS2_REF }}
-      WINDOWS_ANP_REF: 67e6680fac80a5fb3dca41029c67a0ea3ecc0dd5
     steps:
-      - name: Require read-only private Core token
+      - name: Require exact Core source ref
         shell: bash
-        env:
-          READ_TOKEN: ${{ secrets.AWIKI_CI_READ_TOKEN }}
         run: |
           [[ "$WINDOWS_CORE_REF" =~ ^[0-9a-f]{40}$ ]] || {
             echo "AWIKI_CLI_RS2_WINDOWS_REF must be an exact Core commit SHA" >&2
-            exit 1
-          }
-          test -n "$READ_TOKEN" || {
-            echo "AWIKI_CI_READ_TOKEN is required for the private Core checkout" >&2
             exit 1
           }
 
@@ -333,8 +341,9 @@ jobs:
         with:
           repository: AgentConnect/awiki-cli-rs2
           ref: ${{ env.WINDOWS_CORE_REF }}
-          token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
+          token: ${{ github.token }}
           path: awiki-cli-rs2
+          persist-credentials: false
 
       - name: Verify exact CLI / IM Core checkout
         shell: pwsh
@@ -343,13 +352,6 @@ jobs:
           if ($actual -ne $env:WINDOWS_CORE_REF) {
             throw "Core checkout is $actual, expected $env:WINDOWS_CORE_REF"
           }
-
-      - name: Checkout pinned ANP
-        uses: actions/checkout@v6
-        with:
-          repository: agent-network-protocol/anp
-          ref: ${{ env.WINDOWS_ANP_REF }}
-          path: anp/anp
 
       - name: Setup Flutter 3.44.0
         uses: subosito/flutter-action@v2.23.0
@@ -371,7 +373,7 @@ jobs:
         working-directory: awiki-cli-rs2
         shell: pwsh
         run: |
-          cargo +1.88.0 test `
+          python3 scripts/release/registry-build.py -- cargo +1.88.0 test `
             -p im-core-dart `
             --locked `
             --no-default-features `

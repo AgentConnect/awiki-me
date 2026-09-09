@@ -11,6 +11,70 @@ const Map<String, int> _minimumNode24ActionMajors = <String, int>{
 };
 
 void main() {
+  test(
+    'PR checkout credentials are scoped to the private test coordinator',
+    () {
+      final workflow =
+          loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+              as YamlMap;
+      final jobs = workflow['jobs'] as YamlMap;
+      final validateSteps = (jobs['validate'] as YamlMap)['steps'] as YamlList;
+      final coordinator =
+          validateSteps.cast<YamlMap>().singleWhere(
+                (step) =>
+                    step['name'] == 'Checkout unified System Test coordinator',
+              )['with']
+              as YamlMap;
+      expect(coordinator['ref'], matches(RegExp(r'^[0-9a-f]{40}$')));
+      expect(coordinator['token'], r'${{ secrets.AWIKI_CI_READ_TOKEN }}');
+      expect(coordinator['persist-credentials'], isFalse);
+      expect(coordinator.containsKey('ssh-key'), isFalse);
+
+      for (final job in jobs.values.cast<YamlMap>()) {
+        expect(job.containsKey('environment'), isFalse);
+        for (final step in (job['steps'] as YamlList).cast<YamlMap>()) {
+          final options = step['with'];
+          if (options is! YamlMap || options['path'] != 'awiki-cli-rs2') {
+            continue;
+          }
+          expect(options['token'], r'${{ github.token }}');
+          expect(options['persist-credentials'], isFalse);
+        }
+      }
+    },
+  );
+
+  test(
+    'CI native consumers use the published registry SDK build entrypoint',
+    () {
+      final workflow =
+          loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+              as YamlMap;
+      expect((workflow['env'] as YamlMap)['AWIKI_RELEASE_REGISTRY'], '1');
+      final jobs = workflow['jobs'] as YamlMap;
+      var cargoCommands = 0;
+      for (final job in jobs.values.cast<YamlMap>()) {
+        for (final step in (job['steps'] as YamlList).cast<YamlMap>()) {
+          final script = step['run'];
+          if (script is! String) continue;
+          for (final line in script.split('\n')) {
+            if (!RegExp(
+              r'\bcargo (?:\+\S+ )?(?:build|test)\b',
+            ).hasMatch(line)) {
+              continue;
+            }
+            cargoCommands++;
+            expect(
+              line,
+              contains('python3 scripts/release/registry-build.py -- cargo'),
+            );
+          }
+        }
+      }
+      expect(cargoCommands, 3);
+    },
+  );
+
   test('GitHub workflows use actions with native Node 24 runtimes', () {
     final workflowFiles =
         Directory('.github/workflows')
