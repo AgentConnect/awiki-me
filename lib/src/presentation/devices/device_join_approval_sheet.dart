@@ -239,6 +239,15 @@ class _DeviceJoinApprovalSheetState
     required DevicesState state,
     required DeviceJoinProgress? progress,
   }) {
+    // The terminal notification can arrive before the approval result and its
+    // authorized-device summary. Do not offer a premature exit from this flow.
+    if (state.isActionPending) {
+      return AppPrimaryButton(
+        key: const Key('device-join-finalizing'),
+        label: context.l10n.deviceJoinFinalizing,
+        onPressed: null,
+      );
+    }
     final recipient = progress?.authorizedDevice;
     final sender = state.registry?.currentDevice;
     final eligible =

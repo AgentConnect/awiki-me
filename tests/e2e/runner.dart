@@ -236,6 +236,7 @@ const List<String> _identityDeletionRecoveryGuardCaseIds = <String>[
 const List<String> _multiDeviceAppPairCaseIds = <String>[
   'DEVICE-JOIN-E2E-004',
   'DEVICE-JOIN-E2E-005',
+  'ROOT-TRANSFER-APP-PAIR-E2E-001',
 ];
 const List<String> _multiDeviceAppPairFunctionalCaseIds = <String>[
   'DEVICE-AGENT-SYNC-E2E-001',

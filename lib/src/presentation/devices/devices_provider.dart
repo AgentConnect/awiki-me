@@ -422,7 +422,10 @@ class DevicesController extends StateNotifier<DevicesState> {
           : _selectedAdminJoinSessionId;
       if (selectedJoinSessionId != null) {
         final request = _findJoinRequest(requests, selectedJoinSessionId);
-        if (request == null || request.isTerminal) {
+        if (request == null ||
+            (request.isTerminal &&
+                !(request.state == DeviceJoinRemoteState.consumed &&
+                    request.claimedByCurrentDevice))) {
           final preserveAuthorizedCompletion =
               activeJoin?.side == DeviceJoinSide.admin &&
               activeJoin?.joinSessionId == selectedJoinSessionId &&
@@ -438,8 +441,11 @@ class DevicesController extends StateNotifier<DevicesState> {
           }
         } else if (activeJoin?.isTerminal != true &&
             request.claimedByCurrentDevice &&
-            request.state == DeviceJoinRemoteState.responseVerified) {
-          activeJoin = await service.restoreAdminVerificationProgress(
+            (request.state == DeviceJoinRemoteState.responseVerified ||
+                request.state == DeviceJoinRemoteState.consumed)) {
+          final previousProgress = activeJoin;
+          final previousSelection = _selectedAdminJoinSessionId;
+          final restored = await service.restoreAdminVerificationProgress(
             selector: selector,
             joinSessionId: request.joinSessionId,
           );
@@ -449,6 +455,12 @@ class DevicesController extends StateNotifier<DevicesState> {
           )) {
             return;
           }
+          // Approval or another selection may have completed during the read.
+          activeJoin =
+              identical(state.activeJoin, previousProgress) &&
+                  _selectedAdminJoinSessionId == previousSelection
+              ? restored
+              : state.activeJoin;
         }
       }
       state = state.copyWith(
@@ -602,7 +614,11 @@ class DevicesController extends StateNotifier<DevicesState> {
   Future<void> selectJoinRequest(DeviceJoinRequestNotice request) async {
     final selector = _selector;
     final stalePreparation = state.rootTransfer.preparation;
-    _selectedAdminJoinSessionId = request.isTerminal
+    final canRestoreProgress =
+        request.claimedByCurrentDevice &&
+        (request.state == DeviceJoinRemoteState.responseVerified ||
+            request.state == DeviceJoinRemoteState.consumed);
+    _selectedAdminJoinSessionId = request.isTerminal && !canRestoreProgress
         ? null
         : request.joinSessionId;
     state = state.copyWith(
@@ -614,10 +630,7 @@ class DevicesController extends StateNotifier<DevicesState> {
       await ref.read(rootKeyTransferServiceProvider).discard(stalePreparation);
       if (!mounted) return;
     }
-    if (selector == null ||
-        request.isTerminal ||
-        !request.claimedByCurrentDevice ||
-        request.state != DeviceJoinRemoteState.responseVerified) {
+    if (selector == null || !canRestoreProgress) {
       return;
     }
     try {
@@ -799,8 +812,40 @@ class DevicesController extends StateNotifier<DevicesState> {
   }
 
   Future<bool> prepareRootTransferForDevice(DeviceSummary device) async {
-    final target = _deviceListRootTransferTarget(device.protocolDeviceId);
-    return _prepareRootTransfer(target);
+    final selector = _selector;
+    final sessionEpoch = _sessionEpoch;
+    if (selector == null) return false;
+    try {
+      // Display snapshots may already contain a newly joined device while the
+      // action registry is older. Refresh authority rather than trusting cache.
+      final applied = await _loadFreshRegistry(selector, sessionEpoch);
+      if (applied.bindingRefreshRequired) {
+        await _refreshCurrentIdentityClientAfterDeviceMutation(selector);
+      }
+      if (!_isCurrentSessionOwner(
+        selector: selector,
+        sessionEpoch: sessionEpoch,
+      )) {
+        return false;
+      }
+      final target = _deviceListRootTransferTarget(device.protocolDeviceId);
+      if (target == null ||
+          target.recipient.signingKeyId != device.signingKeyId ||
+          target.recipient.e2eeKeyId != device.e2eeKeyId) {
+        return false;
+      }
+      return await _prepareRootTransfer(target);
+    } on _StaleDeviceRegistryRead {
+      return false;
+    } catch (error) {
+      if (_isCurrentSessionOwner(
+        selector: selector,
+        sessionEpoch: sessionEpoch,
+      )) {
+        state = state.copyWith(error: _classifyDeviceError(error));
+      }
+      return false;
+    }
   }
 
   Future<bool> _prepareRootTransfer(_RootTransferTarget? target) async {

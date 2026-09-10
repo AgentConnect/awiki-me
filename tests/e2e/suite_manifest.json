@@ -345,7 +345,7 @@
         "release"
       ],
       "owner": "awiki-me-identity",
-      "estimatedMinutes": 20,
+      "estimatedMinutes": 22,
       "timeoutMinutes": 30,
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
@@ -357,11 +357,13 @@
       "resourceCategories": [
         "dedicated_test_identity",
         "device_join_session",
+        "root_transfer",
         "isolated_app_state"
       ],
       "caseIds": [
         "DEVICE-JOIN-E2E-004",
-        "DEVICE-JOIN-E2E-005"
+        "DEVICE-JOIN-E2E-005",
+        "ROOT-TRANSFER-APP-PAIR-E2E-001"
       ]
     },
     "multi-device-app-pair-functional": {

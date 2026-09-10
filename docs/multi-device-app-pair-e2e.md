@@ -5,14 +5,37 @@ scenarios that need two independently runnable AWiki Me processes on one
 computer. It exposes focused member-Join, functional, content-sync, and paged
 recovery suites:
 
-- `multi-device-app-pair`: security acceptance for `DEVICE-JOIN-E2E-004`,
-  including one real macOS LocalAuthentication decision;
+- `multi-device-app-pair` (also `multi-device-app-pair-later-admin-grant`):
+  real two-App Join (`DEVICE-JOIN-E2E-004`), management grant
+  (`ROOT-TRANSFER-APP-PAIR-E2E-001`), and local deletion/re-Join entry
+  (`DEVICE-JOIN-E2E-005`). The unattended run uses the test-only user-presence
+  port; it does not attest physical macOS LocalAuthentication;
 - `multi-device-app-pair-functional`: unattended functional acceptance for
   cross-device Agent inventory and Direct-message convergence;
 - `multi-device-app-pair-content-sync`: one Join plus Group, attachment, and
   read-state convergence;
 - `multi-device-app-pair-paging-recovery`: one Join plus one exact-device
   `messages_501` Schema 3 recovery case.
+
+The management-grant case observes the grant entry immediately after approval,
+previews it without sending, navigates through the UI to Devices, and completes
+one explicit root-transfer confirmation there. The receiving endpoint is a
+second App, never a CLI. Both fresh Registry reads must eventually show exactly
+two active, management-ready admins without either App losing its session.
+The read-only completion observer tolerates only the exact missing-Bearer error
+or the exact DID-WBA signing/provider-generation conflict while the receiver's
+asynchronous root import converges, within a two-minute bound. Every public
+Registry read opens a fresh identity client; it does not refresh auth, inject
+state, repeat a Root transfer, or initiate synchronization.
+Other errors and final readiness failures remain failures.
+
+The same case then deletes only the joining App's local credential and completes
+another real Join from its fresh form. The server still has two ready admins;
+the original admin must approve the distinct third device, expose management
+grant instead of Done, and successfully grant Root again. Both App views must
+converge to three ready-admin Registry rows. The coordinator clears the first
+SAS round before new submissions; opening the fresh form alone cannot pass this
+checkpoint regression.
 
 ## Isolation model
 
