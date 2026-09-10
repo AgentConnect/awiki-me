@@ -14,8 +14,12 @@ import 'package:path/path.dart' as p;
 import '../../case_attestation.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  tearDownAll(E2eInvocationCompletionWriter.markFinished);
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets(
     'real App bootstrap provisions once and runtime only opens existing key',

@@ -42,6 +42,7 @@ void main() {
 
       await E2eInvocationCompletionWriter.markFinished(
         environment: environment,
+        failedTestCount: 0,
       );
       final completion = E2eInvocationCompletion.read(
         e2eInvocationCompletionFileForAttestation(attestation),
@@ -73,6 +74,7 @@ void main() {
       await expectLater(
         E2eInvocationCompletionWriter.markFinished(
           environment: <String, String>{...environment, e2eCaseRunIdDefine: ''},
+          failedTestCount: 0,
         ),
         throwsStateError,
       );

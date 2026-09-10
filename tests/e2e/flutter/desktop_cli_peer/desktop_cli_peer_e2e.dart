@@ -203,8 +203,12 @@ void runDesktopCliPeerE2e({
   String description =
       'Desktop App and CLI peer cover direct, group, and attachment basics',
 }) {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  tearDownAll(E2eInvocationCompletionWriter.markFinished);
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets(
     description,

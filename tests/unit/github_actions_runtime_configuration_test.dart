@@ -11,6 +11,29 @@ const Map<String, int> _minimumNode24ActionMajors = <String, int>{
 };
 
 void main() {
+  test('E2E report uploads include hidden reports without runtime secrets', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    final jobs = workflow['jobs'] as YamlMap;
+    for (final name in <String>['validate', 'remote-product']) {
+      final uploads = ((jobs[name] as YamlMap)['steps'] as YamlList)
+          .cast<YamlMap>()
+          .where((step) => step['uses'] == 'actions/upload-artifact@v7');
+      final reports = uploads
+          .map((step) => step['with'] as YamlMap)
+          .singleWhere(
+            (options) => options['name'].toString().startsWith('awiki-me-'),
+          );
+      expect(reports['include-hidden-files'], isTrue);
+      expect(reports['if-no-files-found'], 'error');
+      expect(reports['path'].toString().trim().split('\n'), <String>[
+        'test-awiki-me/.e2e/*/*/reports/**',
+        'test-awiki-me/.e2e/native-core/*-provenance.json',
+      ]);
+    }
+  });
+
   test('Linux CI prepares native provenance before desktop E2E', () {
     final workflow =
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
@@ -41,46 +64,59 @@ void main() {
     }
   });
 
-  test(
-    'PR checkout credentials are scoped to the private test coordinator',
-    () {
-      final workflow =
-          loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
-              as YamlMap;
-      final jobs = workflow['jobs'] as YamlMap;
-      final validateSteps = (jobs['validate'] as YamlMap)['steps'] as YamlList;
-      final coordinator =
-          validateSteps.cast<YamlMap>().singleWhere(
-                (step) =>
-                    step['name'] == 'Checkout unified System Test coordinator',
-              )['with']
-              as YamlMap;
-      expect(coordinator['ref'], matches(RegExp(r'^[0-9a-f]{40}$')));
-      expect(coordinator['token'], r'${{ secrets.AWIKI_CI_READ_TOKEN }}');
-      expect(coordinator['persist-credentials'], isFalse);
-      expect(coordinator.containsKey('ssh-key'), isFalse);
-      final dsh =
-          validateSteps.cast<YamlMap>().singleWhere(
-                (step) => step['name'] == 'Checkout pinned DSH contract source',
-              )['with']
-              as YamlMap;
-      expect(dsh['path'], 'dsh-awiki');
-      expect(dsh['ref'], matches(RegExp(r'^[0-9a-f]{40}$')));
-      expect(dsh['persist-credentials'], isFalse);
+  test('PR checkout credentials are scoped to private contract sources', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    final jobs = workflow['jobs'] as YamlMap;
+    final validateSteps = (jobs['validate'] as YamlMap)['steps'] as YamlList;
+    final coordinator =
+        validateSteps.cast<YamlMap>().singleWhere(
+              (step) =>
+                  step['name'] == 'Checkout unified System Test coordinator',
+            )['with']
+            as YamlMap;
+    expect(coordinator['ref'], matches(RegExp(r'^[0-9a-f]{40}$')));
+    expect(coordinator['token'], r'${{ secrets.AWIKI_CI_READ_TOKEN }}');
+    expect(coordinator['persist-credentials'], isFalse);
+    expect(coordinator.containsKey('ssh-key'), isFalse);
+    final dsh =
+        validateSteps.cast<YamlMap>().singleWhere(
+              (step) => step['name'] == 'Checkout pinned DSH contract source',
+            )['with']
+            as YamlMap;
+    expect(dsh['path'], 'dsh-awiki');
+    expect(dsh['ref'], matches(RegExp(r'^[0-9a-f]{40}$')));
+    expect(dsh['persist-credentials'], isFalse);
+    final userService =
+        validateSteps.cast<YamlMap>().singleWhere(
+              (step) =>
+                  step['name'] ==
+                  'Checkout pinned User Service contract source',
+            )['with']
+            as YamlMap;
+    expect(userService['path'], 'user-service');
+    expect(userService['ref'], matches(RegExp(r'^[0-9a-f]{40}$')));
+    expect(userService['token'], r'${{ secrets.AWIKI_CI_READ_TOKEN }}');
+    expect(userService['persist-credentials'], isFalse);
+    final canonicalApp = validateSteps.cast<YamlMap>().singleWhere(
+      (step) =>
+          step['name'] == 'Prepare canonical App source path for contracts',
+    );
+    expect(canonicalApp['run'], 'ln -s test-awiki-me awiki-me');
 
-      for (final job in jobs.values.cast<YamlMap>()) {
-        expect(job.containsKey('environment'), isFalse);
-        for (final step in (job['steps'] as YamlList).cast<YamlMap>()) {
-          final options = step['with'];
-          if (options is! YamlMap || options['path'] != 'awiki-cli-rs2') {
-            continue;
-          }
-          expect(options['token'], r'${{ github.token }}');
-          expect(options['persist-credentials'], isFalse);
+    for (final job in jobs.values.cast<YamlMap>()) {
+      expect(job.containsKey('environment'), isFalse);
+      for (final step in (job['steps'] as YamlList).cast<YamlMap>()) {
+        final options = step['with'];
+        if (options is! YamlMap || options['path'] != 'awiki-cli-rs2') {
+          continue;
         }
+        expect(options['token'], r'${{ github.token }}');
+        expect(options['persist-credentials'], isFalse);
       }
-    },
-  );
+    }
+  });
 
   test(
     'CI native consumers use the published registry SDK build entrypoint',

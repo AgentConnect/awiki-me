@@ -45,7 +45,7 @@ jobs:
             exit 1
           }
           test -n "$SYSTEM_TEST_READ_TOKEN" || {
-            echo "AWIKI_CI_READ_TOKEN must allow read-only System Test checkout" >&2
+            echo "AWIKI_CI_READ_TOKEN must allow read-only System Test and User Service checkouts" >&2
             exit 1
           }
 
@@ -67,7 +67,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-system-test
-          ref: c27512d4a54f638d85a9fcd23ce3be30050c29e6
+          ref: ad498db5135957518f66686117f907cc82fe8731
           token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
           path: test-awiki-system-test
           persist-credentials: false
@@ -79,6 +79,18 @@ jobs:
           ref: 32024ba848febd7f3a03e6b40e5a0afa0c6a1231
           path: dsh-awiki
           persist-credentials: false
+
+      - name: Checkout pinned User Service contract source
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/user-service
+          ref: a2b4852a1442873aaa816fc4964d4fde6e4d0a39
+          token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
+          path: user-service
+          persist-credentials: false
+
+      - name: Prepare canonical App source path for contracts
+        run: ln -s test-awiki-me awiki-me
 
       - name: Record exact CLI / SDK source ref
         env:
@@ -176,6 +188,7 @@ jobs:
         working-directory: test-awiki-system-test
         env:
           AWIKI_SQLITE3_SOURCE_DIR: /tmp/awiki-sqlite3
+          AWIKI_CLI_RUST_CARGO_TOOLCHAIN: '1.88.0'
         run: |
           uv sync --locked
           export AWIKI_CLI_SOURCE_REF="$(cat /tmp/awiki-cli-ref)"
@@ -190,7 +203,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: awiki-me-deterministic-${{ github.run_id }}-${{ github.run_attempt }}
-          path: test-awiki-me/.e2e/
+          path: |
+            test-awiki-me/.e2e/*/*/reports/**
+            test-awiki-me/.e2e/native-core/*-provenance.json
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
 
@@ -327,7 +343,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: awiki-me-remote-${{ github.run_id }}-${{ github.run_attempt }}
-          path: test-awiki-me/.e2e/
+          path: |
+            test-awiki-me/.e2e/*/*/reports/**
+            test-awiki-me/.e2e/native-core/*-provenance.json
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
 
