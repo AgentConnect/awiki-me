@@ -156,7 +156,6 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
       return;
     }
 
-    _resourceSideEffectsPossible = true;
     await _timed('Two isolated Flutter App member-Join lifecycle', () {
       return _withFlutterExecutionLease(pairConfig.platform, runId, () async {
         final competingPids = await competingFlutterIntegrationTestPids();
@@ -172,6 +171,7 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
         final coordinator = await AppPairCoordinatorServer.start(token: token);
         _RunningIsolatedApp? adminApp;
         _RunningIsolatedApp? joinerApp;
+        var appPairCompleted = false;
         try {
           await _writeAppPairRunConfig(pairConfig, coordinator, token);
           final artifacts = await _prepareAndValidateAppPairRoles();
@@ -199,6 +199,7 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
                   Platform.environment[_accountStateFailpointEnableEnv]!,
             },
           };
+          _resourceSideEffectsPossible = true;
           adminApp = await _RunningIsolatedApp.start(
             role: 'admin',
             artifact: artifacts.admin,
@@ -218,11 +219,15 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
             platform: pairConfig.platform,
             timeout: suiteDefinition.timeout,
           );
+          appPairCompleted = true;
         } finally {
           await Future.wait(<Future<void>>[
             if (adminApp != null) adminApp.close(commands),
             if (joinerApp != null) joinerApp.close(commands),
           ]);
+          if (pairConfig.functional || pagingRecovery) {
+            await _cleanupAppPairMessages(coordinator.cleanupAccountIds);
+          }
           await coordinator.close();
           if (appPairRunConfigFile.existsSync()) {
             appPairRunConfigFile.deleteSync();
@@ -236,6 +241,12 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           }
           if (appPairDaemonReadyFile.existsSync()) {
             appPairDaemonReadyFile.deleteSync();
+          }
+          if (appPairCompleted &&
+              appPairMessageCleanup?['status'] == 'failed') {
+            throw E2eFailure(
+              'The registered App-pair Message cleanup did not verify.',
+            );
           }
         }
       });
@@ -271,8 +282,82 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           stderr: result.output,
         );
       }
+      final cleanupCommand = appPairMessageCleanupCommand(
+        Platform.environment[_syncRecoveryOperatorModeEnv]!.trim(),
+      );
+      final cleanupReady = await commands.captureResult(
+        cleanupCommand.first,
+        cleanupCommand.skip(1).toList(),
+        allowFailure: true,
+        timeout: const Duration(seconds: 20),
+        stdinText: '{"action":"cleanup_test_app_scope_preflight"}',
+      );
+      requireOperatorProcessSuccess(
+        label: 'preflight.message_cleanup',
+        exitCode: cleanupReady.exitCode,
+        stderr: cleanupReady.output,
+      );
+      validateAppPairCleanupPreflight(cleanupReady.output);
     } on FormatException catch (error) {
       throw E2eFailure(error.message);
+    }
+  }
+
+  Future<void> _cleanupAppPairMessages(List<String> accountIds) async {
+    if (accountIds.isEmpty) {
+      appPairMessageCleanup = {
+        'status': 'not_attempted',
+        'reason': 'scope_unavailable',
+      };
+      return;
+    }
+    for (final id in accountIds) {
+      _addRuntimeSecret(id);
+    }
+    try {
+      final checkpoint = File(
+        '${reportDir.parent.path}/cleanup_scope.private.json',
+      );
+      await checkpoint.create();
+      final permission = await Process.run('chmod', ['600', checkpoint.path]);
+      if (permission.exitCode != 0) {
+        throw const FormatException('cleanup_checkpoint_permissions');
+      }
+      await checkpoint.writeAsString(
+        appPairCleanupRequest(accountIds),
+        flush: true,
+      );
+      final command = appPairMessageCleanupCommand(
+        Platform.environment[_syncRecoveryOperatorModeEnv]!.trim(),
+      );
+      final result = await commands.captureResult(
+        command.first,
+        command.skip(1).toList(),
+        allowFailure: true,
+        timeout: const Duration(seconds: 60),
+        stdinText: appPairCleanupRequest(accountIds),
+      );
+      requireOperatorProcessSuccess(
+        label: 'message_cleanup',
+        exitCode: result.exitCode,
+        stderr: result.output,
+      );
+      appPairMessageCleanup = validateAppPairCleanupReceipt(
+        result.output,
+        accountIds: accountIds,
+      );
+      await checkpoint.delete();
+      _line(
+        'Registered App-pair Message scope cleanup verified. Other resources remain in the residual ledger.',
+      );
+    } on Object catch (error) {
+      appPairMessageCleanup = {
+        'status': 'failed',
+        'reason': error is FormatException
+            ? error.message
+            : 'operator_cleanup_failed',
+      };
+      _line('Message cleanup failed; residual resources remain recorded.');
     }
   }
 

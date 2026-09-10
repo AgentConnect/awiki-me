@@ -7,6 +7,7 @@ import 'package:yaml/yaml.dart';
 
 import 'account_state_operator_contract.dart';
 import 'app_artifact_spec.dart';
+import 'app_pair_cleanup_contract.dart';
 import 'app_pair_protocol.dart';
 import 'case_attestation.dart';
 import 'host_platform.dart';
@@ -434,6 +435,7 @@ class DesktopE2eRunner {
   RemoteMultiDeviceJoinConfig? remoteMultiDeviceJoinConfig;
   RemoteHandleRecoveryConfig? remoteHandleRecoveryConfig;
   RemoteMultiDeviceAppPairConfig? remoteMultiDeviceAppPairConfig;
+  Map<String, Object?>? appPairMessageCleanup;
   late final DesktopE2ePlatform platform;
   late final E2eHostPlatform hostPlatform;
   late final String runId;

@@ -83,6 +83,34 @@ void main() {
     }
   });
 
+  test('prepared Flutter targets report the binding failure count', () {
+    final implementations = Directory('${root.path}/tests/e2e/flutter')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.dart'));
+    var producers = 0;
+    for (final file in implementations) {
+      final source = file.readAsStringSync();
+      if (!source.contains('E2eInvocationCompletionWriter.markFinished')) {
+        continue;
+      }
+      producers++;
+      expect(
+        source,
+        isNot(
+          contains('tearDownAll(E2eInvocationCompletionWriter.markFinished)'),
+        ),
+        reason: file.path,
+      );
+      expect(
+        source,
+        contains('failedTestCount: binding.failureMethodsDetails.length'),
+        reason: file.path,
+      );
+    }
+    expect(producers, greaterThan(0));
+  });
+
   test('Personal real-backend target always publishes process completion', () {
     final source = File(
       '${root.path}/tests/e2e/flutter/app/personal_agent_full_ui_test.dart',

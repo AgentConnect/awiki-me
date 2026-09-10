@@ -101,6 +101,11 @@ void appPairAdminMain() {
         tester,
         expectedDid: adminSession.did,
       );
+      await coordinator.publish(
+        'admin',
+        'cleanup_scope',
+        data: {'accountId': _requireAppPairAccountId(container)},
+      );
       await _pumpUntil(
         tester,
         () => container

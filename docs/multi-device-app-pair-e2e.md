@@ -316,3 +316,35 @@ A visible confirmation dialog or label is insufficient: the destructive action
 is disabled while that query is pending or failed. Query failures and readiness
 timeouts are reported before the existing onboarding/session/cleanup assertions;
 the test does not bypass the product's deletion check.
+
+### App-pair Message cleanup
+
+The functional and paging-recovery suites retain the freshly registered admin
+and CLI peer account IDs in the authenticated loopback coordinator. Each slot is
+immutable. Selectors never enter argv, logs or public reports. The default
+`appmd` prefix is required by the User operator's fresh-test Handle fence.
+
+A selector-free read-only cleanup preflight runs before either App is built.
+After both App processes close, the runner sends at most two registered account
+IDs on stdin using `cleanup_test_app_scope`. User Service first checks the
+Controller's active test-phone binding, one fresh `appmd` Handle (24-hour window),
+and every real Agent's inventory, DID/User and consumed registration-token owner
+links. Retired Agent identities remain eligible only with those ownership links.
+Inventory-only fixtures with neither DID documents nor registration tokens add
+no Message account and remain User residuals. The separate Recovery operator
+contract is unchanged. Message authorizes the whole bounded Controller/Agent
+union before the existing transactional SQL; unrelated-account references still
+cause rollback. A matching scope fingerprint, closed domain counts and a
+zero-residual receipt are required.
+
+The runner writes a mode-0600 `cleanup_scope.private.json` before cleanup and
+removes it after a verified receipt. Failure retains this ignored, private retry
+checkpoint and still completes local teardown; an otherwise successful suite
+fails its cleanup gate. The public `messageCleanup` record contains only the
+fingerprint and counts. Build failures before App launch report no remote side
+effects.
+
+User accounts, Handles and User-owned inventory remain explicit residuals; this
+is not a User-account deletion API. Historical ledgers without exact account
+selectors cannot authorize deletion, and scope is never inferred from shared
+phone numbers or name-prefix scans.
