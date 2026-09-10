@@ -219,8 +219,12 @@ Future<void> _activateRuntimeSession(
 }
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  tearDownAll(E2eInvocationCompletionWriter.markFinished);
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets(
     'cached update gate survives offline startup and recovers through retry',

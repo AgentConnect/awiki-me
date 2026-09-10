@@ -1182,13 +1182,17 @@ execution profile or release denominator.
   unknown. Do not hide a failure by only increasing timeout.
 
 
-### Recovery / Join prepared 测试的失败上报
+### Prepared 测试的失败上报
 
-Recovery 和 remote Join 的 Flutter 入口在 invocation completion 中记录
+所有写入 invocation completion 的 Flutter 入口（包括 App/Core Smoke、桌面 peer、
+Agent、Recovery 和 remote Join）必须从 binding.failureMethodsDetails 记录
 `failedTestCount`（框架失败数量，不含敏感异常内容）。`test_process_finished`
 只表示进程达到结束边界；执行器必须在存在 Flutter 失败时抛出受控的 E2E failure，
 不能把该步骤标为成功后仅报告缺少 case attestation。其他未执行分支仍保持 not-run，
-不批量伪造失败或通过证据。旧 completion 的缺省计数为 0，逐用例 attestation gate 保留。
+不批量伪造失败或通过证据。写入器要求显式提供失败数量，读取器拒绝缺少计数的旧 completion，
+不能把未知结果视为成功；旧制品需要重新构建，逐用例 attestation gate 保留。
+App Smoke 出现任意 Flutter 失败时（包括未登记 case ID 的测试），suite 立即失败，
+不再启动 Core Smoke，因此后续 invocation 不会覆盖该失败的完成标记。
 Fresh Recovery 主流程失败后不执行冷启动阶段，保留主流程错误，不以缺少 handoff 掩盖根因。
 
 DSH remote Join 使用 active-only Host 快照：撤销后要求精确成员消失、唯一原 current

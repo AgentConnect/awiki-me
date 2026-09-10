@@ -35,7 +35,7 @@ class E2eInvocationCompletion {
     required this.runId,
     required this.expectedCaseIds,
     required this.finishedAt,
-    this.failedTestCount = 0,
+    required this.failedTestCount,
   });
 
   final String scenario;
@@ -66,7 +66,7 @@ class E2eInvocationCompletion {
         'invocation completion expectedCaseIds contain duplicates',
       );
     }
-    final failedTestCount = json['failedTestCount'] ?? 0;
+    final failedTestCount = json['failedTestCount'];
     if (failedTestCount is! int || failedTestCount < 0) {
       throw const FormatException(
         'invocation completion failure count is invalid',
@@ -107,7 +107,7 @@ class E2eInvocationCompletionWriter {
 
   static Future<void> markFinished({
     Map<String, String>? environment,
-    int failedTestCount = 0,
+    required int failedTestCount,
   }) async {
     final attestationPath = e2eInvocationValue(
       e2eCaseAttestationPathDefine,

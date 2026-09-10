@@ -42,6 +42,7 @@ void main() {
 
       await E2eInvocationCompletionWriter.markFinished(
         environment: environment,
+        failedTestCount: 0,
       );
       final completion = E2eInvocationCompletion.read(
         e2eInvocationCompletionFileForAttestation(attestation),
@@ -61,7 +62,13 @@ void main() {
         e2eInvocationCompletionFileForAttestation(attestation),
       );
       expect(failed.failedTestCount, 1);
-      for (final invalid in <Object>[-1, '1', true]) {
+      expect(
+        () => E2eInvocationCompletion.fromJson(
+          Map<String, Object?>.from(failed.toJson())..remove('failedTestCount'),
+        ),
+        throwsFormatException,
+      );
+      for (final invalid in <Object?>[null, -1, '1', true]) {
         expect(
           () => E2eInvocationCompletion.fromJson(<String, Object?>{
             ...failed.toJson(),
@@ -73,6 +80,7 @@ void main() {
       await expectLater(
         E2eInvocationCompletionWriter.markFinished(
           environment: <String, String>{...environment, e2eCaseRunIdDefine: ''},
+          failedTestCount: 0,
         ),
         throwsStateError,
       );

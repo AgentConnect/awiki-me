@@ -90,7 +90,7 @@ void main() {
 
     expect(
       source,
-      contains('tearDownAll(E2eInvocationCompletionWriter.markFinished);'),
+      contains('failedTestCount: binding.failureMethodsDetails.length'),
     );
   });
 }
