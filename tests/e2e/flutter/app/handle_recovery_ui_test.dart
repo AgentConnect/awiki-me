@@ -312,7 +312,19 @@ void main() {
         await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
         await _pumpUntil(
           tester,
-          () => find.byType(AppShell).evaluate().length == 1,
+          () {
+            final shell = find.byType(AppShell);
+            if (shell.evaluate().length != 1) return false;
+            final container = ProviderScope.containerOf(tester.element(shell));
+            final runtime = container.read(appRuntimeProvider);
+            final session = container.read(sessionProvider).session;
+            return runtime.isInitialized &&
+                !runtime.isBusy &&
+                runtime.activatedDid == oldDid &&
+                session?.did == oldDid &&
+                session?.localIdentityId == oldSession.identityId &&
+                find.byKey(const Key('app-shell-page-background')).evaluate().length == 1;
+          },
           timeout: const Duration(seconds: 45),
           failure: 'Fresh Recovery setup did not open the authenticated App.',
         );
@@ -1758,12 +1770,19 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         peerSession.did != registeredPeer.did) {
       fail('The continuity peer did not activate its exact identity.');
     }
+    progress.enter(HandleRecoveryFixtureStage.direct);
+    // A new replica starts at the current stream tail. Both receivers must
+    // finish bootstrap before either fixture message exists in that stream.
+    await _syncHandleRecoveryFixtureWithRetry(
+      tester: tester,
+      bootstrap: bootstrap,
+      reason: 'handle-recovery-fixture-owner-bootstrap',
+    );
     await _syncHandleRecoveryFixtureWithRetry(
       tester: tester,
       bootstrap: peerBootstrap,
       reason: 'handle-recovery-fixture-peer-bootstrap',
     );
-    progress.enter(HandleRecoveryFixtureStage.direct);
     final directOutgoing = await messaging.sendText(
       thread: AppThreadRef.direct(peerSession.did),
       content: 'direct-before-out ${config.runId} ${_nonce(8)}',
@@ -7424,10 +7443,29 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
   if (messaging == null || sync == null) {
     fail('An App lacked canonical thread message sync.');
   }
+  var attempts = 0;
+  var successes = 0;
+  var localStateErrors = 0;
+  var transportErrors = 0;
+  var eventsApplied = 0;
+  var pagesFetched = 0;
+  var candidateCount = 0;
+  var idMatches = 0;
+  var contentMatches = 0;
+  final statuses = <String, int>{};
+  String diagnostic() => 'attempts=$attempts successes=$successes '
+      'local_state_errors=$localStateErrors transport_errors=$transportErrors '
+      'events=$eventsApplied pages=$pagesFetched statuses=$statuses '
+      'candidates=$candidateCount id_matches=$idMatches content_matches=$contentMatches';
   final deadline = DateTime.now().add(const Duration(seconds: 90));
   while (DateTime.now().isBefore(deadline)) {
     try {
-      await sync.syncNow(reason: 'handle-recovery-rejoin-e2e', limit: 100);
+      attempts++;
+      final outcome = await sync.syncNow(reason: 'handle-recovery-rejoin-e2e', limit: 100);
+      successes++;
+      eventsApplied += outcome.eventsApplied;
+      pagesFetched += outcome.pagesFetched;
+      statuses.update(outcome.status.name, (count) => count + 1, ifAbsent: () => 1);
     } on MessageSyncCoreFailure catch (error) {
       if (!const <String>{
         'local_state_unavailable',
@@ -7435,6 +7473,8 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
       }.contains(error.code)) {
         rethrow;
       }
+      if (error.code == 'local_state_unavailable') localStateErrors++;
+      if (error.code == 'transport_unavailable') transportErrors++;
       await tester.pump(const Duration(milliseconds: 200));
       await Future<void>.delayed(const Duration(milliseconds: 550));
       continue;
@@ -7444,6 +7484,9 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
       thread: thread,
       messageId: messageId,
     );
+    candidateCount = messages.length;
+    idMatches = messages.where((message) => message.remoteId == messageId).length;
+    contentMatches = messages.where((message) => message.content == content).length;
     final matches = messages
         .where(
           (message) =>
@@ -7483,12 +7526,17 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
           1) {
         fail('An App thread projection was not exact-one stable.');
       }
+      debugPrint('[recovery-thread-probe] passed ${diagnostic()}');
       return message;
     }
     await tester.pump(const Duration(milliseconds: 200));
     await Future<void>.delayed(const Duration(milliseconds: 550));
   }
-  fail('An App did not converge the exact thread message.');
+  final session = await appBootstrap.appSessionService!.currentSession();
+  final expectedOwner = isMine ? senderDid : receiverDid;
+  fail('An App did not converge the exact thread message. '
+      '${diagnostic()} session_present=${session != null} '
+      'session_owner_matches=${session?.did == expectedOwner}');
 }
 
 Future<void> _syncHandleRecoveryFixtureWithRetry({
@@ -7499,7 +7547,12 @@ Future<void> _syncHandleRecoveryFixtureWithRetry({
   final deadline = DateTime.now().add(const Duration(seconds: 30));
   while (DateTime.now().isBefore(deadline)) {
     try {
-      await bootstrap.messageSyncService!.syncNow(reason: reason, limit: 100);
+      final outcome = await bootstrap.messageSyncService!.syncNow(reason: reason, limit: 100);
+      if (outcome.status != MessageSyncStatus.idle &&
+          outcome.status != MessageSyncStatus.changed) {
+        fail('Handle Recovery fixture sync did not become ready '
+            '(status=${outcome.status.name}).');
+      }
       return;
     } on MessageSyncCoreFailure catch (error) {
       if (error.code != 'transport_unavailable') rethrow;

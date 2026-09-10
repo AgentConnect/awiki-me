@@ -119,6 +119,55 @@ void main() {
     );
   });
 
+  test(
+    'Fresh Recovery initializes both receivers before sending fixture messages',
+    () {
+      final source = File(
+        'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+      ).readAsStringSync();
+      final fixture = source.substring(
+        source.indexOf(
+          'Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture(',
+        ),
+      );
+      final owner = fixture.indexOf(
+        "reason: 'handle-recovery-fixture-owner-bootstrap'",
+      );
+      final peer = fixture.indexOf(
+        "reason: 'handle-recovery-fixture-peer-bootstrap'",
+      );
+      final send = fixture.indexOf(
+        'final directOutgoing = await messaging.sendText(',
+      );
+      expect(owner, greaterThanOrEqualTo(0));
+      expect(peer, greaterThan(owner));
+      expect(send, greaterThan(peer));
+      expect(source, contains('outcome.status != MessageSyncStatus.idle'));
+      expect(source, contains('outcome.status != MessageSyncStatus.changed'));
+    },
+  );
+
+  test('Fresh Recovery waits for the intended authenticated runtime', () {
+    final source = File(
+      'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+    ).readAsStringSync();
+    final start = source.indexOf('if (freshFocusedRequired) {');
+    final readiness = source.substring(
+      start,
+      source.indexOf(
+        'final progress = HandleRecoveryFixtureProgress();',
+        start,
+      ),
+    );
+    expect(readiness, contains('runtime.isInitialized'));
+    expect(readiness, contains('runtime.activatedDid == oldDid'));
+    expect(
+      readiness,
+      contains('session?.localIdentityId == oldSession.identityId'),
+    );
+    expect(readiness, contains("Key('app-shell-page-background')"));
+  });
+
   test('Fresh Recovery restores the reopened peer before continuity checks', () {
     final source = File(
       'tests/e2e/flutter/app/handle_recovery_ui_test.dart',

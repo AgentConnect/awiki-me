@@ -231,6 +231,12 @@ dart run tests/e2e/runner.dart \
 purpose/Handle/operation ID 的短信接口。OTP 只在测试进程内读取并注册到 redactor，不能
 写入 run config、版本控制文件、attestation、诊断或报告。
 
+Fresh Direct fixture 必须先等待 owner 的目标身份、runtime 和认证页面就绪，并在发送任何
+准备消息前显式完成 owner、peer 两端的首次同步。新 replica 的 `tail_only` bootstrap
+从当时的事件流尾部开始；如果先发送回复、再初始化接收方，回复会落在初始游标之前，
+后续延长等待也无法使它进入 delta。组件树中存在 `AppShell` 不代表收件同步已就绪。
+初始化同步只接受 `idle` 或 `changed`，保留传输错误的有界重试和消息 exact-one 断言。
+
 Fresh suite 的共享准备边界（fresh root、App bootstrap、onboarding support、registration
 OTP、identity registration、ready-admin Registry）失败时，会把第一个失败写成
 `HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001` 所属的 secret-free
