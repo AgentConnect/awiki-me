@@ -2239,6 +2239,38 @@ void main() {
   );
 
   test(
+    'slow Join inbox does not own the receive slot or acknowledge Push early',
+    () async {
+      final sync = FakeMessageSyncService();
+      final started = Completer<void>();
+      final gate = Completer<List<DeviceJoinRequestNotice>>();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        devices: _deviceCoreWithBlockingJoinInbox(started: started, gate: gate),
+      );
+      addTearDown(() {
+        if (!gate.isCompleted) gate.complete(const <DeviceJoinRequestNotice>[]);
+        container.dispose();
+      });
+      final coordinator = container.read(messageSyncCoordinatorProvider.notifier);
+      var pushCompleted = false;
+      final push = coordinator.requestRemotePushSync().whenComplete(() => pushCompleted = true);
+      await started.future;
+      final next = coordinator.requestSync('next_receive', immediate: true);
+      try {
+        await pumpEventQueue();
+        expect(sync.syncReasons, ['remote_push', 'next_receive']);
+        expect(pushCompleted, isFalse);
+      } finally {
+        gate.complete(const <DeviceJoinRequestNotice>[]);
+        await next;
+        await push;
+      }
+    },
+  );
+
+  test(
     'identity change while Join inbox waits stops the stale sync projection',
     () async {
       final gateway = FakeAwikiGateway()
