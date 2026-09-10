@@ -13,6 +13,7 @@ import 'host_platform.dart';
 import 'performance_contract.dart';
 import 'prepared_integration_process.dart';
 import 'remote_multi_device_join_contract.dart';
+import 'sync_recovery_operator_contract.dart';
 import 'runner/failure.dart';
 import 'runner/flutter_build_isolation.dart';
 import 'runner/manifest.dart';

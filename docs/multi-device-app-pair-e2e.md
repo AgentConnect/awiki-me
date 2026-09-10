@@ -39,6 +39,13 @@ reusing another run's product data or credential material.
 The Linux GTK runner is explicitly non-unique, so both processes may coexist
 even though Linux does not use the macOS bundle-ID mechanism.
 
+Each driver preserves the parent HTTP/HTTPS proxy settings and effective
+`no_proxy` exclusions, then adds `localhost`, `127.0.0.1` and `::1` to its own
+`NO_PROXY`/`no_proxy`. Dart's lowercase precedence is retained. VM Service HTTP
+and WebSocket traffic stays local even when external requests use a proxy;
+locale and per-role Flutter settings remain isolated. This does not alter the
+parent shell or the App/backend proxy configuration.
+
 ## Coordination boundary
 
 The runner creates an authenticated loopback-only coordinator for the duration
@@ -162,8 +169,22 @@ normal lifecycle and request bus. This prevents a realtime hint or the periodic
 foreground reconcile from consuming the one-shot fixture before the asserted
 request without changing production scheduling or weakening the remote
 protocol assertions.
-The Stage-3 retention-gap action follows the same reviewed boundary. It runs
-only through the fixed `ssh ali -- sudo -n /usr/bin/env ...` command, executes
+The Stage-3 retention-gap action follows the same reviewed boundary. External
+hosts use the fixed `ssh ali -- sudo -n /usr/bin/env ...` command; the Linux
+service host may use the reviewed local equivalent. The cross-repo App runner
+automatically selects the reviewed SSH profile on macOS. External Linux hosts
+select `--app-operator-mode ali`; an explicit local mode requires Linux and
+passes the same-host readiness checks. Both Recovery and Account State use the
+same selected profile; the global target manifest is not rewritten.
+
+Before building or launching Apps, real operator-dependent runs check the
+interpreter, script/config paths and exact sudo command permission on the
+selected host. SSH checks are non-interactive and time-bounded. File tests and
+`sudo -n -l -- <approved command>` are read-only; they do not execute `--apply`.
+Prepare-only and dry-run modes do not perform these remote probes.
+Operator nonzero exits are reported before JSON parsing, using the exit code
+and a closed stderr category without raw secret-bearing output. A zero exit
+still requires the exact closed receipt. The operator executes
 the immutable `/opt/awiki/services/message-service/current` helper with
 `--apply`, pins the reviewed Ali `/usr/bin/python3.11` stdlib runtime, and reads
 only the root-owned, service-group-readable, non-group-writable
