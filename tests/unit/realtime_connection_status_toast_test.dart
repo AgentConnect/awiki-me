@@ -6,12 +6,12 @@ import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
-import 'package:awiki_me/src/presentation/shared/startup_splash.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+import 'support/app_shell_ready.dart';
 
 void main() {
   const session = SessionIdentity(
@@ -47,7 +47,8 @@ void main() {
         realtimeGateway: realtimeGateway,
       ),
     );
-    await _pumpInitializedShell(tester);
+    await pumpUntilAppShellReady(tester, loggedIn: true);
+    await tester.pump();
 
     expect(find.text('正在连接消息服务...'), findsOneWidget);
 
@@ -69,7 +70,8 @@ void main() {
         realtimeGateway: realtimeGateway,
       ),
     );
-    await _pumpInitializedShell(tester);
+    await pumpUntilAppShellReady(tester, loggedIn: true);
+    await tester.pump();
 
     expect(find.text('消息连接中断，正在重连...'), findsOneWidget);
 
@@ -92,7 +94,8 @@ void main() {
         realtimeGateway: realtimeGateway,
       ),
     );
-    await _pumpInitializedShell(tester);
+    await pumpUntilAppShellReady(tester, loggedIn: true);
+    await tester.pump();
 
     expect(find.text('消息连接中断，正在重连...'), findsNothing);
     expect(find.text('消息服务已断开，正在尝试恢复'), findsNothing);
@@ -116,6 +119,7 @@ void main() {
         ],
       ),
     );
+    await pumpUntilAppShellReady(tester, loggedIn: true);
     await tester.pumpAndSettle();
     unawaited(
       Navigator.of(tester.element(find.byType(AppShell))).push<void>(
@@ -178,7 +182,8 @@ void main() {
         ],
       ),
     );
-    await _pumpInitializedShell(tester);
+    await pumpUntilAppShellReady(tester, loggedIn: true);
+    await tester.pump();
 
     expect(find.text('正在恢复近期消息和当前已读状态…'), findsOneWidget);
     expect(find.byType(CupertinoActivityIndicator), findsWidgets);
@@ -203,7 +208,8 @@ void main() {
         ],
       ),
     );
-    await _pumpInitializedShell(tester);
+    await pumpUntilAppShellReady(tester, loggedIn: true);
+    await tester.pump();
 
     expect(find.text('恢复所需的账号状态超过安全容量，消息恢复无法继续，请联系支持人员。'), findsOneWidget);
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
@@ -229,7 +235,8 @@ void main() {
         ],
       ),
     );
-    await _pumpInitializedShell(tester);
+    await pumpUntilAppShellReady(tester, loggedIn: true);
+    await tester.pump();
 
     expect(find.text('消息服务暂时不可用，正在自动重试…'), findsNothing);
     expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsNothing);
@@ -255,7 +262,8 @@ void main() {
         ],
       ),
     );
-    await _pumpInitializedShell(tester);
+    await pumpUntilAppShellReady(tester, loggedIn: true);
+    await tester.pump();
 
     expect(find.text('消息服务暂时不可用，正在自动重试…'), findsOneWidget);
     expect(find.byType(CupertinoActivityIndicator), findsWidgets);
@@ -282,7 +290,8 @@ void main() {
         ],
       ),
     );
-    await _pumpInitializedShell(tester);
+    await pumpUntilAppShellReady(tester, loggedIn: true);
+    await tester.pump();
 
     expect(find.text('消息服务暂时不可用，正在自动重试…'), findsNothing);
   });
@@ -308,7 +317,8 @@ void main() {
         ],
       ),
     );
-    await _pumpInitializedShell(tester);
+    await pumpUntilAppShellReady(tester, loggedIn: true);
+    await tester.pump();
 
     expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsOneWidget);
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
@@ -332,24 +342,12 @@ void main() {
         ],
       ),
     );
-    await _pumpInitializedShell(tester);
+    await pumpUntilAppShellReady(tester, loggedIn: true);
+    await tester.pump();
 
     expect(find.text('消息已同步，但列表刷新失败，请重试重新加载。'), findsOneWidget);
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
   });
-}
-
-Future<void> _pumpInitializedShell(WidgetTester tester) async {
-  // Update-cache restoration and runtime initialization each cross a frame.
-  // A permanent connection spinner cannot use pumpAndSettle.
-  for (var attempt = 0; attempt < 50; attempt += 1) {
-    await tester.pump(const Duration(milliseconds: 10));
-    if (find.byType(AwikiMeStartupPlaceholder).evaluate().isEmpty) {
-      expect(find.byType(AppShell), findsOneWidget);
-      return;
-    }
-  }
-  fail('AppShell did not finish startup within 500 ms.');
 }
 
 class _FixedMessageSyncCoordinator extends MessageSyncCoordinator {

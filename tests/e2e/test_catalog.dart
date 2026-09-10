@@ -395,7 +395,7 @@ class AppTestCatalog {
         'CLI foreground contract, fixed member authorization, CLI listener '
         'host wake, App global review entry, and exactly one E2E-only '
         'user-presence decision where the App approves. The DSH direction '
-        'requires published Node package 0.2.3, opaque Host refs, explicit '
+        'requires a built DSH with its declared Node SDK dependency, opaque Host refs, explicit '
         'APPROVE/REVOKE, and public Handle cleanup with a protected factor. '
         'Production continues '
         'to use macOS LocalAuthentication and is not attested by this suite. '
