@@ -242,33 +242,41 @@ void main() {
     },
   );
 
-  test('v1a blocked Core outcome never schedules a tight retry', () async {
-    final sync = FakeMessageSyncService(
-      deltaResult: const MessageSyncOutcome(
-        status: MessageSyncStatus.blocked,
-        eventsApplied: 0,
-        pagesFetched: 0,
-        errorCode: 'sync.client_upgrade_required',
-      ),
-    );
-    final container = _container(
-      FakeAwikiGateway(),
-      sync,
-      failureBackoff: const Duration(milliseconds: 5),
-    );
-    addTearDown(container.dispose);
+  for (final blockedCode in [
+    'sync.client_upgrade_required',
+    'message_wire_identity_conflict',
+  ]) {
+    test(
+      'blocked Core outcome $blockedCode never schedules a tight retry',
+      () async {
+        final sync = FakeMessageSyncService(
+          deltaResult: MessageSyncOutcome(
+            status: MessageSyncStatus.blocked,
+            eventsApplied: 0,
+            pagesFetched: 0,
+            errorCode: blockedCode,
+          ),
+        );
+        final container = _container(
+          FakeAwikiGateway(),
+          sync,
+          failureBackoff: const Duration(milliseconds: 5),
+        );
+        addTearDown(container.dispose);
 
-    final receipt = await container
-        .read(messageSyncCoordinatorProvider.notifier)
-        .requestRemotePushSync();
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+        final receipt = await container
+            .read(messageSyncCoordinatorProvider.notifier)
+            .requestRemotePushSync();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
 
-    final state = container.read(messageSyncCoordinatorProvider);
-    expect(receipt.disposition, RemotePushSyncDisposition.blocked);
-    expect(state.status, MessageSyncCoordinatorStatus.blocked);
-    expect(state.automaticRetryPending, isFalse);
-    expect(sync.syncReasons, ['remote_push']);
-  });
+        final state = container.read(messageSyncCoordinatorProvider);
+        expect(receipt.disposition, RemotePushSyncDisposition.blocked);
+        expect(state.status, MessageSyncCoordinatorStatus.blocked);
+        expect(state.automaticRetryPending, isFalse);
+        expect(sync.syncReasons, ['remote_push']);
+      },
+    );
+  }
 
   test(
     'Schema 3 bounded history is a ready success with one safe marker',

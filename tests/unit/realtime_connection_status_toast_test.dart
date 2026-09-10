@@ -324,6 +324,31 @@ void main() {
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
   });
 
+  testWidgets('消息身份冲突展示同步暂停而非检查网络', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gatewayWithProfile(),
+        session: session,
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(
+                status: MessageSyncCoordinatorStatus.blocked,
+                lastFailureCode: 'message_wire_identity_conflict',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await pumpUntilAppShellReady(tester, loggedIn: true);
+    await tester.pump();
+    expect(find.text('消息同步已暂停，请升级客户端或修复此设备后继续。'), findsOneWidget);
+    expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsNothing);
+  });
+
   testWidgets('AppShell 单独提示已提交后的列表刷新失败', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(
