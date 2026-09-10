@@ -16,6 +16,8 @@ const Set<String> _forbiddenCheckpointKeys = <String>{
   'authorization',
 };
 const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
+  'admin\u0000cleanup_scope': <String>{'accountId'},
+  'admin\u0000cleanup_peer': <String>{'accountId'},
   'admin\u0000ready': <String>{'did', 'handle', 'adminDeviceId'},
   'joiner\u0000pending': <String>{'joinSessionId', 'joinedDeviceId'},
   'admin\u0000verification_started': <String>{},
@@ -221,6 +223,11 @@ class AppPairCoordinatorServer {
   final Map<String, Map<String, Object?>> _checkpoints =
       <String, Map<String, Object?>>{};
   final Map<String, String> _sasByRole = <String, String>{};
+  List<String> get cleanupAccountIds => [
+    for (final phase in ['cleanup_scope', 'cleanup_peer'])
+      if (_checkpoints['admin\u0000$phase']?['accountId'] case final String id)
+        id,
+  ];
   StreamSubscription<HttpRequest>? _subscription;
 
   Uri get endpoint => Uri(
@@ -311,6 +318,11 @@ class AppPairCoordinatorServer {
     };
     _validateCheckpointData(data);
     _validateCheckpointRoute(role, phase, data);
+    if ((phase == 'cleanup_scope' || phase == 'cleanup_peer') &&
+        _checkpoints.containsKey('$role\u0000$phase') &&
+        _checkpoints['$role\u0000$phase']?['accountId'] != data['accountId']) {
+      throw const AppPairProtocolException('Cleanup scope cannot change.');
+    }
     _checkpoints['$role\u0000$phase'] = Map<String, Object?>.unmodifiable(data);
     await _json(request.response, HttpStatus.ok, const {'accepted': true});
   }

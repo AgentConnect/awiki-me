@@ -330,6 +330,8 @@ extension DesktopE2eReporting on DesktopE2eRunner {
           },
         'identityPreflight': _identityPreflight,
         'resourceLifecycle': <String, Object?>{
+          if (appPairMessageCleanup != null)
+            'messageCleanup': appPairMessageCleanup,
           'cleanupPolicy': suiteDefinition.cleanupPolicy,
           'cleanupStatus': _resourceCleanupStatus,
           'reasonCode': _resourceCleanupReasonCode,
@@ -435,6 +437,11 @@ extension DesktopE2eReporting on DesktopE2eRunner {
     if (_resourceCleanupStatus != 'residual') {
       return 'none';
     }
+    if (appPairMessageCleanup != null) {
+      return appPairMessageCleanup!['status'] == 'cleaned'
+          ? 'message_scope_cleaned_other_resources_retained'
+          : 'message_cleanup_unverified';
+    }
     return 'remote_public_delete_api_unavailable';
   }
 
@@ -459,6 +466,8 @@ extension DesktopE2eReporting on DesktopE2eRunner {
         'cleanupPolicy': suiteDefinition.cleanupPolicy,
         'cleanupStatus': _resourceCleanupStatus,
         'reasonCode': _resourceCleanupReasonCode,
+        if (appPairMessageCleanup != null)
+          'messageCleanup': appPairMessageCleanup,
         'resourceCategories': suiteDefinition.resourceCategories,
         'resourceCounts': <String, Object?>{
           'fixedIdentityPool': config != null

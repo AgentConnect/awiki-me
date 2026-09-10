@@ -2085,6 +2085,12 @@ class _JoinCli {
     if (identity is! Map) {
       fail('The CLI registration returned no safe identity projection.');
     }
+    final pairConfig = config;
+    if (pairConfig is _AppPairRunConfig) {
+      await pairConfig.coordinator.publish('admin', 'cleanup_peer', data: {
+        'accountId': _required(_data(payload, action: 'register_handle'), 'account_id'),
+      });
+    }
     return _required(_stringMap(identity), 'did');
   }
 
