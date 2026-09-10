@@ -4736,6 +4736,7 @@ final class _RecordingRemotePushSyncPort implements RemotePushSyncPort {
 
   @override
   Future<RemotePushSyncReceipt> requestRemotePushSync({
+    Set<String>? messageReferences,
     RemotePushPresentationDisposition presentation =
         RemotePushPresentationDisposition.providerPresented,
   }) async {

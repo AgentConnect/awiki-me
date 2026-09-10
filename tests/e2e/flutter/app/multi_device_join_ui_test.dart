@@ -2087,9 +2087,16 @@ class _JoinCli {
     }
     final pairConfig = config;
     if (pairConfig is _AppPairRunConfig) {
-      await pairConfig.coordinator.publish('admin', 'cleanup_peer', data: {
-        'accountId': _required(_data(payload, action: 'register_handle'), 'account_id'),
-      });
+      await pairConfig.coordinator.publish(
+        'admin',
+        'cleanup_peer',
+        data: {
+          'accountId': _required(
+            _data(payload, action: 'register_handle'),
+            'account_id',
+          ),
+        },
+      );
     }
     return _required(_stringMap(identity), 'did');
   }
@@ -3849,7 +3856,19 @@ bool _sameOrderedText(List<String> first, List<String> second) {
   return true;
 }
 
-String _uniqueHandle(String prefix) => '$prefix${_nonce(10)}';
+String _uniqueHandle(String prefix) {
+  if (prefix == 'systestmd') {
+    // The reviewed managed cleanup accepts this exact test namespace and a
+    // ten-character hexadecimal suffix. Keep other suite prefixes unchanged.
+    final random = Random.secure();
+    final suffix = List<String>.generate(
+      5,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+    return '$prefix$suffix';
+  }
+  return '$prefix${_nonce(10)}';
+}
 
 String _nonce(int length) {
   const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';

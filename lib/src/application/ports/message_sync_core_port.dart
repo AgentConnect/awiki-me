@@ -13,6 +13,88 @@ abstract interface class MessageSyncCorePort {
   });
 }
 
+abstract interface class MessageReceiveCorePort {
+  Future<MessageReceiveOutcome> receiveNow({
+    int? limit,
+    required String reason,
+  });
+  Future<MessageProcessingSession> openProcessingSession();
+  Future<List<LocalIncomingMessage>> findLocalIncoming(Set<String> references);
+}
+
+class MessageReceiveOutcome {
+  const MessageReceiveOutcome({
+    required this.status,
+    required this.complete,
+    required this.eventsReceived,
+    required this.pagesFetched,
+    this.messagesHydrated = 0,
+    this.duplicatesSkipped = 0,
+    this.olderHistoryExcluded = false,
+    this.errorCode,
+    this.warnings = const [],
+  });
+  final MessageSyncStatus status;
+  final bool complete;
+  final int eventsReceived;
+  final int pagesFetched;
+  final int messagesHydrated;
+  final int duplicatesSkipped;
+  final bool olderHistoryExcluded;
+  final String? errorCode;
+  final List<String> warnings;
+}
+
+enum MessageProcessingStatus {
+  applied,
+  retrying,
+  blocked,
+  discarded,
+  resyncRequired,
+}
+
+class MessageProcessingUpdate {
+  const MessageProcessingUpdate({
+    required this.eventId,
+    required this.status,
+    this.changedConversationIds = const [],
+    this.committedIncomingMessages = const [],
+    this.errorCode,
+  });
+  final String eventId;
+  final MessageProcessingStatus status;
+  final List<String> changedConversationIds;
+  final List<CommittedIncomingMessage> committedIncomingMessages;
+  final String? errorCode;
+}
+
+class MessageProcessingOutcome {
+  const MessageProcessingOutcome({
+    required this.complete,
+    required this.pendingCount,
+    required this.blockedCount,
+    required this.discardedCount,
+    this.changedConversationIds = const [],
+    this.committedIncomingMessages = const [],
+    this.recoveredIncomingMessages = const [],
+    this.errorCode,
+  });
+  final bool complete;
+  final int pendingCount;
+  final int blockedCount;
+  final int discardedCount;
+  final List<String> changedConversationIds;
+  final List<CommittedIncomingMessage> committedIncomingMessages;
+  final List<LocalIncomingMessage> recoveredIncomingMessages;
+  final String? errorCode;
+}
+
+abstract interface class MessageProcessingSession {
+  Stream<MessageProcessingUpdate> get updates;
+  Future<MessageProcessingOutcome> waitUntilSettled();
+  Future<void> close();
+}
+
 abstract interface class ConversationMessageSyncCorePort {
   Future<MessageSyncThreadAfterResult> syncConversationAfter({
     required AppConversationReadRef conversation,
@@ -64,11 +146,23 @@ class CommittedIncomingMessage {
     required this.eventId,
     required this.logicalMessageId,
     required this.message,
+    this.opaqueMessageReferences = const {},
   });
 
   final String eventId;
   final String logicalMessageId;
   final ChatMessage message;
+  final Set<String> opaqueMessageReferences;
+}
+
+/// Already committed Core facts used to correlate a Push after restart/replay.
+class LocalIncomingMessage {
+  const LocalIncomingMessage({
+    required this.message,
+    required this.opaqueMessageReferences,
+  });
+  final ChatMessage message;
+  final Set<String> opaqueMessageReferences;
 }
 
 class MessageSyncOutcome {

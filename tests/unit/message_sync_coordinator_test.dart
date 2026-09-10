@@ -5,6 +5,7 @@ import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/app_presentation_service.dart';
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
+import 'package:awiki_me/src/application/remote_push_message_reference.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
@@ -1294,6 +1295,41 @@ void main() {
   );
 
   test(
+    'receive startup prepares Patch subscription before starting reception',
+    () async {
+      final gateway = FakeAwikiGateway();
+      final sync = _SeparatedMessageSyncService()..completeProcessing();
+      final conversations = _BoundReadyConversationService(
+        gateway,
+        ownerIdentityId: 'owner-a',
+      );
+      final container = _container(
+        gateway,
+        sync,
+        syncV2ReadEnabled: true,
+        session: _boundSession(deviceAuthGeneration: '1'),
+        conversationService: conversations,
+      );
+      addTearDown(container.dispose);
+      addTearDown(conversations.dispose);
+      var readyBeforeReceive = false;
+      sync.onReceive = () {
+        readyBeforeReceive =
+            container
+                .read(conversationListProvider.notifier)
+                .patchStartupObservation
+                ?.provesSubscribeBeforeFirstReliableSync ==
+            true;
+      };
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('startup', immediate: true);
+      expect(sync.syncReasons, ['startup']);
+      expect(readyBeforeReceive, isTrue);
+    },
+  );
+
+  test(
     'same DID auth-generation change rejects stale sync completion',
     () async {
       final gateway = FakeAwikiGateway();
@@ -2239,6 +2275,281 @@ void main() {
   );
 
   test(
+    'receive API returns while processing is pending and a later receive proceeds',
+    () async {
+      final sync = _SeparatedMessageSyncService();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(() {
+        sync.completeProcessing();
+        container.dispose();
+      });
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+      await coordinator
+          .requestSync('first_receive', immediate: true)
+          .timeout(const Duration(seconds: 1));
+      expect(sync.processing.isCompleted, isFalse);
+      expect(
+        container.read(messageSyncCoordinatorProvider).status,
+        MessageSyncCoordinatorStatus.idle,
+      );
+      await coordinator
+          .requestSync('next_receive', immediate: true)
+          .timeout(const Duration(seconds: 1));
+      expect(sync.syncReasons, ['first_receive', 'next_receive']);
+      sync.completeProcessing(blocked: true);
+      await pumpEventQueue();
+      expect(
+        container.read(messageSyncCoordinatorProvider).status,
+        MessageSyncCoordinatorStatus.idle,
+      );
+    },
+  );
+
+  test(
+    'receive API preserves a discarded processing result for the independent Push receipt',
+    () async {
+      final sync = _SeparatedMessageSyncService();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(() {
+        sync.completeProcessing();
+        container.dispose();
+      });
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+      var pushCompleted = false;
+      final push = coordinator.requestRemotePushSync().whenComplete(
+        () => pushCompleted = true,
+      );
+      await sync.processingStarted.future;
+      expect(pushCompleted, isFalse);
+      expect(
+        container.read(messageSyncCoordinatorProvider).status,
+        MessageSyncCoordinatorStatus.idle,
+      );
+      await coordinator.requestSync('next_receive', immediate: true);
+      expect(sync.syncReasons, ['remote_push', 'next_receive']);
+      sync.completeProcessing(discarded: true);
+      final receipt = await push;
+      expect(receipt.disposition, RemotePushSyncDisposition.blocked);
+      expect(receipt.canAcknowledge, isFalse);
+      expect(
+        container.read(messageSyncCoordinatorProvider).status,
+        MessageSyncCoordinatorStatus.idle,
+      );
+    },
+  );
+
+  test(
+    'receive API delivers committed incoming notifications after receive has returned',
+    () async {
+      final sync = _SeparatedMessageSyncService();
+      final notifications = FakeNotificationFacade();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(() {
+        sync.completeProcessing();
+        container.dispose();
+      });
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+      await coordinator.requestSync('first_receive', immediate: true);
+      expect(notifications.systemCalls, 0);
+      final committed = CommittedIncomingMessage(
+        eventId: 'processed-later',
+        logicalMessageId: 'message-later',
+        message: ChatMessage(
+          localId: 'message-later',
+          remoteId: 'message-later',
+          conversationId: 'dm:peer-scope:v1:peer',
+          threadId: 'dm:peer-scope:v1:peer',
+          senderDid: 'did:test:peer',
+          senderName: 'Peer',
+          receiverDid: 'did:test:me',
+          content: 'processed later',
+          createdAt: DateTime.utc(2026, 9, 10),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      );
+      final update = MessageProcessingUpdate(
+        eventId: committed.eventId,
+        status: MessageProcessingStatus.applied,
+        committedIncomingMessages: [committed],
+      );
+      sync.updates.add(update);
+      sync.updates.add(update);
+      await pumpEventQueue();
+      expect(notifications.systemCalls, 1);
+      expect(sync.syncReasons, ['first_receive']);
+    },
+  );
+
+  test(
+    'a pending provider Push suppresses only its referenced message',
+    () async {
+      final sync = _SeparatedMessageSyncService();
+      final notifications = FakeNotificationFacade();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(() {
+        sync.completeProcessing();
+        container.dispose();
+      });
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+      final push = coordinator.requestRemotePushSync(
+        messageReferences: {
+          remotePushOpaqueMessageReference('provider-message'),
+        },
+      );
+      await sync.processingStarted.future;
+      CommittedIncomingMessage incoming(String id, String body) =>
+          CommittedIncomingMessage(
+            eventId: 'event-$id',
+            logicalMessageId: id,
+            message: ChatMessage(
+              localId: id,
+              remoteId: id,
+              conversationId: 'dm:peer-scope:v1:peer',
+              threadId: 'dm:peer-scope:v1:peer',
+              senderDid: 'did:test:peer',
+              senderName: 'Peer',
+              receiverDid: 'did:test:me',
+              content: body,
+              createdAt: DateTime.utc(2026, 9, 10),
+              isMine: false,
+              sendState: MessageSendState.sent,
+            ),
+          );
+      sync.updates.add(
+        MessageProcessingUpdate(
+          eventId: 'update',
+          status: MessageProcessingStatus.applied,
+          committedIncomingMessages: [
+            incoming('provider-message', 'already presented'),
+            incoming('other-message', 'independent message'),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+      expect(notifications.systemCalls, 1);
+      expect(notifications.lastSystemBody, 'independent message');
+      sync.completeProcessing();
+      await push;
+    },
+  );
+
+  test(
+    'referenced Push recovers a committed fact without waiting for unrelated processing',
+    () async {
+      final sync = _SeparatedMessageSyncService();
+      final message = ChatMessage(
+        localId: 'already-committed',
+        remoteId: 'already-committed',
+        conversationId: 'dm:peer-scope:v1:peer',
+        threadId: 'dm:peer-scope:v1:peer',
+        senderDid: 'did:test:peer',
+        receiverDid: 'did:test:me',
+        content: 'already committed',
+        createdAt: DateTime.utc(2026, 9, 10),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      );
+      final reference = remotePushOpaqueMessageReference(message.remoteId!);
+      sync.localIncoming = [
+        LocalIncomingMessage(
+          message: message,
+          opaqueMessageReferences: {reference},
+        ),
+      ];
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(() {
+        sync.completeProcessing();
+        container.dispose();
+      });
+      final receipt = await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync(messageReferences: {reference});
+      expect(receipt.canAcknowledge, isTrue);
+      expect(
+        receipt.recoveredIncomingMessages.single.message.remoteId,
+        'already-committed',
+      );
+      expect(sync.processing.isCompleted, isFalse);
+    },
+  );
+
+  test(
+    'an absent referenced fact cannot become a successful Push ACK after discard',
+    () async {
+      final sync = _SeparatedMessageSyncService();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        syncV2ReadEnabled: true,
+        syncWatchdog: const Duration(milliseconds: 150),
+      );
+      addTearDown(() {
+        sync.completeProcessing();
+        container.dispose();
+      });
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+      final push = coordinator.requestRemotePushSync(
+        messageReferences: {
+          remotePushOpaqueMessageReference('discarded-message'),
+        },
+      );
+      await sync.processingStarted.future;
+      sync.updates.add(
+        const MessageProcessingUpdate(
+          eventId: 'discarded-event',
+          status: MessageProcessingStatus.discarded,
+          errorCode: 'sync.input_discarded',
+        ),
+      );
+      final receipt = await push;
+      expect(receipt.canAcknowledge, isFalse);
+      expect(
+        container.read(messageSyncCoordinatorProvider).status,
+        MessageSyncCoordinatorStatus.idle,
+      );
+    },
+  );
+
+  test(
     'slow Join inbox does not own the receive slot or acknowledge Push early',
     () async {
       final sync = FakeMessageSyncService();
@@ -2253,9 +2564,13 @@ void main() {
         if (!gate.isCompleted) gate.complete(const <DeviceJoinRequestNotice>[]);
         container.dispose();
       });
-      final coordinator = container.read(messageSyncCoordinatorProvider.notifier);
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
       var pushCompleted = false;
-      final push = coordinator.requestRemotePushSync().whenComplete(() => pushCompleted = true);
+      final push = coordinator.requestRemotePushSync().whenComplete(
+        () => pushCompleted = true,
+      );
       await started.future;
       final next = coordinator.requestSync('next_receive', immediate: true);
       try {
@@ -2899,5 +3214,92 @@ class _FailingMessageSyncService extends FakeMessageSyncService {
   }) async {
     syncReasons.add(reason);
     throw StateError('sync_failed');
+  }
+}
+
+class _SeparatedMessageSyncService extends FakeMessageSyncService
+    implements MessageReceiveService {
+  final processing = Completer<MessageProcessingOutcome>();
+  final processingStarted = Completer<void>();
+  final updates = StreamController<MessageProcessingUpdate>.broadcast(
+    sync: true,
+  );
+
+  List<LocalIncomingMessage> localIncoming = [];
+  void Function()? onReceive;
+  @override
+  Future<List<LocalIncomingMessage>> findLocalIncoming(
+    Set<String> references,
+  ) async => localIncoming
+      .where(
+        (message) => message.opaqueMessageReferences.any(references.contains),
+      )
+      .toList();
+
+  @override
+  Future<MessageReceiveOutcome> receiveNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    syncReasons.add(reason);
+    onReceive?.call();
+    return const MessageReceiveOutcome(
+      status: MessageSyncStatus.changed,
+      complete: true,
+      eventsReceived: 1,
+      pagesFetched: 1,
+    );
+  }
+
+  @override
+  Future<MessageProcessingSession> openProcessingSession() async =>
+      _TestProcessingSession(this);
+
+  void completeProcessing({bool blocked = false, bool discarded = false}) {
+    if (!processing.isCompleted)
+      processing.complete(
+        MessageProcessingOutcome(
+          complete: !blocked && !discarded,
+          pendingCount: blocked ? 1 : 0,
+          blockedCount: blocked ? 1 : 0,
+          discardedCount: discarded ? 1 : 0,
+          errorCode: discarded
+              ? 'sync.input_discarded'
+              : blocked
+              ? 'message_wire_identity_conflict'
+              : null,
+        ),
+      );
+  }
+}
+
+class _TestProcessingSession implements MessageProcessingSession {
+  _TestProcessingSession(this.owner) {
+    _subscription = owner.updates.stream.listen(_updates.add);
+  }
+  final _SeparatedMessageSyncService owner;
+  final _updates = StreamController<MessageProcessingUpdate>();
+  late final StreamSubscription<MessageProcessingUpdate> _subscription;
+  bool _closed = false;
+  @override
+  Stream<MessageProcessingUpdate> get updates {
+    if (owner.syncReasons.isNotEmpty && !owner.processingStarted.isCompleted)
+      owner.processingStarted.complete();
+    return _updates.stream;
+  }
+
+  @override
+  Future<MessageProcessingOutcome> waitUntilSettled() {
+    if (!owner.processingStarted.isCompleted)
+      owner.processingStarted.complete();
+    return owner.processing.future;
+  }
+
+  @override
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    await _subscription.cancel();
+    unawaited(_updates.close());
   }
 }

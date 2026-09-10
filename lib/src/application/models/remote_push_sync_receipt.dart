@@ -15,10 +15,12 @@ final class RemotePushSyncReceipt {
   const RemotePushSyncReceipt({
     required this.disposition,
     this.committedIncomingMessages = const <CommittedIncomingMessage>[],
+    this.recoveredIncomingMessages = const <LocalIncomingMessage>[],
   });
 
   final RemotePushSyncDisposition disposition;
   final List<CommittedIncomingMessage> committedIncomingMessages;
+  final List<LocalIncomingMessage> recoveredIncomingMessages;
 
   bool get canAcknowledge => disposition == RemotePushSyncDisposition.succeeded;
 }

@@ -8,6 +8,8 @@ import 'package:flutter/widgets.dart';
 import '../../../app/app_services.dart';
 import '../../../app/app_locale.dart';
 import '../../../application/messaging_service.dart';
+import '../../../application/message_sync_service.dart';
+import '../../../application/remote_push_message_reference.dart';
 import '../../../application/models/app_session.dart';
 import '../../../application/models/message_sync_diagnostics.dart';
 import '../../../application/models/remote_push_sync_receipt.dart';
@@ -265,6 +267,12 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   late final ProviderSubscription<SessionState> _sessionSubscription;
   SessionEpoch? _sessionEpoch;
   _ActiveMessageSync? _activeSync;
+  MessageProcessingSession? _processingSession;
+  StreamSubscription<MessageProcessingUpdate>? _processingUpdates;
+  Future<void>? _processingStart;
+  SessionEpoch? _processingEpoch;
+  Future<void>? _processingRefresh;
+  final Set<_ActiveMessageSync> _processingPolicies = <_ActiveMessageSync>{};
   _QueuedMessageSync? _queuedAfterActive;
   Timer? _pendingTimer;
   final List<Completer<void>> _pendingCompleters = <Completer<void>>[];
@@ -287,6 +295,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       return;
     }
     _sessionEpoch = ref.read(sessionProvider).activeEpoch;
+    _stopProcessingUpdates();
     _cancelPendingTimerAndCompleteWaiters();
     _completeQueuedWaiters(_queuedAfterActive);
     _queuedAfterActive = null;
@@ -313,6 +322,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
 
   @override
   Future<RemotePushSyncReceipt> requestRemotePushSync({
+    Set<String>? messageReferences,
     RemotePushPresentationDisposition presentation =
         RemotePushPresentationDisposition.providerPresented,
   }) async {
@@ -348,6 +358,9 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       'remote_push',
       immediate: true,
       policy: _MessageSyncRequestPolicy(
+        messageReferences: messageReferences == null
+            ? null
+            : Set.of(messageReferences),
         suppressNotificationPresentation:
             presentation == RemotePushPresentationDisposition.providerPresented,
         suppressTransientFailurePresentation: true,
@@ -410,6 +423,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         active.policy.merge(
           suppressNotificationPresentation:
               policy.suppressNotificationPresentation,
+          messageReferences: policy.messageReferences,
           suppressTransientFailurePresentation:
               policy.suppressTransientFailurePresentation,
         );
@@ -430,6 +444,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         queuedPolicy.merge(
           suppressNotificationPresentation:
               active.policy.suppressNotificationPresentation,
+          messageReferences: active.policy.messageReferences,
           suppressTransientFailurePresentation:
               active.policy.suppressTransientFailurePresentation,
         );
@@ -447,7 +462,9 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
             : 'request.coalesced_active',
         fields: <String, Object?>{'reason': reason},
       );
-      return waitsForQueuedRun ? queuedFuture! : active.future;
+      return waitsForQueuedRun
+          ? queuedFuture!
+          : (active.receiveFuture ?? active.future);
     }
     final now = DateTime.now();
     var delay = Duration.zero;
@@ -472,7 +489,12 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         'request.run_now',
         fields: <String, Object?>{'reason': reason},
       );
-      return _runSync(reason, epoch, policy);
+      return _runSync(
+        reason,
+        epoch,
+        policy,
+        waitForProcessing: remotePushRequest,
+      );
     }
     _messageSyncTrace(
       'request.schedule',
@@ -518,8 +540,20 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   Future<RemotePushSyncReceipt> _runSync(
     String reason,
     SessionEpoch epoch,
-    _MessageSyncRequestPolicy policy,
-  ) {
+    _MessageSyncRequestPolicy policy, {
+    bool waitForProcessing = false,
+  }) {
+    final service = ref.read(messageSyncServiceProvider);
+    if (service is MessageReceiveService &&
+        ref.read(messageSyncV2ReadEnabledProvider)) {
+      return _runReceiveSync(
+        reason,
+        epoch,
+        policy,
+        service as MessageReceiveService,
+        waitForProcessing: waitForProcessing,
+      );
+    }
     if (_disposed || !_isCurrentEpoch(epoch)) {
       _messageSyncTrace(
         'run.ignored_disposed',
@@ -539,6 +573,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         queuedPolicy.merge(
           suppressNotificationPresentation:
               active.policy.suppressNotificationPresentation,
+          messageReferences: active.policy.messageReferences,
           suppressTransientFailurePresentation:
               active.policy.suppressTransientFailurePresentation,
         );
@@ -732,11 +767,17 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         }
         state = state.copyWith(lastError: null);
 
+        if (identical(_activeSync, activeSync)) {
+          _activeSync = null;
+          state = state.copyWith(status: MessageSyncCoordinatorStatus.idle);
+          _runQueuedAfterActive();
+        }
         try {
           activeSync.presentationFinalized = true;
           _dispatchCommittedIncomingNotifications(
             result,
-            suppressPresentation: policy.suppressNotificationPresentation,
+            suppressPresentation: false,
+            suppressMessage: policy.suppresses,
           );
           await ref.read(devicesProvider.notifier).refreshJoinInbox();
           if (!_isCurrentSync(epoch, sessionFence)) {
@@ -842,8 +883,9 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
             fields: <String, Object?>{'reason': reason},
           );
         } else if (_isCurrentSync(epoch, sessionFence)) {
-          if (state.status == MessageSyncCoordinatorStatus.syncing ||
-              state.status == MessageSyncCoordinatorStatus.recovering) {
+          if (_activeSync == null &&
+              (state.status == MessageSyncCoordinatorStatus.syncing ||
+                  state.status == MessageSyncCoordinatorStatus.recovering)) {
             state = state.copyWith(status: MessageSyncCoordinatorStatus.idle);
           }
           _messageSyncTrace(
@@ -875,6 +917,416 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     return operation;
   }
 
+  Future<RemotePushSyncReceipt> _runReceiveSync(
+    String reason,
+    SessionEpoch epoch,
+    _MessageSyncRequestPolicy policy,
+    MessageReceiveService service, {
+    required bool waitForProcessing,
+  }) {
+    if (_disposed || !_isCurrentEpoch(epoch)) {
+      return Future.value(
+        const RemotePushSyncReceipt(
+          disposition: RemotePushSyncDisposition.staleSession,
+        ),
+      );
+    }
+    final active = _activeSync;
+    if (active != null) {
+      return waitForProcessing
+          ? active.future
+          : (active.receiveFuture ?? active.future);
+    }
+    final reception = Completer<RemotePushSyncReceipt>();
+    final postProcessing = Completer<RemotePushSyncReceipt>();
+    final run = _ActiveMessageSync(
+      epoch: epoch,
+      future: postProcessing.future,
+      policy: policy,
+      receiveFuture: reception.future,
+    );
+    _activeSync = run;
+    _processingPolicies.add(run);
+    void release(RemotePushSyncReceipt receipt) {
+      if (!reception.isCompleted) reception.complete(receipt);
+      if (identical(_activeSync, run)) {
+        _activeSync = null;
+        _runQueuedAfterActive();
+      }
+    }
+
+    final operation = (() async {
+      final fence = _MessageSyncSessionFence.capture(ref.read(sessionProvider));
+      MessageProcessingSession? completion;
+      var receiveFinished = false;
+      try {
+        if (fence == null || !_isCurrentSync(epoch, fence)) {
+          return const RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.staleSession,
+          );
+        }
+        _lastStartedAt = DateTime.now();
+        state = state.copyWith(
+          status: MessageSyncCoordinatorStatus.syncing,
+          pendingReason: null,
+          lastReason: reason,
+          lastError: null,
+        );
+        await ref.read(conversationListProvider.notifier).ensurePatchReady();
+        if (!_isCurrentSync(epoch, fence)) {
+          return const RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.staleSession,
+          );
+        }
+        _patchReplacementRetryPending = false;
+        ref
+            .read(conversationListProvider.notifier)
+            .recordReliableSyncStartedForCurrentPatchGeneration();
+        await _ensureProcessingUpdates(service, epoch);
+        completion = await service.openProcessingSession();
+        final result = await service
+            .receiveNow(reason: reason)
+            .timeout(syncWatchdog);
+        if (!_isCurrentSync(epoch, fence)) {
+          return const RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.staleSession,
+          );
+        }
+        state = state.copyWith(
+          lastStatus: result.status,
+          olderHistoryExcluded:
+              state.olderHistoryExcluded || result.olderHistoryExcluded,
+        );
+        final disposition = _recordReceiveResult(result, epoch, policy);
+        final receipt = RemotePushSyncReceipt(disposition: disposition);
+        receiveFinished = true;
+        release(receipt);
+        if (!receipt.canAcknowledge) return receipt;
+
+        // This completion wait, diagnostics and Join/UI follow-up belong to the
+        // independent receipt. Reception has already released its execution slot.
+        unawaited(_refreshDiagnosticsBestEffort(epoch, fence));
+        final references = policy.messageReferences;
+        final processed = references != null && references.isNotEmpty
+            ? await _awaitReferencedMessages(service, completion, references)
+            : await completion.waitUntilSettled();
+        if (!_isCurrentSync(epoch, fence)) {
+          return const RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.staleSession,
+          );
+        }
+        if (!processed.complete) {
+          return RemotePushSyncReceipt(
+            disposition:
+                processed.blockedCount > 0 || processed.discardedCount > 0
+                ? RemotePushSyncDisposition.blocked
+                : RemotePushSyncDisposition.retryableFailure,
+          );
+        }
+        run.presentationFinalized = true;
+        _dispatchCommittedIncomingNotifications(
+          MessageSyncOutcome(
+            status: MessageSyncStatus.changed,
+            eventsApplied: processed.committedIncomingMessages.length,
+            pagesFetched: 0,
+            committedIncomingMessages: processed.committedIncomingMessages,
+          ),
+          suppressPresentation: false,
+          suppressMessage: policy.suppresses,
+        );
+        await _refreshAfterProcessing(epoch);
+        if (!_isCurrentSync(epoch, fence)) {
+          return const RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.staleSession,
+          );
+        }
+        return RemotePushSyncReceipt(
+          disposition: RemotePushSyncDisposition.succeeded,
+          committedIncomingMessages: processed.committedIncomingMessages,
+          recoveredIncomingMessages: processed.recoveredIncomingMessages,
+        );
+      } catch (error) {
+        if (fence == null || !_isCurrentSync(epoch, fence)) {
+          return const RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.staleSession,
+          );
+        }
+        if (!receiveFinished) {
+          final failure = _classifyFailure(
+            error,
+            AppMessageSyncFailureStage.coreSync,
+          );
+          if (failure.category == AppMessageSyncFailureCategory.auth) {
+            _recordAuthFailure(
+              error: error,
+              stage: failure.stage,
+              code: failure.code,
+              httpStatus: failure.httpStatus,
+            );
+            return const RemotePushSyncReceipt(
+              disposition: RemotePushSyncDisposition.authRevoked,
+            );
+          }
+          _recordRetryableFailure(
+            epoch: epoch,
+            error: error,
+            policy: policy,
+            stage: failure.stage,
+            category: failure.category,
+            code: failure.code,
+            httpStatus: failure.httpStatus,
+          );
+        }
+        // A processing/Join failure cannot overwrite a completed receive status.
+        return const RemotePushSyncReceipt(
+          disposition: RemotePushSyncDisposition.retryableFailure,
+        );
+      } finally {
+        try {
+          if (completion != null) {
+            await completion.close();
+          }
+        } finally {
+          _processingPolicies.remove(run);
+        }
+      }
+    })();
+    operation.then(
+      (receipt) {
+        postProcessing.complete(receipt);
+        release(receipt);
+      },
+      onError: (Object _) {
+        const receipt = RemotePushSyncReceipt(
+          disposition: RemotePushSyncDisposition.retryableFailure,
+        );
+        postProcessing.complete(receipt);
+        release(receipt);
+      },
+    );
+    return waitForProcessing ? postProcessing.future : reception.future;
+  }
+
+  Future<MessageProcessingOutcome> _awaitReferencedMessages(
+    MessageReceiveService service,
+    MessageProcessingSession session,
+    Set<String> references,
+  ) async {
+    final deadline = DateTime.now().add(syncWatchdog);
+    final recovered = List<LocalIncomingMessage>.of(
+      await service.findLocalIncoming(references).timeout(syncWatchdog),
+    );
+    final matched = <String>{
+      for (final item in recovered)
+        ...item.opaqueMessageReferences.where(references.contains),
+    };
+    final committed = <CommittedIncomingMessage>[];
+    var discarded = false;
+    if (!matched.containsAll(references)) {
+      final iterator = StreamIterator(session.updates);
+      try {
+        while (!matched.containsAll(references)) {
+          final remaining = deadline.difference(DateTime.now());
+          if (remaining <= Duration.zero ||
+              !await iterator.moveNext().timeout(remaining)) {
+            break;
+          }
+          final update = iterator.current;
+          if (update.status == MessageProcessingStatus.applied) {
+            for (final message in update.committedIncomingMessages) {
+              final messageReferences = _committedPushReferences(message);
+              if (!messageReferences.any(references.contains)) continue;
+              matched.addAll(messageReferences.where(references.contains));
+              committed.add(message);
+            }
+          } else if (update.status == MessageProcessingStatus.resyncRequired) {
+            final repaired = await service
+                .findLocalIncoming(references.difference(matched))
+                .timeout(deadline.difference(DateTime.now()));
+            recovered.addAll(repaired);
+            for (final item in repaired) {
+              matched.addAll(
+                item.opaqueMessageReferences.where(references.contains),
+              );
+            }
+          } else if (update.status == MessageProcessingStatus.discarded) {
+            discarded = true;
+          }
+        }
+      } on TimeoutException {
+        /* Return a bounded, unacknowledged processing result. */
+      } finally {
+        await iterator.cancel();
+      }
+    }
+    final complete = matched.containsAll(references);
+    return MessageProcessingOutcome(
+      complete: complete,
+      pendingCount: complete ? 0 : references.difference(matched).length,
+      blockedCount: 0,
+      discardedCount: !complete && discarded ? 1 : 0,
+      committedIncomingMessages: committed,
+      recoveredIncomingMessages: recovered,
+      errorCode: complete
+          ? null
+          : discarded
+          ? 'sync.input_discarded'
+          : 'sync.processing_pending',
+    );
+  }
+
+  RemotePushSyncDisposition _recordReceiveResult(
+    MessageReceiveOutcome result,
+    SessionEpoch epoch,
+    _MessageSyncRequestPolicy policy,
+  ) {
+    switch (result.status) {
+      case MessageSyncStatus.authRevoked:
+        _recordAuthFailure(
+          error: MessageSyncCoordinatorFailure(
+            result.errorCode ?? 'message_sync_auth_revoked',
+          ),
+          stage: AppMessageSyncFailureStage.coreSync,
+          code: result.errorCode ?? 'message_sync_auth_revoked',
+        );
+        return RemotePushSyncDisposition.authRevoked;
+      case MessageSyncStatus.blocked:
+        final capacity =
+            result.errorCode == 'sync.snapshot_item_too_large' ||
+            result.errorCode == 'sync.snapshot_required_state_too_large';
+        state = state.copyWith(
+          status: capacity
+              ? MessageSyncCoordinatorStatus.capacityExceeded
+              : MessageSyncCoordinatorStatus.blocked,
+          lastError: MessageSyncCoordinatorFailure(
+            result.errorCode ?? 'message_sync_blocked',
+          ),
+        );
+        return capacity
+            ? RemotePushSyncDisposition.capacityExceeded
+            : RemotePushSyncDisposition.blocked;
+      case MessageSyncStatus.recoveryRequired:
+        state = state.copyWith(
+          status: MessageSyncCoordinatorStatus.recoveryRequired,
+        );
+        return RemotePushSyncDisposition.recoveryRequired;
+      case MessageSyncStatus.retryableFailure:
+      case MessageSyncStatus.idle:
+      case MessageSyncStatus.changed:
+        if (result.status == MessageSyncStatus.retryableFailure ||
+            !result.complete) {
+          final code = result.errorCode ?? 'message_sync_receive_incomplete';
+          _recordRetryableFailure(
+            epoch: epoch,
+            error: MessageSyncCoordinatorFailure(code),
+            policy: policy,
+            stage: AppMessageSyncFailureStage.coreSync,
+            category: _categoryForOutcomeCode(code),
+            code: code,
+          );
+          return RemotePushSyncDisposition.retryableFailure;
+        }
+        _resetRetryableFailureTracking();
+        _lastFailedAt = null;
+        state = state.copyWith(
+          status: MessageSyncCoordinatorStatus.idle,
+          lastError: null,
+          lastSuccessAt: DateTime.now(),
+        );
+        return RemotePushSyncDisposition.succeeded;
+    }
+  }
+
+  Future<void> _ensureProcessingUpdates(
+    MessageReceiveService service,
+    SessionEpoch epoch,
+  ) {
+    if (_processingEpoch == epoch && _processingSession != null) {
+      return Future.value();
+    }
+    if (_processingEpoch == epoch && _processingStart != null) {
+      return _processingStart!;
+    }
+    _stopProcessingUpdates(clearPolicies: false);
+    _processingEpoch = epoch;
+    final start = (() async {
+      final session = await service.openProcessingSession();
+      if (!_isCurrentEpoch(epoch) || _processingEpoch != epoch) {
+        await session.close();
+        return;
+      }
+      _processingSession = session;
+      _processingUpdates = session.updates.listen(
+        (update) {
+          if (!_isCurrentEpoch(epoch)) return;
+          if (update.status == MessageProcessingStatus.applied) {
+            _dispatchCommittedIncomingNotifications(
+              MessageSyncOutcome(
+                status: MessageSyncStatus.changed,
+                eventsApplied: 1,
+                pagesFetched: 0,
+                committedIncomingMessages: update.committedIncomingMessages,
+              ),
+              suppressPresentation: false,
+              suppressMessage: (message) => _processingPolicies.any(
+                (run) => run.epoch == epoch && run.policy.suppresses(message),
+              ),
+            );
+            unawaited(_refreshAfterProcessing(epoch).catchError((Object _) {}));
+          } else if (update.status == MessageProcessingStatus.resyncRequired) {
+            unawaited(_refreshAfterProcessing(epoch).catchError((Object _) {}));
+          }
+        },
+        onError: (Object _) {
+          if (_isCurrentEpoch(epoch)) {
+            _stopProcessingUpdates(clearPolicies: false);
+          }
+        },
+      );
+    })();
+    _processingStart = start;
+    return start.whenComplete(() {
+      if (_processingSession == null && _processingEpoch == epoch) {
+        _processingStart = null;
+        _processingEpoch = null;
+      }
+    });
+  }
+
+  Future<void> _refreshAfterProcessing(SessionEpoch epoch) {
+    final active = _processingRefresh;
+    if (active != null && _processingEpoch == epoch) return active;
+    late final Future<void> work;
+    work =
+        (() async {
+          if (!_isCurrentEpoch(epoch)) return;
+          await ref.read(conversationListProvider.notifier).ensurePatchReady();
+          if (!_isCurrentEpoch(epoch)) return;
+          await ref.read(devicesProvider.notifier).refreshJoinInbox();
+          if (!_isCurrentEpoch(epoch)) return;
+          await ref
+              .read(conversationListProvider.notifier)
+              .refreshFastLocalAfterCoreCommit();
+        })().whenComplete(() {
+          if (identical(_processingRefresh, work)) _processingRefresh = null;
+        });
+    _processingRefresh = work;
+    return work;
+  }
+
+  void _stopProcessingUpdates({bool clearPolicies = true}) {
+    final subscription = _processingUpdates;
+    final session = _processingSession;
+    _processingUpdates = null;
+    _processingSession = null;
+    _processingStart = null;
+    _processingEpoch = null;
+    _processingRefresh = null;
+    if (clearPolicies) _processingPolicies.clear();
+    if (subscription != null) unawaited(subscription.cancel());
+    if (session != null) unawaited(session.close());
+  }
+
   SessionEpoch? _captureCurrentEpoch() {
     final epoch = ref.read(sessionProvider).activeEpoch;
     if (epoch == null || epoch != _sessionEpoch) {
@@ -895,6 +1347,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       return;
     }
     _sessionEpoch = nextEpoch;
+    _stopProcessingUpdates();
     _lastStartedAt = null;
     _lastFailedAt = null;
     _recoveryRetryPending = false;
@@ -942,6 +1395,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     queued.immediate = queued.immediate || immediate;
     queued.policy.merge(
       suppressNotificationPresentation: policy.suppressNotificationPresentation,
+      messageReferences: policy.messageReferences,
       suppressTransientFailurePresentation:
           policy.suppressTransientFailurePresentation,
     );
@@ -997,6 +1451,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         queued.policy.merge(
           suppressNotificationPresentation:
               policy.suppressNotificationPresentation,
+          messageReferences: policy.messageReferences,
           suppressTransientFailurePresentation:
               policy.suppressTransientFailurePresentation,
         );
@@ -1110,7 +1565,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       queued.reason,
       immediate: queued.immediate,
       policy: queued.policy,
-      remotePushRequest: false,
+      remotePushRequest: queued.waiters.isNotEmpty,
     );
     operation.then(
       (receipt) => _completeQueuedWaiters(queued, receipt),
@@ -1156,6 +1611,9 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
           .syncDiagnostics();
       if (!_isCurrentSync(epoch, fence)) {
         return null;
+      }
+      if (attemptSequence < state.diagnosticsRefreshAttemptSequence) {
+        return diagnostics;
       }
       state = state.copyWith(
         lastSuccessAt: diagnostics.lastSuccessAt,
@@ -1225,6 +1683,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   void _dispatchCommittedIncomingNotifications(
     MessageSyncOutcome outcome, {
     required bool suppressPresentation,
+    bool Function(CommittedIncomingMessage)? suppressMessage,
   }) {
     if (!ref.read(messageSyncV2ReadEnabledProvider) ||
         outcome.status != MessageSyncStatus.changed) {
@@ -1256,7 +1715,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       final deduplicator = ref.read(
         agentTerminalNotificationDeduplicatorProvider,
       );
-      if (suppressPresentation) {
+      if (suppressPresentation || (suppressMessage?.call(committed) ?? false)) {
         deduplicator.acceptMessageIds(messageIds);
         continue;
       }
@@ -1475,6 +1934,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   @override
   void dispose() {
     _disposed = true;
+    _stopProcessingUpdates();
     _sessionSubscription.close();
     _cancelPendingTimerAndCompleteWaiters();
     _cancelCoreDirectedRetry();
@@ -1603,10 +2063,12 @@ class _ActiveMessageSync {
     required this.epoch,
     required this.future,
     required this.policy,
+    this.receiveFuture,
   });
 
   final SessionEpoch epoch;
   final Future<RemotePushSyncReceipt> future;
+  final Future<RemotePushSyncReceipt>? receiveFuture;
   final _MessageSyncRequestPolicy policy;
   bool presentationFinalized = false;
 }
@@ -1631,18 +2093,38 @@ class _MessageSyncRequestPolicy {
   _MessageSyncRequestPolicy({
     this.suppressNotificationPresentation = false,
     this.suppressTransientFailurePresentation = false,
+    this.messageReferences,
   });
-
   bool suppressNotificationPresentation;
   bool suppressTransientFailurePresentation;
+  Set<String>? messageReferences;
+
+  bool suppresses(CommittedIncomingMessage message) {
+    if (!suppressNotificationPresentation) return false;
+    final references = messageReferences;
+    return references == null ||
+        _committedPushReferences(message).any(references.contains);
+  }
 
   void merge({
     required bool suppressNotificationPresentation,
     required bool suppressTransientFailurePresentation,
+    Set<String>? messageReferences,
   }) {
-    this.suppressNotificationPresentation =
-        this.suppressNotificationPresentation ||
-        suppressNotificationPresentation;
+    if (suppressNotificationPresentation) {
+      if (!this.suppressNotificationPresentation) {
+        this.messageReferences = messageReferences == null
+            ? null
+            : Set.of(messageReferences);
+      } else if (this.messageReferences != null) {
+        if (messageReferences == null) {
+          this.messageReferences = null;
+        } else {
+          this.messageReferences!.addAll(messageReferences);
+        }
+      }
+      this.suppressNotificationPresentation = true;
+    }
     this.suppressTransientFailurePresentation =
         this.suppressTransientFailurePresentation ||
         suppressTransientFailurePresentation;
@@ -1651,7 +2133,27 @@ class _MessageSyncRequestPolicy {
   _MessageSyncRequestPolicy copy() => _MessageSyncRequestPolicy(
     suppressNotificationPresentation: suppressNotificationPresentation,
     suppressTransientFailurePresentation: suppressTransientFailurePresentation,
+    messageReferences: messageReferences == null
+        ? null
+        : Set.of(messageReferences!),
   );
+}
+
+Set<String> _committedPushReferences(CommittedIncomingMessage message) {
+  final references = <String>{...message.opaqueMessageReferences};
+  for (final id in [
+    message.logicalMessageId,
+    message.message.remoteId,
+    message.message.localId,
+  ]) {
+    if (id == null) continue;
+    try {
+      references.add(remotePushOpaqueMessageReference(id));
+    } on ArgumentError {
+      /* No valid reference. */
+    }
+  }
+  return references;
 }
 
 void _messageSyncTrace(

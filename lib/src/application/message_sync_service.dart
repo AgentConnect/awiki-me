@@ -14,6 +14,15 @@ abstract interface class MessageSyncService {
   });
 }
 
+abstract interface class MessageReceiveService {
+  Future<MessageReceiveOutcome> receiveNow({
+    required String reason,
+    int limit = 100,
+  });
+  Future<MessageProcessingSession> openProcessingSession();
+  Future<List<LocalIncomingMessage>> findLocalIncoming(Set<String> references);
+}
+
 abstract interface class ConversationMessageSyncService {
   Future<MessageSyncThreadAfterResult> syncConversationAfter({
     required AppConversationReadRef conversation,
@@ -23,11 +32,51 @@ abstract interface class ConversationMessageSyncService {
 }
 
 class ImCoreMessageSyncService
-    implements MessageSyncService, ConversationMessageSyncService {
+    implements
+        MessageSyncService,
+        ConversationMessageSyncService,
+        MessageReceiveService {
   const ImCoreMessageSyncService({required MessageSyncCorePort sync})
     : _sync = sync;
 
   final MessageSyncCorePort _sync;
+
+  @override
+  Future<MessageReceiveOutcome> receiveNow({
+    required String reason,
+    int limit = 100,
+  }) {
+    final receiver = _sync;
+    if (receiver is! MessageReceiveCorePort) {
+      throw UnsupportedError('Core receive API is required');
+    }
+    return AwikiPerformanceLogger.async(
+      'message_sync.receive',
+      () => (receiver as MessageReceiveCorePort).receiveNow(
+        reason: _coreMessageSyncReason(reason),
+        limit: limit,
+      ),
+      fields: <String, Object?>{'reason': reason, 'limit': limit},
+    );
+  }
+
+  @override
+  Future<MessageProcessingSession> openProcessingSession() {
+    final receiver = _sync;
+    if (receiver is! MessageReceiveCorePort) {
+      throw UnsupportedError('Core processing API is required');
+    }
+    return (receiver as MessageReceiveCorePort).openProcessingSession();
+  }
+
+  @override
+  Future<List<LocalIncomingMessage>> findLocalIncoming(Set<String> references) {
+    final receiver = _sync;
+    if (receiver is! MessageReceiveCorePort) {
+      throw UnsupportedError('Core local recovery API is required');
+    }
+    return (receiver as MessageReceiveCorePort).findLocalIncoming(references);
+  }
 
   @override
   Future<MessageSyncOutcome> syncNow({

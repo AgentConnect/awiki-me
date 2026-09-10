@@ -315,8 +315,8 @@ Core 的 typed local Join inbox。通知自带的 title/body、payload JSON 或 
 
 Android EMAS message/notification/open callback 与 WebSocket 一样，只表示本地 Core
 projection 可能变脏。`RemotePushMessageSyncCoordinator` 将事件串行合并，并通过
-`MessageSyncCoordinator.requestSync(reason: remote_push)` 请求同一条 Core committed-sync
-路径。它不解析 Push title/body 来生成 `ChatMessage`，也不直接 upsert recents 或 timeline。
+`MessageSyncCoordinator` 请求同一条 Core `receiveNow` 接收路径，并在接收之外等待独立业务
+回执。它不解析 Push title/body 来生成 `ChatMessage`，也不直接 upsert recents 或 timeline。
 
 `MessageSyncCoordinator` 仍是唯一的 Core commit、conversation/Join/timeline 刷新和
 notification dedupe owner。native receiver 在 `showNotificationNow` 之前只用三项安全事实做
@@ -328,19 +328,23 @@ fail-open 决策：Activity resumed、窗口有焦点、当前 session 派生的
 被 native 拦截的 notice 通过 `notification_received_in_app` 进入同一 committed-sync 路径；
 `message_received` 也按 App presentation required 处理。已由 provider 展示的
 `notification_received` / `notification_opened` 继续抑制 App duplicate；混合 batch 只要包含
-provider-presented event 就选择抑制。该 policy 在 active/queued coalescing 和 automatic retry
-中按 OR 传播，不跳过 normal message ledger、Runtime Agent final-message deduper 或 committed
-projection。
+provider-presented event 就选择抑制对应 opaque message references。该 policy 在 active/queued
+coalescing 和 automatic retry 中合并引用集合；长时间等待某个 Push 时，不能抑制不相干消息的
+通知。没有引用信息的兼容调用保留既有全局 policy。不跳过 normal message ledger、Runtime
+Agent final-message deduper 或 committed projection。
 
 前台 App presentation 全局静默：无论用户是否位于消息所属会话，都不显示 Toast、Banner 或系统
 通知，只更新 timeline、recents、排序和未读状态；用户在当前聊天离开底部时继续由 ChatPage 现有
 “新消息”入口提示。App 后台、锁屏、窗口失焦或 opaque target 不匹配时，native 不拦截，仍只
 显示一次 EMAS `NOTICE`。
 
-native delivery ID 只有在 typed sync receipt 表明 Core 成功、所有本地刷新完成、且通知打开
-路由也成功后才能确认。打开事件只接受 `extraMap.mid` 的安全 opaque message reference 和
-必填未过期 `extraMap.exp`；App 在 sync 后用 committed logical/remote/local message ID
-独立派生 reference，匹配后只打开该 committed message 的 canonical conversation。其他
+native delivery ID 只有在 typed receipt 证明对应 ordinary 消息已在 Core 提交、所有本地刷新
+完成、且通知打开路由也成功后才能确认。接收成功、处理队列为空或输入淘汰都不能替代对应消息的
+提交事实。重启、重投递或 stream lag 时，通过 Core 现有 `localIncomingRecovery` 查询已提交
+incoming facts；不另建 App 持久消息结果表。打开事件只接受 `extraMap.mid` 的安全 opaque
+message reference 和必填未过期 `extraMap.exp`；App 用 committed logical/remote/local
+message ID 及 Core 保留的 raw message alias 派生 reference，匹配后只打开该 committed message
+的 canonical conversation。其他
 payload metadata、raw conversation ID、URL、title/body 都不能决定导航；无匹配时只显示会话
 列表。
 
@@ -396,7 +400,7 @@ Chat presentation 是单向的：
 Chat presentation 同时是 owner/session-generation scoped：
 
 - `SessionEpoch` 由规范化 owner DID、稳定本机 identity key 和单调 generation 组成。active identity 改变、登出或 clear 都会推进 generation；同一 identity 的 token/profile refresh 不会误伤正在进行的工作。
-- `MessageSyncCoordinator` 只允许同一 epoch 的请求 single-flight/coalesce。A 的 active 或 delayed sync 不能满足 B 的 startup sync；A 完成后只有仍属当前 epoch 的结果可以刷新 recents、Join inbox、prewarm timeline 或更新 coordinator state。精确正文补齐由 Core 在 `syncNow` 中完成并提交本地 projection；App 不再根据 hydration ID 二次调用 `syncConversationAfter`，只在 Core commit 后执行 fast-local summary read、本地 timeline prewarm 和可见窗口刷新。
+- `MessageSyncCoordinator` 只允许同一 epoch 的接收请求 single-flight/coalesce。A 的 active 或 delayed sync 不能满足 B 的 startup sync；A 完成后只有仍属当前 epoch 的结果可以刷新 recents、Join inbox、prewarm timeline 或更新 coordinator state。精确正文补齐与可靠落盘由 Core `receiveNow` 完成，逐条业务处理在接收之外提交 projection。App 通过独立 processing session 消费提交结果；普通接收 Future 在可靠接收完成时释放，慢 Join 刷新或 Push 业务等待不占下一轮接收位置。App 不再根据 hydration ID 二次调用 `syncConversationAfter`，只在 Core commit 后执行 fast-local summary read、本地 timeline prewarm 和可见窗口刷新。
 - `MessageSyncCoordinator` 将 patch preparation/Core 同步与 Core commit 后的 App 投影刷新分开捕获：认证拒绝立即终止并要求重新登录；普通可重试失败前两次保持静默、第 3 次连续失败后才显示提示，并按连续 30 秒阈值升级为红色提示；任何成功同步都会重置连续失败计数；Join inbox 或列表刷新失败只标记 `projectionRefreshFailed`，不能触发网络同步失败重试或声称本地事实未改变。对外诊断只包含 stage/category/稳定 code/HTTP status/count/time 等脱敏字段。
 - `ChatThreadsController` 在 epoch 改变时同步取消旧 patch subscriptions 和 timers，清空 pending history/read/repair、thread window、message route cache 与 composer draft。history、conversation-after、patch repair、read ack、text/attachment send 和 retry 都在 await 后再次校验启动时 epoch。
 - Future、stream callback 或 timer 即使无法底层取消，旧 epoch 完成也只能安静结束；不得删除新 epoch 的 active marker、合并到新 timeline、更新新 recents preview、恢复旧 read intent 或显示旧错误。
