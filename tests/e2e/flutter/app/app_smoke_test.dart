@@ -720,6 +720,16 @@ void main() {
 
       coordinator.publish(
         const MessageSyncCoordinatorState(
+          status: MessageSyncCoordinatorStatus.blocked,
+          lastFailureCode: 'message_wire_identity_conflict',
+        ),
+      );
+      await tester.pump();
+      expect(find.text('消息同步已暂停，请升级客户端或修复此设备后继续。'), findsOneWidget);
+      expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsNothing);
+
+      coordinator.publish(
+        const MessageSyncCoordinatorState(
           status: MessageSyncCoordinatorStatus.projectionRefreshFailed,
         ),
       );
