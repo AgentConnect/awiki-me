@@ -2940,14 +2940,17 @@ Future<Map<String, Object?>> _runAppPairAccountStateOperator(
   }
   final stdout = await stdoutFuture;
   final stderr = await stderrFuture;
-  if (exitCode != 0 || utf8.encode(stdout).length > 32 * 1024) {
-    final safeStderr = utf8.encode(stderr).length <= 4 * 1024
-        ? _sanitizeAppPairDaemonLine(stderr.replaceAll(RegExp(r'\s+'), ' '))
-        : '<oversized>';
-    fail(
-      'The fixed Account State operator returned no bounded receipt '
-      '(exit=$exitCode, stderr=$safeStderr).',
+  try {
+    requireOperatorProcessSuccess(
+      label: 'account_state',
+      exitCode: exitCode,
+      stderr: stderr,
     );
+  } on FormatException catch (error) {
+    fail(error.message);
+  }
+  if (utf8.encode(stdout).length > 32 * 1024) {
+    fail('The fixed Account State operator receipt exceeded its size limit.');
   }
   Object? decoded;
   try {
@@ -4317,7 +4320,7 @@ Future<void> _runAppPairRecoveryOperator({
     runInShell: false,
   );
   final stdoutFuture = process.stdout.transform(utf8.decoder).join();
-  final stderrFuture = process.stderr.drain<void>();
+  final stderrFuture = process.stderr.transform(utf8.decoder).join();
   if (request['protocol_device_id'] != protocolDeviceId) {
     fail('The fixed recovery operator request changed device scope.');
   }
@@ -4331,20 +4334,16 @@ Future<void> _runAppPairRecoveryOperator({
     fail('The fixed recovery preparation timed out.');
   }
   final stdoutText = await stdoutFuture;
-  await stderrFuture;
-  Object? receipt;
+  final stderrText = await stderrFuture;
   try {
-    receipt = jsonDecode(stdoutText);
-  } on FormatException {
-    fail('The fixed recovery operator returned no closed receipt.');
-  }
-  if (exitCode != 0 ||
-      receipt is! Map ||
-      receipt.length != 3 ||
-      receipt['affected_streams'] != 1 ||
-      receipt['mode'] != expectedMode ||
-      receipt['prepared'] != true) {
-    fail('The fixed recovery preparation failed.');
+    validateSyncRecoveryOperatorReceipt(
+      exitCode: exitCode,
+      stdoutText: stdoutText,
+      stderrText: stderrText,
+      expectedMode: expectedMode,
+    );
+  } on FormatException catch (error) {
+    fail(error.message);
   }
 }
 

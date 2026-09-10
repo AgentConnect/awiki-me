@@ -854,6 +854,10 @@ on the same desktop device concurrently. The runner supplies a UTF-8 locale
 when the parent shell omits one, so CocoaPods does not depend on interactive
 shell initialization.
 
+App-pair drivers also append loopback addresses to their own proxy exclusions,
+while preserving external proxies and the parent's effective exclusion list.
+This keeps VM Service connections out of the external proxy.
+
 The E2E runner also gives Flutter an isolated XDG settings directory and pins
 its build output to `.e2e/flutter-build/<platform>`. Integration-test host Apps
 therefore never overwrite the normal developer artifact under

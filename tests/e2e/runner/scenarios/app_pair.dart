@@ -49,6 +49,19 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
     _line('service base: ${pairConfig.serviceBaseUrl}');
 
     await _timed('Checking App-pair tooling and source', () async {
+      if ((pairConfig.functional || pagingRecovery) &&
+          !options.prepareOnly &&
+          !options.dryRun &&
+          !commands.dryRun) {
+        _requireAppPairRecoveryOperatorEnvironment(Platform.environment);
+        if (pairConfig.functional) {
+          _requireAppPairAccountStateOperatorEnvironment(
+            root: root,
+            environment: Platform.environment,
+          );
+        }
+        await _preflightAppPairOperators(accountState: pairConfig.functional);
+      }
       await commands.requireExecutable(flutterBin);
       await commands.requireExecutable('dart');
       if (pairConfig.platform == DesktopE2ePlatform.linux) {
@@ -227,6 +240,40 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
         }
       });
     });
+  }
+
+  Future<void> _preflightAppPairOperators({required bool accountState}) async {
+    try {
+      final checks = reviewedOperatorPreflightChecks(
+        mode: Platform.environment[_syncRecoveryOperatorModeEnv]!.trim(),
+        operatingSystem: Platform.operatingSystem,
+        accountState: accountState,
+      );
+      for (final check in checks) {
+        DesktopCommandResult result;
+        try {
+          result = await commands.captureResult(
+            check.command.first,
+            check.command.skip(1).toList(growable: false),
+            allowFailure: true,
+            timeout: const Duration(seconds: 20),
+          );
+        } on ProcessException {
+          throw E2eFailure(
+            'operator_preflight.${check.label}: command_unavailable',
+          );
+        } on DesktopCommandTimeout {
+          throw E2eFailure('operator_preflight.${check.label}: timed_out');
+        }
+        requireOperatorProcessSuccess(
+          label: 'preflight.${check.label}',
+          exitCode: result.exitCode,
+          stderr: result.output,
+        );
+      }
+    } on FormatException catch (error) {
+      throw E2eFailure(error.message);
+    }
   }
 
   Future<void> _writeAppPairRunConfig(

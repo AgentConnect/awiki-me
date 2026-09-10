@@ -238,6 +238,30 @@ class _RunningIsolatedApp {
   }
 }
 
+Map<String, String> appPairDriverEnvironment({
+  required Map<String, String> parent,
+  required String locale,
+  required String flutterConfigPath,
+}) {
+  // Dart gives lowercase no_proxy precedence, even when its value is empty.
+  final existing = parent['no_proxy'] ?? parent['NO_PROXY'] ?? '';
+  final noProxy = <String>{
+    for (final host in existing.split(','))
+      if (host.trim().isNotEmpty) host.trim(),
+    'localhost',
+    '127.0.0.1',
+    '::1',
+  }.join(',');
+  return <String, String>{
+    ...parent,
+    'LANG': locale,
+    'LC_ALL': locale,
+    'XDG_CONFIG_HOME': flutterConfigPath,
+    'NO_PROXY': noProxy,
+    'no_proxy': noProxy,
+  };
+}
+
 class _RunningAppPairDriver {
   _RunningAppPairDriver._({
     required this.process,
@@ -298,12 +322,12 @@ class _RunningAppPairDriver {
       executable,
       arguments,
       workingDirectory: root.path,
-      environment: <String, String>{
-        'LANG': locale,
-        'LC_ALL': locale,
-        'XDG_CONFIG_HOME': flutterConfigDirectory.path,
-      },
-      includeParentEnvironment: true,
+      environment: appPairDriverEnvironment(
+        parent: Platform.environment,
+        locale: locale,
+        flutterConfigPath: flutterConfigDirectory.path,
+      ),
+      includeParentEnvironment: false,
       runInShell: false,
     );
     final diagnosticLines = <String>[];
