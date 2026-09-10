@@ -6194,7 +6194,7 @@
       "caseId": "DEVICE-JOIN-E2E-006",
       "feature": "AWiki Me joins a Handle created and managed by DSH",
       "layer": "remote_product_ui_security",
-      "preconditions": "The protected awiki.info config provides the fixed registration OTP; dsh-awiki is built against published @awiki/im-core-node 0.2.3; AWiki Me and DSH use independent empty Core roots; all service URLs resolve exactly to HTTPS awiki.info; the suite uses its audited isolated_device_join_residual_ledger policy instead of granting Handle mutation to the DSH driver.",
+      "preconditions": "The protected awiki.info config provides the fixed registration OTP; dsh-awiki is built against its declared @awiki/im-core-node dependency; AWiki Me and DSH use independent empty Core roots; all service URLs resolve exactly to HTTPS awiki.info; the suite uses its audited isolated_device_join_residual_ledger policy instead of granting Handle mutation to the DSH driver.",
       "action": "Start the real DSH Host driver, create a fresh Handle and prove DSH bootstrap admin_ready, use visible AWiki Me onboarding to choose ordinary Join, let DSH reliable sync/local inbox discover an opaque requestRef, start verification, compare independently rendered SAS, approve with APPROVE, wait for AWiki Me member activation, revoke the App through opaque deviceRef with REVOKE, then record the dedicated test identity through the suite residual ledger.",
       "exactOracles": [
         "DSH is the unique ready-admin and AWiki Me remains pending without SAS before explicit DSH verification.",

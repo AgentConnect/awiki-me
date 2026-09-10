@@ -69,14 +69,6 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
           '${dshRoot.path}/scripts/device-join-e2e.mjs',
         );
         await commands.requireFile('${dshRoot.path}/lib/index.js');
-        final manifest = jsonDecode(
-          File('${dshRoot.path}/package.json').readAsStringSync(),
-        );
-        if (manifest is! Map ||
-            (manifest['dependencies'] as Map?)?['@awiki/im-core-node'] !=
-                '0.2.3') {
-          throw E2eFailure('DSH E2E requires @awiki/im-core-node 0.2.3.');
-        }
       }
       if (joinConfig.platform == DesktopE2ePlatform.linux) {
         await commands.requireExecutable('xvfb-run');
@@ -235,7 +227,6 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
         ).absolute.resolveSymbolicLinksSync(),
         'stateRoot': dshStateRootDir.path,
         'appStateRoot': dshAppStateRootDir.path,
-        'nodePackageVersion': '0.2.3',
       },
       'app': <String, Object?>{
         'stateRoot': fullRootTransferOnly
