@@ -35,8 +35,12 @@ const Duration _claudeCodeRuntimeFinalTimeout = Duration(minutes: 12);
 const String _claudeCodeDaemonMaxRuntimeMs = '780000';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  tearDownAll(E2eInvocationCompletionWriter.markFinished);
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets(
     'Claude Code Agent full UI sends deterministic prompt and shows visible reply',

@@ -219,8 +219,12 @@ Future<void> _activateRuntimeSession(
 }
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  tearDownAll(E2eInvocationCompletionWriter.markFinished);
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets(
     'cached update gate survives offline startup and recovers through retry',
@@ -1262,14 +1266,14 @@ void main() {
         targetDid: 'did:human:bob',
       ),
       ConversationSummary(
-        threadId: 'direct:did:test:personal-agent',
-        conversationId: 'direct:did:test:personal-agent',
+        threadId: 'direct:did:test:agent:personal-agent',
+        conversationId: 'direct:did:test:agent:personal-agent',
         displayName: 'Hermes Personal Agent',
         lastMessagePreview: 'ready',
         lastMessageAt: DateTime(2026, 8, 11, 11),
         unreadCount: 7,
         isGroup: false,
-        targetDid: 'did:test:personal-agent',
+        targetDid: 'did:test:agent:personal-agent',
       ),
     ];
     final control =
@@ -1295,7 +1299,7 @@ void main() {
         ),
       ),
       AgentSummary(
-        agentDid: 'did:test:personal-agent',
+        agentDid: 'did:test:agent:personal-agent',
         kind: AgentKind.runtime,
         daemonAgentDid: 'did:test:daemon:message',
         runtime: 'hermes',

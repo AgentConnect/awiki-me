@@ -5,8 +5,12 @@ const String _patchRestartCaseId = 'MESSAGE-PATCH-RESTART-E2E-001';
 const String _credentialDeleteCaseId = 'IDENTITY-DELETE-E2E-001';
 
 void runDesktopCliPeerProcessRestartPhaseA() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  tearDownAll(E2eInvocationCompletionWriter.markFinished);
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets('Process restart phase A persists real App state', (
     tester,
@@ -232,8 +236,12 @@ void runDesktopCliPeerProcessRestartPhaseA() {
 }
 
 void runDesktopCliPeerProcessRestartPhaseB() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  tearDownAll(E2eInvocationCompletionWriter.markFinished);
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets('Process restart phase B restores only persisted App state', (
     tester,
@@ -497,8 +505,12 @@ void runDesktopCliPeerProcessRestartPhaseB() {
 }
 
 void runDesktopCliPeerCredentialDeletePhaseC() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  tearDownAll(E2eInvocationCompletionWriter.markFinished);
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets('Credential deletion survives a cold App restart', (
     tester,

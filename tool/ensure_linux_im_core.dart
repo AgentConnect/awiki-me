@@ -1,4 +1,4 @@
-// [INPUT]: The awiki_im_core path dependency, its Rust source tree, and Linux shared library.
+// [INPUT]: The awiki_im_core dependency, Rust sources, Linux library, and Debug/SDK build mode.
 // [OUTPUT]: A verified current libawiki_im_core.so plus a local provenance manifest.
 // [POS]: Fail-closed native Core freshness gate for Linux desktop E2E builds.
 
@@ -9,9 +9,12 @@ import 'package:crypto/crypto.dart';
 
 Future<void> main(List<String> arguments) async {
   final checkOnly = arguments.contains('--check-only');
-  if (arguments.any((argument) => argument != '--check-only')) {
+  final debugBuild = arguments.contains('--debug');
+  if (arguments.any(
+    (argument) => argument != '--check-only' && argument != '--debug',
+  )) {
     stderr.writeln(
-      'Usage: dart run tool/ensure_linux_im_core.dart [--check-only]',
+      'Usage: dart run tool/ensure_linux_im_core.dart [--check-only] [--debug]',
     );
     exitCode = 2;
     return;
@@ -19,7 +22,7 @@ Future<void> main(List<String> arguments) async {
   try {
     final result = await LinuxImCoreArtifactGuard(
       projectRoot: Directory.current,
-    ).ensure(rebuildIfStale: !checkOnly);
+    ).ensure(rebuildIfStale: !checkOnly, debugBuild: debugBuild);
     stdout.writeln(jsonEncode(result.toJson()));
   } on LinuxImCoreArtifactException catch (error) {
     stderr.writeln(error.message);
@@ -32,7 +35,10 @@ class LinuxImCoreArtifactGuard {
 
   final Directory projectRoot;
 
-  Future<LinuxImCoreArtifactResult> ensure({bool rebuildIfStale = true}) async {
+  Future<LinuxImCoreArtifactResult> ensure({
+    bool rebuildIfStale = true,
+    bool debugBuild = false,
+  }) async {
     if (!Platform.isLinux) {
       throw const LinuxImCoreArtifactException(
         'The Linux IM Core artifact guard requires a Linux host.',
@@ -55,13 +61,18 @@ class LinuxImCoreArtifactGuard {
       );
     }
 
+    final plan = linuxImCoreBuildPlan(
+      layout,
+      debugBuild: debugBuild,
+      environment: Platform.environment,
+    );
     stdout.writeln(
       'Linux IM Core artifact is stale (${before.issues.join(', ')}); '
-      'rebuilding through scripts/flutter/build-sdk-native.sh --linux-only.',
+      'rebuilding the ${debugBuild ? 'Debug' : 'SDK'} native artifact.',
     );
     final build = await Process.start(
-      layout.buildScript.path,
-      const <String>['--linux-only'],
+      plan.command.first,
+      plan.command.sublist(1),
       workingDirectory: layout.sourceRepository.path,
       mode: ProcessStartMode.normal,
     );
@@ -73,6 +84,16 @@ class LinuxImCoreArtifactGuard {
       throw const LinuxImCoreArtifactException(
         'The official Linux IM Core SDK build failed.',
       );
+    }
+    final builtArtifact = plan.artifactToCopy;
+    if (builtArtifact != null) {
+      if (!builtArtifact.existsSync()) {
+        throw LinuxImCoreArtifactException(
+          'The Debug build did not create ${builtArtifact.path}.',
+        );
+      }
+      layout.artifact.parent.createSync(recursive: true);
+      await builtArtifact.copy(layout.artifact.path);
     }
 
     final source = await _sourceSnapshot(layout);
@@ -203,6 +224,41 @@ class LinuxImCoreArtifactGuard {
       fileCount: paths.length,
     );
   }
+}
+
+({List<String> command, File? artifactToCopy}) linuxImCoreBuildPlan(
+  LinuxImCoreLayout layout, {
+  required bool debugBuild,
+  required Map<String, String> environment,
+}) {
+  if (!debugBuild) {
+    return (
+      command: <String>[layout.buildScript.path, '--linux-only'],
+      artifactToCopy: null,
+    );
+  }
+  final targetRoot = environment['CARGO_TARGET_DIR'] ?? 'target';
+  final targetPath = targetRoot.startsWith('/')
+      ? targetRoot
+      : '${layout.sourceRepository.path}/$targetRoot';
+  return (
+    command: <String>[
+      if (environment['AWIKI_RELEASE_REGISTRY'] == '1') ...<String>[
+        'python3',
+        '${layout.sourceRepository.path}/scripts/release/registry-build.py',
+        '--',
+      ],
+      'cargo',
+      'build',
+      '-p',
+      'im-core-dart',
+      '--locked',
+      '--no-default-features',
+      '--features',
+      'blocking,sqlite,http,linux,group-e2ee,secure-direct,identity-native-anp',
+    ],
+    artifactToCopy: File('$targetPath/debug/libawiki_im_core.so'),
+  );
 }
 
 class LinuxImCoreLayout {

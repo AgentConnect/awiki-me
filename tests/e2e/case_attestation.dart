@@ -107,7 +107,7 @@ class E2eInvocationCompletionWriter {
 
   static Future<void> markFinished({
     Map<String, String>? environment,
-    int failedTestCount = 0,
+    required int failedTestCount,
   }) async {
     final attestationPath = e2eInvocationValue(
       e2eCaseAttestationPathDefine,

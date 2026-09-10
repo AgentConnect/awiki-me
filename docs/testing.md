@@ -1086,9 +1086,54 @@ workspaces, App state roots, remote logs, screenshots, and device state out of
 Git.
 
 The checked-in workflow requires `AWIKI_CLI_RS2_REF` to be an exact commit SHA.
+The Windows lane uses `AWIKI_CLI_RS2_WINDOWS_REF`, falling back to the same ref;
+update both variables to a reviewed, merged Core consumer commit when its Dart
+facade changes. Public Core checkouts use the job's read-only GitHub token and
+do not require the packaging environment's `AWIKI_CI_READ_TOKEN`.
+
+The private System Test coordinator is pinned to a reviewed exact commit in
+`ci.yml`. Its checkout requires repository secret `AWIKI_CI_READ_TOKEN` with
+Contents read-only access to `AgentConnect/awiki-system-test` and
+`AgentConnect/user-service`. The portable parallel-tenant contract also reads
+the pinned User Service source. Use a separate
+credential from the packaging environment; ordinary PR jobs must not receive
+release credentials or repository-write permissions. Checkout removes the
+credential before test code executes (`persist-credentials: false`). Missing
+private-source access fails before builds; fork PRs do not receive this secret.
+The current System Test repository disables deploy keys, so an SSH deploy key
+cannot supply this checkout credential.
+
+The coordinator's portable DSH contracts also read the sibling `dsh-awiki`
+source tree. CI checks out that public repository at an exact reviewed commit.
+These contracts check DSH behavior and the native API surface without fixing a
+particular Node SDK release number.
+The current coordinator fixes are reviewed in
+https://github.com/AgentConnect/awiki-system-test/pull/16; merge that PR before
+merging this consumer update.
+
+The coordinator expects the canonical sibling `awiki-me` directory for source
+contracts. CI creates a workspace-local alias to its `test-awiki-me` checkout;
+the App and User source contracts therefore inspect the actual pinned inputs.
+
+Native CI builds/tests use the Core owner's `scripts/release/registry-build.py`
+and committed registry lock in an isolated worktree. The Windows native build
+selects the same entrypoint with `AWIKI_RELEASE_REGISTRY=1`. CI therefore checks
+the published ANP/Identity/Core SDKs without undeclared sibling source checkouts.
+
+Linux CI then runs `dart run tool/ensure_linux_im_core.dart --debug` after
+`flutter pub get`, before any desktop E2E build reads native provenance. This
+mode builds the locked Debug native target (through the registry owner when
+`AWIKI_RELEASE_REGISTRY=1`), copies that successful build's library, and writes
+the existing source/artifact hash manifest. A library copied without the
+manifest cannot satisfy the freshness gate. The default SDK rebuild entrypoint
+and `--check-only` rejection of missing/stale provenance remain available.
+
 Its `remote-product` job is schedule/manual only, builds debug/incremental Rust
 artifacts, writes a secret-backed ignored config, and targets only `awiki.info`.
 The PR dry-run is orchestration lint and is never substituted for that real job.
+Both jobs upload only `.e2e/*/*/reports/**` and native provenance JSON, with
+hidden-file support enabled for `.e2e`. Runtime configs, account state and vaults
+are outside this allowlist. Missing evidence still fails the upload step.
 
 ### Case-level attestation and fail-closed reports
 
@@ -1182,13 +1227,15 @@ execution profile or release denominator.
   unknown. Do not hide a failure by only increasing timeout.
 
 
-### Recovery / Join prepared 测试的失败上报
+### Prepared Flutter 测试的失败上报
 
-Recovery 和 remote Join 的 Flutter 入口在 invocation completion 中记录
+所有 prepared Flutter 入口在 invocation completion 中记录
 `failedTestCount`（框架失败数量，不含敏感异常内容）。`test_process_finished`
 只表示进程达到结束边界；执行器必须在存在 Flutter 失败时抛出受控的 E2E failure，
 不能把该步骤标为成功后仅报告缺少 case attestation。其他未执行分支仍保持 not-run，
-不批量伪造失败或通过证据。旧 completion 的缺省计数为 0，逐用例 attestation gate 保留。
+不批量伪造失败或通过证据。writer 要求入口显式传入 binding 的失败数；旧 completion 的
+缺省计数为 0，逐用例 attestation gate 保留。smoke 的 Personal Agent 夹具使用 Agent DID
+命名空间，覆盖 inventory 到达前已有的隐藏策略，不改变相似名称的人类联系人可见性。
 Fresh Recovery 主流程失败后不执行冷启动阶段，保留主流程错误，不以缺少 handoff 掩盖根因。
 
 DSH remote Join 使用 active-only Host 快照：撤销后要求精确成员消失、唯一原 current
