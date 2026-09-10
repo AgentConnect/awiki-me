@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+import 'support/app_shell_ready.dart';
 
 void main() {
   const session = SessionIdentity(
@@ -46,6 +47,7 @@ void main() {
         realtimeGateway: realtimeGateway,
       ),
     );
+    await pumpUntilAppShellReady(tester, loggedIn: true);
     await tester.pump();
 
     expect(find.text('正在连接消息服务...'), findsOneWidget);
@@ -68,6 +70,7 @@ void main() {
         realtimeGateway: realtimeGateway,
       ),
     );
+    await pumpUntilAppShellReady(tester, loggedIn: true);
     await tester.pump();
 
     expect(find.text('消息连接中断，正在重连...'), findsOneWidget);
@@ -91,6 +94,7 @@ void main() {
         realtimeGateway: realtimeGateway,
       ),
     );
+    await pumpUntilAppShellReady(tester, loggedIn: true);
     await tester.pump();
 
     expect(find.text('消息连接中断，正在重连...'), findsNothing);
@@ -115,6 +119,7 @@ void main() {
         ],
       ),
     );
+    await pumpUntilAppShellReady(tester, loggedIn: true);
     await tester.pumpAndSettle();
     unawaited(
       Navigator.of(tester.element(find.byType(AppShell))).push<void>(
@@ -177,6 +182,7 @@ void main() {
         ],
       ),
     );
+    await pumpUntilAppShellReady(tester, loggedIn: true);
     await tester.pump();
 
     expect(find.text('正在恢复近期消息和当前已读状态…'), findsOneWidget);
@@ -202,6 +208,7 @@ void main() {
         ],
       ),
     );
+    await pumpUntilAppShellReady(tester, loggedIn: true);
     await tester.pump();
 
     expect(find.text('恢复所需的账号状态超过安全容量，消息恢复无法继续，请联系支持人员。'), findsOneWidget);
@@ -228,6 +235,7 @@ void main() {
         ],
       ),
     );
+    await pumpUntilAppShellReady(tester, loggedIn: true);
     await tester.pump();
 
     expect(find.text('消息服务暂时不可用，正在自动重试…'), findsNothing);
@@ -254,6 +262,7 @@ void main() {
         ],
       ),
     );
+    await pumpUntilAppShellReady(tester, loggedIn: true);
     await tester.pump();
 
     expect(find.text('消息服务暂时不可用，正在自动重试…'), findsOneWidget);
@@ -281,6 +290,7 @@ void main() {
         ],
       ),
     );
+    await pumpUntilAppShellReady(tester, loggedIn: true);
     await tester.pump();
 
     expect(find.text('消息服务暂时不可用，正在自动重试…'), findsNothing);
@@ -307,6 +317,7 @@ void main() {
         ],
       ),
     );
+    await pumpUntilAppShellReady(tester, loggedIn: true);
     await tester.pump();
 
     expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsOneWidget);
@@ -331,6 +342,7 @@ void main() {
         ],
       ),
     );
+    await pumpUntilAppShellReady(tester, loggedIn: true);
     await tester.pump();
 
     expect(find.text('消息已同步，但列表刷新失败，请重试重新加载。'), findsOneWidget);

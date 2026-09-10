@@ -286,3 +286,12 @@ and `DEVICE-AGENT-SYNC-E2E-001`; both isolated Debug Apps completed in
 8 minutes 43 seconds. This is the first recorded App↔App acceptance proving a
 prompt sent through the joining App's visible runtime-Agent composer converges
 to the admin App.
+
+### Delete confirmation readiness
+
+The joined-device deletion flow waits for the local recovery-impact query and an
+enabled `local-credential-delete-confirm:<selector>` button before clicking once.
+A visible confirmation dialog or label is insufficient: the destructive action
+is disabled while that query is pending or failed. Query failures and readiness
+timeouts are reported before the existing onboarding/session/cleanup assertions;
+the test does not bypass the product's deletion check.

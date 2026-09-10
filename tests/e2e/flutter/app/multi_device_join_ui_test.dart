@@ -12,6 +12,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../../root_transfer_fixture_state.dart';
+import '../support/confirm_local_credential_deletion.dart';
 import 'dart:math';
 import 'dart:typed_data';
 

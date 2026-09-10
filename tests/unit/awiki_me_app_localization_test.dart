@@ -32,6 +32,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+import 'support/app_shell_ready.dart';
 
 void main() {
   group('AwikiMeApp localization', () {
@@ -78,7 +79,7 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-      await tester.pump();
+      await pumpUntilAppShellReady(tester, loggedIn: false);
 
       final container = ProviderScope.containerOf(
         tester.element(find.byType(OnboardingPage)),
@@ -126,7 +127,7 @@ void main() {
         );
 
         await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-        await tester.pump();
+        await pumpUntilAppShellReady(tester, loggedIn: false);
 
         final container = ProviderScope.containerOf(
           tester.element(find.byType(OnboardingPage)),
@@ -173,7 +174,7 @@ void main() {
           ],
         ),
       );
-      await tester.pump();
+      await pumpUntilAppShellReady(tester, loggedIn: false);
 
       await tester.tap(find.text('Log in or register'));
       await tester.pumpAndSettle();
@@ -202,7 +203,7 @@ void main() {
           ],
         ),
       );
-      await tester.pump();
+      await pumpUntilAppShellReady(tester, loggedIn: false);
 
       await tester.tap(find.text('Log in or register'));
       await tester.pumpAndSettle();

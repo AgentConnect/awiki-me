@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../e2e/flutter/support/confirm_local_credential_deletion.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/shared/local_credential_delete_dialog.dart';
@@ -40,6 +41,74 @@ Future<void> pumpDialog(
 }
 
 void main() {
+  testWidgets(
+    'E2E confirmation waits for delayed impact query and clicks once',
+    (tester) async {
+      final query = Completer<bool>();
+      var deleted = 0;
+      await pumpDialog(tester, () => query.future, () {
+        deleted++;
+      });
+      final timer = Timer(const Duration(milliseconds: 200), () {
+        expectSync(deleted, 0);
+        query.complete(false);
+      });
+      addTearDown(timer.cancel);
+      await confirmLocalCredentialDeletion(tester);
+      expect(deleted, 1);
+    },
+  );
+
+  testWidgets('E2E confirmation reports failed impact query without deleting', (
+    tester,
+  ) async {
+    var deleted = 0;
+    await pumpDialog(tester, () async => throw StateError('unavailable'), () {
+      deleted++;
+    });
+    await expectLater(
+      confirmLocalCredentialDeletion(tester),
+      throwsA(
+        isA<TestFailure>().having(
+          (error) => error.message,
+          'message',
+          contains('deletion-impact query failed'),
+        ),
+      ),
+    );
+    expect(deleted, 0);
+  });
+
+  testWidgets('E2E confirmation bounds unresolved query without deleting', (
+    tester,
+  ) async {
+    final query = Completer<bool>();
+    var deleted = 0;
+    await pumpDialog(tester, () => query.future, () {
+      deleted++;
+    });
+    Object? failure;
+    try {
+      await confirmLocalCredentialDeletion(
+        tester,
+        timeout: const Duration(milliseconds: 200),
+      );
+    } catch (error) {
+      failure = error;
+    }
+    expect(
+      failure,
+      isA<TestFailure>().having(
+        (error) => error.message,
+        'message',
+        contains('did not become enabled'),
+      ),
+    );
+    expect(deleted, 0);
+    query.complete(false);
+    await tester.pump();
+  });
+
   for (final signsOut in [false, true]) {
     for (final pending in [false, true]) {
       testWidgets(

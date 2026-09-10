@@ -697,16 +697,7 @@ Future<void> _deleteJoinedCredentialAndOpenFreshJoin({
     () => find.byType(AppConfirmationDialog).evaluate().length == 1,
     failure: 'The joined App delete-credential confirmation did not open.',
   );
-  final confirmation = find.byType(AppConfirmationDialog);
-  final confirmLabel = tester
-      .element(confirmation)
-      .l10n
-      .settingsDeleteCredentialConfirmAction;
-  await _tapOne(
-    tester,
-    find.descendant(of: confirmation, matching: find.text(confirmLabel)),
-    failure: 'The joined App delete-credential confirmation was unavailable.',
-  );
+  await confirmLocalCredentialDeletion(tester);
   await _pumpUntil(
     tester,
     () => find.byType(OnboardingPage).evaluate().length == 1,
