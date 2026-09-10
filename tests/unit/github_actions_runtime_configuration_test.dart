@@ -11,6 +11,36 @@ const Map<String, int> _minimumNode24ActionMajors = <String, int>{
 };
 
 void main() {
+  test('Linux CI prepares native provenance before desktop E2E', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    final jobs = workflow['jobs'] as YamlMap;
+    for (final name in <String>['validate', 'remote-product']) {
+      final steps = ((jobs[name] as YamlMap)['steps'] as YamlList)
+          .cast<YamlMap>()
+          .toList();
+      final dependencies = steps.indexWhere(
+        (step) => step['name'] == 'Install Flutter dependencies',
+      );
+      final nativeGuard = steps.indexWhere(
+        (step) => step['name'] == 'Verify Linux native Core provenance',
+      );
+      final desktop = steps.indexWhere(
+        (step) => (step['run']?.toString() ?? '').contains(
+          'dart run tests/e2e/runner.dart',
+        ),
+      );
+      expect(nativeGuard, greaterThan(dependencies), reason: name);
+      expect(nativeGuard, lessThan(desktop), reason: name);
+      expect(steps[nativeGuard]['working-directory'], 'test-awiki-me');
+      expect(
+        steps[nativeGuard]['run'],
+        'dart run tool/ensure_linux_im_core.dart --debug',
+      );
+    }
+  });
+
   test(
     'PR checkout credentials are scoped to the private test coordinator',
     () {

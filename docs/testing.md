@@ -1110,6 +1110,14 @@ and committed registry lock in an isolated worktree. The Windows native build
 selects the same entrypoint with `AWIKI_RELEASE_REGISTRY=1`. CI therefore checks
 the published ANP/Identity/Core SDKs without undeclared sibling source checkouts.
 
+Linux CI then runs `dart run tool/ensure_linux_im_core.dart --debug` after
+`flutter pub get`, before any desktop E2E build reads native provenance. This
+mode builds the locked Debug native target (through the registry owner when
+`AWIKI_RELEASE_REGISTRY=1`), copies that successful build's library, and writes
+the existing source/artifact hash manifest. A library copied without the
+manifest cannot satisfy the freshness gate. The default SDK rebuild entrypoint
+and `--check-only` rejection of missing/stale provenance remain available.
+
 Its `remote-product` job is schedule/manual only, builds debug/incremental Rust
 artifacts, writes a secret-backed ignored config, and targets only `awiki.info`.
 The PR dry-run is orchestration lint and is never substituted for that real job.

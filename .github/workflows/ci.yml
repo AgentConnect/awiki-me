@@ -138,6 +138,10 @@ jobs:
         working-directory: test-awiki-me
         run: flutter pub get
 
+      - name: Verify Linux native Core provenance
+        working-directory: test-awiki-me
+        run: dart run tool/ensure_linux_im_core.dart --debug
+
       - name: Dart analyze
         working-directory: test-awiki-me
         run: dart analyze
@@ -264,6 +268,10 @@ jobs:
       - name: Install Flutter dependencies
         working-directory: test-awiki-me
         run: flutter pub get
+
+      - name: Verify Linux native Core provenance
+        working-directory: test-awiki-me
+        run: dart run tool/ensure_linux_im_core.dart --debug
 
       - name: Write secret-backed awiki.info config
         working-directory: test-awiki-me
