@@ -3,7 +3,7 @@
   "dependencies": {
     "awiki-im-core": {
       "repository": "https://github.com/AgentConnect/awiki-cli-rs2.git",
-      "commit": "5eec44deb1c0c2bb9a1952b9637a49e4850ee0a8",
+      "commit": "de5c801a9422c1ada89fa52bc2307158c949ee82",
       "pull_request": "https://github.com/AgentConnect/awiki-cli-rs2/pull/32"
     }
   }
