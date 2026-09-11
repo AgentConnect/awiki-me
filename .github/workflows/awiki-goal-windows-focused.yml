@@ -1,0 +1,57 @@
+name: AWiki Windows LF configuration retry 20260911-161000
+on:
+  push:
+    branches: [verification/windows-20260911-161000]
+    paths: [.github/workflows/awiki-goal-windows-focused.yml]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+env:
+  PUB_HOSTED_URL: https://pub.dev
+  FLUTTER_STORAGE_BASE_URL: https://storage.googleapis.com
+jobs:
+  windows-checkout-contract:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - name: Preserve repository LF line endings
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - name: Checkout exact App source
+        uses: actions/checkout@v6
+        with:
+          path: awiki-me
+          ref: ff5e752334c4497881a2a15b5a715df150ac0798
+      - name: Checkout exact Core dependency
+        uses: actions/checkout@v6
+        with:
+          repository: AgentConnect/awiki-cli-rs2
+          path: awiki-cli-rs2
+          ref: 53db3974205ed0f35724f17027770221d17b9b86
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+      - name: Verify unchanged source and LF checkout
+        working-directory: awiki-me
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD).Trim() -ne 'ff5e752334c4497881a2a15b5a715df150ac0798') { throw 'source mismatch' }
+          python -c "from pathlib import Path; assert b'\r\n' not in Path('windows/runner/desktop_shell.cpp').read_bytes(); print('LF checkout verified')"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Resolve locked dependencies
+        working-directory: awiki-me
+        shell: pwsh
+        run: |
+          flutter pub get --enforce-lockfile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Rerun owning Windows runner contract tests
+        working-directory: awiki-me
+        shell: pwsh
+        run: |
+          flutter test --no-pub tests/unit/windows_runner_configuration_test.dart
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
