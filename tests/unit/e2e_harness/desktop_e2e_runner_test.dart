@@ -612,6 +612,7 @@ void main() {
       expect(hyphen.e2eCase.caseIds, <String>[
         'DEVICE-JOIN-E2E-004',
         'DEVICE-JOIN-E2E-005',
+        'ROOT-TRANSFER-APP-PAIR-E2E-001',
       ]);
       expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 25));
       expect(
@@ -770,7 +771,12 @@ void main() {
 
       expect(hyphen.e2eCase, DesktopE2eCase.rootTransfer);
       expect(underscore.e2eCase, DesktopE2eCase.rootTransfer);
-      expect(laterGrant.e2eCase, DesktopE2eCase.rootTransfer);
+      expect(laterGrant.e2eCase, DesktopE2eCase.multiDeviceAppPair);
+      expect(
+        laterGrant.e2eCase.caseIds,
+        contains('ROOT-TRANSFER-APP-PAIR-E2E-001'),
+      );
+      expect(laterGrant.e2eCase.caseName, 'multi-device-app-pair');
       expect(hyphen.e2eCase.caseIds, <String>['ROOT-TRANSFER-E2E-001']);
       expect(hyphen.e2eCase.caseName, 'root-transfer');
     });
