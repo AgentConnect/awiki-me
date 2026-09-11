@@ -112,6 +112,8 @@ class AppTestCatalog {
                 'requiredFor',
                 label: 'suite $suiteName',
               ),
+              remoteTargetPolicy:
+                  (suite['remoteTargetPolicy'] ?? 'allowlist') as String,
               allowedHosts: _stringList(
                 suite,
                 'allowedHosts',
@@ -726,7 +728,10 @@ class AppTestCatalogCase {
       expected.cleanupPolicies,
       label: 'cleanup policy',
     );
-    final expectedEnvironment = expected.allowedHosts.isEmpty
+    final expectedEnvironment =
+        expected.remoteTargetPolicies.contains('configured_same_origin')
+        ? 'configured_remote'
+        : expected.allowedHosts.isEmpty
         ? 'no_service'
         : expected.allowedHosts.toSet().difference(const <String>{
             'rwiki.cn',
@@ -830,6 +835,7 @@ class _ExpectedCase {
   final Set<String> cleanupPolicies = <String>{};
   final Set<String> requiredFor = <String>{};
   final Set<String> allowedHosts = <String>{};
+  final Set<String> remoteTargetPolicies = <String>{};
 
   void addSuite({
     required String suiteName,
@@ -838,6 +844,7 @@ class _ExpectedCase {
     required String cleanupPolicy,
     required List<String> requiredFor,
     required List<String> allowedHosts,
+    required String remoteTargetPolicy,
   }) {
     suites.add(suiteName);
     tiers.add(tier);
@@ -845,6 +852,7 @@ class _ExpectedCase {
     cleanupPolicies.add(cleanupPolicy);
     this.requiredFor.addAll(requiredFor);
     this.allowedHosts.addAll(allowedHosts);
+    remoteTargetPolicies.add(remoteTargetPolicy);
   }
 
   String only(Set<String> values, {required String label}) {

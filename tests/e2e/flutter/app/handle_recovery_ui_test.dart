@@ -1,4 +1,4 @@
-// [INPUT]: Audited awiki.info endpoints, one protected fixed test SMS account,
+// [INPUT]: Explicitly configured remote HTTPS endpoints, one protected fixed test SMS account,
 //          server-issued SMS retry boundaries, fresh production
 //          AppBootstrap/native Core roots with primed replica sync tails, and
 //          an E2E-only user-presence decision.
@@ -87,6 +87,7 @@ import '../../handle_recovery_commit_cut_proxy.dart';
 import '../../e2e_user_presence_port.dart';
 import '../../handle_recovery_fixture_contract.dart';
 import '../../runtime_message_sync_readiness.dart';
+import '../../remote_target.dart';
 import '../../remote_multi_device_join_contract.dart';
 import '../support/protected_otp_config.dart';
 
@@ -7964,29 +7965,20 @@ class _RemoteRecoveryRunConfig {
       daemonReadyFile: _optionalString(daemon, 'readyFile'),
       daemonHandle: _optionalString(daemon, 'handle'),
     );
-    final auditedHost =
-        _invocationExpects(_retirementOrdinaryRejoinCaseId) ||
-            _invocationExpects(_identityDeletionGuardCaseId) ||
-            _invocationExpects(_identityDeletionResumeCaseId)
-        ? 'rwiki.cn'
-        : 'awiki.info';
     if (!config.automatedUserPresence ||
-        config.didDomain != auditedHost ||
         config.otpMode != 'ignored_local_fixture') {
       throw StateError('Remote Handle Recovery controls are not audited.');
     }
-    for (final value in <String>[
-      config.baseUrl,
-      config.userServiceUrl,
-      config.messageServiceUrl,
-      config.mailServiceUrl,
-      config.anpServiceUrl,
-    ]) {
-      final uri = Uri.tryParse(value);
-      if (uri == null || uri.scheme != 'https' || uri.host != auditedHost) {
-        throw StateError('Remote Handle Recovery target is not audited.');
-      }
-    }
+    validateConfiguredRemoteTarget(
+      didDomain: config.didDomain,
+      serviceUrls: <String>[
+        config.baseUrl,
+        config.userServiceUrl,
+        config.messageServiceUrl,
+        config.mailServiceUrl,
+        config.anpServiceUrl,
+      ],
+    );
     return config;
   }
 }

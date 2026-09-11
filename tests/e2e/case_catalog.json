@@ -6022,7 +6022,7 @@
       "caseId": "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001",
       "feature": "Explicit App identity deletion ends unfinished recovery and resumes cleanup",
       "layer": "remote_product_ui_security",
-      "preconditions": "An explicit Linux/Xvfb or macOS rwiki.cn configuration, protected fixed OTP account, one fresh App/Core root, and the production Settings deletion coordinator are available.",
+      "preconditions": "An explicit Linux/Xvfb or macOS remote configuration with externally supplied HTTPS service URLs and DID domain, protected fixed OTP account, one fresh App/Core root, and the production Settings deletion coordinator are available.",
       "action": "Register and activate one identity, seed a Product sentinel, create a pre-attempt Recovery, check the deletion impact, then confirm deletion once and verify the recovery ends before the deliberate Product/Core cleanup cut.",
       "exactOracles": [
         "The read-only impact query reports unfinished recovery before deletion and reports none after the deletion decision.",
@@ -6032,7 +6032,7 @@
       "negativeChecks": [
         "Unconfirmed deletion, remote recovery submission/resume, Product deletion before ticket, a second ticket, same-process-only simulation, leaked secrets, or skipped steps prevent pass attestation."
       ],
-      "environment": "rwiki_cn_remote",
+      "environment": "configured_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
       "requiredFor": [
         "release"
@@ -6071,7 +6071,7 @@
       "caseId": "IDENTITY-DATA-DELETION-RESUME-E2E-001",
       "feature": "Full App identity data deletion resumes one committed ticket in a distinct process",
       "layer": "remote_product_ui_security",
-      "preconditions": "Phase A has one durable full-data deletion ticket and committed Product delete on an isolated rwiki.cn App/Core root, but Core completion has not run.",
+      "preconditions": "Phase A has one durable full-data deletion ticket and committed Product delete on an isolated configured-remote App/Core root, but Core completion has not run.",
       "action": "Terminate Phase A, launch a distinct Phase B Flutter process on the same root, inspect the one pending ticket before widget startup, start the real App, and let AppRuntime bootstrap replay Product deletion and Core completion before session restoration.",
       "exactOracles": [
         "Phase A exits with Product data absent, one local identity still present, and exactly one pending ticket.",
@@ -6081,7 +6081,7 @@
       "negativeChecks": [
         "A widget rebuild, same process, new ticket, cancellation, non-idempotent Product delete, session restoration before resume, retained target identity, awiki.info target, leaked raw handoff in reports, or skipped step prevents pass attestation."
       ],
-      "environment": "rwiki_cn_remote",
+      "environment": "configured_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
       "requiredFor": [
         "release"
@@ -6129,7 +6129,7 @@
       "caseId": "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001",
       "feature": "A recovered current App identity retires locally and ordinary-rejoins with the same stable owner",
       "layer": "remote_product_ui_security",
-      "preconditions": "An explicit Linux/Xvfb or macOS rwiki.cn configuration, protected fixed OTP account, and two fresh isolated App roots are available; one Recovery has completed, the sibling has rejoined, and standard Root transfer has made that sibling a management-ready admin.",
+      "preconditions": "An explicit Linux/Xvfb or macOS remote configuration with externally supplied HTTPS service URLs and DID domain, protected fixed OTP account, and two fresh isolated App roots are available; one Recovery has completed, the sibling has rejoined, and standard Root transfer has made that sibling a management-ready admin.",
       "action": "Retire the recovered current credential through the App public local-credential path, submit the same Handle with a new registration OTP, require an opaque Ordinary continuation with no user-presence request, approve from the sibling admin, activate the fresh protocol device, compare stable owner/Recovery/sibling inventories, then reopen the same App/Core root.",
       "exactOracles": [
         "Exactly one Recovery is applied before retirement; the sibling becomes and remains a management-ready admin while public local retirement leaves no target Registry credential in the joining root. The retired owner cannot log in through an alias placeholder, and reopening Recovery in the same provider tree clears the old completed result without starting another Recovery.",
@@ -6138,9 +6138,9 @@
         "A cold App/Core reopen authenticates the same stable owner and current DID, proving the old tombstone did not delete the new Vault material."
       ],
       "negativeChecks": [
-        "Settings data deletion, scope reset, direct SQLite/Vault/marker mutation, old OTP or device reuse, Recovery-rebind mode, any user-presence call, non-null reset authority, changed stable owner, additional Recovery operation, sibling mutation, duplicate local identity/binding, failed cold reopen, non-Linux/macOS execution, implicit or non-rwiki.cn config, secret-bearing evidence, or a skipped business step prevents pass attestation."
+        "Settings data deletion, scope reset, direct SQLite/Vault/marker mutation, old OTP or device reuse, Recovery-rebind mode, any user-presence call, non-null reset authority, changed stable owner, additional Recovery operation, sibling mutation, duplicate local identity/binding, failed cold reopen, non-Linux/macOS execution, implicit config or mismatched/insecure service URLs and DID domain, secret-bearing evidence, or a skipped business step prevents pass attestation."
       ],
-      "environment": "rwiki_cn_remote",
+      "environment": "configured_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
       "requiredFor": [
         "optional_nightly",

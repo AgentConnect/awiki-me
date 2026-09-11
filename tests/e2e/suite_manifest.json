@@ -287,12 +287,9 @@
       "estimatedMinutes": 20,
       "timeoutMinutes": 25,
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
-      "allowedHosts": [
-        "rwiki.cn"
-      ],
-      "allowedDidDomains": [
-        "rwiki.cn"
-      ],
+      "remoteTargetPolicy": "configured_same_origin",
+      "allowedHosts": [],
+      "allowedDidDomains": [],
       "resourceCategories": [
         "dedicated_test_identity",
         "handle_recovery_operation",
@@ -318,12 +315,9 @@
       "estimatedMinutes": 32,
       "timeoutMinutes": 35,
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
-      "allowedHosts": [
-        "rwiki.cn"
-      ],
-      "allowedDidDomains": [
-        "rwiki.cn"
-      ],
+      "remoteTargetPolicy": "configured_same_origin",
+      "allowedHosts": [],
+      "allowedDidDomains": [],
       "resourceCategories": [
         "dedicated_test_identity",
         "handle_recovery_operation",

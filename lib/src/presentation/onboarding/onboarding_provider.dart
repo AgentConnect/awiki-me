@@ -318,6 +318,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     if (!await cooldown.beginSend()) return;
     var success = false;
     try {
+      if (!mounted) return;
       await _runBusy(() async {
         final normalizedHandle = _normalizeHandleForOtp(handle);
         final domain = _normalizeHandleDomain(handleDomain);
@@ -333,6 +334,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
               );
         } on RegistrationOtpRateLimited catch (error) {
           await cooldown.completeRateLimitedAt(error.retryAt);
+          if (!mounted) return;
           ref
               .read(uiFeedbackProvider.notifier)
               .showError(AppMessage.otpRateLimited(error.retryAfterSeconds));
@@ -341,12 +343,15 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         success = true;
       });
       if (success && receipt != null && normalizedPhone != null) {
+        // The server receipt still owns the shared resend boundary when the
+        // originating page/controller has gone away. Only UI state is stale.
+        await cooldown.completeAcceptedAt(receipt!.retryAt);
+        if (!mounted) return;
         state = state.copyWith(
           otpTargetFullHandle: fullHandle!,
           otpTargetPhone: normalizedPhone,
           isPhoneOtpConsumed: false,
         );
-        await cooldown.completeAcceptedAt(receipt!.retryAt);
         ref.read(uiFeedbackProvider.notifier).showInfo(AppMessage.otpSent());
       }
     } finally {

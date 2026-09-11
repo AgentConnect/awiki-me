@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../host_platform.dart';
+import '../remote_target.dart';
 import 'failure.dart';
 
 const String desktopE2eSuiteManifestPath = 'tests/e2e/suite_manifest.json';
@@ -147,6 +148,7 @@ class DesktopE2eSuiteDefinition {
     required this.requiredTools,
     required this.caseIds,
     this.includes = const <String>[],
+    this.remoteTargetPolicy = 'allowlist',
   });
 
   final String name;
@@ -166,6 +168,7 @@ class DesktopE2eSuiteDefinition {
   final List<String> requiredTools;
   final List<String> caseIds;
   final List<String> includes;
+  final String remoteTargetPolicy;
 
   static DesktopE2eSuiteDefinition fromJson(String name, Map raw) {
     List<String> stringList(String key) {
@@ -231,6 +234,16 @@ class DesktopE2eSuiteDefinition {
     }
     final requiredFor = stringList('requiredFor');
     final allowedHosts = stringList('allowedHosts');
+    final allowedDidDomains = stringList('allowedDidDomains');
+    final remoteTargetPolicy = raw['remoteTargetPolicy'] ?? 'allowlist';
+    if (!const <String>{
+          'allowlist',
+          'configured_same_origin',
+        }.contains(remoteTargetPolicy) ||
+        (remoteTargetPolicy == 'configured_same_origin' &&
+            (allowedHosts.isNotEmpty || allowedDidDomains.isNotEmpty))) {
+      throw E2eFailure('E2E suite "$name" has invalid remoteTargetPolicy.');
+    }
     final requiredTargetCapabilities =
         raw.containsKey('requiredTargetCapabilities')
         ? stringList('requiredTargetCapabilities')
@@ -238,7 +251,9 @@ class DesktopE2eSuiteDefinition {
     if (requiredTargetCapabilities.toSet().length !=
             requiredTargetCapabilities.length ||
         requiredTargetCapabilities.any((value) => value.trim().isEmpty) ||
-        (requiredTargetCapabilities.isNotEmpty && allowedHosts.isEmpty)) {
+        (requiredTargetCapabilities.isNotEmpty &&
+            allowedHosts.isEmpty &&
+            remoteTargetPolicy == 'allowlist')) {
       throw E2eFailure(
         'E2E suite "$name" has invalid requiredTargetCapabilities.',
       );
@@ -270,7 +285,8 @@ class DesktopE2eSuiteDefinition {
       timeout: Duration(minutes: timeoutMinutes),
       cleanupPolicy: cleanupPolicy.trim(),
       allowedHosts: allowedHosts,
-      allowedDidDomains: stringList('allowedDidDomains'),
+      allowedDidDomains: allowedDidDomains,
+      remoteTargetPolicy: remoteTargetPolicy as String,
       requiredTargetCapabilities: requiredTargetCapabilities,
       missingCapabilityPolicy: missingCapabilityPolicy,
       resourceCategories: stringList('resourceCategories'),
@@ -316,14 +332,23 @@ class DesktopE2eSuiteDefinition {
         config.messageServiceUrl ?? config.serviceBaseUrl,
       ],
     );
-    if (allowedHosts.isEmpty && allowedDidDomains.isEmpty) {
+    if (remoteTargetPolicy == 'allowlist' &&
+        allowedHosts.isEmpty &&
+        allowedDidDomains.isEmpty) {
       return;
     }
     final ws = config.messageServiceWsUrl;
     final wsUri = ws == null ? null : Uri.tryParse(ws);
     if (wsUri == null ||
         wsUri.scheme != 'wss' ||
-        !allowedHosts.contains(wsUri.host) ||
+        !(remoteTargetPolicy == 'configured_same_origin'
+            ? wsUri.host == config.didDomain &&
+                  wsUri.replace(scheme: 'https').port ==
+                      Uri.parse(config.serviceBaseUrl).port &&
+                  wsUri.userInfo.isEmpty &&
+                  !wsUri.hasQuery &&
+                  !wsUri.hasFragment
+            : allowedHosts.contains(wsUri.host)) ||
         wsUri.path != '/im/ws') {
       throw E2eFailure(
         'E2E suite "$name" requires the audited remote WebSocket endpoint.',
@@ -335,6 +360,17 @@ class DesktopE2eSuiteDefinition {
     required String didDomain,
     required List<String> serviceUrls,
   }) {
+    if (remoteTargetPolicy == 'configured_same_origin') {
+      try {
+        validateConfiguredRemoteTarget(
+          didDomain: didDomain,
+          serviceUrls: serviceUrls,
+        );
+      } on FormatException catch (error) {
+        throw E2eFailure('E2E suite "$name": ${error.message}');
+      }
+      return;
+    }
     if (allowedHosts.isEmpty && allowedDidDomains.isEmpty) {
       return;
     }
@@ -368,6 +404,7 @@ class DesktopE2eSuiteDefinition {
     'estimatedMinutes': estimatedMinutes,
     'timeoutMinutes': timeout.inMinutes,
     'cleanupPolicy': cleanupPolicy,
+    'remoteTargetPolicy': remoteTargetPolicy,
     'requiredTargetCapabilities': requiredTargetCapabilities,
     'missingCapabilityPolicy': missingCapabilityPolicy,
     'unexpectedSkipBudget': 0,

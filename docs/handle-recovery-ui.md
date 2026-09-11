@@ -13,6 +13,11 @@ AWiki Me 的基线能力，不使用 Debug/Release 或平台编译开关；当�
 边界按 purpose 隔离，避免注册冷却阻止专用 Recovery OTP，同时仍分别遵守服务端返回的
 `retry_at`。Recovery 不绑定当前激活身份，也不要求本机曾保存目标 Handle。
 
+注册 OTP 请求返回时，若原 onboarding Controller 已销毁，不再更新其 OTP 目标或发出
+UI 提示；仍存活的共享冷却控制器继续接收成功/限流回执的 `retry_at`。等待冷却恢复期间
+销毁 Controller 则不发起请求，并释放发送占用。对应生命周期回归见
+`tests/unit/onboarding_otp_lifecycle_test.dart`。
+
 已登录用户也可从设置选择“恢复 Handle DID”。该入口要求重新输入手机号并完成同一专用
 Recovery OTP、风险确认和 activate 流程，但必须把当前会话的 exact `localIdentityId` 交给
 Core；恢复前不退出、不删除凭证或本地数据，因此 Direct、Group、Agent 历史和智能体库存继续
@@ -290,3 +295,27 @@ Schema 44 的本地删除终态与幂等清理由 Core 所有；App 不删除 Va
 - Core：`cargo test -p awiki-im-core --lib deletion --locked`：30 通过；同命令过滤 `identity_handle_recovery`：66 通过；过滤 `local_state::schema::tests`：50 通过。完成态迟到写入防护调整后，`cargo test -p awiki-im-core --lib deleted_recovered_owner --locked` 再次通过。
 - SDK：`cargo check -p awiki-im-core-node --locked`、`cargo check -p im-core-dart --locked`、`bash scripts/flutter/codegen-check.sh` 通过；Dart SDK 的 `dart test test/identity_api_test.dart test/handle_recovery_api_test.dart`：10 通过。
 - System：`uv run pytest tests/non_did/test_case_catalog.py tests/non_did/test_handle_recovery_v1_contract.py -k 'not test_model_recovery_attestation_is_retired_without_removing_v4_or_mail_owner' -q`：40 通过。排除的单项已单独确认失败：Model Proxy 的 HEAD 仍有 `/api/identity-recovery` 路由，而既有合同要求其不存在；本次未修改该服务。
+
+## Recovery E2E 目标配置
+
+`multi-device-app-pair-recovery-retirement-ordinary-rejoin` 与
+`identity-deletion-recovery-guard` 从显式传入的受保护 YAML 读取
+`service.baseUrl`、`service.didDomain` 及各服务 URL，不在用例中限定域名或
+要求固定的 `AWIKI_SYSTEM_TEST_TARGET` 名称。Manifest 使用
+`remoteTargetPolicy: configured_same_origin`，catalog 环境标记为
+`configured_remote`。跨仓执行时仍由外部 target 配置选择部署环境。
+
+这些用例只接受同一 HTTPS origin，且服务 host 必须等于配置中的 DID domain；
+缺配置、跨域、明文 URL、URL 内嵌凭据或重定向参数均拒绝。专用 OTP 配置、
+显式 Recovery 开关、隔离 App/Core root、原有 user-presence 测试边界和资源
+ledger 不变。改变域名不代表授权服务部署、重启或扩大清理范围。
+
+```bash
+AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
+dart run tests/e2e/runner.dart --case multi-device-app-pair-recovery-retirement-ordinary-rejoin \
+  --config <protected-macos-or-linux-config.yaml>
+
+AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
+dart run tests/e2e/runner.dart --case identity-deletion-recovery-guard \
+  --config <protected-macos-or-linux-config.yaml>
+```

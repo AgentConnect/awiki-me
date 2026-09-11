@@ -215,15 +215,7 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
       environment: Platform.environment,
     );
     remoteHandleRecoveryConfig = recoveryConfig;
-    if (identityDeletion &&
-        Platform.environment[_syncRecoveryTargetEnv]?.trim() !=
-            'rwiki-cn-testing') {
-      throw E2eFailure(
-        'Identity deletion Recovery guard requires '
-        'AWIKI_SYSTEM_TEST_TARGET=rwiki-cn-testing.',
-      );
-    }
-    if (registrationRejoin) {
+    if (registrationRejoin || identityDeletion) {
       if (fileConfig.path == null || fileConfig.path!.trim().isEmpty) {
         throw E2eFailure(
           'The recovery registration App-pair case requires an explicit '
@@ -241,6 +233,8 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
           recoveryConfig.serviceBaseUrl,
           recoveryConfig.userServiceUrl,
           recoveryConfig.messageServiceUrl,
+          recoveryConfig.mailServiceUrl,
+          recoveryConfig.anpServiceUrl,
         ],
       );
       if (freshOnly || localDataOnly) {
