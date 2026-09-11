@@ -1096,6 +1096,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceJoinAuthorized => '设备已加入';
 
   @override
+  String get deviceJoinFinalizing => '正在完成设备操作...';
+
+  @override
   String get deviceJoinCancelled => '设备关联已取消';
 
   @override

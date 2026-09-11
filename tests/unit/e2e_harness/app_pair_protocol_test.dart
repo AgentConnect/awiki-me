@@ -54,6 +54,10 @@ void main() {
           'joinedDeviceId': 'member-device',
         },
       );
+      await admin.publish('admin', 'root_grant_sent');
+      expect(await joiner.waitFor('admin', 'root_grant_sent'), isEmpty);
+      await joiner.publish('joiner', 'management_ready');
+      expect(await admin.waitFor('joiner', 'management_ready'), isEmpty);
       await admin.publish('admin', 'complete');
 
       final results = await Future.wait<bool>(<Future<bool>>[
@@ -61,6 +65,46 @@ void main() {
         joiner.submitAndCompareSas('joiner', '123456'),
       ]);
       expect(results, everyElement(isTrue));
+      const rejoin = <String, Object?>{
+        'joinSessionId': 'join-second',
+        'joinedDeviceId': 'third-device',
+      };
+      await joiner.publish('joiner', 'rejoin_pending', data: rejoin);
+      var compared = false;
+      final nextAdmin = admin
+          .submitAndCompareSas(
+            'admin',
+            '123456',
+            timeout: const Duration(seconds: 3),
+          )
+          .then((value) {
+            compared = true;
+            return value;
+          });
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(
+        compared,
+        isFalse,
+        reason: 'The prior Join SAS must not satisfy re-Join.',
+      );
+      await joiner.publish('joiner', 'rejoin_pending', data: rejoin);
+      expect(
+        await joiner.submitAndCompareSas(
+          'joiner',
+          '123456',
+          timeout: const Duration(seconds: 3),
+        ),
+        isTrue,
+      );
+      expect(
+        await nextAdmin,
+        isTrue,
+        reason: 'A checkpoint replay must not clear the new admin submission.',
+      );
+      await admin.publish('admin', 'rejoin_verification_started');
+      await joiner.publish('joiner', 'rejoin_authorized');
+      await admin.publish('admin', 'rejoin_root_grant_sent');
+      await joiner.publish('joiner', 'rejoin_management_ready');
     },
   );
 

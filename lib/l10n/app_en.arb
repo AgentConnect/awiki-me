@@ -429,6 +429,7 @@
   "deviceJoinApprove": "Confirm and authorize",
   "deviceJoinCancel": "Cancel pairing",
   "deviceJoinAuthorized": "Device added",
+  "deviceJoinFinalizing": "Finishing device operation...",
   "deviceJoinCancelled": "Device pairing cancelled",
   "deviceJoinExpired": "Device pairing expired. Start again.",
   "deviceJoinActivating": "Activating this device...",

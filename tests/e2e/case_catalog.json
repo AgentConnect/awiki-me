@@ -3641,7 +3641,7 @@
       "caseId": "DEVICE-JOIN-E2E-005",
       "feature": "Joined AWiki Me device deletes its current local data and starts Join again",
       "layer": "remote_product_ui_security",
-      "preconditions": "DEVICE-JOIN-E2E-004 has completed on two isolated real App processes, the joining App is the current active member, and its completed New Device Join journal belongs to the same local identity and protocol device.",
+      "preconditions": "DEVICE-JOIN-E2E-004 has completed on two isolated real App processes, the joining App is the current active joined device (after the two-App management grant), and its completed New Device Join journal belongs to the same local identity and protocol device.",
       "action": "On the joining App, leave the completed Join page, open Settings, confirm Exit and delete current data through visible UI, verify the completed local Join journal is retired, submit the same verified Handle from onboarding, then reopen the standalone Join form.",
       "exactOracles": [
         "Deleting the current local data returns the real App to onboarding without affecting the admin App or remotely revoking either registered device.",
@@ -3721,17 +3721,17 @@
       "feature": "AWiki Me management-device root import",
       "layer": "remote_product_ui_security",
       "preconditions": "An accepted Step 3 contract has established a management-ready AWiki Me admin and an independent CLI active member with management_ready false; both use fresh native Core roots and exact protocol device IDs, and the unattended suite uses the test-scoped user-presence port while production LocalAuthentication remains unchanged.",
-      "action": "Before the CLI activation poll, click the active Join management grant and require a retryable PreKey wait. Activate that same CLI member, retry through the visible Join button, require a fresh summary without sending or extra presence, then cancel preparation. Approve the CLI as a rootless member, close the short-lived Join sheet, clear its transient state, open Devices on the ready AWiki Me admin, select the exact eligible member, let Core perform a fresh prepare and display a safe recipient summary, complete exactly one E2E-only user-presence decision, stop the App sender flow at standard P5 accepted, bring the CLI receiver online to import and complete readiness directly, then create a Group immediately after the sender observes the fresh Registry.",
+      "action": "Hold the real successful approval result while its terminal notice is processed, and reject any premature Done action that exits the grant flow. Hold one real pre-approval verification response until approval completes, then release it and require the grant entry to remain available. Before the CLI activation poll, click the active Join management grant and require a retryable PreKey wait. Activate that same CLI member, retry through the visible Join button, require a fresh summary without sending or extra presence, then cancel preparation. Approve the CLI as a rootless member, close the short-lived Join sheet, clear its transient state, open Devices on the ready AWiki Me admin, select the exact eligible member, let Core perform a fresh prepare and display a safe recipient summary, complete exactly one E2E-only user-presence decision, stop the App sender flow at standard P5 accepted, bring the CLI receiver online to import and complete readiness directly, then create a Group immediately after the sender observes the fresh Registry.",
       "exactOracles": [
-        "An approved but unactivated CLI member yields retryable root_transfer.prekey_unavailable; after activation, the visible Join retry re-prepares the same recipient and stops at fresh confirmation without exporting or sending Root material.",
+        "A terminal Join notice cannot expose Done while approval is still pending; the grant step becomes available after the authorized-device result arrives. A delayed verification response must not replace the authorized Join or hide its management-grant entry. An approved but unactivated CLI member yields retryable root_transfer.prekey_unavailable; after activation, the visible Join retry re-prepares the same recipient and stops at fresh confirmation without exporting or sending Root material.",
         "Before receiver completion, the exact recipient remains active member with management_ready false; no Init-only pending, sender waiting, or App-owned transfer state is projected.",
-        "The later-grant action remains available after the Join sheet and active Join presentation state are gone, and its Core preparation is bound to the exact eligible Devices row rather than a retained Join session or handle.",
+        "The later-grant action remains available after the Join sheet and active Join presentation state are gone, and its Core preparation is bound to the exact eligible Devices row rather than a retained Join session or handle. Clicking that row must perform a new authoritative Registry read before Core preparation; display cache alone never authorizes a grant.",
         "The App displays only Core's safe recipient summary, delegates exactly one E2E-only user-presence decision without changing production LocalAuthentication, and treats the closed standard P5 accepted receipt as the end of the sender operation.",
         "The CLI receiver imports the envelope, completes directly with User Service, and becomes active admin with management_ready true after fresh device auth and Registry convergence; Root control never appears in either product inbox.",
         "The sender refreshes its same-identity client from the changed authoritative Registry before the immediate Group create, so no stale identity_binding_conflict is possible."
       ],
       "negativeChecks": [
-        "A wrong or ineligible target, dependence on retained Join presentation state, reuse of an old authorization handle, caller-supplied message ID, automatic pending send before fresh user presence, a second user-presence action, treating accepted as receiver readiness, waiting for or emitting an imported ACK/Reply, root/control JSON in inbox or UI, Root bytes in logs/errors/reports, management actions before Registry readiness, a fixed sleep, or retrying Group create with a stale identity binding fails."
+        "Overwriting successful approval with an earlier response, silently ignoring an enabled grant, or preparing solely from cached device state fails. A wrong or ineligible target, dependence on retained Join presentation state, reuse of an old authorization handle, caller-supplied message ID, automatic pending send before fresh user presence, a second user-presence action, treating accepted as receiver readiness, waiting for or emitting an imported ACK/Reply, root/control JSON in inbox or UI, Root bytes in logs/errors/reports, management actions before Registry readiness, a fixed sleep, or retrying Group create with a stale identity binding fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_root_transfer_residual_ledger",
@@ -3754,19 +3754,25 @@
           "ROOT-TRANSFER-E2E-001:sender_accepted_terminal",
           "ROOT-TRANSFER-E2E-001:receiver_completion_ready",
           "ROOT-TRANSFER-E2E-001:root_p5_not_projected",
-          "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding"
+          "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding",
+          "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
+          "ROOT-TRANSFER-E2E-001:device_list_click_refreshes_registry",
+          "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape"
         ],
         "exactOracleAssertions": [
           [
             "ROOT-TRANSFER-E2E-001:active_join_missing_prekey_retryable",
-            "ROOT-TRANSFER-E2E-001:active_join_retry_requires_fresh_confirmation"
+            "ROOT-TRANSFER-E2E-001:active_join_retry_requires_fresh_confirmation",
+            "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
+            "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape"
           ],
           [
             "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion"
           ],
           [
             "ROOT-TRANSFER-E2E-001:join_sheet_closed_before_later_grant",
-            "ROOT-TRANSFER-E2E-001:device_list_fresh_prepare"
+            "ROOT-TRANSFER-E2E-001:device_list_fresh_prepare",
+            "ROOT-TRANSFER-E2E-001:device_list_click_refreshes_registry"
           ],
           [
             "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
@@ -3791,7 +3797,10 @@
             "ROOT-TRANSFER-E2E-001:sender_accepted_terminal",
             "ROOT-TRANSFER-E2E-001:receiver_completion_ready",
             "ROOT-TRANSFER-E2E-001:root_p5_not_projected",
-            "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding"
+            "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding",
+            "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
+            "ROOT-TRANSFER-E2E-001:device_list_click_refreshes_registry",
+            "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape"
           ]
         ]
       }
@@ -6354,6 +6363,74 @@
             "APP-UPDATE-SMOKE-E2E-001:manual_download_action_preserves_gate",
             "APP-UPDATE-SMOKE-E2E-001:offline_refresh_preserves_gate",
             "APP-UPDATE-SMOKE-E2E-001:policy_removal_recovers_through_retry"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "ROOT-TRANSFER-APP-PAIR-E2E-001",
+      "feature": "Two real Apps grant administrator permissions after Join",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Two isolated real App processes complete ordinary member Join on awiki.info; no CLI substitutes for either device.",
+      "action": "Check the grant entry immediately after approval, prepare from that entry without sending, leave the sheet through its Back action, then grant from Devices with one explicit confirmation. The joining App receives the root material and both real App Registries must show two ready admins. After local deletion of the joining credential, actually complete a fresh third-device Join and another management grant from the original admin, not merely reopen the form.",
+      "exactOracles": [
+        "The approving App exposes the management grant step rather than premature Done, and preparation does not send or invoke user presence.",
+        "The Devices grant opens confirmation and sends only after exactly one additional user-presence decision.",
+        "The receiving App completes root import and both App Registries contain exactly two active management-ready admins.",
+        "With two existing ready admins and independent Document/Registry versions, the next Join exposes grant rather than Done; the new third device then becomes management-ready without reusing the deleted local identity."
+      ],
+      "negativeChecks": [
+        "CLI receiver substitution, forged identity facts, direct state injection, hidden/no-op grant actions, early root send, extra confirmation, or a receiver left as member prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:active_join_grant_visible",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:device_list_grant_confirmed",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:single_root_presence",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:receiver_app_management_ready",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:both_apps_ready_admins",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_after_registry_only_promotion",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_grant_visible_without_done",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:third_device_management_ready"
+        ],
+        "exactOracleAssertions": [
+          [
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:active_join_grant_visible"
+          ],
+          [
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:device_list_grant_confirmed",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:single_root_presence"
+          ],
+          [
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:receiver_app_management_ready",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:both_apps_ready_admins"
+          ],
+          [
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_after_registry_only_promotion",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_grant_visible_without_done",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:third_device_management_ready"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:active_join_grant_visible",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:device_list_grant_confirmed",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:single_root_presence",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:receiver_app_management_ready",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:both_apps_ready_admins",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_after_registry_only_promotion",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_grant_visible_without_done",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:third_device_management_ready"
           ]
         ]
       }

@@ -28,6 +28,7 @@ class DevicesPage extends ConsumerStatefulWidget {
 
 class _DevicesPageState extends ConsumerState<DevicesPage> {
   bool _isRefreshing = false;
+  String? _grantingDeviceId;
 
   @override
   void initState() {
@@ -156,8 +157,13 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                                 registry.devices[index].protocolDeviceId,
                             onRevoke: () =>
                                 _confirmDeviceRevoke(registry.devices[index]),
-                            onGrantManagement: () =>
-                                _grantManagement(registry.devices[index]),
+                            isGrantPending:
+                                _grantingDeviceId ==
+                                registry.devices[index].protocolDeviceId,
+                            onGrantManagement: _grantingDeviceId == null
+                                ? () =>
+                                      _grantManagement(registry.devices[index])
+                                : null,
                           ),
                           if (index != registry.devices.length - 1)
                             const AppSectionDivider(),
@@ -251,63 +257,82 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
   }
 
   Future<void> _grantManagement(DeviceSummary device) async {
-    var transfer = ref.read(devicesProvider).rootTransfer;
-    final alreadyPrepared =
-        transfer.context?.origin == RootKeyTransferOrigin.deviceList &&
-        transfer.context?.recipientDeviceId == device.protocolDeviceId &&
-        transfer.phase == RootKeyTransferPhase.awaitingConfirmation &&
-        transfer.preparation != null;
-    if (!alreadyPrepared) {
-      final prepared = await ref
-          .read(devicesProvider.notifier)
-          .prepareRootTransferForDevice(device);
-      if (!mounted || !prepared) return;
-      transfer = ref.read(devicesProvider).rootTransfer;
-    }
-    final preparation = transfer.preparation;
-    if (transfer.phase != RootKeyTransferPhase.awaitingConfirmation ||
-        transfer.context?.origin != RootKeyTransferOrigin.deviceList ||
-        transfer.context?.recipientDeviceId != device.protocolDeviceId ||
-        preparation == null) {
-      return;
-    }
-    final confirmed = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        key: const Key('device-root-transfer-confirm-dialog'),
-        title: Text(context.l10n.deviceRootTransferGrantManagement),
-        content: Text(
-          context.l10n.deviceRootTransferTarget(
-            preparation.recipient.deviceId,
-            preparation.recipient.signingKeyId,
-            preparation.recipient.e2eeKeyId,
+    if (_grantingDeviceId != null) return;
+    setState(() => _grantingDeviceId = device.protocolDeviceId);
+    try {
+      var transfer = ref.read(devicesProvider).rootTransfer;
+      final alreadyPrepared =
+          transfer.context?.origin == RootKeyTransferOrigin.deviceList &&
+          transfer.context?.recipientDeviceId == device.protocolDeviceId &&
+          transfer.phase == RootKeyTransferPhase.awaitingConfirmation &&
+          transfer.preparation != null;
+      if (!alreadyPrepared) {
+        final prepared = await ref
+            .read(devicesProvider.notifier)
+            .prepareRootTransferForDevice(device);
+        if (!mounted) return;
+        setState(() => _grantingDeviceId = null);
+        if (!prepared) {
+          await _showRootTransferResult(false);
+          return;
+        }
+        transfer = ref.read(devicesProvider).rootTransfer;
+      }
+      if (_grantingDeviceId != null) {
+        setState(() => _grantingDeviceId = null);
+      }
+      final preparation = transfer.preparation;
+      if (transfer.phase != RootKeyTransferPhase.awaitingConfirmation ||
+          transfer.context?.origin != RootKeyTransferOrigin.deviceList ||
+          transfer.context?.recipientDeviceId != device.protocolDeviceId ||
+          preparation == null) {
+        await _showRootTransferResult(false);
+        return;
+      }
+      final confirmed = await showCupertinoDialog<bool>(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          key: const Key('device-root-transfer-confirm-dialog'),
+          title: Text(context.l10n.deviceRootTransferGrantManagement),
+          content: Text(
+            context.l10n.deviceRootTransferTarget(
+              preparation.recipient.deviceId,
+              preparation.recipient.signingKeyId,
+              preparation.recipient.e2eeKeyId,
+            ),
+            key: const Key('device-root-transfer-recipient-summary'),
           ),
-          key: const Key('device-root-transfer-recipient-summary'),
+          actions: <Widget>[
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.l10n.commonCancel),
+            ),
+            CupertinoDialogAction(
+              key: const Key('device-root-transfer-confirm-action'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(context.l10n.deviceRootTransferConfirm),
+            ),
+          ],
         ),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(context.l10n.commonCancel),
-          ),
-          CupertinoDialogAction(
-            key: const Key('device-root-transfer-confirm-action'),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(context.l10n.deviceRootTransferConfirm),
-          ),
-        ],
-      ),
-    );
-    if (!mounted) return;
-    if (confirmed != true) {
-      await ref.read(devicesProvider.notifier).cancelRootTransfer();
-      return;
+      );
+      if (!mounted) return;
+      if (confirmed != true) {
+        await ref.read(devicesProvider.notifier).cancelRootTransfer();
+        return;
+      }
+      final sent = await ref
+          .read(devicesProvider.notifier)
+          .confirmAndSendRootTransfer(
+            presenceReason: context.l10n.deviceRootTransferPresenceReason,
+          );
+      if (!mounted) return;
+      await _showRootTransferResult(sent);
+    } finally {
+      if (mounted) setState(() => _grantingDeviceId = null);
     }
-    final sent = await ref
-        .read(devicesProvider.notifier)
-        .confirmAndSendRootTransfer(
-          presenceReason: context.l10n.deviceRootTransferPresenceReason,
-        );
-    if (!mounted) return;
+  }
+
+  Future<void> _showRootTransferResult(bool sent) async {
     await showCupertinoDialog<void>(
       context: context,
       builder: (context) => CupertinoAlertDialog(
@@ -388,6 +413,7 @@ class _DeviceTile extends StatelessWidget {
     required this.isConfirming,
     required this.onRevoke,
     required this.onGrantManagement,
+    required this.isGrantPending,
   });
 
   final DeviceSummary device;
@@ -399,7 +425,8 @@ class _DeviceTile extends StatelessWidget {
   final bool isSubmitting;
   final bool isConfirming;
   final VoidCallback onRevoke;
-  final VoidCallback onGrantManagement;
+  final VoidCallback? onGrantManagement;
+  final bool isGrantPending;
 
   @override
   Widget build(BuildContext context) {
@@ -431,11 +458,12 @@ class _DeviceTile extends StatelessWidget {
                       vertical: 6,
                     ),
                     onPressed:
-                        rootTransfer.isPending ||
+                        isGrantPending ||
+                            rootTransfer.isPending ||
                             rootTransfer.phase == RootKeyTransferPhase.sent
                         ? null
                         : onGrantManagement,
-                    child: rootTransfer.isPending
+                    child: isGrantPending || rootTransfer.isPending
                         ? Row(
                             mainAxisSize: MainAxisSize.min,
                             children: <Widget>[

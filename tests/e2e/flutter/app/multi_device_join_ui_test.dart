@@ -12,6 +12,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../../root_transfer_fixture_state.dart';
+import '../../root_transfer_registry_observer.dart';
 import '../support/confirm_local_credential_deletion.dart';
 import 'dart:math';
 import 'dart:typed_data';
@@ -58,6 +59,7 @@ import 'package:awiki_me/src/presentation/devices/device_join_approval_sheet.dar
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
+import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
@@ -81,6 +83,7 @@ import '../../e2e_user_presence_port.dart';
 import '../../remote_multi_device_join_contract.dart';
 import '../../sync_recovery_operator_contract.dart';
 import '../support/protected_otp_config.dart';
+import '../support/join_admin_response_gate.dart';
 
 part 'multi_device_app_pair_ui_test.part.dart';
 part 'multi_device_app_pair_content_sync_test.part.dart';
@@ -619,11 +622,19 @@ void main() {
         initialRegistry,
       );
 
+      final responseGate = JoinAdminResponseGateService(
+        core: bootstrap.deviceManagementCorePort!,
+        userPresence: presence,
+      );
+      addTearDown(responseGate.releaseVerification);
+      addTearDown(responseGate.releaseApproval);
       await tester.pumpWidget(
         AwikiMeApp(
           bootstrap: bootstrap,
           providerOverrides: <Override>[
             userPresencePortProvider.overrideWithValue(presence),
+            if (_invocationExpects(_rootTransferCaseId))
+              deviceManagementServiceProvider.overrideWithValue(responseGate),
           ],
         ),
       );
@@ -764,6 +775,20 @@ void main() {
         fail('The independently derived App and CLI SAS values did not match.');
       }
 
+      Future<void>? delayedInboxRefresh;
+      if (_invocationExpects(_rootTransferCaseId)) {
+        responseGate.holdNextVerification();
+        responseGate.holdNextApproval();
+        delayedInboxRefresh = container
+            .read(devicesProvider.notifier)
+            .refreshJoinInbox();
+        await _pumpUntil(
+          tester,
+          () => responseGate.verificationCaptured,
+          failure: 'The real pre-approval verification response was not held.',
+        );
+      }
+
       final approveAction = find.bySemanticsIdentifier('multi-device-approve');
       if (approveAction.evaluate().isNotEmpty) {
         fail('Approval was enabled before explicit SAS confirmation.');
@@ -808,6 +833,80 @@ void main() {
       }
 
       if (_invocationExpects(_rootTransferCaseId)) {
+        await _pumpUntil(
+          tester,
+          () => responseGate.approvalCaptured,
+          failure: 'The real successful approval response was not held.',
+        );
+        final deadline = DateTime.now().add(const Duration(seconds: 30));
+        while (DateTime.now().isBefore(deadline)) {
+          await container.read(devicesProvider.notifier).refreshJoinInbox();
+          final matching = container
+              .read(devicesProvider)
+              .joinRequests
+              .where(
+                (request) => request.joinSessionId == started.joinSessionId,
+              );
+          if (matching.isEmpty || matching.first.isTerminal) break;
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+        final pendingState = container.read(devicesProvider);
+        final matching = pendingState.joinRequests.where(
+          (request) => request.joinSessionId == started.joinSessionId,
+        );
+        if (!pendingState.isActionPending ||
+            (matching.isNotEmpty && !matching.first.isTerminal)) {
+          fail(
+            'The terminal-notice/pending-approval boundary was not exercised.',
+          );
+        }
+        await tester.pump();
+        final sheet = find.byType(DeviceJoinApprovalSheet);
+        final done = find.descendant(
+          of: sheet,
+          matching: find.text(tester.element(sheet).l10n.commonDone),
+        );
+        if (done.hitTestable().evaluate().isNotEmpty) {
+          await _tapOne(
+            tester,
+            done,
+            failure: 'The premature Done action could not be tested.',
+          );
+          await tester.pump();
+          fail(
+            'Premature Done dismissed the grant flow before approval settled.',
+          );
+        }
+        final finalizing = find.byKey(const Key('device-join-finalizing'));
+        if (finalizing.evaluate().length != 1 ||
+            tester.widget<AppPrimaryButton>(finalizing).onPressed != null) {
+          fail('Pending approval must show a disabled finalization action.');
+        }
+        await _tapOne(
+          tester,
+          finalizing,
+          failure: 'The finalization state was not visible.',
+        );
+        await tester.pump();
+        if (sheet.evaluate().length != 1) {
+          fail('Clicking the pending finalization state closed the Join flow.');
+        }
+        responseGate.releaseApproval();
+        await _pumpUntil(
+          tester,
+          () =>
+              container.read(devicesProvider).activeJoin?.phase ==
+                  DeviceJoinPhase.authorized &&
+              !container.read(devicesProvider).isActionPending,
+          failure: 'Approval did not finish while the old response was held.',
+        );
+        responseGate.releaseVerification();
+        await delayedInboxRefresh;
+        await tester.pump();
+        if (container.read(devicesProvider).activeJoin?.phase !=
+            DeviceJoinPhase.authorized) {
+          fail('A late verification response replaced authorized Join state.');
+        }
         await _verifyActiveJoinWaitsForRecipientPrekey(
           tester,
           container,
@@ -1327,6 +1426,11 @@ Future<void> _verifyRootTransferCompletion({
   }
   await _openDevicesPage(tester);
 
+  final responseGate = container.read(deviceManagementServiceProvider);
+  if (responseGate is! JoinAdminResponseGateService) {
+    fail('The real Registry read witness is missing.');
+  }
+  final registryReadsBeforeGrant = responseGate.registryReadCount;
   final presenceCallsBeforePrepare = presence.calls;
   final grantAction = find.byKey(
     Key('device-grant-management-$recipientDeviceId'),
@@ -1377,6 +1481,10 @@ Future<void> _verifyRootTransferCompletion({
       prepared.receipt != null) {
     fail('Root transfer preparation escaped the exact Devices recipient.');
   }
+  if (responseGate.registryReadCount <= registryReadsBeforeGrant) {
+    fail('The device-list grant did not refresh Registry authority on click.');
+  }
+
   if (find
               .byKey(const Key('device-root-transfer-recipient-summary'))
               .evaluate()
@@ -1529,11 +1637,14 @@ Future<void> _verifyRootTransferCompletion({
     await E2eCaseAttestationWriter.markPassed(
       _rootTransferCaseId,
       phases: const <String>[
+        'pending_approval_has_no_done_escape',
+        'late_verification_preserves_authorized_join',
         'active_join_missing_prekey_retryable',
         'active_join_retry_requires_fresh_confirmation',
         'member_not_ready_before_completion',
         'join_sheet_closed_before_later_grant',
         'device_list_fresh_prepare',
+        'device_list_click_refreshes_registry',
         'safe_summary_single_presence',
         'sender_accepted_terminal',
         'receiver_completion_ready',

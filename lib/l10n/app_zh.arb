@@ -429,6 +429,7 @@
   "deviceJoinApprove": "确认并授权",
   "deviceJoinCancel": "取消关联",
   "deviceJoinAuthorized": "设备已加入",
+  "deviceJoinFinalizing": "正在完成设备操作...",
   "deviceJoinCancelled": "设备关联已取消",
   "deviceJoinExpired": "设备关联已过期，请重新发起",
   "deviceJoinActivating": "正在激活此设备…",

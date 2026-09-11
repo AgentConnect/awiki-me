@@ -1150,6 +1150,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceJoinAuthorized => 'Device added';
 
   @override
+  String get deviceJoinFinalizing => 'Finishing device operation...';
+
+  @override
   String get deviceJoinCancelled => 'Device pairing cancelled';
 
   @override

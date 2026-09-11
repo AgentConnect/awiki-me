@@ -2160,6 +2160,12 @@ abstract class AppLocalizations {
   /// **'设备已加入'**
   String get deviceJoinAuthorized;
 
+  /// No description provided for @deviceJoinFinalizing.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在完成设备操作...'**
+  String get deviceJoinFinalizing;
+
   /// No description provided for @deviceJoinCancelled.
   ///
   /// In zh, this message translates to:

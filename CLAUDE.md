@@ -122,8 +122,11 @@ exact-one；不新增 App JSON 通知，也不把 token/transition/owner 选择�
 `multi-device-app-pair` 是独立的单机双进程模式：通过通用 Debug 构建脚本生成稳定且不同
 bundle ID、独立 Flutter build root 与独立 native Core state root 的管理端/加入端 App，
 再由两个 driver 并发操作真实 UI。loopback coordinator 只交换生命周期 checkpoint，并在
-内存中比较 SAS；不得调用产品 API、触发 inbox/sync 或持久化秘密。当前该模式仅注册
-`DEVICE-JOIN-E2E-004`，不能外推为其他 E2E 已具备 App↔App 覆盖。两个双 App suite 都只在
+内存中比较 SAS；不得调用产品 API、触发 inbox/sync 或持久化秘密。基础双 App 模式覆盖
+`DEVICE-JOIN-E2E-004`、`ROOT-TRANSFER-APP-PAIR-E2E-001` 和 `DEVICE-JOIN-E2E-005`：
+真实加入、主 App 两个管理权限入口、接收 App 升级为管理员及后续本地删除/重新加入入口；
+Root 用例还必须实际完成下一次加入和授权，覆盖已有两个管理员后的 Registry-only 版本分叉。
+不能把 `root-transfer` 的 App+CLI 结果当作双 App 证明。两个双 App suite 都只在
 integration-test provider override 中自动确认 user presence；正式 App 仍使用 macOS
 LocalAuthentication。独立的 `multi-device-app-pair-functional` 用真实双 App、Daemon、
 Agent Inventory、CLI peer 和远端消息链路验证

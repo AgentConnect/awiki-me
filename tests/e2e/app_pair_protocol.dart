@@ -23,6 +23,13 @@ const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
   'admin\u0000verification_started': <String>{},
   'joiner\u0000authorized': <String>{'adminDeviceId', 'joinedDeviceId'},
   'admin\u0000complete': <String>{},
+  'admin\u0000root_grant_sent': <String>{},
+  'joiner\u0000management_ready': <String>{},
+  'joiner\u0000rejoin_pending': <String>{'joinSessionId', 'joinedDeviceId'},
+  'admin\u0000rejoin_verification_started': <String>{},
+  'joiner\u0000rejoin_authorized': <String>{},
+  'admin\u0000rejoin_root_grant_sent': <String>{},
+  'joiner\u0000rejoin_management_ready': <String>{},
   'joiner\u0000functional_ready': <String>{},
   'admin\u0000content_fixture_ready': <String>{
     'peerDid',
@@ -322,6 +329,12 @@ class AppPairCoordinatorServer {
         _checkpoints.containsKey('$role\u0000$phase') &&
         _checkpoints['$role\u0000$phase']?['accountId'] != data['accountId']) {
       throw const AppPairProtocolException('Cleanup scope cannot change.');
+    }
+    if (role == 'joiner' &&
+        phase == 'rejoin_pending' &&
+        !_checkpoints.containsKey('$role\u0000$phase')) {
+      // The second Join must compare new submissions, not the previous SAS.
+      _sasByRole.clear();
     }
     _checkpoints['$role\u0000$phase'] = Map<String, Object?>.unmodifiable(data);
     await _json(request.response, HttpStatus.ok, const {'accepted': true});

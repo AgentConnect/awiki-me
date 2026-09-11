@@ -140,12 +140,10 @@ Options:
                                one Join and one CLI peer to run only the
                                messages_501 Schema 3 recovery case.
                                full runs the audited App+CLI desktop peer flow.
-                               multi-device-app-pair-later-admin-grant is the
-                               focused alias for the release root-transfer
-                               case: it closes the Join sheet, clears its
-                               transient state, then grants from Devices.
-                               It requires the remote Join gate and protected
-                               OTP fixture.
+                               multi-device-app-pair-later-admin-grant runs two
+                               isolated Apps through member Join and a later
+                               management grant. The receiver is an App, not CLI.
+                               It requires the protected remote OTP fixture.
                                The other cases run real App+CLI peer flows. The
                                performance case records product-level startup,
                                conversation, and send-to-visible timings and
@@ -522,6 +520,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       'identity-deletion-recovery-guard' ||
       'identity_deletion_recovery_guard' =>
         DesktopE2eCase.identityDeletionRecoveryGuard,
+      'multi-device-app-pair-later-admin-grant' ||
+      'multi_device_app_pair_later_admin_grant' ||
       'multi-device-app-pair' ||
       'multi_device_app_pair' => DesktopE2eCase.multiDeviceAppPair,
       'multi-device-app-pair-functional' ||
@@ -534,10 +534,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       'multi_device_app_pair_paging_recovery' =>
         DesktopE2eCase.multiDeviceAppPairPagingRecovery,
       'step4-revoke-mls' || 'step4_revoke_mls' => DesktopE2eCase.step4RevokeMls,
-      'multi-device-app-pair-later-admin-grant' ||
-      'multi_device_app_pair_later_admin_grant' ||
-      'root-transfer' ||
-      'root_transfer' => DesktopE2eCase.rootTransfer,
+      'root-transfer' || 'root_transfer' => DesktopE2eCase.rootTransfer,
       'full' => DesktopE2eCase.full,
       'performance' ||
       'perf' ||
