@@ -14,7 +14,12 @@ import 'package:path/path.dart' as p;
 import '../../case_attestation.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets(
     'real App bootstrap provisions once and runtime only opens existing key',
@@ -61,7 +66,12 @@ void main() {
       );
       final legacyRegistry =
           jsonDecode(await registryFile.readAsString()) as Map;
-      final legacyTenant = (legacyRegistry['tenants'] as List).single as Map;
+      final legacyTenants = (legacyRegistry['tenants'] as List).cast<Map>();
+      final activeTenantProfileId =
+          legacyRegistry['active_tenant_profile_id'] as String;
+      final legacyTenant = legacyTenants.singleWhere(
+        (item) => item['tenant_profile_id'] == activeTenantProfileId,
+      );
       legacyTenant['backend_base_url'] = 'http://awiki.info';
       await registryFile.writeAsString(jsonEncode(legacyRegistry), flush: true);
 

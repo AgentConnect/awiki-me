@@ -12,7 +12,7 @@ import '../core/app_error_classifier.dart';
 import '../domain/entities/session_identity.dart';
 
 abstract interface class AppSessionService {
-  AppSessionTransition beginSessionTransition();
+  AppSessionTransition beginSessionTransition({bool Function()? isCurrent});
 
   bool isSessionTransitionCurrent(AppSessionTransition transition);
 
@@ -43,17 +43,40 @@ abstract interface class AppSessionService {
 
   Future<AppSession?> refreshSession();
 
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation();
+
   Future<void> logout();
+
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias);
 
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias);
 }
 
 abstract interface class LocalIdentityDataDeletionSessionService {
   Future<AppSession> deleteLocalIdentityData(String identityIdOrAlias);
+
+  Future<LocalIdentityDeletionTicket> prepareLocalIdentityDataDeletion(
+    String identityIdOrAlias,
+  );
+
+  Future<AppSession> completeLocalIdentityDataDeletion(
+    LocalIdentityDeletionTicket ticket,
+  );
+
+  Future<List<LocalIdentityDeletionTicket>> pendingLocalIdentityDataDeletions();
 }
 
 final class AppSessionTransition {
-  AppSessionTransition._(this._previousCommittedTransition);
+  AppSessionTransition._(
+    this._previousCommittedTransition, [
+    this._requestIsCurrent,
+  ]);
+
+  bool Function()? _requestIsCurrent;
+
+  /// Detach after activation succeeds, or before exact-transition cleanup.
+  /// A committed App session must not depend on the lifetime of its old page.
+  void releaseRequestGuard() => _requestIsCurrent = null;
 
   final AppSessionTransition? _previousCommittedTransition;
 
@@ -74,15 +97,19 @@ mixin AppSessionTransitionGuard {
   AppSessionTransition? _committedSessionTransition;
   AppSessionTransition? _latestSessionTransition;
 
-  AppSessionTransition beginSessionTransition() {
-    final transition = AppSessionTransition._(_committedSessionTransition);
+  AppSessionTransition beginSessionTransition({bool Function()? isCurrent}) {
+    final transition = AppSessionTransition._(
+      _committedSessionTransition,
+      isCurrent,
+    );
     _activeSessionTransition = transition;
     _latestSessionTransition = transition;
     return transition;
   }
 
   bool isSessionTransitionCurrent(AppSessionTransition transition) {
-    return identical(_activeSessionTransition, transition);
+    return identical(_activeSessionTransition, transition) &&
+        (transition._requestIsCurrent?.call() ?? true);
   }
 
   bool isLatestSessionTransition(AppSessionTransition transition) {
@@ -322,7 +349,12 @@ class ImCoreAppSessionService
       await _runtime.open();
     }
     _requireCurrentTransition(transition);
-    final identity = await _localIdentityFor(identityIdOrAlias);
+    // Local login must use an identity that still exists in the Core registry.
+    // Alias resolution can synthesize a placeholder when the registry is empty.
+    final identity = await _localIdentityFor(
+      identityIdOrAlias,
+      allowResolve: false,
+    );
     _requireCurrentTransition(transition);
     if (identity == null) {
       throw StateError('local_identity_not_found: $identityIdOrAlias');
@@ -351,6 +383,7 @@ class ImCoreAppSessionService
     AppSession identity, {
     required AppSessionTransition transition,
     Future<void> Function(AppSession session)? initializeIdentitySession,
+    bool allowTransientAuth = true,
   }) async {
     _requireCurrentTransition(transition);
     if (!_runtime.isOpen) {
@@ -406,7 +439,7 @@ class ImCoreAppSessionService
       );
     } catch (error) {
       _requireCurrentTransition(transition);
-      if (!isTransientNetworkAppError(error)) {
+      if (!allowTransientAuth || !isTransientNetworkAppError(error)) {
         await _clearFailedActivationState();
         rethrow;
       }
@@ -454,6 +487,37 @@ class ImCoreAppSessionService
   Future<AppSession?> refreshSession() {
     final transition = _committedSessionTransition;
     return _runSessionTransition(() => _refreshSession(transition));
+  }
+
+  @override
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation() {
+    final transition = _committedSessionTransition;
+    return _runSessionTransition(() async {
+      final current = _current;
+      if (current == null ||
+          transition == null ||
+          !isSessionTransitionCurrent(transition)) {
+        throw StateError('identity_binding_refresh_unavailable');
+      }
+      final realtimeWasRunning = _realtime?.isRunning ?? false;
+      final refreshed = await _activateIdentity(
+        current,
+        transition: transition,
+        allowTransientAuth: false,
+      );
+      if (!refreshed.authenticated) {
+        throw StateError('identity_binding_refresh_unauthenticated');
+      }
+      if (realtimeWasRunning) {
+        try {
+          await _realtime?.start();
+        } catch (_) {
+          // The identity client is already current. The App realtime
+          // supervisor owns connection recovery independently.
+        }
+      }
+      return refreshed;
+    });
   }
 
   Future<AppSession?> _refreshSession(AppSessionTransition? transition) async {
@@ -583,6 +647,12 @@ class ImCoreAppSessionService
   }
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async {
+    if (!_runtime.isOpen) await _runtime.open();
+    return _identities.hasPendingLocalIdentityRecovery(identityIdOrAlias);
+  }
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {
     final transition = beginSessionTransition();
     return _runOwnedSessionTransition(
@@ -608,10 +678,52 @@ class ImCoreAppSessionService
     );
   }
 
+  @override
+  Future<LocalIdentityDeletionTicket> prepareLocalIdentityDataDeletion(
+    String identityIdOrAlias,
+  ) {
+    return _runSessionTransition(() async {
+      if (!_runtime.isOpen) {
+        await _runtime.open();
+      }
+      return _localIdentityDataDeletionPort.prepareLocalIdentityDataDeletion(
+        identityIdOrAlias,
+      );
+    });
+  }
+
+  @override
+  Future<AppSession> completeLocalIdentityDataDeletion(
+    LocalIdentityDeletionTicket ticket,
+  ) {
+    final transition = beginSessionTransition();
+    return _runOwnedSessionTransition(
+      transition,
+      () => _deleteLocalIdentity(
+        ticket.ownerIdentityId,
+        transition,
+        deleteOwnerData: true,
+        deletionId: ticket.deletionId,
+      ),
+    );
+  }
+
+  @override
+  Future<List<LocalIdentityDeletionTicket>>
+  pendingLocalIdentityDataDeletions() {
+    return _runSessionTransition(() async {
+      if (!_runtime.isOpen) {
+        await _runtime.open();
+      }
+      return _localIdentityDataDeletionPort.pendingLocalIdentityDataDeletions();
+    });
+  }
+
   Future<AppSession> _deleteLocalIdentity(
     String identityIdOrAlias,
     AppSessionTransition transition, {
     required bool deleteOwnerData,
+    String? deletionId,
   }) async {
     _requireCurrentTransition(transition);
     final selector = identityIdOrAlias.trim();
@@ -622,19 +734,25 @@ class ImCoreAppSessionService
     final current = _current;
     final deletingCurrent =
         current != null && _matchesIdentity(current, selector);
-    Future<void>? realtimeCleanup;
+    final deleted = deletionId != null
+        ? await _localIdentityDataDeletionPort
+              .completeLocalIdentityDataDeletion(deletionId)
+        : deleteOwnerData
+        ? await _localIdentityDataDeletionPort.deleteLocalIdentityData(
+            identityIdOrAlias,
+          )
+        : await _identities.deleteLocalIdentity(identityIdOrAlias);
     if (deletingCurrent) {
       _current = null;
       clearCommittedSessionTransition();
       await _activeSessionStore?.clearActiveIdentityId();
-      realtimeCleanup = _stopRealtimeBestEffort();
+      final cleanup = _stopRealtimeBestEffort();
       if (deleteOwnerData) {
-        await realtimeCleanup;
+        await cleanup;
+      } else {
+        unawaited(cleanup);
       }
     }
-    final deleted = deleteOwnerData
-        ? await _deleteLocalIdentityData(identityIdOrAlias)
-        : await _identities.deleteLocalIdentity(identityIdOrAlias);
     if (current != null &&
         (_matchesIdentity(current, selector) ||
             _matchesIdentity(current, deleted.identityId) ||
@@ -644,7 +762,10 @@ class ImCoreAppSessionService
             (deleted.handle != null &&
                 _matchesIdentity(current, deleted.handle!)))) {
       _current = null;
-      unawaited(_cleanupRetiredRuntimeBestEffort(realtimeCleanup));
+      // Deletion retires this owner/client, not the shared Storage Scope.
+      // Core has already purged the exact owner's durable data; the signed-out
+      // flow and independent identities must keep using the same live runtime.
+      await _runtime.clearIdentity();
     } else {
       final activeIdentityId = await _activeSessionStore
           ?.readActiveIdentityId();
@@ -659,13 +780,12 @@ class ImCoreAppSessionService
     return deleted;
   }
 
-  Future<AppSession> _deleteLocalIdentityData(String identityIdOrAlias) {
+  LocalIdentityDataDeletionPort get _localIdentityDataDeletionPort {
     final identities = _identities;
     if (identities is! LocalIdentityDataDeletionPort) {
       throw UnsupportedError('local_identity_data_deletion_unavailable');
     }
-    return (identities as LocalIdentityDataDeletionPort)
-        .deleteLocalIdentityData(identityIdOrAlias);
+    return identities as LocalIdentityDataDeletionPort;
   }
 
   void _requireCurrentTransition(AppSessionTransition transition) {
@@ -772,23 +892,6 @@ class ImCoreAppSessionService
         rethrow;
       }
     });
-  }
-
-  Future<void> _disposeRuntimeBestEffort() async {
-    try {
-      await _runtime.dispose().timeout(_realtimeCleanupTimeout);
-    } on TimeoutException {
-      return;
-    } catch (_) {
-      return;
-    }
-  }
-
-  Future<void> _cleanupRetiredRuntimeBestEffort(
-    Future<void>? realtimeCleanup,
-  ) async {
-    await (realtimeCleanup ?? _stopRealtimeBestEffort());
-    await _disposeRuntimeBestEffort();
   }
 
   Future<void> _clearFailedActivationState() async {

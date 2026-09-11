@@ -176,6 +176,129 @@ class HandleRecoveryCrashCutHandoff {
   }
 }
 
+class RegistrationJoinResumeHandoff {
+  RegistrationJoinResumeHandoff._({
+    required this.runRef,
+    required Map<String, String> references,
+    required Map<String, int> expectedCounts,
+    required this.registrationRetryAt,
+  }) : references = Map<String, String>.unmodifiable(references),
+       expectedCounts = Map<String, int>.unmodifiable(expectedCounts);
+
+  factory RegistrationJoinResumeHandoff.fromRaw({
+    required String runId,
+    required Map<String, String> rawReferences,
+    required Map<String, int> expectedCounts,
+    required DateTime registrationRetryAt,
+  }) {
+    return RegistrationJoinResumeHandoff.fromJson(<String, Object?>{
+      'schemaVersion': 1,
+      'stage': 'registration_join_pending',
+      'runRef': handleRecoveryFixtureReference(runId),
+      'references': <String, Object?>{
+        for (final entry in rawReferences.entries)
+          entry.key: handleRecoveryFixtureReference(entry.value),
+      },
+      'expectedCounts': <String, Object?>{
+        for (final entry in expectedCounts.entries) entry.key: entry.value,
+      },
+      'registrationRetryAt': registrationRetryAt.toUtc().toIso8601String(),
+    });
+  }
+
+  factory RegistrationJoinResumeHandoff.fromJson(Map<String, Object?> json) {
+    _requireExactKeys(json, const <String>{
+      'schemaVersion',
+      'stage',
+      'runRef',
+      'references',
+      'expectedCounts',
+      'registrationRetryAt',
+    });
+    if (json['schemaVersion'] != 1 ||
+        json['stage'] != 'registration_join_pending') {
+      throw const FormatException(
+        'registration Join handoff schema or stage invalid',
+      );
+    }
+    final runRef = _requiredOpaqueReference(json, 'runRef');
+    final references = _stringMap(json, 'references');
+    final expectedCounts = _intMap(json, 'expectedCounts');
+    if (!_sameStrings(references.keys, _registrationJoinResumeReferences)) {
+      throw const FormatException(
+        'registration Join handoff reference shape is not exact',
+      );
+    }
+    if (!_sameStrings(
+      expectedCounts.keys,
+      _registrationJoinResumeExpectedCounts,
+    )) {
+      throw const FormatException(
+        'registration Join handoff count shape is not exact',
+      );
+    }
+    for (final entry in references.entries) {
+      _requireSafeFieldName(entry.key, kind: 'registration Join reference');
+      _requireOpaqueReference(entry.value, field: entry.key);
+    }
+    for (final entry in expectedCounts.entries) {
+      _requireSafeFieldName(entry.key, kind: 'registration Join count');
+      if (entry.value < 0) {
+        throw FormatException(
+          'registration Join count ${entry.key} is negative',
+        );
+      }
+    }
+    final retryAtRaw = _requiredString(json, 'registrationRetryAt');
+    final retryAt = DateTime.tryParse(retryAtRaw);
+    if (retryAt == null ||
+        !retryAt.isUtc ||
+        retryAt.toIso8601String() != retryAtRaw) {
+      throw const FormatException(
+        'registration Join retry boundary must be canonical UTC',
+      );
+    }
+    return RegistrationJoinResumeHandoff._(
+      runRef: runRef,
+      references: references,
+      expectedCounts: expectedCounts,
+      registrationRetryAt: retryAt,
+    );
+  }
+
+  final String runRef;
+  final Map<String, String> references;
+  final Map<String, int> expectedCounts;
+  final DateTime registrationRetryAt;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'schemaVersion': 1,
+    'stage': 'registration_join_pending',
+    'runRef': runRef,
+    'references': references,
+    'expectedCounts': expectedCounts,
+    'registrationRetryAt': registrationRetryAt.toIso8601String(),
+  };
+
+  void requireRunId(String runId) {
+    if (runRef != handleRecoveryFixtureReference(runId)) {
+      throw const HandleRecoveryOracleFailure(
+        'registration_join_handoff_run_mismatch',
+      );
+    }
+  }
+
+  void requireReference(String name, String rawValue) {
+    final expected = references[name];
+    if (expected == null ||
+        expected != handleRecoveryFixtureReference(rawValue)) {
+      throw const HandleRecoveryOracleFailure(
+        'registration_join_handoff_reference_mismatch',
+      );
+    }
+  }
+}
+
 class HandleRecoveryFixtureCheckpoint {
   HandleRecoveryFixtureCheckpoint._({
     required this.caseId,
@@ -639,6 +762,21 @@ const Set<String> _crashCutTransitionReferences = <String>{
 const Set<String> _crashCutExpectedCounts = <String>{
   'local_identities',
   'pre_reset_registry_devices',
+};
+
+const Set<String> _registrationJoinResumeReferences = <String>{
+  'stable_owner',
+  'full_handle',
+  'current_identity',
+  'join_session',
+  'protocol_device',
+};
+
+const Set<String> _registrationJoinResumeExpectedCounts = <String>{
+  'recovery_operations',
+  'pending_join_authorities',
+  'registry_devices',
+  'peer_local_identities',
 };
 
 void _requireFixtureShape({

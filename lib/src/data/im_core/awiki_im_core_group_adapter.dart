@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
-import '../../application/config/awiki_environment_config.dart';
 import '../../application/models/group_collection_page.dart';
 import '../../application/ports/group_core_port.dart';
 import '../../domain/entities/chat_message.dart';
@@ -31,6 +30,7 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     required String rules,
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+    bool secureRequired = false,
   }) async {
     if ((_runtime.config.anpServiceDid ?? '').trim().isEmpty) {
       throw StateError('Group creation requires an ANP service DID.');
@@ -45,7 +45,7 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
           rules: rules,
           messagePrompt: messagePrompt,
           identity: identity,
-          secureRequired: defaultGroupCreationE2eeRequired,
+          secureRequired: secureRequired,
         ),
       ),
     );
@@ -63,33 +63,6 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
       ),
     );
     return _groupFromResult(result);
-  }
-
-  @override
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({
-    int limit = 100,
-  }) async {
-    final result = await _runtime.withCurrentClient(
-      (client) => client.groups.resumeRebindRecovery(limit: limit),
-    );
-    return GroupRebindRecoverySummary(
-      processed: result.processed,
-      completed: result.completed,
-      pending: result.pending,
-      blocked: result.blocked,
-      sendPausedGroupDids: result.sendPausedGroupDids,
-      items: result.items
-          .map(
-            (item) => GroupRebindRecoveryItem(
-              groupDid: item.groupDid,
-              layer: item.layer,
-              phase: item.phase,
-              blocked: item.blocked,
-            ),
-          )
-          .toList(growable: false),
-      warnings: result.warnings,
-    );
   }
 
   @override

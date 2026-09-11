@@ -1,9 +1,11 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-13.stale-daemon-delete-convergence",
+  "sourceRevision": "2026-09-11.full-active-case-aggregate-v1",
   "suites": {
     "smoke": {
-      "tier": "product_ui",
+      "tier": "portable_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter"],
       "requiredFor": [
         "pull_request",
         "release"
@@ -19,11 +21,15 @@
         "AGENT-NOTIFY-SMOKE-E2E-001",
         "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001",
         "SMOKE-E2E-001",
+        "TENANT-SWITCH-SMOKE-E2E-001",
+        "APP-UPDATE-SMOKE-E2E-001",
         "NATIVE-E2E-001"
       ]
     },
     "multi-device": {
-      "tier": "product_ui",
+      "tier": "portable_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter"],
       "requiredFor": [
         "pull_request",
         "release"
@@ -43,13 +49,15 @@
     },
     "multi-device-remote-join": {
       "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script","awiki-cli","node"],
       "requiredFor": [
         "optional_nightly",
         "release"
       ],
       "owner": "awiki-me-identity",
-      "estimatedMinutes": 20,
-      "timeoutMinutes": 30,
+      "estimatedMinutes": 50,
+      "timeoutMinutes": 60,
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
         "awiki.info"
@@ -66,11 +74,14 @@
       "caseIds": [
         "DEVICE-JOIN-E2E-001",
         "DEVICE-JOIN-E2E-002",
+        "DEVICE-JOIN-E2E-006",
         "DEVICE-JOIN-MESSAGE-CORE-E2E-001"
       ]
     },
     "multi-device-remote-recovery": {
       "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -102,8 +113,45 @@
         "HANDLE-RECOVERY-V1-E2E-003"
       ]
     },
+    "handle-recovery-state-machine": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "requiredTools": [
+        "flutter",
+        "script"
+      ],
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 15,
+      "timeoutMinutes": 25,
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "handle_recovery_operation",
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001",
+        "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001",
+        "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001"
+      ]
+    },
     "handle-recovery-local-data": {
       "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script","awiki-daemon"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -134,6 +182,8 @@
     },
     "multi-device-remote-recovery-fresh": {
       "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script","awiki-daemon"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -169,6 +219,8 @@
     },
     "multi-device-app-pair-recovery-registration-rejoin-management-transfer": {
       "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -195,14 +247,99 @@
         "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001"
       ]
     },
-    "multi-device-app-pair": {
+    "multi-device-app-pair-recovery-registration-resume": {
       "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script"],
       "requiredFor": [
         "optional_nightly",
         "release"
       ],
       "owner": "awiki-me-identity",
+      "estimatedMinutes": 27,
+      "timeoutMinutes": 30,
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "handle_recovery_operation",
+        "device_join_session",
+        "app_core_restart",
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001"
+      ]
+    },
+    "identity-deletion-recovery-guard": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script"],
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
       "estimatedMinutes": 20,
+      "timeoutMinutes": 25,
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "remoteTargetPolicy": "configured_same_origin",
+      "allowedHosts": [],
+      "allowedDidDomains": [],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "handle_recovery_operation",
+        "local_identity_deletion_ticket",
+        "app_product_store",
+        "app_core_restart",
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001",
+        "IDENTITY-DATA-DELETION-RESUME-E2E-001"
+      ]
+    },
+    "multi-device-app-pair-recovery-retirement-ordinary-rejoin": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script"],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 32,
+      "timeoutMinutes": 35,
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "remoteTargetPolicy": "configured_same_origin",
+      "allowedHosts": [],
+      "allowedDidDomains": [],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "handle_recovery_operation",
+        "device_join_session",
+        "root_key_transfer",
+        "direct_message",
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001"
+      ]
+    },
+    "multi-device-app-pair": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","dart"],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 22,
       "timeoutMinutes": 30,
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
@@ -214,15 +351,19 @@
       "resourceCategories": [
         "dedicated_test_identity",
         "device_join_session",
+        "root_transfer",
         "isolated_app_state"
       ],
       "caseIds": [
         "DEVICE-JOIN-E2E-004",
-        "DEVICE-JOIN-E2E-005"
+        "DEVICE-JOIN-E2E-005",
+        "ROOT-TRANSFER-APP-PAIR-E2E-001"
       ]
     },
     "multi-device-app-pair-functional": {
       "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","dart","awiki-cli","awiki-daemon"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -271,6 +412,8 @@
     },
     "multi-device-app-pair-content-sync": {
       "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","dart","awiki-cli"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -302,8 +445,39 @@
         "DEVICE-GROUP-READ-SYNC-E2E-001"
       ]
     },
+    "multi-device-app-pair-paging-recovery": {
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","dart","awiki-cli"],
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "estimatedMinutes": 14,
+      "timeoutMinutes": 20,
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "device_join_session",
+        "isolated_app_state",
+        "isolated_cli_state",
+        "direct_message",
+        "compact_recovery_paging_fixture"
+      ],
+      "caseIds": [
+        "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001"
+      ]
+    },
     "step4-revoke-mls": {
       "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script","awiki-cli"],
       "requiredFor": [
         "optional_nightly",
         "release"
@@ -318,6 +492,8 @@
       "allowedDidDomains": [
         "awiki.info"
       ],
+      "requiredTargetCapabilities": ["lanes.p5_device.v1"],
+      "missingCapabilityPolicy": "fail",
       "resourceCategories": [
         "dedicated_test_identity",
         "device_join_session",
@@ -333,6 +509,8 @@
     },
     "production-keychain": {
       "tier": "native_release_security",
+      "supportedPlatforms": ["macos"],
+      "requiredTools": ["flutter","xcode","codesign"],
       "requiredFor": [
         "release"
       ],
@@ -349,8 +527,10 @@
         "NATIVE-E2E-002"
       ]
     },
-    "full": {
-      "tier": "product_ui",
+    "messaging": {
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -402,12 +582,35 @@
         "ATTACH-E2E-001",
         "ATTACH-E2E-002",
         "ATTACH-REG-001",
-        "DISPLAY-NAME-E2E-004",
-        "ROOT-TRANSFER-E2E-001"
+        "DISPLAY-NAME-E2E-004"
       ]
     },
+    "root-transfer": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","script","awiki-cli"],
+      "requiredFor": ["nightly","release"],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 14,
+      "timeoutMinutes": 16,
+      "cleanupPolicy": "isolated_root_transfer_residual_ledger",
+      "allowedHosts": ["awiki.info"],
+      "allowedDidDomains": ["awiki.info"],
+      "requiredTargetCapabilities": ["lanes.p5_device.v1"],
+      "missingCapabilityPolicy": "fail",
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "device_join_session",
+        "root_transfer",
+        "isolated_app_state",
+        "isolated_cli_state"
+      ],
+      "caseIds": ["ROOT-TRANSFER-E2E-001"]
+    },
     "direct": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -440,7 +643,9 @@
       ]
     },
     "group": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -475,7 +680,9 @@
       ]
     },
     "attachment": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -507,7 +714,9 @@
       ]
     },
     "contacts": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -540,8 +749,40 @@
         "CONTACT-FIRST-CONV-E2E-001"
       ]
     },
+    "contact-first": {
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
+      "requiredFor": [
+        "nightly"
+      ],
+      "owner": "awiki-me-contacts",
+      "estimatedMinutes": 8,
+      "timeoutMinutes": 10,
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "allowedHosts": [
+        "awiki.info",
+        "agentwiki.info",
+        "anpclaw.com"
+      ],
+      "allowedDidDomains": [
+        "awiki.info",
+        "agentwiki.info",
+        "anpclaw.com"
+      ],
+      "resourceCategories": [
+        "relationships",
+        "direct_messages",
+        "read_state"
+      ],
+      "caseIds": [
+        "CONTACT-FIRST-CONV-E2E-001"
+      ]
+    },
     "inbound": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -565,12 +806,13 @@
         "read_state"
       ],
       "caseIds": [
-        "AUTH-E2E-001",
         "INBOUND-FIRST-CONV-E2E-001"
       ]
     },
     "identity-switch": {
-      "tier": "product_application",
+      "tier": "remote_product_application",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -595,7 +837,9 @@
       ]
     },
     "restart": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "release"
       ],
@@ -626,7 +870,9 @@
       ]
     },
     "display-name-fallback": {
-      "tier": "product_ui",
+      "tier": "remote_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "nightly",
         "release"
@@ -653,12 +899,13 @@
         "read_state"
       ],
       "caseIds": [
-        "AUTH-E2E-001",
         "DISPLAY-NAME-E2E-002"
       ]
     },
     "performance": {
-      "tier": "integration_diagnostic",
+      "tier": "remote_integration_diagnostic",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli"],
       "requiredFor": [
         "optional_nightly"
       ],
@@ -696,7 +943,10 @@
       ]
     },
     "personal-agent": {
+      "catalogStatus": "unsupported",
       "tier": "optional_provider_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli","awiki-daemon"],
       "requiredFor": [
         "optional_nightly"
       ],
@@ -726,6 +976,8 @@
     },
     "codex-agent": {
       "tier": "optional_provider_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli","awiki-daemon"],
       "requiredFor": [
         "optional_nightly"
       ],
@@ -756,6 +1008,8 @@
     },
     "claude-code-agent": {
       "tier": "optional_provider_product_ui",
+      "supportedPlatforms": ["macos","linux"],
+      "requiredTools": ["flutter","awiki-cli","awiki-daemon"],
       "requiredFor": [
         "optional_nightly"
       ],
@@ -782,6 +1036,190 @@
         "CLAUDECODEAGENT-E2E-002",
         "CLAUDECODEAGENT-E2E-003",
         "CLAUDECODEAGENT-E2E-004"
+      ]
+    },
+    "full": {
+      "tier": "remote_product_ui",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "requiredTools": [
+        "flutter",
+        "script",
+        "awiki-cli"
+      ],
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me",
+      "estimatedMinutes": 584,
+      "timeoutMinutes": 714,
+      "cleanupPolicy": "child_suite_ledgers",
+      "allowedHosts": [
+        "awiki.info",
+        "agentwiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info",
+        "agentwiki.info"
+      ],
+      "resourceCategories": [
+        "direct_messages",
+        "groups",
+        "relationships",
+        "attachments",
+        "read_state",
+        "dedicated_test_identity",
+        "device_join_session",
+        "isolated_app_state",
+        "isolated_cli_state"
+      ],
+      "caseIds": [
+        "AGENT-NOTIFY-SMOKE-E2E-001",
+        "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001",
+        "APP-UPDATE-SMOKE-E2E-001",
+        "ATTACH-E2E-001",
+        "ATTACH-E2E-002",
+        "ATTACH-REG-001",
+        "AUTH-E2E-001",
+        "CLAUDECODEAGENT-E2E-001",
+        "CLAUDECODEAGENT-E2E-002",
+        "CLAUDECODEAGENT-E2E-003",
+        "CLAUDECODEAGENT-E2E-004",
+        "CODEXAGENT-E2E-001",
+        "CODEXAGENT-E2E-002",
+        "CODEXAGENT-E2E-003",
+        "CODEXAGENT-E2E-004",
+        "CONTACT-E2E-001",
+        "CONTACT-E2E-002",
+        "CONTACT-FIRST-CONV-E2E-001",
+        "CONTACT-MSG-E2E-001",
+        "CONTACT-REG-001",
+        "CONV-CANON-E2E-001",
+        "CONV-LIST-E2E-001",
+        "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001",
+        "DEVICE-AGENT-ADD-SYNC-E2E-001",
+        "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001",
+        "DEVICE-AGENT-DELETE-SYNC-E2E-001",
+        "DEVICE-AGENT-MESSAGE-SYNC-E2E-001",
+        "DEVICE-AGENT-RENAME-SYNC-E2E-001",
+        "DEVICE-AGENT-SYNC-E2E-001",
+        "DEVICE-AGENT-UNBIND-SYNC-E2E-001",
+        "DEVICE-ATTACHMENT-SYNC-E2E-001",
+        "DEVICE-CONTENT-TAIL-ONLY-E2E-001",
+        "DEVICE-GROUP-READ-SYNC-E2E-001",
+        "DEVICE-GROUP-SYNC-E2E-001",
+        "DEVICE-JOIN-E2E-001",
+        "DEVICE-JOIN-E2E-002",
+        "DEVICE-JOIN-E2E-004",
+        "DEVICE-JOIN-E2E-005",
+        "DEVICE-JOIN-E2E-006",
+        "DEVICE-JOIN-MESSAGE-CORE-E2E-001",
+        "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001",
+        "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001",
+        "DEVICE-MESSAGE-HINT-LOSS-E2E-001",
+        "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001",
+        "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001",
+        "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001",
+        "DEVICE-MESSAGE-PATCH-READY-E2E-001",
+        "DEVICE-MESSAGE-READ-SYNC-E2E-001",
+        "DEVICE-MESSAGE-RECONNECT-E2E-001",
+        "DEVICE-MESSAGE-SYNC-E2E-001",
+        "DEVICE-MESSAGE-SYNC-E2E-002",
+        "DEVICE-MESSAGE-TAIL-ONLY-E2E-001",
+        "DEVICE-PROFILE-SYNC-E2E-001",
+        "DEVICE-REGISTRY-SYNC-E2E-001",
+        "DEVICE-REVOKE-E2E-001",
+        "DISPLAY-NAME-E2E-001",
+        "DISPLAY-NAME-E2E-002",
+        "DISPLAY-NAME-E2E-004",
+        "DISPLAY-NAME-REG-001",
+        "GROUP-CANON-E2E-001",
+        "GROUP-E2E-001",
+        "GROUP-E2E-002",
+        "GROUP-P9-001",
+        "GROUP-P9-002",
+        "GROUP-REG-001",
+        "HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001",
+        "HANDLE-RECOVERY-FRESH-AGENT-MESSAGE-E2E-001",
+        "HANDLE-RECOVERY-FRESH-DIRECT-INBOUND-E2E-001",
+        "HANDLE-RECOVERY-FRESH-GROUP-INBOUND-E2E-001",
+        "HANDLE-RECOVERY-FRESH-GROUP-REBIND-E2E-001",
+        "HANDLE-RECOVERY-FRESH-RESTART-E2E-001",
+        "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001",
+        "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001",
+        "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001",
+        "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001",
+        "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001",
+        "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001",
+        "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001",
+        "HANDLE-RECOVERY-V1-E2E-001",
+        "HANDLE-RECOVERY-V1-E2E-002",
+        "HANDLE-RECOVERY-V1-E2E-003",
+        "IDENTITY-DATA-DELETION-RESUME-E2E-001",
+        "IDENTITY-DELETE-E2E-001",
+        "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001",
+        "IDENTITY-SWITCH-E2E-001",
+        "INBOUND-FIRST-CONV-E2E-001",
+        "MESSAGE-PATCH-RESTART-E2E-001",
+        "MLS-MULTI-DEVICE-E2E-002",
+        "MSG-E2E-001",
+        "MSG-E2E-002",
+        "MSG-REG-001",
+        "MSG-SEQUENCE-E2E-001",
+        "MULTI-DEVICE-CAPABILITY-GATE-E2E-001",
+        "NATIVE-E2E-001",
+        "NATIVE-E2E-002",
+        "PERF-E2E-001",
+        "PERF-E2E-002",
+        "PERF-E2E-003",
+        "PERF-E2E-004",
+        "PERF-E2E-005",
+        "PERF-E2E-006",
+        "PERF-E2E-007",
+        "PERF-E2E-008",
+        "PERF-E2E-009",
+        "PERF-E2E-010",
+        "PERF-E2E-011",
+        "PERF-E2E-012",
+        "PROCESS-RESTART-E2E-001",
+        "ROOT-TRANSFER-APP-PAIR-E2E-001",
+        "ROOT-TRANSFER-E2E-001",
+        "SMOKE-E2E-001",
+        "STEP4-GROUP-PAGINATION-E2E-001",
+        "TENANT-SWITCH-SMOKE-E2E-001",
+        "UNREAD-MULTI-E2E-001"
+      ],
+      "includes": [
+        "smoke",
+        "multi-device",
+        "multi-device-remote-join",
+        "multi-device-remote-recovery",
+        "handle-recovery-state-machine",
+        "handle-recovery-local-data",
+        "multi-device-remote-recovery-fresh",
+        "multi-device-app-pair-recovery-registration-rejoin-management-transfer",
+        "multi-device-app-pair-recovery-registration-resume",
+        "identity-deletion-recovery-guard",
+        "multi-device-app-pair-recovery-retirement-ordinary-rejoin",
+        "multi-device-app-pair",
+        "multi-device-app-pair-functional",
+        "multi-device-app-pair-content-sync",
+        "multi-device-app-pair-paging-recovery",
+        "step4-revoke-mls",
+        "root-transfer",
+        "messaging",
+        "performance",
+        "contact-first",
+        "inbound",
+        "identity-switch",
+        "restart",
+        "display-name-fallback",
+        "codex-agent",
+        "claude-code-agent",
+        "production-keychain"
       ]
     }
   }

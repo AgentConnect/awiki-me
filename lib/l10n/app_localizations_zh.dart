@@ -289,8 +289,37 @@ class AppLocalizationsZh extends AppLocalizations {
       '这个验证码已过期或已被使用，请重新发送验证码后再试。';
 
   @override
+  String get registrationCommittedActivationPending =>
+      '账号已创建并安全保存在本机，但登录初始化尚未完成。请在本地账号列表中重新登录，无需重新获取验证码。';
+
+  @override
   String get registrationRecoveryStateInvalid =>
       '当前 Handle 的身份状态需要服务器处理，请联系支持后重试。';
+
+  @override
+  String get registrationLocalStateNeedsAttention =>
+      '本机存在无法安全自动收敛的身份状态。请先处理本地状态，然后重新发送验证码。';
+
+  @override
+  String get registrationContinuityChanged => '身份连续性状态已变化。请重新发送验证码后再试。';
+
+  @override
+  String get registrationJoinTerminalWait =>
+      '旧的设备 Join 正在安全结束。请稍候片刻，然后重新发送验证码再试。';
+
+  @override
+  String get identityDeletionCompleteTransitionFirst =>
+      '身份切换仍在落地。请先完成身份切换，再删除此身份。';
+
+  @override
+  String get identityDeletionCompleteJoinFirst =>
+      '设备 Join 仍在进行。请先完成设备加入，再删除此身份。';
+
+  @override
+  String get identityDeletionPendingWillResume => '这项已确认的删除尚未完成，应用将在启动时自动继续。';
+
+  @override
+  String get identityDeletionConflict => '本地身份控制状态存在冲突，尚未删除任何 App 产品数据。';
 
   @override
   String get tenantSwitcherLabel => '管理租户';
@@ -317,7 +346,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tenantCurrent => '当前';
 
   @override
-  String get tenantDefaultBadge => '默认配置';
+  String get tenantDefaultBadge => '官方租户';
 
   @override
   String get tenantName => '租户名称';
@@ -391,7 +420,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get tenantValidationBackendHttpsRequired =>
-      '公网租户地址必须使用 HTTPS，例如 https://anpclaw.com。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。';
+      '公网租户地址必须使用 HTTPS，例如 https://tenant.example。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。';
 
   @override
   String get tenantValidationDidHostInvalid =>
@@ -938,6 +967,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceRevokeSucceededGroupsSyncing => '设备已撤销，受影响的群正在同步安全状态。';
 
   @override
+  String get deviceRevokeSucceededGroupsRepairPartial =>
+      '设备已撤销；部分相关群本次未能更新安全状态，但不影响继续收发消息。';
+
+  @override
   String get deviceRevokeOutcomeUnknown => '撤销结果暂未确认，请刷新设备列表。';
 
   @override
@@ -1063,6 +1096,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceJoinAuthorized => '设备已加入';
 
   @override
+  String get deviceJoinFinalizing => '正在完成设备操作...';
+
+  @override
   String get deviceJoinCancelled => '设备关联已取消';
 
   @override
@@ -1181,6 +1217,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsUpdateStatusInstalling => '正在准备安装更新...';
 
   @override
+  String get settingsUpdateStatusUnavailable => '当前租户暂未提供更新信息';
+
+  @override
+  String get settingsUpdateStatusUnchecked => '尚未检查更新';
+
+  @override
+  String get settingsUpdateStatusCached => '检查失败，保留上次确认的版本信息';
+
+  @override
+  String get updatePolicyUnavailable => '当前租户暂未提供更新信息，你仍可打开下载页面。';
+
+  @override
   String get settingsUpdateStatusFailed => '检查更新失败，请稍后重试';
 
   @override
@@ -1225,6 +1273,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get messageSyncStatusRetryableFailure => '暂时无法同步新消息，请检查网络后重试。';
+
+  @override
+  String get messageSyncStatusBlocked => '消息同步已暂停，请升级客户端或修复此设备后继续。';
+
+  @override
+  String get messageSyncStatusCapacityExceeded =>
+      '恢复所需的账号状态超过安全容量，消息恢复无法继续，请联系支持人员。';
 
   @override
   String get messageSyncStatusProjectionRefreshFailed =>
@@ -1744,7 +1799,53 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get screenshotPermissionRequired =>
-      '录屏权限尚未生效。请在系统设置的“录屏与系统录音”中允许当前 AWiki Me 应用，然后完全退出并重新打开。';
+      'macOS 要求开启“屏幕录制”权限才能截图。请在系统设置中允许 AWiki Me，完成后退出并重新打开应用。';
+
+  @override
+  String get screenshotPermissionTitle => '截图需要屏幕录制权限';
+
+  @override
+  String get screenshotPermissionRecovery =>
+      '先完全退出 AWiki Me，再重新打开并尝试截图。\n\n如果仍然不行，请退出应用，在屏幕录制设置中移除旧的 AWiki Me 条目，再添加下方位置的应用并允许访问，然后重新打开。这里只调整系统权限，不会删除聊天记录。';
+
+  @override
+  String get screenshotPermissionSettings => '打开系统设置';
+
+  @override
+  String get screenshotPermissionLater => '暂不设置';
+
+  @override
+  String get screenshotPermissionHelp => '已开启权限，仍无法截图？';
+
+  @override
+  String get screenshotShowDiagnostics => '查看排查信息';
+
+  @override
+  String get screenshotPermissionSettingsFailed =>
+      '无法自动打开设置。请手动打开系统设置 → 隐私与安全 → 屏幕与系统音频录制（部分系统显示为“录屏与系统录音”）。';
+
+  @override
+  String get screenshotPermissionCheckFailed =>
+      '截图暂时不可用。请退出并重新打开 AWiki Me 后重试。';
+
+  @override
+  String get screenshotCaptureFailed => '截图未完成，请重试。若持续失败，可先用系统截图工具保存图片，再添加为附件。';
+
+  @override
+  String get screenshotCurrentApplication => '当前运行的应用';
+
+  @override
+  String get screenshotApplicationUnavailable => '无法读取当前应用信息，请确认正在使用的版本和安装位置。';
+
+  @override
+  String get screenshotBuildMode => '运行模式';
+
+  @override
+  String get screenshotCopyDiagnostics => '复制排查信息';
+
+  @override
+  String get screenshotDiagnosticsPrivacy =>
+      '复制内容包含版本和应用位置（可能含电脑用户名），不含账号或截图。分享前请检查。';
 
   @override
   String get chatRemoveAttachment => '移除附件';
@@ -2996,6 +3097,27 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateInstallFailed => '更新失败，请打开下载页手动安装。';
 
   @override
+  String get updateRestrictedTitle => '当前租户需要更新';
+
+  @override
+  String updateRestrictedMessage(
+    Object tenantName,
+    Object minimumVersion,
+    Object currentVersion,
+  ) {
+    return '$tenantName 要求 AWiki Me $minimumVersion 或更高版本，当前版本为 $currentVersion。请更新客户端后继续使用；你也可以切换租户。';
+  }
+
+  @override
+  String get updateRestrictedInstall => '打开官方下载页面';
+
+  @override
+  String get updateRestrictedSwitchTenant => '切换租户';
+
+  @override
+  String get updateRestrictedSettings => '设置和本地数据';
+
+  @override
   String get daemonUpgradeStarted => '已开始升级代理。';
 
   @override
@@ -3231,6 +3353,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get handleRecoveryUnavailable => '当前版本不支持 Handle 恢复，未对身份做任何更改。';
 
   @override
+  String get handleRecoveryFactorRequired =>
+      '恢复资格需要重新验证。请为同一操作获取新的验证码，验证后重新确认风险。';
+
+  @override
+  String get handleRecoveryLocalSuperseded =>
+      '远端恢复已经提交，但本机恢复身份已被新的绑定或授权状态取代。已停止旧操作；恢复记录和材料仍保留。请返回登录页加入当前身份，或明确开始新的恢复。';
+
+  @override
   String get handleRecoveryTitle => '恢复 Handle';
 
   @override
@@ -3393,4 +3523,32 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get legacyIdentityUpgradeFailed => '旧身份升级失败，请重试。';
+
+  @override
+  String get localCredentialDeleteRecoveryHint => '同时会清除本机尚未完成的恢复进度。';
+
+  @override
+  String get localCredentialDeleteInspectFailed => '暂时无法确认本机身份状态，请重试。';
+
+  @override
+  String get handleRecoveryFreshDataNotice => '本机没有可迁移的原身份数据，恢复后不会自动找回此前的私聊历史。';
+
+  @override
+  String get handleRecoveryAwaitingResult => '暂未确认账号恢复结果，请继续确认。不要重新发起恢复。';
+
+  @override
+  String get handleRecoveryAwaitingLocal =>
+      '账号恢复已生效，本机设置尚未完成。请继续恢复，无需再次接收短信验证码。';
+
+  @override
+  String get handleRecoveryChecking => '正在检查恢复进度…';
+
+  @override
+  String get handleRecoveryRunning => '正在处理恢复操作，请稍候…';
+
+  @override
+  String get handleRecoveryEntering => '恢复已完成，正在进入消息…';
+
+  @override
+  String get handleRecoveryContinueExisting => '继续上次恢复';
 }

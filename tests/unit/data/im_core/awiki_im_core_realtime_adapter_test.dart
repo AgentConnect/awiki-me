@@ -38,9 +38,7 @@ void main() {
     firstClient.addEvent(_groupUpdate('stale-first'));
     secondClient.addEvent(_groupUpdate('second-live'));
     await pumpEventQueue();
-    expect(updates.map((update) => update.reason), <String?>[
-      'second-live',
-    ]);
+    expect(updates.map((update) => update.reason), <String?>['second-live']);
 
     oldStop.complete();
     await firstStop;
@@ -128,9 +126,7 @@ void main() {
     firstClient.addEvent(_groupUpdate('stale-first'));
     secondClient.addEvent(_groupUpdate('second-live'));
     await pumpEventQueue();
-    expect(updates.map((update) => update.reason), <String?>[
-      'second-live',
-    ]);
+    expect(updates.map((update) => update.reason), <String?>['second-live']);
 
     await adapter.stop();
     await updateSubscription.cancel();

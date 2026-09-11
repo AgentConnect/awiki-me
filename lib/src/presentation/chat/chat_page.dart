@@ -48,6 +48,8 @@ import '../../app/app_router.dart';
 import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
 import '../../application/attachment_preview_service.dart';
+import '../../application/screenshot_failure.dart';
+import 'screenshot_permission_dialog.dart';
 import '../../application/attachment_image_dimensions.dart';
 import '../../application/attachment_resource_reference.dart';
 import '../../application/models/attachment_models.dart';
@@ -713,6 +715,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   int _openingAnchorToken = 0;
   bool _isOpeningGroupInvite = false;
   bool _isDraggingExternalAttachment = false;
+  bool _screenshotOperationInProgress = false;
   final Set<String> _requestedGroupRoleIds = <String>{};
   final Set<String> _downloadingAttachmentMessageIds = <String>{};
   final Set<String> _activeImageAttachmentActions = <String>{};
@@ -721,6 +724,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
   @override
   void initState() {
     super.initState();
+    _groupDisplayRefreshTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _refreshVisibleGroupProfiles(),
+    );
     _displayThreadId = _timelineDisplayThreadId(widget.conversation);
     scrollController = _ChatTimelineScrollController(
       onUserScrollStart: _handleUserScrollStart,
@@ -753,6 +760,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   @override
   void dispose() {
+    _groupDisplayRefreshTimer?.cancel();
     _conversationVisibilityToken += 1;
     _cancelPendingScrollRequests();
     if (_messagesDestinationActive) {
@@ -996,12 +1004,18 @@ class _ChatViewState extends ConsumerState<ChatView> {
           _handleThreadChanged(previous, next, currentConversation),
     );
     final messages = thread.messages;
+
     final mentionGroupDid = _mentionGroupDidForConversation(
       currentConversation,
     );
     final mentionGroupMembers = mentionGroupDid == null
         ? const <GroupMemberSummary>[]
         : ref.watch(groupMembersProvider(mentionGroupDid));
+    if (currentConversation.isGroup) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _refreshVisibleGroupProfiles(),
+      );
+    }
     final peerDisplayProfiles = ref.watch(peerDisplayProfileProvider);
     final currentSession = ref.watch(sessionProvider).session;
     final currentSessionDid = currentSession?.did.trim();
@@ -1778,11 +1792,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   Future<void> _captureAndStageScreenshot({required bool hideApp}) async {
+    if (_screenshotOperationInProgress) return;
     final expectedEpoch = ref.read(sessionProvider).activeEpoch;
     final conversation = _currentConversationSnapshot();
     if (expectedEpoch == null || !_canAcceptExternalAttachment(conversation)) {
       return;
     }
+    _screenshotOperationInProgress = true;
     try {
       final draft = await ref
           .read(attachmentPickerServiceProvider)
@@ -1796,9 +1812,20 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (!_isExternalAttachmentOperationCurrent(expectedEpoch, conversation)) {
         return;
       }
+      if (error is ScreenshotFailure &&
+          error.kind == ScreenshotFailureKind.permissionRequired) {
+        if (!mounted) return;
+        await AppNavigator.showDialog<void>(
+          context,
+          (_) => ScreenshotPermissionDialog(diagnostics: error.diagnostics),
+        );
+        return;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));
+    } finally {
+      _screenshotOperationInProgress = false;
     }
   }
 
@@ -2619,6 +2646,46 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
   }
 
+  Timer? _groupDisplayRefreshTimer;
+
+  void _refreshVisibleGroupProfiles() {
+    if (!mounted ||
+        !_messagesDestinationActive ||
+        !widget.conversation.isGroup ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.paused ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.hidden) {
+      return;
+    }
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (epoch == null) return;
+    final messages = ref.read(chatThreadProvider(_displayThreadId)).messages;
+    final groupDid = _mentionGroupDidForConversation(widget.conversation);
+    final members = groupDid == null
+        ? const <GroupMemberSummary>[]
+        : ref.read(groupMembersProvider(groupDid));
+    unawaited(
+      ref
+          .read(peerDisplayProfileProvider.notifier)
+          .refreshDisplayProfiles(
+            ownerDid: epoch.ownerDid,
+            dids: {
+              ...messages.map((message) => message.senderDid),
+              ...members.map((member) => member.did),
+            },
+            peerPersonaIdsByDid: {
+              for (final member in members)
+                if (member.peerPersonaId != null)
+                  member.did: member.peerPersonaId!,
+              if (widget.conversation.targetDid != null &&
+                  widget.conversation.peerPersonaId != null)
+                widget.conversation.targetDid!:
+                    widget.conversation.peerPersonaId!,
+            },
+            expectedEpoch: epoch,
+          ),
+    );
+  }
+
   void _handleThreadChanged(
     ChatThreadState? previous,
     ChatThreadState next,
@@ -3244,11 +3311,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return localizeAgentTitle(context.l10n, runtimeAgent);
     }
     return ref.watch(
-      peerDisplayNameProvider(
-        PeerDisplayNameRequest(
-          peerPersonaId: message.senderPeerPersonaId,
+      publicIdentityDisplayNameProvider(
+        PublicIdentityDisplayNameRequest(
           did: senderDid,
-          senderNameSnapshot: message.senderName,
           unknownLabel: context.l10n.chatUnknownUser,
         ),
       ),

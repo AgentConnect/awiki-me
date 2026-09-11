@@ -12,6 +12,9 @@ catalog or coverage gate.
 | `tests/unit/chat_page_test.dart` (5380 lines) | composer/send; failure/retry; attachment pick/drop/paste; mention UI; timeline/read/scroll; responsive states | `awiki-me-ui` | widget test-name parity; targeted golden/layout review; no shared mutable fixture ordering |
 | `tests/unit/agents/agents_provider_test.dart` (3522 lines) | inventory/load; daemon actions; Personal Agent binding/recovery; runtime lifecycle; error/idempotency | `awiki-me-agents` | provider test-name parity; optional E2E case IDs unchanged |
 | `tests/unit/test_support.dart` (3902 lines) | account/session fakes; messaging/conversation fakes; group/relationship fakes; agent/runtime fakes; widget harness builders | `awiki-me-test-infra` | no circular imports; fake ownership documented; full unit count/IDs unchanged |
+| `tests/e2e/flutter/app/handle_recovery_ui_test.dart` (6658 lines) | base Recovery; crash/resume; Fresh Root continuity; local-data continuity; registration re-Join | `awiki-me-identity` | before/after case/assertion contract identical; phase restart/process boundaries unchanged |
+| `tests/e2e/flutter/app/multi_device_join_ui_test.dart` (3534 lines) | App joiner; App admin approval; Root transfer; Step4 revoke/MLS | `awiki-me-identity+awiki-me-groups` | exact case/attestation order; Linux/macOS platform contract; user-presence boundary unchanged |
+| `tests/e2e/flutter/app/multi_device_app_pair_ui_test.part.dart` (4462 lines) | pair Join; messaging/sync; Agent/account-state | `awiki-me-identity+awiki-me-messaging` | dual-process lifecycle and coordinator schema unchanged; exact case set parity |
 
 ## Rules for each split
 
@@ -29,8 +32,9 @@ catalog or coverage gate.
 
 ## Current decision
 
-No large file was mechanically split in the quality-baseline change. The same
-workspace had concurrent conversation projection work, and splitting these
-high-conflict files would make semantic review and mutation evidence ambiguous.
-The catalog, coverage gate and this responsibility plan are the safe first
-checkpoint.
+The top-level E2E runner has been split from 6,790 to 1,548 lines into eleven
+runner responsibility modules and four orchestration extensions. The three
+large Flutter business scenario bodies listed above have not yet been split;
+their current line counts and required parity evidence are explicit backlog,
+not completed Step-4 work. Splitting them remains separate from platform,
+release-lane, or product-behavior fixes so semantic review stays auditable.

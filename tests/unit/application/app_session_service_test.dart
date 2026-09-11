@@ -11,7 +11,6 @@ import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/im_core_runtime_port.dart';
 import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/ports/realtime_core_port.dart';
-import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
@@ -513,11 +512,15 @@ void main() {
     );
 
     test(
-      'explicit local identity login can resolve a non-listed identity',
+      'local login rejects a deleted identity without resolving an alias placeholder',
       () async {
         final runtime = _FakeRuntime();
         final identities = _FakeIdentities(
-          resolvedIdentity: _session('id-resolved'),
+          resolvedIdentity: const AppSession(
+            did: 'did:awiki:id-deleted',
+            identityId: 'id-deleted',
+            displayName: 'Deleted',
+          ),
         );
         final service = ImCoreAppSessionService(
           bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
@@ -525,13 +528,21 @@ void main() {
           identities: identities,
           auth: _FakeAuth(),
           activeSessionStore: _FakeActiveSessionStore(),
+          expectedDidDomain: 'awiki.ai',
         );
 
-        final session = await service.loginWithIdentity('id-resolved');
-
-        expect(session.identityId, 'id-resolved');
-        expect(identities.resolvedSelectors, ['id-resolved']);
-        expect(runtime.switchedIdentities, ['id-resolved']);
+        await expectLater(
+          service.loginWithIdentity('id-deleted'),
+          throwsA(
+            isA<StateError>().having(
+              (error) => error.message,
+              'message',
+              'local_identity_not_found: id-deleted',
+            ),
+          ),
+        );
+        expect(identities.resolvedSelectors, isEmpty);
+        expect(runtime.switchedIdentities, isEmpty);
       },
     );
 
@@ -764,6 +775,73 @@ void main() {
         final reloginLease = await service.currentSessionLease();
         expect(reloginLease?.session.identityId, identity.identityId);
         expect(reloginLease?.transition, isNot(same(restoredLease.transition)));
+      },
+    );
+
+    test(
+      'expired Recovery caller cannot commit a pending identity activation',
+      () async {
+        final identity = _session('id-default');
+        final active = _FakeActiveSessionStore(null);
+        final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+          runtime: _FakeRuntime(),
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: _FakeAuth(),
+          activeSessionStore: active,
+        );
+        var pageCurrent = true;
+        final transition = service.beginSessionTransition(
+          isCurrent: () => pageCurrent,
+        );
+        final started = Completer<void>();
+        final release = Completer<void>();
+        final activation = service.activateIdentity(
+          identity,
+          transition: transition,
+          initializeIdentitySession: (_) async {
+            started.complete();
+            await release.future;
+          },
+        );
+        await started.future;
+        pageCurrent = false;
+        final assertion = expectLater(
+          activation,
+          throwsA(isA<AppSessionTransitionSuperseded>()),
+        );
+        release.complete();
+        await assertion;
+        expect(await active.readActiveIdentityId(), isNull);
+        expect(await service.currentSession(), isNull);
+        transition.releaseRequestGuard();
+        service.cancelPendingSessionTransition(transition);
+      },
+    );
+
+    test(
+      'successful Recovery activation detaches its page lifetime guard',
+      () async {
+        final identity = _session('id-default');
+        final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+          runtime: _FakeRuntime(),
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: _FakeAuth(),
+          activeSessionStore: _FakeActiveSessionStore(null),
+        );
+        var pageCurrent = true;
+        final transition = service.beginSessionTransition(
+          isCurrent: () => pageCurrent,
+        );
+        await service.activateIdentity(identity, transition: transition);
+        transition.releaseRequestGuard();
+        pageCurrent = false;
+        expect(service.isSessionTransitionCurrent(transition), isTrue);
+        expect(
+          (await service.currentSessionLease())?.session.identityId,
+          identity.identityId,
+        );
       },
     );
 
@@ -1016,6 +1094,53 @@ void main() {
         expect(realtime.isRunning, isFalse);
       },
     );
+
+    for (final prepared in [false, true]) {
+      test(
+        'owner data deletion preserves the scope for another login (prepared=$prepared)',
+        () async {
+          final first = _session('id-first');
+          final second = _session(
+            'id-second',
+          ).copyWith(handle: 'bob.awiki', localAlias: 'bob-local');
+          final runtime = _FakeRuntime();
+          final identities = _FakeDeletingIdentities(
+            defaultIdentity: first,
+            extraIdentities: [second],
+          );
+          final service = ImCoreAppSessionService(
+            bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+            runtime: runtime,
+            identities: identities,
+            auth: _FakeAuth(),
+            activeSessionStore: _FakeActiveSessionStore(first.identityId),
+            realtime: _FakeRealtime(),
+          );
+          await service.restoreSession();
+          if (prepared) {
+            final ticket = await service.prepareLocalIdentityDataDeletion(
+              first.identityId,
+            );
+            await service.completeLocalIdentityDataDeletion(ticket);
+          } else {
+            await service.deleteLocalIdentityData(first.identityId);
+          }
+          expect(runtime.disposeCount, 0);
+          expect(runtime.clearIdentityCount, 1);
+          expect(runtime.isOpen, isTrue);
+          expect(await service.currentSession(), isNull);
+          expect(
+            (await service.listLocalIdentities()).map(
+              (value) => value.identityId,
+            ),
+            [second.identityId],
+          );
+          final active = await service.loginWithIdentity(second.identityId);
+          expect(active.identityId, second.identityId);
+          expect(runtime.openCount, 1);
+        },
+      );
+    }
 
     test('logout clears active identity without disposing runtime', () async {
       final runtime = _FakeRuntime();
@@ -1384,19 +1509,96 @@ void main() {
         expect(deleted.identityId, identity.identityId);
         expect(identities.deletedSelectors, ['alice-local']);
         expect(realtime.stopCount, 1);
-        expect(runtime.disposeCount, 1);
+        expect(runtime.clearIdentityCount, 1);
+        expect(runtime.disposeCount, 0);
         expect(await service.currentSession(), isNull);
       },
     );
 
     test(
-      'deleteLocalIdentity is offline-first when realtime and runtime cleanup are slow',
+      'device mutation refresh atomically replaces the same identity client and binding',
+      () async {
+        final identity = _session('id-default');
+        final initialBinding = _bindingForGeneration(identity, '1');
+        final refreshedBinding = SessionAccountBinding(
+          ownerIdentityId: identity.identityId,
+          accountId: initialBinding.accountId,
+          currentDid: identity.did,
+          protocolDeviceId: initialBinding.protocolDeviceId,
+          identityGeneration: '2',
+          deviceAuthGeneration: '3',
+        );
+        final runtime = _FakeRuntime();
+        final realtime = _FakeRealtime();
+        final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+          runtime: runtime,
+          identities: _FakeIdentities(
+            defaultIdentity: identity,
+            activeBindings: <SessionAccountBinding>[
+              initialBinding,
+              refreshedBinding,
+            ],
+          ),
+          auth: _FakeAuth(),
+          activeSessionStore: _FakeActiveSessionStore(identity.identityId),
+          realtime: realtime,
+        );
+
+        await service.restoreSession();
+        await realtime.start();
+        final refreshed = await service
+            .refreshCurrentIdentityClientAfterDeviceMutation();
+
+        expect(runtime.switchedIdentities, <String>[
+          identity.identityId,
+          identity.identityId,
+        ]);
+        expect(refreshed.accountBinding?.identityGeneration, '2');
+        expect(refreshed.accountBinding?.deviceAuthGeneration, '3');
+        expect(refreshed.authenticated, isTrue);
+        expect(realtime.stopCount, 1);
+        expect(realtime.isRunning, isTrue);
+      },
+    );
+
+    test(
+      'rejected local deletion preserves the active session and realtime',
+      () async {
+        final identity = _session('id-default');
+        final identities = _FakeIdentities(defaultIdentity: identity)
+          ..deletionError = StateError('delete unavailable');
+        final active = _FakeActiveSessionStore(identity.identityId);
+        final runtime = _FakeRuntime();
+        final realtime = _FakeRealtime();
+        final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+          runtime: runtime,
+          identities: identities,
+          auth: _FakeAuth(),
+          activeSessionStore: active,
+          realtime: realtime,
+        );
+        await service.restoreSession();
+        await expectLater(
+          service.deleteLocalIdentity(identity.identityId),
+          throwsStateError,
+        );
+        expect(
+          (await service.currentSession())?.identityId,
+          identity.identityId,
+        );
+        expect(await active.readActiveIdentityId(), identity.identityId);
+        expect(realtime.stopCount, 0);
+        expect(runtime.clearIdentityCount, 0);
+      },
+    );
+
+    test(
+      'deleteLocalIdentity keeps Core open and does not block the next session operation on realtime cleanup',
       () async {
         final realtimeStop = Completer<void>();
-        final runtimeDispose = Completer<void>();
-        final runtime = _FakeRuntime(
-          onDispose: () async => runtimeDispose.future,
-        );
+        final runtime = _FakeRuntime();
         final realtime = _FakeRealtime(onStop: () async => realtimeStop.future);
         final identity = _session('id-default');
         final identities = _FakeIdentities(defaultIdentity: identity);
@@ -1420,13 +1622,24 @@ void main() {
         expect(await active.readActiveIdentityId(), isNull);
         expect(await service.currentSession(), isNull);
         expect(realtime.stopCount, 1);
+        expect(runtime.clearIdentityCount, 1);
         expect(runtime.disposeCount, 0);
+
+        var nextSessionOperationCompleted = false;
+        final nextSessionOperation = service.listLocalIdentities().then((
+          value,
+        ) {
+          nextSessionOperationCompleted = true;
+          return value;
+        });
+        await pumpEventQueue();
+        expect(nextSessionOperationCompleted, isTrue);
 
         realtimeStop.complete();
         await pumpEventQueue();
-        expect(runtime.disposeCount, 1);
-        runtimeDispose.complete();
-        await pumpEventQueue();
+        await nextSessionOperation;
+        expect(nextSessionOperationCompleted, isTrue);
+        expect(runtime.disposeCount, 0);
       },
     );
 
@@ -1545,17 +1758,13 @@ AppSession _session(String id) {
 }
 
 class _FakeRuntime implements ImCoreRuntimePort {
-  _FakeRuntime({
-    this.vaultError,
-    this.vaultErrorsByIdentity = const {},
-    this.onDispose,
-  });
+  _FakeRuntime({this.vaultError, this.vaultErrorsByIdentity = const {}});
 
   final Object? vaultError;
   final Map<String, Object> vaultErrorsByIdentity;
-  final Future<void> Function()? onDispose;
   int openCount = 0;
   int disposeCount = 0;
+  int clearIdentityCount = 0;
   final List<String> switchedIdentities = <String>[];
   final List<String> vaultChecks = <String>[];
 
@@ -1585,13 +1794,18 @@ class _FakeRuntime implements ImCoreRuntimePort {
   }
 
   @override
+  Future<void> clearIdentity() async {
+    clearIdentityCount += 1;
+  }
+
+  @override
   Future<void> dispose() async {
     disposeCount += 1;
-    await onDispose?.call();
   }
 }
 
 class _FakeIdentities implements IdentityCorePort {
+  Object? deletionError;
   _FakeIdentities({
     AppSession? defaultIdentity,
     AppSession? resolvedIdentity,
@@ -1704,18 +1918,6 @@ class _FakeIdentities implements IdentityCorePort {
   }
 
   @override
-  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias) {
-    throw UnsupportedError('unsupported');
-  }
-
-  @override
-  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
-    String identityIdOrAlias,
-  ) {
-    throw UnsupportedError('unsupported');
-  }
-
-  @override
   Future<DaemonSubkeyAuthorizationRevokeResult> revokeDaemonSubkeyAuthorization(
     String identityIdOrAlias,
   ) {
@@ -1723,7 +1925,13 @@ class _FakeIdentities implements IdentityCorePort {
   }
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(
+    String identityIdOrAlias,
+  ) async => false;
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
+    if (deletionError != null) throw deletionError!;
     deletedSelectors.add(identityIdOrAlias);
     final defaultIdentity = _defaultIdentity;
     final identities = <AppSession>[
@@ -1738,6 +1946,54 @@ class _FakeIdentities implements IdentityCorePort {
       orElse: () => _session(identityIdOrAlias),
     );
   }
+}
+
+class _FakeDeletingIdentities extends _FakeIdentities
+    implements LocalIdentityDataDeletionPort {
+  _FakeDeletingIdentities({
+    required super.defaultIdentity,
+    required super.extraIdentities,
+  });
+
+  LocalIdentityDeletionTicket? _ticket;
+
+  @override
+  Future<AppSession> deleteLocalIdentityData(String selector) async {
+    final deleted = await deleteLocalIdentity(selector);
+    if (_defaultIdentity?.identityId == deleted.identityId) {
+      _defaultIdentity = null;
+    }
+    _extraIdentities.removeWhere(
+      (value) => value.identityId == deleted.identityId,
+    );
+    return deleted;
+  }
+
+  @override
+  Future<LocalIdentityDeletionTicket> prepareLocalIdentityDataDeletion(
+    String selector,
+  ) async {
+    final identity = (await listLocalIdentities()).singleWhere(
+      (value) => value.identityId == selector,
+    );
+    return _ticket = LocalIdentityDeletionTicket(
+      deletionId: 'deletion-test',
+      ownerIdentityId: identity.identityId,
+      currentDid: identity.did,
+    );
+  }
+
+  @override
+  Future<AppSession> completeLocalIdentityDataDeletion(
+    String deletionId,
+  ) async {
+    expect(deletionId, _ticket!.deletionId);
+    return deleteLocalIdentityData(_ticket!.ownerIdentityId);
+  }
+
+  @override
+  Future<List<LocalIdentityDeletionTicket>>
+  pendingLocalIdentityDataDeletions() async => [];
 }
 
 class _FakeLegacyUpgrades implements LegacyIdentityUpgradePort {

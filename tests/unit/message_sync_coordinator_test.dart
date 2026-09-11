@@ -5,6 +5,7 @@ import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/app_presentation_service.dart';
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
+import 'package:awiki_me/src/application/remote_push_message_reference.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
@@ -109,6 +110,7 @@ void main() {
       MessageSyncStatus.recoveryRequired:
           RemotePushSyncDisposition.recoveryRequired,
       MessageSyncStatus.authRevoked: RemotePushSyncDisposition.authRevoked,
+      MessageSyncStatus.blocked: RemotePushSyncDisposition.blocked,
     };
 
     for (final entry in cases.entries) {
@@ -155,6 +157,69 @@ void main() {
   });
 
   test(
+    'v1a coordinator calls Core before preparing the Patch projection',
+    () async {
+      final gateway = FakeAwikiGateway();
+      late int conversationReadsWhenCoreStarted;
+      final sync = _ObservingMessageSyncService(() {
+        conversationReadsWhenCoreStarted = gateway.listConversationsCalls;
+      });
+      final container = _container(gateway, sync);
+      addTearDown(container.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('v1a_core_first', immediate: true);
+
+      expect(conversationReadsWhenCoreStarted, 0);
+      expect(gateway.listConversationsCalls, greaterThan(0));
+    },
+  );
+
+  test(
+    'v1a watchdog detaches a stuck Core Future and permits a new run',
+    () async {
+      final sync = _QueuedBlockingMessageSyncService();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        syncWatchdog: const Duration(milliseconds: 10),
+        failureBackoff: const Duration(minutes: 1),
+      );
+      addTearDown(container.dispose);
+
+      final first = await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync();
+      expect(first.disposition, RemotePushSyncDisposition.retryableFailure);
+
+      final second = container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('v1a_after_watchdog', immediate: true);
+      await Future<void>.delayed(const Duration(milliseconds: 2));
+      expect(sync.syncReasons, ['remote_push', 'v1a_after_watchdog']);
+      sync.completeAt(1);
+      await second;
+
+      final beforeLateCompletion = container.read(
+        messageSyncCoordinatorProvider,
+      );
+      sync.completeAt(0);
+      await Future<void>.delayed(const Duration(milliseconds: 2));
+      final afterLateCompletion = container.read(
+        messageSyncCoordinatorProvider,
+      );
+      expect(afterLateCompletion.status, beforeLateCompletion.status);
+      expect(afterLateCompletion.lastStatus, beforeLateCompletion.lastStatus);
+      expect(
+        afterLateCompletion.pendingReason,
+        beforeLateCompletion.pendingReason,
+      );
+      expect(sync.syncReasons, ['remote_push', 'v1a_after_watchdog']);
+    },
+  );
+
+  test(
     'remote Push suppresses transient failure presentation while retrying',
     () async {
       final container = _container(
@@ -175,6 +240,96 @@ void main() {
       expect(state.transientFailurePresentationSuppressed, isTrue);
       expect(state.automaticRetryPending, isTrue);
       expect(state.shouldSurfaceRetryableFailure, isFalse);
+    },
+  );
+
+  for (final blockedCode in [
+    'sync.client_upgrade_required',
+    'message_wire_identity_conflict',
+  ]) {
+    test(
+      'blocked Core outcome $blockedCode never schedules a tight retry',
+      () async {
+        final sync = FakeMessageSyncService(
+          deltaResult: MessageSyncOutcome(
+            status: MessageSyncStatus.blocked,
+            eventsApplied: 0,
+            pagesFetched: 0,
+            errorCode: blockedCode,
+          ),
+        );
+        final container = _container(
+          FakeAwikiGateway(),
+          sync,
+          failureBackoff: const Duration(milliseconds: 5),
+        );
+        addTearDown(container.dispose);
+
+        final receipt = await container
+            .read(messageSyncCoordinatorProvider.notifier)
+            .requestRemotePushSync();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        final state = container.read(messageSyncCoordinatorProvider);
+        expect(receipt.disposition, RemotePushSyncDisposition.blocked);
+        expect(state.status, MessageSyncCoordinatorStatus.blocked);
+        expect(state.automaticRetryPending, isFalse);
+        expect(sync.syncReasons, ['remote_push']);
+      },
+    );
+  }
+
+  test(
+    'Schema 3 bounded history is a ready success with one safe marker',
+    () async {
+      final sync = FakeMessageSyncService(
+        deltaResult: const MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 0,
+          pagesFetched: 64,
+          olderHistoryExcluded: true,
+        ),
+      );
+      final container = _container(FakeAwikiGateway(), sync);
+      addTearDown(container.dispose);
+
+      final receipt = await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync();
+      final state = container.read(messageSyncCoordinatorProvider);
+
+      expect(receipt.disposition, RemotePushSyncDisposition.succeeded);
+      expect(state.status, MessageSyncCoordinatorStatus.idle);
+      expect(state.olderHistoryExcluded, isTrue);
+    },
+  );
+
+  test(
+    'Schema 3 hard capacity errors are terminal capacity outcomes',
+    () async {
+      for (final errorCode in <String>[
+        'sync.snapshot_item_too_large',
+        'sync.snapshot_required_state_too_large',
+      ]) {
+        final sync = FakeMessageSyncService(
+          deltaResult: MessageSyncOutcome(
+            status: MessageSyncStatus.blocked,
+            eventsApplied: 0,
+            pagesFetched: 0,
+            errorCode: errorCode,
+          ),
+        );
+        final container = _container(FakeAwikiGateway(), sync);
+        final receipt = await container
+            .read(messageSyncCoordinatorProvider.notifier)
+            .requestRemotePushSync();
+        final state = container.read(messageSyncCoordinatorProvider);
+
+        expect(receipt.disposition, RemotePushSyncDisposition.capacityExceeded);
+        expect(state.status, MessageSyncCoordinatorStatus.capacityExceeded);
+        expect(state.automaticRetryPending, isFalse);
+        container.dispose();
+      }
     },
   );
 
@@ -1048,7 +1203,9 @@ void main() {
       await bobSync;
       await pumpEventQueue();
 
-      expect(gateway.listConversationsCalls, 3);
+      // The stale Alice Core result is fenced before Patch preparation, so
+      // only Bob's current generation performs projection reads.
+      expect(gateway.listConversationsCalls, 2);
       expect(
         container.read(messageSyncCoordinatorProvider).lastReason,
         'bob_startup',
@@ -1101,7 +1258,7 @@ void main() {
   });
 
   test(
-    'bound startup records Patch subscribe and reset before reliable sync',
+    'bound startup records Patch readiness before projecting Core sync',
     () async {
       final gateway = FakeAwikiGateway();
       final conversations = _BoundReadyConversationService(
@@ -1134,6 +1291,41 @@ void main() {
         observation.patchReadySequence,
         lessThan(observation.firstReliableSyncStartedSequence!),
       );
+    },
+  );
+
+  test(
+    'receive startup prepares Patch subscription before starting reception',
+    () async {
+      final gateway = FakeAwikiGateway();
+      final sync = _SeparatedMessageSyncService()..completeProcessing();
+      final conversations = _BoundReadyConversationService(
+        gateway,
+        ownerIdentityId: 'owner-a',
+      );
+      final container = _container(
+        gateway,
+        sync,
+        syncV2ReadEnabled: true,
+        session: _boundSession(deviceAuthGeneration: '1'),
+        conversationService: conversations,
+      );
+      addTearDown(container.dispose);
+      addTearDown(conversations.dispose);
+      var readyBeforeReceive = false;
+      sync.onReceive = () {
+        readyBeforeReceive =
+            container
+                .read(conversationListProvider.notifier)
+                .patchStartupObservation
+                ?.provesSubscribeBeforeFirstReliableSync ==
+            true;
+      };
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('startup', immediate: true);
+      expect(sync.syncReasons, ['startup']);
+      expect(readyBeforeReceive, isTrue);
     },
   );
 
@@ -1297,6 +1489,59 @@ void main() {
     expect(staleSafe.refreshedAt, firstSafe.refreshedAt);
     expect(staleSafe.toJson()['current'], isFalse);
   });
+
+  test(
+    'lane and domain degradation does not become auth revoke or logout',
+    () async {
+      final gateway = FakeAwikiGateway();
+      const diagnostics = AppMessageSyncDiagnostics(
+        mode: AppMessageSyncMode.idle,
+        pendingMutationCount: 0,
+        retryState: AppMessageSyncRetryState.none,
+        lanes: <AppMessageSyncLaneState>[
+          AppMessageSyncLaneState(
+            lane: AppMessageSyncLane.p5Device,
+            committedCursor: '41:7',
+            pending: true,
+            lastTransportError: 'lane_storage_pressure',
+          ),
+        ],
+        domainStates: <AppMessageSyncDomainState>[
+          AppMessageSyncDomainState(
+            lane: AppMessageSyncLane.p6Group,
+            scope: 'redacted-group-scope',
+            retryable: false,
+            status: AppMessageSyncDomainStatus.actionRequired,
+          ),
+        ],
+      );
+      final messaging = _DiagnosticMessagingService(
+        gateway,
+        diagnostics: diagnostics,
+      );
+      final sync = FakeMessageSyncService(
+        deltaResult: const MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+        ),
+      );
+      final container = _container(gateway, sync, messagingService: messaging);
+      addTearDown(container.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('lane_domain_degraded', immediate: true);
+
+      final state = container.read(messageSyncCoordinatorProvider);
+      expect(diagnostics.laneDegraded, isTrue);
+      expect(state.status, MessageSyncCoordinatorStatus.idle);
+      expect(state.lastStatus, MessageSyncStatus.changed);
+      expect(state.isAuthRevoked, isFalse);
+      expect(state.lastError, isNull);
+      expect(gateway.logoutCalls, 0);
+    },
+  );
 
   test('successful sync honors the Core mutation retry deadline', () async {
     final gateway = FakeAwikiGateway();
@@ -2030,6 +2275,317 @@ void main() {
   );
 
   test(
+    'receive API returns while processing is pending and a later receive proceeds',
+    () async {
+      final sync = _SeparatedMessageSyncService();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(() {
+        sync.completeProcessing();
+        container.dispose();
+      });
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+      await coordinator
+          .requestSync('first_receive', immediate: true)
+          .timeout(const Duration(seconds: 1));
+      expect(sync.processing.isCompleted, isFalse);
+      expect(
+        container.read(messageSyncCoordinatorProvider).status,
+        MessageSyncCoordinatorStatus.idle,
+      );
+      await coordinator
+          .requestSync('next_receive', immediate: true)
+          .timeout(const Duration(seconds: 1));
+      expect(sync.syncReasons, ['first_receive', 'next_receive']);
+      sync.completeProcessing(blocked: true);
+      await pumpEventQueue();
+      expect(
+        container.read(messageSyncCoordinatorProvider).status,
+        MessageSyncCoordinatorStatus.idle,
+      );
+    },
+  );
+
+  test(
+    'receive API preserves a discarded processing result for the independent Push receipt',
+    () async {
+      final sync = _SeparatedMessageSyncService();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(() {
+        sync.completeProcessing();
+        container.dispose();
+      });
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+      var pushCompleted = false;
+      final push = coordinator.requestRemotePushSync().whenComplete(
+        () => pushCompleted = true,
+      );
+      await sync.processingStarted.future;
+      expect(pushCompleted, isFalse);
+      expect(
+        container.read(messageSyncCoordinatorProvider).status,
+        MessageSyncCoordinatorStatus.idle,
+      );
+      await coordinator.requestSync('next_receive', immediate: true);
+      expect(sync.syncReasons, ['remote_push', 'next_receive']);
+      sync.completeProcessing(discarded: true);
+      final receipt = await push;
+      expect(receipt.disposition, RemotePushSyncDisposition.blocked);
+      expect(receipt.canAcknowledge, isFalse);
+      expect(
+        container.read(messageSyncCoordinatorProvider).status,
+        MessageSyncCoordinatorStatus.idle,
+      );
+    },
+  );
+
+  test(
+    'receive API delivers committed incoming notifications after receive has returned',
+    () async {
+      final sync = _SeparatedMessageSyncService();
+      final notifications = FakeNotificationFacade();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(() {
+        sync.completeProcessing();
+        container.dispose();
+      });
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+      await coordinator.requestSync('first_receive', immediate: true);
+      expect(notifications.systemCalls, 0);
+      final committed = CommittedIncomingMessage(
+        eventId: 'processed-later',
+        logicalMessageId: 'message-later',
+        message: ChatMessage(
+          localId: 'message-later',
+          remoteId: 'message-later',
+          conversationId: 'dm:peer-scope:v1:peer',
+          threadId: 'dm:peer-scope:v1:peer',
+          senderDid: 'did:test:peer',
+          senderName: 'Peer',
+          receiverDid: 'did:test:me',
+          content: 'processed later',
+          createdAt: DateTime.utc(2026, 9, 10),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      );
+      final update = MessageProcessingUpdate(
+        eventId: committed.eventId,
+        status: MessageProcessingStatus.applied,
+        committedIncomingMessages: [committed],
+      );
+      sync.updates.add(update);
+      sync.updates.add(update);
+      await pumpEventQueue();
+      expect(notifications.systemCalls, 1);
+      expect(sync.syncReasons, ['first_receive']);
+    },
+  );
+
+  test(
+    'a pending provider Push suppresses only its referenced message',
+    () async {
+      final sync = _SeparatedMessageSyncService();
+      final notifications = FakeNotificationFacade();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(() {
+        sync.completeProcessing();
+        container.dispose();
+      });
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+      final push = coordinator.requestRemotePushSync(
+        messageReferences: {
+          remotePushOpaqueMessageReference('provider-message'),
+        },
+      );
+      await sync.processingStarted.future;
+      CommittedIncomingMessage incoming(String id, String body) =>
+          CommittedIncomingMessage(
+            eventId: 'event-$id',
+            logicalMessageId: id,
+            message: ChatMessage(
+              localId: id,
+              remoteId: id,
+              conversationId: 'dm:peer-scope:v1:peer',
+              threadId: 'dm:peer-scope:v1:peer',
+              senderDid: 'did:test:peer',
+              senderName: 'Peer',
+              receiverDid: 'did:test:me',
+              content: body,
+              createdAt: DateTime.utc(2026, 9, 10),
+              isMine: false,
+              sendState: MessageSendState.sent,
+            ),
+          );
+      sync.updates.add(
+        MessageProcessingUpdate(
+          eventId: 'update',
+          status: MessageProcessingStatus.applied,
+          committedIncomingMessages: [
+            incoming('provider-message', 'already presented'),
+            incoming('other-message', 'independent message'),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+      expect(notifications.systemCalls, 1);
+      expect(notifications.lastSystemBody, 'independent message');
+      sync.completeProcessing();
+      await push;
+    },
+  );
+
+  test(
+    'referenced Push recovers a committed fact without waiting for unrelated processing',
+    () async {
+      final sync = _SeparatedMessageSyncService();
+      final message = ChatMessage(
+        localId: 'already-committed',
+        remoteId: 'already-committed',
+        conversationId: 'dm:peer-scope:v1:peer',
+        threadId: 'dm:peer-scope:v1:peer',
+        senderDid: 'did:test:peer',
+        receiverDid: 'did:test:me',
+        content: 'already committed',
+        createdAt: DateTime.utc(2026, 9, 10),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      );
+      final reference = remotePushOpaqueMessageReference(message.remoteId!);
+      sync.localIncoming = [
+        LocalIncomingMessage(
+          message: message,
+          opaqueMessageReferences: {reference},
+        ),
+      ];
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(() {
+        sync.completeProcessing();
+        container.dispose();
+      });
+      final receipt = await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync(messageReferences: {reference});
+      expect(receipt.canAcknowledge, isTrue);
+      expect(
+        receipt.recoveredIncomingMessages.single.message.remoteId,
+        'already-committed',
+      );
+      expect(sync.processing.isCompleted, isFalse);
+    },
+  );
+
+  test(
+    'an absent referenced fact cannot become a successful Push ACK after discard',
+    () async {
+      final sync = _SeparatedMessageSyncService();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        syncV2ReadEnabled: true,
+        syncWatchdog: const Duration(milliseconds: 150),
+      );
+      addTearDown(() {
+        sync.completeProcessing();
+        container.dispose();
+      });
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+      final push = coordinator.requestRemotePushSync(
+        messageReferences: {
+          remotePushOpaqueMessageReference('discarded-message'),
+        },
+      );
+      await sync.processingStarted.future;
+      sync.updates.add(
+        const MessageProcessingUpdate(
+          eventId: 'discarded-event',
+          status: MessageProcessingStatus.discarded,
+          errorCode: 'sync.input_discarded',
+        ),
+      );
+      final receipt = await push;
+      expect(receipt.canAcknowledge, isFalse);
+      expect(
+        container.read(messageSyncCoordinatorProvider).status,
+        MessageSyncCoordinatorStatus.idle,
+      );
+    },
+  );
+
+  test(
+    'slow Join inbox does not own the receive slot or acknowledge Push early',
+    () async {
+      final sync = FakeMessageSyncService();
+      final started = Completer<void>();
+      final gate = Completer<List<DeviceJoinRequestNotice>>();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        devices: _deviceCoreWithBlockingJoinInbox(started: started, gate: gate),
+      );
+      addTearDown(() {
+        if (!gate.isCompleted) gate.complete(const <DeviceJoinRequestNotice>[]);
+        container.dispose();
+      });
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+      var pushCompleted = false;
+      final push = coordinator.requestRemotePushSync().whenComplete(
+        () => pushCompleted = true,
+      );
+      await started.future;
+      final next = coordinator.requestSync('next_receive', immediate: true);
+      try {
+        await pumpEventQueue();
+        expect(sync.syncReasons, ['remote_push', 'next_receive']);
+        expect(pushCompleted, isFalse);
+      } finally {
+        gate.complete(const <DeviceJoinRequestNotice>[]);
+        await next;
+        await push;
+      }
+    },
+  );
+
+  test(
     'identity change while Join inbox waits stops the stale sync projection',
     () async {
       final gateway = FakeAwikiGateway()
@@ -2164,6 +2720,7 @@ ProviderContainer _container(
   Duration minInterval = Duration.zero,
   Duration failureBackoff = Duration.zero,
   Duration failureSurfaceDelay = Duration.zero,
+  Duration syncWatchdog = const Duration(seconds: 30),
   FakeDeviceManagementCore? devices,
   FakeNotificationFacade? notifications,
   AppPresentationService? appPresentationService,
@@ -2185,7 +2742,6 @@ ProviderContainer _container(
       );
   return ProviderContainer(
     overrides: <Override>[
-      awikiGatewayProvider.overrideWithValue(gateway),
       awikiEnvironmentConfigProvider.overrideWithValue(
         AwikiEnvironmentConfig(messageSyncV2ReadEnabled: syncV2ReadEnabled),
       ),
@@ -2218,6 +2774,7 @@ ProviderContainer _container(
           minInterval: minInterval,
           failureBackoff: failureBackoff,
           failureSurfaceDelay: failureSurfaceDelay,
+          syncWatchdog: syncWatchdog,
         ),
       ),
       sessionProvider.overrideWith((ref) {
@@ -2327,6 +2884,26 @@ class _BlockingMessageSyncService extends FakeMessageSyncService {
   }
 }
 
+class _ObservingMessageSyncService extends FakeMessageSyncService {
+  _ObservingMessageSyncService(this.onSyncStarted);
+
+  final void Function() onSyncStarted;
+
+  @override
+  Future<MessageSyncOutcome> syncNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    syncReasons.add(reason);
+    onSyncStarted();
+    return const MessageSyncOutcome(
+      status: MessageSyncStatus.idle,
+      eventsApplied: 0,
+      pagesFetched: 0,
+    );
+  }
+}
+
 class _QueuedBlockingMessageSyncService extends FakeMessageSyncService {
   final List<Completer<MessageSyncOutcome>> _pending =
       <Completer<MessageSyncOutcome>>[];
@@ -2343,7 +2920,11 @@ class _QueuedBlockingMessageSyncService extends FakeMessageSyncService {
   }
 
   void completeNext() {
-    final completer = _pending.removeAt(0);
+    completeAt(0);
+  }
+
+  void completeAt(int index) {
+    final completer = _pending.removeAt(index);
     completer.complete(
       const MessageSyncOutcome(
         status: MessageSyncStatus.idle,
@@ -2633,5 +3214,92 @@ class _FailingMessageSyncService extends FakeMessageSyncService {
   }) async {
     syncReasons.add(reason);
     throw StateError('sync_failed');
+  }
+}
+
+class _SeparatedMessageSyncService extends FakeMessageSyncService
+    implements MessageReceiveService {
+  final processing = Completer<MessageProcessingOutcome>();
+  final processingStarted = Completer<void>();
+  final updates = StreamController<MessageProcessingUpdate>.broadcast(
+    sync: true,
+  );
+
+  List<LocalIncomingMessage> localIncoming = [];
+  void Function()? onReceive;
+  @override
+  Future<List<LocalIncomingMessage>> findLocalIncoming(
+    Set<String> references,
+  ) async => localIncoming
+      .where(
+        (message) => message.opaqueMessageReferences.any(references.contains),
+      )
+      .toList();
+
+  @override
+  Future<MessageReceiveOutcome> receiveNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    syncReasons.add(reason);
+    onReceive?.call();
+    return const MessageReceiveOutcome(
+      status: MessageSyncStatus.changed,
+      complete: true,
+      eventsReceived: 1,
+      pagesFetched: 1,
+    );
+  }
+
+  @override
+  Future<MessageProcessingSession> openProcessingSession() async =>
+      _TestProcessingSession(this);
+
+  void completeProcessing({bool blocked = false, bool discarded = false}) {
+    if (!processing.isCompleted)
+      processing.complete(
+        MessageProcessingOutcome(
+          complete: !blocked && !discarded,
+          pendingCount: blocked ? 1 : 0,
+          blockedCount: blocked ? 1 : 0,
+          discardedCount: discarded ? 1 : 0,
+          errorCode: discarded
+              ? 'sync.input_discarded'
+              : blocked
+              ? 'message_wire_identity_conflict'
+              : null,
+        ),
+      );
+  }
+}
+
+class _TestProcessingSession implements MessageProcessingSession {
+  _TestProcessingSession(this.owner) {
+    _subscription = owner.updates.stream.listen(_updates.add);
+  }
+  final _SeparatedMessageSyncService owner;
+  final _updates = StreamController<MessageProcessingUpdate>();
+  late final StreamSubscription<MessageProcessingUpdate> _subscription;
+  bool _closed = false;
+  @override
+  Stream<MessageProcessingUpdate> get updates {
+    if (owner.syncReasons.isNotEmpty && !owner.processingStarted.isCompleted)
+      owner.processingStarted.complete();
+    return _updates.stream;
+  }
+
+  @override
+  Future<MessageProcessingOutcome> waitUntilSettled() {
+    if (!owner.processingStarted.isCompleted)
+      owner.processingStarted.complete();
+    return owner.processing.future;
+  }
+
+  @override
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    await _subscription.cancel();
+    unawaited(_updates.close());
   }
 }

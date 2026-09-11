@@ -1,22 +1,46 @@
 # Repository Guidelines
 
+## Shared rules
+
+Engineering work follows [AI Coding Rules](../awiki-harness/rules/ai-coding-rules.md).
+Behavior changes and verification follow the relevant [Verification Policy](../awiki-harness/rules/verification-policy.md)
+sections; production behavior needs owning unit coverage and applicable System/product E2E review.
+If Harness is absent, use local docs/tests/CI and disclose missing acceptance evidence.
+
 ## Project Structure & Module Organization
 `lib/` contains the Flutter application. Domain contracts live in
 `lib/src/domain/`, Dart service clients and persistence live in
 `lib/src/data/`, and UI/providers live in `lib/src/presentation/`.
 `tests/unit/` contains fast Dart logic, widget, provider, and fake-backed
 harness tests. `tests/e2e/` contains E2E runners, configs, Flutter shim
-implementations, and App + CLI peer/backend/device validation assets. Root
+implementations, and App + CLI peer/backend/device validation assets.
+`tests/computer-use/` contains playbooks for a screen-using AI or human; it is
+not a Dart runner and does not replace `tests/e2e/`. Root
 `integration_test/*.dart` files are Flutter-tooling shims only. Platform runners live under
 `android/`, `ios/`, `macos/`, and `web/`. Static assets live in `assets/`.
 
+## Documentation
+Follow this file, [`CLAUDE.md`](CLAUDE.md), and `docs/`. Do not apply the GEB fractal protocol, and do not add a `CLAUDE.md` to every directory.
+
 ## Architecture Guardrail
-Before changing conversation identity, list/detail/profile projection,
-read/send/realtime behavior, or release/0710 upgrade behavior, read
-[`docs/conversation-presentation-ownership.md`](docs/conversation-presentation-ownership.md),
-[`docs/storage-scope-vault-contract.md`](docs/storage-scope-vault-contract.md), and
-[`../awiki-cli-rs2/docs/architecture/im-core-sdk-architecture.md`](../awiki-cli-rs2/docs/architecture/im-core-sdk-architecture.md).
-Do not implement conflicting ownership, canonical-identity, fallback, or migration logic; update the authoritative documents first if the architecture itself must change.
+Preserve Core ownership, canonical identity, fail-closed behavior and migration
+constraints. Locate the affected contract or section before editing:
+
+- Conversation/list/detail/profile display, rendering and overlays: use the relevant
+  owner, mapping, preview or timeline sections of
+  [presentation ownership](docs/conversation-presentation-ownership.md).
+- Storage Scope, tenant switch, vault lifecycle or upgrade: use the corresponding
+  ownership, provision/open, route/switch or upgrade sections of
+  [storage contract](docs/storage-scope-vault-contract.md).
+- Core-owned identity, read/send/sync or realtime behavior: use the affected sections
+  of [Core architecture](../awiki-cli-rs2/docs/architecture/im-core-sdk-architecture.md),
+  such as `Host vs SDK Responsibilities`, `Identity Model`, `Reliable Message Sync`
+  and `Conversation Read State`.
+
+Read additional sections when the change crosses those boundaries or leaves a
+contract question unresolved. Reuse established context; these links are not a
+mandatory full-document reading sequence. Update the affected authoritative contract
+before implementing a change to the architecture itself.
 
 ## Build, Test, and Development Commands
 Use Flutter/Dart tooling only. When installing dependencies, prefer the
@@ -29,12 +53,14 @@ dart run tests/unit/runner.dart
 flutter run
 ```
 
-On the current Intel macOS development machine, routine AWiki Me Debug builds
-must build only `x86_64-apple-darwin`, including the sibling
-`awiki-cli-rs2/packages/awiki_im_core` native artifact. Do not compile ARM or a
-universal macOS XCFramework during debugging unless the user explicitly asks
-for ARM, universal, Release, or packaging output. Keep the Flutter App itself
-as a Debug incremental build.
+Routine macOS Debug builds must detect the current host instead of fixing one
+chip in test code: Intel uses `x86_64-apple-darwin`, Apple Silicon uses
+`arm64-apple-darwin`, and the sibling `awiki_im_core` artifact must contain the
+same native architecture. A Rosetta-translated x86 process on Apple Silicon is
+reported explicitly and is not accepted as a native host build. Do not compile
+a universal macOS XCFramework during routine debugging unless the user asks for
+universal, Release, or packaging output. Keep the Flutter App itself as a Debug
+incremental build.
 
 For manual macOS dual-App runs, use
 `scripts/build_manual_dual_macos_apps.sh`. It builds normal `lib/main.dart`
@@ -62,6 +88,10 @@ correct active test domain:
   smoke tests, real App + CLI peer/backend/device flows, reports, and redaction
   rules. Root `integration_test/*.dart` files must stay thin Flutter tooling
   shims that import implementations from `tests/e2e/flutter/`.
+- `tests/computer-use/`: operator/AI playbooks for visible App actions on two
+  real macOS Debug windows. Do not add a `--case` to `tests/e2e/runner.dart`
+  for this domain, and do not treat a computer-use pass as Dart E2E
+  attestation. Start at `tests/computer-use/README.md`.
 
 When running AWiki Me E2E, select the desktop strategy from the current host
 instead of treating macOS as a universal prerequisite. On macOS, use the macOS
@@ -70,29 +100,28 @@ supported by the E2E runner (`platform: linux`), which runs Flutter under Xvfb
 and therefore requires `xvfb-run`. Linux-hosted desktop E2E, including the
 isolated dual-App multi-device suites, must execute in that simulated desktop
 environment; do not replace the real run with a macOS-shaped dry-run or skip it
-only because the host is Linux. The full App + CLI peer flow and product-level
+only because the host is Linux. The messaging App + CLI peer flow and product-level
 multi-device account, messaging, attachment, and read-state assertions are
 valid on both hosts; by default run `dart run tests/e2e/runner.dart --case full`
-with a local config for the detected platform. Require macOS only for an
+with a local config for the detected platform. `full` aggregates every active
+audited case, including App-pair, Recovery, Root Transfer and native gates;
+`messaging` selects only the former 24-case flow. Require macOS only for an
 assertion that genuinely depends on macOS operating-system behavior, such as
 codesigning, Keychain, or LocalAuthentication, and never claim that Linux
 simulates or attests those macOS-specific behaviors.
 
-Every new feature or behavior change must add or update the corresponding test
-coverage in the same change. Prefer focused unit/provider/widget tests first;
-add or update integration smoke when App bootstrap, routing, platform bindings,
-native plugins, or visual surfaces change; add or update E2E scenarios or runner
-assertions when the feature spans the real backend, CLI peer, account/OTP,
-multi-client messaging, or mobile-device flows. If coverage cannot be added in
-the current change, document the reason, skipped case ID, owner, and follow-up
-in the relevant test docs or plan before merging.
+The suite platform schema also preserves `windows`; the existing Windows x64
+build/native-smoke CI remains authoritative for that lane. The Mac/Linux E2E
+runner must not silently treat Windows as an unknown platform or delete that
+gate.
 
-Any code addition or modification must, in the same task, add or update the
-corresponding unit tests, system tests, and end-to-end (E2E) tests. Keep unit
-tests in this repository, put cross-service system coverage in
-`../awiki-system-test`, and keep AWiki Me product E2E coverage under
-`tests/e2e/`; when another repository owns a required test layer, update it in
-the same task.
+Use focused unit/provider/widget coverage for App behavior. Review native/bootstrap
+smoke coverage when routing, platform bindings, native plugins or visual surfaces
+change, and product E2E when real backend, CLI peer, account/OTP, multi-client or
+device flows change. Reuse exact existing coverage and add only missing coverage
+for this change, following Verification Policy. Cross-service System Tests remain
+in `../awiki-system-test`; product E2E implementations exclusively belong to
+`tests/e2e/` in this repository.
 
 For development/test OTP flows, load the protected phone and code only from
 the ignored, permission-restricted local E2E configuration. Never place those
@@ -108,13 +137,19 @@ runtime behavior unless the task explicitly requires it. If a tool regenerates
 unrelated platform files, inspect and revert those unrelated changes before
 committing.
 
-## ANP SDK Direction
-The app is Dart-only. Do not add Python CLI tools, Python dependency manifests,
-legacy credential migrations, or old RPC gateway paths. Account creation,
-DID-WBA authentication, message proof generation, IM, and User Service calls
-must use the Dart ANP SDK and Dart service clients.
+## App and Core Responsibilities
+
+The App uses Dart/Flutter for UI, navigation, application orchestration and platform
+adapters. Identity/vault, DID-WBA authentication, message proofs, IM and reliable
+sync use the existing `awiki_im_core` facade backed by Rust Core. Keep User Service
+calls in their established owning adapter/facade; do not move Core-owned contracts
+into a parallel Dart protocol implementation. The current ownership contracts and
+[repository context](CLAUDE.md) define the boundaries.
+
+Do not add Python CLI tools, Python dependency manifests, legacy credential
+migrations or old RPC gateway paths.
 
 ## Security & Configuration Tips
 Do not commit real credentials, generated local state, signing keys, or custom
-runtime configuration. Account credentials are e1 DID-only and stored through
-the app's Dart account service and platform secure storage.
+runtime configuration. Account identities remain e1 DID-only. Credential and key
+storage follow the existing Core vault and platform secret-provider contracts.

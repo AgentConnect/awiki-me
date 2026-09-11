@@ -309,6 +309,9 @@ class _FakeSessions
       sessionLeaseFor(_current);
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async =>
       _current ?? _session(jwtToken: null);
 
@@ -339,6 +342,10 @@ class _FakeSessions
     _current = _refreshed;
     return _current;
   }
+
+  @override
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation() async =>
+      _current ?? (throw StateError('identity_binding_refresh_unavailable'));
 
   void replaceCommittedSession(AppSession session) {
     final transition = beginSessionTransition();

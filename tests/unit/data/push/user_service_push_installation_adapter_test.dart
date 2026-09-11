@@ -306,6 +306,10 @@ final class _Sessions
   Future<AppSession?> refreshSession() async => session;
 
   @override
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation() async =>
+      session;
+
+  @override
   Future<AppSession> activateIdentity(
     AppSession identity, {
     AppSessionTransition? transition,
@@ -323,6 +327,9 @@ final class _Sessions
   @override
   Future<AppSessionLease?> currentSessionLease() async =>
       sessionLeaseFor(session);
+
+  @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) =>

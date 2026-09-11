@@ -1,8 +1,8 @@
+import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/group_collection_page.dart';
-import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/application/ports/group_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -12,7 +12,6 @@ import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/identity_type.dart';
-import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
@@ -35,33 +34,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
 
-class _RecoveryGroupController extends GroupController {
-  _RecoveryGroupController(super.ref, GroupRebindRecoverySummary summary) {
-    state = GroupState(recoverySummary: summary);
-  }
-}
-
-class _DelayedPublicProfileService implements ProfileApplicationService {
-  final Completer<UserProfile> profile = Completer<UserProfile>();
-  int loadCalls = 0;
-
-  @override
-  Future<UserProfile> loadPublicProfile(String didOrHandle) {
-    loadCalls += 1;
-    return profile.future;
-  }
-
-  @override
-  Future<UserProfile> loadMyProfile() {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<UserProfile> updateProfile(ProfilePatch patch) {
-    throw UnimplementedError();
-  }
-}
-
 class _DelayedCreateGroupService extends FakeGroupApplicationService {
   _DelayedCreateGroupService(super.gateway);
 
@@ -77,6 +49,7 @@ class _DelayedCreateGroupService extends FakeGroupApplicationService {
     required String rules,
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+    bool secureRequired = false,
   }) {
     started.complete();
     return result.future;
@@ -121,50 +94,6 @@ class _DelayedRefreshGroupService extends FakeGroupApplicationService {
     return Future<GroupCollectionPage<GroupMemberSummary>>.value(
       const GroupCollectionPage<GroupMemberSummary>(
         items: <GroupMemberSummary>[],
-        hasMore: false,
-      ),
-    );
-  }
-}
-
-class _RecoveryGatedGroupListService extends FakeGroupApplicationService {
-  _RecoveryGatedGroupListService(super.gateway);
-
-  bool recoveryResumed = false;
-
-  @override
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({int limit = 100}) {
-    recoveryResumed = true;
-    return Future<GroupRebindRecoverySummary>.value(
-      const GroupRebindRecoverySummary(
-        processed: 1,
-        completed: 1,
-        pending: 0,
-        blocked: 0,
-      ),
-    );
-  }
-
-  @override
-  Future<GroupCollectionPage<GroupSummary>> listGroups({
-    int limit = 100,
-    String? cursor,
-  }) {
-    if (!recoveryResumed) {
-      throw StateError('group recovery must run before group.list');
-    }
-    return Future<GroupCollectionPage<GroupSummary>>.value(
-      const GroupCollectionPage<GroupSummary>(
-        items: <GroupSummary>[
-          GroupSummary(
-            conversationId: 'group:recovered',
-            groupId: 'did:wba:awiki.ai:groups:recovered',
-            name: 'Recovered group',
-            description: '',
-            memberCount: 2,
-            lastMessageAt: null,
-          ),
-        ],
         hasMore: false,
       ),
     );
@@ -450,8 +379,8 @@ void main() {
       expect(gateway.lastCreatedGroupGoal, isEmpty);
       expect(gateway.lastCreatedGroupRules, isEmpty);
       expect(gateway.lastCreatedGroupPrompt, isEmpty);
-      expect(gateway.lastGroupIdentityMode, GroupIdentityMode.handle);
-      expect(gateway.lastGroupIdentityHandle, 'me.awiki.ai');
+      expect(gateway.lastGroupIdentityMode, GroupIdentityMode.didOnly);
+      expect(gateway.lastGroupIdentityHandle, isNull);
       expect(find.byType(ChatView), findsOneWidget);
       expect(find.text('融资协作群'), findsWidgets);
     } finally {
@@ -488,8 +417,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(gateway.lastJoinedGroupDid, groupDid);
-      expect(gateway.lastGroupIdentityMode, GroupIdentityMode.handle);
-      expect(gateway.lastGroupIdentityHandle, 'me.awiki.ai');
+      expect(gateway.lastGroupIdentityMode, GroupIdentityMode.didOnly);
+      expect(gateway.lastGroupIdentityHandle, isNull);
       expect(find.byType(ChatView), findsOneWidget);
       expect(find.text('Joined $groupDid'), findsWidgets);
     } finally {
@@ -498,7 +427,7 @@ void main() {
     }
   });
 
-  testWidgets('无 Handle 时建群不会静默降级为 DID-only', (tester) async {
+  testWidgets('无 Handle 时建群使用 DID-only', (tester) async {
     const didOnlySession = SessionIdentity(
       did: 'did:web:identity.example.com:users:a-very-long-identity-value',
       credentialName: 'did-only.json',
@@ -528,9 +457,9 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('create-group-submit-button')));
     await tester.pumpAndSettle();
-    expect(gateway.lastGroupIdentityMode, isNull);
+    expect(gateway.lastGroupIdentityMode, GroupIdentityMode.didOnly);
     expect(gateway.lastGroupIdentityHandle, isNull);
-    expect(find.byType(ChatView), findsNothing);
+    expect(find.byType(ChatView), findsOneWidget);
   });
 
   testWidgets('窄屏建群隐藏身份选择且不遮挡操作', (tester) async {
@@ -560,48 +489,6 @@ void main() {
     expect(find.byKey(const Key('group-identity-mode-control')), findsNothing);
     expect(find.byKey(const Key('create-group-submit-button')), findsOneWidget);
     expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('群列表区分 recovery 的 P4 pending 与 P6 blocked', (tester) async {
-    const summary = GroupRebindRecoverySummary(
-      processed: 2,
-      completed: 0,
-      pending: 1,
-      blocked: 1,
-      sendPausedGroupDids: <String>['did:example:group'],
-      items: <GroupRebindRecoveryItem>[
-        GroupRebindRecoveryItem(
-          groupDid: 'did:example:group',
-          layer: 'p4',
-          phase: 'awaiting_p6',
-          blocked: false,
-        ),
-        GroupRebindRecoveryItem(
-          groupDid: 'did:example:group',
-          layer: 'p6',
-          phase: 'blocked',
-          blocked: true,
-        ),
-      ],
-    );
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const GroupListPage(),
-        providerOverrides: <Override>[
-          groupProvider.overrideWith(
-            (ref) => _RecoveryGroupController(ref, summary),
-          ),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('group-recovery-status-band')), findsOneWidget);
-    expect(find.text('did:example:group'), findsNWidgets(2));
-    expect(find.text('成员关系'), findsOneWidget);
-    expect(find.text('群加密'), findsOneWidget);
-    expect(find.text('等待中'), findsOneWidget);
-    expect(find.text('已阻塞'), findsOneWidget);
   });
 
   testWidgets('通过 Group DID 加入群失败时停留列表并提示错误', (tester) async {
@@ -691,6 +578,48 @@ void main() {
     expect(find.textContaining('join-code'), findsNothing);
   });
 
+  test('先进入群聊时成员先显示，展示资料后台补齐且不调用公开资料业务入口', () async {
+    const groupDid = 'did:wba:awiki.ai:group:cold';
+    const guestDid = 'did:wba:awiki.ai:user:guest:e1';
+    final completion = Completer<List<PeerDisplayProfile>>();
+    final gateway = FakeAwikiGateway()
+      ..refreshDisplayProfilesCompleter = completion
+      ..groupMembersByGroupId = const {
+        groupDid: [
+          GroupMemberSummary(
+            userId: guestDid,
+            did: guestDid,
+            handle: '',
+            role: 'member',
+          ),
+        ],
+      };
+    final container = ProviderContainer(
+      overrides: fakeApplicationServiceOverrides(gateway),
+    );
+    addTearDown(container.dispose);
+    container.read(sessionProvider.notifier).setSession(session);
+    final members = await container
+        .read(groupProvider.notifier)
+        .ensureGroupMembersLoaded(groupDid);
+    expect(members.single.did, guestDid);
+    expect(members.single.displayName, isNull);
+    expect(gateway.loadPublicProfileQueries, isEmpty);
+    completion.complete(const [
+      PeerDisplayProfile(did: guestDid, displayName: 'AWiki Guest 7K3M'),
+    ]);
+    await pumpEventQueue();
+    expect(
+      container.read(groupMembersProvider(groupDid)).single.displayName,
+      'AWiki Guest 7K3M',
+    );
+    expect(
+      container.read(peerDisplayProfileProvider).forDid(guestDid)?.displayName,
+      'AWiki Guest 7K3M',
+    );
+    expect(gateway.refreshDisplayProfileQueries, [guestDid]);
+  });
+
   test('群成员加载会用公开 Profile Display Name 补全展示名', () async {
     const groupDid = 'did:wba:awiki.ai:group:e1_group';
     const memberDid = 'did:wba:awiki.ai:user:lzc:e1_member';
@@ -728,51 +657,24 @@ void main() {
         .loadGroupMembers(groupDid);
 
     expect(members.single.displayName, '李智诚');
-    expect(members.single.handle, 'lzc');
+    expect(members.single.handle, 'lzc.awiki.ai');
     expect(members.single.avatarUri, 'https://example.test/lzc.png');
     expect(
       container.read(groupMembersProvider(groupDid)).single.displayName,
       '李智诚',
     );
-  });
-
-  test('群列表刷新会先续跑 Handle Recovery 群重绑定', () async {
-    final gateway = FakeAwikiGateway();
-    final groups = _RecoveryGatedGroupListService(gateway);
-    final container = ProviderContainer(
-      overrides: <Override>[
-        ...fakeApplicationServiceOverrides(gateway),
-        groupApplicationServiceProvider.overrideWithValue(groups),
-      ],
+    expect(
+      container.read(groupMembersProvider(groupDid)).single.handle,
+      'lzc.awiki.ai',
     );
-    addTearDown(container.dispose);
-    container.read(sessionProvider.notifier).setSession(session);
-
-    await container.read(groupProvider.notifier).refresh();
-
-    expect(groups.recoveryResumed, isTrue);
-    expect(container.read(groupProvider).groups.single.name, 'Recovered group');
-    expect(container.read(groupProvider).recoverySummary?.completed, 1);
   });
 
   test('旧身份群成员 Profile 慢请求不会写入新身份投影', () async {
     const groupDid = 'did:wba:awiki.ai:group:e1_group';
     const memberDid = 'did:wba:awiki.ai:user:lzc:e1_member';
-    final profiles = _DelayedPublicProfileService();
-    addTearDown(() {
-      if (!profiles.profile.isCompleted) {
-        profiles.profile.complete(
-          const UserProfile(
-            did: memberDid,
-            nickName: 'Old member',
-            bio: '',
-            tags: <String>[],
-            profileMarkdown: '',
-          ),
-        );
-      }
-    });
+    final profiles = Completer<List<PeerDisplayProfile>>();
     final gateway = FakeAwikiGateway()
+      ..refreshDisplayProfilesCompleter = profiles
       ..groupMembersByGroupId = const <String, List<GroupMemberSummary>>{
         groupDid: <GroupMemberSummary>[
           GroupMemberSummary(
@@ -785,10 +687,7 @@ void main() {
         ],
       };
     final container = ProviderContainer(
-      overrides: <Override>[
-        ...fakeApplicationServiceOverrides(gateway),
-        profileApplicationServiceProvider.overrideWithValue(profiles),
-      ],
+      overrides: <Override>[...fakeApplicationServiceOverrides(gateway)],
     );
     addTearDown(container.dispose);
     container.read(sessionProvider.notifier).setSession(session);
@@ -797,21 +696,15 @@ void main() {
         .read(groupProvider.notifier)
         .loadGroupMembers(groupDid);
     await pumpEventQueue();
-    expect(profiles.loadCalls, 1);
+    expect(gateway.refreshDisplayProfileQueries, [memberDid]);
     final loadFailure = expectLater(load, throwsSessionEpochChanged);
 
     container.read(sessionProvider.notifier).setSession(replacementSession);
     container.read(groupProvider.notifier).clear();
     container.read(peerDisplayProfileProvider.notifier).clear();
-    profiles.profile.complete(
-      const UserProfile(
-        did: memberDid,
-        nickName: 'Old member',
-        bio: '',
-        tags: <String>[],
-        profileMarkdown: '',
-      ),
-    );
+    profiles.complete(const [
+      PeerDisplayProfile(did: memberDid, displayName: 'Old member'),
+    ]);
     await loadFailure;
 
     final peerState = container.read(peerDisplayProfileProvider);

@@ -6,7 +6,8 @@ param(
     [Parameter(Mandatory = $true)][string]$AppRef,
     [Parameter(Mandatory = $true)][string]$CoreRef,
     [Parameter(Mandatory = $true)][string]$AnpRef,
-    [Parameter(Mandatory = $true)][string]$PrimaryTenantDomain,
+    [Parameter(Mandatory = $true)][string]$TenantConfigBase64,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$TenantConfigSha256,
     [Parameter(Mandatory = $true)][string]$OutputDir,
     [string]$CoreDir = (Join-Path $PSScriptRoot '..\..\awiki-cli-rs2'),
     [string]$AnpDir = (Join-Path $PSScriptRoot '..\..\anp\anp'),
@@ -14,6 +15,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$env:AWIKI_RELEASE_REGISTRY = "1"
+
 Set-StrictMode -Version Latest
 
 $RootDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -26,6 +29,42 @@ $RuntimeFileListName = 'awiki-runtime-files.txt'
 function Assert-ExitCode([string]$Label) {
     if ($LASTEXITCODE -ne 0) {
         throw "$Label failed with exit code $LASTEXITCODE"
+    }
+}
+
+function Assert-TenantConfig {
+    try {
+        $bytes = [Convert]::FromBase64String($TenantConfigBase64)
+        $actual = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+        if ($actual -cne $TenantConfigSha256) { throw 'SHA-256 mismatch' }
+        $value = [Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json
+        if ($value.schema_version -ne 1 -or $value.default_slot -notin @('primary', 'secondary')) {
+            throw 'invalid schema'
+        }
+        $slots = @($value.tenants.PSObject.Properties.Name | Sort-Object)
+        if ($slots.Count -ne 2 -or ($slots -join ',') -ne 'primary,secondary') {
+            throw 'tenant config must contain exactly two slots'
+        }
+        $origins = @()
+        foreach ($slot in $slots) {
+            $tenant = $value.tenants.$slot
+            if (-not $tenant.display_name.'zh-CN'.Trim() -or -not $tenant.display_name.en.Trim()) {
+                throw "invalid display name for $slot"
+            }
+            $origin = [Uri]$tenant.backend_origin
+            $didHost = $tenant.did_host.Trim().TrimEnd('.').ToLowerInvariant()
+            $loopback = $origin.Scheme -eq 'http' -and $origin.IsLoopback
+            if (($origin.Scheme -ne 'https' -and -not $loopback) -or -not $origin.IsAbsoluteUri `
+                -or $origin.UserInfo -or $origin.AbsolutePath -ne '/' -or $origin.Query -or $origin.Fragment `
+                -or (-not $origin.IsDefaultPort -and -not $loopback) -or $origin.Host -cne $didHost) {
+                throw "invalid endpoint for $slot"
+            }
+            $origins += $origin.GetLeftPart([UriPartial]::Authority)
+        }
+        if (@($origins | Sort-Object -Unique).Count -ne 2) { throw 'tenant endpoints must be distinct' }
+    }
+    catch {
+        throw "Invalid built-in tenant config: $($_.Exception.Message)"
     }
 }
 
@@ -145,6 +184,7 @@ foreach ($ref in @($AppRef, $CoreRef, $AnpRef)) {
         throw 'Source refs must be lowercase 40-character SHAs'
     }
 }
+Assert-TenantConfig
 if ((Read-GitRef $RootDir) -ne $AppRef) { throw 'APP checkout ref mismatch' }
 if ((Read-GitRef $CoreDir) -ne $CoreRef) { throw 'Core checkout ref mismatch' }
 if ((Read-GitRef $AnpDir) -ne $AnpRef) { throw 'ANP checkout ref mismatch' }
@@ -183,7 +223,8 @@ try {
     & flutter build windows `
         --release `
         --no-pub `
-        "--dart-define=AWIKI_PRIMARY_TENANT_DOMAIN=$PrimaryTenantDomain" `
+        "--dart-define=AWIKI_BUILTIN_TENANTS_BASE64=$TenantConfigBase64" `
+        "--dart-define=AWIKI_BUILTIN_TENANTS_SHA256=$TenantConfigSha256" `
         "--dart-define=AWIKI_APP_SOURCE_REF=$AppRef" `
         "--dart-define=AWIKI_IM_CORE_SOURCE_REF=$CoreRef" `
         --build-name $Version `
@@ -309,6 +350,7 @@ try {
         --app-ref $AppRef `
         --core-ref $CoreRef `
         --anp-ref $AnpRef `
+        --tenant-config-sha256 $TenantConfigSha256 `
         --runtime-files ($runtimeFileSummary -join ',') `
         --output (Join-Path $OutputDir 'artifact-metadata.json')
     Assert-ExitCode 'Windows artifact metadata generation'

@@ -48,6 +48,9 @@ class AppMessage {
   factory AppMessage.updateAlreadyLatest() =>
       const AppMessage._('updateAlreadyLatest');
 
+  factory AppMessage.updatePolicyUnavailable() =>
+      const AppMessage._('updatePolicyUnavailable');
+
   factory AppMessage.updateCheckFailed() =>
       const AppMessage._('updateCheckFailed');
 
@@ -101,8 +104,32 @@ class AppMessage {
   factory AppMessage.registrationVerificationUnavailable() =>
       const AppMessage._('registrationVerificationUnavailable');
 
+  factory AppMessage.registrationCommittedActivationPending() =>
+      const AppMessage._('registrationCommittedActivationPending');
+
   factory AppMessage.registrationRecoveryStateInvalid() =>
       const AppMessage._('registrationRecoveryStateInvalid');
+
+  factory AppMessage.registrationLocalStateNeedsAttention() =>
+      const AppMessage._('registrationLocalStateNeedsAttention');
+
+  factory AppMessage.registrationContinuityChanged() =>
+      const AppMessage._('registrationContinuityChanged');
+
+  factory AppMessage.registrationJoinTerminalWait() =>
+      const AppMessage._('registrationJoinTerminalWait');
+
+  factory AppMessage.identityDeletionCompleteTransitionFirst() =>
+      const AppMessage._('identityDeletionCompleteTransitionFirst');
+
+  factory AppMessage.identityDeletionCompleteJoinFirst() =>
+      const AppMessage._('identityDeletionCompleteJoinFirst');
+
+  factory AppMessage.identityDeletionPendingWillResume() =>
+      const AppMessage._('identityDeletionPendingWillResume');
+
+  factory AppMessage.identityDeletionConflict() =>
+      const AppMessage._('identityDeletionConflict');
 
   factory AppMessage.handleRecoveryUnavailable() =>
       const AppMessage._('handleRecoveryUnavailable');
@@ -246,8 +273,24 @@ class AppMessage {
         return AppMessage.registrationVerificationInvalid();
       case 'identity.registration_verification_unavailable':
         return AppMessage.registrationVerificationUnavailable();
+      case 'identity.registration_committed_activation_pending':
+        return AppMessage.registrationCommittedActivationPending();
       case 'identity.registration_recovery_state_invalid':
         return AppMessage.registrationRecoveryStateInvalid();
+      case 'handle_recovery.local_state_conflict':
+        return AppMessage.registrationLocalStateNeedsAttention();
+      case 'handle_recovery.transition_missing':
+        return AppMessage.registrationContinuityChanged();
+      case 'handle_recovery.join_terminal_wait':
+        return AppMessage.registrationJoinTerminalWait();
+      case 'handle_recovery.transition_must_complete':
+        return AppMessage.identityDeletionCompleteTransitionFirst();
+      case 'handle_recovery.join_must_complete':
+        return AppMessage.identityDeletionCompleteJoinFirst();
+      case 'identity.local_data_deletion_pending':
+        return AppMessage.identityDeletionPendingWillResume();
+      case 'identity.local_deletion_conflict':
+        return AppMessage.identityDeletionConflict();
     }
     final raw = normalizeAppError(error);
     if (raw.isEmpty) {
@@ -375,8 +418,12 @@ class AppMessage {
     if (raw == 'screenshot_screen_recording_permission_required') {
       return AppMessage.screenshotPermissionRequired();
     }
-    if (raw == 'document_picker_failed') {
-      return AppMessage.documentPickerFailed();
+    if (raw == 'screenshot_permission_check_failed') {
+      return const AppMessage._('screenshotPermissionCheckFailed');
+    }
+    if (raw == 'screenshot_capture_failed' ||
+        raw.startsWith('screenshot_capture_failed:')) {
+      return const AppMessage._('screenshotCaptureFailed');
     }
     if (raw == '文件选择失败，请稍后重试。') {
       return AppMessage.documentPickerFailed();
@@ -416,6 +463,8 @@ class AppMessage {
         return l10n.agentTerminalRuntimeFailed;
       case 'updateAlreadyLatest':
         return l10n.updateAlreadyLatest;
+      case 'updatePolicyUnavailable':
+        return l10n.updatePolicyUnavailable;
       case 'updateCheckFailed':
         return l10n.updateCheckFailed;
       case 'updateOpenReleaseNotesFailed':
@@ -452,8 +501,24 @@ class AppMessage {
         return l10n.registrationVerificationInvalid;
       case 'registrationVerificationUnavailable':
         return l10n.registrationVerificationUnavailable;
+      case 'registrationCommittedActivationPending':
+        return l10n.registrationCommittedActivationPending;
       case 'registrationRecoveryStateInvalid':
         return l10n.registrationRecoveryStateInvalid;
+      case 'registrationLocalStateNeedsAttention':
+        return l10n.registrationLocalStateNeedsAttention;
+      case 'registrationContinuityChanged':
+        return l10n.registrationContinuityChanged;
+      case 'registrationJoinTerminalWait':
+        return l10n.registrationJoinTerminalWait;
+      case 'identityDeletionCompleteTransitionFirst':
+        return l10n.identityDeletionCompleteTransitionFirst;
+      case 'identityDeletionCompleteJoinFirst':
+        return l10n.identityDeletionCompleteJoinFirst;
+      case 'identityDeletionPendingWillResume':
+        return l10n.identityDeletionPendingWillResume;
+      case 'identityDeletionConflict':
+        return l10n.identityDeletionConflict;
       case 'handleRecoveryUnavailable':
         return l10n.handleRecoveryUnavailable;
       case 'sessionExpiredRelogin':
@@ -550,6 +615,10 @@ class AppMessage {
         return l10n.attachmentDownloadCancelFailed;
       case 'screenshotPermissionRequired':
         return l10n.screenshotPermissionRequired;
+      case 'screenshotPermissionCheckFailed':
+        return l10n.screenshotPermissionCheckFailed;
+      case 'screenshotCaptureFailed':
+        return l10n.screenshotCaptureFailed;
       case 'raw':
         return detail ?? l10n.operationFailedRetry;
       default:
@@ -589,6 +658,20 @@ class AppMessage {
         return 'This server does not support the selected registration method.';
       case 'registrationRecoveryStateInvalid':
         return "This Handle's identity state needs server-side attention. Contact support before trying again.";
+      case 'registrationLocalStateNeedsAttention':
+        return 'This device has identity state that cannot be reconciled safely. Resolve the local state, then send a new verification code.';
+      case 'registrationContinuityChanged':
+        return 'Identity continuity changed. Send a new verification code and try again.';
+      case 'registrationJoinTerminalWait':
+        return 'The previous device Join is ending safely. Wait briefly, then send a new verification code and try again.';
+      case 'identityDeletionCompleteTransitionFirst':
+        return 'An identity transition is still being applied. Complete it before deleting this identity.';
+      case 'identityDeletionCompleteJoinFirst':
+        return 'A device Join is still in progress. Complete it before deleting this identity.';
+      case 'identityDeletionPendingWillResume':
+        return 'This confirmed deletion is still being completed and will resume automatically.';
+      case 'identityDeletionConflict':
+        return 'This identity has conflicting local control state. No local product data was deleted.';
       case 'handleRecoveryUnavailable':
         return 'Safe Handle Recovery is not available. No identity state was changed.';
       case 'didNotFoundOrRevoked':

@@ -72,6 +72,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   final AwikiImCoreUpgradeLocalState _upgradeLocalState;
   final void Function(AwikiImCoreRuntimeProgress progress)? _onProgress;
 
+  bool _disposed = false;
   core.AwikiImCore? _core;
   core.LocalStateUpgradeResult? _localStateUpgradeResult;
   Future<void>? _openInFlight;
@@ -98,6 +99,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
 
   @override
   Future<void> open() async {
+    _ensureNotDisposed();
     if (_core != null) {
       return;
     }
@@ -150,11 +152,18 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     );
     try {
       for (final identity in await opened.listIdentities()) {
-        await opened.verifyIdentityVault(core.IdentitySelector.id(identity.id));
+        await _ensureIdentityCustodyReady(
+          opened,
+          core.IdentitySelector.id(identity.id),
+        );
       }
     } on Object {
       await opened.dispose();
       rethrow;
+    }
+    if (_disposed) {
+      await opened.dispose();
+      _ensureNotDisposed();
     }
     _core = opened;
   }
@@ -170,11 +179,13 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   }
 
   Future<core.AwikiImCore> coreInstance() async {
+    _ensureNotDisposed();
     final existing = _core;
     if (existing != null) {
       return existing;
     }
     await open();
+    _ensureNotDisposed();
     return _core!;
   }
 
@@ -186,10 +197,11 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   Future<void> ensureIdentityVault(String identityIdOrAlias) async {
     final coreInstance = await this.coreInstance();
     final selector = _selectorFromString(identityIdOrAlias);
-    await coreInstance.verifyIdentityVault(selector);
+    await _ensureIdentityCustodyReady(coreInstance, selector);
   }
 
   Future<core.AwikiImClient> currentClient() async {
+    _ensureNotDisposed();
     final client = _currentClient;
     if (client == null) {
       throw StateError('IM Core identity is not selected.');
@@ -208,6 +220,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
       await transition.future;
     }
 
+    _ensureNotDisposed();
     final client = _currentClient;
     if (client == null) {
       throw StateError('IM Core identity is not selected.');
@@ -235,6 +248,10 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     try {
       final nextClient = await clientFor(selector);
       await _waitForClientOperations();
+      if (_disposed) {
+        await nextClient.dispose();
+        _ensureNotDisposed();
+      }
       final previousClient = _currentClient;
       _currentClient = nextClient;
       await previousClient?.dispose();
@@ -244,7 +261,28 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   }
 
   @override
+  Future<void> clearIdentity() async {
+    final transition = await _beginClientTransition();
+    try {
+      await _waitForClientOperations();
+      final client = _currentClient;
+      _currentClient = null;
+      await client?.dispose();
+    } finally {
+      _endClientTransition(transition);
+    }
+  }
+
+  @override
   Future<void> dispose() async {
+    _disposed = true;
+    // Opening owns any partially-created native instance and closes it when
+    // it observes disposal. A stale adapter must never reopen this runtime.
+    try {
+      await _openInFlight;
+    } catch (_) {
+      // Preserve disposal even when the in-flight open failed.
+    }
     final transition = await _beginClientTransition();
     try {
       await _waitForClientOperations();
@@ -261,6 +299,10 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     } finally {
       _endClientTransition(transition);
     }
+  }
+
+  void _ensureNotDisposed() {
+    if (_disposed) throw StateError('im_core_runtime_disposed');
   }
 
   Future<Completer<void>> _beginClientTransition() async {
@@ -291,6 +333,30 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     }
     final idle = _clientOperationsIdle ??= Completer<void>();
     await idle.future;
+  }
+}
+
+Future<void> _ensureIdentityCustodyReady(
+  core.AwikiImCore instance,
+  core.IdentitySelector selector,
+) async {
+  final status = await instance.identityCustodyStatus(selector);
+  if (status.backend != core.IdentityCustodyBackend.anpIdentity ||
+      status.state != core.IdentityCustodyState.active ||
+      !status.ready) {
+    throw const core.AwikiImCoreException(
+      code: 'identity_custody_unavailable',
+      message: 'ANP Identity custody is not ready.',
+    );
+  }
+  final device = await instance.identityDeviceSummary(selector);
+  if (device.readiness != core.IdentityDeviceReadiness.memberReady &&
+      device.readiness != core.IdentityDeviceReadiness.adminAwaitingRoot &&
+      device.readiness != core.IdentityDeviceReadiness.adminReady) {
+    throw const core.AwikiImCoreException(
+      code: 'identity_custody_unavailable',
+      message: 'ANP Identity device custody is not ready.',
+    );
   }
 }
 

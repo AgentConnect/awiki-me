@@ -43,7 +43,6 @@ import '../application/relationship_application_service.dart';
 import '../application/remote_push_installation_coordinator.dart';
 import '../application/sms_otp_cooldown_service.dart';
 import '../data/compat/compat_awiki_account_gateway.dart';
-import '../data/compat/compat_awiki_gateway.dart';
 import '../data/compat/compat_realtime_gateway.dart';
 import '../data/agent/user_service_agent_inventory_adapter.dart';
 import '../data/agent/user_service_personal_agent_binding_adapter.dart';
@@ -83,9 +82,6 @@ import '../data/services/locale_preference_service.dart';
 import '../data/services/user_service_peer_identity_service.dart';
 import '../data/push/user_service_push_installation_adapter.dart';
 import '../domain/repositories/awiki_account_gateway.dart';
-import '../data/services/noop_e2ee_facade.dart';
-import '../domain/repositories/awiki_gateway.dart';
-import '../domain/services/e2ee_facade.dart';
 import '../domain/services/notification_facade.dart';
 import '../domain/services/remote_push_client.dart';
 import '../domain/services/realtime_gateway.dart';
@@ -106,17 +102,15 @@ enum AppBootstrapProgress {
 
 const String awikiMeReleaseLine = String.fromEnvironment(
   'AWIKI_RELEASE',
-  defaultValue: '0714',
+  defaultValue: '0815',
 );
 
 class AppBootstrap {
   AppBootstrap({
     required this.environment,
     required this.accountGateway,
-    required this.gateway,
     required this.realtimeGateway,
     required this.notificationFacade,
-    required this.e2eeFacade,
     required this.localePreferenceService,
     required this.updateService,
     this.tenantRegistry,
@@ -159,10 +153,8 @@ class AppBootstrap {
 
   final AwikiEnvironmentConfig environment;
   final AwikiAccountGateway accountGateway;
-  final AwikiGateway gateway;
   final RealtimeGateway realtimeGateway;
   final NotificationFacade notificationFacade;
-  final E2eeFacade e2eeFacade;
   final LocalePreferenceService localePreferenceService;
   final UpdateService updateService;
   final AppTenantRegistry? tenantRegistry;
@@ -299,8 +291,8 @@ class AppBootstrap {
         }
       },
     );
-    await runtime.openAndValidate();
     try {
+      await runtime.openAndValidate();
       final productLocalStore = AwikiProductLocalStoreSqlite(
         databasePath: storageScopeLayout.productDatabasePath,
       );
@@ -441,14 +433,6 @@ class AppBootstrap {
         onboarding: onboardingService,
         onboardingSupport: onboardingSupportService,
       );
-      final gateway = CompatAwikiGateway(
-        sessions: appSessionService,
-        profiles: profileApplicationService,
-        relationships: relationshipApplicationService,
-        conversations: conversationService,
-        messages: messagingService,
-        groups: groupApplicationService,
-      );
       final realtimeGateway = CompatRealtimeGateway(
         realtime: realtimeApplicationService,
       );
@@ -465,7 +449,6 @@ class AppBootstrap {
           delay: const Duration(seconds: 8),
         ),
       );
-      final e2eeFacade = NoopE2eeFacade();
       final localePreferenceService = LocalePreferenceService(
         storage: preferenceStorage,
       );
@@ -475,14 +458,17 @@ class AppBootstrap {
         storage: preferenceStorage,
         scopeId: registeredTenant.storageScopeId.value,
       );
-      final updateService = AppUpdateService(storage: preferenceStorage);
+      final updateService = AppUpdateService(
+        storage: preferenceStorage,
+        tenantId: registeredTenant.id,
+        backendBaseUrl: registeredTenant.backendBaseUrl,
+        officialTenant: registeredTenant.isOfficialTenant,
+      );
       final bootstrap = AppBootstrap(
         environment: effectiveEnvironment,
         accountGateway: accountGateway,
-        gateway: gateway,
         realtimeGateway: realtimeGateway,
         notificationFacade: effectiveNotificationFacade,
-        e2eeFacade: e2eeFacade,
         localePreferenceService: localePreferenceService,
         displayScalePreferenceService: displayScalePreferenceService,
         smsOtpCooldownService: smsOtpCooldownService,
@@ -534,6 +520,7 @@ class AppBootstrap {
         httpClient: remotePushHttpClientForTesting,
       );
     } on Object {
+      userServiceHttpClient.close();
       await runtime.dispose();
       rethrow;
     }
@@ -572,20 +559,20 @@ class AppBootstrap {
         client: remotePushClient,
         installations: pushInstallations,
       ),
+      httpClient: pushHttpClient,
     );
   }
 
   AppBootstrap _copyWithRemotePush({
     required RemotePushClient client,
     required RemotePushInstallationCoordinator coordinator,
+    required AwikiOnboardingUtilityHttpClient httpClient,
   }) {
     return AppBootstrap(
       environment: environment,
       accountGateway: accountGateway,
-      gateway: gateway,
       realtimeGateway: realtimeGateway,
       notificationFacade: notificationFacade,
-      e2eeFacade: e2eeFacade,
       localePreferenceService: localePreferenceService,
       displayScalePreferenceService: displayScalePreferenceService,
       smsOtpCooldownService: smsOtpCooldownService,
@@ -617,7 +604,7 @@ class AppBootstrap {
       productLocalStore: productLocalStore,
       peerIdentityService: peerIdentityService,
       attachmentCacheService: attachmentCacheService,
-      userServiceHttpClient: userServiceHttpClient,
+      userServiceHttpClient: userServiceHttpClient ?? httpClient,
       storageScopeLayout: storageScopeLayout,
       remotePushClient: client,
       remotePushInstallationCoordinator: coordinator,
@@ -662,9 +649,17 @@ class AppBootstrap {
         await disposeStep(realtime.stop);
       }
     }
+    final httpClient = userServiceHttpClient;
+    if (httpClient != null) {
+      await disposeStep(() async => httpClient.close());
+    }
     final localStore = productLocalStore;
     if (localStore is AwikiProductLocalStoreSqlite) {
       await disposeStep(localStore.close);
+    }
+    final updates = updateService;
+    if (updates is DisposableUpdateService) {
+      (updates as DisposableUpdateService).dispose();
     }
     if (disposeNotificationFacade) {
       await disposeStep(notificationFacade.dispose);

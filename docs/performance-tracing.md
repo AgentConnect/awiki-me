@@ -174,10 +174,13 @@ App 侧禁止做的事情：
 只提供 dirty-domain hint 以降低发现延迟；提示丢失后，前台周期对账或重连仍必须通过 HTTP
 恢复。移动 Push 在首版为 `DEFERRED`，不能记录为已实现可靠通道。
 
-新设备 bootstrap 是 tail-only，不恢复加入前普通消息；已有设备 compact recovery 由服务端
-时间限制为最近 48 小时且最多 500 条普通逻辑消息，Snapshot 只 merge、不删除本地更老消息。
-Agent/Profile/Registry 当前快照不受该消息窗口限制。Direct E2EE、Group MLS、密钥、密文和
-加密历史不进入这条普通同步链；普通消息编辑、撤回、删除和消息 tombstone 当前也不支持。
+新设备 bootstrap 是 tail-only，不恢复加入前普通消息；已有设备 compact recovery 只使用
+Schema 3 分页：单页最多 100 items/1 MiB，整个逻辑 package 最多 10,000 items/64 MiB/100 页。
+Core 在一次 `syncNow` 内收齐并验证全部页后才原子 merge，且不删除本地更老消息；普通历史触顶
+返回成功并只向 App 暴露 `olderHistoryExcluded=true`，必需状态或单 item 超限才映射为
+`capacityExceeded`。App 不读取 token、page ref、manifest、section、页数、cursor、event boundary
+或 byte count。Agent/Profile/Registry 当前快照不受普通消息窗口限制。Direct E2EE、Group MLS、
+密钥、密文和加密历史不进入这条普通同步链；普通消息编辑、撤回、删除和消息 tombstone 当前也不支持。
 
 ## 如何解读
 

@@ -1,7 +1,4 @@
 PODS:
-  - auto_updater_macos (0.0.1):
-    - FlutterMacOS
-    - Sparkle
   - awiki_im_core (0.1.0)
   - desktop_drop (0.0.1):
     - FlutterMacOS
@@ -19,7 +16,6 @@ PODS:
     - FlutterMacOS
   - pasteboard (0.0.1):
     - FlutterMacOS
-  - Sparkle (2.9.1)
   - sqflite_darwin (0.0.4):
     - Flutter
     - FlutterMacOS
@@ -52,7 +48,6 @@ PODS:
     - FlutterMacOS
 
 DEPENDENCIES:
-  - auto_updater_macos (from `Flutter/ephemeral/.symlinks/plugins/auto_updater_macos/macos`)
   - awiki_im_core (from `Flutter/ephemeral/.symlinks/plugins/awiki_im_core/macos`)
   - desktop_drop (from `Flutter/ephemeral/.symlinks/plugins/desktop_drop/macos`)
   - file_selector_macos (from `Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos`)
@@ -68,12 +63,9 @@ DEPENDENCIES:
 
 SPEC REPOS:
   trunk:
-    - Sparkle
     - sqlite3
 
 EXTERNAL SOURCES:
-  auto_updater_macos:
-    :path: Flutter/ephemeral/.symlinks/plugins/auto_updater_macos/macos
   awiki_im_core:
     :path: Flutter/ephemeral/.symlinks/plugins/awiki_im_core/macos
   desktop_drop:
@@ -100,8 +92,7 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos
 
 SPEC CHECKSUMS:
-  auto_updater_macos: 3a42f1a06be6981f1a18be37e6e7bf86aa732118
-  awiki_im_core: e07f9ebe8af4dfea1f4e3f9baffc97adbed31d3b
+  awiki_im_core: c7578b7f392e602c33c99e8c8d349dedc31920f4
   desktop_drop: 10a3e6a7fa9dbe350541f2574092fecfa345a07b
   file_selector_macos: 9e9e068e90ebee155097d00e89ae91edb2374db7
   flutter_local_notifications: 1fc7ffb10a83d6a2eeeeddb152d43f1944b0aad0
@@ -110,7 +101,6 @@ SPEC CHECKSUMS:
   local_auth_darwin: c3ee6cce0a8d56be34c8ccb66ba31f7f180aaebb
   package_info_plus: f0052d280d17aa382b932f399edf32507174e870
   pasteboard: b594eaf838d930b276d7a35a44a32b4f489170cb
-  Sparkle: a4115cd9a339b297a61163256e6954d9e35297ce
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
   sqlite3: a51c07cf16e023d6c48abd5e5791a61a47354921
   sqlite3_flutter_libs: b3e120efe9a82017e5552a620f696589ed4f62ab

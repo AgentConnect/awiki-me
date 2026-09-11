@@ -10,11 +10,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 const String _caseId = 'NATIVE-E2E-002';
-const String _phase = String.fromEnvironment('AWIKI_SCOPE_RESTART_PHASE');
-const String _scopeValue = String.fromEnvironment('AWIKI_SCOPE_RESTART_ID');
-const String _resultPath = String.fromEnvironment(
-  'AWIKI_SCOPE_RESTART_RESULT_PATH',
-);
 const String _productionService = 'ai.awiki.awikime.scope-secrets';
 const String _developmentService = 'ai.awiki.awikime.dev.scope-secrets';
 
@@ -42,7 +37,7 @@ class _ProbeAppState extends State<_ProbeApp> {
   Future<void> _run() async {
     var status = 'failed';
     var code = 'production_scope_restart_failed';
-    final configuration = _ProbeConfiguration.fromEnvironment(widget.arguments);
+    final configuration = _ProbeConfiguration.fromArguments(widget.arguments);
     try {
       if (!(Platform.isMacOS || Platform.isWindows) ||
           !kReleaseMode ||
@@ -229,19 +224,11 @@ final class _ProbeConfiguration {
     required this.resultPath,
   });
 
-  factory _ProbeConfiguration.fromEnvironment(List<String> arguments) =>
+  factory _ProbeConfiguration.fromArguments(List<String> arguments) =>
       _ProbeConfiguration(
-        phase: _runtimeOption(arguments, 'awiki-scope-probe-phase', _phase),
-        scopeValue: _runtimeOption(
-          arguments,
-          'awiki-scope-probe-id',
-          _scopeValue,
-        ),
-        resultPath: _runtimeOption(
-          arguments,
-          'awiki-scope-probe-result',
-          _resultPath,
-        ),
+        phase: _runtimeOption(arguments, 'awiki-scope-probe-phase'),
+        scopeValue: _runtimeOption(arguments, 'awiki-scope-probe-id'),
+        resultPath: _runtimeOption(arguments, 'awiki-scope-probe-result'),
       );
 
   final String phase;
@@ -249,16 +236,16 @@ final class _ProbeConfiguration {
   final String resultPath;
 }
 
-String _runtimeOption(List<String> arguments, String name, String fallback) {
+String _runtimeOption(List<String> arguments, String name) {
   final prefix = '--$name=';
   final values = arguments
       .where((argument) => argument.startsWith(prefix))
       .map((argument) => argument.substring(prefix.length))
       .toList(growable: false);
-  if (values.length > 1) {
-    throw StateError('production_scope_restart_duplicate_argument');
+  if (values.length != 1 || values.single.trim().isEmpty) {
+    throw StateError('production_scope_restart_argument_invalid');
   }
-  return values.isEmpty ? fallback : values.single;
+  return values.single;
 }
 
 void _expectReadStatus(

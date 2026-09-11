@@ -1,4 +1,4 @@
-// [INPUT]: Audited awiki.info endpoints, one protected fixed test SMS account,
+// [INPUT]: Explicitly configured remote HTTPS endpoints, one protected fixed test SMS account,
 //          server-issued SMS retry boundaries, fresh production
 //          AppBootstrap/native Core roots with primed replica sync tails, and
 //          an E2E-only user-presence decision.
@@ -24,7 +24,9 @@ import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/agent/agent_control_service.dart';
 import 'package:awiki_me/src/application/app_bootstrap_epoch_barrier.dart';
+import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
+import 'package:awiki_me/src/application/device_management_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
@@ -37,12 +39,13 @@ import 'package:awiki_me/src/application/ports/device_management_core_port.dart'
 import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
+import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
+import 'package:awiki_me/src/data/im_core/awiki_im_core_device_management_adapter.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
-import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -65,6 +68,7 @@ import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -72,12 +76,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:integration_test/integration_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:yaml/yaml.dart';
+
+import 'package:awiki_me/src/data/im_core/awiki_im_core_paths.dart';
+import 'package:awiki_me/src/data/im_core/awiki_im_core_secret_storage.dart';
+import 'package:awiki_me/src/data/storage/scope_secret_repository_factory.dart';
+import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
 
 import '../../case_attestation.dart';
+import '../../handle_recovery_commit_cut_proxy.dart';
 import '../../e2e_user_presence_port.dart';
 import '../../handle_recovery_fixture_contract.dart';
+import '../../runtime_message_sync_readiness.dart';
+import '../../remote_target.dart';
 import '../../remote_multi_device_join_contract.dart';
+import '../support/protected_otp_config.dart';
+
+part 'handle_recovery_state_machine_test.part.dart';
 
 const String _caseId = 'HANDLE-RECOVERY-V1-E2E-001';
 const String _crashCutCaseId = 'HANDLE-RECOVERY-V1-E2E-002';
@@ -86,6 +100,14 @@ const String _settingsContinuityCaseId =
 const String _rejoinCaseId = 'HANDLE-RECOVERY-V1-E2E-003';
 const String _registrationRejoinCaseId =
     'HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001';
+const String _registrationResumeCaseId =
+    'HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001';
+const String _retirementOrdinaryRejoinCaseId =
+    'HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001';
+const String _identityDeletionGuardCaseId =
+    'IDENTITY-DELETION-RECOVERY-GUARD-E2E-001';
+const String _identityDeletionResumeCaseId =
+    'IDENTITY-DATA-DELETION-RESUME-E2E-001';
 const String _freshAgentInventoryCaseId =
     'HANDLE-RECOVERY-FRESH-AGENT-INVENTORY-E2E-001';
 const String _freshAgentMessageCaseId =
@@ -108,6 +130,10 @@ const List<String> _freshFocusedCaseIds = <String>[
 const String _e2ePhase = String.fromEnvironment(
   'AWIKI_HANDLE_RECOVERY_E2E_PHASE',
 );
+const String _registrationResumePhaseA = 'registration_resume_a';
+const String _registrationResumePhaseB = 'registration_resume_b';
+const String _identityDeletionPhaseA = 'identity_deletion_a';
+const String _identityDeletionPhaseB = 'identity_deletion_b';
 const String _runConfigPath =
     '.e2e/multi-device-remote-recovery/current/run_config.json';
 const String _activationGate = 'AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED';
@@ -131,7 +157,17 @@ Future<void> _recordAppProjectionFixtureFailure({
 );
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
+
+  if (_invocationExpects(_stateMachineTargetCaseId)) {
+    _registerStateMachineRecoveryE2e();
+    return;
+  }
 
   testWidgets(
     'Handle Recovery V4 replaces the DID through the visible App flow',
@@ -141,9 +177,18 @@ void main() {
       final account = _DedicatedAccount.fromConfig(config);
       final presence = E2eUserPresencePort();
       final peerPresence = E2eUserPresencePort();
-      final registrationRejoinRequired = _invocationExpects(
-        _registrationRejoinCaseId,
+      final retirementOrdinaryRequired = _invocationExpects(
+        _retirementOrdinaryRejoinCaseId,
       );
+      final registrationRejoinRequired =
+          _invocationExpects(_registrationRejoinCaseId) ||
+          _invocationExpects(_registrationResumeCaseId) ||
+          retirementOrdinaryRequired;
+      final registrationResumeRequired = _invocationExpects(
+        _registrationResumeCaseId,
+      );
+      final retainedRecoveryIdentityRequired =
+          retirementOrdinaryRequired || registrationResumeRequired;
       final freshFocusedRequired = _freshFocusedCaseIds.any(_invocationExpects);
       final rejoinRequired =
           _invocationExpects(_rejoinCaseId) || registrationRejoinRequired;
@@ -269,7 +314,19 @@ void main() {
         await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
         await _pumpUntil(
           tester,
-          () => find.byType(AppShell).evaluate().length == 1,
+          () {
+            final shell = find.byType(AppShell);
+            if (shell.evaluate().length != 1) return false;
+            final container = ProviderScope.containerOf(tester.element(shell));
+            final runtime = container.read(appRuntimeProvider);
+            final session = container.read(sessionProvider).session;
+            return runtime.isInitialized &&
+                !runtime.isBusy &&
+                runtime.activatedDid == oldDid &&
+                session?.did == oldDid &&
+                session?.localIdentityId == oldSession.identityId &&
+                find.byKey(const Key('app-shell-page-background')).evaluate().length == 1;
+          },
           timeout: const Duration(seconds: 45),
           failure: 'Fresh Recovery setup did not open the authenticated App.',
         );
@@ -358,7 +415,6 @@ void main() {
         );
         final oldJoin = await _startAppPeerJoin(
           tester: tester,
-          client: httpClient,
           config: config,
           account: account,
           adminBootstrap: bootstrap,
@@ -401,206 +457,280 @@ void main() {
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
-      await bootstrap.dispose();
-      bootstrap = null;
-      await _deleteDirectory(config.appStateRoot);
-      bootstrap = await AppBootstrap.create(
-        environment: _environment(
-          config,
-          directE2eeEnabled: registrationRejoinRequired,
-          groupE2eeEnabled: false,
-          agentImEnabled: freshFocusedRequired,
-        ),
-        appStateRoot: config.appStateRoot,
-      );
-      if ((await bootstrap.appSessionService!.listLocalIdentities())
-          .isNotEmpty) {
-        fail('The Recovery machine unexpectedly retained a local identity.');
-      }
-      final recoveryCore = bootstrap.handleRecoveryCorePort;
-      if (recoveryCore == null) {
-        fail('The production Handle Recovery Core port was unavailable.');
-      }
-      final recordingRecoveryCore = _RecordingHandleRecoveryCorePort(
-        recoveryCore,
-      );
+      final expectedRecoveryLocalIdentityId = retainedRecoveryIdentityRequired
+          ? oldSession.identityId
+          : null;
+      late final _RecordingHandleRecoveryCorePort recordingRecoveryCore;
+      late final ProviderContainer container;
+      if (retainedRecoveryIdentityRequired) {
+        final recoveryCore = bootstrap.handleRecoveryCorePort;
+        if (recoveryCore == null) {
+          fail('The production Handle Recovery Core port was unavailable.');
+        }
+        recordingRecoveryCore = _RecordingHandleRecoveryCorePort(recoveryCore);
+        await tester.pumpWidget(
+          AwikiMeApp(
+            bootstrap: bootstrap,
+            providerOverrides: <Override>[
+              userPresencePortProvider.overrideWithValue(presence),
+              handleRecoveryCorePortProvider.overrideWithValue(
+                recordingRecoveryCore,
+              ),
+            ],
+          ),
+        );
+        await _pumpUntil(
+          tester,
+          () => find.byType(AppShell).evaluate().length == 1,
+          timeout: const Duration(seconds: 45),
+          failure: 'The retained Recovery App did not reopen its shell.',
+        );
+        container = ProviderScope.containerOf(
+          tester.element(find.byType(AppShell)),
+        );
+        container
+            .read(shellDestinationProvider.notifier)
+            .select(ShellDestination.settings);
+        await _pumpUntil(
+          tester,
+          () => find.byType(SettingsPage).evaluate().length == 1,
+          failure: 'The retained Recovery App did not open Settings.',
+        );
+        final recoveryRow = find.byKey(
+          const Key('settings-recover-handle-did-row'),
+        );
+        await tester.ensureVisible(recoveryRow);
+        await _tapOne(
+          tester,
+          recoveryRow,
+          failure: 'Settings did not expose Handle DID Recovery.',
+        );
+        await _pumpUntil(
+          tester,
+          () => find.byType(HandleRecoveryPage).evaluate().length == 1,
+          failure: 'Settings did not open the visible Recovery surface.',
+        );
+        await _enterTextByKey(
+          tester,
+          const Key('handle-recovery-phone-input'),
+          account.phone,
+        );
+        await _tapOne(
+          tester,
+          find.bySemanticsIdentifier('handle-recovery-send-otp'),
+          failure: 'Settings Recovery OTP action was unavailable.',
+        );
+      } else {
+        await bootstrap.dispose();
+        bootstrap = null;
+        await _deleteDirectory(config.appStateRoot);
+        bootstrap = await AppBootstrap.create(
+          environment: _environment(
+            config,
+            directE2eeEnabled: registrationRejoinRequired,
+            groupE2eeEnabled: false,
+            agentImEnabled: freshFocusedRequired,
+          ),
+          appStateRoot: config.appStateRoot,
+        );
+        if ((await bootstrap.appSessionService!.listLocalIdentities())
+            .isNotEmpty) {
+          fail('The Recovery machine unexpectedly retained a local identity.');
+        }
+        final recoveryCore = bootstrap.handleRecoveryCorePort;
+        if (recoveryCore == null) {
+          fail('The production Handle Recovery Core port was unavailable.');
+        }
+        recordingRecoveryCore = _RecordingHandleRecoveryCorePort(recoveryCore);
 
-      await tester.pumpWidget(
-        AwikiMeApp(
-          bootstrap: bootstrap,
-          providerOverrides: <Override>[
-            userPresencePortProvider.overrideWithValue(presence),
-            handleRecoveryCorePortProvider.overrideWithValue(
-              recordingRecoveryCore,
-            ),
-          ],
-        ),
-      );
-      await _pumpUntil(
-        tester,
-        () => find.byType(OnboardingPage).evaluate().length == 1,
-        timeout: const Duration(seconds: 45),
-        failure: 'The fresh machine did not open the real onboarding surface.',
-      );
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(OnboardingPage)),
-      );
-      final onboardingFields = find.byType(CupertinoTextField);
-      await _pumpUntil(
-        tester,
-        () => onboardingFields.evaluate().length >= 3,
-        timeout: const Duration(seconds: 45),
-        failure: 'The unified phone onboarding form did not become available.',
-      );
-      await tester.enterText(onboardingFields.at(0), account.phone);
-      await tester.enterText(onboardingFields.at(1), bareHandle);
-      await _waitForRegistrationRetryBoundary(latestOtpRetryAt);
-      await _pumpUntil(
-        tester,
-        () {
-          final onboarding = container.read(onboardingProvider);
-          final cooldown = container.read(smsOtpCooldownProvider);
-          return !onboarding.isBusy && cooldown.canSend;
-        },
-        timeout: const Duration(seconds: 45),
-        failure: 'The registration OTP action did not become enabled.',
-      );
-      final registrationFeedbackBefore = container.read(uiFeedbackProvider)?.id;
-      await _tapOne(
-        tester,
-        find.bySemanticsIdentifier('e2e-send-otp-button'),
-        failure: 'The registration OTP action was unavailable.',
-      );
-      await _pumpUntil(
-        tester,
-        () {
-          final state = container.read(onboardingProvider);
-          final feedback = container.read(uiFeedbackProvider);
-          if (!state.isBusy &&
-              feedback?.id != registrationFeedbackBefore &&
-              feedback?.message.id == 'otpRateLimited') {
-            return true;
-          }
-          _failOnDangerousUiFeedback(
-            container,
-            'Registration OTP request',
-            existingEventId: registrationFeedbackBefore,
-          );
-          return !state.isBusy &&
-              state.otpTargetFullHandle == fullHandle &&
-              state.otpTargetPhone != null;
-        },
-        timeout: const Duration(seconds: 45),
-        failure: 'The UI did not bind the registration OTP to the Handle.',
-        safeDiagnostic: () {
-          final onboarding = container.read(onboardingProvider);
-          final cooldown = container.read(smsOtpCooldownProvider);
-          final feedback = container.read(uiFeedbackProvider);
-          return <String>[
-            'busy=${onboarding.isBusy}',
-            'handle_target_present=${onboarding.otpTargetFullHandle != null}',
-            'handle_target_matches=${onboarding.otpTargetFullHandle == fullHandle}',
-            'phone_target_present=${onboarding.otpTargetPhone != null}',
-            'cooldown_ready=${cooldown.isReady}',
-            'cooldown_sending=${cooldown.isSending}',
-            'cooldown_remaining=${cooldown.remainingSeconds}',
-            'feedback=${_safeDiagnosticToken(feedback?.message.id)}',
-          ].join(',');
-        },
-      );
-      final registrationRateLimitFeedback = container.read(uiFeedbackProvider);
-      if (registrationRateLimitFeedback?.message.id == 'otpRateLimited') {
-        await _retryRegistrationOtpAfterRateLimit(tester, container);
+        await tester.pumpWidget(
+          AwikiMeApp(
+            bootstrap: bootstrap,
+            providerOverrides: <Override>[
+              userPresencePortProvider.overrideWithValue(presence),
+              handleRecoveryCorePortProvider.overrideWithValue(
+                recordingRecoveryCore,
+              ),
+            ],
+          ),
+        );
+        await _pumpUntil(
+          tester,
+          () => find.byType(OnboardingPage).evaluate().length == 1,
+          timeout: const Duration(seconds: 45),
+          failure:
+              'The fresh machine did not open the real onboarding surface.',
+        );
+        container = ProviderScope.containerOf(
+          tester.element(find.byType(OnboardingPage)),
+        );
+        final onboardingFields = find.byType(CupertinoTextField);
+        await _pumpUntil(
+          tester,
+          () => onboardingFields.evaluate().length >= 3,
+          timeout: const Duration(seconds: 45),
+          failure:
+              'The unified phone onboarding form did not become available.',
+        );
+        await tester.enterText(onboardingFields.at(0), account.phone);
+        await tester.enterText(onboardingFields.at(1), bareHandle);
+        await _waitForRegistrationRetryBoundary(latestOtpRetryAt);
         await _pumpUntil(
           tester,
           () {
+            final onboarding = container.read(onboardingProvider);
+            final cooldown = container.read(smsOtpCooldownProvider);
+            return !onboarding.isBusy && cooldown.canSend;
+          },
+          timeout: const Duration(seconds: 45),
+          failure: 'The registration OTP action did not become enabled.',
+        );
+        final registrationFeedbackBefore = container
+            .read(uiFeedbackProvider)
+            ?.id;
+        await _tapOne(
+          tester,
+          find.bySemanticsIdentifier('e2e-send-otp-button'),
+          failure: 'The registration OTP action was unavailable.',
+        );
+        await _pumpUntil(
+          tester,
+          () {
+            final state = container.read(onboardingProvider);
+            final feedback = container.read(uiFeedbackProvider);
+            if (!state.isBusy &&
+                feedback?.id != registrationFeedbackBefore &&
+                feedback?.message.id == 'otpRateLimited') {
+              return true;
+            }
             _failOnDangerousUiFeedback(
               container,
-              'Registration OTP retry',
-              existingEventId: registrationRateLimitFeedback!.id,
+              'Registration OTP request',
+              existingEventId: registrationFeedbackBefore,
             );
-            final state = container.read(onboardingProvider);
             return !state.isBusy &&
                 state.otpTargetFullHandle == fullHandle &&
                 state.otpTargetPhone != null;
           },
           timeout: const Duration(seconds: 45),
-          failure: 'The UI did not bind the retried registration OTP.',
+          failure: 'The UI did not bind the registration OTP to the Handle.',
+          safeDiagnostic: () {
+            final onboarding = container.read(onboardingProvider);
+            final cooldown = container.read(smsOtpCooldownProvider);
+            final feedback = container.read(uiFeedbackProvider);
+            return <String>[
+              'busy=${onboarding.isBusy}',
+              'handle_target_present=${onboarding.otpTargetFullHandle != null}',
+              'handle_target_matches=${onboarding.otpTargetFullHandle == fullHandle}',
+              'phone_target_present=${onboarding.otpTargetPhone != null}',
+              'cooldown_ready=${cooldown.isReady}',
+              'cooldown_sending=${cooldown.isSending}',
+              'cooldown_remaining=${cooldown.remainingSeconds}',
+              'feedback=${_safeDiagnosticToken(feedback?.message.id)}',
+            ].join(',');
+          },
         );
-      }
-      final onboardingOtp = await _resolveOtp(
-        account: account,
-        purpose: _registrationPurpose,
-        handle: bareHandle,
-        didDomain: config.didDomain,
-      );
-      await tester.enterText(onboardingFields.at(2), onboardingOtp);
-      await _tapOne(
-        tester,
-        find.byKey(const Key('onboarding-mac-phone-submit-action')),
-        failure: 'The unified login/register action was unavailable.',
-      );
-      await _pumpUntil(
-        tester,
-        () {
-          _failOnDangerousUiFeedback(container, 'Existing Handle verification');
-          final state = container.read(onboardingProvider);
-          return find
-                      .byKey(const Key('existing-handle-recovery-action'))
-                      .evaluate()
-                      .length ==
-                  1 &&
-              state.isPhoneOtpConsumed &&
-              !state.canSubmitPhoneOtp;
-        },
-        timeout: const Duration(seconds: 45),
-        failure: 'Existing Handle did not expose the Join/Recovery choice.',
-      );
-      await _waitForPhoneGlobalRecoveryCooldown(tester, container);
-      await _tapOne(
-        tester,
-        find.byKey(const Key('existing-handle-recovery-action')),
-        failure: 'The existing-Handle Recovery choice was unavailable.',
-      );
-      await _pumpUntil(
-        tester,
-        () => find.byType(HandleRecoveryPage).evaluate().length == 1,
-        failure: 'The unified onboarding flow did not open Recovery.',
-      );
-      final recoveryPage = find.byType(HandleRecoveryPage);
-      if (find
-                  .descendant(
-                    of: find.byKey(const Key('handle-recovery-handle')),
-                    matching: find.text(fullHandle),
-                  )
-                  .evaluate()
-                  .length !=
-              1 ||
-          find
-                  .descendant(
-                    of: find.byKey(const Key('handle-recovery-phone')),
-                    matching: find.text(account.phone),
-                  )
-                  .evaluate()
-                  .length !=
-              1 ||
-          find
-                  .descendant(
-                    of: recoveryPage,
-                    matching: find.byType(CupertinoTextField),
-                  )
-                  .evaluate()
-                  .length !=
-              1) {
-        fail(
-          'Recovery did not reuse the verified Handle and phone as read-only context.',
+        final registrationRateLimitFeedback = container.read(
+          uiFeedbackProvider,
         );
+        if (registrationRateLimitFeedback?.message.id == 'otpRateLimited') {
+          await _retryRegistrationOtpAfterRateLimit(tester, container);
+          await _pumpUntil(
+            tester,
+            () {
+              _failOnDangerousUiFeedback(
+                container,
+                'Registration OTP retry',
+                existingEventId: registrationRateLimitFeedback!.id,
+              );
+              final state = container.read(onboardingProvider);
+              return !state.isBusy &&
+                  state.otpTargetFullHandle == fullHandle &&
+                  state.otpTargetPhone != null;
+            },
+            timeout: const Duration(seconds: 45),
+            failure: 'The UI did not bind the retried registration OTP.',
+          );
+        }
+        final onboardingOtp = await _resolveOtp(
+          account: account,
+          purpose: _registrationPurpose,
+          handle: bareHandle,
+          didDomain: config.didDomain,
+        );
+        await tester.enterText(onboardingFields.at(2), onboardingOtp);
+        await _tapOne(
+          tester,
+          find.byKey(const Key('onboarding-mac-phone-submit-action')),
+          failure: 'The unified login/register action was unavailable.',
+        );
+        await _pumpUntil(
+          tester,
+          () {
+            _failOnDangerousUiFeedback(
+              container,
+              'Existing Handle verification',
+            );
+            final state = container.read(onboardingProvider);
+            return find
+                        .byKey(const Key('existing-handle-recovery-action'))
+                        .evaluate()
+                        .length ==
+                    1 &&
+                state.isPhoneOtpConsumed &&
+                !state.canSubmitPhoneOtp;
+          },
+          timeout: const Duration(seconds: 45),
+          failure: 'Existing Handle did not expose the Join/Recovery choice.',
+        );
+        await _waitForPhoneGlobalRecoveryCooldown(tester, container);
+        await _tapOne(
+          tester,
+          find.byKey(const Key('existing-handle-recovery-action')),
+          failure: 'The existing-Handle Recovery choice was unavailable.',
+        );
+        await _pumpUntil(
+          tester,
+          () => find.byType(HandleRecoveryPage).evaluate().length == 1,
+          failure: 'The unified onboarding flow did not open Recovery.',
+        );
+        final recoveryPage = find.byType(HandleRecoveryPage);
+        if (find
+                    .descendant(
+                      of: find.byKey(const Key('handle-recovery-handle')),
+                      matching: find.text(fullHandle),
+                    )
+                    .evaluate()
+                    .length !=
+                1 ||
+            find
+                    .descendant(
+                      of: find.byKey(const Key('handle-recovery-phone')),
+                      matching: find.text(account.phone),
+                    )
+                    .evaluate()
+                    .length !=
+                1 ||
+            find
+                    .descendant(
+                      of: recoveryPage,
+                      matching: find.byType(CupertinoTextField),
+                    )
+                    .evaluate()
+                    .length !=
+                1) {
+          fail(
+            'Recovery did not reuse the verified Handle and phone as read-only context.',
+          );
+        }
       }
       var recoveryOtpRateLimitRetries = 0;
       await _pumpUntil(
         tester,
         () {
-          final state = container.read(handleRecoveryProvider);
+          final state = _recoveryUiContainer(
+            tester,
+          ).read(handleRecoveryProvider);
           return !state.isBusy &&
               ((state.otpRequested && state.otpOperationId != null) ||
                   state.error == HandleRecoveryUiError.rateLimited);
@@ -608,7 +738,7 @@ void main() {
         timeout: const Duration(seconds: 45),
         failure: 'The UI did not accept an operation-bound Recovery OTP.',
       );
-      if (container.read(handleRecoveryProvider).error ==
+      if (_recoveryUiContainer(tester).read(handleRecoveryProvider).error ==
           HandleRecoveryUiError.rateLimited) {
         recoveryOtpRateLimitRetries = 1;
         await _retryRecoveryOtpAfterRateLimit(tester, container);
@@ -616,7 +746,9 @@ void main() {
       await _pumpUntil(
         tester,
         () {
-          final state = container.read(handleRecoveryProvider);
+          final state = _recoveryUiContainer(
+            tester,
+          ).read(handleRecoveryProvider);
           _failOnRecoveryError(
             state,
             'OTP request',
@@ -629,17 +761,16 @@ void main() {
         timeout: const Duration(seconds: 45),
         failure: 'The UI did not accept an operation-bound Recovery OTP.',
       );
-      final operationId = container
-          .read(handleRecoveryProvider)
-          .otpOperationId!;
+      final operationId = _recoveryUiContainer(
+        tester,
+      ).read(handleRecoveryProvider).otpOperationId!;
       if (recordingRecoveryCore.requestOtpCalls !=
               1 + recoveryOtpRateLimitRetries ||
           recordingRecoveryCore.requestedHandle != fullHandle ||
           recordingRecoveryCore.requestedPhone != account.phone ||
-          recordingRecoveryCore.requestedLocalIdentityId != null) {
-        fail(
-          'Recovery did not submit the exact verified context without a local selector.',
-        );
+          recordingRecoveryCore.requestedLocalIdentityId !=
+              expectedRecoveryLocalIdentityId) {
+        fail('Recovery did not submit the exact verified identity context.');
       }
       final recoveryOtpRetryAt = recordingRecoveryCore.requestedRetryAt;
       if (recoveryOtpRetryAt == null) {
@@ -666,7 +797,9 @@ void main() {
       await _pumpUntil(
         tester,
         () {
-          final state = container.read(handleRecoveryProvider);
+          final state = _recoveryUiContainer(
+            tester,
+          ).read(handleRecoveryProvider);
           _failOnRecoveryError(
             state,
             'OTP verification',
@@ -679,8 +812,9 @@ void main() {
         timeout: const Duration(minutes: 2),
         failure: 'The UI did not reach the prepared Recovery phase.',
       );
-      if (recordingRecoveryCore.requestedLocalIdentityId != null) {
-        fail('Fresh-machine Recovery unexpectedly supplied a local identity.');
+      if (recordingRecoveryCore.requestedLocalIdentityId !=
+          expectedRecoveryLocalIdentityId) {
+        fail('Recovery changed its exact local identity selector.');
       }
       if (find.byKey(const Key('handle-recovery-progress')).evaluate().length !=
               1 ||
@@ -691,6 +825,8 @@ void main() {
               1) {
         fail('The prepared Recovery risks were not visibly presented.');
       }
+      expect(find.byKey(const Key('handle-recovery-otp')), findsNothing);
+      expect(find.byKey(const Key('handle-recovery-send-otp')), findsNothing);
 
       await _tapOne(
         tester,
@@ -699,7 +835,9 @@ void main() {
       );
       await _pumpUntil(
         tester,
-        () => container.read(handleRecoveryProvider).riskConfirmed,
+        () => _recoveryUiContainer(
+          tester,
+        ).read(handleRecoveryProvider).riskConfirmed,
         failure: 'The UI did not retain explicit risk confirmation.',
       );
       await _tapOne(
@@ -707,14 +845,18 @@ void main() {
         find.bySemanticsIdentifier('handle-recovery-activate'),
         failure: 'The risk-gated Recovery activation was unavailable.',
       );
-      await _waitForCompletedRecovery(tester, container);
+      await _waitForCompletedRecovery(
+        tester,
+        coreDiagnostic: () => recordingRecoveryCore.lastSafeFailure,
+        observedProgress: () => recordingRecoveryCore.lastProgress,
+      );
       if (presence.calls != 1 ||
           presence.completions != 1 ||
           !presence.lastResult) {
         fail('Recovery did not use exactly one E2E user-presence decision.');
       }
 
-      final completed = container.read(handleRecoveryProvider).progress!;
+      final completed = recordingRecoveryCore.lastProgress!;
       final reset = completed.registryEpochReset;
       if (completed.handle != fullHandle ||
           reset == null ||
@@ -826,33 +968,89 @@ void main() {
           peerBootstrap,
           targetDid: reset.currentDid,
         );
-        final rejoin = registrationRejoinRequired
-            ? await _startAppPeerRegistrationJoin(
-                tester: tester,
-                config: config,
-                account: account,
-                adminBootstrap: bootstrap,
-                peerBootstrap: peerBootstrap,
-                adminPresence: presence,
-                peerPresence: peerPresence,
-                handle: bareHandle,
-                fullHandle: fullHandle,
-                expectedDid: reset.currentDid,
-                registrationRetryAt: latestOtpRetryAt,
-              )
-            : await _startAppPeerJoin(
-                tester: tester,
-                client: httpClient,
-                config: config,
-                account: account,
-                adminBootstrap: bootstrap,
-                peerBootstrap: peerBootstrap,
-                adminPresence: presence,
-                peerPresence: peerPresence,
-                handle: bareHandle,
-                joinHandle: fullHandle,
-                expectedDid: reset.currentDid,
+        late final ({
+          DeviceJoinProgress progress,
+          ProviderContainer container,
+          DateTime otpRetryAt,
+        })
+        rejoin;
+        if (registrationResumeRequired) {
+          rejoin = await _startAppPeerRegistrationJoin(
+            tester: tester,
+            config: config,
+            account: account,
+            adminBootstrap: bootstrap,
+            peerBootstrap: peerBootstrap,
+            adminPresence: presence,
+            peerPresence: peerPresence,
+            handle: bareHandle,
+            fullHandle: fullHandle,
+            expectedDid: reset.currentDid,
+            registrationRetryAt: latestOtpRetryAt,
+          );
+          final pendingRequest = await _waitForSinglePendingAppJoinRequest(
+            bootstrap.deviceManagementCorePort!,
+            selector: reset.currentDid,
+          );
+          if (pendingRequest.joinSessionId != rejoin.progress.joinSessionId ||
+              pendingRequest.protocolDeviceId !=
+                  rejoin.progress.protocolDeviceId) {
+            fail('Phase A did not expose the exact pending registration Join.');
+          }
+          final operations = await bootstrap.handleRecoveryCorePort!
+              .listOperations(
+                HandleRecoveryOwner(
+                  localIdentityId: completed.ownerIdentityId,
+                  handle: fullHandle,
+                ),
               );
+          final registry = await bootstrap.deviceManagementCorePort!
+              .identityDeviceRegistry(reset.currentDid);
+          final peerIdentities = await peerBootstrap.appSessionService!
+              .listLocalIdentities();
+          if (operations.length != 1 ||
+              registry.devices.length != 1 ||
+              peerIdentities.length != 1) {
+            fail('Phase A did not stop at one exact pending Join boundary.');
+          }
+          await _writeRegistrationJoinResumeHandoff(
+            config: config,
+            stableOwnerIdentityId: completed.ownerIdentityId,
+            fullHandle: fullHandle,
+            currentDid: reset.currentDid,
+            progress: rejoin.progress,
+            registrationRetryAt: rejoin.otpRetryAt,
+          );
+          retainFreshRoots = true;
+          return;
+        } else if (registrationRejoinRequired) {
+          rejoin = await _startAppPeerRegistrationJoin(
+            tester: tester,
+            config: config,
+            account: account,
+            adminBootstrap: bootstrap,
+            peerBootstrap: peerBootstrap,
+            adminPresence: presence,
+            peerPresence: peerPresence,
+            handle: bareHandle,
+            fullHandle: fullHandle,
+            expectedDid: reset.currentDid,
+            registrationRetryAt: latestOtpRetryAt,
+          );
+        } else {
+          rejoin = await _startAppPeerJoin(
+            tester: tester,
+            config: config,
+            account: account,
+            adminBootstrap: bootstrap,
+            peerBootstrap: peerBootstrap,
+            adminPresence: presence,
+            peerPresence: peerPresence,
+            handle: bareHandle,
+            joinHandle: fullHandle,
+            expectedDid: reset.currentDid,
+          );
+        }
         final reauthorized = await _completeAppPeerJoin(
           tester: tester,
           adminBootstrap: bootstrap,
@@ -926,6 +1124,7 @@ void main() {
           account: account,
           handle: externalHandle,
         );
+        latestOtpRetryAt = externalFactor.retryAt;
         final externalRegistration = await peerBootstrap.onboardingService!
             .registerHandleWithPhone(
               phone: account.phone,
@@ -951,6 +1150,195 @@ void main() {
           externalDid: externalIdentity.did,
           runId: config.runId,
         );
+        if (retirementOrdinaryRequired) {
+          await _activatePeerIdentity(
+            peerBootstrap,
+            identityId: rejoinedIdentityId,
+            expectedDid: reset.currentDid,
+          );
+          final retiringSession = recoveredContainer
+              .read(sessionProvider)
+              .session;
+          if (retiringSession == null ||
+              retiringSession.did != reset.currentDid ||
+              retiringSession.localIdentityId == null) {
+            fail('The recovered App exposed no exact identity to retire.');
+          }
+          final stableOwnerIdentityId = retiringSession.localIdentityId!;
+          final registryBeforeRetirement = await bootstrap
+              .deviceManagementCorePort!
+              .identityDeviceRegistry(reset.currentDid);
+          final retiringDevices = registryBeforeRetirement.devices
+              .where((device) => device.isCurrent)
+              .toList(growable: false);
+          if (retiringDevices.length != 1) {
+            fail(
+              'The recovered App exposed no unique current device to retire.',
+            );
+          }
+          final retiredDeviceId = retiringDevices.single.protocolDeviceId;
+          final owner = HandleRecoveryOwner(
+            localIdentityId: stableOwnerIdentityId,
+            handle: fullHandle,
+          );
+          final recoveryOperationsBefore = await recordingRecoveryCore
+              .listOperations(owner);
+          final siblingInventoryBefore = await peerBootstrap.appSessionService!
+              .listLocalIdentities();
+          final retired = await recoveredContainer
+              .read(appRuntimeProvider.notifier)
+              .deleteLocalCredential(retiringSession);
+          if (!retired ||
+              (await bootstrap.appSessionService!.listLocalIdentities())
+                  .isNotEmpty) {
+            fail('The recovered App did not complete public local retirement.');
+          }
+          await expectLater(
+            bootstrap.appSessionService!.loginWithIdentity(
+              stableOwnerIdentityId,
+            ),
+            throwsA(
+              isA<StateError>().having(
+                (error) => error.message,
+                'missing local identity',
+                startsWith('local_identity_not_found:'),
+              ),
+            ),
+          );
+          // Reenter the same provider tree without sending a new OTP: an old
+          // applied audit is not a credential or a new Recovery operation.
+          final recoveryNavigator = tester.state<NavigatorState>(
+            find.byType(Navigator).first,
+          );
+          unawaited(
+            recoveryNavigator.push<void>(
+              CupertinoPageRoute<void>(
+                builder: (_) => HandleRecoveryPage(
+                  initialHandle: fullHandle,
+                  initialPhone: account.phone,
+                  autoRequestOtp: false,
+                ),
+              ),
+            ),
+          );
+          await _pumpUntil(
+            tester,
+            () =>
+                find.byType(HandleRecoveryPage).evaluate().isNotEmpty &&
+                !_recoveryUiContainer(tester)
+                    .read(handleRecoveryProvider)
+                    .allows(HandleRecoveryAction.activateIdentity),
+            failure: 'Recovery reused the retired owner completed state.',
+          );
+          expect(
+            find.byKey(const Key('handle-recovery-enter-messages')),
+            findsNothing,
+          );
+          expect(
+            _recoveryUiContainer(tester).read(handleRecoveryProvider).error,
+            isNull,
+          );
+          recoveryNavigator.pop();
+          await tester.pump();
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pump();
+
+          final ordinary = await _startAppPeerRegistrationJoin(
+            tester: tester,
+            config: config,
+            account: account,
+            adminBootstrap: peerBootstrap,
+            peerBootstrap: bootstrap,
+            adminPresence: peerPresence,
+            peerPresence: presence,
+            handle: bareHandle,
+            fullHandle: fullHandle,
+            expectedDid: reset.currentDid,
+            registrationRetryAt: latestOtpRetryAt,
+            expectedOrdinaryRetirement: true,
+          );
+          final ordinaryAuthorized = await _completeAppPeerJoin(
+            tester: tester,
+            adminBootstrap: peerBootstrap,
+            deviceCore: peerBootstrap.deviceManagementCorePort!,
+            selector: reset.currentDid,
+            peerContainer: ordinary.container,
+            pending: ordinary.progress,
+          );
+          final ordinaryDevice = ordinaryAuthorized.authorizedDevice;
+          if (ordinaryDevice == null ||
+              ordinaryDevice.protocolDeviceId == retiredDeviceId ||
+              ordinaryDevice.role != DeviceRole.member ||
+              ordinaryDevice.managementReady ||
+              !ordinaryDevice.isCurrent) {
+            fail(
+              'Retired ordinary Join did not authorize one fresh member device.',
+            );
+          }
+          await _activateAppPeerJoin(
+            tester: tester,
+            peerBootstrap: bootstrap,
+            peerContainer: ordinary.container,
+            expectedDid: reset.currentDid,
+            expectedDeviceId: ordinaryDevice.protocolDeviceId,
+            expectedDeviceCount: 3,
+          );
+          final rejoinedIdentities = await bootstrap.appSessionService!
+              .listLocalIdentities();
+          final recoveryOperationsAfter = await bootstrap
+              .handleRecoveryCorePort!
+              .listOperations(owner);
+          final siblingInventoryAfter = await peerBootstrap.appSessionService!
+              .listLocalIdentities();
+          if (rejoinedIdentities.length != 1 ||
+              rejoinedIdentities.single.identityId != stableOwnerIdentityId ||
+              rejoinedIdentities.single.did != reset.currentDid ||
+              recoveryOperationsAfter
+                      .map((item) => item.operationId)
+                      .toSet()
+                      .length !=
+                  recoveryOperationsBefore.length ||
+              !_sameStringSet(
+                recoveryOperationsAfter.map((item) => item.operationId),
+                recoveryOperationsBefore.map((item) => item.operationId),
+              ) ||
+              !_sameStringSet(
+                siblingInventoryAfter.map((item) => item.identityId),
+                siblingInventoryBefore.map((item) => item.identityId),
+              )) {
+            fail(
+              'Retired ordinary Join changed stable owner, Recovery, or sibling state.',
+            );
+          }
+
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pump();
+          await bootstrap.dispose();
+          bootstrap = await AppBootstrap.create(
+            environment: _environment(
+              config,
+              directE2eeEnabled: true,
+              groupE2eeEnabled: false,
+            ),
+            appStateRoot: config.appStateRoot,
+          );
+          final coldSession = await bootstrap.appSessionService!
+              .restoreSession();
+          final coldIdentities = await bootstrap.appSessionService!
+              .listLocalIdentities();
+          if (coldSession == null ||
+              !coldSession.authenticated ||
+              coldSession.identityId != stableOwnerIdentityId ||
+              coldSession.did != reset.currentDid ||
+              coldSession.accountBinding?.ownerIdentityId !=
+                  stableOwnerIdentityId ||
+              coldIdentities.length != 1 ||
+              coldIdentities.single.identityId != stableOwnerIdentityId) {
+            fail(
+              'Retired ordinary Join did not survive a cold App/Core reopen.',
+            );
+          }
+        }
       }
 
       if (_invocationExpects(_caseId)) {
@@ -990,7 +1378,7 @@ void main() {
           ],
         );
       }
-      if (registrationRejoinRequired) {
+      if (_invocationExpects(_registrationRejoinCaseId)) {
         await E2eCaseAttestationWriter.markPassed(
           _registrationRejoinCaseId,
           startedAt: startedAt,
@@ -1008,23 +1396,81 @@ void main() {
           ],
         );
       }
+      if (retirementOrdinaryRequired) {
+        await E2eCaseAttestationWriter.markPassed(
+          _retirementOrdinaryRejoinCaseId,
+          startedAt: startedAt,
+          phases: const <String>[
+            'single_recovery_applied_before_retirement',
+            'sibling_promoted_to_management_ready_admin',
+            'current_credential_retired_through_public_app_path',
+            'registration_returned_ordinary_join_without_user_presence',
+            'ordinary_join_exposed_no_recovery_reset_authority',
+            'fresh_protocol_device_reused_stable_local_owner',
+            'active_local_binding_and_identity_remained_unique',
+            'recovery_operation_inventory_did_not_increase',
+            'sibling_identity_inventory_remained_unchanged',
+            'cold_app_core_reopen_preserved_new_identity_and_vault',
+          ],
+        );
+      }
     },
     skip:
-        _e2ePhase.isNotEmpty ||
+        (_invocationExpects(_registrationResumeCaseId)
+            ? _e2ePhase != _registrationResumePhaseA
+            : _e2ePhase.isNotEmpty) ||
         !_RemoteRecoveryRunConfig.exists() ||
         (!_invocationExpects(_caseId) &&
             !_invocationExpects(_rejoinCaseId) &&
             !_invocationExpects(_registrationRejoinCaseId) &&
+            !_invocationExpects(_registrationResumeCaseId) &&
+            !_invocationExpects(_retirementOrdinaryRejoinCaseId) &&
             !_freshFocusedCaseIds.any(_invocationExpects)),
     timeout: Timeout(
       Duration(
-        minutes: _invocationExpects(_registrationRejoinCaseId)
+        minutes: _invocationExpects(_retirementOrdinaryRejoinCaseId)
+            ? 35
+            : _invocationExpects(_registrationResumeCaseId)
+            ? 30
+            : _invocationExpects(_registrationRejoinCaseId)
             ? 25
             : _freshFocusedCaseIds.any(_invocationExpects)
             ? 35
             : 20,
       ),
     ),
+  );
+
+  testWidgets(
+    'Registration rebind Join resumes after an App process restart',
+    _runRegistrationResumePhaseB,
+    skip:
+        _e2ePhase != _registrationResumePhaseB ||
+        !_RemoteRecoveryRunConfig.exists() ||
+        !_invocationExpects(_registrationResumeCaseId),
+    timeout: const Timeout(Duration(minutes: 15)),
+  );
+
+  testWidgets(
+    'Identity deletion guard preserves state and stops after Product delete',
+    _runIdentityDeletionPhaseA,
+    skip:
+        _e2ePhase != _identityDeletionPhaseA ||
+        !_RemoteRecoveryRunConfig.exists() ||
+        !_invocationExpects(_identityDeletionGuardCaseId) ||
+        !_invocationExpects(_identityDeletionResumeCaseId),
+    timeout: const Timeout(Duration(minutes: 15)),
+  );
+
+  testWidgets(
+    'Identity deletion resumes the same ticket after an App process restart',
+    _runIdentityDeletionPhaseB,
+    skip:
+        _e2ePhase != _identityDeletionPhaseB ||
+        !_RemoteRecoveryRunConfig.exists() ||
+        !_invocationExpects(_identityDeletionGuardCaseId) ||
+        !_invocationExpects(_identityDeletionResumeCaseId),
+    timeout: const Timeout(Duration(minutes: 10)),
   );
 
   testWidgets(
@@ -1326,12 +1772,19 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         peerSession.did != registeredPeer.did) {
       fail('The continuity peer did not activate its exact identity.');
     }
+    progress.enter(HandleRecoveryFixtureStage.direct);
+    // A new replica starts at the current stream tail. Both receivers must
+    // finish bootstrap before either fixture message exists in that stream.
+    await _syncHandleRecoveryFixtureWithRetry(
+      tester: tester,
+      bootstrap: bootstrap,
+      reason: 'handle-recovery-fixture-owner-bootstrap',
+    );
     await _syncHandleRecoveryFixtureWithRetry(
       tester: tester,
       bootstrap: peerBootstrap,
       reason: 'handle-recovery-fixture-peer-bootstrap',
     );
-    progress.enter(HandleRecoveryFixtureStage.direct);
     final directOutgoing = await messaging.sendText(
       thread: AppThreadRef.direct(peerSession.did),
       content: 'direct-before-out ${config.runId} ${_nonce(8)}',
@@ -1417,7 +1870,6 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
       description: 'Settings Handle Recovery continuity',
       goal: 'Verify stable transport Group continuity',
       rules: 'E2E only',
-      identity: GroupIdentitySelection.handle(ownerHandle),
     );
     await groups.addMember(groupDid: group.groupId, memberRef: peerSession.did);
     await _waitForPeerGroup(
@@ -1541,6 +1993,8 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
       );
       await _waitForRuntimeMessageSyncReady(
         daemonStateRoot: daemonConfig.stateRoot,
+        daemonBinary: daemonConfig.binary,
+        daemonEnvironment: _continuityDaemonEnvironment(config),
         runtimeDid: runtimeAgent.agentDid,
       );
       final agentConversation = await _waitForRuntimeConversationRoute(
@@ -2312,11 +2766,15 @@ Future<AgentSummary> _waitForContinuityDaemonReady({
 
 Future<void> _waitForRuntimeMessageSyncReady({
   required String daemonStateRoot,
+  required String daemonBinary,
+  required Map<String, String> daemonEnvironment,
   required String runtimeDid,
 }) async {
   final daemonDbPath = '$daemonStateRoot/daemon.db';
   final coreDbPath = '$daemonStateRoot/im-core/local-state.sqlite';
   final deadline = DateTime.now().add(const Duration(seconds: 120));
+  Map<String, Object?> lastObservation = const <String, Object?>{};
+  var lastDiagnostic = '';
   while (DateTime.now().isBefore(deadline)) {
     try {
       final daemonDb = await databaseFactoryFfi.openDatabase(
@@ -2324,32 +2782,105 @@ Future<void> _waitForRuntimeMessageSyncReady({
         options: OpenDatabaseOptions(readOnly: true),
       );
       String? ownerIdentityId;
+      String? accountId;
+      String? protocolDeviceId;
       var completedSyncCount = 0;
+      final observation = <String, Object?>{};
       try {
         final identities = await daemonDb.query(
           'agent_device_identity',
-          columns: const <String>['identity_id'],
+          columns: const <String>[
+            'identity_id',
+            'account_id',
+            'protocol_device_id',
+            'identity_status',
+            'authorization_status',
+            'last_error_code',
+          ],
           where: 'agent_did = ?',
           whereArgs: <Object?>[runtimeDid],
           limit: 2,
         );
+        observation['deviceMappingCount'] = identities.length;
         if (identities.length == 1) {
-          ownerIdentityId = identities.single['identity_id']?.toString();
+          final identity = identities.single;
+          ownerIdentityId = identity['identity_id']?.toString();
+          accountId = identity['account_id']?.toString();
+          protocolDeviceId = identity['protocol_device_id']?.toString();
+          observation['identityStatus'] = _safeDiagnosticToken(
+            identity['identity_status']?.toString(),
+          );
+          observation['authorizationStatus'] = _safeDiagnosticToken(
+            identity['authorization_status']?.toString(),
+          );
+          observation['identityErrorCode'] = _safeDiagnosticToken(
+            identity['last_error_code']?.toString(),
+          );
         }
         final completed = await daemonDb.rawQuery(
-          '''
-        SELECT COUNT(*) AS count
-        FROM audit_log
-        WHERE event_type = 'daemon.realtime.sync.completed'
-          AND agent_did = ?
-        ''',
+          "SELECT COUNT(*) AS count FROM audit_log WHERE event_type = 'daemon.realtime.sync.completed' AND agent_did = ?",
           <Object?>[runtimeDid],
         );
         completedSyncCount = completed.single['count'] as int? ?? 0;
+        observation['completedSyncCount'] = completedSyncCount;
+        final probes = await daemonDb.query(
+          'agent_sync_probe',
+          columns: const <String>[
+            'v2_subprotocol_negotiated',
+            'v2_bootstrap_completed',
+            'last_reconcile_protocol',
+            'legacy_sync_used',
+          ],
+          where: 'agent_did = ?',
+          whereArgs: <Object?>[runtimeDid],
+          limit: 2,
+        );
+        observation['syncProbeCount'] = probes.length;
+        if (probes.length == 1) {
+          observation['v2Negotiated'] =
+              probes.single['v2_subprotocol_negotiated'] == 1;
+          observation['v2BootstrapCompleted'] =
+              probes.single['v2_bootstrap_completed'] == 1;
+          observation['lastReconcileProtocol'] = _safeDiagnosticToken(
+            probes.single['last_reconcile_protocol']?.toString(),
+          );
+          observation['legacySyncUsed'] =
+              probes.single['legacy_sync_used'] == 1;
+        }
+        final audits = await daemonDb.query(
+          'audit_log',
+          columns: const <String>['event_type', 'detail_json'],
+          where: "agent_did = ? AND event_type LIKE 'daemon.realtime.sync.%'",
+          whereArgs: <Object?>[runtimeDid],
+          orderBy: 'created_at_ms DESC',
+          limit: 1,
+        );
+        if (audits.isNotEmpty) {
+          observation['lastRealtimeEvent'] = _safeDiagnosticToken(
+            audits.single['event_type']?.toString(),
+          );
+          final detail = jsonDecode(
+            audits.single['detail_json']?.toString() ?? '{}',
+          );
+          if (detail is Map) {
+            observation['lastRealtimeErrorCode'] = _safeDiagnosticToken(
+              detail['error_code']?.toString(),
+            );
+            final warnings = detail['warnings'];
+            if (warnings is List) {
+              observation['lastRealtimeWarnings'] = warnings
+                  .map((value) => _safeDiagnosticToken(value?.toString()))
+                  .toList(growable: false);
+            }
+          }
+        }
       } finally {
         await daemonDb.close();
       }
-      if (ownerIdentityId != null && completedSyncCount > 0) {
+      var coreReady = false;
+      // Observe Core independently of the audit gate so a missing audit row
+      // cannot hide whether registration/authentication/bootstrap succeeded.
+      if (ownerIdentityId != null) {
         final coreDb = await databaseFactoryFfi.openDatabase(
           coreDbPath,
           options: OpenDatabaseOptions(readOnly: true),
@@ -2362,15 +2893,68 @@ Future<void> _waitForRuntimeMessageSyncReady({
             whereArgs: <Object?>[ownerIdentityId],
             limit: 2,
           );
-          if (states.length == 1 &&
-              states.single['bootstrap_state'] == 'active' &&
-              states.single['last_error_code'] == null) {
-            await Future<void>.delayed(const Duration(seconds: 2));
-            return;
+          observation['coreBootstrapCount'] = states.length;
+          if (states.length == 1) {
+            observation['coreBootstrapState'] = _safeDiagnosticToken(
+              states.single['bootstrap_state']?.toString(),
+            );
+            observation['coreLastErrorCode'] = _safeDiagnosticToken(
+              states.single['last_error_code']?.toString(),
+            );
+            coreReady = runtimeCoreBootstrapReady(
+              bootstrapState: states.single['bootstrap_state']?.toString(),
+              lastErrorCode: states.single['last_error_code']?.toString(),
+            );
           }
+          final bindings = await coreDb.query(
+            'identity_account_bindings',
+            columns: const <String>['account_id', 'device_id'],
+            where: 'owner_identity_id = ?',
+            whereArgs: <Object?>[ownerIdentityId],
+            limit: 2,
+          );
+          observation['coreBindingCount'] = bindings.length;
+          observation['coreBindingMatchesDevice'] =
+              bindings.length == 1 &&
+              bindings.single['account_id'] == accountId &&
+              bindings.single['device_id'] == protocolDeviceId;
         } finally {
           await coreDb.close();
         }
+      }
+      observation['deviceMappingReady'] = ownerIdentityId != null;
+      observation['daemonAuditReady'] = completedSyncCount > 0;
+      observation['coreBootstrapReady'] = coreReady;
+      var publicReady = false;
+      if (ownerIdentityId != null && completedSyncCount > 0 && coreReady) {
+        final status = await Process.run(
+          daemonBinary,
+          <String>['status', '--state-root', daemonStateRoot],
+          environment: daemonEnvironment,
+        );
+        observation['publicStatusExitCode'] = status.exitCode;
+        if (status.exitCode == 0) {
+          try {
+            publicReady = daemonPublicSyncV2Ready(
+              jsonDecode(status.stdout.toString()),
+            );
+          } on FormatException {
+            observation['publicStatusInvalidJson'] = true;
+          }
+        }
+        observation['publicSyncV2Ready'] = publicReady;
+      }
+      lastObservation = observation;
+      final diagnostic = jsonEncode(observation);
+      if (diagnostic != lastDiagnostic) {
+        // Only closed states/counts are emitted; identities, paths and payloads
+        // stay in memory and are never included in this diagnostic.
+        debugPrint('Runtime message sync readiness: $diagnostic');
+        lastDiagnostic = diagnostic;
+      }
+      if (ownerIdentityId != null && completedSyncCount > 0 && coreReady && publicReady) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        return;
       }
     } on DatabaseException catch (error) {
       final code = error.getResultCode();
@@ -2378,7 +2962,10 @@ Future<void> _waitForRuntimeMessageSyncReady({
     }
     await Future<void>.delayed(const Duration(milliseconds: 500));
   }
-  fail('The Runtime Agent did not establish reliable message sync.');
+  fail(
+    'The Runtime Agent did not establish reliable message sync. '
+    'Readiness: ${jsonEncode(lastObservation)}',
+  );
 }
 
 Future<AppConversationReadRef> _waitForRuntimeConversationRoute({
@@ -2540,6 +3127,517 @@ class _RunningContinuityDaemon {
       await _stderrSubscription.cancel();
     }
   }
+}
+
+Future<void> _runRegistrationResumePhaseB(WidgetTester tester) async {
+  final startedAt = DateTime.now().toUtc();
+  final config = _RemoteRecoveryRunConfig.load();
+  final account = _DedicatedAccount.fromConfig(config);
+  final handoffFile = File(config.crashCutHandoffPath);
+  if (!handoffFile.existsSync()) {
+    fail('Registration Join phase B found no phase-A handoff.');
+  }
+  final decoded = jsonDecode(handoffFile.readAsStringSync());
+  if (decoded is! Map) {
+    fail('Registration Join phase-A handoff was invalid.');
+  }
+  final handoff = RegistrationJoinResumeHandoff.fromJson(<String, Object?>{
+    for (final entry in decoded.entries) entry.key.toString(): entry.value,
+  });
+  handoff.requireRunId(config.runId);
+
+  AppBootstrap? adminBootstrap;
+  AppBootstrap? peerBootstrap;
+  await tester.binding.setSurfaceSize(const Size(1440, 900));
+  addTearDown(() async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await adminBootstrap?.dispose();
+    await peerBootstrap?.dispose();
+    await _deleteDirectory(config.appStateRoot);
+    await _deleteDirectory(config.peerAppStateRoot);
+    if (handoffFile.existsSync()) await handoffFile.delete();
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  adminBootstrap = await AppBootstrap.create(
+    environment: _environment(
+      config,
+      directE2eeEnabled: true,
+      groupE2eeEnabled: false,
+    ),
+    appStateRoot: config.appStateRoot,
+  );
+  peerBootstrap = await AppBootstrap.create(
+    environment: _environment(
+      config,
+      directE2eeEnabled: true,
+      groupE2eeEnabled: false,
+    ),
+    appStateRoot: config.peerAppStateRoot,
+  );
+  final admin = adminBootstrap;
+  var peer = peerBootstrap;
+  final adminIdentities = await admin.appSessionService!.listLocalIdentities();
+  if (adminIdentities.length != 1) {
+    fail('Registration Join phase B found an invalid admin identity set.');
+  }
+  final adminIdentity = adminIdentities.single;
+  final fullHandle = adminIdentity.handle?.trim().toLowerCase() ?? '';
+  final handleSuffix = '.${config.didDomain}';
+  if (!fullHandle.endsWith(handleSuffix) ||
+      fullHandle.length <= handleSuffix.length) {
+    fail('Registration Join phase B found an invalid recovered Handle.');
+  }
+  final bareHandle = fullHandle.substring(
+    0,
+    fullHandle.length - handleSuffix.length,
+  );
+  handoff.requireReference('stable_owner', adminIdentity.identityId);
+  handoff.requireReference('full_handle', fullHandle);
+  handoff.requireReference('current_identity', adminIdentity.did);
+
+  final operations = await admin.handleRecoveryCorePort!.listOperations(
+    HandleRecoveryOwner(
+      localIdentityId: adminIdentity.identityId,
+      handle: fullHandle,
+    ),
+  );
+  if (operations.length != handoff.expectedCounts['recovery_operations'] ||
+      operations.length != 1 ||
+      !operations.single.isCompleted) {
+    fail('Registration Join phase B changed Recovery authority inventory.');
+  }
+  final beforeRegistry = await admin.deviceManagementCorePort!
+      .identityDeviceRegistry(adminIdentity.did);
+  if (beforeRegistry.devices.length !=
+      handoff.expectedCounts['registry_devices']) {
+    fail('Registration Join phase B changed the pre-Join Registry.');
+  }
+  _requireReadyCurrentAdmin(beforeRegistry, expectedDid: adminIdentity.did);
+  final pendingBefore = await _waitForSinglePendingAppJoinRequest(
+    admin.deviceManagementCorePort!,
+    selector: adminIdentity.did,
+  );
+  handoff.requireReference('join_session', pendingBefore.joinSessionId);
+  handoff.requireReference('protocol_device', pendingBefore.protocolDeviceId);
+
+  final peerIdentities = await peer.appSessionService!.listLocalIdentities();
+  if (peerIdentities.length !=
+          handoff.expectedCounts['peer_local_identities'] ||
+      peerIdentities.length != 1 ||
+      peerIdentities.single.did == adminIdentity.did) {
+    fail('Registration Join phase B did not reopen the fenced peer root.');
+  }
+
+  final adminPresence = E2eUserPresencePort();
+  final peerPresence = E2eUserPresencePort();
+  final rejoin = await _startAppPeerRegistrationJoin(
+    tester: tester,
+    config: config,
+    account: account,
+    adminBootstrap: admin,
+    peerBootstrap: peer,
+    adminPresence: adminPresence,
+    peerPresence: peerPresence,
+    handle: bareHandle,
+    fullHandle: fullHandle,
+    expectedDid: adminIdentity.did,
+    registrationRetryAt: handoff.registrationRetryAt,
+    expectNoInitialContinuation: true,
+  );
+  handoff.requireReference('join_session', rejoin.progress.joinSessionId);
+  handoff.requireReference('protocol_device', rejoin.progress.protocolDeviceId);
+  final pendingAfter = await _waitForSinglePendingAppJoinRequest(
+    admin.deviceManagementCorePort!,
+    selector: adminIdentity.did,
+  );
+  if (pendingAfter.joinSessionId != rejoin.progress.joinSessionId ||
+      pendingAfter.protocolDeviceId != rejoin.progress.protocolDeviceId) {
+    fail('Registration Join phase B exposed a second Join authority.');
+  }
+
+  final authorized = await _completeAppPeerJoin(
+    tester: tester,
+    adminBootstrap: admin,
+    deviceCore: admin.deviceManagementCorePort!,
+    selector: adminIdentity.did,
+    peerContainer: rejoin.container,
+    pending: rejoin.progress,
+  );
+  final authorizedDevice = authorized.authorizedDevice;
+  if (authorizedDevice == null ||
+      authorizedDevice.role != DeviceRole.member ||
+      authorizedDevice.managementReady ||
+      !authorizedDevice.isCurrent) {
+    fail('Registration Join phase B did not authorize the original peer.');
+  }
+  await _activateAppPeerJoin(
+    tester: tester,
+    peerBootstrap: peer,
+    peerContainer: rejoin.container,
+    expectedDid: adminIdentity.did,
+    expectedDeviceId: authorizedDevice.protocolDeviceId,
+  );
+  final convergedRegistry = await _waitForAppRegistry(
+    admin.deviceManagementCorePort!,
+    did: adminIdentity.did,
+    expectedDeviceCount: 2,
+  );
+  _requireAppAdminAndPeer(
+    convergedRegistry,
+    expectedDid: adminIdentity.did,
+    peerDeviceId: authorizedDevice.protocolDeviceId,
+  );
+  final operationsAfter = await admin.handleRecoveryCorePort!.listOperations(
+    HandleRecoveryOwner(
+      localIdentityId: adminIdentity.identityId,
+      handle: fullHandle,
+    ),
+  );
+  if (operationsAfter.length != operations.length) {
+    fail('Registration Join phase B created a second Recovery authority.');
+  }
+
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump();
+  await peer.dispose();
+  peerBootstrap = null;
+  peer = await AppBootstrap.create(
+    environment: _environment(
+      config,
+      directE2eeEnabled: true,
+      groupE2eeEnabled: false,
+    ),
+    appStateRoot: config.peerAppStateRoot,
+  );
+  peerBootstrap = peer;
+  await _requirePeerCurrentIdentityAndRegistry(
+    peer,
+    expectedDid: adminIdentity.did,
+    expectedDeviceId: authorizedDevice.protocolDeviceId,
+    expectedDeviceCount: 2,
+  );
+
+  await E2eCaseAttestationWriter.markPassed(
+    _registrationResumeCaseId,
+    startedAt: startedAt,
+    phases: const <String>[
+      'old_app_peer_joined_before_recovery',
+      'old_principal_remote_action_fenced',
+      'registration_returned_opaque_recovery_join_continuation',
+      'recovery_action_absent_from_rebind_dialog',
+      'core_begin_committed_before_app_interruption',
+      'app_and_core_reopened_on_same_state_root',
+      'fresh_otp_registration_adopted_durable_join',
+      'registration_resume_returned_original_join_session',
+      'single_admin_join_authority_completed',
+      'two_app_registry_session_converged',
+      'no_second_recovery_authority',
+    ],
+  );
+}
+
+Future<void> _runIdentityDeletionPhaseA(WidgetTester tester) async {
+  final config = _RemoteRecoveryRunConfig.load();
+  final account = _DedicatedAccount.fromConfig(config);
+  _requireIndependentFreshRoots(<String>[config.appStateRoot]);
+  await tester.binding.setSurfaceSize(const Size(1440, 900));
+  final bootstrap = await AppBootstrap.create(
+    environment: _environment(
+      config,
+      directE2eeEnabled: false,
+      groupE2eeEnabled: false,
+      agentImEnabled: false,
+    ),
+    appStateRoot: config.appStateRoot,
+  );
+  final onboardingSupport = bootstrap.onboardingSupportService;
+  final product = bootstrap.productLocalStore;
+  final recovery = bootstrap.handleRecoveryCorePort;
+  final sessionService = bootstrap.appSessionService;
+  if (onboardingSupport == null ||
+      product == null ||
+      recovery == null ||
+      sessionService is! LocalIdentityDataDeletionSessionService) {
+    fail('Identity deletion phase A dependencies were unavailable.');
+  }
+  final deletionSessions =
+      sessionService as LocalIdentityDataDeletionSessionService;
+
+  final bareHandle = _uniqueHandle('${config.handlePrefix}delete');
+  final factor = await _requestAndResolveRegistrationOtp(
+    onboardingSupport: onboardingSupport,
+    config: config,
+    account: account,
+    handle: bareHandle,
+  );
+  final registration = await bootstrap.onboardingService!
+      .registerHandleWithPhone(
+        phone: account.phone,
+        otp: factor.otp,
+        handle: bareHandle,
+        nickName: 'AWiki deletion guard',
+      );
+  final identity = registration.identity;
+  if (registration.status != IdentityRegistrationStatus.registered ||
+      identity == null ||
+      identity.handle == null) {
+    fail('Identity deletion phase A did not create one local identity.');
+  }
+  final activated = await sessionService!.loginWithIdentity(
+    identity.identityId,
+  );
+  if (!activated.authenticated || activated.did != identity.did) {
+    fail('Identity deletion phase A did not activate its identity.');
+  }
+  final sentinel = 'identity-deletion-sentinel-${config.runId}';
+  await product.upsertConversationOverlay(
+    ProductConversationOverlay(
+      ownerDid: identity.did,
+      threadId: sentinel,
+      conversationId: sentinel,
+      updatedAt: DateTime.now().toUtc(),
+    ),
+  );
+
+  await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+  await _pumpUntil(
+    tester,
+    () => find.byType(AppShell).evaluate().length == 1,
+    timeout: const Duration(seconds: 45),
+    failure: 'Identity deletion phase A did not open the authenticated App.',
+  );
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(AppShell)),
+  );
+  await _pumpUntil(
+    tester,
+    () =>
+        container.read(sessionProvider).session?.did == identity.did &&
+        container.read(appRuntimeProvider).activatedDid == identity.did,
+    timeout: const Duration(seconds: 45),
+    failure: 'Identity deletion phase A did not restore the active session.',
+  );
+
+  final otp = await recovery.requestOtp(
+    handle: identity.handle!.trim().toLowerCase(),
+    phone: account.phone,
+    localIdentityId: identity.identityId,
+  );
+  if (!await sessionService.hasPendingLocalIdentityRecovery(identity.identityId)) {
+    fail('Pending recovery was missing from the deletion impact query.');
+  }
+  // One explicit deletion decision ends the recovery; no separate discard or
+  // resume is required. The deliberate Product/Core cut remains unchanged.
+  await container.read(appRuntimeProvider.notifier).deleteCurrentData();
+  final operations = await recovery.listOperations(HandleRecoveryOwner(
+    localIdentityId: identity.identityId, handle: identity.handle!,
+  ));
+  final deletedOperation = operations.singleWhere((item) => item.operationId == otp.operationId);
+  if (deletedOperation.lifecycleClass != HandleRecoveryLifecycleClass.locallyDeleted ||
+      deletedOperation.commitAttempted ||
+      await sessionService.hasPendingLocalIdentityRecovery(identity.identityId)) {
+    fail('Explicit deletion did not end the pending recovery.');
+  }
+  final pending = await deletionSessions.pendingLocalIdentityDataDeletions();
+  final identitiesAfterCut = await sessionService.listLocalIdentities();
+  final sentinelAfterCut = await product.loadConversationOverlay(
+    ownerDid: identity.did,
+    threadId: sentinel,
+  );
+  if (pending.length != 1 ||
+      pending.single.ownerIdentityId != identity.identityId ||
+      pending.single.currentDid != identity.did ||
+      identitiesAfterCut.length != 1 ||
+      identitiesAfterCut.single.identityId != identity.identityId ||
+      sentinelAfterCut != null) {
+    fail('Identity deletion phase A did not stop at the Product/Core cut.');
+  }
+  await _writeIdentityDeletionHandoff(
+    config.crashCutHandoffPath,
+    <String, Object?>{
+      'schemaVersion': 1,
+      'runId': config.runId,
+      'phaseAProcessId': pid,
+      'ownerIdentityId': identity.identityId,
+      'currentDid': identity.did,
+      'fullHandle': identity.handle!.trim().toLowerCase(),
+      'operationId': otp.operationId,
+      'deletionId': pending.single.deletionId,
+      'sentinel': sentinel,
+    },
+  );
+
+  // Deliberately leave the production bootstrap undisposed. Process exit is
+  // the crash cut: Product deletion is durable while Core completion is not.
+}
+
+Future<void> _runIdentityDeletionPhaseB(WidgetTester tester) async {
+  final startedAt = DateTime.now().toUtc();
+  final config = _RemoteRecoveryRunConfig.load();
+  final handoff = _readIdentityDeletionHandoff(
+    config.crashCutHandoffPath,
+    expectedRunId: config.runId,
+  );
+  if (handoff['phaseAProcessId'] == pid) {
+    fail('Identity deletion phase B did not start in a fresh App process.');
+  }
+  final bootstrap = await AppBootstrap.create(
+    environment: _environment(
+      config,
+      directE2eeEnabled: false,
+      groupE2eeEnabled: false,
+      agentImEnabled: false,
+    ),
+    appStateRoot: config.appStateRoot,
+  );
+  final sessionService = bootstrap.appSessionService;
+  final product = bootstrap.productLocalStore;
+  if (sessionService is! LocalIdentityDataDeletionSessionService ||
+      product == null) {
+    fail('Identity deletion phase B dependencies were unavailable.');
+  }
+  final deletionSessions =
+      sessionService as LocalIdentityDataDeletionSessionService;
+  await tester.binding.setSurfaceSize(const Size(1440, 900));
+  addTearDown(() async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await bootstrap.dispose();
+    await _deleteDirectory(config.appStateRoot);
+    final handoffFile = File(config.crashCutHandoffPath);
+    if (handoffFile.existsSync()) await handoffFile.delete();
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  final pendingBefore = await deletionSessions
+      .pendingLocalIdentityDataDeletions();
+  final identitiesBefore = await sessionService!.listLocalIdentities();
+  if (pendingBefore.length != 1 ||
+      pendingBefore.single.deletionId != handoff['deletionId'] ||
+      pendingBefore.single.ownerIdentityId != handoff['ownerIdentityId'] ||
+      pendingBefore.single.currentDid != handoff['currentDid'] ||
+      identitiesBefore.length != 1 ||
+      identitiesBefore.single.identityId != handoff['ownerIdentityId']) {
+    fail('Identity deletion phase B did not reopen the phase-A ticket.');
+  }
+  if (await product.loadConversationOverlay(
+        ownerDid: handoff['currentDid']! as String,
+        threadId: handoff['sentinel']! as String,
+      ) !=
+      null) {
+    fail('Identity deletion phase B found the deleted Product sentinel.');
+  }
+
+  await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+  late ProviderContainer container;
+  await _pumpUntil(
+    tester,
+    () {
+      final onboarding = find.byType(OnboardingPage);
+      if (onboarding.evaluate().length != 1) return false;
+      container = ProviderScope.containerOf(tester.element(onboarding));
+      return container.read(appRuntimeProvider).isInitialized &&
+          container.read(sessionProvider).session == null;
+    },
+    timeout: const Duration(seconds: 45),
+    failure: 'Identity deletion phase B did not resume before session restore.',
+  );
+  final pendingAfter = await deletionSessions
+      .pendingLocalIdentityDataDeletions();
+  final identitiesAfter = await sessionService.listLocalIdentities();
+  if (pendingAfter.isNotEmpty ||
+      identitiesAfter.isNotEmpty ||
+      container.read(sessionProvider).localCredentials.isNotEmpty ||
+      await product.loadConversationOverlay(
+            ownerDid: handoff['currentDid']! as String,
+            threadId: handoff['sentinel']! as String,
+          ) !=
+          null) {
+    fail('Identity deletion phase B did not converge exactly once.');
+  }
+
+  await E2eCaseAttestationWriter.markPassed(
+    _identityDeletionGuardCaseId,
+    startedAt: startedAt,
+    phases: const <String>[
+      'pending_recovery_reported_before_confirmation',
+      'explicit_deletion_ends_recovery_without_resume',
+      'single_confirmation_creates_one_deletion_ticket',
+    ],
+  );
+  await E2eCaseAttestationWriter.markPassed(
+    _identityDeletionResumeCaseId,
+    startedAt: startedAt,
+    phases: const <String>[
+      'phase_a_product_delete_committed_before_core_complete',
+      'phase_b_used_a_distinct_app_process',
+      'bootstrap_replayed_the_same_pending_ticket',
+      'product_delete_replay_was_idempotent',
+      'core_completion_removed_only_the_target_identity',
+      'no_session_restored_for_the_deleted_identity',
+    ],
+  );
+}
+
+Future<void> _writeIdentityDeletionHandoff(
+  String path,
+  Map<String, Object?> value,
+) async {
+  final file = File(path);
+  await file.parent.create(recursive: true);
+  final temporary = File('$path.tmp');
+  await temporary.writeAsString(jsonEncode(value), flush: true);
+  if (file.existsSync()) await file.delete();
+  await temporary.rename(file.path);
+}
+
+Map<String, Object?> _readIdentityDeletionHandoff(
+  String path, {
+  required String expectedRunId,
+}) {
+  final file = File(path);
+  if (!file.existsSync()) {
+    fail('Identity deletion phase B found no phase-A handoff.');
+  }
+  final decoded = jsonDecode(file.readAsStringSync());
+  const fields = <String>{
+    'schemaVersion',
+    'runId',
+    'phaseAProcessId',
+    'ownerIdentityId',
+    'currentDid',
+    'fullHandle',
+    'operationId',
+    'deletionId',
+    'sentinel',
+  };
+  if (decoded is! Map ||
+      decoded.keys
+          .map((key) => key.toString())
+          .toSet()
+          .difference(fields)
+          .isNotEmpty ||
+      fields
+          .difference(decoded.keys.map((key) => key.toString()).toSet())
+          .isNotEmpty ||
+      decoded['schemaVersion'] != 1 ||
+      decoded['runId'] != expectedRunId ||
+      decoded['phaseAProcessId'] is! int ||
+      fields
+          .where(
+            (field) => field != 'schemaVersion' && field != 'phaseAProcessId',
+          )
+          .any(
+            (field) =>
+                decoded[field] is! String || (decoded[field] as String).isEmpty,
+          )) {
+    fail('Identity deletion phase-A handoff was invalid.');
+  }
+  return <String, Object?>{
+    for (final entry in decoded.entries) entry.key.toString(): entry.value,
+  };
 }
 
 Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
@@ -2725,9 +3823,6 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
     () => find.byType(HandleRecoveryPage).evaluate().length == 1,
     failure: 'Crash-cut setup did not open the visible Recovery surface.',
   );
-  final container = ProviderScope.containerOf(
-    tester.element(find.byType(HandleRecoveryPage)),
-  );
   await _tapOne(
     tester,
     find.bySemanticsIdentifier('handle-recovery-send-otp'),
@@ -2739,7 +3834,7 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
               .length !=
           1 ||
       recordingCore.requestOtpCalls != 0 ||
-      container.read(handleRecoveryProvider).error != null) {
+      _recoveryUiContainer(tester).read(handleRecoveryProvider).error != null) {
     fail(
       'Blank Settings Recovery phone reached Core or reported a state error.',
     );
@@ -2757,7 +3852,7 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
   await _pumpUntil(
     tester,
     () {
-      final state = container.read(handleRecoveryProvider);
+      final state = _recoveryUiContainer(tester).read(handleRecoveryProvider);
       _failOnRecoveryError(state, 'Crash-cut OTP request');
       return state.otpRequested &&
           state.otpOperationId != null &&
@@ -2772,7 +3867,9 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
       recordingCore.requestedPhone != account.phone) {
     fail('Settings Recovery did not target the exact active local identity.');
   }
-  final operationId = container.read(handleRecoveryProvider).otpOperationId!;
+  final operationId = _recoveryUiContainer(
+    tester,
+  ).read(handleRecoveryProvider).otpOperationId!;
   final otp = await _resolveOtp(
     account: account,
     purpose: _recoveryPurpose,
@@ -2789,7 +3886,7 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
   await _pumpUntil(
     tester,
     () {
-      final state = container.read(handleRecoveryProvider);
+      final state = _recoveryUiContainer(tester).read(handleRecoveryProvider);
       _failOnRecoveryError(state, 'Crash-cut prepare');
       return state.progress?.phase == HandleRecoveryProgressPhase.prepared &&
           !state.isBusy;
@@ -2804,7 +3901,8 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
   );
   await _pumpUntil(
     tester,
-    () => container.read(handleRecoveryProvider).riskConfirmed,
+    () =>
+        _recoveryUiContainer(tester).read(handleRecoveryProvider).riskConfirmed,
     failure: 'Crash-cut Recovery did not retain risk confirmation.',
   );
   await _tapOne(
@@ -2812,8 +3910,11 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
     find.bySemanticsIdentifier('handle-recovery-activate'),
     failure: 'Crash-cut activation was unavailable.',
   );
-  await _waitForCompletedRecovery(tester, container);
-  final completed = container.read(handleRecoveryProvider).progress!;
+  await _waitForCompletedRecovery(
+    tester,
+    observedProgress: () => recordingCore.lastProgress,
+  );
+  final completed = recordingCore.lastProgress!;
   final reset = completed.registryEpochReset;
   if (reset == null ||
       reset.previousDid != oldSession.did ||
@@ -4648,16 +5749,65 @@ Future<void> _writeCrashCutHandoff(
   }
 }
 
+Future<void> _writeRegistrationJoinResumeHandoff({
+  required _RemoteRecoveryRunConfig config,
+  required String stableOwnerIdentityId,
+  required String fullHandle,
+  required String currentDid,
+  required DeviceJoinProgress progress,
+  required DateTime registrationRetryAt,
+}) async {
+  final handoff = RegistrationJoinResumeHandoff.fromRaw(
+    runId: config.runId,
+    registrationRetryAt: registrationRetryAt,
+    rawReferences: <String, String>{
+      'stable_owner': stableOwnerIdentityId,
+      'full_handle': fullHandle,
+      'current_identity': currentDid,
+      'join_session': progress.joinSessionId,
+      'protocol_device': progress.protocolDeviceId,
+    },
+    expectedCounts: const <String, int>{
+      'recovery_operations': 1,
+      'pending_join_authorities': 1,
+      'registry_devices': 1,
+      'peer_local_identities': 1,
+    },
+  );
+  final file = File(config.crashCutHandoffPath);
+  await file.parent.create(recursive: true);
+  final temporary = File('${file.path}.tmp');
+  await temporary.writeAsString(jsonEncode(handoff.toJson()), flush: true);
+  await temporary.rename(file.path);
+  if (!Platform.isWindows) {
+    await Process.run('chmod', <String>['600', file.path]);
+  }
+}
+
+ProviderContainer _recoveryUiContainer(WidgetTester tester) =>
+    ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('handle-recovery-page'))),
+    );
+
 Future<void> _waitForCompletedRecovery(
-  WidgetTester tester,
-  ProviderContainer container,
-) async {
-  final initial = container.read(handleRecoveryProvider);
+  WidgetTester tester, {
+  String? Function()? coreDiagnostic,
+  required HandleRecoveryProgress? Function() observedProgress,
+}) async {
+  if (find.byType(HandleRecoveryPage).evaluate().isEmpty &&
+      observedProgress()?.isCompleted == true) {
+    return;
+  }
+  final initial = _recoveryUiContainer(tester).read(handleRecoveryProvider);
   if (initial.progress?.canActivate ?? false) {
     await _pumpUntil(
       tester,
       () {
-        final state = container.read(handleRecoveryProvider);
+        if (find.byType(HandleRecoveryPage).evaluate().isEmpty &&
+            observedProgress()?.isCompleted == true) {
+          return true;
+        }
+        final state = _recoveryUiContainer(tester).read(handleRecoveryProvider);
         return state.isBusy ||
             state.error != null ||
             !(state.progress?.canActivate ?? false);
@@ -4669,18 +5819,29 @@ Future<void> _waitForCompletedRecovery(
   for (var attempt = 0; attempt < 8; attempt += 1) {
     await _pumpUntil(
       tester,
-      () => !container.read(handleRecoveryProvider).isBusy,
+      () =>
+          (find.byType(HandleRecoveryPage).evaluate().isEmpty &&
+              observedProgress()?.isCompleted == true) ||
+          !_recoveryUiContainer(tester).read(handleRecoveryProvider).isBusy,
       timeout: const Duration(minutes: 2),
       failure: 'A Recovery transition did not return control to the UI.',
     );
-    final state = container.read(handleRecoveryProvider);
+    if (find.byType(HandleRecoveryPage).evaluate().isEmpty &&
+        observedProgress()?.isCompleted == true) {
+      return;
+    }
+    final state = _recoveryUiContainer(tester).read(handleRecoveryProvider);
     final progress = state.progress;
     if (progress?.isCompleted ?? false) return;
     final error = state.error;
     if (error != null &&
         !(error.action == HandleRecoveryUiAction.exactResume &&
             (progress?.canResume ?? false))) {
-      _failOnRecoveryError(state, 'Recovery activation/resume');
+      _failOnRecoveryError(
+        state,
+        'Recovery activation/resume',
+        coreDiagnostic: coreDiagnostic?.call(),
+      );
     }
     if (progress == null || !progress.canResume) {
       fail(
@@ -4692,6 +5853,14 @@ Future<void> _waitForCompletedRecovery(
         'error=${error?.safeCode ?? 'absent'}).',
       );
     }
+    if (!state.allows(HandleRecoveryAction.prepare)) {
+      expect(find.byKey(const Key('handle-recovery-otp')), findsNothing);
+    }
+    expect(
+      find.byKey(const Key('handle-recovery-risk-confirmation')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('handle-recovery-activate')), findsNothing);
     await _tapOne(
       tester,
       find.bySemanticsIdentifier('handle-recovery-resume'),
@@ -4730,16 +5899,94 @@ void _failOnDangerousUiFeedback(
   }
 }
 
+class _RecordingDeviceManagementService extends DeviceManagementService {
+  _RecordingDeviceManagementService({
+    required super.core,
+    required super.userPresence,
+  });
+
+  String? lastSafeFailure;
+
+  @override
+  Future<DeviceJoinProgress> beginNewDeviceJoinWithSms({
+    required String handle,
+    required String phone,
+    required String otp,
+    required String operationId,
+    int ttlSeconds = 600,
+  }) async {
+    try {
+      return await super.beginNewDeviceJoinWithSms(
+        handle: handle,
+        phone: phone,
+        otp: otp,
+        operationId: operationId,
+        ttlSeconds: ttlSeconds,
+      );
+    } catch (error) {
+      lastSafeFailure = switch (error) {
+        core.AwikiImCoreException() => [
+          'code=${_safeDiagnosticToken(error.code)}',
+          'status=${error.statusCode?.toString() ?? 'none'}',
+          'service=${_safeDiagnosticToken(error.serviceCode)}',
+          'detail=${_safeCoreFailureDetail(error.message)}',
+        ].join(','),
+        DeviceManagementTransportException(:final code) =>
+          'transport=${_safeDiagnosticToken(code)}',
+        DeviceManagementException(:final code) =>
+          'device=${_safeDiagnosticToken(code)}',
+        _ => 'type=${_safeDiagnosticToken(error.runtimeType.toString())}',
+      };
+      rethrow;
+    }
+  }
+}
+
+String _safeCoreFailureDetail(String message) {
+  final normalized = message.toLowerCase();
+  if (normalized.contains('provider') ||
+      normalized.contains('identity not found')) {
+    return 'provider_identity_missing';
+  }
+  if (normalized.contains('canonical') || normalized.contains('subject')) {
+    return 'canonical_identity_missing';
+  }
+  if (normalized.contains('conversation')) {
+    return 'conversation_identity_missing';
+  }
+  return 'other';
+}
+
 class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
   _RecordingHandleRecoveryCorePort(this._delegate);
 
   final HandleRecoveryCorePort _delegate;
   String? lastSafeFailure;
+  HandleRecoveryProgress? lastProgress;
   int requestOtpCalls = 0;
   String? requestedHandle;
   String? requestedPhone;
   String? requestedLocalIdentityId;
   DateTime? requestedRetryAt;
+
+  @override
+  Future<HandleRecoveryContext> inspectContext({
+    required String handle,
+    String? localIdentityId,
+  }) => _record(
+    () => _delegate.inspectContext(
+      handle: handle,
+      localIdentityId: localIdentityId,
+    ),
+  );
+
+  Future<HandleRecoveryProgress> _recordProgress(
+    Future<HandleRecoveryProgress> Function() action,
+  ) async {
+    final progress = await _record(action);
+    lastProgress = progress;
+    return progress;
+  }
 
   Future<T> _record<T>(Future<T> Function() action) async {
     try {
@@ -4750,6 +5997,7 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
           'code=${_safeDiagnosticToken(error.code)}',
           'status=${error.statusCode?.toString() ?? 'none'}',
           'service=${_safeDiagnosticToken(error.serviceCode)}',
+          'detail=${_safeCoreFailureDetail(error.message)}',
         ].join(','),
         HandleRecoveryFailure() => 'failure=${error.code.name}',
         _ when error.runtimeType.toString() == 'PanicException' =>
@@ -4804,7 +6052,7 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
     required String operationId,
     required String phone,
     required String otp,
-  }) => _record(
+  }) => _recordProgress(
     () => _delegate.prepare(operationId: operationId, phone: phone, otp: otp),
   );
 
@@ -4815,13 +6063,13 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
 
   @override
   Future<HandleRecoveryProgress> getStatus(String operationId) =>
-      _record(() => _delegate.getStatus(operationId));
+      _recordProgress(() => _delegate.getStatus(operationId));
 
   @override
   Future<HandleRecoveryProgress> activate({
     required String operationId,
     required bool userPresenceConfirmed,
-  }) => _record(
+  }) => _recordProgress(
     () => _delegate.activate(
       operationId: operationId,
       userPresenceConfirmed: userPresenceConfirmed,
@@ -4830,7 +6078,7 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
 
   @override
   Future<HandleRecoveryProgress> reconcile(String operationId) =>
-      _record(() => _delegate.reconcile(operationId));
+      _recordProgress(() => _delegate.reconcile(operationId));
 
   @override
   Future<void> discardPreAttempt(String operationId) =>
@@ -4840,7 +6088,7 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
   Future<HandleRecoveryProgress> quarantineKeyUnavailable({
     required String operationId,
     required bool confirmed,
-  }) => _record(
+  }) => _recordProgress(
     () => _delegate.quarantineKeyUnavailable(
       operationId: operationId,
       confirmed: confirmed,
@@ -4998,8 +6246,21 @@ Future<({String otp, DateTime retryAt})> _requestAndResolveRegistrationOtp({
       didDomain: config.didDomain,
     );
     return (otp: otp, retryAt: receipt.retryAt);
-  } on Object {
-    fail('The fixed registration OTP request failed safely.');
+  } on AwikiOnboardingUtilityError catch (error) {
+    final data = error.data;
+    final serviceCode = data is Map
+        ? _safeDiagnosticToken((data['code'] ?? data['awiki_code'])?.toString())
+        : 'none';
+    fail(
+      'The fixed registration OTP request failed safely '
+      '(http=${error.statusCode?.toString() ?? 'none'}, '
+      'rpc=${error.rpcCode?.toString() ?? 'none'}, code=$serviceCode).',
+    );
+  } on Object catch (error) {
+    fail(
+      'The fixed registration OTP request failed safely '
+      '(type=${_safeDiagnosticToken(error.runtimeType.toString())}).',
+    );
   }
 }
 
@@ -5022,11 +6283,15 @@ _startAppPeerRegistrationJoin({
   required String fullHandle,
   required String expectedDid,
   required DateTime registrationRetryAt,
+  bool expectedOrdinaryRetirement = false,
+  bool expectNoInitialContinuation = false,
 }) async {
   final localIdentities = await peerBootstrap.appSessionService!
       .listLocalIdentities();
-  if (localIdentities.length != 1 ||
-      localIdentities.single.did == expectedDid) {
+  if (expectedOrdinaryRetirement
+      ? localIdentities.isNotEmpty
+      : localIdentities.length != 1 ||
+            localIdentities.single.did == expectedDid) {
     fail(
       'The registration re-Join did not begin from one fenced old identity.',
     );
@@ -5062,10 +6327,50 @@ _startAppPeerRegistrationJoin({
     ),
   );
   final peerRoot = find.byKey(_recoveryPeerAppKey);
-  final container = await _confirmFencedPeerReturnedToOnboarding(
-    tester,
-    peerRoot: peerRoot,
-  );
+  final ProviderContainer container;
+  if (expectedOrdinaryRetirement) {
+    final onboarding = find.descendant(
+      of: peerRoot,
+      matching: find.byType(OnboardingPage),
+    );
+    await _pumpUntil(
+      tester,
+      () => onboarding.evaluate().length == 1,
+      timeout: const Duration(seconds: 45),
+      failure: 'Retired App did not return to onboarding.',
+      safeDiagnostic: () {
+        final shell = find.descendant(
+          of: peerRoot,
+          matching: find.byType(AppShell),
+        );
+        if (shell.evaluate().length != 1) {
+          return 'shell_count=${shell.evaluate().length}, '
+              'onboarding_count=${onboarding.evaluate().length}';
+        }
+        final retiredContainer = ProviderScope.containerOf(
+          tester.element(shell),
+        );
+        final runtime = retiredContainer.read(appRuntimeProvider);
+        final session = retiredContainer.read(sessionProvider);
+        final feedback = retiredContainer.read(uiFeedbackProvider);
+        return 'initialized=${runtime.isInitialized}, busy=${runtime.isBusy}, '
+            'session_present=${session.session != null}, '
+            'credentials=${session.localCredentials.length}, '
+            'feedback=${_safeDiagnosticToken(feedback?.message.id)}, '
+            'onboarding_count=${onboarding.evaluate().length}';
+      },
+    );
+    container = ProviderScope.containerOf(tester.element(onboarding));
+  } else {
+    container = await _confirmFencedPeerReturnedToOnboarding(
+      tester,
+      peerRoot: peerRoot,
+    );
+  }
+  if (expectNoInitialContinuation &&
+      container.read(onboardingProvider).existingHandleContinuationId != null) {
+    fail('The restarted App retained a process-local Join continuation.');
+  }
   await _pumpUntil(
     tester,
     () => container.read(onboardingProvider).supportsPhoneOtpRegistration,
@@ -5100,13 +6405,21 @@ _startAppPeerRegistrationJoin({
     timeout: const Duration(seconds: 90),
     failure: 'Registration re-Join OTP action did not become available.',
   );
+  final sendOtpAction = find.descendant(
+    of: peerRoot,
+    matching: find.bySemanticsIdentifier('e2e-send-otp-button'),
+  );
+  if (sendOtpAction.evaluate().length != 1) {
+    fail('Registration re-Join exposed an invalid OTP action count.');
+  }
+  final sendOtpControl = find.ancestor(
+    of: sendOtpAction,
+    matching: find.byType(AppPressable),
+  );
   final existingFeedbackId = container.read(uiFeedbackProvider)?.id;
-  await _tapOne(
+  await _invokeOneAppPressable(
     tester,
-    find.descendant(
-      of: peerRoot,
-      matching: find.bySemanticsIdentifier('e2e-send-otp-button'),
-    ),
+    sendOtpControl,
     failure: 'Registration re-Join OTP action was unavailable.',
   );
   await _pumpUntil(
@@ -5132,11 +6445,14 @@ _startAppPeerRegistrationJoin({
     didDomain: config.didDomain,
   );
   await tester.enterText(otpField, otp);
-  await _tapOne(
+  await _invokeOneAppPressable(
     tester,
     find.descendant(
-      of: peerRoot,
-      matching: find.byKey(const Key('onboarding-mac-phone-submit-action')),
+      of: find.descendant(
+        of: peerRoot,
+        matching: find.byKey(const Key('onboarding-mac-phone-submit-action')),
+      ),
+      matching: find.byType(AppPressable),
     ),
     failure: 'Registration re-Join submit action was unavailable.',
   );
@@ -5154,13 +6470,39 @@ _startAppPeerRegistrationJoin({
           !state.canSubmitPhoneOtp &&
           state.existingHandleContinuationId != null &&
           state.existingHandleJoinMode ==
-              ExistingHandleJoinMode.handleRecoveryRebind &&
-          state.existingHandleJoinRequiresUserPresence;
+              (expectedOrdinaryRetirement
+                  ? ExistingHandleJoinMode.ordinary
+                  : ExistingHandleJoinMode.handleRecoveryRebind) &&
+          state.existingHandleJoinRequiresUserPresence ==
+              !expectedOrdinaryRetirement;
     },
     timeout: const Duration(minutes: 2),
-    failure:
-        'Registration did not return one opaque Recovery rebind continuation.',
+    failure: expectedOrdinaryRetirement
+        ? 'Registration did not return one opaque ordinary continuation.'
+        : 'Registration did not return one opaque Recovery rebind continuation.',
+    safeDiagnostic: () {
+      final state = container.read(onboardingProvider);
+      return 'join_action_count=${joinAction.evaluate().length}, '
+          'otp_consumed=${state.isPhoneOtpConsumed}, '
+          'can_submit_otp=${state.canSubmitPhoneOtp}, '
+          'continuation_present=${state.existingHandleContinuationId != null}, '
+          'join_mode=${state.existingHandleJoinMode?.name ?? "none"}, '
+          'presence_required=${state.existingHandleJoinRequiresUserPresence}, '
+          'busy=${state.isBusy}, '
+          'registration_outcome=${state.phoneRegistrationOutcome.name}, '
+          'failure_code=${_safeDiagnosticToken(state.phoneRegistrationFailureCode)}';
+    },
   );
+  if (!expectedOrdinaryRetirement &&
+      find
+          .descendant(
+            of: peerRoot,
+            matching: find.byKey(const Key('existing-handle-recovery-action')),
+          )
+          .evaluate()
+          .isNotEmpty) {
+    fail('Recovery rebind continuation exposed a second Recovery action.');
+  }
   await _tapOne(
     tester,
     joinAction,
@@ -5185,14 +6527,19 @@ _startAppPeerRegistrationJoin({
           progress?.phase == DeviceJoinPhase.pending &&
           progress?.remoteState == DeviceJoinRemoteState.pending &&
           progress?.sas == null &&
-          progress?.cause == DeviceJoinCause.handleRecovery;
+          progress?.cause ==
+              (expectedOrdinaryRetirement
+                  ? DeviceJoinCause.ordinary
+                  : DeviceJoinCause.handleRecovery);
     },
     timeout: const Duration(minutes: 2),
     failure: 'The registration continuation did not create Recovery re-Join.',
   );
-  if (peerPresence.calls != callsBefore + 1 ||
-      peerPresence.completions != callsBefore + 1 ||
-      !peerPresence.lastResult ||
+  final expectedPresenceCalls =
+      callsBefore + (expectedOrdinaryRetirement ? 0 : 1);
+  if (peerPresence.calls != expectedPresenceCalls ||
+      peerPresence.completions != expectedPresenceCalls ||
+      (!expectedOrdinaryRetirement && !peerPresence.lastResult) ||
       container.read(onboardingProvider).existingHandleContinuationId != null) {
     fail('Registration re-Join crossed an invalid user-presence boundary.');
   }
@@ -5203,6 +6550,32 @@ _startAppPeerRegistrationJoin({
         container.read(smsOtpCooldownProvider).retryAt ??
         DateTime.now().toUtc(),
   );
+}
+
+Future<DeviceJoinRequestNotice> _waitForSinglePendingAppJoinRequest(
+  DeviceManagementCorePort deviceCore, {
+  required String selector,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 45));
+  while (DateTime.now().isBefore(deadline)) {
+    final pending = (await deviceCore.localDeviceJoinRequests(selector))
+        .where(
+          (request) =>
+              request.did == selector &&
+              request.state == DeviceJoinRemoteState.pending,
+        )
+        .toList(growable: false);
+    if (pending.length > 1) {
+      fail('Interrupted registration exposed more than one pending Join.');
+    }
+    if (pending.length == 1 &&
+        !pending.single.claimedByCurrentDevice &&
+        pending.single.canStartVerification) {
+      return pending.single;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+  }
+  fail('Interrupted registration did not expose one pending durable Join.');
 }
 
 Future<void> _waitForRegistrationRetryBoundary(DateTime retryAt) async {
@@ -5308,7 +6681,7 @@ Future<String> _resolveOtp({
 }
 
 Future<DateTime> _requestScopedOtp({
-  required http.Client client,
+  required AwikiOnboardingUtilityHttpClient client,
   required _RemoteRecoveryRunConfig config,
   required _DedicatedAccount account,
   required String purpose,
@@ -5317,19 +6690,18 @@ Future<DateTime> _requestScopedOtp({
   http.Response response;
   try {
     response = await client
-        .post(
+        .postJson(
           Uri.parse(
             config.userServiceUrl,
           ).resolve('/user-service/v1/auth/sms-codes'),
-          headers: const <String, String>{'Content-Type': 'application/json'},
-          body: jsonEncode(<String, Object?>{
+          body: <String, Object?>{
             'phone': account.phone,
             'purpose': purpose,
             'target_handle': handle,
             'target_handle_domain': config.didDomain,
             'rate_limit_seconds': 60,
             'code_expire_minutes': 5,
-          }),
+          },
         )
         .timeout(_remoteTimeout);
   } on Object {
@@ -5337,6 +6709,29 @@ Future<DateTime> _requestScopedOtp({
   }
   if (response.statusCode != 200) {
     fail('The fixed purpose-bound OTP request was rejected.');
+  }
+  try {
+    final payload = jsonDecode(response.body);
+    if (payload is! Map ||
+        payload.keys.map((key) => key.toString()).toSet().difference(
+          const <String>{'message'},
+        ).isNotEmpty ||
+        payload.length != 1 ||
+        payload['message'] != 'Code sent.') {
+      final error = payload is Map && payload['error'] is Map
+          ? payload['error'] as Map
+          : null;
+      final data = error?['data'];
+      final code = data is Map
+          ? _safeDiagnosticToken(data['awiki_code']?.toString())
+          : 'none';
+      fail(
+        'The fixed purpose-bound OTP request returned a non-success '
+        'contract (code=$code).',
+      );
+    }
+  } on FormatException {
+    fail('The fixed purpose-bound OTP request returned invalid JSON.');
   }
   return DateTime.now().toUtc().add(const Duration(seconds: 1));
 }
@@ -5350,7 +6745,6 @@ Future<
 >
 _startAppPeerJoin({
   required WidgetTester tester,
-  required http.Client client,
   required _RemoteRecoveryRunConfig config,
   required _DedicatedAccount account,
   required AppBootstrap adminBootstrap,
@@ -5368,13 +6762,17 @@ _startAppPeerJoin({
   }
   final recoveryAware = localIdentities.length == 1;
   final otpRetryAt = await _requestScopedOtp(
-    client: client,
+    client: peerBootstrap.userServiceHttpClient!,
     config: config,
     account: account,
     purpose: _joinPurpose,
     handle: handle,
   );
   final callsBefore = peerPresence.calls;
+  final peerDeviceService = _RecordingDeviceManagementService(
+    core: peerBootstrap.deviceManagementCorePort!,
+    userPresence: peerPresence,
+  );
   await tester.pumpWidget(
     Row(
       textDirection: TextDirection.ltr,
@@ -5397,6 +6795,9 @@ _startAppPeerJoin({
               bootstrap: peerBootstrap,
               providerOverrides: <Override>[
                 userPresencePortProvider.overrideWithValue(peerPresence),
+                deviceManagementServiceProvider.overrideWithValue(
+                  peerDeviceService,
+                ),
               ],
             ),
           ),
@@ -5438,7 +6839,11 @@ _startAppPeerJoin({
     () {
       final state = container.read(devicesProvider);
       if (state.error != null) {
-        fail('The isolated peer App rejected ordinary Join.');
+        fail(
+          'The isolated peer App rejected ordinary Join '
+          '(error=${state.error!.name}, '
+          'diagnostic=${peerDeviceService.lastSafeFailure ?? 'none'}).',
+        );
       }
       final progress = state.activeJoin;
       return !state.isActionPending &&
@@ -5679,28 +7084,30 @@ Future<ProviderContainer> _confirmFencedPeerReturnedToOnboarding(
   await _pumpUntil(
     tester,
     () {
-      if (onboarding.evaluate().length != 1 || confirm.evaluate().length != 1) {
-        return false;
-      }
+      if (onboarding.evaluate().length != 1) return false;
       final container = ProviderScope.containerOf(tester.element(onboarding));
-      return container.read(sessionProvider).session == null &&
-          container.read(appRuntimeProvider).authRevoked;
+      return container.read(appRuntimeProvider).isInitialized &&
+          container.read(sessionProvider).session == null;
     },
     timeout: const Duration(seconds: 45),
-    failure:
-        'The fenced peer App did not return to onboarding with an auth notice.',
+    failure: 'The fenced peer App did not return to onboarding.',
   );
   final container = ProviderScope.containerOf(tester.element(onboarding));
-  await _tapOne(
-    tester,
-    confirm,
-    failure: 'The fenced peer App auth notice could not be confirmed.',
-  );
-  await _pumpUntil(
-    tester,
-    () => confirm.evaluate().isEmpty,
-    failure: 'The fenced peer App auth notice did not close.',
-  );
+  if (confirm.evaluate().length == 1) {
+    await _tapOne(
+      tester,
+      confirm,
+      failure: 'The fenced peer App auth notice could not be confirmed.',
+    );
+    await _pumpUntil(
+      tester,
+      () => confirm.evaluate().isEmpty,
+      failure: 'The fenced peer App auth notice did not close.',
+    );
+  } else if (confirm.evaluate().isNotEmpty) {
+    fail('The fenced peer App exposed duplicate auth notices.');
+  }
+  await tester.pumpAndSettle();
   return container;
 }
 
@@ -5723,6 +7130,7 @@ Future<void> _activateAppPeerJoin({
   required ProviderContainer peerContainer,
   required String expectedDid,
   required String expectedDeviceId,
+  int expectedDeviceCount = 2,
 }) async {
   await _pumpUntil(
     tester,
@@ -5747,7 +7155,7 @@ Future<void> _activateAppPeerJoin({
   final registry = await _waitForAppRegistry(
     peerBootstrap.deviceManagementCorePort!,
     did: expectedDid,
-    expectedDeviceCount: 2,
+    expectedDeviceCount: expectedDeviceCount,
   );
   final current = registry.devices.where(
     (device) =>
@@ -5965,8 +7373,7 @@ Future<void> _transferManagementToRejoinedPeer({
     fail('The App did not accept one exact standard root transfer.');
   }
 
-  final deadline = DateTime.now().add(const Duration(seconds: 90));
-  while (DateTime.now().isBefore(deadline)) {
+  Future<void> reconcileTransfer() async {
     try {
       final outcome = await peerBootstrap.messageSyncService!.syncNow(
         reason: 'handle-recovery-registration-root-transfer',
@@ -5983,6 +7390,12 @@ Future<void> _transferManagementToRejoinedPeer({
       // must still prove the authoritative Registry transition.
       if (error.code != 'secure_inbox_ack_incomplete') rethrow;
     }
+  }
+
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(deadline)) {
+    // Both explicit callers race with the App realtime/background recovery.
+    await Future.wait<void>([reconcileTransfer(), reconcileTransfer()]);
     final peerRegistry = await peerBootstrap.deviceManagementCorePort!
         .identityDeviceRegistry(expectedDid);
     final adminRegistry = await bootstrap.deviceManagementCorePort!
@@ -6167,12 +7580,38 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
   if (messaging == null || sync == null) {
     fail('An App lacked canonical thread message sync.');
   }
+  var attempts = 0;
+  var successes = 0;
+  var localStateErrors = 0;
+  var transportErrors = 0;
+  var eventsApplied = 0;
+  var pagesFetched = 0;
+  var candidateCount = 0;
+  var idMatches = 0;
+  var contentMatches = 0;
+  final statuses = <String, int>{};
+  String diagnostic() => 'attempts=$attempts successes=$successes '
+      'local_state_errors=$localStateErrors transport_errors=$transportErrors '
+      'events=$eventsApplied pages=$pagesFetched statuses=$statuses '
+      'candidates=$candidateCount id_matches=$idMatches content_matches=$contentMatches';
   final deadline = DateTime.now().add(const Duration(seconds: 90));
   while (DateTime.now().isBefore(deadline)) {
     try {
-      await sync.syncNow(reason: 'handle-recovery-rejoin-e2e', limit: 100);
+      attempts++;
+      final outcome = await sync.syncNow(reason: 'handle-recovery-rejoin-e2e', limit: 100);
+      successes++;
+      eventsApplied += outcome.eventsApplied;
+      pagesFetched += outcome.pagesFetched;
+      statuses.update(outcome.status.name, (count) => count + 1, ifAbsent: () => 1);
     } on MessageSyncCoreFailure catch (error) {
-      if (error.code != 'transport_unavailable') rethrow;
+      if (!const <String>{
+        'local_state_unavailable',
+        'transport_unavailable',
+      }.contains(error.code)) {
+        rethrow;
+      }
+      if (error.code == 'local_state_unavailable') localStateErrors++;
+      if (error.code == 'transport_unavailable') transportErrors++;
       await tester.pump(const Duration(milliseconds: 200));
       await Future<void>.delayed(const Duration(milliseconds: 550));
       continue;
@@ -6182,6 +7621,9 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
       thread: thread,
       messageId: messageId,
     );
+    candidateCount = messages.length;
+    idMatches = messages.where((message) => message.remoteId == messageId).length;
+    contentMatches = messages.where((message) => message.content == content).length;
     final matches = messages
         .where(
           (message) =>
@@ -6221,12 +7663,17 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
           1) {
         fail('An App thread projection was not exact-one stable.');
       }
+      debugPrint('[recovery-thread-probe] passed ${diagnostic()}');
       return message;
     }
     await tester.pump(const Duration(milliseconds: 200));
     await Future<void>.delayed(const Duration(milliseconds: 550));
   }
-  fail('An App did not converge the exact thread message.');
+  final session = await appBootstrap.appSessionService!.currentSession();
+  final expectedOwner = isMine ? senderDid : receiverDid;
+  fail('An App did not converge the exact thread message. '
+      '${diagnostic()} session_present=${session != null} '
+      'session_owner_matches=${session?.did == expectedOwner}');
 }
 
 Future<void> _syncHandleRecoveryFixtureWithRetry({
@@ -6237,7 +7684,12 @@ Future<void> _syncHandleRecoveryFixtureWithRetry({
   final deadline = DateTime.now().add(const Duration(seconds: 30));
   while (DateTime.now().isBefore(deadline)) {
     try {
-      await bootstrap.messageSyncService!.syncNow(reason: reason, limit: 100);
+      final outcome = await bootstrap.messageSyncService!.syncNow(reason: reason, limit: 100);
+      if (outcome.status != MessageSyncStatus.idle &&
+          outcome.status != MessageSyncStatus.changed) {
+        fail('Handle Recovery fixture sync did not become ready '
+            '(status=${outcome.status.name}).');
+      }
       return;
     } on MessageSyncCoreFailure catch (error) {
       if (error.code != 'transport_unavailable') rethrow;
@@ -6380,6 +7832,12 @@ Future<void> _activatePeerIdentity(
 
 bool _validSas(String value) => RegExp(r'^\d{6}$').hasMatch(value);
 
+bool _sameStringSet(Iterable<String> left, Iterable<String> right) {
+  final leftSet = left.toSet();
+  final rightSet = right.toSet();
+  return leftSet.length == rightSet.length && leftSet.containsAll(rightSet);
+}
+
 bool _constantTimeAsciiEquals(String first, String second) {
   final firstBytes = ascii.encode(first);
   final secondBytes = ascii.encode(second);
@@ -6508,22 +7966,19 @@ class _RemoteRecoveryRunConfig {
       daemonHandle: _optionalString(daemon, 'handle'),
     );
     if (!config.automatedUserPresence ||
-        config.didDomain != 'awiki.info' ||
         config.otpMode != 'ignored_local_fixture') {
       throw StateError('Remote Handle Recovery controls are not audited.');
     }
-    for (final value in <String>[
-      config.baseUrl,
-      config.userServiceUrl,
-      config.messageServiceUrl,
-      config.mailServiceUrl,
-      config.anpServiceUrl,
-    ]) {
-      final uri = Uri.tryParse(value);
-      if (uri == null || uri.scheme != 'https' || uri.host != 'awiki.info') {
-        throw StateError('Remote Handle Recovery target is not audited.');
-      }
-    }
+    validateConfiguredRemoteTarget(
+      didDomain: config.didDomain,
+      serviceUrls: <String>[
+        config.baseUrl,
+        config.userServiceUrl,
+        config.messageServiceUrl,
+        config.mailServiceUrl,
+        config.anpServiceUrl,
+      ],
+    );
     return config;
   }
 }
@@ -6535,26 +7990,11 @@ class _DedicatedAccount {
   final String fixedOtp;
 
   static _DedicatedAccount fromConfig(_RemoteRecoveryRunConfig config) {
-    final file = File(config.localConfigPath);
-    if (!file.existsSync()) {
-      throw StateError('The ignored local OTP fixture is missing.');
-    }
-    final Object? decoded;
-    try {
-      decoded = loadYaml(file.readAsStringSync());
-    } on Object {
-      throw StateError('The ignored local OTP fixture is invalid.');
-    }
-    if (decoded is! Map) {
-      throw StateError('The ignored local OTP fixture is invalid.');
-    }
-    final otp = _map(_stringMap(decoded), 'otp');
-    final phone = _required(otp, 'phone');
-    final fixedOtp = _required(otp, 'code');
-    if (!isSixDigitAsciiOtp(fixedOtp)) {
-      throw StateError('The ignored local test OTP is invalid.');
-    }
-    return _DedicatedAccount(phone: phone, fixedOtp: fixedOtp);
+    final protectedOtp = ProtectedOtpConfig.load(config.localConfigPath);
+    return _DedicatedAccount(
+      phone: protectedOtp.phone,
+      fixedOtp: protectedOtp.code,
+    );
   }
 }
 
@@ -6644,6 +8084,20 @@ Future<void> _tapOne(
   if (target.evaluate().length != 1) fail(failure);
   await tester.ensureVisible(target);
   await tester.tap(target);
+  await tester.pump();
+}
+
+Future<void> _invokeOneAppPressable(
+  WidgetTester tester,
+  Finder finder, {
+  required String failure,
+}) async {
+  if (finder.evaluate().length != 1) fail(failure);
+  await tester.ensureVisible(finder);
+  await tester.pump();
+  final callback = tester.widget<AppPressable>(finder).onTap;
+  if (callback == null) fail(failure);
+  callback();
   await tester.pump();
 }
 

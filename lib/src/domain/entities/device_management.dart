@@ -67,14 +67,10 @@ class DeviceJoinHandleRecoveryContext {
   const DeviceJoinHandleRecoveryContext({
     required this.handle,
     required this.localOrdinaryDataWillMigrate,
-    this.unsupportedE2eeGroupCount = 0,
-    this.unsupportedDidOnlyGroupCount = 0,
   });
 
   final String handle;
   final bool localOrdinaryDataWillMigrate;
-  final int unsupportedE2eeGroupCount;
-  final int unsupportedDidOnlyGroupCount;
 }
 
 class DeviceSummary {
@@ -170,16 +166,20 @@ class RootKeyTransferReceipt {
   final DateTime acceptedAt;
 }
 
+enum RootKeyTransferOrigin { activeJoin, deviceList }
+
 class RootKeyTransferContext {
   const RootKeyTransferContext({
-    required this.joinSessionId,
+    required this.origin,
+    required this.flowId,
     required this.did,
     required this.recipientDeviceId,
     required this.recipientSigningKeyId,
     required this.recipientE2eeKeyId,
   });
 
-  final String joinSessionId;
+  final RootKeyTransferOrigin origin;
+  final String flowId;
   final String did;
   final String recipientDeviceId;
   final String recipientSigningKeyId;
@@ -188,7 +188,8 @@ class RootKeyTransferContext {
   @override
   bool operator ==(Object other) =>
       other is RootKeyTransferContext &&
-      joinSessionId == other.joinSessionId &&
+      origin == other.origin &&
+      flowId == other.flowId &&
       did == other.did &&
       recipientDeviceId == other.recipientDeviceId &&
       recipientSigningKeyId == other.recipientSigningKeyId &&
@@ -196,7 +197,8 @@ class RootKeyTransferContext {
 
   @override
   int get hashCode => Object.hash(
-    joinSessionId,
+    origin,
+    flowId,
     did,
     recipientDeviceId,
     recipientSigningKeyId,

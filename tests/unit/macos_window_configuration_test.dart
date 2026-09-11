@@ -293,10 +293,8 @@ void main() {
     expect(packageWorker, contains('verify_android_startup_smoke'));
     expect(packageWorker, contains('GeneratedPluginRegistrant'));
     expect(packageWorker, contains('application-debuggable'));
-    expect(
-      packageWorker,
-      contains('AWIKI_PRIMARY_TENANT_DOMAIN="\$PRIMARY_TENANT_DOMAIN"'),
-    );
+    expect(packageWorker, contains('AWIKI_BUILTIN_TENANTS_BASE64'));
+    expect(packageWorker, contains('AWIKI_BUILTIN_TENANTS_SHA256'));
 
     expect(packageWorkflow, contains('FLUTTER_VERSION: 3.44.0'));
     expect(packageWorkflow, contains('RUST_VERSION: 1.88.0'));
@@ -361,10 +359,6 @@ void main() {
       infoPlist,
       contains('<string>\$(AWIKI_IM_CORE_SOURCE_REF)</string>'),
     );
-    expect(infoPlist, contains('<key>AWikiPrimaryTenantDomain</key>'));
-    expect(
-      infoPlist,
-      contains('<string>\$(AWIKI_PRIMARY_TENANT_DOMAIN)</string>'),
-    );
+    expect(infoPlist, isNot(contains('<key>AWikiPrimaryTenantDomain</key>')));
   });
 }

@@ -161,6 +161,10 @@ class ImCoreOnboardingService implements OnboardingService {
     String? nickName,
     String? profileMarkdown,
   }) async {
+    if (result.status == IdentityRegistrationStatus.recoveryRequired) {
+      _sessions.cancelPendingSessionTransition(transition);
+      return result;
+    }
     if (result.status == IdentityRegistrationStatus.joinRequired) {
       final mode = result.existingHandleJoinMode;
       if (result.existingHandleContinuationId == null ||

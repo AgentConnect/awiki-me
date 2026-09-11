@@ -5,10 +5,11 @@
 1. **地位**：AWiki 跨平台 Flutter App，面向人类用户和 Agent，承载身份 onboarding、tenant 管理、会话/群组/附件/Mention、Agent/Daemon 控制和产品 UI。
 2. **边界**：App 拥有 UI、导航、application orchestration、平台适配、短期交互状态和 presentation overlay；消息、conversation、read-state、sync/outbox、identity vault 与密码正确性由 sibling `../awiki-cli-rs2/packages/awiki_im_core` / Rust `im-core` 提供。
 3. **约束**：
+   - 文档跟随本文件、[AGENTS.md](AGENTS.md) 和 `docs/`。不要套 GEB 分形协议，不要为每个目录新建 `CLAUDE.md`。
    - 不直接拼 message-service wire、读 raw SQLite、写 reliable checkpoint 或持有 DID/E2EE 私钥。
    - `ProductLocalStore` 只保存 App overlay，不建立第二套 durable message truth。
    - tenant 切换必须先释放旧 runtime，并按不可变 Storage Scope 隔离 identity、conversation、cache 与 vault。
-   - 首页只保留统一登录/注册；已验证 Handle 存在时才显示 Join/Recovery 选择。Join grant 只能留在 adapter 内存并由 opaque continuation 单次消费；fresh onboarding Recovery 必须丢弃该 grant、发送 purpose 隔离的专用 OTP、省略 selector，并由 Core 按输入 Handle 匹配或新增身份，不能把当前身份、`credentialName`/alias 当作目标猜测。设置内已登录 Recovery 则必须携带当前 exact `localIdentityId`，且成功前不得退出或删除 owner 数据，以保留 Direct/Group/Agent 连续性。远端 Commit 后的 JWT/PreKey 本地收尾失败必须按 Core 的 `local_transition_pending` 保留同一 operation 精确续跑，不得改写为未准备或重新开始。
+   - 首页只保留统一登录/注册；已验证 Handle 存在时才显示 Join/Recovery 选择。 已有本机 Recovery 可由 Core `inspectContext` 返回的操作/动作直接提供续接入口，不要求再次普通登录 OTP；该入口不能创建新恢复。Join grant 只能留在 adapter 内存并由 opaque continuation 单次消费；fresh onboarding Recovery 必须丢弃该 grant、发送 purpose 隔离的专用 OTP、省略 selector，并由 Core 按输入 Handle 匹配或新增身份，不能把当前身份、`credentialName`/alias 当作目标猜测。设置内已登录 Recovery 则必须携带当前 exact `localIdentityId`，且成功前不得退出或删除 owner 数据，以保留 Direct/Group/Agent 连续性。远端 Commit 后的 JWT/PreKey 本地收尾失败必须按 Core 的 `local_transition_pending` 保留同一 operation 精确续跑，不得改写为未准备或重新开始。
    - 设备管理等高风险操作通过 `UserPresencePort` 调用系统认证，设备不支持、用户取消或平台认证失败时必须 fail closed。
    - `system_notification_changed` 仅作为设备域因果失效信号：App 必须独立读取 Core typed Join inbox 并展示全局审批入口，不能等待通用 message sync 成功，也不能从 realtime payload 直接构造请求、自动验证/拒绝/批准。
    - Core reliable sync 必须把 v2 `system.notification` marker 作为 exact-device durable inbox hydration 门禁，在提交该页 cursor 前完成 typed notification 投影；因此 realtime hint 丢失时，前台 catch-up 仍能恢复 Join 请求。
@@ -19,7 +20,7 @@
    - 无业务消息体但携带 Core `sync` hint 的 realtime 事件必须保留为 sync-only `RealtimeUpdate` 并调度 reliable sync；普通 P3 Direct 的兄弟设备 outgoing 投影来自 sender owner 的 `sync.delta` / `sync.thread_after`，不能由 App 构造 plain own-sync 或升级为 P5。App 使用的稳定 conversationId 只是展示/存储路由，普通 Direct 的不可变 wire identity 仍由 Core 保持为 `direct + peer DID`。
    - AWiki Me 默认创建普通群并以 `default-plain` 发送普通 Direct；P5/P6 capability gate 保持可用，但在产品提供显式用户选择前不得把“能力可用”解释为“默认使用 E2EE”。Runtime Agent prompt 同样固定走 `default-plain`。
    - Agent 页面以 User Service Inventory 为存在性基线，以 IM Core committed control patch 为运行状态/因果失效信号，以 App pending intent 为短期交互层；realtime control 只触发 reliable sync，不能直接成为 Agent UI 真相。typed account binding 存在时，Agent provider 的 cache/load owner 必须是稳定 `owner_identity_id + account_id`，应用权威 Inventory 后标记同一 owner 与当前 session operation 已加载，不能因 Handle/DID key 不一致阻塞 create pending 首帧。权威 Inventory 中的 runtime Agent 在发布到 UI 前通过 Core Directory 投影 canonical Direct route，失败不伪造 Persona，并由后续 Inventory 对账重试。可见 Agent 页面在 App 前台按 30 秒静默重读 Inventory，以补偿失效信号丢失，页面销毁或 App 后台时不发起对账。
-   - Agent/Daemon 能力按 App 内置 realm 白名单 fail-closed；仅当 HTTPS backend host 与 DID Host 相同且命中 `awiki.ai`、`agent-connect.cn`、`awiki.info`、`anpclaw.com` 时启用。Skill onboarding 还必须由当前同源 User Service 的 `server-info` 显式声明受支持 V1 和固定 `/cli/onboarding.md`，不能另建域名名单或仅按 realm 猜测发布状态。
+   - Agent/Daemon 能力按 App 内置 realm 白名单 fail-closed；仅当 HTTPS backend host 与 DID Host 相同且命中当前官方域 `awiki.ai`、`awiki.me`，或兼容域 `agent-connect.cn`、`awiki.info`、`anpclaw.com` 时启用。兼容域在完成基于服务端 capability 的迁移前不得静默移除。Skill onboarding 还必须由当前同源 User Service 的 `server-info` 显式声明受支持 V1 和固定 `/cli/onboarding.md`，不能另建域名名单或仅按 realm 猜测发布状态。
    - Daemon 安装命令只签发自动命名意图，不在 App 或 token metadata 中预先写死 `Daemon N`；最终默认名由 User Service 在实际 exchange 的账号级事务内分配，未执行命令不得占号。
    - 新加入的 tail-only 设备可以先拥有 canonical Agent/Direct route、后拥有服务端 durable thread binding；App 只在空 Direct 且无本地 server sequence 时把 typed `SYNC_THREAD_BINDING_REQUIRED` 解释为“暂无加入后历史”，不得由 DID/Handle/Inventory 伪造 binding，已有服务端序号时仍 fail closed。
    - 行为和 UI 变化同时更新 `tests/unit/`；真实 backend、CLI peer、平台或设备流程变化同步更新 `tests/e2e/`。
@@ -46,7 +47,7 @@
 ## 权威入口
 
 - [README.md](README.md)：产品定位、架构、运行、测试、打包与安全边界。
-- [docs/testing.md](docs/testing.md)：unit/smoke/full E2E 分层。
+- [docs/testing.md](docs/testing.md)：unit/smoke/messaging 与全 active `full` 聚合 E2E 分层；full 包含双 App、Recovery、Root Transfer 和平台原生专项。
 - [docs/test-case-catalog.md](docs/test-case-catalog.md)：由 catalog 生成的 case→oracle→gate→evidence 追踪表。
 - [docs/test-quality.md](docs/test-quality.md)：line/branch baseline、mutation proof 与大文件治理入口。
 - [docs/conversation-presentation-ownership.md](docs/conversation-presentation-ownership.md)：conversation-first 显示与 overlay 边界。
@@ -75,6 +76,7 @@ dart run tests/e2e/runner.dart --case multi-device
 dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-app-pair --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-app-pair-functional --config <local-awiki-info-config.yaml>
+dart run tests/e2e/runner.dart --case multi-device-app-pair-paging-recovery --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-remote-recovery --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case handle-recovery-local-data --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-app-pair-recovery-registration-rejoin-management-transfer --config <explicit-awiki-info-config.yaml>
@@ -120,8 +122,11 @@ exact-one；不新增 App JSON 通知，也不把 token/transition/owner 选择�
 `multi-device-app-pair` 是独立的单机双进程模式：通过通用 Debug 构建脚本生成稳定且不同
 bundle ID、独立 Flutter build root 与独立 native Core state root 的管理端/加入端 App，
 再由两个 driver 并发操作真实 UI。loopback coordinator 只交换生命周期 checkpoint，并在
-内存中比较 SAS；不得调用产品 API、触发 inbox/sync 或持久化秘密。当前该模式仅注册
-`DEVICE-JOIN-E2E-004`，不能外推为其他 E2E 已具备 App↔App 覆盖。两个双 App suite 都只在
+内存中比较 SAS；不得调用产品 API、触发 inbox/sync 或持久化秘密。基础双 App 模式覆盖
+`DEVICE-JOIN-E2E-004`、`ROOT-TRANSFER-APP-PAIR-E2E-001` 和 `DEVICE-JOIN-E2E-005`：
+真实加入、主 App 两个管理权限入口、接收 App 升级为管理员及后续本地删除/重新加入入口；
+Root 用例还必须实际完成下一次加入和授权，覆盖已有两个管理员后的 Registry-only 版本分叉。
+不能把 `root-transfer` 的 App+CLI 结果当作双 App 证明。两个双 App suite 都只在
 integration-test provider override 中自动确认 user presence；正式 App 仍使用 macOS
 LocalAuthentication。独立的 `multi-device-app-pair-functional` 用真实双 App、Daemon、
 Agent Inventory、CLI peer 和远端消息链路验证
@@ -132,7 +137,9 @@ active Handle 的手机号绑定和受保护的测试手机号摘要授权，App
 account allowlist。Stage-3 retention-gap operator 同样固定到 Ali 不可变 Message Service
 发布、已审查的 Ali `/usr/bin/python3.11` stdlib runtime 与 root-owned、service-group-readable 且不可由 group/other 写入的配置，由服务端显式门禁；Message helper 唯一解析 account 后复用 User
 operator 的 active Handle 测试手机号摘要绑定和 active-device 授权，再重验映射、要求
-replica 已 bootstrap 并精确更新一个 active stream。App runner 不接收或转发 account
-ID/allowlist，闭合 receipt 也不作为消息或恢复 oracle。
+replica 已 bootstrap 并精确更新一个 active stream。focused paging alias 只额外允许闭合的
+`messages_501` fixture；它仍由 exact device、测试手机号授权和 managed cleanup 约束，App 不接触
+account/cursor/token/page ref/manifest。App runner 不接收或转发 account ID/allowlist，闭合
+receipt 也不作为消息或恢复 oracle。
 
 ⚡触发器：App 目录职责、SDK/App 边界、tenant/state/vault 归属、测试结构或平台支持变化时同步更新本文件。

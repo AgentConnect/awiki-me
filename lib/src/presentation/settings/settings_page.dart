@@ -4,7 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_locale.dart';
 import '../../app/app_router.dart';
+import '../../app/app_services.dart';
+import '../../application/tenant/app_tenant.dart';
 import '../../domain/entities/session_identity.dart';
+import '../../domain/services/update_service.dart';
 import '../../l10n/l10n.dart';
 import '../app_shell/providers/app_update_provider.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
@@ -44,6 +47,7 @@ class SettingsPage extends ConsumerWidget {
     final session = ref.watch(sessionProvider).session;
     final runtime = ref.read(appRuntimeProvider.notifier);
     final updateState = ref.watch(appUpdateProvider);
+    final activeTenant = ref.watch(activeAppTenantProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
     final displayScale = ref.watch(displayScaleProvider);
     final isDesktopPlatform =
@@ -131,6 +135,32 @@ class SettingsPage extends ConsumerWidget {
                       .read(appUpdateProvider.notifier)
                       .checkForUpdates(force: true),
           ),
+          if (!activeTenant.isOfficialTenant) ...<Widget>[
+            const AppSectionDivider(),
+            AppListTile(
+              key: const Key('settings-check-primary-update-source-row'),
+              title:
+                  '${l10n.settingsCheckForUpdates} · $primaryBuiltinTenantName',
+              leading: leading(const _SettingsIcon(icon: CupertinoIcons.globe)),
+              onTap: updateState.status == AppUpdateStatus.checking
+                  ? null
+                  : () => ref
+                        .read(appUpdateProvider.notifier)
+                        .checkOfficialSource(AppOfficialUpdateSource.primary),
+            ),
+            const AppSectionDivider(),
+            AppListTile(
+              key: const Key('settings-check-secondary-update-source-row'),
+              title:
+                  '${l10n.settingsCheckForUpdates} · $secondaryBuiltinTenantName',
+              leading: leading(const _SettingsIcon(icon: CupertinoIcons.globe)),
+              onTap: updateState.status == AppUpdateStatus.checking
+                  ? null
+                  : () => ref
+                        .read(appUpdateProvider.notifier)
+                        .checkOfficialSource(AppOfficialUpdateSource.secondary),
+            ),
+          ],
           const AppSectionDivider(),
           AppListTile(
             title: l10n.settingsLanguage,
@@ -215,7 +245,12 @@ class SettingsPage extends ConsumerWidget {
             ),
             onTap: session == null
                 ? null
-                : () => _showDeleteCredentialDialog(context, runtime, session),
+                : () => _showDeleteCredentialDialog(
+                    context,
+                    ref,
+                    runtime,
+                    session,
+                  ),
           ),
         ],
       ),
@@ -320,6 +355,34 @@ class SettingsPage extends ConsumerWidget {
                         .read(appUpdateProvider.notifier)
                         .checkForUpdates(force: true),
             ),
+            if (!activeTenant.isOfficialTenant)
+              _QuietSettingsRow(
+                key: const Key('settings-check-primary-update-source-row'),
+                icon: CupertinoIcons.globe,
+                title:
+                    '${l10n.settingsCheckForUpdates} · $primaryBuiltinTenantName',
+                height: optionRowHeight,
+                onTap: updateState.status == AppUpdateStatus.checking
+                    ? null
+                    : () => ref
+                          .read(appUpdateProvider.notifier)
+                          .checkOfficialSource(AppOfficialUpdateSource.primary),
+              ),
+            if (!activeTenant.isOfficialTenant)
+              _QuietSettingsRow(
+                key: const Key('settings-check-secondary-update-source-row'),
+                icon: CupertinoIcons.globe,
+                title:
+                    '${l10n.settingsCheckForUpdates} · $secondaryBuiltinTenantName',
+                height: optionRowHeight,
+                onTap: updateState.status == AppUpdateStatus.checking
+                    ? null
+                    : () => ref
+                          .read(appUpdateProvider.notifier)
+                          .checkOfficialSource(
+                            AppOfficialUpdateSource.secondary,
+                          ),
+              ),
             _QuietSettingsRow(
               key: const Key('settings-language-row'),
               icon: CupertinoIcons.globe,
@@ -391,8 +454,12 @@ class SettingsPage extends ConsumerWidget {
               height: optionRowHeight,
               onTap: session == null
                   ? null
-                  : () =>
-                        _showDeleteCredentialDialog(context, runtime, session),
+                  : () => _showDeleteCredentialDialog(
+                      context,
+                      ref,
+                      runtime,
+                      session,
+                    ),
             ),
           ],
         ),
@@ -485,13 +552,21 @@ class SettingsPage extends ConsumerWidget {
     if (state.status == AppUpdateStatus.checking) {
       return l10n.settingsUpdateStatusChecking;
     }
+    if (state.status == AppUpdateStatus.error) {
+      return state.usedCache
+          ? l10n.settingsUpdateStatusCached
+          : l10n.settingsUpdateStatusFailed;
+    }
+    if (state.policyUnavailable) return l10n.settingsUpdateStatusUnavailable;
+    if (state.status == AppUpdateStatus.idle) {
+      return l10n.settingsUpdateStatusUnchecked;
+    }
     if (state.hasUpdate) {
       return l10n.settingsUpdateAvailable(state.latestManifest!.version);
     }
-    if (state.status == AppUpdateStatus.error) {
-      return l10n.settingsUpdateStatusFailed;
-    }
-    return l10n.settingsAlreadyLatestVersion;
+    return state.status == AppUpdateStatus.upToDate
+        ? l10n.settingsAlreadyLatestVersion
+        : l10n.settingsUpdateStatusLoading;
   }
 
   void _showLogoutDialog(BuildContext context, AppRuntimeController runtime) {
@@ -515,6 +590,7 @@ class SettingsPage extends ConsumerWidget {
 
   void _showDeleteCredentialDialog(
     BuildContext context,
+    WidgetRef ref,
     AppRuntimeController runtime,
     SessionIdentity identity,
   ) {
@@ -522,6 +598,9 @@ class SettingsPage extends ConsumerWidget {
       context,
       (ctx) => LocalCredentialDeleteDialog(
         identity: identity,
+        loadRecoveryImpact: () => ref
+            .read(appSessionServiceProvider)
+            .hasPendingLocalIdentityRecovery(identity.localIdentitySelector),
         signsOut: true,
         onConfirm: () async {
           Navigator.of(ctx).pop();
@@ -544,6 +623,7 @@ class SettingsPage extends ConsumerWidget {
     AppNavigator.push<void>(
       context,
       (_) => HandleRecoveryPage(
+        startNew: true,
         initialHandle: identity.handle!.trim(),
         initialPhone: '',
         autoRequestOtp: false,

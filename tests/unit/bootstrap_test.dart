@@ -29,6 +29,10 @@ import 'package:http/testing.dart';
 import 'test_support.dart';
 
 void main() {
+  test('candidate build defaults to the 0815 release line', () {
+    expect(awikiMeReleaseLine, '0815');
+  });
+
   test('bootstrap exposes its app-lifetime remote Push dependencies', () {
     final client = _FakeRemotePushClient();
     final coordinator = RemotePushInstallationCoordinator(
@@ -39,10 +43,8 @@ void main() {
     final bootstrap = AppBootstrap(
       environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
       accountGateway: gateway,
-      gateway: gateway,
       realtimeGateway: FakeRealtimeGateway(),
       notificationFacade: FakeNotificationFacade(),
-      e2eeFacade: FakeE2eeFacade(),
       localePreferenceService: FakeLocalePreferenceService(),
       updateService: FakeUpdateService(),
       remotePushClient: client,
@@ -146,10 +148,8 @@ void main() {
       final bootstrap = AppBootstrap(
         environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
         accountGateway: gateway,
-        gateway: gateway,
         realtimeGateway: FakeRealtimeGateway(),
         notificationFacade: FakeNotificationFacade(),
-        e2eeFacade: FakeE2eeFacade(),
         localePreferenceService: FakeLocalePreferenceService(),
         updateService: FakeUpdateService(),
         realtimeApplicationService: _RecordingRealtimeService(calls),
@@ -184,6 +184,31 @@ void main() {
       expect(coordinator.disableCalls, 1);
       expect(calls, <String>['dispose_runtime']);
       expect(stopwatch.elapsed, lessThan(const Duration(seconds: 1)));
+    },
+  );
+
+  test(
+    'bootstrap closes its utility client without closing a borrowed transport',
+    () async {
+      final transport = _CloseTrackingHttpClient();
+      final utilityClient = AwikiOnboardingUtilityHttpClient(
+        baseUrl: 'https://awiki.ai',
+        httpClient: transport,
+      );
+      final gateway = FakeAwikiGateway();
+      final bootstrap = _buildBootstrap(
+        gateway: gateway,
+        userServiceHttpClient: utilityClient,
+      );
+
+      await bootstrap.dispose();
+      await bootstrap.dispose();
+
+      expect(transport.closeCalls, 0);
+      expect(
+        () => utilityClient.get(Uri.parse('https://awiki.ai/health')),
+        throwsStateError,
+      );
     },
   );
 
@@ -249,23 +274,37 @@ AppBootstrap _buildBootstrap({
   RealtimeApplicationService? realtimeApplicationService,
   RemotePushClient? remotePushClient,
   RemotePushInstallationCoordinator? remotePushInstallationCoordinator,
+  AwikiOnboardingUtilityHttpClient? userServiceHttpClient,
   Duration remotePushDisposeTimeout = const Duration(seconds: 3),
 }) {
   return AppBootstrap(
     environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
     accountGateway: gateway,
-    gateway: gateway,
     realtimeGateway: FakeRealtimeGateway(),
     notificationFacade: FakeNotificationFacade(),
-    e2eeFacade: FakeE2eeFacade(),
     localePreferenceService: FakeLocalePreferenceService(),
     updateService: FakeUpdateService(),
     appSessionService: appSessionService,
     realtimeApplicationService: realtimeApplicationService,
+    userServiceHttpClient: userServiceHttpClient,
     remotePushClient: remotePushClient,
     remotePushInstallationCoordinator: remotePushInstallationCoordinator,
     remotePushDisposeTimeout: remotePushDisposeTimeout,
   );
+}
+
+final class _CloseTrackingHttpClient extends http.BaseClient {
+  int closeCalls = 0;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    return http.StreamedResponse(const Stream<List<int>>.empty(), 200);
+  }
+
+  @override
+  void close() {
+    closeCalls += 1;
+  }
 }
 
 final class _FakeRemotePushClient implements RemotePushClient {

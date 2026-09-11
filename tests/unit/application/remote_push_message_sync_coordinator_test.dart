@@ -1169,6 +1169,7 @@ final class _FakeRemotePushSyncPort implements RemotePushSyncPort {
 
   @override
   Future<RemotePushSyncReceipt> requestRemotePushSync({
+    Set<String>? messageReferences,
     RemotePushPresentationDisposition presentation =
         RemotePushPresentationDisposition.providerPresented,
   }) async {
@@ -1203,6 +1204,7 @@ final class _SequencedRemotePushSyncPort implements RemotePushSyncPort {
 
   @override
   Future<RemotePushSyncReceipt> requestRemotePushSync({
+    Set<String>? messageReferences,
     RemotePushPresentationDisposition presentation =
         RemotePushPresentationDisposition.providerPresented,
   }) {

@@ -31,7 +31,8 @@ class UserServiceAccountStateSyncAdapter
     );
   }
 
-  static const String accountStateEndpoint = '/user-service/v1/account-state/rpc';
+  static const String accountStateEndpoint =
+      '/user-service/v1/account-state/rpc';
   static const String deviceAuthEndpoint = '/user-service/v1/did-auth/rpc';
   static const String profileEndpoint = '/user-service/v1/me/rpc';
 

@@ -122,39 +122,6 @@ class GroupListPage extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            if (state.recoverySummary != null) ...<Widget>[
-              _GroupRecoveryStatusBand(
-                summary: state.recoverySummary!,
-                isLoading: state.isResumingRecovery,
-                onRetry: () async {
-                  try {
-                    final summary = await ref
-                        .read(groupProvider.notifier)
-                        .resumeRebindRecovery();
-                    if (!context.mounted) {
-                      return;
-                    }
-                    final feedback = ref.read(uiFeedbackProvider.notifier);
-                    if (summary.hasBlocked) {
-                      feedback.showInfo(
-                        AppMessage.groupRecoveryBlocked(summary.blocked),
-                      );
-                    } else if (summary.hasPending) {
-                      feedback.showInfo(
-                        AppMessage.groupRecoveryPending(summary.pending),
-                      );
-                    } else {
-                      feedback.showInfo(AppMessage.groupRecoveryCompleted());
-                    }
-                  } catch (error) {
-                    ref
-                        .read(uiFeedbackProvider.notifier)
-                        .showError(AppMessage.fromError(error));
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-            ],
             if (state.groups.isEmpty)
               AppCardSection(
                 color: theme.subtleSurface,
@@ -240,11 +207,6 @@ class GroupListPage extends ConsumerWidget {
 
   Future<void> _showJoinDialog(BuildContext context, WidgetRef ref) async {
     final textController = TextEditingController();
-    final session = ref.read(sessionProvider).session;
-    final activeHandle = groupHandleForDid(
-      handle: session?.handle,
-      did: session?.did ?? '',
-    );
     try {
       await AppNavigator.showDialog<void>(
         context,
@@ -287,12 +249,13 @@ class GroupListPage extends ConsumerWidget {
                           }
                           Navigator.of(ctx).pop();
                           try {
-                            final identity = GroupIdentitySelection.handle(
-                              activeHandle ?? '',
-                            );
                             final group = await ref
                                 .read(groupProvider.notifier)
-                                .joinGroup(groupDid, identity: identity);
+                                .joinGroup(
+                                  groupDid,
+                                  identity:
+                                      const GroupIdentitySelection.didOnly(),
+                                );
                             await ref
                                 .read(groupProvider.notifier)
                                 .loadGroupMembers(group.groupId);
@@ -319,118 +282,6 @@ class GroupListPage extends ConsumerWidget {
       textController.dispose();
     }
   }
-}
-
-class _GroupRecoveryStatusBand extends StatelessWidget {
-  const _GroupRecoveryStatusBand({
-    required this.summary,
-    required this.isLoading,
-    required this.onRetry,
-  });
-
-  final GroupRebindRecoverySummary summary;
-  final bool isLoading;
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final title = summary.hasBlocked
-        ? context.l10n.groupRecoveryBlocked(summary.blocked)
-        : summary.hasPending
-        ? context.l10n.groupRecoveryPending(summary.pending)
-        : context.l10n.groupRecoveryCompleted;
-    final accent = summary.hasBlocked
-        ? AwikiMePalette.dangerRed
-        : summary.hasPending
-        ? const Color(0xFF8A5A00)
-        : AwikiMePalette.successGreen;
-    return Container(
-      key: const Key('group-recovery-status-band'),
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: accent.withValues(alpha: 0.24)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  title,
-                  style: AwikiMeTextStyles.cardTitle.copyWith(color: accent),
-                ),
-              ),
-              Semantics(
-                label: context.l10n.groupRecoveryRetry,
-                button: true,
-                child: CupertinoButton(
-                  key: const Key('group-recovery-retry-button'),
-                  padding: const EdgeInsets.all(8),
-                  minimumSize: const Size(40, 40),
-                  onPressed: isLoading ? null : onRetry,
-                  child: isLoading
-                      ? const CupertinoActivityIndicator(radius: 9)
-                      : Icon(CupertinoIcons.refresh, color: accent, size: 19),
-                ),
-              ),
-            ],
-          ),
-          if (summary.items.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 6),
-            for (final item in summary.items.take(6))
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(
-                        item.groupDid,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AwikiMeTextStyles.cardSubtitle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _recoveryLayerLabel(context, item.layer),
-                      style: AwikiMeTextStyles.cardSubtitle,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _recoveryPhaseLabel(context, item),
-                      style: AwikiMeTextStyles.cardSubtitle.copyWith(
-                        color: item.blocked ? accent : theme.secondaryText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-String _recoveryLayerLabel(BuildContext context, String layer) {
-  return layer == 'p6'
-      ? context.l10n.groupRecoveryEncryptionLayer
-      : context.l10n.groupRecoveryMembershipLayer;
-}
-
-String _recoveryPhaseLabel(BuildContext context, GroupRebindRecoveryItem item) {
-  if (item.blocked || item.phase == 'blocked') {
-    return context.l10n.groupRecoveryPhaseBlocked;
-  }
-  if (item.phase == 'complete' || item.phase == 'completed') {
-    return context.l10n.groupRecoveryPhaseCompleted;
-  }
-  return context.l10n.groupRecoveryPhasePending;
 }
 
 class GroupDetailPage extends ConsumerStatefulWidget {

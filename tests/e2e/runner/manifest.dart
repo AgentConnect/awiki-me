@@ -1,0 +1,424 @@
+// [INPUT]: Checked-in App suite manifest plus case, platform, and remote-target contracts.
+// [OUTPUT]: Validated suite definitions and report-ready tier/lane policy.
+// [POS]: Manifest authority boundary; contains no scenario execution or runtime secrets.
+
+import 'dart:convert';
+import 'dart:io';
+
+import '../host_platform.dart';
+import '../remote_target.dart';
+import 'failure.dart';
+
+const String desktopE2eSuiteManifestPath = 'tests/e2e/suite_manifest.json';
+
+abstract interface class DesktopE2eCaseContract {
+  String get caseName;
+  List<String> get caseIds;
+}
+
+abstract interface class DesktopRemoteTargetContract {
+  String get didDomain;
+  String get serviceBaseUrl;
+  String? get userServiceUrl;
+  String? get messageServiceUrl;
+  String? get messageServiceWsUrl;
+}
+
+class DesktopE2eSuiteManifest {
+  DesktopE2eSuiteManifest({
+    required this.schemaVersion,
+    required this.sourceRevision,
+    required this.definitions,
+  });
+
+  final int schemaVersion;
+  final String sourceRevision;
+  final Map<String, DesktopE2eSuiteDefinition> definitions;
+
+  static DesktopE2eSuiteManifest load(Directory root) {
+    final scopedFile = File('${root.path}/$desktopE2eSuiteManifestPath');
+    final repositoryFile = File(desktopE2eSuiteManifestPath);
+    final file = scopedFile.existsSync() ? scopedFile : repositoryFile;
+    if (!file.existsSync()) {
+      throw E2eFailure('E2E suite manifest was not found.');
+    }
+    Object? decoded;
+    try {
+      decoded = jsonDecode(file.readAsStringSync());
+    } on Object {
+      throw E2eFailure('E2E suite manifest is not valid JSON.');
+    }
+    if (decoded is! Map || decoded['schemaVersion'] != 1) {
+      throw E2eFailure('E2E suite manifest must use schemaVersion 1.');
+    }
+    final sourceRevision = decoded['sourceRevision'];
+    final suites = decoded['suites'];
+    if (sourceRevision is! String || sourceRevision.trim().isEmpty) {
+      throw E2eFailure('E2E suite manifest has no sourceRevision.');
+    }
+    if (suites is! Map) {
+      throw E2eFailure('E2E suite manifest has no suites object.');
+    }
+    final definitions = <String, DesktopE2eSuiteDefinition>{};
+    for (final entry in suites.entries) {
+      final name = entry.key.toString();
+      final raw = entry.value;
+      if (raw is! Map) {
+        throw E2eFailure('E2E suite "$name" must be an object.');
+      }
+      definitions[name] = DesktopE2eSuiteDefinition.fromJson(name, raw);
+    }
+    return DesktopE2eSuiteManifest(
+      schemaVersion: 1,
+      sourceRevision: sourceRevision.trim(),
+      definitions: definitions,
+    );
+  }
+
+  /// Every active leaf case has exactly one executor in full. Adding a new
+  /// audited case without updating the aggregate is a catalog error.
+  List<DesktopE2eSuiteDefinition> fullSuites() {
+    final full = definitions['full'];
+    if (full == null ||
+        full.includes.isEmpty ||
+        full.includes.toSet().length != full.includes.length) {
+      throw E2eFailure('full must include unique audited leaf suites.');
+    }
+    final selected = <DesktopE2eSuiteDefinition>[];
+    final covered = <String>{};
+    for (final name in full.includes) {
+      final suite = definitions[name];
+      if (suite == null ||
+          suite.includes.isNotEmpty ||
+          suite.catalogStatus != 'active') {
+        throw E2eFailure(
+          'full includes an unknown, aggregate, or unsupported suite.',
+        );
+      }
+      for (final id in suite.caseIds) {
+        if (!covered.add(id)) {
+          throw E2eFailure('full duplicates case $id.');
+        }
+      }
+      selected.add(suite);
+    }
+    final active = <String>{
+      for (final suite in definitions.values)
+        if (suite.includes.isEmpty && suite.catalogStatus == 'active')
+          ...suite.caseIds,
+    };
+    if (covered.length != active.length ||
+        !covered.containsAll(active) ||
+        !_sameOrderedStrings(
+          full.caseIds,
+          selected.expand((suite) => suite.caseIds).toList()..sort(),
+        )) {
+      throw E2eFailure('full must cover every active case exactly once.');
+    }
+    return selected;
+  }
+
+  DesktopE2eSuiteDefinition definitionFor(DesktopE2eCaseContract e2eCase) {
+    final definition = definitions[e2eCase.caseName];
+    if (definition == null) {
+      throw E2eFailure(
+        'E2E suite manifest does not define ${e2eCase.caseName}.',
+      );
+    }
+    return definition;
+  }
+}
+
+class DesktopE2eSuiteDefinition {
+  DesktopE2eSuiteDefinition({
+    required this.name,
+    required this.catalogStatus,
+    required this.tier,
+    required this.requiredFor,
+    required this.owner,
+    required this.estimatedMinutes,
+    required this.timeout,
+    required this.cleanupPolicy,
+    required this.allowedHosts,
+    required this.allowedDidDomains,
+    required this.requiredTargetCapabilities,
+    required this.missingCapabilityPolicy,
+    required this.resourceCategories,
+    required this.supportedPlatforms,
+    required this.requiredTools,
+    required this.caseIds,
+    this.includes = const <String>[],
+    this.remoteTargetPolicy = 'allowlist',
+  });
+
+  final String name;
+  final String catalogStatus;
+  final String tier;
+  final List<String> requiredFor;
+  final String owner;
+  final int estimatedMinutes;
+  final Duration timeout;
+  final String cleanupPolicy;
+  final List<String> allowedHosts;
+  final List<String> allowedDidDomains;
+  final List<String> requiredTargetCapabilities;
+  final String missingCapabilityPolicy;
+  final List<String> resourceCategories;
+  final List<String> supportedPlatforms;
+  final List<String> requiredTools;
+  final List<String> caseIds;
+  final List<String> includes;
+  final String remoteTargetPolicy;
+
+  static DesktopE2eSuiteDefinition fromJson(String name, Map raw) {
+    List<String> stringList(String key) {
+      final value = raw[key];
+      if (value is! List || value.any((item) => item is! String)) {
+        throw E2eFailure('E2E suite "$name" has invalid $key.');
+      }
+      return value.cast<String>();
+    }
+
+    final tier = raw['tier'];
+    final catalogStatus = (raw['catalogStatus'] ?? 'active').toString().trim();
+    final owner = raw['owner'];
+    final estimatedMinutes = raw['estimatedMinutes'];
+    final timeoutMinutes = raw['timeoutMinutes'];
+    final cleanupPolicy = raw['cleanupPolicy'];
+    if (tier is! String || tier.trim().isEmpty) {
+      throw E2eFailure('E2E suite "$name" has no tier.');
+    }
+    if (!const <String>{'active', 'unsupported'}.contains(catalogStatus)) {
+      throw E2eFailure('E2E suite "$name" has invalid catalogStatus.');
+    }
+    final canonicalTier = tier.trim();
+    try {
+      awikiExecutionLaneForAppTier(canonicalTier);
+    } on FormatException catch (error) {
+      throw E2eFailure(error.message);
+    }
+    if (owner is! String || owner.trim().isEmpty) {
+      throw E2eFailure('E2E suite "$name" has no owner.');
+    }
+    if (estimatedMinutes is! int || estimatedMinutes <= 0) {
+      throw E2eFailure('E2E suite "$name" has invalid estimatedMinutes.');
+    }
+    if (timeoutMinutes is! int || timeoutMinutes <= 0) {
+      throw E2eFailure('E2E suite "$name" has invalid timeoutMinutes.');
+    }
+    if (timeoutMinutes < estimatedMinutes) {
+      throw E2eFailure(
+        'E2E suite "$name" timeoutMinutes must not be less than estimatedMinutes.',
+      );
+    }
+    if (cleanupPolicy is! String || cleanupPolicy.trim().isEmpty) {
+      throw E2eFailure('E2E suite "$name" has no cleanupPolicy.');
+    }
+    final caseIds = stringList('caseIds');
+    if (caseIds.isEmpty || caseIds.toSet().length != caseIds.length) {
+      throw E2eFailure('E2E suite "$name" has missing or duplicate caseIds.');
+    }
+    final supportedPlatforms = stringList('supportedPlatforms');
+    if (supportedPlatforms.isEmpty ||
+        supportedPlatforms.toSet().length != supportedPlatforms.length ||
+        supportedPlatforms.any(
+          (value) => !awikiSupportedTestPlatforms.contains(value),
+        )) {
+      throw E2eFailure('E2E suite "$name" has invalid supportedPlatforms.');
+    }
+    final requiredTools = stringList('requiredTools');
+    if (requiredTools.isEmpty ||
+        requiredTools.toSet().length != requiredTools.length ||
+        requiredTools.any((value) => value.trim().isEmpty)) {
+      throw E2eFailure('E2E suite "$name" has invalid requiredTools.');
+    }
+    final requiredFor = stringList('requiredFor');
+    final allowedHosts = stringList('allowedHosts');
+    final allowedDidDomains = stringList('allowedDidDomains');
+    final remoteTargetPolicy = raw['remoteTargetPolicy'] ?? 'allowlist';
+    if (!const <String>{
+          'allowlist',
+          'configured_same_origin',
+        }.contains(remoteTargetPolicy) ||
+        (remoteTargetPolicy == 'configured_same_origin' &&
+            (allowedHosts.isNotEmpty || allowedDidDomains.isNotEmpty))) {
+      throw E2eFailure('E2E suite "$name" has invalid remoteTargetPolicy.');
+    }
+    final requiredTargetCapabilities =
+        raw.containsKey('requiredTargetCapabilities')
+        ? stringList('requiredTargetCapabilities')
+        : const <String>[];
+    if (requiredTargetCapabilities.toSet().length !=
+            requiredTargetCapabilities.length ||
+        requiredTargetCapabilities.any((value) => value.trim().isEmpty) ||
+        (requiredTargetCapabilities.isNotEmpty &&
+            allowedHosts.isEmpty &&
+            remoteTargetPolicy == 'allowlist')) {
+      throw E2eFailure(
+        'E2E suite "$name" has invalid requiredTargetCapabilities.',
+      );
+    }
+    final missingCapabilityPolicy = (raw['missingCapabilityPolicy'] ?? 'fail')
+        .toString()
+        .trim();
+    if (missingCapabilityPolicy != 'fail' &&
+        missingCapabilityPolicy != 'expected_skip') {
+      throw E2eFailure(
+        'E2E suite "$name" has invalid missingCapabilityPolicy.',
+      );
+    }
+    if (missingCapabilityPolicy == 'expected_skip' &&
+        (requiredTargetCapabilities.isEmpty ||
+            requiredFor.isEmpty ||
+            requiredFor.any((value) => !value.startsWith('optional_')))) {
+      throw E2eFailure(
+        'E2E suite "$name" can expected-skip missing capabilities only when all requiredFor values are optional.',
+      );
+    }
+    return DesktopE2eSuiteDefinition(
+      name: name,
+      catalogStatus: catalogStatus,
+      tier: canonicalTier,
+      requiredFor: requiredFor,
+      owner: owner.trim(),
+      estimatedMinutes: estimatedMinutes,
+      timeout: Duration(minutes: timeoutMinutes),
+      cleanupPolicy: cleanupPolicy.trim(),
+      allowedHosts: allowedHosts,
+      allowedDidDomains: allowedDidDomains,
+      remoteTargetPolicy: remoteTargetPolicy as String,
+      requiredTargetCapabilities: requiredTargetCapabilities,
+      missingCapabilityPolicy: missingCapabilityPolicy,
+      resourceCategories: stringList('resourceCategories'),
+      supportedPlatforms: supportedPlatforms,
+      requiredTools: requiredTools,
+      caseIds: caseIds,
+      includes: raw.containsKey('includes')
+          ? stringList('includes')
+          : const <String>[],
+    );
+  }
+
+  void validateCodeCaseIds(List<String> codeCaseIds) {
+    if (!_sameOrderedStrings(caseIds, codeCaseIds)) {
+      throw E2eFailure(
+        'E2E suite manifest drift for "$name"; caseIds do not match the Flutter scenario contract.',
+      );
+    }
+  }
+
+  String get executionLane => awikiExecutionLaneForAppTier(tier);
+
+  void validatePlatform(String platform) {
+    if (!awikiSupportedTestPlatforms.contains(platform)) {
+      throw E2eFailure(
+        'E2E suite "$name" received unknown platform $platform.',
+      );
+    }
+    if (!supportedPlatforms.contains(platform)) {
+      throw E2eFailure(
+        'E2E suite "$name" does not support $platform; supported: '
+        '${supportedPlatforms.join(', ')}.',
+      );
+    }
+  }
+
+  void validateRemoteTarget(DesktopRemoteTargetContract config) {
+    validateRemoteTargetValues(
+      didDomain: config.didDomain,
+      serviceUrls: <String>[
+        config.serviceBaseUrl,
+        config.userServiceUrl ?? config.serviceBaseUrl,
+        config.messageServiceUrl ?? config.serviceBaseUrl,
+      ],
+    );
+    if (remoteTargetPolicy == 'allowlist' &&
+        allowedHosts.isEmpty &&
+        allowedDidDomains.isEmpty) {
+      return;
+    }
+    final ws = config.messageServiceWsUrl;
+    final wsUri = ws == null ? null : Uri.tryParse(ws);
+    if (wsUri == null ||
+        wsUri.scheme != 'wss' ||
+        !(remoteTargetPolicy == 'configured_same_origin'
+            ? wsUri.host == config.didDomain &&
+                  wsUri.replace(scheme: 'https').port ==
+                      Uri.parse(config.serviceBaseUrl).port &&
+                  wsUri.userInfo.isEmpty &&
+                  !wsUri.hasQuery &&
+                  !wsUri.hasFragment
+            : allowedHosts.contains(wsUri.host)) ||
+        wsUri.path != '/im/ws') {
+      throw E2eFailure(
+        'E2E suite "$name" requires the audited remote WebSocket endpoint.',
+      );
+    }
+  }
+
+  void validateRemoteTargetValues({
+    required String didDomain,
+    required List<String> serviceUrls,
+  }) {
+    if (remoteTargetPolicy == 'configured_same_origin') {
+      try {
+        validateConfiguredRemoteTarget(
+          didDomain: didDomain,
+          serviceUrls: serviceUrls,
+        );
+      } on FormatException catch (error) {
+        throw E2eFailure('E2E suite "$name": ${error.message}');
+      }
+      return;
+    }
+    if (allowedHosts.isEmpty && allowedDidDomains.isEmpty) {
+      return;
+    }
+    if (!allowedDidDomains.contains(didDomain)) {
+      throw E2eFailure(
+        'E2E suite "$name" must target an audited remote DID domain.',
+      );
+    }
+    for (final value in serviceUrls) {
+      final uri = Uri.tryParse(value);
+      if (uri == null || !allowedHosts.contains(uri.host)) {
+        throw E2eFailure(
+          'E2E suite "$name" must target an audited remote host.',
+        );
+      }
+      if (uri.scheme != 'https') {
+        throw E2eFailure(
+          'E2E suite "$name" requires secure remote service URLs.',
+        );
+      }
+    }
+  }
+
+  Map<String, Object?> toReportJson() => <String, Object?>{
+    'tier': tier,
+    'executionLane': executionLane,
+    'supportedPlatforms': supportedPlatforms,
+    'requiredTools': requiredTools,
+    'requiredFor': requiredFor,
+    'owner': owner,
+    'estimatedMinutes': estimatedMinutes,
+    'timeoutMinutes': timeout.inMinutes,
+    'cleanupPolicy': cleanupPolicy,
+    'remoteTargetPolicy': remoteTargetPolicy,
+    'requiredTargetCapabilities': requiredTargetCapabilities,
+    'missingCapabilityPolicy': missingCapabilityPolicy,
+    'unexpectedSkipBudget': 0,
+  };
+}
+
+bool _sameOrderedStrings(List<String> left, List<String> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index += 1) {
+    if (left[index] != right[index]) {
+      return false;
+    }
+  }
+  return true;
+}

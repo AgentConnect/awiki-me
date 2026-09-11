@@ -275,16 +275,8 @@ void main() {
       'awiki_verify_macos_nested_distribution_code',
       r'details="$(codesign -dvvv "$app" 2>&1)"',
     );
-    _expectBefore(
-      signing,
-      'awiki_notarytool submit',
-      'awiki_notarytool wait',
-    );
-    _expectBefore(
-      signing,
-      'awiki_notarytool wait',
-      'xcrun stapler staple',
-    );
+    _expectBefore(signing, 'awiki_notarytool submit', 'awiki_notarytool wait');
+    _expectBefore(signing, 'awiki_notarytool wait', 'xcrun stapler staple');
 
     final project = File(
       'macos/Runner.xcodeproj/project.pbxproj',

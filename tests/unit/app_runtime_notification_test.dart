@@ -104,10 +104,8 @@ void main() {
       return AppBootstrap(
         environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
         accountGateway: gateway,
-        gateway: gateway,
         realtimeGateway: FakeRealtimeGateway(),
         notificationFacade: notifications,
-        e2eeFacade: FakeE2eeFacade(),
         localePreferenceService: FakeLocalePreferenceService(),
         updateService: FakeUpdateService(),
         disposeNotificationFacade: disposeNotificationFacade,
@@ -158,6 +156,8 @@ void main() {
       bool enableRemotePushEvents = false,
       RemotePushSyncPort? remotePushSyncPort,
       AppSessionService? appSessions,
+      ConversationListController Function(Ref ref)? conversationListFactory,
+      Duration? runtimeRequestTimeout,
     }) {
       final effectiveSessions =
           appSessions ?? _CurrentBarrierAppSessionService(gateway);
@@ -168,7 +168,6 @@ void main() {
               messageSyncV2ReadEnabled: enableRemotePushEvents,
             ),
           ),
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -196,9 +195,13 @@ void main() {
             remotePushClientProvider.overrideWithValue(remotePushClient),
           if (remotePushSyncPort != null)
             remotePushSyncPortProvider.overrideWithValue(remotePushSyncPort),
+          if (conversationListFactory != null)
+            conversationListProvider.overrideWith(conversationListFactory),
           appRuntimeProvider.overrideWith(
             (ref) => AppRuntimeController(
               ref,
+              requestTimeout:
+                  runtimeRequestTimeout ?? const Duration(seconds: 12),
               realtimeSyncRetryBaseDelay: Duration.zero,
             ),
           ),
@@ -210,7 +213,6 @@ void main() {
             ),
           ),
           deviceManagementCorePortProvider.overrideWithValue(deviceCore),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
@@ -456,7 +458,7 @@ void main() {
     });
 
     test(
-      'committed activation replaces the old identity state after E2EE',
+      'committed activation replaces the old identity state after lease validation',
       () async {
         await _activateRuntimeSession(container, _epochSession('first'));
         container
@@ -505,27 +507,15 @@ void main() {
     );
 
     test(
-      'aborting a committed session during E2EE clears Core lease and UI',
+      'aborting a committed session during patch preparation clears Core lease and UI',
       () async {
         final sessions = FakeAppSessionService(gateway);
-        final e2ee = _FirstBlockingE2eeFacade();
-        addTearDown(e2ee.completeFirstIfPending);
+        _FirstBlockingPatchController? patchController;
         container.dispose();
-        container = ProviderContainer(
-          overrides: <Override>[
-            awikiGatewayProvider.overrideWithValue(gateway),
-            awikiAccountGatewayProvider.overrideWithValue(gateway),
-            ...fakeApplicationServiceOverrides(
-              gateway,
-              realtimeGateway: realtimeGateway,
-            ),
-            appSessionServiceProvider.overrideWithValue(sessions),
-            realtimeGatewayProvider.overrideWithValue(realtimeGateway),
-            notificationFacadeProvider.overrideWithValue(notificationFacade),
-            desktopShellServiceProvider.overrideWithValue(desktopShell),
-            e2eeFacadeProvider.overrideWithValue(e2ee),
-            updateServiceProvider.overrideWithValue(FakeUpdateService()),
-          ],
+        container = createContainer(
+          appSessions: sessions,
+          conversationListFactory: (ref) =>
+              patchController = _FirstBlockingPatchController(ref),
         );
         final runtime = container.read(appRuntimeProvider.notifier);
         final committed = await _commitRuntimeSession(
@@ -535,11 +525,12 @@ void main() {
         final lease = (await sessions.currentSessionLease())!;
 
         final activation = runtime.activateCommittedSession(committed);
-        await e2ee.firstStarted;
-        expect(container.read(sessionProvider).session, isNull);
+        await _pumpUntil(() => patchController != null);
+        await patchController!.firstStarted;
+        expect(container.read(sessionProvider).session?.did, 'did:test:first');
 
         expect(await sessions.abortSessionIfCurrent(lease), isTrue);
-        e2ee.completeFirst();
+        patchController!.completeFirst();
         await activation;
 
         expect(await sessions.currentSession(), isNull);
@@ -549,74 +540,48 @@ void main() {
       },
     );
 
-    test('E2EE failure aborts the matching committed session', () async {
-      final sessions = FakeAppSessionService(gateway);
-      container.dispose();
-      container = ProviderContainer(
-        overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
-          awikiAccountGatewayProvider.overrideWithValue(gateway),
-          ...fakeApplicationServiceOverrides(
-            gateway,
-            realtimeGateway: realtimeGateway,
-          ),
-          appSessionServiceProvider.overrideWithValue(sessions),
-          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
-          notificationFacadeProvider.overrideWithValue(notificationFacade),
-          desktopShellServiceProvider.overrideWithValue(desktopShell),
-          e2eeFacadeProvider.overrideWithValue(_FailingE2eeFacade()),
-          updateServiceProvider.overrideWithValue(FakeUpdateService()),
-        ],
-      );
-      final committed = await _commitRuntimeSession(
-        container,
-        _epochSession('first'),
-      );
-
-      await expectLater(
-        container
-            .read(appRuntimeProvider.notifier)
-            .activateCommittedSession(committed),
-        throwsStateError,
-      );
-
-      expect(await sessions.currentSession(), isNull);
-      expect(await sessions.currentSessionLease(), isNull);
-      expect(container.read(sessionProvider).session, isNull);
-      expect(
-        container.read(realtimeApplicationServiceProvider).isRunning,
-        isFalse,
-      );
-    });
-
     test(
-      'timed out E2EE cannot publish late and a replacement still activates',
+      'patch preparation failure aborts the matching committed session',
       () async {
         final sessions = FakeAppSessionService(gateway);
-        final e2ee = _FirstBlockingE2eeFacade();
-        addTearDown(e2ee.completeFirstIfPending);
         container.dispose();
-        container = ProviderContainer(
-          overrides: <Override>[
-            awikiGatewayProvider.overrideWithValue(gateway),
-            awikiAccountGatewayProvider.overrideWithValue(gateway),
-            ...fakeApplicationServiceOverrides(
-              gateway,
-              realtimeGateway: realtimeGateway,
-            ),
-            appSessionServiceProvider.overrideWithValue(sessions),
-            realtimeGatewayProvider.overrideWithValue(realtimeGateway),
-            notificationFacadeProvider.overrideWithValue(notificationFacade),
-            desktopShellServiceProvider.overrideWithValue(desktopShell),
-            e2eeFacadeProvider.overrideWithValue(e2ee),
-            updateServiceProvider.overrideWithValue(FakeUpdateService()),
-            appRuntimeProvider.overrideWith(
-              (ref) => AppRuntimeController(
-                ref,
-                requestTimeout: const Duration(milliseconds: 20),
-              ),
-            ),
-          ],
+        container = createContainer(
+          appSessions: sessions,
+          conversationListFactory: _FailingPatchController.new,
+        );
+        final committed = await _commitRuntimeSession(
+          container,
+          _epochSession('first'),
+        );
+
+        await expectLater(
+          container
+              .read(appRuntimeProvider.notifier)
+              .activateCommittedSession(committed),
+          throwsStateError,
+        );
+
+        expect(await sessions.currentSession(), isNull);
+        expect(await sessions.currentSessionLease(), isNull);
+        expect(container.read(sessionProvider).session, isNull);
+        expect(
+          container.read(realtimeApplicationServiceProvider).isRunning,
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'timed out patch preparation cannot publish late and a replacement still activates',
+      () async {
+        final sessions = FakeAppSessionService(gateway);
+        _FirstBlockingPatchController? patchController;
+        container.dispose();
+        container = createContainer(
+          appSessions: sessions,
+          conversationListFactory: (ref) =>
+              patchController = _FirstBlockingPatchController(ref),
+          runtimeRequestTimeout: const Duration(milliseconds: 20),
         );
         final runtime = container.read(appRuntimeProvider.notifier);
         final first = await _commitRuntimeSession(
@@ -636,11 +601,14 @@ void main() {
           _epochSession('second'),
         );
         final secondActivation = runtime.activateCommittedSession(second);
-        e2ee.completeFirst();
-        await secondActivation;
+        patchController!.completeFirst();
+        await secondActivation.timeout(
+          const Duration(seconds: 1),
+          onTimeout: () => throw StateError('replacement activation timed out'),
+        );
 
         expect(container.read(sessionProvider).session?.did, 'did:test:second');
-        expect(e2ee.initializedDids, <String>[
+        expect(patchController!.preparedDids.take(2), <String>[
           'did:test:first',
           'did:test:second',
         ]);
@@ -648,27 +616,15 @@ void main() {
     );
 
     test(
-      'superseded E2EE completion cannot clear the replacement session',
+      'superseded patch preparation cannot clear the replacement session',
       () async {
         final sessions = FakeAppSessionService(gateway);
-        final e2ee = _FirstBlockingE2eeFacade();
-        addTearDown(e2ee.completeFirstIfPending);
+        _FirstBlockingPatchController? patchController;
         container.dispose();
-        container = ProviderContainer(
-          overrides: <Override>[
-            awikiGatewayProvider.overrideWithValue(gateway),
-            awikiAccountGatewayProvider.overrideWithValue(gateway),
-            ...fakeApplicationServiceOverrides(
-              gateway,
-              realtimeGateway: realtimeGateway,
-            ),
-            appSessionServiceProvider.overrideWithValue(sessions),
-            realtimeGatewayProvider.overrideWithValue(realtimeGateway),
-            notificationFacadeProvider.overrideWithValue(notificationFacade),
-            desktopShellServiceProvider.overrideWithValue(desktopShell),
-            e2eeFacadeProvider.overrideWithValue(e2ee),
-            updateServiceProvider.overrideWithValue(FakeUpdateService()),
-          ],
+        container = createContainer(
+          appSessions: sessions,
+          conversationListFactory: (ref) =>
+              patchController = _FirstBlockingPatchController(ref),
         );
         final runtime = container.read(appRuntimeProvider.notifier);
         final first = await _commitRuntimeSession(
@@ -677,14 +633,15 @@ void main() {
         );
 
         final firstActivation = runtime.activateCommittedSession(first);
-        await e2ee.firstStarted;
+        await _pumpUntil(() => patchController != null);
+        await patchController!.firstStarted;
         final second = await _commitRuntimeSession(
           container,
           _epochSession('second'),
         );
         final secondActivation = runtime.activateCommittedSession(second);
 
-        e2ee.completeFirst();
+        patchController!.completeFirst();
         await Future.wait<void>(<Future<void>>[
           firstActivation,
           secondActivation,
@@ -695,7 +652,7 @@ void main() {
           container.read(sessionProvider).session?.credentialName,
           'second',
         );
-        expect(e2ee.initializedDids, <String>[
+        expect(patchController!.preparedDids.take(2), <String>[
           'did:test:first',
           'did:test:second',
         ]);
@@ -703,27 +660,15 @@ void main() {
     );
 
     test(
-      'same-identity reactivation supersedes a blocked old E2EE epoch',
+      'same-identity reactivation supersedes blocked old patch preparation',
       () async {
         final sessions = FakeAppSessionService(gateway);
-        final e2ee = _FirstBlockingE2eeFacade();
-        addTearDown(e2ee.completeFirstIfPending);
+        _FirstBlockingPatchController? patchController;
         container.dispose();
-        container = ProviderContainer(
-          overrides: <Override>[
-            awikiGatewayProvider.overrideWithValue(gateway),
-            awikiAccountGatewayProvider.overrideWithValue(gateway),
-            ...fakeApplicationServiceOverrides(
-              gateway,
-              realtimeGateway: realtimeGateway,
-            ),
-            appSessionServiceProvider.overrideWithValue(sessions),
-            realtimeGatewayProvider.overrideWithValue(realtimeGateway),
-            notificationFacadeProvider.overrideWithValue(notificationFacade),
-            desktopShellServiceProvider.overrideWithValue(desktopShell),
-            e2eeFacadeProvider.overrideWithValue(e2ee),
-            updateServiceProvider.overrideWithValue(FakeUpdateService()),
-          ],
+        container = createContainer(
+          appSessions: sessions,
+          conversationListFactory: (ref) =>
+              patchController = _FirstBlockingPatchController(ref),
         );
         final runtime = container.read(appRuntimeProvider.notifier);
         const session = SessionIdentity(
@@ -735,7 +680,8 @@ void main() {
         final first = await _commitRuntimeSession(container, session);
 
         final firstActivation = runtime.activateCommittedSession(first);
-        await e2ee.firstStarted;
+        await _pumpUntil(() => patchController != null);
+        await patchController!.firstStarted;
         final second = await _commitRuntimeSession(
           container,
           const SessionIdentity(
@@ -747,7 +693,7 @@ void main() {
         );
         final secondActivation = runtime.activateCommittedSession(second);
 
-        e2ee.completeFirst();
+        patchController!.completeFirst();
         await Future.wait<void>(<Future<void>>[
           firstActivation,
           secondActivation,
@@ -758,7 +704,7 @@ void main() {
           container.read(sessionProvider).session?.jwtToken,
           'replacement-token',
         );
-        expect(e2ee.initializedDids, <String>[
+        expect(patchController!.preparedDids.take(2), <String>[
           'did:test:same',
           'did:test:same',
         ]);
@@ -1173,6 +1119,28 @@ void main() {
       },
     );
 
+    test(
+      'background realtime stop does not schedule interruption sync',
+      () async {
+        await activateBound();
+        await pumpEventQueue();
+        messageSyncService.syncReasons.clear();
+
+        container
+            .read(appLifecycleProvider.notifier)
+            .setLifecycle(AppLifecycleState.paused);
+        realtimeGateway.setStatus(RealtimeConnectionStatus.disconnected);
+        await pumpEventQueue();
+
+        expect(
+          messageSyncService.syncReasons,
+          isNot(contains('realtime_connection_interrupted')),
+        );
+        expect(container.read(sessionProvider).session, isNotNull);
+        expect(container.read(appRuntimeProvider).authRevoked, isFalse);
+      },
+    );
+
     test('系统通知变化独立刷新可信 Join 收件箱，不依赖消息同步成功', () async {
       await activate();
       await pumpEventQueue();
@@ -1226,12 +1194,15 @@ void main() {
 
     test('已授权成员设备按精确 DID 单飞激活一次', () async {
       const joinedDid = 'did:test:joined-member';
-      gateway.loginResult = const SessionIdentity(
+      const joinedIdentity = SessionIdentity(
         did: joinedDid,
         credentialName: 'joined-local',
+        localIdentityId: 'joined-owner',
         displayName: 'Joined',
         handle: 'joined',
       );
+      gateway.loginResult = joinedIdentity;
+      gateway.localCredentials = const <SessionIdentity>[joinedIdentity];
       final runtime = container.read(appRuntimeProvider.notifier);
 
       await Future.wait(<Future<void>>[
@@ -1243,6 +1214,10 @@ void main() {
       expect(gateway.lastLoginCredentialName, joinedDid);
       expect(container.read(sessionProvider).session?.did, joinedDid);
       expect(container.read(appRuntimeProvider).activatedDid, joinedDid);
+      expect(
+        container.read(sessionProvider).localCredentials.single.localIdentityId,
+        'joined-owner',
+      );
     });
 
     test('成员设备激活遇到错误 DID 时失败关闭并登出', () async {
@@ -1367,7 +1342,6 @@ void main() {
       final periodicSync = FakeMessageSyncService();
       final periodicContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -1377,7 +1351,6 @@ void main() {
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           deviceManagementCorePortProvider.overrideWithValue(deviceCore),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
           appRuntimeProvider.overrideWith(
             (ref) => AppRuntimeController(
@@ -1419,7 +1392,6 @@ void main() {
       final agentControl = _CountingAgentControlService();
       final lifecycleContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -1432,7 +1404,6 @@ void main() {
           agentControlServiceProvider.overrideWithValue(agentControl),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
@@ -1488,7 +1459,6 @@ void main() {
       );
       final cacheContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -1497,7 +1467,6 @@ void main() {
           ),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
           chatThreadsProvider.overrideWith(
             (ref) => ChatThreadsController(
@@ -1567,7 +1536,6 @@ void main() {
       );
       final cacheContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -1576,7 +1544,6 @@ void main() {
           ),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
           chatThreadsProvider.overrideWith(
             (ref) => ChatThreadsController(
@@ -1774,7 +1741,6 @@ void main() {
       container.dispose();
       container = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -1801,7 +1767,6 @@ void main() {
             ),
           ),
           deviceManagementCorePortProvider.overrideWithValue(deviceCore),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
@@ -2007,7 +1972,6 @@ void main() {
       container.dispose();
       container = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -2019,7 +1983,6 @@ void main() {
           ),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
@@ -2052,7 +2015,6 @@ void main() {
       container.dispose();
       container = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -2068,7 +2030,6 @@ void main() {
           ),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
@@ -2105,7 +2066,6 @@ void main() {
       container.dispose();
       container = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -2115,7 +2075,6 @@ void main() {
           groupApplicationServiceProvider.overrideWithValue(groups),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
@@ -2160,7 +2119,6 @@ void main() {
       container.dispose();
       container = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -2171,7 +2129,6 @@ void main() {
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           desktopShellServiceProvider.overrideWithValue(desktopShell),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
@@ -2219,7 +2176,6 @@ void main() {
       container.dispose();
       container = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -2228,7 +2184,6 @@ void main() {
           appSessionServiceProvider.overrideWithValue(sessions),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
@@ -2267,7 +2222,6 @@ void main() {
         container.dispose();
         container = ProviderContainer(
           overrides: <Override>[
-            awikiGatewayProvider.overrideWithValue(gateway),
             awikiAccountGatewayProvider.overrideWithValue(gateway),
             ...fakeApplicationServiceOverrides(
               gateway,
@@ -2276,7 +2230,6 @@ void main() {
             appSessionServiceProvider.overrideWithValue(sessions),
             realtimeGatewayProvider.overrideWithValue(realtimeGateway),
             notificationFacadeProvider.overrideWithValue(notificationFacade),
-            e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
             updateServiceProvider.overrideWithValue(FakeUpdateService()),
           ],
         );
@@ -2325,7 +2278,6 @@ void main() {
         container.dispose();
         container = ProviderContainer(
           overrides: <Override>[
-            awikiGatewayProvider.overrideWithValue(gateway),
             awikiAccountGatewayProvider.overrideWithValue(gateway),
             ...fakeApplicationServiceOverrides(
               gateway,
@@ -2334,7 +2286,6 @@ void main() {
             appSessionServiceProvider.overrideWithValue(sessions),
             realtimeGatewayProvider.overrideWithValue(realtimeGateway),
             notificationFacadeProvider.overrideWithValue(notificationFacade),
-            e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
             updateServiceProvider.overrideWithValue(FakeUpdateService()),
           ],
         );
@@ -2364,7 +2315,6 @@ void main() {
         container.dispose();
         container = ProviderContainer(
           overrides: <Override>[
-            awikiGatewayProvider.overrideWithValue(gateway),
             awikiAccountGatewayProvider.overrideWithValue(gateway),
             ...fakeApplicationServiceOverrides(
               gateway,
@@ -2373,7 +2323,6 @@ void main() {
             appSessionServiceProvider.overrideWithValue(sessions),
             realtimeGatewayProvider.overrideWithValue(realtimeGateway),
             notificationFacadeProvider.overrideWithValue(notificationFacade),
-            e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
             updateServiceProvider.overrideWithValue(FakeUpdateService()),
           ],
         );
@@ -2400,7 +2349,6 @@ void main() {
         container.dispose();
         container = ProviderContainer(
           overrides: <Override>[
-            awikiGatewayProvider.overrideWithValue(gateway),
             awikiAccountGatewayProvider.overrideWithValue(gateway),
             ...fakeApplicationServiceOverrides(
               gateway,
@@ -2409,7 +2357,6 @@ void main() {
             appSessionServiceProvider.overrideWithValue(sessions),
             realtimeGatewayProvider.overrideWithValue(realtimeGateway),
             notificationFacadeProvider.overrideWithValue(notificationFacade),
-            e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
             updateServiceProvider.overrideWithValue(FakeUpdateService()),
           ],
         );
@@ -2435,7 +2382,6 @@ void main() {
       container.dispose();
       container = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -2444,7 +2390,6 @@ void main() {
           appSessionServiceProvider.overrideWithValue(sessions),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
           appRuntimeProvider.overrideWith(
             (ref) => AppRuntimeController(
@@ -2479,7 +2424,6 @@ void main() {
         container.dispose();
         container = ProviderContainer(
           overrides: <Override>[
-            awikiGatewayProvider.overrideWithValue(gateway),
             awikiAccountGatewayProvider.overrideWithValue(gateway),
             ...fakeApplicationServiceOverrides(
               gateway,
@@ -2491,7 +2435,6 @@ void main() {
             realtimeGatewayProvider.overrideWithValue(realtimeGateway),
             notificationFacadeProvider.overrideWithValue(notificationFacade),
             desktopShellServiceProvider.overrideWithValue(desktopShell),
-            e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
             updateServiceProvider.overrideWithValue(FakeUpdateService()),
           ],
         );
@@ -2521,7 +2464,6 @@ void main() {
       container.dispose();
       container = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -2531,7 +2473,6 @@ void main() {
           profileApplicationServiceProvider.overrideWithValue(profiles),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
@@ -2675,7 +2616,6 @@ void main() {
           awikiEnvironmentConfigProvider.overrideWithValue(
             AwikiEnvironmentConfig(messageSyncV2ReadEnabled: true),
           ),
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -2688,7 +2628,6 @@ void main() {
             const _ForegroundAppPresentationService(),
           ),
           deviceManagementCorePortProvider.overrideWithValue(deviceCore),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
           messageSyncCoordinatorProvider.overrideWith(
             (ref) => MessageSyncCoordinator(
@@ -2869,7 +2808,6 @@ void main() {
       container.dispose();
       container = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -2879,7 +2817,6 @@ void main() {
           conversationServiceProvider.overrideWithValue(conversationService),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
@@ -4058,6 +3995,8 @@ void main() {
           .prepareIdentityActivation();
 
       expect(pushInstallations.calls, <String>['deactivate', 'disable']);
+      // Recovery may outlive its page; quiescing must release the global mask.
+      expect(container.read(appRuntimeProvider).isBusy, isFalse);
       expect(container.read(sessionProvider).session, isNull);
 
       await activateBound();
@@ -4797,6 +4736,7 @@ final class _RecordingRemotePushSyncPort implements RemotePushSyncPort {
 
   @override
   Future<RemotePushSyncReceipt> requestRemotePushSync({
+    Set<String>? messageReferences,
     RemotePushPresentationDisposition presentation =
         RemotePushPresentationDisposition.providerPresented,
   }) async {
@@ -5480,19 +5420,21 @@ class _DelayedStaleAuthFailureSessionService extends FakeAppSessionService {
   void releaseFirstIfPending() => releaseFirst();
 }
 
-class _FirstBlockingE2eeFacade extends FakeE2eeFacade {
+class _FirstBlockingPatchController extends ConversationListController {
+  _FirstBlockingPatchController(super.ref);
+
   final Completer<void> _firstStarted = Completer<void>();
   final Completer<void> _releaseFirst = Completer<void>();
-  int _initializeCalls = 0;
-  final List<String> initializedDids = <String>[];
+  final List<String> preparedDids = <String>[];
+  int _calls = 0;
 
   Future<void> get firstStarted => _firstStarted.future;
 
   @override
-  Future<void> initialize(SessionIdentity identity) async {
-    _initializeCalls += 1;
-    initializedDids.add(identity.did);
-    if (_initializeCalls != 1) {
+  Future<void> preparePatchGeneration() async {
+    _calls += 1;
+    preparedDids.add(ref.read(sessionProvider).session!.did);
+    if (_calls != 1) {
       return;
     }
     _firstStarted.complete();
@@ -5504,14 +5446,14 @@ class _FirstBlockingE2eeFacade extends FakeE2eeFacade {
       _releaseFirst.complete();
     }
   }
-
-  void completeFirstIfPending() => completeFirst();
 }
 
-class _FailingE2eeFacade extends FakeE2eeFacade {
+class _FailingPatchController extends ConversationListController {
+  _FailingPatchController(super.ref);
+
   @override
-  Future<void> initialize(SessionIdentity identity) async {
-    throw StateError('e2ee initialization failed');
+  Future<void> preparePatchGeneration() async {
+    throw StateError('conversation patch preparation failed');
   }
 }
 

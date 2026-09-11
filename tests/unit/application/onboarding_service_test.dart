@@ -7,7 +7,6 @@ import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/ports/profile_core_port.dart';
-import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
@@ -48,6 +47,35 @@ void main() {
       expect(identities.lastHandle, 'alice');
       expect(sessions.activated.map((item) => item.identityId), ['phone-id']);
       expect(profiles.patches.single.profileMarkdown, '# Alice');
+    },
+  );
+
+  test(
+    'Recovery continuation does not activate registration or patch profile',
+    () async {
+      final identities = _FakeIdentities()
+        ..registrationStatus = IdentityRegistrationStatus.recoveryRequired;
+      final sessions = _FakeSessions();
+      final profiles = _FakeProfiles();
+      final service = ImCoreOnboardingService(
+        identities: identities,
+        legacyUpgrades: identities,
+        sessions: sessions,
+        profiles: profiles,
+      );
+      final transition = sessions.beginSessionTransition();
+      final result = await service.registerHandleWithPhone(
+        phone: '+8613800138000',
+        otp: '123456',
+        handle: 'alice',
+        profileMarkdown: '# Alice',
+        transition: transition,
+      );
+      expect(result.status, IdentityRegistrationStatus.recoveryRequired);
+      expect(result.identity, isNull);
+      expect(sessions.activated, isEmpty);
+      expect(profiles.patches, isEmpty);
+      expect(sessions.isSessionTransitionCurrent(transition), isFalse);
     },
   );
 
@@ -254,23 +282,14 @@ class _FakeIdentities implements IdentityCorePort, LegacyIdentityUpgradePort {
   }
 
   @override
-  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias) {
-    throw UnsupportedError('unsupported');
-  }
-
-  @override
-  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
-    String identityIdOrAlias,
-  ) {
-    throw UnsupportedError('unsupported');
-  }
-
-  @override
   Future<DaemonSubkeyAuthorizationRevokeResult> revokeDaemonSubkeyAuthorization(
     String identityIdOrAlias,
   ) {
     throw UnsupportedError('unsupported');
   }
+
+  @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {
@@ -323,6 +342,9 @@ class _FakeSessions
   Future<void> logout() async {}
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {
     throw UnsupportedError('unsupported');
   }
@@ -330,6 +352,12 @@ class _FakeSessions
   @override
   Future<AppSession?> refreshSession() async =>
       activated.isEmpty ? null : activated.last;
+
+  @override
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation() async =>
+      activated.isEmpty
+      ? throw StateError('identity_binding_refresh_unavailable')
+      : activated.last;
 
   @override
   Future<AppSession?> restoreSession() async =>

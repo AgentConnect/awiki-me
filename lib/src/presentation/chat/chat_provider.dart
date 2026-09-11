@@ -3484,6 +3484,9 @@ class ChatThreadsController
     final mentionPayload = ChatMentionPayload.tryParsePayloadJson(
       message.payloadJson,
     );
+    final retrying = message.copyWith(sendState: MessageSendState.sending);
+    _replaceMessage(targetThreadId, message.localId, retrying);
+    final idempotencyKey = 'op-$clientMessageId';
     try {
       final messaging = ref.read(messagingServiceProvider);
       final retried =
@@ -3496,7 +3499,7 @@ class ChatThreadsController
                   text: mentionPayload.text,
                   mentions: _messageMentionsToDrafts(message.mentions),
                   clientMessageId: clientMessageId,
-                  idempotencyKey: 'retry-$clientMessageId',
+                  idempotencyKey: idempotencyKey,
                 )
                 .timeout(_sendTimeout)
           : await _sendConversationText(
@@ -3506,7 +3509,7 @@ class ChatThreadsController
               content: message.content,
               expectedAgentReplyDid: expectedAgentReplyDid,
               clientMessageId: clientMessageId,
-              idempotencyKey: 'retry-$clientMessageId',
+              idempotencyKey: idempotencyKey,
             ).timeout(_sendTimeout);
       if (!_isCurrentSessionEpoch(sessionEpoch)) {
         return;
@@ -3667,7 +3670,7 @@ class ChatThreadsController
             caption: attachment.caption,
             mentions: _messageMentionsToDrafts(retrying.mentions),
             clientMessageId: clientMessageId,
-            idempotencyKey: 'retry-$clientMessageId',
+            idempotencyKey: 'op-$clientMessageId',
           )
           .timeout(_attachmentSendTimeout);
       if (!_isCurrentSessionEpoch(sessionEpoch)) {
@@ -5645,11 +5648,20 @@ class ChatThreadsController
       return;
     }
     _upsertPersonalAgentSyncRecord(threadId, record);
-    if (!ref.read(personalAgentFeatureVisibleProvider)) {
-      return;
-    }
     final runtimeAgentDid = record.runtimeAgentDid?.trim();
     if (runtimeAgentDid == null || runtimeAgentDid.isEmpty) {
+      return;
+    }
+    if (record.isTerminal) {
+      _clearAgentPendingTurnsForPersonalAgent(
+        threadId: threadId,
+        runtimeAgentDid: runtimeAgentDid,
+        sourceMessageId: record.messageId,
+        runId: record.runId,
+      );
+      return;
+    }
+    if (!ref.read(personalAgentFeatureVisibleProvider)) {
       return;
     }
     if (record.isRuntimeStatus && _isActiveRunStatus(record.state ?? '')) {
@@ -5664,14 +5676,6 @@ class ChatThreadsController
         startedAt: DateTime.now(),
       );
       return;
-    }
-    if (record.isTerminal) {
-      _clearAgentPendingTurnsForPersonalAgent(
-        threadId: threadId,
-        runtimeAgentDid: runtimeAgentDid,
-        sourceMessageId: record.messageId,
-        runId: record.runId,
-      );
     }
   }
 

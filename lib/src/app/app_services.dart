@@ -56,16 +56,10 @@ import '../data/services/method_channel_desktop_window_placement_service.dart';
 import '../data/services/user_service_peer_identity_service.dart';
 import '../domain/entities/realtime_update.dart';
 import '../domain/repositories/awiki_account_gateway.dart';
-import '../domain/repositories/awiki_gateway.dart';
-import '../domain/services/e2ee_facade.dart';
 import '../domain/services/notification_facade.dart';
 import '../domain/services/remote_push_client.dart';
 import '../domain/services/realtime_gateway.dart';
 import '../domain/services/update_service.dart';
-
-final awikiGatewayProvider = Provider<AwikiGateway>(
-  (ref) => throw UnimplementedError('awikiGatewayProvider must be overridden'),
-);
 
 final awikiAccountGatewayProvider = Provider<AwikiAccountGateway>(
   (ref) => throw UnimplementedError(
@@ -303,10 +297,6 @@ final desktopWindowPlacementServiceProvider =
     Provider<DesktopWindowPlacementService>(
       (ref) => const MethodChannelDesktopWindowPlacementService(),
     );
-
-final e2eeFacadeProvider = Provider<E2eeFacade>(
-  (ref) => throw UnimplementedError('e2eeFacadeProvider must be overridden'),
-);
 
 final localePreferenceServiceProvider = Provider<LocalePreferenceService>(
   (ref) => throw UnimplementedError(

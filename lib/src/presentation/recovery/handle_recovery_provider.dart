@@ -9,6 +9,7 @@ import '../../application/handle_recovery_service.dart';
 import '../../application/ports/handle_recovery_core_port.dart';
 import '../../domain/entities/handle_recovery.dart';
 import '../shared/sms_otp_cooldown_provider.dart';
+import 'handle_recovery_session.dart';
 
 final handleRecoveryCorePortProvider = Provider<HandleRecoveryCorePort>(
   (ref) => throw UnimplementedError(
@@ -21,11 +22,20 @@ final handleRecoveryServiceProvider = Provider<HandleRecoveryService>(
     core: ref.watch(handleRecoveryCorePortProvider),
     userPresence: ref.watch(userPresencePortProvider),
   ),
+  dependencies: [handleRecoveryCorePortProvider, userPresencePortProvider],
 );
 
 enum HandleRecoveryUiAction { terminal, exactResume, userAction, localBlocked }
 
 enum HandleRecoveryUiError {
+  activationRequired,
+  recoveryInProgress,
+  actionNotAllowed,
+  stateChanged,
+  unknownEpoch,
+  factorRetryRequired,
+  localTransitionPending,
+  localTransitionSuperseded,
   riskConfirmationRequired,
   notPrepared,
   userPresenceRequired,
@@ -44,6 +54,22 @@ enum HandleRecoveryUiError {
 
 extension HandleRecoveryUiErrorDetails on HandleRecoveryUiError {
   HandleRecoveryFailureCode? get code => switch (this) {
+    HandleRecoveryUiError.activationRequired =>
+      HandleRecoveryFailureCode.activationRequired,
+    HandleRecoveryUiError.recoveryInProgress =>
+      HandleRecoveryFailureCode.recoveryInProgress,
+    HandleRecoveryUiError.actionNotAllowed =>
+      HandleRecoveryFailureCode.actionNotAllowed,
+    HandleRecoveryUiError.stateChanged =>
+      HandleRecoveryFailureCode.stateChanged,
+    HandleRecoveryUiError.unknownEpoch =>
+      HandleRecoveryFailureCode.unknownEpoch,
+    HandleRecoveryUiError.localTransitionSuperseded =>
+      HandleRecoveryFailureCode.localTransitionSuperseded,
+    HandleRecoveryUiError.factorRetryRequired =>
+      HandleRecoveryFailureCode.factorRetryRequired,
+    HandleRecoveryUiError.localTransitionPending =>
+      HandleRecoveryFailureCode.localTransitionPending,
     HandleRecoveryUiError.notPrepared => HandleRecoveryFailureCode.notPrepared,
     HandleRecoveryUiError.userPresenceRequired =>
       HandleRecoveryFailureCode.userPresenceRequired,
@@ -70,18 +96,26 @@ extension HandleRecoveryUiErrorDetails on HandleRecoveryUiError {
   };
 
   HandleRecoveryUiAction get action => switch (this) {
+    HandleRecoveryUiError.stateChanged ||
+    HandleRecoveryUiError.localTransitionSuperseded ||
     HandleRecoveryUiError.notPrepared ||
     HandleRecoveryUiError.transitionMismatch ||
     HandleRecoveryUiError.transitionChainUnsupported ||
     HandleRecoveryUiError.remoteStateChanged ||
     HandleRecoveryUiError.migrationUnsupported =>
       HandleRecoveryUiAction.terminal,
+    HandleRecoveryUiError.localTransitionPending ||
     HandleRecoveryUiError.resultAbsent ||
     HandleRecoveryUiError.outcomeUnknown => HandleRecoveryUiAction.exactResume,
+    HandleRecoveryUiError.activationRequired ||
+    HandleRecoveryUiError.factorRetryRequired ||
     HandleRecoveryUiError.riskConfirmationRequired ||
     HandleRecoveryUiError.userPresenceRequired ||
     HandleRecoveryUiError.keyUnavailable ||
     HandleRecoveryUiError.rateLimited => HandleRecoveryUiAction.userAction,
+    HandleRecoveryUiError.recoveryInProgress ||
+    HandleRecoveryUiError.actionNotAllowed ||
+    HandleRecoveryUiError.unknownEpoch ||
     HandleRecoveryUiError.localStateUnavailable ||
     HandleRecoveryUiError.blocked ||
     HandleRecoveryUiError.failed => HandleRecoveryUiAction.localBlocked,
@@ -96,6 +130,14 @@ HandleRecoveryUiError handleRecoveryUiErrorFrom(Object error) {
   }
   if (error is! HandleRecoveryFailure) return HandleRecoveryUiError.failed;
   return switch (error.code) {
+    HandleRecoveryFailureCode.activationRequired =>
+      HandleRecoveryUiError.activationRequired,
+    HandleRecoveryFailureCode.recoveryInProgress =>
+      HandleRecoveryUiError.recoveryInProgress,
+    HandleRecoveryFailureCode.actionNotAllowed =>
+      HandleRecoveryUiError.actionNotAllowed,
+    HandleRecoveryFailureCode.stateChanged =>
+      HandleRecoveryUiError.stateChanged,
     HandleRecoveryFailureCode.notPrepared => HandleRecoveryUiError.notPrepared,
     HandleRecoveryFailureCode.userPresenceRequired =>
       HandleRecoveryUiError.userPresenceRequired,
@@ -116,17 +158,21 @@ HandleRecoveryUiError handleRecoveryUiErrorFrom(Object error) {
     HandleRecoveryFailureCode.localMigrationUnsupported =>
       HandleRecoveryUiError.migrationUnsupported,
     HandleRecoveryFailureCode.factorRetryRequired =>
-      HandleRecoveryUiError.failed,
+      HandleRecoveryUiError.factorRetryRequired,
+    HandleRecoveryFailureCode.localTransitionSuperseded =>
+      HandleRecoveryUiError.localTransitionSuperseded,
     HandleRecoveryFailureCode.localTransitionPending =>
-      HandleRecoveryUiError.outcomeUnknown,
+      HandleRecoveryUiError.localTransitionPending,
     HandleRecoveryFailureCode.unknownEpoch =>
-      HandleRecoveryUiError.localStateUnavailable,
+      HandleRecoveryUiError.unknownEpoch,
     HandleRecoveryFailureCode.blocked => HandleRecoveryUiError.blocked,
   };
 }
 
 class HandleRecoveryState {
   const HandleRecoveryState({
+    this.authoritative = false,
+    this.allowedActions = const [],
     this.riskConfirmed = false,
     this.isBusy = false,
     this.otpPhone,
@@ -135,6 +181,10 @@ class HandleRecoveryState {
     this.error,
   });
 
+  final bool authoritative;
+  final List<HandleRecoveryAction> allowedActions;
+  bool allows(HandleRecoveryAction action) =>
+      authoritative && allowedActions.contains(action);
   final bool riskConfirmed;
   final bool isBusy;
   final String? otpPhone;
@@ -142,24 +192,20 @@ class HandleRecoveryState {
   final HandleRecoveryProgress? progress;
   final HandleRecoveryUiError? error;
 
-  bool get canRequestOtp {
-    final current = progress;
-    return current == null ||
-        current.phase == HandleRecoveryProgressPhase.otpRequested ||
-        (current.lifecycleClass ==
-                HandleRecoveryLifecycleClass.remoteUnresolved &&
-            current.commitAttempted &&
-            current.keyState == HandleRecoveryKeyState.available);
-  }
+  bool get canRequestOtp =>
+      allows(HandleRecoveryAction.requestOtp) ||
+      (progress == null && allows(HandleRecoveryAction.startNew));
 
   bool get otpRequested =>
-      otpPhone != null && progress != null && canRequestOtp;
+      allows(HandleRecoveryAction.prepare) && progress != null;
 
   String? get otpOperationId => progress?.operationId;
   String? get otpHandle => owner?.handle ?? progress?.handle;
   String? get localIdentityId => owner?.localIdentityId;
 
   HandleRecoveryState copyWith({
+    bool? authoritative,
+    List<HandleRecoveryAction>? allowedActions,
     bool? riskConfirmed,
     bool? isBusy,
     String? otpPhone,
@@ -171,6 +217,8 @@ class HandleRecoveryState {
     bool clearOperation = false,
   }) {
     return HandleRecoveryState(
+      authoritative: authoritative ?? this.authoritative,
+      allowedActions: allowedActions ?? this.allowedActions,
       riskConfirmed: riskConfirmed ?? this.riskConfirmed,
       isBusy: isBusy ?? this.isBusy,
       otpPhone: clearPhone ? null : (otpPhone ?? this.otpPhone),
@@ -182,230 +230,393 @@ class HandleRecoveryState {
 }
 
 class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
-  HandleRecoveryController(this._service, this._otpCooldown)
-    : super(const HandleRecoveryState());
+  HandleRecoveryController(
+    this._service,
+    this._otpCooldown, {
+    required HandleRecoverySession session,
+    bool Function()? isPageCurrent,
+  }) : _session = session,
+       _isPageCurrent = isPageCurrent,
+       super(const HandleRecoveryState());
 
+  final HandleRecoverySession _session;
   final HandleRecoveryService _service;
   final SmsOtpCooldownController _otpCooldown;
+  final bool Function()? _isPageCurrent;
+  int _epoch = 0;
+  String? _handle;
+  String? _localIdentityId;
+
+  int get epoch => _epoch;
+  bool isCurrent(int epoch) =>
+      mounted && epoch == _epoch && (_isPageCurrent?.call() ?? true);
+
+  void invalidate() => _epoch++;
 
   void reset() {
+    _epoch++;
+    _handle = null;
+    _localIdentityId = null;
     state = const HandleRecoveryState();
   }
 
-  void setRiskConfirmed(bool value) {
-    state = state.copyWith(riskConfirmed: value, clearError: true);
+  @override
+  void dispose() {
+    _epoch++;
+    super.dispose();
   }
+
+  void setRiskConfirmed(bool value) {
+    if (!state.isBusy) {
+      state = state.copyWith(riskConfirmed: value, clearError: true);
+    }
+  }
+
+  Future<void> _refresh(int epoch, {String? expectedOperationId}) async {
+    final handle = _handle;
+    if (!isCurrent(epoch) || handle == null) return;
+    final context = await _service.inspectContext(
+      handle: handle,
+      localIdentityId: _localIdentityId,
+    );
+    if (!isCurrent(epoch)) return;
+    final progress = context.progress;
+    if (expectedOperationId != null &&
+        progress?.operationId != expectedOperationId) {
+      // An authoritative empty context retires the old UI selection as well.
+      // Transport failures still retain evidence with actions disabled.
+      if (progress == null) {
+        state = state.copyWith(
+          clearOperation: true,
+          clearPhone: true,
+          riskConfirmed: false,
+          authoritative: false,
+          allowedActions: const [],
+        );
+      }
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.transitionMismatch,
+      );
+    }
+    state = state.copyWith(
+      clearOperation: progress == null,
+      owner: progress == null
+          ? null
+          : HandleRecoveryOwner(
+              localIdentityId: progress.ownerIdentityId,
+              handle: progress.handle,
+            ),
+      progress: progress,
+      allowedActions: context.allowedActions,
+      authoritative: true,
+      riskConfirmed:
+          state.progress?.operationId == progress?.operationId &&
+          state.riskConfirmed,
+      error: context.blockedReason == null
+          ? null
+          : handleRecoveryUiErrorFrom(
+              HandleRecoveryFailure(context.blockedReason!),
+            ),
+      clearError: context.blockedReason == null,
+    );
+  }
+
+  Future<void> _run(
+    Future<void> Function(int epoch) action, {
+    Future<void> Function(int epoch)? onSettled,
+  }) async {
+    if (state.isBusy) return;
+    final epoch = ++_epoch;
+    final expectedOperationId = state.progress?.operationId;
+    state = state.copyWith(isBusy: true, clearError: true);
+    try {
+      await action(epoch);
+    } catch (error) {
+      if (!isCurrent(epoch)) return;
+      try {
+        await _refresh(epoch, expectedOperationId: expectedOperationId);
+      } catch (_) {
+        if (isCurrent(epoch)) {
+          state = state.copyWith(
+            authoritative: false,
+            allowedActions: const [],
+          );
+        }
+      }
+      if (isCurrent(epoch)) {
+        state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
+      }
+    } finally {
+      if (isCurrent(epoch)) {
+        try {
+          await onSettled?.call(epoch);
+        } catch (error) {
+          if (isCurrent(epoch)) {
+            state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
+          }
+        } finally {
+          if (isCurrent(epoch)) state = state.copyWith(isBusy: false);
+        }
+      }
+    }
+  }
+
+  Future<void> initialize({
+    required String handle,
+    String? localIdentityId,
+    bool startNew = false,
+  }) async {
+    reset();
+    _handle = handle;
+    _localIdentityId = localIdentityId;
+    await _run((epoch) async {
+      await _refresh(epoch);
+      if (isCurrent(epoch) &&
+          startNew &&
+          state.allows(HandleRecoveryAction.startNew)) {
+        state = state.copyWith(
+          clearOperation: true,
+          clearPhone: true,
+          riskConfirmed: false,
+          allowedActions: const [HandleRecoveryAction.startNew],
+        );
+      }
+    });
+  }
+
+  Future<void> restoreForOwner({
+    required HandleRecoveryIdentityScope scope,
+    required String handle,
+  }) => initialize(handle: handle, localIdentityId: scope.localIdentityId);
 
   Future<void> requestOtp({
     required String handle,
     required String phone,
     String? localIdentityId,
   }) async {
-    if (!await _otpCooldown.beginSend()) return;
-    state = state.copyWith(isBusy: true, clearError: true);
-    try {
-      final receipt = await _service.requestOtp(
-        handle: handle,
-        phone: phone,
-        localIdentityId: localIdentityId,
-        expectedOperationId: state.progress?.operationId,
-      );
-      await _otpCooldown.completeAcceptedAt(receipt.retryAt);
-      if (mounted) {
-        state = state.copyWith(
-          owner: HandleRecoveryOwner(
-            localIdentityId: receipt.operation.ownerIdentityId,
-            handle: receipt.operation.handle,
-          ),
-          progress: receipt.operation,
-          otpPhone: phone.trim(),
-        );
-      }
-    } catch (error) {
-      if (error is HandleRecoveryOtpRateLimited) {
-        await _otpCooldown.completeRateLimitedAt(error.retryAt);
-      }
-      if (mounted) {
-        state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
-      }
-    } finally {
-      _otpCooldown.completeFailed();
-      if (mounted) state = state.copyWith(isBusy: false);
+    if (_handle != handle || _localIdentityId != localIdentityId) {
+      await initialize(handle: handle, localIdentityId: localIdentityId);
     }
+    if (!state.canRequestOtp) return;
+    await _run((epoch) async {
+      if (!await _otpCooldown.beginSend()) return;
+      try {
+        if (!isCurrent(epoch)) return;
+        final receipt = await _service.requestOtp(
+          handle: handle,
+          phone: phone,
+          localIdentityId: localIdentityId,
+          expectedOperationId: state.progress?.operationId,
+        );
+        await _otpCooldown.completeAcceptedAt(receipt.retryAt);
+        if (!isCurrent(epoch)) return;
+        _accept(receipt.operation, epoch);
+        state = state.copyWith(otpPhone: phone.trim(), riskConfirmed: false);
+      } on HandleRecoveryOtpRateLimited catch (error) {
+        await _otpCooldown.completeRateLimitedAt(error.retryAt);
+        rethrow;
+      } finally {
+        _otpCooldown.completeFailed();
+      }
+    });
   }
 
-  Future<void> prepare({required String phone, required String otp}) async {
-    state = state.copyWith(isBusy: true, clearError: true);
-    try {
-      final operationId = state.progress?.operationId;
-      if (operationId == null || state.otpPhone != phone.trim()) {
-        throw const HandleRecoveryFailure(
-          HandleRecoveryFailureCode.transitionMismatch,
-        );
-      }
-      final progress = await _service.prepare(
-        operationId: operationId,
+  void _accept(HandleRecoveryProgress progress, int epoch) {
+    if (!isCurrent(epoch)) return;
+    if (progress.handle != _handle ||
+        (state.progress != null &&
+            progress.operationId != state.progress!.operationId)) {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.transitionMismatch,
+      );
+    }
+    state = state.copyWith(
+      progress: progress,
+      owner: HandleRecoveryOwner(
+        localIdentityId: progress.ownerIdentityId,
+        handle: progress.handle,
+      ),
+      allowedActions: progress.allowedActions,
+      authoritative: true,
+      error: progress.failureCode == null
+          ? null
+          : handleRecoveryUiErrorFrom(
+              HandleRecoveryFailure(progress.failureCode!),
+            ),
+      clearError: progress.failureCode == null,
+    );
+  }
+
+  Future<void> prepare({required String phone, required String otp}) => _run((
+    epoch,
+  ) async {
+    final progress = state.progress;
+    if (progress == null || !state.allows(HandleRecoveryAction.prepare)) {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.actionNotAllowed,
+      );
+    }
+    // The phone is transient. Reentry may verify the same operation with a new
+    // factor without recovering the old phone from App storage.
+    state = state.copyWith(riskConfirmed: false);
+    _accept(
+      await _service.prepare(
+        operationId: progress.operationId,
         phone: phone,
         otp: otp,
-      );
-      if (mounted) state = state.copyWith(progress: progress);
-    } catch (error) {
-      if (mounted) {
-        state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
-      }
-    } finally {
-      if (mounted) state = state.copyWith(isBusy: false);
-    }
-  }
+      ),
+      epoch,
+    );
+  });
 
   Future<void> activate({required String presenceReason}) async {
     final progress = state.progress;
-    if (progress == null || state.isBusy) return;
+    if (progress == null ||
+        state.isBusy ||
+        !state.allows(HandleRecoveryAction.activate)) {
+      return;
+    }
     if (!state.riskConfirmed) {
       state = state.copyWith(
         error: HandleRecoveryUiError.riskConfirmationRequired,
       );
       return;
     }
-    state = state.copyWith(isBusy: true, clearError: true);
-    try {
-      final next = await _service.activate(
-        operationId: progress.operationId,
-        presenceReason: presenceReason,
-      );
-      if (mounted) state = state.copyWith(progress: next);
-    } catch (error) {
-      Object? failure = error;
-      HandleRecoveryProgress? latest;
-      try {
-        latest = await _service.status(progress.operationId);
-        if (latest.isCompleted) {
-          failure = null;
-        } else if (latest.canResume) {
-          try {
-            latest = await _service.resume(progress.operationId);
-            failure = null;
-          } catch (resumeError) {
-            failure = resumeError;
-            try {
-              latest = await _service.status(progress.operationId);
-            } catch (_) {
-              // Keep the last readable Core projection and resume error.
-            }
+    await _advance(activate: true, presenceReason: presenceReason);
+  }
+
+  Future<void> resume() => _advance(activate: false);
+
+  Future<void> _advance({
+    required bool activate,
+    String presenceReason = '',
+  }) async {
+    String? previousIdentityId;
+    String? operationId;
+    var pauseAttempted = false;
+    var paused = false;
+    await _run(
+      (epoch) async {
+        final progress = state.progress;
+        final action = activate
+            ? HandleRecoveryAction.activate
+            : HandleRecoveryAction.resume;
+        if (progress == null || !state.allows(action)) {
+          throw const HandleRecoveryFailure(
+            HandleRecoveryFailureCode.actionNotAllowed,
+          );
+        }
+        operationId = progress.operationId;
+        previousIdentityId = _session.currentIdentityId;
+        bool current() => isCurrent(epoch);
+        Future<void> pause() async {
+          if (paused) return;
+          pauseAttempted = true;
+          await _session.pauseCurrent(isCurrent: current);
+          paused = current();
+        }
+
+        if (!activate) {
+          await pause();
+          _accept(
+            await _service.resume(progress.operationId, isCurrent: current),
+            epoch,
+          );
+          return;
+        }
+        try {
+          _accept(
+            await _service.activate(
+              operationId: progress.operationId,
+              presenceReason: presenceReason,
+              isCurrent: current,
+              beforeAdvance: pause,
+            ),
+            epoch,
+          );
+        } catch (_) {
+          if (!current()) return;
+          await _refresh(epoch, expectedOperationId: progress.operationId);
+          if (!current()) return;
+          if (state.allows(HandleRecoveryAction.activateIdentity)) return;
+          if (!state.allows(HandleRecoveryAction.resume)) rethrow;
+          await pause();
+          _accept(
+            await _service.resume(progress.operationId, isCurrent: current),
+            epoch,
+          );
+        }
+      },
+      onSettled: (epoch) async {
+        final previous = previousIdentityId;
+        final progress = state.progress;
+        // An unreadable outcome must never inherit the old prepared projection's
+        // permission to restore a session. Restoration remains inside busy scope.
+        if (pauseAttempted &&
+            previous != null &&
+            previous.isNotEmpty &&
+            state.authoritative &&
+            progress != null &&
+            progress.operationId == operationId &&
+            !progress.commitAttempted) {
+          final restored = await _session.restorePrevious(
+            previous,
+            isCurrent: () => isCurrent(epoch),
+          );
+          if (isCurrent(epoch) && !restored) {
+            throw StateError('previous_session_activation_failed');
           }
         }
-      } catch (_) {
-        // Keep the original activation error when Core status is unavailable.
-      }
-      if (mounted) {
-        state = state.copyWith(
-          progress: latest,
-          error: failure == null ? null : handleRecoveryUiErrorFrom(failure),
-          clearError: failure == null,
-        );
-      }
-    } finally {
-      if (mounted) state = state.copyWith(isBusy: false);
-    }
+      },
+    );
   }
 
-  Future<void> resume() async {
-    final progress = state.progress;
-    if (progress == null || state.isBusy) return;
-    state = state.copyWith(isBusy: true, clearError: true);
-    try {
-      final next = await _service.resume(progress.operationId);
-      if (mounted) state = state.copyWith(progress: next);
-    } catch (error) {
-      if (mounted) {
-        state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
-      }
-    } finally {
-      if (mounted) state = state.copyWith(isBusy: false);
-    }
-  }
-
-  Future<void> restoreForOwner({
-    required HandleRecoveryIdentityScope scope,
-    required String handle,
-  }) async {
-    state = state.copyWith(isBusy: true, clearError: true);
-    try {
-      final restored = await _service.restoreForOwner(
-        scope: scope,
-        handle: handle,
-      );
-      if (!mounted) return;
-      if (restored == null) {
-        state = const HandleRecoveryState();
-      } else {
-        state = state.copyWith(
-          owner: HandleRecoveryOwner(
-            localIdentityId: restored.ownerIdentityId,
-            handle: restored.handle,
-          ),
-          progress: restored,
-        );
-      }
-    } catch (error) {
-      if (mounted) {
-        state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
-      }
-    } finally {
-      if (mounted) state = state.copyWith(isBusy: false);
-    }
-  }
-
-  Future<void> discardPreAttempt() async {
-    final progress = state.progress;
-    if (progress == null || !progress.canDiscard || state.isBusy) return;
-    state = state.copyWith(isBusy: true, clearError: true);
-    try {
-      await _service.discardPreAttempt(progress.operationId);
-      if (mounted) {
-        state = HandleRecoveryState(riskConfirmed: state.riskConfirmed);
-      }
-    } catch (error) {
-      if (mounted) {
-        state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
-      }
-    } finally {
-      if (mounted) state = state.copyWith(isBusy: false);
-    }
-  }
-
-  Future<void> quarantineKeyUnavailable({
-    required String presenceReason,
-  }) async {
+  Future<void> discardPreAttempt() => _run((epoch) async {
     final progress = state.progress;
     if (progress == null ||
-        (progress.keyState != HandleRecoveryKeyState.permanentlyUnavailable &&
-            state.error != HandleRecoveryUiError.keyUnavailable) ||
-        state.isBusy) {
+        !state.allows(HandleRecoveryAction.discardPreAttempt)) {
       return;
     }
-    state = state.copyWith(isBusy: true, clearError: true);
-    try {
-      final next = await _service.quarantineKeyUnavailable(
-        operationId: progress.operationId,
-        presenceReason: presenceReason,
+    await _service.discardPreAttempt(progress.operationId);
+    await _refresh(epoch);
+    if (isCurrent(epoch) && state.allows(HandleRecoveryAction.startNew)) {
+      state = state.copyWith(
+        clearOperation: true,
+        clearPhone: true,
+        riskConfirmed: false,
       );
-      if (mounted) state = state.copyWith(progress: next);
-    } catch (error) {
-      if (mounted) {
-        state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
-      }
-    } finally {
-      if (mounted) state = state.copyWith(isBusy: false);
     }
-  }
+  });
+
+  Future<void> quarantineKeyUnavailable({required String presenceReason}) =>
+      _run((epoch) async {
+        final progress = state.progress;
+        if (progress == null ||
+            !state.allows(HandleRecoveryAction.quarantineKeyUnavailable)) {
+          return;
+        }
+        await _refresh(epoch, expectedOperationId: progress.operationId);
+        if (!isCurrent(epoch) ||
+            !state.allows(HandleRecoveryAction.quarantineKeyUnavailable)) {
+          return;
+        }
+        await _service.quarantineKeyUnavailable(
+          operationId: progress.operationId,
+          presenceReason: presenceReason,
+          isCurrent: () => isCurrent(epoch),
+        );
+        await _refresh(epoch);
+      });
 
   void startAfterQuarantine() {
-    if (state.progress?.lifecycleClass !=
-        HandleRecoveryLifecycleClass.quarantinedKeyUnavailable) {
-      return;
+    if (!state.isBusy && state.allows(HandleRecoveryAction.startNew)) {
+      _epoch++;
+      state = state.copyWith(
+        clearOperation: true,
+        clearPhone: true,
+        riskConfirmed: false,
+      );
     }
-    state = HandleRecoveryState(riskConfirmed: state.riskConfirmed);
   }
 }
 
@@ -414,5 +625,6 @@ final handleRecoveryProvider =
       (ref) => HandleRecoveryController(
         ref.watch(handleRecoveryServiceProvider),
         ref.watch(handleRecoverySmsOtpCooldownProvider.notifier),
+        session: ref.watch(handleRecoverySessionProvider),
       ),
     );

@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
+import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
+import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/agent/agent_control_service.dart';
 import 'package:awiki_me/src/application/attachment_cache_service.dart';
@@ -65,8 +68,6 @@ import 'package:awiki_me/src/domain/entities/peer_agent_identity.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
-import 'package:awiki_me/src/domain/repositories/awiki_gateway.dart';
-import 'package:awiki_me/src/domain/services/e2ee_facade.dart';
 import 'package:awiki_me/src/domain/services/notification_facade.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/domain/services/update_service.dart';
@@ -236,7 +237,6 @@ Widget buildLocalizedTestApp({
   FakeAwikiGateway? gateway,
   FakeRealtimeGateway? realtimeGateway,
   FakeNotificationFacade? notificationFacade,
-  FakeE2eeFacade? e2eeFacade,
   FakeLocalePreferenceService? localePreferenceService,
   FakeUpdateService? updateService,
   AttachmentCacheService? attachmentCacheService,
@@ -250,17 +250,14 @@ Widget buildLocalizedTestApp({
   final resolvedGateway = gateway ?? FakeAwikiGateway();
   final resolvedRealtime = realtimeGateway ?? FakeRealtimeGateway();
   final resolvedNotification = notificationFacade ?? FakeNotificationFacade();
-  final resolvedE2ee = e2eeFacade ?? FakeE2eeFacade();
   final resolvedLocalePreference =
       localePreferenceService ?? FakeLocalePreferenceService();
   final resolvedUpdateService = updateService ?? FakeUpdateService();
   return ProviderScope(
     overrides: <Override>[
-      awikiGatewayProvider.overrideWithValue(resolvedGateway),
       awikiAccountGatewayProvider.overrideWithValue(resolvedGateway),
       realtimeGatewayProvider.overrideWithValue(resolvedRealtime),
       notificationFacadeProvider.overrideWithValue(resolvedNotification),
-      e2eeFacadeProvider.overrideWithValue(resolvedE2ee),
       localePreferenceServiceProvider.overrideWithValue(
         resolvedLocalePreference,
       ),
@@ -315,6 +312,7 @@ Widget buildLocalizedTestApp({
           homepageMarkdownLoader,
         ),
       appRuntimeProvider.overrideWith((ref) => AppRuntimeController(ref)),
+      handleRecoveryCorePortProvider.overrideWithValue(_EmptyRecoveryContext()),
       ...providerOverrides,
     ],
     child: Consumer(
@@ -484,24 +482,42 @@ class FakeUpdateService implements UpdateService {
     buildNumber: 1,
   );
   AppUpdateManifest? latestManifest;
+  AppUpdateCheckResult? cachedUpdate;
+  bool policyUnavailable = false;
   bool openReleaseNotesCalled = false;
   bool openDownloadPageCalled = false;
   bool installUpdateCalled = false;
   bool openInstallPermissionSettingsCalled = false;
   int getCurrentVersionCalls = 0;
   int checkForUpdatesCalls = 0;
+  final List<bool> checkForUpdatesForces = <bool>[];
+  bool versionUnsupported = false;
   Object? checkError;
   Object? installError;
+  bool ignored = false;
+  AppOfficialUpdateSource preferredOfficialSource =
+      AppOfficialUpdateSource.primary;
+
+  @override
+  Future<AppUpdateCheckResult> loadCachedUpdate() async =>
+      cachedUpdate ??
+      AppUpdateCheckResult(
+        currentVersion: await getCurrentVersion(),
+        wasSkipped: true,
+      );
 
   @override
   Future<AppUpdateCheckResult> checkForUpdates({required bool force}) async {
     checkForUpdatesCalls += 1;
+    checkForUpdatesForces.add(force);
     if (checkError != null) {
       throw checkError!;
     }
     return AppUpdateCheckResult(
       currentVersion: currentVersion,
       latestManifest: latestManifest,
+      versionUnsupported: versionUnsupported,
+      policyUnavailable: policyUnavailable,
     );
   }
 
@@ -509,6 +525,29 @@ class FakeUpdateService implements UpdateService {
   Future<AppVersion> getCurrentVersion() async {
     getCurrentVersionCalls += 1;
     return currentVersion;
+  }
+
+  @override
+  Future<AppUpdateCheckResult> checkOfficialSource(
+    AppOfficialUpdateSource source,
+  ) async {
+    preferredOfficialSource = source;
+    return checkForUpdates(force: true);
+  }
+
+  @override
+  Future<AppOfficialUpdateSource> loadPreferredOfficialSource() async =>
+      preferredOfficialSource;
+
+  @override
+  Future<bool> isVersionIgnored(AppUpdateManifest manifest) async => ignored;
+
+  @override
+  Future<void> markVersionPrompted(AppUpdateManifest manifest) async {}
+
+  @override
+  Future<void> ignoreVersion(AppUpdateManifest manifest) async {
+    ignored = true;
   }
 
   @override
@@ -733,7 +772,7 @@ class FakeAttachmentCacheService implements AttachmentCacheService {
       '$messageId::$attachmentId';
 }
 
-class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
+class FakeAwikiGateway implements AwikiAccountGateway {
   List<SessionIdentity> localCredentials = const <SessionIdentity>[];
   List<ConversationSummary> conversations = const <ConversationSummary>[];
   Map<String, List<ChatMessage>> dmHistoryByPeerDid =
@@ -760,6 +799,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       const <PeerDisplayProfile>[];
   Completer<void>? cachedPeerDisplayProfilesCompleter;
   int loadCachedDisplayProfilesCalls = 0;
+  final List<String> refreshDisplayProfileQueries = [];
+  Completer<List<PeerDisplayProfile>>? refreshDisplayProfilesCompleter;
   Map<String, UserProfile> publicProfilesByQuery = <String, UserProfile>{};
   final List<String> loadPublicProfileQueries = <String>[];
   Map<String, String> directoryConversationIdsByQuery = <String, String>{};
@@ -799,6 +840,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int onboardingPhoneRegistrationCalls = 0;
   Completer<void>? onboardingPhoneRegistrationCompleter;
   Object? nextOnboardingPhoneRegistrationError;
+  SessionIdentity? committedIdentityBeforePhoneRegistrationError;
   ExistingHandleJoinMode existingHandleJoinMode =
       ExistingHandleJoinMode.ordinary;
   bool existingHandleJoinRequiresUserPresence = false;
@@ -874,21 +916,22 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int registerHandleCalls = 0;
   int registerHandleWithEmailCalls = 0;
   int registerHandleWithoutContactVerificationCalls = 0;
-  int resumeGroupRecoveryCalls = 0;
-  bool failGroupRecovery = false;
-  GroupRebindRecoverySummary groupRecoverySummary =
-      GroupRebindRecoverySummary.empty;
   int logoutCalls = 0;
   int deleteLocalThreadCalls = 0;
   String? lastDeletedLocalThreadId;
   int deleteLocalCredentialCalls = 0;
   int deleteLocalIdentityDataCalls = 0;
+  int prepareLocalIdentityDataDeletionCalls = 0;
+  int completeLocalIdentityDataDeletionCalls = 0;
+  Object? prepareLocalIdentityDataDeletionError;
+  Object? completeLocalIdentityDataDeletionError;
+  final List<LocalIdentityDeletionTicket> pendingLocalIdentityDeletionTickets =
+      <LocalIdentityDeletionTicket>[];
   String? lastDeletedLocalCredentialSelector;
   Object? deleteLocalCredentialError;
   Completer<void>? logoutCompleter;
   Completer<void>? deleteLocalCredentialCompleter;
 
-  @override
   Future<BridgeCapabilities> loadCapabilities() async {
     return const BridgeCapabilities(
       profileMarkdown: true,
@@ -925,7 +968,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     }
   }
 
-  @override
   Future<void> deleteLocalThread(String threadId) async {
     deleteLocalThreadCalls += 1;
     lastDeletedLocalThreadId = threadId;
@@ -937,7 +979,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return exportedPath;
   }
 
-  @override
   Future<List<ChatMessage>> fetchDmHistory(String peerDid) async {
     fetchDmHistoryCalls += 1;
     lastFetchedDmPeerDid = peerDid;
@@ -975,7 +1016,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return peerDidOrHandle;
   }
 
-  @override
   Future<List<ChatMessage>> fetchGroupHistory(String groupId) async {
     fetchGroupHistoryCalls += 1;
     return groupHistoryByGroupId[groupId] ?? const <ChatMessage>[];
@@ -1002,7 +1042,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return localGroupHistoryByGroupId[groupId] ?? const <ChatMessage>[];
   }
 
-  @override
   Future<void> follow(String didOrHandle) async {
     if (failNextFollow) {
       failNextFollow = false;
@@ -1030,7 +1069,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     relationshipsByDidOrHandle[summary.did] = summary;
   }
 
-  @override
   Future<GroupSummary> createGroup({
     required String name,
     required String slug,
@@ -1074,14 +1112,12 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return group;
   }
 
-  @override
   Future<RealtimeUpdate?> consumeRealtimeEvent(
     Map<String, Object?> event,
   ) async {
     return nextRealtimeUpdate;
   }
 
-  @override
   Future<GroupSummary> getGroup(String groupId) async {
     if (getGroupError != null) {
       throw getGroupError!;
@@ -1100,7 +1136,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     );
   }
 
-  @override
   Future<RelationshipSummary> getRelationshipStatus(String didOrHandle) async {
     return relationshipsByDidOrHandle[didOrHandle] ??
         relationshipsByDidOrHandle[normalizeTestIdentity(didOrHandle)] ??
@@ -1117,7 +1152,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return importedCredential;
   }
 
-  @override
   Future<GroupSummary> joinGroup(String groupDid) async {
     if (failNextJoinGroup) {
       failNextJoinGroup = false;
@@ -1141,7 +1175,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return group;
   }
 
-  @override
   Future<GroupSummary> addGroupMember({
     required String groupId,
     required String memberRef,
@@ -1158,11 +1191,13 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       ...(groupMembersByGroupId[groupId] ?? const <GroupMemberSummary>[]),
     ];
     if (!members.any((item) => item.did == memberRef)) {
-      final profile = _profileForDid(memberRef);
+      final profile =
+          publicProfilesByQuery[normalizeTestIdentity(memberRef)] ??
+          _profileForDid(memberRef);
       members.add(
         GroupMemberSummary(
-          userId: memberRef,
-          did: memberRef,
+          userId: profile?.did ?? memberRef,
+          did: profile?.did ?? memberRef,
           handle: profile?.fullHandle ?? profile?.handle ?? memberRef,
           role: role,
           profileUrl: null,
@@ -1200,7 +1235,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return null;
   }
 
-  @override
   Future<GroupSummary> removeGroupMember({
     required String groupId,
     required String memberRef,
@@ -1241,7 +1275,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return emailVerificationResult;
   }
 
-  @override
   Future<List<ConversationSummary>> listConversations() async {
     listConversationsCalls += 1;
     if (failNextListConversations) {
@@ -1251,7 +1284,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return conversations;
   }
 
-  @override
   Future<List<RelationshipSummary>> listFollowers() async {
     if (failListFollowers) {
       throw StateError('followers unavailable');
@@ -1259,7 +1291,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return followers;
   }
 
-  @override
   Future<List<GroupMemberSummary>> listGroupMembers(String groupId) async {
     listGroupMembersCalls += 1;
     if (listGroupMembersError != null) {
@@ -1273,7 +1304,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return groupMembersByGroupId[groupId] ?? const <GroupMemberSummary>[];
   }
 
-  @override
   Future<List<GroupSummary>> listGroups() async {
     return groups;
   }
@@ -1284,7 +1314,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return localCredentials;
   }
 
-  @override
   Future<List<RelationshipSummary>> listFollowing() async {
     if (failListFollowing) {
       throw StateError('following unavailable');
@@ -1306,7 +1335,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return serverInfo;
   }
 
-  @override
   Future<UserProfile> loadMyProfile() async {
     if (myProfile != null) {
       return myProfile!;
@@ -1317,7 +1345,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     throw UnimplementedError();
   }
 
-  @override
   Future<UserProfile> loadPublicProfile(String didOrHandle) async {
     loadPublicProfileQueries.add(didOrHandle);
     final normalized = normalizeTestIdentity(didOrHandle);
@@ -1354,7 +1381,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     }
   }
 
-  @override
   Future<void> markRead(String threadId) async {
     markReadCalls += 1;
     lastMarkReadThreadId = threadId;
@@ -1485,7 +1511,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     );
   }
 
-  @override
   Future<ChatMessage> retryMessage(ChatMessage message) async {
     return sendTextMessage(
       threadId: message.threadId,
@@ -1513,7 +1538,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     }
   }
 
-  @override
   Future<ChatMessage> sendTextMessage({
     required String threadId,
     String? peerDid,
@@ -1620,7 +1644,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     );
   }
 
-  @override
   Future<void> unfollow(String didOrHandle) async {
     lastUnfollowedDidOrHandle = didOrHandle;
     final normalized = normalizeTestIdentity(didOrHandle);
@@ -1639,7 +1662,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     );
   }
 
-  @override
   Future<UserProfile> updateProfile(ProfilePatch patch) async {
     lastProfilePatch = patch;
     if (updatedProfile != null) {
@@ -1692,6 +1714,36 @@ class FakeDirectoryApplicationService implements DirectoryApplicationService {
   final FakeAwikiGateway gateway;
 
   @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  }) async {
+    gateway.refreshDisplayProfileQueries.addAll(dids);
+    if (gateway.refreshDisplayProfilesCompleter != null) {
+      return gateway.refreshDisplayProfilesCompleter!.future;
+    }
+    final requested = dids.toSet();
+    final profiles = <String, UserProfile>{
+      for (final profile in gateway.publicProfilesByQuery.values)
+        profile.did: profile,
+      if (gateway.publicProfile case final profile?) profile.did: profile,
+    };
+    return profiles.values
+        .where((p) => requested.contains(p.did))
+        .map(
+          (p) => PeerDisplayProfile(
+            did: p.did,
+            displayName: p.nickName,
+            handle: p.fullHandle ?? p.handle,
+            avatarUri: p.avatarUri,
+            profileUri: p.profileUri,
+            subjectType: p.subjectType,
+          ),
+        )
+        .toList();
+  }
+
+  @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
   ) async {
@@ -1734,6 +1786,7 @@ class FakeAppSessionService
 
   final FakeAwikiGateway gateway;
   AppSession? _current;
+  int deviceMutationRefreshCalls = 0;
 
   @override
   Future<AppSession> activateIdentity(
@@ -1756,6 +1809,18 @@ class FakeAppSessionService
 
   @override
   Future<AppSession?> currentSession() async => _current;
+
+  @override
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation() async {
+    deviceMutationRefreshCalls += 1;
+    final current =
+        _current ??
+        switch (await gateway.currentSession()) {
+          final SessionIdentity legacy => _appSessionFromLegacy(legacy),
+          null => throw StateError('identity_binding_refresh_unavailable'),
+        };
+    return _current = current.copyWith(authenticated: true);
+  }
 
   @override
   Future<AppSessionLease?> currentSessionLease() async =>
@@ -1804,6 +1869,9 @@ class FakeAppSessionService
   }
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
     final identities = await gateway.listLocalCredentials();
     final deletedIdentity = identities.cast<SessionIdentity?>().firstWhere(
@@ -1840,6 +1908,72 @@ class FakeAppSessionService
     gateway.deleteLocalIdentityDataCalls += 1;
     return deleteLocalIdentity(identityIdOrAlias);
   }
+
+  @override
+  Future<LocalIdentityDeletionTicket> prepareLocalIdentityDataDeletion(
+    String identityIdOrAlias,
+  ) async {
+    gateway.prepareLocalIdentityDataDeletionCalls += 1;
+    final prepareError = gateway.prepareLocalIdentityDataDeletionError;
+    if (prepareError != null) {
+      throw prepareError;
+    }
+    final existing = gateway.pendingLocalIdentityDeletionTickets
+        .cast<LocalIdentityDeletionTicket?>()
+        .firstWhere(
+          (ticket) =>
+              ticket != null && ticket.ownerIdentityId == identityIdOrAlias,
+          orElse: () => null,
+        );
+    if (existing != null) {
+      return existing;
+    }
+    final identity = gateway.localCredentials
+        .cast<SessionIdentity?>()
+        .firstWhere(
+          (candidate) =>
+              candidate != null &&
+              _matchesLocalCredential(candidate, identityIdOrAlias),
+          orElse: () => null,
+        );
+    if (identity == null) {
+      throw StateError('local_identity_not_found');
+    }
+    final ownerIdentityId = identity.localIdentityId?.trim();
+    if (ownerIdentityId == null || ownerIdentityId.isEmpty) {
+      throw StateError('local_identity_owner_missing');
+    }
+    final ticket = LocalIdentityDeletionTicket(
+      deletionId: 'delete-${gateway.prepareLocalIdentityDataDeletionCalls}',
+      ownerIdentityId: ownerIdentityId,
+      currentDid: identity.did,
+    );
+    gateway.pendingLocalIdentityDeletionTickets.add(ticket);
+    return ticket;
+  }
+
+  @override
+  Future<AppSession> completeLocalIdentityDataDeletion(
+    LocalIdentityDeletionTicket ticket,
+  ) async {
+    gateway.completeLocalIdentityDataDeletionCalls += 1;
+    final completeError = gateway.completeLocalIdentityDataDeletionError;
+    if (completeError != null) {
+      throw completeError;
+    }
+    gateway.deleteLocalIdentityDataCalls += 1;
+    gateway.pendingLocalIdentityDeletionTickets.removeWhere(
+      (pending) => pending.deletionId == ticket.deletionId,
+    );
+    return deleteLocalIdentity(ticket.ownerIdentityId);
+  }
+
+  @override
+  Future<List<LocalIdentityDeletionTicket>>
+  pendingLocalIdentityDataDeletions() async =>
+      List<LocalIdentityDeletionTicket>.unmodifiable(
+        gateway.pendingLocalIdentityDeletionTickets,
+      );
 
   @override
   Future<AppSession?> refreshSession() async {
@@ -3783,6 +3917,7 @@ class FakeGroupApplicationService implements GroupApplicationService {
     required String rules,
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+    bool secureRequired = false,
   }) {
     gateway.lastGroupIdentityMode = identity.mode;
     gateway.lastGroupIdentityHandle = identity.handle;
@@ -3807,17 +3942,6 @@ class FakeGroupApplicationService implements GroupApplicationService {
     gateway.lastGroupIdentityMode = identity.mode;
     gateway.lastGroupIdentityHandle = identity.handle;
     return gateway.joinGroup(groupDid);
-  }
-
-  @override
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({
-    int limit = 100,
-  }) async {
-    gateway.resumeGroupRecoveryCalls += 1;
-    if (gateway.failGroupRecovery) {
-      throw StateError('group recovery unavailable');
-    }
-    return gateway.groupRecoverySummary;
   }
 
   @override
@@ -3933,6 +4057,12 @@ class FakeOnboardingService implements OnboardingService {
     String? profileMarkdown,
     AppSessionTransition? transition,
   }) async {
+    if (gateway.registrationStatus ==
+        IdentityRegistrationStatus.recoveryRequired) {
+      return const IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.recoveryRequired,
+      );
+    }
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
       return const IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
@@ -3973,7 +4103,17 @@ class FakeOnboardingService implements OnboardingService {
     final error = gateway.nextOnboardingPhoneRegistrationError;
     gateway.nextOnboardingPhoneRegistrationError = null;
     if (error != null) {
+      final committed = gateway.committedIdentityBeforePhoneRegistrationError;
+      if (committed != null) {
+        gateway.localCredentials = <SessionIdentity>[committed];
+      }
       throw error;
+    }
+    if (gateway.registrationStatus ==
+        IdentityRegistrationStatus.recoveryRequired) {
+      return const IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.recoveryRequired,
+      );
     }
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
       return IdentityRegistrationResult(
@@ -4012,6 +4152,12 @@ class FakeOnboardingService implements OnboardingService {
     String? profileMarkdown,
     AppSessionTransition? transition,
   }) async {
+    if (gateway.registrationStatus ==
+        IdentityRegistrationStatus.recoveryRequired) {
+      return const IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.recoveryRequired,
+      );
+    }
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
       return const IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
@@ -4113,7 +4259,8 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
   }
 }
 
-class FakeIdentityCorePort implements IdentityCorePort {
+class FakeIdentityCorePort
+    implements IdentityCorePort, DaemonSubkeyAuthorizationCorePort {
   FakeIdentityCorePort({
     UserSubkeyPackage? daemonSubkeyPackage,
     AppSession? defaultSession,
@@ -4123,7 +4270,6 @@ class FakeIdentityCorePort implements IdentityCorePort {
              userDid: 'did:human:me',
              verificationMethod: 'did:human:me#daemon-key-1',
              publicKeyMultibase: 'zPublic',
-             privateKeyMultibase: 'zPrivate',
            ),
        defaultSession =
            defaultSession ??
@@ -4136,8 +4282,8 @@ class FakeIdentityCorePort implements IdentityCorePort {
 
   final UserSubkeyPackage daemonSubkeyPackage;
   final AppSession defaultSession;
-  String? lastDaemonSubkeySelector;
-  String? lastEnsuredDaemonSubkeySelector;
+  String? lastAuthorizedDaemonSubkeySelector;
+  UserSubkeyPackage? lastAuthorizedDaemonSubkeyProposal;
   String? lastRevokedDaemonSubkeySelector;
   String? lastDisplayNameProjectionIdentityId;
   String? lastDisplayNameProjection;
@@ -4163,18 +4309,12 @@ class FakeIdentityCorePort implements IdentityCorePort {
   ];
 
   @override
-  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(
+  Future<UserSubkeyPackage> authorizeDaemonSubkey(
     String identityIdOrAlias,
+    UserSubkeyPackage proposal,
   ) async {
-    lastDaemonSubkeySelector = identityIdOrAlias;
-    return daemonSubkeyPackage;
-  }
-
-  @override
-  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
-    String identityIdOrAlias,
-  ) async {
-    lastEnsuredDaemonSubkeySelector = identityIdOrAlias;
+    lastAuthorizedDaemonSubkeySelector = identityIdOrAlias;
+    lastAuthorizedDaemonSubkeyProposal = proposal;
     return daemonSubkeyPackage;
   }
 
@@ -4238,6 +4378,9 @@ class FakeIdentityCorePort implements IdentityCorePort {
       displayName: displayName ?? defaultSession.handle ?? defaultSession.did,
     );
   }
+
+  @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async =>
@@ -4627,48 +4770,6 @@ class FakeNotificationFacade implements NotificationFacade {
   }
 }
 
-class FakeE2eeFacade implements E2eeFacade {
-  @override
-  Future<ChatMessage> decryptIncomingMessage(ChatMessage message) async {
-    return message;
-  }
-
-  @override
-  Future<void> ensureSession(String peerDid) async {}
-
-  @override
-  Future<EncryptedPayload> encryptOutgoing({
-    required String peerDid,
-    required String originalType,
-    required String plaintext,
-  }) async {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<Map<String, Object?>> exportSessionState() async {
-    return const <String, Object?>{};
-  }
-
-  @override
-  Future<void> importSessionState(Map<String, Object?> state) async {}
-
-  @override
-  Future<void> initialize(SessionIdentity identity) async {}
-
-  @override
-  Future<bool> isSupported() async {
-    return false;
-  }
-
-  @override
-  Future<E2eeProcessResult> processIncomingProtocolMessage(
-    ChatMessage message,
-  ) async {
-    return const E2eeProcessResult();
-  }
-}
-
 class TestProfileController extends ProfileController {
   TestProfileController(super.ref, {UserProfile? initialProfile}) {
     if (initialProfile != null) {
@@ -4692,4 +4793,19 @@ PersonalAgentBinding _personalAgentBinding({
     delegatedKeyVerificationMethod: 'did:human:me#daemon-key-1',
     status: status,
   );
+}
+
+class _EmptyRecoveryContext implements HandleRecoveryCorePort {
+  @override
+  Future<HandleRecoveryContext> inspectContext({
+    required String handle,
+    String? localIdentityId,
+  }) async => HandleRecoveryContext(
+    handle: handle,
+    localIdentityId: localIdentityId,
+    allowedActions: const [HandleRecoveryAction.startNew],
+  );
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw StateError('unexpected recovery mutation in an empty fixture');
 }

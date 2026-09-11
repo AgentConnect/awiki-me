@@ -216,7 +216,18 @@ Flutter 3.44 的 macOS `SelectableRegion` 在每次右键按下时会先按鼠�
 
 文字动作顺序固定为复制、复制全部、全选。复制优先使用冻结的有效选区，未形成可复制选区时（例如直接右键单个 Emoji）兼容回退整条消息全文；复制全部始终从 `ChatMessage` 投影稳定全文，普通消息复制原始 `content`，附件消息复制非空 caption 和本地化文件名，不得把 Markdown 渲染结果、下载进度或操作按钮文案当作全文。全选关闭菜单后必须保留全文高亮和移动端选择句柄，后续复制继续使用更新后的真实选区。
 
-Composer 的附件来源仍统一进入 `AttachmentDraft`：文件选择、拖拽、剪贴板图片和 macOS `/usr/sbin/screencapture -i -x` 交互式截图都只负责暂存，用户点击发送后才调用 canonical attachment send API。截图期间主窗口始终保持可见，不再根据 Shift 或 native 全局 modifier 隐藏 App。App 在启动系统截图前必须通过 native `CGPreflightScreenCaptureAccess` 检查权限，单进程最多调用一次 `CGRequestScreenCaptureAccess`；未授权时禁止继续执行 `screencapture`，避免把只有桌面的错误图片当作有效附件。Debug App 必须使用稳定 Apple Development designated requirement，不能用随构建变化的 ad-hoc CDHash。Emoji 面板只修改当前 `TextEditingValue` 的选区并沿用 draft mention range 转换，不引入新的消息类型。
+Composer 的附件来源仍统一进入 `AttachmentDraft`：文件选择、拖拽、剪贴板图片和 macOS `/usr/sbin/screencapture -i -x` 交互式截图都只负责暂存，用户点击发送后才调用 canonical attachment send API。截图期间主窗口始终保持可见，不再根据 Shift 或 native 全局 modifier 隐藏 App。App 在启动系统截图前必须通过 native `CGPreflightScreenCaptureAccess` 检查权限，native 层单进程最多调用一次 `CGRequestScreenCaptureAccess`，不随 tenant runtime/window 重建；未授权或接口异常时禁止继续执行 `screencapture`，避免把只有桌面的错误图片当作有效附件。需要跨构建保留权限的 Debug 验证应启用本地稳定 Apple Development 签名；共享默认仍为便携 ad-hoc，详见 `macos-signing.md`。Emoji 面板只修改当前 `TextEditingValue` 的选区并沿用 draft mention range 转换，不引入新的消息类型。
+
+macOS 截图错误通过 `ScreenshotFailure` 区分权限未生效、权限接口失败和截图执行失败。
+权限拒绝不持久缓存，每次用户截图重新 preflight；同一进行中的截图和恢复对话框不重复提交。
+权限恢复窗口默认只解释 macOS 截图需要屏幕录制权限，提供固定底部的“打开系统设置”和
+“暂不设置”；故障恢复说明仅在“已开启权限，仍无法截图？”展开后显示，版本、运行模式、
+Bundle ID 和复制入口进一步收进“查看排查信息”。正文可滚动，但主操作不随正文滚走。
+开关已开启仍失败时才展示移除旧条目、重新添加当前应用的指引；普通权限 API 无法证明
+签名不匹配，因此 UI 不把该原因当作事实。普通错误提示不包含原生接口或重新编译等开发术语。
+原生桥只返回当前 Bundle 的名称、Bundle ID、版本和安装路径，诊断仅在用户点击时复制，
+不读取 TCC 数据库、不记录账号或截图、不自动重置权限、重签名、退出或重启应用。
+截图工具无图且退出码 0/1、stderr 为空时按取消处理；其他失败显示本地化错误，不暴露 stderr。
 
 mention 渲染规则：
 
@@ -304,8 +315,8 @@ Core 的 typed local Join inbox。通知自带的 title/body、payload JSON 或 
 
 Android EMAS message/notification/open callback 与 WebSocket 一样，只表示本地 Core
 projection 可能变脏。`RemotePushMessageSyncCoordinator` 将事件串行合并，并通过
-`MessageSyncCoordinator.requestSync(reason: remote_push)` 请求同一条 Core committed-sync
-路径。它不解析 Push title/body 来生成 `ChatMessage`，也不直接 upsert recents 或 timeline。
+`MessageSyncCoordinator` 请求同一条 Core `receiveNow` 接收路径，并在接收之外等待独立业务
+回执。它不解析 Push title/body 来生成 `ChatMessage`，也不直接 upsert recents 或 timeline。
 
 `MessageSyncCoordinator` 仍是唯一的 Core commit、conversation/Join/timeline 刷新和
 notification dedupe owner。native receiver 在 `showNotificationNow` 之前只用三项安全事实做
@@ -317,19 +328,23 @@ fail-open 决策：Activity resumed、窗口有焦点、当前 session 派生的
 被 native 拦截的 notice 通过 `notification_received_in_app` 进入同一 committed-sync 路径；
 `message_received` 也按 App presentation required 处理。已由 provider 展示的
 `notification_received` / `notification_opened` 继续抑制 App duplicate；混合 batch 只要包含
-provider-presented event 就选择抑制。该 policy 在 active/queued coalescing 和 automatic retry
-中按 OR 传播，不跳过 normal message ledger、Runtime Agent final-message deduper 或 committed
-projection。
+provider-presented event 就选择抑制对应 opaque message references。该 policy 在 active/queued
+coalescing 和 automatic retry 中合并引用集合；长时间等待某个 Push 时，不能抑制不相干消息的
+通知。没有引用信息的兼容调用保留既有全局 policy。不跳过 normal message ledger、Runtime
+Agent final-message deduper 或 committed projection。
 
 前台 App presentation 全局静默：无论用户是否位于消息所属会话，都不显示 Toast、Banner 或系统
 通知，只更新 timeline、recents、排序和未读状态；用户在当前聊天离开底部时继续由 ChatPage 现有
 “新消息”入口提示。App 后台、锁屏、窗口失焦或 opaque target 不匹配时，native 不拦截，仍只
 显示一次 EMAS `NOTICE`。
 
-native delivery ID 只有在 typed sync receipt 表明 Core 成功、所有本地刷新完成、且通知打开
-路由也成功后才能确认。打开事件只接受 `extraMap.mid` 的安全 opaque message reference 和
-必填未过期 `extraMap.exp`；App 在 sync 后用 committed logical/remote/local message ID
-独立派生 reference，匹配后只打开该 committed message 的 canonical conversation。其他
+native delivery ID 只有在 typed receipt 证明对应 ordinary 消息已在 Core 提交、所有本地刷新
+完成、且通知打开路由也成功后才能确认。接收成功、处理队列为空或输入淘汰都不能替代对应消息的
+提交事实。重启、重投递或 stream lag 时，通过 Core 现有 `localIncomingRecovery` 查询已提交
+incoming facts；不另建 App 持久消息结果表。打开事件只接受 `extraMap.mid` 的安全 opaque
+message reference 和必填未过期 `extraMap.exp`；App 用 committed logical/remote/local
+message ID 及 Core 保留的 raw message alias 派生 reference，匹配后只打开该 committed message
+的 canonical conversation。其他
 payload metadata、raw conversation ID、URL、title/body 都不能决定导航；无匹配时只显示会话
 列表。
 
@@ -361,6 +376,10 @@ release/0710 的 legacy DID/thread/Handle alias 只允许由 Core upgrade、alia
 
 打开会话后，text/payload/attachment 首发、重试和 read/sync 都传入同一 canonical `AppConversationReadRef`；Core 用 directory 解析时写入的 owner-scoped Direct route 寻址 current DID。App 不得把 peer-scope 会话降级为 `dm:<targetDid>` write alias。`ChatThreadsController` 只从 canonical `conversationId` timeline、conversation timeline patch 或 committed projection repair 中获得更新消息。列表 preview 的 authoritative base 仍来自 `im-core` conversation summary projection；legacy alias、remote history best-effort page 或 realtime hint 都不能成为第二套 preview 真相。`ConversationListProvider` 是 recents state 的唯一发布边界，snapshot、fast-local、patch reset/upsert/remove/reorder、repair 和 read ack 都必须在发布前应用同一套 read presentation waterline；Profile/Group 展示信息在 Widget/View Provider 中组合，不回写 base summary。这个 waterline 只接受 latest message watermark 前进或 read watermark 前进；summary-only 更新不能提前清 unread，read watermark 覆盖的迟到 unread 不能重新出现，旧的 0 unread 不能清掉更新消息。真正的 read state 必须通过带 message watermark 的 `markConversationRead(AppConversationReadRef, watermark)` 提交，并以 Core 返回的 `effectiveWatermark` 确认本地持久提交；`pendingRemoteAck` 表示 Core 已完成 local-first 提交，不能被 App 误判为本地失败。
 
+Direct 正常发送只使用 Core 已持久化的 current route，不增加 Directory/WNS 请求或 UI 等待。只有 Message Service 明确返回 stale-DID target-binding 错误时，Core 才按 owner + canonical conversation 合并并发恢复，执行一次权威绑定刷新和最多一次重发；同域使用本地域 Directory + 公开 WNS 双重一致性校验，跨域只信任公开 WNS。恢复必须保持 Persona、canonical conversation、message ID、operation/idempotency ID、正文和安全模式不变，只推进 current DID route。任何已经落盘的 wire receiver DID 都是 Core 的不可变消息事实：text/payload 的 pre-send pending row 保留失败 route，attachment 若在远端接受后才首次建立消息行则记录 accepted route，后续恢复或同 logical message 重放都不能改写已有快照；Group 和其他服务错误不进入该流程。
+
+该恢复对 App 始终表现为同一次在途发送：timeline 只保留一个原 message ID 对应的 `sending` 气泡，并在 Core committed 结果到达后原位收敛为 `sent` 或 `failed`。App 不查询 Handle、不复制 Core 恢复状态机、不新增第二个 optimistic 气泡，也不通过 full conversation refresh 或 history backfill 等待恢复。手动重试 text、Mention payload 和 attachment 时必须复用原 `clientMessageId` 及首次发送的 `op-<clientMessageId>` idempotency key；attachment 的 create/upload/commit 与 Manifest 重发边界由 Core 管理。
+
 新加入设备采用 tail-only 消息语义：Agent Inventory 或显式打开只能建立 canonical Direct
 route，不能证明 Message Service 已发布 durable thread binding。空 Direct 在首次
 conversation-after 收到 `SYNC_THREAD_BINDING_REQUIRED` 时，data adapter 将稳定服务码投影为
@@ -381,7 +400,7 @@ Chat presentation 是单向的：
 Chat presentation 同时是 owner/session-generation scoped：
 
 - `SessionEpoch` 由规范化 owner DID、稳定本机 identity key 和单调 generation 组成。active identity 改变、登出或 clear 都会推进 generation；同一 identity 的 token/profile refresh 不会误伤正在进行的工作。
-- `MessageSyncCoordinator` 只允许同一 epoch 的请求 single-flight/coalesce。A 的 active 或 delayed sync 不能满足 B 的 startup sync；A 完成后只有仍属当前 epoch 的结果可以刷新 recents、Join inbox、prewarm timeline 或更新 coordinator state。精确正文补齐由 Core 在 `syncNow` 中完成并提交本地 projection；App 不再根据 hydration ID 二次调用 `syncConversationAfter`，只在 Core commit 后执行 fast-local summary read、本地 timeline prewarm 和可见窗口刷新。
+- `MessageSyncCoordinator` 只允许同一 epoch 的接收请求 single-flight/coalesce。A 的 active 或 delayed sync 不能满足 B 的 startup sync；A 完成后只有仍属当前 epoch 的结果可以刷新 recents、Join inbox、prewarm timeline 或更新 coordinator state。精确正文补齐与可靠落盘由 Core `receiveNow` 完成，逐条业务处理在接收之外提交 projection。App 通过独立 processing session 消费提交结果；普通接收 Future 在可靠接收完成时释放，慢 Join 刷新或 Push 业务等待不占下一轮接收位置。App 不再根据 hydration ID 二次调用 `syncConversationAfter`，只在 Core commit 后执行 fast-local summary read、本地 timeline prewarm 和可见窗口刷新。
 - `MessageSyncCoordinator` 将 patch preparation/Core 同步与 Core commit 后的 App 投影刷新分开捕获：认证拒绝立即终止并要求重新登录；普通可重试失败前两次保持静默、第 3 次连续失败后才显示提示，并按连续 30 秒阈值升级为红色提示；任何成功同步都会重置连续失败计数；Join inbox 或列表刷新失败只标记 `projectionRefreshFailed`，不能触发网络同步失败重试或声称本地事实未改变。对外诊断只包含 stage/category/稳定 code/HTTP status/count/time 等脱敏字段。
 - `ChatThreadsController` 在 epoch 改变时同步取消旧 patch subscriptions 和 timers，清空 pending history/read/repair、thread window、message route cache 与 composer draft。history、conversation-after、patch repair、read ack、text/attachment send 和 retry 都在 await 后再次校验启动时 epoch。
 - Future、stream callback 或 timer 即使无法底层取消，旧 epoch 完成也只能安静结束；不得删除新 epoch 的 active marker、合并到新 timeline、更新新 recents preview、恢复旧 read intent 或显示旧错误。
@@ -424,6 +443,9 @@ Timeline merge 必须把“同一条本机发送消息的 durable server row”�
 特殊边界：`dm:peer-scope:*`、legacy DID direct、old Flutter direct alias、handle 切换和 DID rotation 都必须在 `im-core` identity resolver / migration 中收敛到 canonical `conversationId`。AWiki Me 可以展示 alias/handle/DID，但不能用这些字段决定消息归属、read ack key 或 timeline patch key。旧 `ThreadRef` / raw thread history 能力只作为 compatibility adapter；App 主路径不得把 `unsupported_capability: thread-history` 暴露为可见错误。附件下载是明确的网络寻址例外：timeline 归属仍保持 canonical peer-scoped conversation，但下载请求必须使用该会话已解析的 direct peer reference，不能把不可逆的 `dm:peer-scope:*` storage thread 传给只支持 direct/group 的 attachment lookup。
 
 会话列表、聊天头部、联系人、添加群成员候选、`@` 候选、群成员和群消息发送人属于同一个 Profile 展示投影消费面。持久投影由 `im-core` 按 storage scope、owner identity 和 `peerPersonaId` 隔离；当前 DID 只是 Persona 的 route。App `PeerDisplayProfileStore` 以 Persona 为主键，DID-only unresolved 项进入独立 bucket，不能把一个 DID 查询结果复制成另一个身份的 alias。以上消费面必须同时复用该投影的名称与头像；候选列表不得直接展示原始 conversation/roster 快照，也不得使用与 Persona 无关的固定占位头像。切换消息页、选择会话和联系人首页预览都不得触发阻塞式远端 Profile 查询；完整关注/粉丝页、显式 Profile 入口和 stale cache 后台刷新可以合并远端读取，单个失败保留旧缓存且不能阻断其他条目。群会话 Composer 打开时通过 `GroupController.ensureGroupMembersLoaded` 合并同群冷加载并把 roster 发布到 `GroupState.membersByGroup`；`@` 的每次 query 只读取该应用层投影、叠加本地 Persona Profile 后过滤，禁止按字符重复调用 `group.list_members`。添加/移除成员和用户显式刷新仍通过 `GroupController.loadGroupMembers` 更新该投影。主名称展示顺序固定为当前权威 Profile Display Name、完整 Handle、历史 sender snapshot（仅前两者都不可用）、紧凑 DID、unknown；旧 `customTitle`、联系人 `name/nick_name`、本地 credential alias 和 `user_name` 都不得覆盖权威 Display Name。完整 Handle 必须继续保存在同一 Profile 投影中，并在身份查找、群成员和用户资料等可容纳第二行身份信息的页面显示为 `@完整Handle`，在协议寻址时原样使用。有可用缓存时首帧必须直接显示缓存名称；过期值允许 stale-while-revalidate，刷新不得先清空名称造成闪烁。群名的冷启动基线来自 `im-core` owner-scoped Group profile projection，并随 conversation snapshot/patch 携带；View 层可按同一 canonical `conversationId` 组合更新后的群资料，但不得改写 Core conversation identity。群资料刷新、添加成员和移除成员回调必须保留已选会话原有的 `conversationId`，不得用 `groupId` 重新拼接 `group:*`。
+
+群成员首帧和聊天发送人使用 Directory 的 `refreshDisplayProfiles` 独立补齐展示数据，不能以批量 `resolvePeer` 或 Profile 业务查询制造联系人/私聊副作用。`ensureGroupMembersLoaded` 先发布 roster，再后台补齐并以 owner epoch 与成员加载代次检查结果。聊天前台每 10 秒对已显示发送人及已加载成员重新提出需求，App 只合并/节流请求；TTL、网络并发、失败重试与持久缓存由 Core 控制。失败继续显示已有名称，成功的无昵称结果清除投影昵称。Dart adapter 在同一个 client 内分批，不能在中途切换 owner。
+
 
 身份查找结果使用“当前昵称 > 短 Handle > DID”作为主名称，并在 Handle 可用且未完整出现在主名称时显示 `@完整Handle` 作为第二身份行。群系统事件、通知等无法同时承载第二身份行的单行公共身份场景使用“当前昵称 > 完整 Handle > DID”。DID 只是最后 fallback，UI 可使用紧凑格式显示；不得在 nickname 或 Handle 已知时优先显示 DID。这些 UI 仍必须消费同一 Persona Profile 投影，Widget 不得自行拼接 fallback。删除成员等破坏性操作的确认文案必须同时保留完整 Handle，Handle 不可用时保留完整 DID，避免短名碰撞导致误操作。
 
@@ -572,6 +594,7 @@ copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
 - `tests/unit/chat_mention_composer_test.dart`：验证 draft mention range 维护、编辑失效、候选插入、本地 Profile single-flight 预热、首帧不闪现 Handle、连续 query 只使用一次 roster/Profile 请求，以及气泡按 DID 重投影但不修改原始消息。
 - `tests/unit/chat_page_test.dart`：验证聊天窗口渲染、read ack 边界、header 行为、sending indicator 的 3 秒延迟与明确终态清理等关键 widget 行为。
 - `tests/unit/chat_provider_open_test.dart`：验证打开会话 local-first conversation timeline、conversation-after/remote fallback、conversation timeline patch version gap repair、stream closed repair/re-subscribe、read ack、文本 / payload / 附件 send intent 和附件 retry 都按 `conversationId` / `AppConversationReadRef` 走主路径；其中可见群聊必须在 Controller 自身建立持久 intent，不依赖 Widget 二次回调，并覆盖在途 `seq 5 -> seq 6` 串行合并和 Core `pendingRemoteAck` local-first 成功。
+  - Direct stale-route 恢复与手动 retry 必须覆盖稳定 `clientMessageId` / `op-<clientMessageId>`、原气泡原位 `failed -> sending -> sent|failed`、Mention/附件一致性，以及不触发 full refresh/history backfill。
   - Agent pending turn 必须覆盖精确 reply correlation、多个 legacy candidate 不猜测、单 candidate 旧回复兼容、final/terminal 后迟到 running 不复活，以及 session 切换清空完成 ledger。
   - 其中 `dm:peer-scope:*`、legacy direct、old Flutter direct alias 和 handle/DID rotation 必须由 core/SDK canonical identity 收敛；App 不因 raw thread history unsupported 而把错误暴露成可见 UI 报错。
   - 身份隔离还必须覆盖 A 的 delayed local history、patch repair 和 send completion 在快速 A→B→C 后被丢弃，同时切换当下即清空旧 thread window、patch subscription 和 composer draft。
@@ -589,6 +612,7 @@ copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
 - `tests/unit/conversation_list_provider_test.dart` 还必须验证 patch-ready single-flight、订阅先于 seed、seed 期间 patch 不丢不重、stream error/close 单次重建，以及同 DID auth generation 切换后旧 patch / Profile 异步结果失效。
 - `tests/unit/data/im_core/awiki_im_core_conversation_adapter_test.dart` 与 `awiki_im_core_message_adapter_test.dart`：验证 conversation/timeline patch 的 `ownerIdentityId` 不在 SDK→App 映射中丢失，并验证产品诊断只映射脱敏 mode/count/domain/retry/time 字段。
 - `tests/e2e/flutter/app/app_smoke_test.dart`：验证真实 App UI 从完整 Handle 发起空私聊后，Core committed row 在首条消息前可见，recents 与 selected ID 始终指向同一个 canonical conversation；同时验证后台 committed Agent 消息通过系统通知 facade 投影时，标题使用 Agent inventory 的展示名。
+  - Direct stale-route UI smoke 必须通过真实 composer 约束恢复期间仅有一个稳定 message ID 的 `sending` 气泡，完成后原位变为 `sent`，且全过程不触发 history/full refresh。
 - `tests/e2e/flutter/desktop_cli_peer/flows/attachment_flow.dart`：验证不同客户端账号发送附件时，关闭会话的 unread 精确 `0 -> 1`，从 recents 打开后精确 `1 -> 0`，并在 App presentation 重建后仍从 Core local read state 恢复为 `0`，同时保留 canonical 附件、下载字节和 digest 校验。
 - `tests/e2e/flutter/desktop_cli_peer/flows/direct_message_flow.dart`：direct App + CLI peer E2E 在 CLI -> App 消息后，先等 conversation refresh 返回 `ConversationSummary`，再验证 list latest message 能在 `conversationId` 对应的 canonical timeline 中唯一出现；同正文双消息还必须在 realtime 首次可见、sync sequence 收敛、重连和重启后保持不同 canonical ID 与严格递增顺序。
 - `tests/e2e/flutter/desktop_cli_peer/flows/group_message_flow.dart`：群消息流程必须覆盖 CLI 入站后总未读 `baseline -> baseline + 1`、App 重启后 group row 仍为未读、打开群聊后 Core read watermark 提交并使 conversation unread 与总未读共同收敛回 baseline。

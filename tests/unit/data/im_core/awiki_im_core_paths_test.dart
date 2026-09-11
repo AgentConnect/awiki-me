@@ -194,6 +194,45 @@ void main() {
     );
   });
 
+  test('production gate ignores an injected E2E runtime state root', () {
+    expect(
+      resolveAwikiE2eAppStateRoot(
+        enabled: false,
+        compiledRoot: '',
+        environment: const <String, String>{
+          'AWIKI_E2E_APP_STATE_ROOT': '/tmp/must-not-be-visible',
+        },
+      ),
+      isNull,
+    );
+  });
+
+  test(
+    'E2E gate accepts runtime root and preserves legacy compile override',
+    () {
+      expect(
+        resolveAwikiE2eAppStateRoot(
+          enabled: true,
+          compiledRoot: '',
+          environment: const <String, String>{
+            'AWIKI_E2E_APP_STATE_ROOT': '/tmp/runtime-root',
+          },
+        ),
+        '/tmp/runtime-root',
+      );
+      expect(
+        resolveAwikiE2eAppStateRoot(
+          enabled: true,
+          compiledRoot: '/tmp/legacy-compile-root',
+          environment: const <String, String>{
+            'AWIKI_E2E_APP_STATE_ROOT': '/tmp/runtime-root',
+          },
+        ),
+        '/tmp/legacy-compile-root',
+      );
+    },
+  );
+
   test(
     'keeps GUI-launched relative E2E state root on writable macOS support',
     () {

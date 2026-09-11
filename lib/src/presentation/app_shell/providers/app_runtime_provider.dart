@@ -14,6 +14,7 @@ import '../../../app/app_locale.dart';
 import '../../../app/app_services.dart';
 import '../../../app/ui_feedback.dart';
 import '../../../application/app_session_service.dart';
+import '../../../core/app_error_classifier.dart';
 import '../../../core/performance_logger.dart';
 import '../../../application/models/app_session.dart';
 import '../../../application/remote_push_installation_coordinator.dart';
@@ -55,6 +56,10 @@ import 'session_provider.dart';
 
 const bool _runtimeTraceEnabled = bool.fromEnvironment(
   'AWIKI_RUNTIME_TRACE',
+  defaultValue: false,
+);
+const bool _e2eCrashAfterIdentityProductDelete = bool.fromEnvironment(
+  'AWIKI_E2E_IDENTITY_DELETION_CRASH_AFTER_PRODUCT_DELETE',
   defaultValue: false,
 );
 const Set<SyncDomain> _accountStateRealtimeDomains = <SyncDomain>{
@@ -181,7 +186,6 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   _SessionEpochOperation? _realtimeRecoveryOperation;
   _SessionEpochBarrierOperation? _sessionEpochBarrierOperation;
   int _busyOperationCount = 0;
-  Future<void> _e2eeInitializationTail = Future<void>.value();
   SessionEpoch? _lastAuthenticatedRefreshEpoch;
   late final AgentTerminalNotificationDeduplicator
   _agentTerminalNotificationDeduplicator;
@@ -218,7 +222,23 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     _beginBusyOperation();
     try {
       final sessions = ref.read(appSessionServiceProvider);
-      final localIdentities = await sessions.listLocalIdentities();
+      var localIdentities = await sessions.listLocalIdentities();
+      if (sessions is LocalIdentityDataDeletionSessionService) {
+        final deletionSessions =
+            sessions as LocalIdentityDataDeletionSessionService;
+        final pending = await deletionSessions
+            .pendingLocalIdentityDataDeletions();
+        if (pending.isNotEmpty) {
+          for (final ticket in pending) {
+            await _deletePreparedIdentityProductData(
+              ownerIdentityId: ticket.ownerIdentityId,
+              currentDid: ticket.currentDid,
+            );
+            await deletionSessions.completeLocalIdentityDataDeletion(ticket);
+          }
+          localIdentities = await sessions.listLocalIdentities();
+        }
+      }
       final localCredentials = _legacySessionsFromAppSessions(localIdentities);
       ref.read(sessionProvider.notifier).setCapabilities(_imCoreCapabilities);
       ref.read(sessionProvider.notifier).setLocalCredentials(localCredentials);
@@ -271,11 +291,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       }
       ref.read(selectedConversationProvider.notifier).clearSelection();
       ref.read(friendsWorkspaceNavigationProvider.notifier).reset();
-      final initialized = await _enqueueE2eeInitialization(
-        lease,
-        session,
-      ).timeout(_requestTimeout);
-      if (!initialized || !_isSessionLeaseTransitionCurrent(lease)) {
+      if (!_isSessionLeaseTransitionCurrent(lease)) {
         return;
       }
       ref.read(sessionProvider.notifier).activateSession(session);
@@ -297,9 +313,13 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       }
       await ref
           .read(conversationListProvider.notifier)
-          .preparePatchGeneration();
+          .preparePatchGeneration()
+          .timeout(_requestTimeout);
       if (!_isSessionLeaseTransitionCurrent(lease) ||
           !_isSessionEpochActive(epoch)) {
+        if (_isSessionEpochActive(epoch)) {
+          _clearAuthenticatedUiState();
+        }
         return;
       }
       state = state.copyWith(
@@ -326,13 +346,29 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       if (!_isSessionLeaseTransitionCurrent(lease)) {
         return;
       }
-      await ref.read(appSessionServiceProvider).abortSessionIfCurrent(lease);
+      final aborted = await ref
+          .read(appSessionServiceProvider)
+          .abortSessionIfCurrent(lease);
+      final activeSession = ref.read(sessionProvider).session;
+      if (aborted &&
+          activeSession?.localIdentityId == lease.session.identityId &&
+          activeSession?.did == lease.session.did) {
+        _clearAuthenticatedUiState();
+      }
       rethrow;
     } catch (_) {
       if (!_isSessionLeaseTransitionCurrent(lease)) {
         return;
       }
-      await ref.read(appSessionServiceProvider).abortSessionIfCurrent(lease);
+      final aborted = await ref
+          .read(appSessionServiceProvider)
+          .abortSessionIfCurrent(lease);
+      final activeSession = ref.read(sessionProvider).session;
+      if (aborted &&
+          activeSession?.localIdentityId == lease.session.identityId &&
+          activeSession?.did == lease.session.did) {
+        _clearAuthenticatedUiState();
+      }
       rethrow;
     } finally {
       if (mounted) {
@@ -347,12 +383,15 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
   }
 
-  Future<void> prepareIdentityActivation() async {
+  Future<void> prepareIdentityActivation({bool Function()? isCurrent}) async {
+    if (!mounted || isCurrent?.call() == false) return;
     _isLoggingOut = true;
     _syncAuthRevoked = false;
     final pushSession = _currentRemotePushInstallationSession();
     _deactivateRemotePushLocally(pushSession);
     await _disableRemotePushBestEffort(pushSession);
+    if (!mounted || isCurrent?.call() == false) return;
+    _beginBusyOperation();
     _clearAuthenticatedUiState();
     state = state.copyWith(
       isBusy: true,
@@ -363,8 +402,11 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     try {
       await ref.read(realtimeApplicationServiceProvider).stop();
     } catch (error, stackTrace) {
+      if (!mounted || isCurrent?.call() == false) return;
       await _rollbackSessionActivationBestEffort();
       Error.throwWithStackTrace(error, stackTrace);
+    } finally {
+      _endBusyOperation();
     }
   }
 
@@ -378,19 +420,28 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   /// Activates one local identity and reports whether the authenticated App
   /// projection committed. Recovery uses this result as a navigation gate.
-  Future<bool> loginWithLocalCredentialAndConfirm(String credentialName) async {
+  Future<bool> loginWithLocalCredentialAndConfirm(
+    String credentialName, {
+    bool reportFailure = true,
+    bool Function()? isCurrent,
+  }) async {
+    bool requestIsCurrent() => mounted && (isCurrent?.call() ?? true);
+    if (!requestIsCurrent()) return false;
     final currentSession = ref.read(sessionProvider).session;
     if (currentSession != null) {
       ref.read(sessionProvider.notifier).upsertLocalCredential(currentSession);
       final pushSession = _currentRemotePushInstallationSession();
       _deactivateRemotePushLocally(pushSession);
       await _disableRemotePushBestEffort(pushSession);
+      if (!requestIsCurrent()) return false;
       _clearAuthenticatedUiState();
     }
     AppSession? session;
     AppSessionLease? restoredLease;
     final sessions = ref.read(appSessionServiceProvider);
-    final transition = sessions.beginSessionTransition();
+    final transition = sessions.beginSessionTransition(
+      isCurrent: requestIsCurrent,
+    );
     final loginCompleted = await _runBusy(
       () async {
         session = await sessions.loginWithIdentity(
@@ -399,28 +450,46 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         );
       },
       onFailure: () async {
-        restoredLease = await _cancelOrAbortSessionTransition(transition);
+        transition.releaseRequestGuard();
+        if (mounted) {
+          restoredLease = await _cancelOrAbortSessionTransition(transition);
+        }
       },
-      shouldReportFailure: () => sessions.isLatestSessionTransition(transition),
+      shouldReportFailure: () =>
+          reportFailure &&
+          requestIsCurrent() &&
+          sessions.isLatestSessionTransition(transition),
     );
+    if (!requestIsCurrent()) {
+      transition.releaseRequestGuard();
+      if (mounted) await _cancelOrAbortSessionTransition(transition);
+      return false;
+    }
     final committed = session;
     if (!loginCompleted || committed == null) {
+      transition.releaseRequestGuard();
       final predecessor = restoredLease;
       if (predecessor != null) {
         await _runBusy(
           () => _activateSession(predecessor),
           enforceTimeout: false,
+          shouldReportFailure: () => reportFailure && requestIsCurrent(),
         );
       }
       return false;
     }
     final activationCompleted = await _runBusy(
-      () => activateCommittedSession(committed),
+      () => activateCommittedSession(committed, expectedTransition: transition),
       enforceTimeout: false,
+      shouldReportFailure: () => reportFailure && requestIsCurrent(),
     );
-    if (!activationCompleted || !mounted) {
+    final stillCurrent = requestIsCurrent();
+    transition.releaseRequestGuard();
+    if (!stillCurrent) {
+      if (mounted) await _cancelOrAbortSessionTransition(transition);
       return false;
     }
+    if (!activationCompleted) return false;
     final active = ref.read(sessionProvider).session;
     return active != null &&
         active.localIdentityId == committed.identityId &&
@@ -469,33 +538,6 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
             .isSessionTransitionCurrent(lease.transition);
   }
 
-  Future<bool> _enqueueE2eeInitialization(
-    AppSessionLease lease,
-    SessionIdentity session,
-  ) {
-    final previous = _e2eeInitializationTail;
-    final completed = Completer<void>();
-    _e2eeInitializationTail = completed.future;
-
-    return () async {
-      await previous;
-      try {
-        if (!_isSessionLeaseTransitionCurrent(lease)) {
-          return false;
-        }
-        await AwikiPerformanceLogger.async(
-          'app_runtime.activate_session.e2ee',
-          () => ref.read(e2eeFacadeProvider).initialize(session),
-        );
-        return _isSessionLeaseTransitionCurrent(lease);
-      } finally {
-        if (!completed.isCompleted) {
-          completed.complete();
-        }
-      }
-    }();
-  }
-
   Future<void> activateJoinedMember(String expectedDid) {
     final normalizedDid = expectedDid.trim();
     if (normalizedDid.isEmpty) {
@@ -525,10 +567,24 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
             throw StateError('joined_identity_did_mismatch');
           }
           await activateCommittedSession(session);
+          final activeSession = ref.read(sessionProvider).session;
           if (state.activatedDid != normalizedDid ||
-              ref.read(sessionProvider).session?.did != normalizedDid) {
+              activeSession?.did != normalizedDid) {
             throw StateError('joined_identity_activation_incomplete');
           }
+          final credentials = await _localCredentialsFor(ref);
+          final stillActive = ref.read(sessionProvider).session;
+          if (state.activatedDid != normalizedDid ||
+              stillActive?.did != normalizedDid) {
+            throw StateError('joined_identity_activation_superseded');
+          }
+          if (activeSession == null ||
+              !credentials.any(
+                (identity) => _sameLocalIdentity(identity, activeSession),
+              )) {
+            throw StateError('joined_identity_inventory_missing');
+          }
+          ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
         })().whenComplete(() {
           if (identical(_joinedMemberActivation, operation)) {
             _joinedMemberActivation = null;
@@ -617,19 +673,27 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     final deletionSessions =
         sessions as LocalIdentityDataDeletionSessionService;
-    final productLocalStore = ref.read(productLocalStoreProvider);
     _deletingLocalIdentitySelector = selector;
     _isLoggingOut = true;
     try {
+      final ticket = await deletionSessions.prepareLocalIdentityDataDeletion(
+        selector,
+      );
+      if (ticket.ownerIdentityId != ownerIdentityId) {
+        throw StateError('local_identity_deletion_ticket_mismatch');
+      }
       _agentTerminalNotificationDeduplicator.clear();
       final pushSession = _currentRemotePushInstallationSession();
       _deactivateRemotePushLocally(pushSession);
       await _disableRemotePushBestEffort(pushSession);
-      await productLocalStore.deleteOwnerData(
-        ownerIdentityId: ownerIdentityId,
-        currentDid: identity.did,
+      await _deletePreparedIdentityProductData(
+        ownerIdentityId: ticket.ownerIdentityId,
+        currentDid: ticket.currentDid,
       );
-      await deletionSessions.deleteLocalIdentityData(selector);
+      if (_e2eCrashAfterIdentityProductDelete) {
+        throw StateError('e2e_identity_deletion_crash_after_product_delete');
+      }
+      await deletionSessions.completeLocalIdentityDataDeletion(ticket);
       if (mounted) {
         state = state.copyWith(activatedDid: null);
         _clearAuthenticatedUiState();
@@ -652,6 +716,34 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
   }
 
+  Future<void> _deletePreparedIdentityProductData({
+    required String ownerIdentityId,
+    required String currentDid,
+  }) async {
+    try {
+      await ref
+          .read(productLocalStoreProvider)
+          .deleteOwnerData(
+            ownerIdentityId: ownerIdentityId,
+            currentDid: currentDid,
+          );
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[awiki_me][identity-deletion][error] '
+        'code=identity.local_data_deletion_pending '
+        'stage=product_delete ticket_retained=true '
+        'core_complete_started=false',
+      );
+      Error.throwWithStackTrace(
+        AppStructuredError(
+          code: 'identity.local_data_deletion_pending',
+          cause: error,
+        ),
+        stackTrace,
+      );
+    }
+  }
+
   /// Removes one exact local identity. It is valid both for the active session
   /// and for a signed-out identity chooser; only the active case tears down
   /// authenticated projections and remote push state.
@@ -665,6 +757,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     final deletingCurrent =
         current != null && _sameLocalIdentity(current, identity);
     try {
+      await ref.read(appSessionServiceProvider).deleteLocalIdentity(selector);
       if (deletingCurrent) {
         _isLoggingOut = true;
         _agentTerminalNotificationDeduplicator.clear();
@@ -674,7 +767,6 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         await _disableRemotePushBestEffort(pushSession);
         _clearAuthenticatedUiState();
       }
-      await ref.read(appSessionServiceProvider).deleteLocalIdentity(selector);
       final credentials = await _localCredentialsFor(ref);
       ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
       return true;
@@ -1027,10 +1119,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   ) {
     final status = next.valueOrNull;
     final previousStatus = previous?.valueOrNull;
+    final isForeground =
+        ref.read(appLifecycleProvider) == AppLifecycleState.resumed;
     if (status == RealtimeConnectionStatus.reconnecting ||
         status == RealtimeConnectionStatus.failed ||
         status == RealtimeConnectionStatus.disconnected) {
-      if (!_isLoggingOut && !_syncAuthRevoked) {
+      if (isForeground && !_isLoggingOut && !_syncAuthRevoked) {
         _scheduleReliableSync(
           'realtime_connection_interrupted',
           immediate: true,
@@ -1039,7 +1133,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     if (status == RealtimeConnectionStatus.failed ||
         status == RealtimeConnectionStatus.disconnected) {
-      if (_isLoggingOut || _syncAuthRevoked) {
+      if (!isForeground || _isLoggingOut || _syncAuthRevoked) {
         return;
       }
       final session = ref.read(sessionProvider).session;
@@ -1049,6 +1143,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       return;
     }
     if (status != RealtimeConnectionStatus.connected) {
+      return;
+    }
+    if (!isForeground) {
       return;
     }
     if (previousStatus != RealtimeConnectionStatus.reconnecting &&

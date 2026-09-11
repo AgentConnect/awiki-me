@@ -239,6 +239,15 @@ class _DeviceJoinApprovalSheetState
     required DevicesState state,
     required DeviceJoinProgress? progress,
   }) {
+    // The terminal notification can arrive before the approval result and its
+    // authorized-device summary. Do not offer a premature exit from this flow.
+    if (state.isActionPending) {
+      return AppPrimaryButton(
+        key: const Key('device-join-finalizing'),
+        label: context.l10n.deviceJoinFinalizing,
+        onPressed: null,
+      );
+    }
     final recipient = progress?.authorizedDevice;
     final sender = state.registry?.currentDevice;
     final eligible =
@@ -260,7 +269,8 @@ class _DeviceJoinApprovalSheetState
     }
 
     final expectedContext = RootKeyTransferContext(
-      joinSessionId: progress.joinSessionId,
+      origin: RootKeyTransferOrigin.activeJoin,
+      flowId: progress.joinSessionId,
       did: progress.did,
       recipientDeviceId: recipient.protocolDeviceId,
       recipientSigningKeyId: recipient.signingKeyId,
@@ -336,6 +346,16 @@ class _DeviceJoinApprovalSheetState
             style: TextStyle(color: context.awikiTheme.danger),
           ),
           const SizedBox(height: 16),
+          if (transfer.retryable) ...<Widget>[
+            AppPrimaryButton(
+              key: const Key('root-transfer-retry'),
+              label: context.l10n.commonRetry,
+              onPressed: () => ref
+                  .read(devicesProvider.notifier)
+                  .prepareRootTransferForActiveJoin(),
+            ),
+            const SizedBox(height: 16),
+          ],
           AppPrimaryButton(
             label: context.l10n.commonDone,
             onPressed: () => Navigator.of(context).maybePop(),

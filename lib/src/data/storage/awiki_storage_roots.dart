@@ -6,12 +6,28 @@ const bool _awikiE2eEnabled = bool.fromEnvironment('AWIKI_E2E');
 const String _awikiE2eAppStateRoot = String.fromEnvironment(
   'AWIKI_E2E_APP_STATE_ROOT',
 );
+const String _awikiE2eAppStateRootEnvironment = 'AWIKI_E2E_APP_STATE_ROOT';
 
 bool awikiE2eEnabledForBuild() => _awikiE2eEnabled;
 
 String? awikiE2eAppStateRoot() {
-  if (!_awikiE2eEnabled) return null;
-  final root = _awikiE2eAppStateRoot.trim();
+  return resolveAwikiE2eAppStateRoot(
+    enabled: _awikiE2eEnabled,
+    compiledRoot: _awikiE2eAppStateRoot,
+    environment: Platform.environment,
+  );
+}
+
+String? resolveAwikiE2eAppStateRoot({
+  required bool enabled,
+  required String compiledRoot,
+  required Map<String, String> environment,
+}) {
+  if (!enabled) return null;
+  final compiled = compiledRoot.trim();
+  final root = compiled.isNotEmpty
+      ? compiled
+      : (environment[_awikiE2eAppStateRootEnvironment]?.trim() ?? '');
   return root.isEmpty ? null : normalizeAwikiE2eAppStateRootForLaunch(root);
 }
 

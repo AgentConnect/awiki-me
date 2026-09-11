@@ -11,6 +11,7 @@ import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
+import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
@@ -32,9 +33,17 @@ const String _codexAgentRunConfigPath =
     '.e2e/codex-agent/current/run_config.json';
 const Duration _codexRuntimeFinalTimeout = Duration(minutes: 5);
 const String _codexDaemonMaxRuntimeMs = '780000';
+const String _daemonCliProxyPassthrough =
+    'HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY '
+    'http_proxy https_proxy all_proxy no_proxy';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets(
     'Codex Agent full UI sends deterministic prompt and shows visible reply',
@@ -64,6 +73,7 @@ void main() {
 
         final session = await _prepareRealAppIdentity(
           bootstrap.onboardingService!,
+          bootstrap.onboardingSupportService!,
           config,
         );
         await ProviderScope.containerOf(
@@ -224,8 +234,15 @@ void main() {
 
 Future<AppSession> _prepareRealAppIdentity(
   OnboardingService onboarding,
+  OnboardingSupportService onboardingSupport,
   _CodexAgentRealBackendConfig config,
 ) async {
+  await onboardingSupport.sendRegistrationOtp(
+    phone: config.otpPhone,
+    handle: config.appHandle,
+    domain: config.environment.didDomain,
+    fullHandle: '${config.appHandle}.${config.environment.didDomain}',
+  );
   final register = await _tryAppIdentityAction(
     () => onboarding.registerHandleWithPhone(
       phone: config.otpPhone,
@@ -331,6 +348,15 @@ Future<Process> _startRealDaemon({
 
 Map<String, String> _daemonEnvironment(_CodexAgentRealBackendConfig config) {
   final environment = _loadDaemonEnvFile(config);
+  final parentPassthrough = Platform
+      .environment['AWIKI_DAEMON_CLI_ENV_PASSTHROUGH']
+      ?.trim();
+  environment.putIfAbsent(
+    'AWIKI_DAEMON_CLI_ENV_PASSTHROUGH',
+    () => parentPassthrough?.isNotEmpty == true
+        ? parentPassthrough!
+        : _daemonCliProxyPassthrough,
+  );
   environment.addAll(<String, String>{
     'AWIKI_DAEMON_SERVICE_BASE_URL': config.environment.baseUrl,
     'AWIKI_DAEMON_USER_SERVICE_BASE_URL': config.environment.userServiceUrl,

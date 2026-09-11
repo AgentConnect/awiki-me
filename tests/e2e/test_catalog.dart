@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'host_platform.dart';
+import 'runner/manifest.dart';
+
 const String appSuiteManifestPath = 'tests/e2e/suite_manifest.json';
 const String appCaseCatalogPath = 'tests/e2e/case_catalog.json';
 const String appCaseCatalogDocumentPath = 'docs/test-case-catalog.md';
@@ -34,12 +37,53 @@ class AppTestCatalog {
         'suite manifest and case catalog must use schemaVersion 1',
       );
     }
+    final manifestRevision = _requiredString(
+      manifest,
+      'sourceRevision',
+      label: 'suite manifest',
+    );
+    final catalogRevision = _requiredString(
+      catalog,
+      'sourceRevision',
+      label: 'case catalog',
+    );
+    if (manifestRevision != catalogRevision) {
+      throw const FormatException(
+        'suite manifest and case catalog sourceRevision must match',
+      );
+    }
     final suites = _requiredObject(manifest, 'suites', label: 'suite manifest');
     final expectedByCaseId = <String, _ExpectedCase>{};
     final suiteCaseIds = <String, List<String>>{};
     for (final entry in suites.entries) {
       final suiteName = entry.key;
       final suite = _object(entry.value, label: 'suite $suiteName');
+      final tier = _requiredString(suite, 'tier', label: 'suite $suiteName');
+      awikiExecutionLaneForAppTier(tier);
+      final supportedPlatforms = _stringList(
+        suite,
+        'supportedPlatforms',
+        label: 'suite $suiteName',
+      );
+      if (supportedPlatforms.isEmpty ||
+          supportedPlatforms.toSet().length != supportedPlatforms.length ||
+          supportedPlatforms.any(
+            (value) => !awikiSupportedTestPlatforms.contains(value),
+          )) {
+        throw FormatException(
+          'suite $suiteName has invalid supportedPlatforms',
+        );
+      }
+      final requiredTools = _stringList(
+        suite,
+        'requiredTools',
+        label: 'suite $suiteName',
+      );
+      if (requiredTools.isEmpty ||
+          requiredTools.toSet().length != requiredTools.length ||
+          requiredTools.any((value) => value.trim().isEmpty)) {
+        throw FormatException('suite $suiteName has invalid requiredTools');
+      }
       final caseIds = _stringList(suite, 'caseIds', label: 'suite $suiteName');
       if (caseIds.isEmpty || caseIds.toSet().length != caseIds.length) {
         throw FormatException(
@@ -47,12 +91,16 @@ class AppTestCatalog {
         );
       }
       suiteCaseIds[suiteName] = caseIds;
+      if (suite.containsKey('includes')) {
+        // Aggregate policy does not replace each case's owning leaf metadata.
+        continue;
+      }
       for (final caseId in caseIds) {
         expectedByCaseId
             .putIfAbsent(caseId, _ExpectedCase.new)
             .addSuite(
               suiteName: suiteName,
-              tier: _requiredString(suite, 'tier', label: 'suite $suiteName'),
+              tier: tier,
               owner: _requiredString(suite, 'owner', label: 'suite $suiteName'),
               cleanupPolicy: _requiredString(
                 suite,
@@ -64,6 +112,8 @@ class AppTestCatalog {
                 'requiredFor',
                 label: 'suite $suiteName',
               ),
+              remoteTargetPolicy:
+                  (suite['remoteTargetPolicy'] ?? 'allowlist') as String,
               allowedHosts: _stringList(
                 suite,
                 'allowedHosts',
@@ -71,6 +121,12 @@ class AppTestCatalog {
               ),
             );
       }
+    }
+
+    if (suites.values.any(
+      (value) => value is Map && value.containsKey('includes'),
+    )) {
+      DesktopE2eSuiteManifest.load(root).fullSuites();
     }
 
     final rawCases = catalog['cases'];
@@ -124,12 +180,17 @@ class AppTestCatalog {
       }
       parsed.add(value);
     }
-    final active = parsed
-        .where((value) => value.catalogStatus == 'active')
+    final executableOrDormant = parsed
+        .where(
+          (value) =>
+              value.catalogStatus == 'active' ||
+              value.catalogStatus == 'unsupported',
+        )
         .map((value) => value.caseId)
         .toSet();
-    final missing = expectedByCaseId.keys.toSet().difference(active).toList()
-      ..sort();
+    final missing =
+        expectedByCaseId.keys.toSet().difference(executableOrDormant).toList()
+          ..sort();
     if (missing.isNotEmpty) {
       throw FormatException(
         'case catalog is missing manifest caseIds: ${missing.join(', ')}',
@@ -312,12 +373,13 @@ class AppTestCatalog {
       ..writeln('## Known coverage boundaries')
       ..writeln()
       ..writeln(
-        '- `full` means the audited Direct, Group, P9 Mention, Contacts and '
-        'Attachment product slices plus one real App-admin/CLI-member Join and '
-        '`ROOT-TRANSFER-E2E-001` readiness-completion lifecycle. It does '
-        '**not** claim onboarding beyond that isolated lifecycle, '
-        'profile editing/search, identity switching, group role/remove/leave, '
-        'secure-trust UI, mobile-device, or optional runtime-provider coverage.',
+        '- `full` aggregates every active audited case exactly once, including '
+        'multi-device App pairs, Handle Recovery, Root Key Transfer, native '
+        'Keychain, provider and performance suites. `messaging` is the former '
+        '24-case Direct/Group/Contacts/Attachment flow. Platform-inapplicable '
+        'cases and planned/unsupported catalog entries are explicitly reported, '
+        'never counted as passes. Missing capabilities, credentials or prepared '
+        'native artifacts block the affected suite; independent suites continue.',
       )
       ..writeln(
         '- `identity-switch` separately covers bidirectional messaging, unread '
@@ -338,21 +400,26 @@ class AppTestCatalog {
       )
       ..writeln(
         '- `multi-device-remote-join` is a separate, explicitly activated '
-        '`awiki.info` suite for `DEVICE-JOIN-E2E-001/002` only. It runs both '
-        'App-new-device/CLI-admin and App-admin/CLI-new-device directions '
+        '`awiki.info` suite for `DEVICE-JOIN-E2E-001/002/006`. It runs both '
+        'App-new-device/CLI-admin, App-admin/CLI-new-device, and '
+        'App-new-device/DSH-ready-admin directions '
         'with independent native roots, protected fixed test OTPs, '
         'SAS comparison, pending-session App restart coverage, the production '
         'CLI foreground contract, fixed member authorization, CLI listener '
         'host wake, App global review entry, and exactly one E2E-only '
-        'user-presence decision where the App approves. Production continues '
+        'user-presence decision where the App approves. The DSH direction '
+        'requires a built DSH with its declared Node SDK dependency, opaque Host refs, explicit '
+        'APPROVE/REVOKE, and public Handle cleanup with a protected factor. '
+        'Production continues '
         'to use macOS LocalAuthentication and is not attested by this suite. '
         'The tests do not directly call Message Inbox '
         'hydration, requestSync(), or refreshJoinInbox() to discover Join. '
         'The same platform-neutral suite requires one minimal App+CLI Direct, '
         'peer realtime receipt, offline/same-root online convergence, visible read, '
         'and idle Core-directed sync case. '
-        'It does not execute root transfer, revoke, or MLS; the root lifecycle '
-        'is registered by `full`. A checked-in '
+        'It does not execute root transfer or MLS; revoke is limited to the '
+        'DSH-owned test member and public cleanup. The root lifecycle '
+        'is registered by `messaging`. A checked-in '
         'implementation is not evidence of a remote pass while the protected '
         'test-phone fixture or operator prerequisites are unavailable. The '
         'focused Join suite supports Linux and macOS desktop hosts.',
@@ -397,7 +464,8 @@ class AppTestCatalog {
         'state roots, then concurrently drives their visible Join UI. The '
         'loopback coordinator carries only lifecycle checkpoints and compares '
         'transient SAS values in memory; it cannot call product APIs or write '
-        'SAS evidence. This mode covers `DEVICE-JOIN-E2E-004` and then '
+        'SAS evidence. This mode covers `DEVICE-JOIN-E2E-004`, '
+        '`ROOT-TRANSFER-APP-PAIR-E2E-001` for real App receiver promotion, and '
         '`DEVICE-JOIN-E2E-005`, which deletes the joined App local data, '
         'proves the completed local Join journal is retired, and reopens a '
         'fresh Join form. Its E2E-only UserPresencePort keeps the '
@@ -430,14 +498,14 @@ class AppTestCatalog {
         'TTL or time bypass.',
       )
       ..writeln(
-        '- Personal Agent, Codex and Claude Code remain `optional_nightly`. A '
-        'missing provider/configuration is reported as skipped/not-run, never passed.',
+        '- Personal Agent is currently not a supported product capability. Its '
+        'four cases are explicitly unsupported and absent from execution profiles. Codex and '
+        'Claude Code remain independent `optional_nightly` suites.',
       )
       ..writeln(
-        '- `PERSONALAGENT-E2E-003` is cataloged as planned, not executable: the '
-        'supporting confirmation/draft step does not yet have its own accepted '
-        'case attestation. The runnable Personal Agent suite attests enable, '
-        'receive/process and exact revoke convergence.',
+        '- `PERSONALAGENT-E2E-001/002/003/004` are cataloged as unsupported and '
+        'excluded from the current supported denominator. The dormant suite, implementation '
+        'and migrations stay available for a later product decision.',
       )
       ..writeln(
         '- The latest recorded `awiki.info` conversation-correctness evidence '
@@ -614,8 +682,14 @@ class AppTestCatalogCase {
     final exactOracles = _stringList(json, 'exactOracles', label: label);
     final negativeChecks = _stringList(json, 'negativeChecks', label: label);
     final catalogStatus = _requiredString(json, 'catalogStatus', label: label);
-    if (!const <String>{'active', 'planned'}.contains(catalogStatus)) {
-      throw FormatException('$label catalogStatus must be active or planned');
+    if (!const <String>{
+      'active',
+      'planned',
+      'unsupported',
+    }.contains(catalogStatus)) {
+      throw FormatException(
+        '$label catalogStatus must be active, planned, or unsupported',
+      );
     }
     if (requiredFor.isEmpty || exactOracles.isEmpty || negativeChecks.isEmpty) {
       throw FormatException(
@@ -654,8 +728,15 @@ class AppTestCatalogCase {
       expected.cleanupPolicies,
       label: 'cleanup policy',
     );
-    final expectedEnvironment = expected.allowedHosts.isEmpty
+    final expectedEnvironment =
+        expected.remoteTargetPolicies.contains('configured_same_origin')
+        ? 'configured_remote'
+        : expected.allowedHosts.isEmpty
         ? 'no_service'
+        : expected.allowedHosts.toSet().difference(const <String>{
+            'rwiki.cn',
+          }).isEmpty
+        ? 'rwiki_cn_remote'
         : 'awiki_info_remote';
     if (layer != expectedLayer ||
         cleanupPolicy != expectedCleanup ||
@@ -754,6 +835,7 @@ class _ExpectedCase {
   final Set<String> cleanupPolicies = <String>{};
   final Set<String> requiredFor = <String>{};
   final Set<String> allowedHosts = <String>{};
+  final Set<String> remoteTargetPolicies = <String>{};
 
   void addSuite({
     required String suiteName,
@@ -762,6 +844,7 @@ class _ExpectedCase {
     required String cleanupPolicy,
     required List<String> requiredFor,
     required List<String> allowedHosts,
+    required String remoteTargetPolicy,
   }) {
     suites.add(suiteName);
     tiers.add(tier);
@@ -769,6 +852,7 @@ class _ExpectedCase {
     cleanupPolicies.add(cleanupPolicy);
     this.requiredFor.addAll(requiredFor);
     this.allowedHosts.addAll(allowedHosts);
+    remoteTargetPolicies.add(remoteTargetPolicy);
   }
 
   String only(Set<String> values, {required String label}) {

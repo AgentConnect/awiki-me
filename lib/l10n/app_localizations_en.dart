@@ -301,8 +301,40 @@ class AppLocalizationsEn extends AppLocalizations {
       'This verification code has expired or has already been used. Send a new code and try again.';
 
   @override
+  String get registrationCommittedActivationPending =>
+      'Your account was created and saved safely on this device, but sign-in setup did not finish. Select the local account and sign in again; no new verification code is needed.';
+
+  @override
   String get registrationRecoveryStateInvalid =>
       'This Handle\'s identity state needs server-side attention. Contact support before trying again.';
+
+  @override
+  String get registrationLocalStateNeedsAttention =>
+      'This device has identity state that cannot be reconciled safely. Resolve the local state, then send a new verification code.';
+
+  @override
+  String get registrationContinuityChanged =>
+      'Identity continuity changed. Send a new verification code and try again.';
+
+  @override
+  String get registrationJoinTerminalWait =>
+      'The previous device Join is ending safely. Wait briefly, then send a new verification code and try again.';
+
+  @override
+  String get identityDeletionCompleteTransitionFirst =>
+      'An identity transition is still being applied. Complete it before deleting this identity.';
+
+  @override
+  String get identityDeletionCompleteJoinFirst =>
+      'A device Join is still in progress. Complete it before deleting this identity.';
+
+  @override
+  String get identityDeletionPendingWillResume =>
+      'This confirmed deletion is still being completed and will resume automatically.';
+
+  @override
+  String get identityDeletionConflict =>
+      'This identity has conflicting local control state. No local product data was deleted.';
 
   @override
   String get tenantSwitcherLabel => 'Manage tenants';
@@ -331,7 +363,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tenantCurrent => 'Current';
 
   @override
-  String get tenantDefaultBadge => 'Default configuration';
+  String get tenantDefaultBadge => 'Official tenant';
 
   @override
   String get tenantName => 'Tenant name';
@@ -408,7 +440,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tenantValidationBackendHttpsRequired =>
-      'Public tenant addresses must use HTTPS. For example: https://anpclaw.com. HTTP is allowed only for local development addresses such as localhost and 127.0.0.1.';
+      'Public tenant addresses must use HTTPS. For example: https://tenant.example. HTTP is allowed only for local development addresses such as localhost and 127.0.0.1.';
 
   @override
   String get tenantValidationDidHostInvalid =>
@@ -981,6 +1013,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Device revoked. Affected groups are synchronizing their security state.';
 
   @override
+  String get deviceRevokeSucceededGroupsRepairPartial =>
+      'Device revoked. Some affected groups could not update their security state in this attempt; messaging remains available.';
+
+  @override
   String get deviceRevokeOutcomeUnknown =>
       'The revocation result is not confirmed yet. Refresh the device list.';
 
@@ -1114,6 +1150,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceJoinAuthorized => 'Device added';
 
   @override
+  String get deviceJoinFinalizing => 'Finishing device operation...';
+
+  @override
   String get deviceJoinCancelled => 'Device pairing cancelled';
 
   @override
@@ -1239,6 +1278,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsUpdateStatusInstalling => 'Preparing installation...';
 
   @override
+  String get settingsUpdateStatusUnavailable =>
+      'This tenant has not provided update information';
+
+  @override
+  String get settingsUpdateStatusUnchecked => 'Updates have not been checked';
+
+  @override
+  String get settingsUpdateStatusCached =>
+      'Check failed; showing the last verified result';
+
+  @override
+  String get updatePolicyUnavailable =>
+      'This tenant has not provided update information. You can still open the download page.';
+
+  @override
   String get settingsUpdateStatusFailed =>
       'Update check failed. Please try again later.';
 
@@ -1291,6 +1345,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get messageSyncStatusRetryableFailure =>
       'New messages cannot be synced right now. Check your network and retry.';
+
+  @override
+  String get messageSyncStatusBlocked =>
+      'Message sync is paused. Upgrade the client or repair this device to continue.';
+
+  @override
+  String get messageSyncStatusCapacityExceeded =>
+      'Message recovery cannot continue because required account state exceeds the safe capacity. Contact support.';
 
   @override
   String get messageSyncStatusProjectionRefreshFailed =>
@@ -1846,7 +1908,56 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get screenshotPermissionRequired =>
-      'Screen Recording permission is not active. Allow the current AWiki Me app under Screen & System Audio Recording in System Settings, then quit and reopen it.';
+      'macOS requires Screen Recording permission to take screenshots. Allow AWiki Me in System Settings, then quit and reopen the app.';
+
+  @override
+  String get screenshotPermissionTitle => 'Allow screenshots';
+
+  @override
+  String get screenshotPermissionRecovery =>
+      'Quit AWiki Me completely, reopen it and try taking a screenshot.\n\nIf it still does not work, quit the app and remove the old AWiki Me entry in Screen Recording settings. Add and allow the app at the location below, then reopen it. This only changes system permission, not your chat history.';
+
+  @override
+  String get screenshotPermissionSettings => 'Open System Settings';
+
+  @override
+  String get screenshotPermissionLater => 'Not now';
+
+  @override
+  String get screenshotPermissionHelp =>
+      'Already allowed, but still unable to capture?';
+
+  @override
+  String get screenshotShowDiagnostics => 'Troubleshooting details';
+
+  @override
+  String get screenshotPermissionSettingsFailed =>
+      'Could not open settings automatically. Open System Settings → Privacy & Security → Screen & System Audio Recording manually.';
+
+  @override
+  String get screenshotPermissionCheckFailed =>
+      'Screenshots are temporarily unavailable. Quit and reopen AWiki Me, then try again.';
+
+  @override
+  String get screenshotCaptureFailed =>
+      'Could not complete the screenshot. Try again. If this continues, save an image with the system screenshot tool and add it as an attachment.';
+
+  @override
+  String get screenshotCurrentApplication => 'Currently running app';
+
+  @override
+  String get screenshotApplicationUnavailable =>
+      'Could not read app information. Check which version and installation you are running.';
+
+  @override
+  String get screenshotBuildMode => 'Build mode';
+
+  @override
+  String get screenshotCopyDiagnostics => 'Copy troubleshooting details';
+
+  @override
+  String get screenshotDiagnosticsPrivacy =>
+      'Copied details include the version and app location (which may contain your computer username), but no account or screenshot. Review before sharing.';
 
   @override
   String get chatRemoveAttachment => 'Remove attachment';
@@ -3174,6 +3285,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'Update failed. Please install it from the download page.';
 
   @override
+  String get updateRestrictedTitle => 'Update required for this tenant';
+
+  @override
+  String updateRestrictedMessage(
+    Object tenantName,
+    Object minimumVersion,
+    Object currentVersion,
+  ) {
+    return '$tenantName requires AWiki Me $minimumVersion or later. You are using $currentVersion. Update the app to continue, or switch tenants.';
+  }
+
+  @override
+  String get updateRestrictedInstall => 'Open official download page';
+
+  @override
+  String get updateRestrictedSwitchTenant => 'Switch tenant';
+
+  @override
+  String get updateRestrictedSettings => 'Settings and local data';
+
+  @override
   String get daemonUpgradeStarted => 'Daemon upgrade started.';
 
   @override
@@ -3435,6 +3567,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Handle Recovery is not supported in this version. No identity state was changed.';
 
   @override
+  String get handleRecoveryFactorRequired =>
+      'Recovery verification must be renewed. Request a new code for this operation, verify it, then confirm the risks again.';
+
+  @override
+  String get handleRecoveryLocalSuperseded =>
+      'Remote recovery was committed, but this local identity has been superseded by a newer binding or authorization state. The old operation is stopped; its records and materials are preserved. Return to login to join the current identity, or explicitly start a new recovery.';
+
+  @override
   String get handleRecoveryTitle => 'Recover Handle';
 
   @override
@@ -3617,4 +3757,37 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get legacyIdentityUpgradeFailed =>
       'The legacy identity upgrade failed. Please try again.';
+
+  @override
+  String get localCredentialDeleteRecoveryHint =>
+      'This also clears the unfinished recovery progress on this device.';
+
+  @override
+  String get localCredentialDeleteInspectFailed =>
+      'Unable to check the local identity state. Please retry.';
+
+  @override
+  String get handleRecoveryFreshDataNotice =>
+      'No previous identity data is available on this device. Earlier direct messages will not be restored automatically.';
+
+  @override
+  String get handleRecoveryAwaitingResult =>
+      'The recovery result is not yet confirmed. Continue checking the existing recovery.';
+
+  @override
+  String get handleRecoveryAwaitingLocal =>
+      'Account recovery has taken effect. Continue setup on this device; no new SMS code is needed.';
+
+  @override
+  String get handleRecoveryChecking => 'Checking recovery progress…';
+
+  @override
+  String get handleRecoveryRunning => 'Processing recovery. Please wait…';
+
+  @override
+  String get handleRecoveryEntering =>
+      'Recovery is complete. Opening messages…';
+
+  @override
+  String get handleRecoveryContinueExisting => 'Continue previous recovery';
 }

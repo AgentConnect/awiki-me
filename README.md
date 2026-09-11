@@ -167,6 +167,7 @@ See the [Security Model Overview](docs/security-overview.md) and [SECURITY.md](S
 | Document | Purpose |
 | --- | --- |
 | [Getting Started](docs/getting-started.md) | Releases, source builds, first login, and first message. |
+| [Configuration](docs/configuration.md) | Compile-time defines, product gates, and defaults. |
 | [Platform and Service Compatibility](docs/compatibility.md) | Platform, service, Agent, and encryption boundaries. |
 | [Security Model Overview](docs/security-overview.md) | Storage Scope, SecretVault, tenant switching, and security invariants. |
 | [Development Guide](docs/development.md) | Architecture, repository structure, testing, and packaging. |

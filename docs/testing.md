@@ -1,12 +1,13 @@
 # Testing AWiki Me
 
-AWiki Me keeps two active test domains plus Flutter tooling shims:
+AWiki Me keeps three active test domains plus Flutter tooling shims:
 
 ```text
-tests/unit/         # fast unit, widget, provider, and pure Dart tests
-tests/e2e/          # desktop user-flow runner plus Flutter platform shims/support
-integration_test/   # Flutter tooling shims only; do not put test logic here
-.e2e/               # local E2E reports/state; ignored by Git
+tests/unit/           # fast unit, widget, provider, and pure Dart tests
+tests/e2e/            # desktop user-flow runner plus Flutter platform shims/support
+tests/computer-use/   # screen-using AI/human playbooks; not a Dart runner
+integration_test/     # Flutter tooling shims only; do not put test logic here
+.e2e/                 # local E2E reports/state; ignored by Git
 ```
 
 Root files under `integration_test/` are Flutter-tooling shims. Each shim imports
@@ -21,6 +22,7 @@ Use the smallest deterministic test that answers the question:
 | --- | --- | --- | --- |
 | `tests/unit/` | Does this Dart logic, mapper, provider, service, or widget state behave correctly? | No | Pure Dart unit tests, widget/provider tests, fake service-client tests, parser tests, E2E runner plan/redaction tests. |
 | `tests/e2e/` | Does the user/business chain work through the App runner, platform shims, native plugin, CLI peer, backend, or devices? | Case-dependent | E2E runners, scenario orchestration, local/example configs, Flutter shim implementations, App + CLI peer/backend reports. |
+| `tests/computer-use/` | Can a screen-using AI or human complete the visible App path in two real macOS windows? | Yes, against the selected tenant (default `awiki.info`) | Playbooks, selector maps, and on-screen oracles. Authority: `tests/computer-use/README.md`. Do not register these cases in `tests/e2e/suite_manifest.json`. |
 | `integration_test/` | Can Flutter tooling discover and launch the test entrypoint? | No business ownership | Thin imports only. Keep orchestration in `tests/e2e/`. |
 
 Do not use the root `integration_test/` directory as the owner of a real
@@ -29,6 +31,9 @@ keep the scenario contract, config, runner, reports, and assertions under
 `tests/e2e/`.
 
 ## Required Coverage
+
+For version-policy regression and a local native update UI smoke that needs no
+release or backend, see [client update behavior](client-updates.md#local-verification).
 
 Every new feature or behavior change must ship with matching test coverage in
 the same change:
@@ -122,7 +127,7 @@ user-presence 同时成立后才显示执行入口；公开 Join 表单不暴露
 E2EE capability 默认可用，但普通 Direct 和新建群的产品策略默认选择非 E2EE。该用例不发送 OTP，也不声称完成远端 Join、SAS、
 审批、根导入、撤销、MLS 或 Handle Recovery。
 
-`DEVICE-JOIN-E2E-001/002` 由独立的 `multi-device-remote-join` suite 承载；它们不会混入
+`DEVICE-JOIN-E2E-001/002/006` 由独立的 `multi-device-remote-join` suite 承载；它们不会混入
 本地 capability gate。该 suite 只覆盖 App 新设备 + CLI 管理设备和 App 管理设备 + CLI
 新设备的消息驱动 member Join。两个方向均使用独立 native Core root、动态一次性 OTP、
 双端 SAS 和场景级 attestation；加入端 CLI 的 SAS 只从前台 TTY 提示读取，结构化 JSON
@@ -158,12 +163,16 @@ sender-side reliable sync 收敛同一 `message_id`。这里的 canonical conver
 只是 App 展示/存储路由；Core 仍须把普通 Direct 历史保存为 `direct + peer DID` wire
 identity，再与发送设备的本地投影合并，不能通过放宽 wire-conflict 校验让用例通过。
 重复使用同一个 `run-id` 时，runner 会先重置双 App、Daemon 和 CLI 的隔离运行态目录，
-但保留 App-pair build/artifact 目录，以便增量编译且不会继承上一次的身份状态。
+但保留内容寻址的App artifact cache；Functional、Content Sync和Paging都复用同一组
+admin/joiner编译制品，且不会继承上一次的身份状态。
 
 `DEVICE-JOIN-E2E-003`、`ROOT-TRANSFER-E2E-002` 和
 `MLS-MULTI-DEVICE-E2E-001` 为 planned、不可执行边界。`ROOT-TRANSFER-E2E-001`
 已由独立 Root transfer suite 注册；`DEVICE-REVOKE-E2E-001` 与
-`MLS-MULTI-DEVICE-E2E-002` 已由 `step4-revoke-mls` 注册为 active。不得把 planning
+`MLS-MULTI-DEVICE-E2E-002` 已由 `step4-revoke-mls` 注册为 active。Root transfer 和
+Step4 都要求 reviewed target 明确声明 `lanes.p5_device.v1`；缺能力时 release fail closed，
+不能改写为 optional skip。Step4 的 App client flow 支持 Linux/Xvfb 与 macOS；System 同名
+suite 的 Linux-only 属性来自 managed operator/cleanup，不表示 App 依赖 macOS API。不得把 planning
 文档、本地 capability gate、Widget fake 或手工演示记录为远端 E2E pass。
 
 聊天附件入口需要同时覆盖按钮、桌面拖拽、剪贴板粘贴和 macOS 交互式截图；
@@ -198,6 +207,36 @@ requirement 由证书和 identifier 构成而不是 `cdhash`。截图服务还�
 未生效时单进程只请求一次授权，并且不得启动 `/usr/sbin/screencapture` 或接收只有桌面的
 图片。
 
+### macOS 截图权限恢复回归
+
+本地自动化：
+
+```bash
+flutter test tests/unit/screenshot_permission_service_test.dart tests/unit/screenshot_permission_dialog_test.dart tests/unit/chat_screenshot_recovery_test.dart tests/unit/attachment_picker_service_test.dart tests/unit/app_message_test.dart tests/unit/macos_window_configuration_test.dart
+```
+
+覆盖拒绝后授权恢复、并发截图合并、原生接口缺失/异常 fail-closed、取消与执行失败分类、
+可选诊断失败降级、实际应用元数据、中英文、窄窗口、Escape 关闭和设置/复制失败，
+以及默认隐藏技术信息、分层展开、键盘展开/收起、固定底部操作和“暂不设置”无副作用。
+这属于本地平台适配与 UI（L1），不改变服务端、身份、存储或跨服务协议，System Test 无新增合同。
+已有 `tests/e2e/flutter/app/app_smoke_test.dart` 的截图入口使用 fake picker，不能证明真实 TCC 授权。
+
+真实 Mac 手动验收（系统权限只能由操作者确认，不在自动测试中重置）：
+
+1. 启动本次 Debug 构建，进入会话截图。权限未生效时只能出现一个恢复窗口，不能暂存图片。
+2. 首屏不应展示路径、Bundle ID、Debug/Release 或复制入口。展开“已开启权限，仍无法截图？”
+   和“查看排查信息”后核对这些信息；点击复制前不写剪贴板，复制内容不含账号或截图。
+   窄窗口滚动说明时，设置与暂不设置按钮仍可见；暂不设置仅关闭窗口，继续使用聊天。
+3. 点击设置，确认进入屏幕录制页面；自动打开失败时使用窗口中的手动路径。
+4. 授权实际运行的 App，完全退出后重开，再截图应能暂存附件；Esc 取消系统截图不产生附件。
+5. 若开关已开但仍失败，退出 App 后移除旧条目，再添加窗口标明路径的 App、授权并重开。
+   这是一次性系统授权恢复，不是数据迁移；不要清理数据库、Vault 或重置其他应用权限。
+6. 同一稳定签名和 Bundle ID 的新构建覆盖后复测；开发签名切换为正式签名时应允许系统要求重新授权。
+   正式版和 Debug 版分别检查，不能用一个版本的授权证明另一个版本已获授权。
+
+原生 bridge 修改需重新构建 Mac Debug App；热重载不能更新 Swift。稳定签名配置继续复用
+`macos/Runner/Configs/LocalSigning.xcconfig.example`，不将证书或本机配置提交到仓库。
+
 The repository configures `package:sqlite3` to use the system SQLite library
 through `hooks.user_defines.sqlite3.source: system`. This keeps the test gates
 from downloading a prebuilt SQLite dylib from GitHub during native asset build
@@ -214,7 +253,7 @@ revision、专用测试账号/OTP 和测试 scoped user-presence。最终双 App
 验收由发布负责人在 macOS 手工执行，不作为 Linux 自动化退出条件。
 
 Linux 仍必须执行其可运行的真实 App + CLI peer/backend E2E，包括 `direct`、`group`、
-`attachment`、`restart`、`performance` 以及 `full` 中进入真实设备 Join 前的主链路。
+`attachment`、`restart`、`performance` 以及 `messaging` 中进入真实设备 Join 前的主链路。
 Linux 结果不能冒充 macOS 双 App/user-presence attestation，但 macOS 手工项也不能阻止这些
 Linux 用例独立报告真实通过或失败。
 
@@ -222,7 +261,7 @@ Linux 用例独立报告真实通过或失败。
 | --- | --- | --- |
 | 1：稳定身份与数据库骨架 | 无独立产品 UI case；作为本 suite 全部 case 的 preflight | 必须先取得合法 `ActiveSyncAccountBinding`，并由 Core 持有 stable owner、replica 与 cursor；迁移/fixture 证据不能冒充 UI E2E。 |
 | 2：在线普通消息 | `DEVICE-MESSAGE-SYNC-E2E-001`、`DEVICE-MESSAGE-SYNC-E2E-002`、`DEVICE-MESSAGE-ONLINE-SYNC-E2E-001`、`DEVICE-AGENT-MESSAGE-SYNC-E2E-001` | 覆盖 joined Apps 双向 own-sync、远端回复、sender/recipient sibling exact-once 和默认普通 Agent 消息；不创建 P5/E2EE session。 |
-| 3：已读、离线与 Snapshot | `DEVICE-MESSAGE-READ-SYNC-E2E-001`、`DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001`、`DEVICE-MESSAGE-TAIL-ONLY-E2E-001` | 覆盖单调已读、新设备 tail-only、已有设备 compact recovery 和保留窗口外本地消息。47:59/48:00/48:01 与 499/500/501 精确边界仍由隔离 Message Service/Core 测试证明，不能在共享远端造数替代。 |
+| 3：已读、离线与 Snapshot | `DEVICE-MESSAGE-READ-SYNC-E2E-001`、`DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001`、`DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001`、`DEVICE-MESSAGE-TAIL-ONLY-E2E-001` | 覆盖单调已读、新设备 tail-only、已有设备 Schema 3 compact recovery、501 条真实多页恢复和旧本地投影保留。9,999/10,000/10,001 items、64 MiB 前后、99/100/101 页与必需状态超预算仍由隔离 Message Service/Core 测试证明；共享远端只用闭合 exact-device fixture，不以数据库当产品 oracle。 |
 | 4：账号状态域 | `DEVICE-AGENT-SYNC-E2E-001`、`DEVICE-AGENT-ADD-SYNC-E2E-001`、`DEVICE-AGENT-RENAME-SYNC-E2E-001`、`DEVICE-AGENT-UNBIND-SYNC-E2E-001`、`DEVICE-AGENT-DELETE-SYNC-E2E-001`、`DEVICE-AGENT-ARCHIVE-SYNC-E2E-001`、`DEVICE-PROFILE-SYNC-E2E-001`、`DEVICE-REGISTRY-SYNC-E2E-001`、`DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001` | Agent topology/current status、Profile 和 Registry 使用独立 versioned snapshot；一个域失败不能阻止消息或其他域收敛。Archive case 创建第三个独立 runtime，再经 App `deleteSelected` → daemon runtime delete → User Service archive 的真实产品链路验证 active→archived，不能使用 test operator 或复用 Codex 删除。 |
 | 5：Dirty Hint | `DEVICE-MESSAGE-HINT-LOSS-E2E-001`、`DEVICE-MESSAGE-RECONNECT-E2E-001` | WebSocket 只作 dirty hint；断线或提示丢失后必须由前台/重连 HTTP pull exact-once 恢复。Push wake-up 当前为 `DEFERRED`，没有 active pass case。 |
 | 6：体验、观测与发布验收 | `DEVICE-MESSAGE-PATCH-READY-E2E-001`、`DEVICE-MESSAGE-DIAGNOSTICS-E2E-001`、`DEVICE-MESSAGE-GENERATION-FENCE-E2E-001`、`MESSAGE-PATCH-RESTART-E2E-001`，以及上述 active case 的完整、顺序一致 schema-v2 attestation | 覆盖产品观测的 subscribe→reset→first-sync 顺序、diagnostics 成功刷新序列与脱敏、同 DID revoked-device auth fencing、撤权 App 自动回到登录页，以及 Phase A 完全销毁后提交 gap 的跨进程恢复；不宣称测试直接注入了旧 generation Patch。 |
@@ -231,8 +270,9 @@ Linux 用例独立报告真实通过或失败。
 
 - HTTP 服务端事实加 Core SQLite 原子 commit 是可靠 truth；WebSocket payload、Push、App
   memory state 或 CLI 输出都不能替代。
-- 新设备只从 tail 开始；已有设备自动恢复只包含服务端当前时间最近 48 小时内、最多 500
-  条普通逻辑消息。Agent/Profile/Registry 当前快照不受该窗口限制。
+- 新设备只从 tail 开始；已有设备 Schema 3 恢复先完整纳入 read/Group/有效 exact-device
+  notification，再在 64 MiB、10,000 items、100 页硬预算内选择最新完整普通消息后缀。
+  普通历史触顶返回 `olderHistoryExcluded` 成功，必需状态超预算才返回 capacity。
 
 `multi-device-app-pair-content-sync` 是内容同步的聚焦入口。它只建立一次账号、双 App、
 真实 member Join、CLI peer、Direct 和 Group，在同一轮中分别 attestation：混合内容
@@ -240,6 +280,12 @@ tail-only（补 Group 和 Attachment，普通 Direct 复用既有专项）、普
 SHA-256、以及 Direct/Group 精确 `0→1→0` 未读隔离。该入口不启动
 Daemon、Agent、Profile、Recovery 或 Registry 流程；业务能力不满足时测试失败并保留报告，
 不由 E2E 用例修改业务实现。
+
+`multi-device-app-pair-paging-recovery` 是本计划唯一真实分页 App case。它只建立一次账号、
+双 App member Join 和一个 CLI peer；joining App 在已有普通 Direct 基线后离线，operator 只准备
+`messages_501`，App resume 仅调用正常 coordinator/Core sync。通过要求基线 exact-once 保留、
+`capacityExceeded=false`、`olderHistoryExcluded=false`、恢复后新 Direct exact-once，以及 diagnostics
+不含 cursor/token/page ref/manifest；它不运行 Agent、Account State、Group、附件或 MLS。
 - App 必须先订阅 committed patch 并完成当前 session generation 的一次 bounded seed，
   再执行首次 `syncNow`。普通 delta/hint/reconnect 后不得做全 conversation refresh、
   20×50 history prewarm 或 forced visible refresh。
@@ -398,19 +444,18 @@ dart run tests/e2e/runner.dart \
 ```
 
 Unlike `multi-device-remote-join`, the YAML for this mode does not require a CLI
-binary or source revision. `tool/build_isolated_e2e_app.dart` owns reusable
-Debug App construction, while the runner owns the ephemeral loopback
+binary or source revision. The product-owned artifact spec and isolated builder
+own reusable Debug App construction, while the runner owns the ephemeral loopback
 coordinator, two direct App launches on macOS or Xvfb launches on Linux, two
 concurrent existing-App drivers, and cleanup. Failed driver output is bounded to 80 lines and redacted in memory
 before it can enter diagnostics; raw driver output is neither streamed nor
 persisted. See
 [multi-device-app-pair-e2e.md](multi-device-app-pair-e2e.md).
 
-Admin and Joiner use stable work roots under
-`.e2e/build-cache/multi-device-app-pair/`. macOS uses separate role build
-caches; Linux builds the roles sequentially through Flutter's standard
-`build/linux` cache, then copies each role bundle before building the next.
-A rerun therefore performs only the required incremental recompile. Run config and case-attestation values are launch-time environment
+Admin and Joiner are two compile-keyed artifacts in `.e2e/build-cache/v2/`.
+Prepare builds each unique role once; all App-pair suites import that same pair,
+and required execution fails instead of rebuilding when either artifact is
+missing or mismatched. Run config, coordinator fixture and case-attestation values are launch-time environment
 inputs rather than run-specific Dart defines. Identity state, E2E credential
 storage, reports, and copied App bundles remain isolated under the current run
 directory; production Keychain state is not reused.
@@ -432,6 +477,13 @@ shares the Direct, Group, attachment, and read/unread actions while four case
 attestations remain independent. On a Linux host this case must execute with a
 `platform: linux` config under Xvfb; a macOS-shaped dry-run is not pass
 evidence.
+
+For the single paged-recovery product case, use
+`--case multi-device-app-pair-paging-recovery`. It reuses the content-sync
+CLI/App-pair configuration and additionally requires the reviewed Stage-3
+recovery operator environment. It does not require a Daemon or Account State
+operator and must not be replaced by `messaging` or the 21-case functional suite.
+The `full` aggregate invokes this paging leaf with its original prerequisites.
 
 The macOS runner is not the service host. Account State test actions therefore
 require `AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE=ali` and the exact reviewed
@@ -470,14 +522,58 @@ When dedicated test-account, OTP, operator, or platform prerequisites are
 unavailable, the suite fails closed before claiming success. Those prerequisites
 protect the test execution and do not imply a product account rollout.
 
+### Full aggregate (all active cases)
+
+Since 2026-09-11, `--case full` is the all-active-case aggregate, not the old
+24-case message flow. Use `--case messaging` for that narrower flow.
+The checked-in [suite manifest](../tests/e2e/suite_manifest.json) owns the
+`full.includes` execution order and exact case union: currently 27 disjoint
+leaf suites / 114 active cases. This includes all App-pair multi-device suites,
+Handle Recovery variants, Root Key Transfer, restart, performance, supported
+Agent providers, and the macOS production-Keychain gate. The 13 planned and
+4 unsupported catalog entries are reported as non-executable, not passes.
+Adding an active case without adding exact-one aggregate coverage fails catalog
+validation. Focused overlapping slices remain independently selectable.
+
+```bash
+dart run tests/e2e/runner.dart --case full --config <protected-host-config> --dry-run
+dart run tests/e2e/runner.dart --case full --config <protected-host-config>
+```
+
+Full executes existing leaf runners sequentially with distinct child run IDs,
+identity Handles and isolated state. It preserves each leaf's capability,
+operator, OTP, provider, timeout and cleanup requirements; it does not enable
+security gates or restart services on the operator's behalf. Configure the
+prerequisites documented for every selected leaf before execution. Missing
+prerequisites fail/block that leaf while independent leaves continue.
+A missing/invalid report, stale attestation, or zero-exit/no-case run cannot pass.
+Only manifest-declared platform exclusions are `not_applicable`; a single-host
+result is not cross-platform acceptance.
+
+The production-Keychain leaf uses the existing prepared signed artifact gate.
+Set `AWIKI_E2E_PRODUCTION_KEYCHAIN_MANIFEST` to its artifact manifest and retain
+`AWIKI_MACOS_DEVELOPMENT_TEAM` as required by
+[the native gate](../scripts/run_macos_production_scope_restart_gate.sh).
+Preparation remains an explicit release/native prerequisite: full never
+implicitly builds a universal Release artifact. On Linux this macOS-only case
+is explicitly `not_applicable`. `--prepare-only` never attests a case as passed.
+
+The incremental aggregate is `.e2e/full/<run-id>/reports/timings.json`, with all
+active case IDs, per-case statuses, child commands/evidence locations, and
+planned/unsupported catalog entries. Every child retains its own case
+attestation, timing report and resource ledger. Remote residuals are not
+converted to cleaned; full reports `see_child_ledgers`. A used full run ID is
+rejected, preserving the earlier attempt. Dry-run records plans only and runs
+no child process.
+
 Run real App + CLI peer flows when the `awiki.info` remote test account pool,
 test OTP, and CLI peer are configured:
 
 ```bash
-dart run tests/e2e/runner.dart --case full
+dart run tests/e2e/runner.dart --case messaging
 ```
 
-同一安装内双身份消息闭环使用独立 focused suite，避免扩大既有 `full` UI
+同一安装内双身份消息闭环使用独立 focused suite，避免扩大既有 `messaging` UI
 流程。配置文件需提供同一非生产 OTP 账号池中的第二个本地身份 Handle：
 
 ```bash
@@ -491,7 +587,7 @@ conversation catch-up 得到精确正文并清零未读；最后快速切换确�
 的产品语义，不能把 bootstrap 之前的消息误当成应由增量同步投影的数据。它是
 application/runtime 闭环，不替代账户选择器的视觉人工验收。
 
-`full` additionally runs the cross-conversation correctness slice: one Direct
+`messaging` additionally runs the cross-conversation correctness slice: one Direct
 and one Group receive messages in alternating order, then the test verifies
 exact visible row title/preview/order, per-row and global unread isolation,
 exact canonical message sequences with no leakage, and one nickname projection
@@ -523,7 +619,7 @@ assertions remain the App row, badge, timeline, sender label, and read state.
 Detailed CLI product behavior belongs to the CLI-owned test project and must not
 replace a missing App assertion here.
 
-The `direct` and `full` slices also inspect the scoped chat-header title from
+The `direct` and `messaging` slices also inspect the scoped chat-header title from
 the first frame after a restarted App shell selects the cached Direct
 conversation. `DISPLAY-NAME-REG-001` fails immediately if that first non-empty
 title is a Handle, DID, `Unknown`, a duplicate title widget, or later changes
@@ -552,13 +648,13 @@ or Handle. `CONTACT-FIRST-CONV-E2E-001` opens the visible follower row, waits
 for the same peer's real profile, and uses the explicit send-message action
 before identity lookup or a first message. It then requires one empty canonical
 peer-scope conversation and reuses the same ID for the later contact message
-closed loop. The combined `full` slice does not attest this first-create case
+closed loop. The combined `messaging` slice does not attest this first-create case
 because it intentionally creates the Direct in the earlier Direct flow.
 
 On macOS, pass an explicit macOS config such as:
 
 ```bash
-dart run tests/e2e/runner.dart --case full \
+dart run tests/e2e/runner.dart --case messaging \
   --config tests/e2e/configs/e2e.codex-macos-allowed.local.yaml
 
 dart run tests/e2e/runner.dart --case restart \
@@ -614,13 +710,26 @@ Required configuration values:
 - `service.didDomain`: DID domain paired with the selected service profile;
   Singapore staging uses `anpclaw.com`.
 - `otp.phone` and `otp.code`: the test OTP credential.
-- `accounts.appUser.handle`: App-side test handle.
-- `accounts.cliPeer.handle`: CLI peer test handle.
-- `cliPeer.binary`: `awiki-cli` binary path.
+- `accounts.appUser.handle`: App-side Handle prefix. A real run appends the
+  same bounded run suffix used for its fresh App state root; set
+  `AWIKI_E2E_APP_HANDLE` only with a prepared matching identity/root.
+- `accounts.cliPeer.handle`: CLI peer Handle prefix. Real App + CLI peer runs
+  append a bounded suffix derived from the run ID so every fresh CLI root
+  registers a fresh account instead of entering Device Join for an identity
+  owned by an earlier run. Set `AWIKI_E2E_CLI_HANDLE` only when an operator
+  intentionally provides a prepared fixed identity/root pair.
+- Keep the checked-in example prefixes beginning with `e1`: this is valid
+  Handle text, not a DID credential segment, and the Direct/messaging product E2E
+  intentionally protects canonical Handle-history lookup for that boundary.
+- `cliPeer.binary`: fallback `awiki-cli` binary path used by dry-run planning.
+  Real App + CLI peer runs build a stable-versioned artifact from
+  `daemon.rustRepo` in a content-addressed `.e2e/cli-build-cache` Cargo target,
+  unless `AWIKI_E2E_CLI_BINARY` explicitly selects a prepared artifact.
 - `cliPeer.sourceRef`: exact non-zero 40-character commit SHA embedded in the
   selected CLI binary. It does not attest the App's SDK artifact revision.
 
-Before identity or message assertions, the runner executes `awiki-cli version`,
+Before creating a CLI workspace, requesting OTP, or performing any remote
+identity/message action, the runner executes `awiki-cli version`,
 requires `data.commit` to equal `cliPeer.sourceRef`, and requires `data.version`
 to use the Core-compatible one-to-four-component numeric form such as
 `1.0.46`. Debug labels such as `e2e-debug`, prerelease suffixes, `unknown`,
@@ -669,18 +778,18 @@ Supported E2E cases:
 - `direct`: App and CLI peer direct-message flow.
 - `group`: App and CLI peer group-message flow.
 - `attachment`: App and CLI peer attachment flow.
-- `personal-agent`: full App UI Personal Agent real-backend gate.
 - `contacts`: App and CLI peer follow/contact flow，包含从可见联系人行打开 canonical Direct 的发送、restart 和 unread/read 闭环。
 - `restart`: release-only two-Flutter-process cold restart using one isolated App state root; the second process must restore the active identity, canonical Direct/Group rows, exact messages, unread state, and cached display names without in-memory Provider reuse.
-- `full`: all App + CLI peer flows.
+- `messaging`: the 24-case Direct/Group/Contacts/Attachment flow.
+- `full`: all active audited leaf cases; see the aggregate contract above.
 
 群组 E2E 使用协议级身份规则：有 Handle 时必须发送完整 `local-part.provider-domain`，bare Handle 只能从当前已认证 `did:wba` 的 provider domain 补全；无法可信补全时只允许用户显式选择 DID-only。App 和测试不得把内部 User ID 放入 ANP group body，也不得先把 Handle 解析成 DID 后丢失 Handle-backed membership 语义。
 
-`group` / `full` case 会通过当前 tenant-scoped CLI workspace 建群和添加成员。Handle-backed recovery 的跨域 P4 continuity 由 `awiki-system-test/tests_v2/multi_tenant/test_cross_domain_message_flows.py` 负责；AWiki Me full case负责证明真实 App/CLI peer产品入口仍发送完整 Handle并完成后续群消息。
+`group` / `messaging` case 会通过当前 tenant-scoped CLI workspace 建群和添加成员。Handle-backed recovery 的跨域 P4 continuity 由 `awiki-system-test/tests_v2/multi_tenant/test_cross_domain_message_flows.py` 负责；AWiki Me messaging case负责证明真实 App/CLI peer产品入口仍发送完整 Handle并完成后续群消息。
 
 ### UI-driven full acceptance
 
-The required `direct`, `group`, `attachment`, `contacts`, and `full` cases are
+The required `direct`, `group`, `attachment`, `contacts`, and `messaging` cases are
 product E2E, not service-client scripts. App-side sends, retry, navigation,
 follow/unfollow, group creation/member invitation, structured mention, and
 attachment staging are performed through `WidgetTester` against visible
@@ -748,58 +857,41 @@ conversation row; service snapshot/hydration calls remain separate metrics and
 must not be used to infer UI visibility. Its results must not be relabeled as
 required UI acceptance. Profile editing, directory-wide search, onboarding, group
 role/remove/leave flows, and secure-trust UI remain roadmap cases until they
-receive their own case IDs and vertical slices; `full` does not imply those
+receive their own case IDs and vertical slices; `messaging` does not imply those
 features are covered. The focused identity-switch suite covers the runtime and
 message lifecycle, while account-picker visual acceptance remains manual.
 
-Personal Agent UI changes must keep coverage in both active test domains:
-
-- Focused widget/provider/layout coverage under `tests/unit/`, including Settings entry visibility, daemon readiness, missing bootstrap key, and feature-disabled no-op behavior.
-- Durable App flow coverage under `tests/e2e/flutter/app/personal_agent_full_ui_test.dart`, with root `integration_test/personal_agent_full_ui_test.dart` kept as a thin Flutter shim.
-- The fake-backed Personal Agent App shim expects `--dart-define=AWIKI_E2E=true` when tests assert semantics identifiers such as `personal-agent-settings-entry`.
-- The product full chain is owned by `flutter pub run tests/e2e/runner.dart --case personal-agent`; `dart run` is acceptable only in environments where native assets can build through the Dart entrypoint. Selected runs must fail fast when backend, daemon, CLI, OTP, or Hermes prerequisites are missing and must not convert the case into a silent skip.
-- Product gate evidence must include passed attestations for `PERSONALAGENT-E2E-001`, `PERSONALAGENT-E2E-002`, and `PERSONALAGENT-E2E-004`; `uiEnabled`, `runtimeFinalReceived`, and `authorizationRevoked` must be derived from those individual case results, not overall runner success. `PERSONALAGENT-E2E-003` remains planned, and there is no executable `PERSONALAGENT-E2E-005` in the current suite.
-- Treat `status: success` as the first required report condition. Failed Personal Agent reports now keep evidence flags false, so old failed reports with true-looking flags must not be reused as pass evidence.
-
-Run the Personal Agent full UI real-backend gate:
-
-```bash
-flutter pub run tests/e2e/runner.dart \
-  --case personal-agent \
-  --config tests/e2e/configs/e2e.local.yaml
-```
-
-`personal-agent` requires the normal backend/OTP/account/CLI values plus:
-
-- `service.messageServiceUrl`
-- `service.messageServiceWsUrl`
-- `daemon.rustRepo`
-- `daemon.binary`
-- `daemon.stateRoot`
-- `daemon.readyFile`
-- `daemon.fakeHermesGatewayCommand`
-- `personalAgent.runtimeProvider: hermes`
-- `personalAgent.realBackend: true`
-
-When `--case personal-agent` is selected, omitted `personalAgent.realBackend`
-defaults to true. Setting it to false, omitting any required backend/daemon field,
-or using a provider other than `hermes` is a configuration failure. This gate uses
-the real Settings / Personal Agent UI, isolates the product scenario with the
-plain-name `Personal Agent full UI drives real backend daemon and recovery`, sends
-a CLI peer direct text, waits for daemon `runtime_final`, confirms the App draft
-action, checks a redacted `awiki.app.action.result.v1`, and revokes Daemon message
-authorization. Focused fake-backed shim tests can diagnose UI behavior, but they
-are not sufficient release evidence for the product chain.
+Personal Agent is not a supported product capability in the current release.
+`personalAgentFeatureVisibleByDefault=false` keeps its user-facing surfaces hidden;
+`PERSONALAGENT-E2E-001/002/003/004` are marked unsupported and are absent from every
+execution profile and prepared-artifact DAG. Existing dormant suite, implementation, unit fixtures,
+data tables and migrations are retained for a later product decision. They must not
+be reported as passed or as a runtime skip in the current supported denominator.
 
 All E2E runtime state and reports go under `.e2e/` and must remain untracked.
 Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and
 must not be committed because they may contain OTP values.
 
 `tests/e2e/suite_manifest.json` is the checked-in suite source of truth. The
-runner fails on case-ID drift, records tier/owner/required triggers/timeout,
+runner fails on case-ID drift, records canonical tier/derived execution lane,
+supported platforms, required tools, owner, required triggers and timeout,
 and uses a killable child-process runner. A timeout terminates the Flutter/CLI
 process tree and records `failure.code=command_timeout`; it cannot leave an
 untracked test child running indefinitely.
+
+Canonical App tiers have one execution-lane mapping: portable product UI,
+remote product UI/application/security, native release security, optional
+provider UI, and remote integration diagnostics. `requiredFor` only controls
+gate selection and does not duplicate lane semantics. `supportedPlatforms`
+uses the shared `macos / linux / windows` schema; the current Dart desktop E2E
+runner executes macOS/Linux, while the existing Windows build/native-smoke job
+remains an explicit preserved lane.
+
+Host architecture is runtime evidence, not suite configuration. Linux/macOS
+reports record process and hardware architecture. On macOS the runner also
+records Rosetta translation, requires native arm64 tooling on Apple Silicon,
+and verifies that an isolated App contains the detected host architecture
+instead of requiring a hard-coded x86 binary.
 
 Desktop Flutter execution is protected by a host-wide per-platform file lock
 and a preflight scan for already-running `flutter test integration_test/...`
@@ -807,6 +899,10 @@ processes. This prevents separate worktrees from launching the same App bundle
 on the same desktop device concurrently. The runner supplies a UTF-8 locale
 when the parent shell omits one, so CocoaPods does not depend on interactive
 shell initialization.
+
+App-pair drivers also append loopback addresses to their own proxy exclusions,
+while preserving external proxies and the parent's effective exclusion list.
+This keeps VM Service connections out of the external proxy.
 
 The E2E runner also gives Flutter an isolated XDG settings directory and pins
 its build output to `.e2e/flutter-build/<platform>`. Integration-test host Apps
@@ -862,13 +958,15 @@ context-specific primary/identity policy; it is not a substitute
 for the remaining DID-only remote case.
 
 Suite `timeoutMinutes` must be greater than or equal to `estimatedMinutes`.
-The full product suite uses a 30-minute runner budget and a 29-minute Flutter
-scenario budget so framework teardown remains bounded without terminating the
-declared 25-minute product flow early.
+The current `messaging` suite declares 24 active cases, a 40-minute estimate, and a
+45-minute runner/Flutter timeout. These values come from
+`tests/e2e/suite_manifest.json`; documentation must not maintain a second
+hand-written budget.
 
-The v8 `awiki.info` `full` evidence
-`fixed-full-committed-20260717160000` passes all 24 declared cases with verified
-schema-v2 attestation. It closes the earlier v7 red evidence by preserving two
+The historical v8 `awiki.info` `full` evidence
+`fixed-full-committed-20260717160000` passed the 24 cases declared by that older
+manifest revision with verified schema-v2 attestation. It is regression history,
+not evidence for the current 24-case suite. It closed the earlier v7 red evidence by preserving two
 same-body canonical messages during realtime delivery, converging them to
 strictly increasing `serverSequence`, keeping hidden-burst order exact, and
 persisting the newest visible Direct read watermark even when navigation held
@@ -912,19 +1010,27 @@ Keychain item.
 The native im-core smoke now follows the production lifecycle: explicit scope
 provision, runtime `openExisting`, native `VaultRequired` open, same-process
 runtime reopen with the same root, and missing-key fail-closed without recreate.
-The release-only `NATIVE-E2E-002` gate builds and signs the production bundle
-three times, launches three independent App processes for provision/reopen/cleanup,
-rejects the development service, proves `createExclusive` cannot replace the item,
-and verifies the signing Team/bundle identity before every launch. Before those
-three phases it builds and validates one universal macOS `awiki_im_core` from
-the sibling `awiki-cli-rs2` checkout, refreshes CocoaPods once, and removes the
-stale Release XCFramework intermediate. Set `AWIKI_IM_CORE_REPO_DIR` only when
-the Core checkout is not the default sibling:
+The release-only `NATIVE-E2E-002` gate has a strict prepare/execute split.
+Prepare builds and validates one universal macOS `awiki_im_core`, refreshes
+CocoaPods, builds one Release App, signs it, and writes a relative-path manifest
+with source/dirty/architecture/digest evidence. Execute verifies that immutable
+bundle and launches the same App three times with runtime-only
+provision/reopen/cleanup arguments. Execute performs no native, Flutter, Pod, or
+codesign build and writes schema-v2 attestation, timings, and resource ledger.
+The phases reject the development service and prove `createExclusive` cannot
+replace the item. Set `AWIKI_IM_CORE_REPO_DIR` only when the Core checkout is
+not the default sibling:
 
 ```bash
 AWIKI_MACOS_SIGNING_IDENTITY="<stable identity>" \
 AWIKI_MACOS_DEVELOPMENT_TEAM="<matching team id>" \
-scripts/run_macos_production_scope_restart_gate.sh
+scripts/run_macos_production_scope_restart_gate.sh \
+  --prepare-only --artifact-root=<private-prepared-root>
+
+AWIKI_MACOS_DEVELOPMENT_TEAM="<matching team id>" \
+scripts/run_macos_production_scope_restart_gate.sh \
+  --execute --artifact-manifest=<private-prepared-root>/manifest.json \
+  --report-dir=<run-report-root> --run-id=<run-id>
 ```
 
 The script never prints the Keychain value and deletes its run-unique production
@@ -1014,7 +1120,7 @@ backend credentials, OTP, and CLI peer configuration are prepared.
 | --- | --- | --- | --- | --- |
 | PR required | Every pull request and push to main | Flutter, sibling `awiki-cli-rs2` at an exact SHA, deterministic service-independent dependencies. | `dart analyze`, `dart run tests/unit/runner.dart`, smoke E2E. | Real OTP, real service accounts, live backend, mobile devices, SSH evidence. |
 | Optional desktop | Developer or self-hosted runner with desktop support | macOS or Linux desktop runner. | App shell and native SDK smoke on the available desktop platform. | Non-production account pool or real message service. |
-| Nightly desktop | Prepared runner | Remote `awiki.info`, OTP/account pool, debug `awiki-cli` + SDK built from one exact SHA, isolated App and CLI state. | Direct message, contacts, group, attachment basics, report/redaction/resource ledger. | Local service stacks or scenarios without owner. |
+| Nightly desktop | Prepared runner | Remote `awiki.info`, OTP/account pool, stable-versioned `awiki-cli` + SDK built from one exact SHA, isolated Cargo/App/CLI state. | Direct message, contacts, group, attachment basics, report/redaction/resource ledger. | Local service stacks or scenarios without owner. |
 | Nightly mobile | Prepared device runner | iOS or Android device pair, Maestro, local config from secrets. | Real two-device direct message when device pool is available. | Desktop-only scenarios. |
 | Release | Release candidate validation | Stable nightly environment plus release owner review. | P0/P1 regression subset for desktop smoke, native SDK smoke, App + CLI basics, mobile when available. | New feature cases that have not been promoted. |
 | Manual | Developer or QA runbook | Local or remote environment prepared by the runner. | Any focused case needed for debugging or evidence, with command, runId, platform, endpoints, and report path recorded. | Manual results presented as automatic PR gate evidence. |
@@ -1026,9 +1132,54 @@ workspaces, App state roots, remote logs, screenshots, and device state out of
 Git.
 
 The checked-in workflow requires `AWIKI_CLI_RS2_REF` to be an exact commit SHA.
+The Windows lane uses `AWIKI_CLI_RS2_WINDOWS_REF`, falling back to the same ref;
+update both variables to a reviewed, merged Core consumer commit when its Dart
+facade changes. Public Core checkouts use the job's read-only GitHub token and
+do not require the packaging environment's `AWIKI_CI_READ_TOKEN`.
+
+The private System Test coordinator is pinned to a reviewed exact commit in
+`ci.yml`. Its checkout requires repository secret `AWIKI_CI_READ_TOKEN` with
+Contents read-only access to `AgentConnect/awiki-system-test` and
+`AgentConnect/user-service`. The portable parallel-tenant contract also reads
+the pinned User Service source. Use a separate
+credential from the packaging environment; ordinary PR jobs must not receive
+release credentials or repository-write permissions. Checkout removes the
+credential before test code executes (`persist-credentials: false`). Missing
+private-source access fails before builds; fork PRs do not receive this secret.
+The current System Test repository disables deploy keys, so an SSH deploy key
+cannot supply this checkout credential.
+
+The coordinator's portable DSH contracts also read the sibling `dsh-awiki`
+source tree. CI checks out that public repository at an exact reviewed commit.
+These contracts check DSH behavior and the native API surface without fixing a
+particular Node SDK release number.
+The current coordinator fixes are reviewed in
+https://github.com/AgentConnect/awiki-system-test/pull/16; merge that PR before
+merging this consumer update.
+
+The coordinator expects the canonical sibling `awiki-me` directory for source
+contracts. CI creates a workspace-local alias to its `test-awiki-me` checkout;
+the App and User source contracts therefore inspect the actual pinned inputs.
+
+Native CI builds/tests use the Core owner's `scripts/release/registry-build.py`
+and committed registry lock in an isolated worktree. The Windows native build
+selects the same entrypoint with `AWIKI_RELEASE_REGISTRY=1`. CI therefore checks
+the published ANP/Identity/Core SDKs without undeclared sibling source checkouts.
+
+Linux CI then runs `dart run tool/ensure_linux_im_core.dart --debug` after
+`flutter pub get`, before any desktop E2E build reads native provenance. This
+mode builds the locked Debug native target (through the registry owner when
+`AWIKI_RELEASE_REGISTRY=1`), copies that successful build's library, and writes
+the existing source/artifact hash manifest. A library copied without the
+manifest cannot satisfy the freshness gate. The default SDK rebuild entrypoint
+and `--check-only` rejection of missing/stale provenance remain available.
+
 Its `remote-product` job is schedule/manual only, builds debug/incremental Rust
 artifacts, writes a secret-backed ignored config, and targets only `awiki.info`.
 The PR dry-run is orchestration lint and is never substituted for that real job.
+Both jobs upload only `.e2e/*/*/reports/**` and native provenance JSON, with
+hidden-file support enabled for `.e2e`. Runtime configs, account state and vaults
+are outside this allowlist. Missing evidence still fails the upload step.
 
 ### Case-level attestation and fail-closed reports
 
@@ -1050,14 +1201,61 @@ and timestamps. This is the first assertion-evidence layer; one-to-one trace
 from every catalog exact oracle/negative guard to a dedicated assertion ID is
 still required before the conversation-correctness plan is complete.
 
-Personal Agent fake Widget coverage is not product acceptance. The optional real
-`personal-agent` suite currently attests only implemented vertical slices:
-`PERSONALAGENT-E2E-001` enable/binding, `PERSONALAGENT-E2E-002` CLI message plus runtime
-result, and `PERSONALAGENT-E2E-004` UI revoke plus exact User Service/daemon
-convergence. `PERSONALAGENT-E2E-003` (visible action/draft confirmation) is planned
-in the catalog because the supporting action step does not yet have its own
-accepted case attestation. Missing provider/configuration or any non-attested
-runnable case remains failed/not-run, never passed.
+### Prepared desktop execution
+
+On macOS and Linux, `--prepare-only` builds content-addressed integration
+executables without creating identities or starting remote business flows.
+`tests/e2e/app_artifact_specs.json` is the product-owned suite-to-artifact
+contract used by both this runner and the cross-repository orchestrator. The
+smoke, desktop-core/focused, Join, App-pair, Agent, restart, and Handle Recovery
+runners then launch those verified executables with run-owned state and
+attestation paths.
+Run ID, state root, scenario, and case IDs are runtime E2E inputs and do not
+change the build fingerprint; true fault-injection or product-capability flavors
+remain compile-time inputs. A warm prepared execution must not invoke
+`flutter build` or `flutter test`.
+
+Artifact identity is the canonical compile key, not the human-readable artifact
+name. The key includes the selected integration target's transitive Dart source
+graph, product sources/assets/platform files, sorted compile-time defines,
+native Core and toolchain/architecture inputs. It excludes unrelated E2E
+targets and runtime secrets. Import recomputes and verifies that key plus the
+complete bundle digest against the current working tree; required mode never
+falls back to a build. App-pair Functional, Content and Paging share exactly one
+admin/joiner pair because their differences are runtime coordinator fixtures,
+while compile-time Recovery phase variants remain separate.
+
+Export manifests contain only project-relative bundle/executable paths and
+record consumer suites, canonical compile-key payload, Git source ref, dirty
+state, Flutter/Dart/Rust identity, and native Core provenance. A dirty candidate
+is executable for local validation but carries `evidenceEligible=false`, so it
+cannot produce a formal release lane PASS. Cache governance pins the current
+DAG and previous successful DAG, refreshes last-used metadata, and only prunes
+other complete entries by LRU when the next-job free-space budget requires it;
+dead-PID temporary entries are recovered without touching reports or runtime
+state.
+
+Multi-phase scenarios keep distinct artifacts when their compiled behavior is
+different: restart uses `restart-a/b/c`, Handle Recovery uses main/crash/fresh
+variants, and Join/Root Transfer/Step4 share `remote-join`. Personal Agent uses
+the real-backend-only integration target so the prepared acceptance executable
+cannot accidentally enter fake Widget coverage. The runner validates
+the artifact name, target, bundle ID, host architecture, fingerprint, executable
+containment, and complete bundle digest before launch. Set
+`AWIKI_E2E_USE_FLUTTER_TEST=1` only as a legacy debugging fallback; it is not the
+unified profile path.
+
+The top-level `tests/e2e/runner.dart` owns coordination and shared launch
+boundaries. Manifest, options, test-only config, artifact/process lifecycle,
+platform/build isolation, performance and evidence reporting live under
+`tests/e2e/runner/`; desktop-peer, Recovery, Join and App-pair orchestration
+live under `tests/e2e/runner/scenarios/`. These files are one Dart library so
+the split does not duplicate case membership or expose private runtime state.
+Business actions and assertions remain in the existing Flutter/Core tests.
+
+Personal Agent fake Widget coverage only preserves dormant implementation safety;
+it is not product acceptance. The dormant suite is not selected by any current
+execution profile or release denominator.
 
 ## Maintenance Rules
 
@@ -1073,3 +1271,23 @@ runnable case remains failed/not-run, never passed.
 - A failed real E2E must be classified as product regression, test bug,
   account/OTP problem, backend deployment problem, runner/device problem, or
   unknown. Do not hide a failure by only increasing timeout.
+
+
+### Prepared 测试的失败上报
+
+所有写入 invocation completion 的 Flutter 入口（包括 App/Core Smoke、桌面 peer、
+Agent、Recovery 和 remote Join）必须从 binding.failureMethodsDetails 记录
+`failedTestCount`（框架失败数量，不含敏感异常内容）。`test_process_finished`
+只表示进程达到结束边界；执行器必须在存在 Flutter 失败时抛出受控的 E2E failure，
+不能把该步骤标为成功后仅报告缺少 case attestation。其他未执行分支仍保持 not-run，
+不批量伪造失败或通过证据。写入器要求显式提供失败数量，读取器拒绝缺少计数的旧 completion，
+不能把未知结果视为成功；旧制品需要重新构建，逐用例 attestation gate 保留。
+App Smoke 出现任意 Flutter 失败时（包括未登记 case ID 的测试），suite 立即失败，
+不再启动 Core Smoke，因此后续 invocation 不会覆盖该失败的完成标记。
+smoke 的 Personal Agent 夹具使用 Agent DID 命名空间，覆盖 inventory 到达前已有的
+隐藏策略，不改变相似名称的人类联系人可见性。
+Fresh Recovery 主流程失败后不执行冷启动阶段，保留主流程错误，不以缺少 handoff 掩盖根因。
+
+DSH remote Join 使用 active-only Host 快照：撤销后要求精确成员消失、唯一原 current
+ready-admin 保留，并再次刷新确认；不能在该过滤快照中要求出现 revoked 条目。
+Core 原始 Registry 的设备状态及授权围栏由其对应测试保持验证。

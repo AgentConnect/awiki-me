@@ -1,7 +1,160 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-13.stale-daemon-delete-convergence",
+  "sourceRevision": "2026-09-11.full-active-case-aggregate-v1",
   "cases": [
+    {
+      "caseId": "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001",
+      "feature": "Real late Recovery error/finally cannot affect another Handle",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Reviewed awiki.info, isolated production AppBootstrap/native Core roots and a protected dedicated fixed-OTP account; two fixture Handles and E2E-only user presence.",
+      "action": "Drive Settings Recovery, deterministic native Commit/local-authority cut and delayed App port returns; switch to another visible Handle, reopen the same native scope, use unified onboarding and perform a second Recovery after visible data deletion.",
+      "exactOracles": [
+        "The exact real Core and visible App lifecycle checkpoints all complete without transferring operation, risk confirmation, session or routing authority."
+      ],
+      "negativeChecks": [
+        "Synthetic backend results, an unconfirmed first Commit, mixed Handle state, old callback feedback/navigation, login from deleted audit, a new factor for resume, or deletion of unresolved recovery material prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_state_machine_test.part.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:real_a_commit_held_after_local_cut",
+          "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:visible_b_login_and_recovery",
+          "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:late_a_error_finally_preserved_b_busy_target",
+          "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:b_session_feedback_navigation_unchanged"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:real_a_commit_held_after_local_cut",
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:visible_b_login_and_recovery",
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:late_a_error_finally_preserved_b_busy_target",
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:b_session_feedback_navigation_unchanged"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:real_a_commit_held_after_local_cut",
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:visible_b_login_and_recovery",
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:late_a_error_finally_preserved_b_busy_target",
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:b_session_feedback_navigation_unchanged"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001",
+      "feature": "Cold Core reentry routes blocked registration to exact committed Recovery",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Reviewed awiki.info, isolated production AppBootstrap/native Core roots and a protected dedicated fixed-OTP account; two fixture Handles and E2E-only user presence.",
+      "action": "After cold reopen, first open the same local committed recovery directly from its Handle without ordinary login OTP, verify stage-appropriate controls, return and also exercise the ordinary submit redirect, then resume. Drive Settings Recovery, deterministic native Commit/local-authority cut and delayed App port returns; switch to another visible Handle, reopen the same native scope, use unified onboarding and perform a second Recovery after visible data deletion.",
+      "exactOracles": [
+        "The exact real Core and visible App lifecycle checkpoints all complete without transferring operation, risk confirmation, session or routing authority. Local continuation requires no ordinary login or Recovery OTP, and committed reentry hides factor, risk and first-commit controls while idle."
+      ],
+      "negativeChecks": [
+        "Synthetic backend results, an unconfirmed first Commit, mixed Handle state, old callback feedback/navigation, login from deleted audit, a new factor for resume, or deletion of unresolved recovery material prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_state_machine_test.part.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:core_reopened_same_scope_with_committed_result",
+          "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:local_continuation_without_login_otp",
+          "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:committed_reentry_hides_factor_and_first_commit",
+          "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:registration_redirected_to_exact_recovery",
+          "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:resume_without_new_factor_or_presence",
+          "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:recovered_session_entered_messages"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:core_reopened_same_scope_with_committed_result",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:local_continuation_without_login_otp",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:committed_reentry_hides_factor_and_first_commit",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:registration_redirected_to_exact_recovery",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:resume_without_new_factor_or_presence",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:recovered_session_entered_messages"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:core_reopened_same_scope_with_committed_result",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:local_continuation_without_login_otp",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:committed_reentry_hides_factor_and_first_commit",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:registration_redirected_to_exact_recovery",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:resume_without_new_factor_or_presence",
+            "HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:recovered_session_entered_messages"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001",
+      "feature": "Visible credential deletion followed by a second Recovery in the same App process",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Reviewed awiki.info, isolated production AppBootstrap/native Core roots and a protected dedicated fixed-OTP account; two fixture Handles and E2E-only user presence.",
+      "action": "Drive Settings Recovery, deterministic native Commit/local-authority cut and delayed App port returns; switch to another visible Handle, reopen the same native scope, use unified onboarding and perform a second Recovery after visible data deletion.",
+      "exactOracles": [
+        "The exact real Core and visible App lifecycle checkpoints all complete without transferring operation, risk confirmation, session or routing authority."
+      ],
+      "negativeChecks": [
+        "Synthetic backend results, an unconfirmed first Commit, mixed Handle state, old callback feedback/navigation, login from deleted audit, a new factor for resume, or deletion of unresolved recovery material prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_state_machine_test.part.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:visible_current_data_deletion",
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:same_process_provider_tree_reentered",
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:historical_applied_not_login",
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_operation_and_confirmation_distinct",
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_recovery_entered_messages",
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_handle_preserved"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:visible_current_data_deletion",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:same_process_provider_tree_reentered",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:historical_applied_not_login",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_operation_and_confirmation_distinct",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_recovery_entered_messages",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_handle_preserved"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:visible_current_data_deletion",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:same_process_provider_tree_reentered",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:historical_applied_not_login",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_operation_and_confirmation_distinct",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_recovery_entered_messages",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_handle_preserved"
+          ]
+        ]
+      }
+    },
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
       "feature": "Real Coding Agent terminal delivery to AWiki Me",
@@ -52,7 +205,7 @@
     {
       "caseId": "AGENT-NOTIFY-SMOKE-E2E-001",
       "feature": "Coding Agent background terminal notification routing",
-      "layer": "product_ui",
+      "layer": "portable_product_ui",
       "preconditions": "Flutter desktop can launch the authenticated fake-bootstrap AWiki Me shell without backend credentials.",
       "action": "Background the App lifecycle and inject a completed awiki.agent.status.v1 update through the App realtime boundary.",
       "exactOracles": [
@@ -99,7 +252,7 @@
     {
       "caseId": "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001",
       "feature": "Stale Daemon deletion converges without an unreachable control channel",
-      "layer": "product_ui",
+      "layer": "portable_product_ui",
       "preconditions": "The authenticated App inventory contains an active Daemon whose cached status is actionable but whose last heartbeat is older than the control freshness window.",
       "action": "Open the Agents page, remove the stale Daemon through the visible destructive action and confirm the account-only removal dialog.",
       "exactOracles": [
@@ -298,7 +451,7 @@
     {
       "caseId": "ATTACH-E2E-001",
       "feature": "App to CLI attachment",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Stage an attachment through desktop drop UI and send it to CLI.",
       "exactOracles": [
@@ -318,12 +471,38 @@
       "owner": "awiki-me-attachments+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "ATTACH-E2E-001:app_attachment_staged_and_sent_through_drop_ui",
+          "ATTACH-E2E-001:cli_attachment_bytes_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "ATTACH-E2E-001:app_attachment_staged_and_sent_through_drop_ui",
+            "ATTACH-E2E-001:cli_attachment_bytes_verified"
+          ],
+          [
+            "ATTACH-E2E-001:app_attachment_staged_and_sent_through_drop_ui",
+            "ATTACH-E2E-001:cli_attachment_bytes_verified"
+          ],
+          [
+            "ATTACH-E2E-001:app_attachment_staged_and_sent_through_drop_ui",
+            "ATTACH-E2E-001:cli_attachment_bytes_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "ATTACH-E2E-001:app_attachment_staged_and_sent_through_drop_ui",
+            "ATTACH-E2E-001:cli_attachment_bytes_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "ATTACH-E2E-002",
       "feature": "CLI to App attachment",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Send an attachment from CLI and open/download it through App UI.",
       "exactOracles": [
@@ -343,12 +522,43 @@
       "owner": "awiki-me-attachments+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "ATTACH-E2E-002:cli_attachment_sent",
+          "ATTACH-E2E-002:attachment_unread_read_watermark_persisted_after_rebuild",
+          "ATTACH-E2E-002:app_attachment_bytes_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "ATTACH-E2E-002:cli_attachment_sent",
+            "ATTACH-E2E-002:attachment_unread_read_watermark_persisted_after_rebuild",
+            "ATTACH-E2E-002:app_attachment_bytes_verified"
+          ],
+          [
+            "ATTACH-E2E-002:cli_attachment_sent",
+            "ATTACH-E2E-002:attachment_unread_read_watermark_persisted_after_rebuild",
+            "ATTACH-E2E-002:app_attachment_bytes_verified"
+          ],
+          [
+            "ATTACH-E2E-002:cli_attachment_sent",
+            "ATTACH-E2E-002:attachment_unread_read_watermark_persisted_after_rebuild",
+            "ATTACH-E2E-002:app_attachment_bytes_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "ATTACH-E2E-002:cli_attachment_sent",
+            "ATTACH-E2E-002:attachment_unread_read_watermark_persisted_after_rebuild",
+            "ATTACH-E2E-002:app_attachment_bytes_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "ATTACH-REG-001",
       "feature": "Attachment integrity regression",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Requery both attachment directions after the stability window.",
       "exactOracles": [
@@ -366,12 +576,27 @@
       "owner": "awiki-me-attachments+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "ATTACH-REG-001:attachment_digest_regression_checked"
+        ],
+        "exactOracleAssertions": [
+          [
+            "ATTACH-REG-001:attachment_digest_regression_checked"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "ATTACH-REG-001:attachment_digest_regression_checked"
+          ]
+        ]
+      }
     },
     {
       "caseId": "AUTH-E2E-001",
       "feature": "Remote identity/auth preflight",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Prepare the App identity, activate the authenticated shell, and cross-check App/CLI handle resolution.",
       "exactOracles": [
@@ -391,7 +616,33 @@
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "AUTH-E2E-001:app_identity_prepared",
+          "AUTH-E2E-001:authenticated_app_shell_visible"
+        ],
+        "exactOracleAssertions": [
+          [
+            "AUTH-E2E-001:app_identity_prepared",
+            "AUTH-E2E-001:authenticated_app_shell_visible"
+          ],
+          [
+            "AUTH-E2E-001:app_identity_prepared",
+            "AUTH-E2E-001:authenticated_app_shell_visible"
+          ],
+          [
+            "AUTH-E2E-001:app_identity_prepared",
+            "AUTH-E2E-001:authenticated_app_shell_visible"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "AUTH-E2E-001:app_identity_prepared",
+            "AUTH-E2E-001:authenticated_app_shell_visible"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CLAUDECODEAGENT-E2E-001",
@@ -415,7 +666,43 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CLAUDECODEAGENT-E2E-001:daemon_selected",
+          "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
+          "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
+          "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-001:daemon_selected",
+            "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
+            "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
+          ],
+          [
+            "CLAUDECODEAGENT-E2E-001:daemon_selected",
+            "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
+            "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
+          ],
+          [
+            "CLAUDECODEAGENT-E2E-001:daemon_selected",
+            "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
+            "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-001:daemon_selected",
+            "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
+            "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CLAUDECODEAGENT-E2E-002",
@@ -437,7 +724,25 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CLAUDECODEAGENT-E2E-002:prompt_entered_through_ui",
+          "CLAUDECODEAGENT-E2E-002:send_action_completed"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-002:prompt_entered_through_ui",
+            "CLAUDECODEAGENT-E2E-002:send_action_completed"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-002:prompt_entered_through_ui",
+            "CLAUDECODEAGENT-E2E-002:send_action_completed"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CLAUDECODEAGENT-E2E-003",
@@ -459,7 +764,25 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CLAUDECODEAGENT-E2E-003:runtime_run_finished",
+          "CLAUDECODEAGENT-E2E-003:runtime_final_outbox_sent"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-003:runtime_run_finished",
+            "CLAUDECODEAGENT-E2E-003:runtime_final_outbox_sent"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-003:runtime_run_finished",
+            "CLAUDECODEAGENT-E2E-003:runtime_final_outbox_sent"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CLAUDECODEAGENT-E2E-004",
@@ -481,7 +804,25 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CLAUDECODEAGENT-E2E-004:app_history_exact_reply_verified",
+          "CLAUDECODEAGENT-E2E-004:visible_reply_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-004:app_history_exact_reply_verified",
+            "CLAUDECODEAGENT-E2E-004:visible_reply_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CLAUDECODEAGENT-E2E-004:app_history_exact_reply_verified",
+            "CLAUDECODEAGENT-E2E-004:visible_reply_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CODEXAGENT-E2E-001",
@@ -505,7 +846,43 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CODEXAGENT-E2E-001:daemon_selected",
+          "CODEXAGENT-E2E-001:runtime_agent_created",
+          "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
+          "CODEXAGENT-E2E-001:runtime_chat_opened"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CODEXAGENT-E2E-001:daemon_selected",
+            "CODEXAGENT-E2E-001:runtime_agent_created",
+            "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CODEXAGENT-E2E-001:runtime_chat_opened"
+          ],
+          [
+            "CODEXAGENT-E2E-001:daemon_selected",
+            "CODEXAGENT-E2E-001:runtime_agent_created",
+            "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CODEXAGENT-E2E-001:runtime_chat_opened"
+          ],
+          [
+            "CODEXAGENT-E2E-001:daemon_selected",
+            "CODEXAGENT-E2E-001:runtime_agent_created",
+            "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CODEXAGENT-E2E-001:runtime_chat_opened"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CODEXAGENT-E2E-001:daemon_selected",
+            "CODEXAGENT-E2E-001:runtime_agent_created",
+            "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
+            "CODEXAGENT-E2E-001:runtime_chat_opened"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CODEXAGENT-E2E-002",
@@ -527,7 +904,25 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CODEXAGENT-E2E-002:prompt_entered_through_ui",
+          "CODEXAGENT-E2E-002:send_action_completed"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CODEXAGENT-E2E-002:prompt_entered_through_ui",
+            "CODEXAGENT-E2E-002:send_action_completed"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CODEXAGENT-E2E-002:prompt_entered_through_ui",
+            "CODEXAGENT-E2E-002:send_action_completed"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CODEXAGENT-E2E-003",
@@ -549,7 +944,25 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CODEXAGENT-E2E-003:runtime_run_finished",
+          "CODEXAGENT-E2E-003:runtime_final_outbox_sent"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CODEXAGENT-E2E-003:runtime_run_finished",
+            "CODEXAGENT-E2E-003:runtime_final_outbox_sent"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CODEXAGENT-E2E-003:runtime_run_finished",
+            "CODEXAGENT-E2E-003:runtime_final_outbox_sent"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CODEXAGENT-E2E-004",
@@ -571,12 +984,30 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CODEXAGENT-E2E-004:app_history_exact_reply_verified",
+          "CODEXAGENT-E2E-004:visible_reply_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CODEXAGENT-E2E-004:app_history_exact_reply_verified",
+            "CODEXAGENT-E2E-004:visible_reply_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CODEXAGENT-E2E-004:app_history_exact_reply_verified",
+            "CODEXAGENT-E2E-004:visible_reply_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CONTACT-E2E-001",
       "feature": "App follow interaction",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; the CLI peer first follows the isolated App identity and becomes a visible follower contact.",
       "action": "Open the exact follower contact and tap the visible follow control in the resulting Direct peer information surface.",
       "exactOracles": [
@@ -620,7 +1051,7 @@
     {
       "caseId": "CONTACT-E2E-002",
       "feature": "CLI follow and App unfollow interaction",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Let CLI follow the App identity, refresh, then tap App unfollow.",
       "exactOracles": [
@@ -664,7 +1095,7 @@
     {
       "caseId": "CONTACT-FIRST-CONV-E2E-001",
       "feature": "Contact-first canonical Direct creation",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The contacts-focused awiki.info run has an isolated App state root, the exact CLI peer is an inbound follower, and no Direct row exists for its current DID or Handle.",
       "action": "Open the exact follower row, verify its real peer profile, and use the profile send-message action before identity lookup, recents, local search, or sending a first message.",
       "exactOracles": [
@@ -709,7 +1140,7 @@
     {
       "caseId": "CONTACT-MSG-E2E-001",
       "feature": "Contact row canonical Direct message closed loop",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; the exact CLI peer is visible in the App Contacts UI after canonical relationship convergence.",
       "action": "Click the exact visible contact row, use the peer profile send-message action, send one run-unique message through the App, restart, then receive and read one run-unique CLI message.",
       "exactOracles": [
@@ -763,7 +1194,7 @@
     {
       "caseId": "CONTACT-REG-001",
       "feature": "Relationship transition/idempotency regression",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Exercise the canonical relationship lifecycle through refreshes and repeated reads.",
       "exactOracles": [
@@ -805,7 +1236,7 @@
     {
       "caseId": "CONV-LIST-E2E-001",
       "feature": "Multi-conversation list projection correctness",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The full remote awiki.info flow has one canonical Direct and one canonical Group for the isolated App state root.",
       "action": "While both conversations are closed, deliver Direct, Group, then Direct messages and restart before inspecting the list.",
       "exactOracles": [
@@ -849,7 +1280,7 @@
     {
       "caseId": "DISPLAY-NAME-E2E-001",
       "feature": "Nickname consistency across identity and conversation surfaces",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The CLI peer publishes a deterministic nickname that differs from its Handle and DID.",
       "action": "Resolve the peer, open Direct and Contacts, inspect the add-member and @ mention candidates, add the same peer to a Group, observe the system event and receive a Group message.",
       "exactOracles": [
@@ -893,7 +1324,7 @@
     {
       "caseId": "DISPLAY-NAME-E2E-002",
       "feature": "Compact Handle primary names with full identity preservation",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "A dedicated awiki.info CLI peer has no nickname and has one stable full Handle distinct from its DID and generated user name.",
       "action": "Resolve the peer and exercise identity lookup, Direct, Contacts, group member, group system-event, and sender-label surfaces through the App.",
       "exactOracles": [
@@ -960,7 +1391,7 @@
     {
       "caseId": "DISPLAY-NAME-E2E-004",
       "feature": "Explicit Profile refresh converges every App display surface",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The awiki.info peer starts with one nickname distinct from its Handle and DID, then publishes a second run-unique nickname while its Direct, Contact, Group, system-event, and sender-label surfaces already exist.",
       "action": "Open the existing Direct, click the visible peer avatar to refresh Profile, then reopen identity lookup, recents, Contacts, group info, the member-added system event, and the existing group sender label.",
       "exactOracles": [
@@ -1004,7 +1435,7 @@
     {
       "caseId": "DISPLAY-NAME-REG-001",
       "feature": "Cached nickname is correct on the first visible frame",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The CLI peer nickname has already been resolved into the isolated App profile projection and the Direct conversation survives an App-shell restart.",
       "action": "Restart the App shell and open the canonical Direct row through the visible conversation list before any remote profile refresh is requested.",
       "exactOracles": [
@@ -1048,7 +1479,7 @@
     {
       "caseId": "GROUP-E2E-001",
       "feature": "App group create/member/send",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Create a group, add the canonical CLI member, and send through visible App UI.",
       "exactOracles": [
@@ -1109,7 +1540,7 @@
     {
       "caseId": "GROUP-E2E-002",
       "feature": "CLI group to App message",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Send a run-unique group message from CLI, navigate to it in App UI, then open the sender profile and choose Send Message.",
       "exactOracles": [
@@ -1165,7 +1596,7 @@
     {
       "caseId": "GROUP-P9-001",
       "feature": "App structured P9 mention",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Compose a group mention through App UI and send it.",
       "exactOracles": [
@@ -1213,7 +1644,7 @@
     {
       "caseId": "GROUP-P9-002",
       "feature": "CLI structured P9 mention",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Send a structured group mention from CLI to the App.",
       "exactOracles": [
@@ -1262,7 +1693,7 @@
     {
       "caseId": "GROUP-REG-001",
       "feature": "Group history stability regression",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Refresh and requery the group history after bidirectional sends and mentions.",
       "exactOracles": [
@@ -1306,7 +1737,7 @@
     {
       "caseId": "INBOUND-FIRST-CONV-E2E-001",
       "feature": "Inbound-first canonical Direct creation",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The inbound-focused awiki.info run has an isolated App state root and no Direct row for the exact CLI peer current DID or Handle.",
       "action": "Keep the peer conversation closed, send the first Direct message from CLI, open the resulting visible row, then re-enter through identity lookup, recents, and local search.",
       "exactOracles": [
@@ -1376,7 +1807,7 @@
     {
       "caseId": "IDENTITY-SWITCH-E2E-001",
       "feature": "Bidirectional local identity switch message recovery",
-      "layer": "product_application",
+      "layer": "remote_product_application",
       "preconditions": "The awiki.info run has one isolated App state root containing two distinct local App identities plus a distinct CLI preflight identity; both App identities establish their reliable-sync tail anchors before either test message is sent.",
       "action": "Anchor both online App identities, send from primary to secondary, logout and activate secondary, hydrate and read the post-anchor exact message, then repeat in reverse and rapidly switch both identities once more.",
       "exactOracles": [
@@ -1427,7 +1858,7 @@
     {
       "caseId": "MSG-E2E-001",
       "feature": "Direct App to CLI message",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Open a canonical Direct conversation, verify it before the first message and after App restart, then type and send a run-unique message through visible App controls.",
       "exactOracles": [
@@ -1480,7 +1911,7 @@
     {
       "caseId": "MSG-E2E-002",
       "feature": "Direct CLI to App unread/read",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Send a run-unique direct message from CLI while the App target conversation is not open, then open it through UI.",
       "exactOracles": [
@@ -1528,7 +1959,7 @@
     {
       "caseId": "MSG-REG-001",
       "feature": "Direct failure/retry/replay regression",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Inject the E2E transport failure, tap the visible retry action, reconnect, rebuild the App shell, and requery.",
       "exactOracles": [
@@ -1584,7 +2015,7 @@
     {
       "caseId": "MSG-SEQUENCE-E2E-001",
       "feature": "Cross-conversation exact message sequence and isolation",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The full remote awiki.info flow has one canonical Direct and one canonical Group.",
       "action": "Deliver ordered Direct/Group traffic, then hide the App, send a three-message Direct burst without waiting for App convergence, resume, open each row, and requery local history.",
       "exactOracles": [
@@ -1647,7 +2078,28 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "unsupported",
+      "assertionContract": {
+        "assertionIds": [
+          "PERSONALAGENT-E2E-001:daemon_selected_in_ui",
+          "PERSONALAGENT-E2E-001:personal_agent_enabled_in_ui",
+          "PERSONALAGENT-E2E-001:binding_active_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERSONALAGENT-E2E-001:daemon_selected_in_ui",
+            "PERSONALAGENT-E2E-001:personal_agent_enabled_in_ui",
+            "PERSONALAGENT-E2E-001:binding_active_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERSONALAGENT-E2E-001:daemon_selected_in_ui",
+            "PERSONALAGENT-E2E-001:personal_agent_enabled_in_ui",
+            "PERSONALAGENT-E2E-001:binding_active_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERSONALAGENT-E2E-002",
@@ -1669,7 +2121,28 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "unsupported",
+      "assertionContract": {
+        "assertionIds": [
+          "PERSONALAGENT-E2E-002:cli_peer_message_sent",
+          "PERSONALAGENT-E2E-002:app_history_exact_source_verified",
+          "PERSONALAGENT-E2E-002:runtime_final_visible_in_app"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERSONALAGENT-E2E-002:cli_peer_message_sent",
+            "PERSONALAGENT-E2E-002:app_history_exact_source_verified",
+            "PERSONALAGENT-E2E-002:runtime_final_visible_in_app"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERSONALAGENT-E2E-002:cli_peer_message_sent",
+            "PERSONALAGENT-E2E-002:app_history_exact_source_verified",
+            "PERSONALAGENT-E2E-002:runtime_final_visible_in_app"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERSONALAGENT-E2E-003",
@@ -1691,7 +2164,7 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "planned"
+      "catalogStatus": "unsupported"
     },
     {
       "caseId": "PERSONALAGENT-E2E-004",
@@ -1713,12 +2186,33 @@
       "owner": "awiki-me-agents",
       "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "unsupported",
+      "assertionContract": {
+        "assertionIds": [
+          "PERSONALAGENT-E2E-004:revoke_action_confirmed_in_ui",
+          "PERSONALAGENT-E2E-004:user_service_binding_revoked",
+          "PERSONALAGENT-E2E-004:daemon_binding_revoked"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERSONALAGENT-E2E-004:revoke_action_confirmed_in_ui",
+            "PERSONALAGENT-E2E-004:user_service_binding_revoked",
+            "PERSONALAGENT-E2E-004:daemon_binding_revoked"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERSONALAGENT-E2E-004:revoke_action_confirmed_in_ui",
+            "PERSONALAGENT-E2E-004:user_service_binding_revoked",
+            "PERSONALAGENT-E2E-004:daemon_binding_revoked"
+          ]
+        ]
+      }
     },
     {
       "caseId": "NATIVE-E2E-001",
       "feature": "Storage Scope native bootstrap and tenant SMS cooldown smoke",
-      "layer": "product_ui",
+      "layer": "portable_product_ui",
       "preconditions": "Flutter desktop and debug native IM Core artifacts are available.",
       "action": "Provision one Storage Scope through the real App bootstrap, persist a tenant-scoped SMS retry boundary, simulate an older public HTTP tenant record, reopen the same App root, then remove its key and retry openExisting.",
       "exactOracles": [
@@ -1738,7 +2232,58 @@
       "owner": "awiki-me",
       "implementationPath": "tests/e2e/flutter/native/im_core_open_smoke_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "NATIVE-E2E-001:scope_provisioned_exclusive",
+          "NATIVE-E2E-001:real_app_bootstrap_open_existing",
+          "NATIVE-E2E-001:same_process_reopen_same_root",
+          "NATIVE-E2E-001:legacy_public_http_tenant_upgraded_in_place",
+          "NATIVE-E2E-001:tenant_sms_cooldown_restored_after_restart",
+          "NATIVE-E2E-001:missing_key_failed_without_recreate",
+          "NATIVE-E2E-001:native_paths_validated"
+        ],
+        "exactOracleAssertions": [
+          [
+            "NATIVE-E2E-001:scope_provisioned_exclusive",
+            "NATIVE-E2E-001:real_app_bootstrap_open_existing",
+            "NATIVE-E2E-001:same_process_reopen_same_root",
+            "NATIVE-E2E-001:legacy_public_http_tenant_upgraded_in_place",
+            "NATIVE-E2E-001:tenant_sms_cooldown_restored_after_restart",
+            "NATIVE-E2E-001:missing_key_failed_without_recreate",
+            "NATIVE-E2E-001:native_paths_validated"
+          ],
+          [
+            "NATIVE-E2E-001:scope_provisioned_exclusive",
+            "NATIVE-E2E-001:real_app_bootstrap_open_existing",
+            "NATIVE-E2E-001:same_process_reopen_same_root",
+            "NATIVE-E2E-001:legacy_public_http_tenant_upgraded_in_place",
+            "NATIVE-E2E-001:tenant_sms_cooldown_restored_after_restart",
+            "NATIVE-E2E-001:missing_key_failed_without_recreate",
+            "NATIVE-E2E-001:native_paths_validated"
+          ],
+          [
+            "NATIVE-E2E-001:scope_provisioned_exclusive",
+            "NATIVE-E2E-001:real_app_bootstrap_open_existing",
+            "NATIVE-E2E-001:same_process_reopen_same_root",
+            "NATIVE-E2E-001:legacy_public_http_tenant_upgraded_in_place",
+            "NATIVE-E2E-001:tenant_sms_cooldown_restored_after_restart",
+            "NATIVE-E2E-001:missing_key_failed_without_recreate",
+            "NATIVE-E2E-001:native_paths_validated"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "NATIVE-E2E-001:scope_provisioned_exclusive",
+            "NATIVE-E2E-001:real_app_bootstrap_open_existing",
+            "NATIVE-E2E-001:same_process_reopen_same_root",
+            "NATIVE-E2E-001:legacy_public_http_tenant_upgraded_in_place",
+            "NATIVE-E2E-001:tenant_sms_cooldown_restored_after_restart",
+            "NATIVE-E2E-001:missing_key_failed_without_recreate",
+            "NATIVE-E2E-001:native_paths_validated"
+          ]
+        ]
+      }
     },
     {
       "caseId": "NATIVE-E2E-002",
@@ -1763,12 +2308,72 @@
       "owner": "awiki-me-identity",
       "implementationPath": "scripts/run_macos_production_scope_restart_gate.sh",
       "evidenceType": "signed_process_command_log",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "NATIVE-E2E-002:native_dependency_built_once",
+          "NATIVE-E2E-002:architecture_matrix_validated",
+          "NATIVE-E2E-002:podfile_lock_stable",
+          "NATIVE-E2E-002:production_scope_provisioned",
+          "NATIVE-E2E-002:independent_reopen_preserved_revision",
+          "NATIVE-E2E-002:create_exclusive_already_exists",
+          "NATIVE-E2E-002:cleanup_deleted_and_missing"
+        ],
+        "exactOracleAssertions": [
+          [
+            "NATIVE-E2E-002:native_dependency_built_once",
+            "NATIVE-E2E-002:architecture_matrix_validated",
+            "NATIVE-E2E-002:podfile_lock_stable",
+            "NATIVE-E2E-002:production_scope_provisioned",
+            "NATIVE-E2E-002:independent_reopen_preserved_revision",
+            "NATIVE-E2E-002:create_exclusive_already_exists",
+            "NATIVE-E2E-002:cleanup_deleted_and_missing"
+          ],
+          [
+            "NATIVE-E2E-002:native_dependency_built_once",
+            "NATIVE-E2E-002:architecture_matrix_validated",
+            "NATIVE-E2E-002:podfile_lock_stable",
+            "NATIVE-E2E-002:production_scope_provisioned",
+            "NATIVE-E2E-002:independent_reopen_preserved_revision",
+            "NATIVE-E2E-002:create_exclusive_already_exists",
+            "NATIVE-E2E-002:cleanup_deleted_and_missing"
+          ],
+          [
+            "NATIVE-E2E-002:native_dependency_built_once",
+            "NATIVE-E2E-002:architecture_matrix_validated",
+            "NATIVE-E2E-002:podfile_lock_stable",
+            "NATIVE-E2E-002:production_scope_provisioned",
+            "NATIVE-E2E-002:independent_reopen_preserved_revision",
+            "NATIVE-E2E-002:create_exclusive_already_exists",
+            "NATIVE-E2E-002:cleanup_deleted_and_missing"
+          ],
+          [
+            "NATIVE-E2E-002:native_dependency_built_once",
+            "NATIVE-E2E-002:architecture_matrix_validated",
+            "NATIVE-E2E-002:podfile_lock_stable",
+            "NATIVE-E2E-002:production_scope_provisioned",
+            "NATIVE-E2E-002:independent_reopen_preserved_revision",
+            "NATIVE-E2E-002:create_exclusive_already_exists",
+            "NATIVE-E2E-002:cleanup_deleted_and_missing"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "NATIVE-E2E-002:native_dependency_built_once",
+            "NATIVE-E2E-002:architecture_matrix_validated",
+            "NATIVE-E2E-002:podfile_lock_stable",
+            "NATIVE-E2E-002:production_scope_provisioned",
+            "NATIVE-E2E-002:independent_reopen_preserved_revision",
+            "NATIVE-E2E-002:create_exclusive_already_exists",
+            "NATIVE-E2E-002:cleanup_deleted_and_missing"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-001",
       "feature": "Real backend performance flow",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Complete the measured App/CLI backend scenario.",
       "exactOracles": [
@@ -1785,12 +2390,27 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-001:real_backend_flow_completed"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-001:real_backend_flow_completed"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-001:real_backend_flow_completed"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-002",
       "feature": "Multi-conversation dataset",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Prepare the audited remote dataset.",
       "exactOracles": [
@@ -1807,12 +2427,27 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-002:multi_conversation_dataset_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-002:multi_conversation_dataset_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-002:multi_conversation_dataset_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-003",
       "feature": "Cold shell visibility",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Measure cold App shell and conversation-list visibility.",
       "exactOracles": [
@@ -1830,12 +2465,30 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-003:cold_shell_visibility_measured"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-003:cold_shell_visibility_measured"
+          ],
+          [
+            "PERF-E2E-003:cold_shell_visibility_measured"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-003:cold_shell_visibility_measured"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-004",
       "feature": "Snapshot/hydration timing",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Measure snapshot, fast-local and full hydration.",
       "exactOracles": [
@@ -1852,12 +2505,27 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-004:snapshot_and_hydration_timings_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-004:snapshot_and_hydration_timings_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-004:snapshot_and_hydration_timings_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-005",
       "feature": "App→CLI latency",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Measure App send to CLI visibility.",
       "exactOracles": [
@@ -1874,12 +2542,27 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-005:app_to_cli_latency_measured"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-005:app_to_cli_latency_measured"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-005:app_to_cli_latency_measured"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-006",
       "feature": "CLI→App latency",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Measure CLI send to App visibility.",
       "exactOracles": [
@@ -1896,12 +2579,27 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-006:cli_to_app_latency_measured"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-006:cli_to_app_latency_measured"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-006:cli_to_app_latency_measured"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-007",
       "feature": "No full-refresh regression",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Observe refresh counters during send/receive.",
       "exactOracles": [
@@ -1918,12 +2616,27 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-007:full_refresh_regression_checked"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-007:full_refresh_regression_checked"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-007:full_refresh_regression_checked"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-008",
       "feature": "Long-thread open timing",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Open and hydrate the long audited thread.",
       "exactOracles": [
@@ -1940,12 +2653,27 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-008:long_thread_open_timing_measured"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-008:long_thread_open_timing_measured"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-008:long_thread_open_timing_measured"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-009",
       "feature": "Timing report schema",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Write the product timing report.",
       "exactOracles": [
@@ -1962,12 +2690,27 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-009:product_timing_schema_written"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-009:product_timing_schema_written"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-009:product_timing_schema_written"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-010",
       "feature": "Hard budget semantics",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Evaluate hard performance budgets.",
       "exactOracles": [
@@ -1984,12 +2727,27 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-010:hard_budget_semantics_checked"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-010:hard_budget_semantics_checked"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-010:hard_budget_semantics_checked"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-011",
       "feature": "Soft budget semantics",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Evaluate soft performance budgets.",
       "exactOracles": [
@@ -2006,12 +2764,27 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-011:soft_budget_semantics_checked"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-011:soft_budget_semantics_checked"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-011:soft_budget_semantics_checked"
+          ]
+        ]
+      }
     },
     {
       "caseId": "PERF-E2E-012",
       "feature": "Performance diagnostics",
-      "layer": "integration_diagnostic",
+      "layer": "remote_integration_diagnostic",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Retain sanitized failure diagnostics.",
       "exactOracles": [
@@ -2028,12 +2801,27 @@
       "owner": "awiki-me-performance",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "timing_report+case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PERF-E2E-012:failure_diagnostics_retained"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PERF-E2E-012:failure_diagnostics_retained"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PERF-E2E-012:failure_diagnostics_retained"
+          ]
+        ]
+      }
     },
     {
       "caseId": "IDENTITY-DELETE-E2E-001",
       "feature": "Current credential deletion across idle Patch and cold restart",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "A real native Core identity is active in an isolated App state root, the committed conversation Patch stream is attached and idle, and the runner can launch a third independent Flutter process against that same root.",
       "action": "After the normal cold-restart conversation assertions, delete the current credential while the conversation Patch stream is idle; then start another Flutter process against the same App state root.",
       "exactOracles": [
@@ -2080,7 +2868,7 @@
     {
       "caseId": "PROCESS-RESTART-E2E-001",
       "feature": "Canonical conversation cold-process restart",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The runner can launch two independent Flutter integration-test processes against one isolated App state root and one attested x86_64 build.",
       "action": "Phase A creates Direct/Group conversations, messages, unread state, and cached Profiles; Phase B starts a new Flutter process and restores only persisted state.",
       "exactOracles": [
@@ -2130,7 +2918,7 @@
     {
       "caseId": "MESSAGE-PATCH-RESTART-E2E-001",
       "feature": "Cold restart closes a message gap committed while Patch subscription is unavailable",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "Phase A has a real bound App/Core session, the runner can stop realtime and launch a distinct Flutter process against the same isolated state root, and the CLI peer is independently authenticated.",
       "action": "Pause Phase A, stop realtime, destroy its App ProviderContainer and native bootstrap, prove Patch/sync providers are unavailable, then commit one Direct message from the CLI and start Phase B normally.",
       "exactOracles": [
@@ -2188,7 +2976,7 @@
     {
       "caseId": "SMOKE-E2E-001",
       "feature": "App shell smoke",
-      "layer": "product_ui",
+      "layer": "portable_product_ui",
       "preconditions": "Flutter desktop and debug native IM Core artifacts are available.",
       "action": "Launch the real Flutter desktop app shim without backend credentials.",
       "exactOracles": [
@@ -2210,12 +2998,74 @@
       "owner": "awiki-me",
       "implementationPath": "tests/e2e/flutter/app/app_smoke_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "SMOKE-E2E-001:app_shell_visible",
+          "SMOKE-E2E-001:onboarding_visible",
+          "SMOKE-E2E-001:onboarding_auth_entry_visible",
+          "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
+          "SMOKE-E2E-001:phone_single_stage_submit_visible",
+          "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
+        ],
+        "exactOracleAssertions": [
+          [
+            "SMOKE-E2E-001:app_shell_visible",
+            "SMOKE-E2E-001:onboarding_visible",
+            "SMOKE-E2E-001:onboarding_auth_entry_visible",
+            "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
+          ],
+          [
+            "SMOKE-E2E-001:app_shell_visible",
+            "SMOKE-E2E-001:onboarding_visible",
+            "SMOKE-E2E-001:onboarding_auth_entry_visible",
+            "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
+          ],
+          [
+            "SMOKE-E2E-001:app_shell_visible",
+            "SMOKE-E2E-001:onboarding_visible",
+            "SMOKE-E2E-001:onboarding_auth_entry_visible",
+            "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
+          ],
+          [
+            "SMOKE-E2E-001:app_shell_visible",
+            "SMOKE-E2E-001:onboarding_visible",
+            "SMOKE-E2E-001:onboarding_auth_entry_visible",
+            "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
+          ],
+          [
+            "SMOKE-E2E-001:app_shell_visible",
+            "SMOKE-E2E-001:onboarding_visible",
+            "SMOKE-E2E-001:onboarding_auth_entry_visible",
+            "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "SMOKE-E2E-001:app_shell_visible",
+            "SMOKE-E2E-001:onboarding_visible",
+            "SMOKE-E2E-001:onboarding_auth_entry_visible",
+            "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
+          ]
+        ]
+      }
     },
     {
       "caseId": "UNREAD-MULTI-E2E-001",
       "feature": "Multi-conversation unread isolation and read clearing",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The full remote awiki.info flow has one closed canonical Direct and one closed canonical Group.",
       "action": "Receive two Direct messages and one Group message, restart, open Group, then open Direct.",
       "exactOracles": [
@@ -2262,7 +3112,7 @@
     {
       "caseId": "CONV-CANON-E2E-001",
       "feature": "Canonical Direct conversation across App entries",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The awiki.info peer has a nickname distinct from its Handle and DID, and the isolated App state contains no Direct row for that Persona.",
       "action": "Create the Direct through identity lookup before the first message, then reopen it through recents, local conversation search, restart, and the visible Contact row.",
       "exactOracles": [
@@ -2308,7 +3158,7 @@
     {
       "caseId": "GROUP-CANON-E2E-001",
       "feature": "Canonical Group conversation across App lifecycle",
-      "layer": "product_ui",
+      "layer": "remote_product_ui",
       "preconditions": "The App creates a unique group on awiki.info through visible UI.",
       "action": "Create the group, add the canonical peer, refresh members, restart the App shell, and send/receive the first messages.",
       "exactOracles": [
@@ -2380,10 +3230,22 @@
           "DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_group_and_attachment_visible_once"
         ],
         "exactOracleAssertions": [
-          ["DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_group_and_attachment_absent", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:explicit_pull_preserved_tail_boundary"],
-          ["DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_group_and_attachment_visible_once"]
+          [
+            "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_group_and_attachment_absent",
+            "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread",
+            "DEVICE-CONTENT-TAIL-ONLY-E2E-001:explicit_pull_preserved_tail_boundary"
+          ],
+          [
+            "DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_group_and_attachment_visible_once"
+          ]
         ],
-        "negativeCheckAssertions": [["DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_group_and_attachment_absent", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread", "DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_group_and_attachment_visible_once"]]
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_group_and_attachment_absent",
+            "DEVICE-CONTENT-TAIL-ONLY-E2E-001:prejoin_content_contributed_no_unread",
+            "DEVICE-CONTENT-TAIL-ONLY-E2E-001:postjoin_group_and_attachment_visible_once"
+          ]
+        ]
       }
     },
     {
@@ -2779,7 +3641,7 @@
       "caseId": "DEVICE-JOIN-E2E-005",
       "feature": "Joined AWiki Me device deletes its current local data and starts Join again",
       "layer": "remote_product_ui_security",
-      "preconditions": "DEVICE-JOIN-E2E-004 has completed on two isolated real App processes, the joining App is the current active member, and its completed New Device Join journal belongs to the same local identity and protocol device.",
+      "preconditions": "DEVICE-JOIN-E2E-004 has completed on two isolated real App processes, the joining App is the current active joined device (after the two-App management grant), and its completed New Device Join journal belongs to the same local identity and protocol device.",
       "action": "On the joining App, leave the completed Join page, open Settings, confirm Exit and delete current data through visible UI, verify the completed local Join journal is retired, submit the same verified Handle from onboarding, then reopen the standalone Join form.",
       "exactOracles": [
         "Deleting the current local data returns the real App to onboarding without affecting the admin App or remotely revoking either registered device.",
@@ -2857,19 +3719,22 @@
     {
       "caseId": "ROOT-TRANSFER-E2E-001",
       "feature": "AWiki Me management-device root import",
-      "layer": "product_ui",
+      "layer": "remote_product_ui_security",
       "preconditions": "An accepted Step 3 contract has established a management-ready AWiki Me admin and an independent CLI active member with management_ready false; both use fresh native Core roots and exact protocol device IDs, and the unattended suite uses the test-scoped user-presence port while production LocalAuthentication remains unchanged.",
-      "action": "Open Devices on the ready AWiki Me admin, select the exact eligible member, let Core prepare a safe recipient summary, complete exactly one E2E-only user-presence decision, stop the App sender flow at standard P5 accepted, then bring the CLI receiver online to import and complete readiness directly.",
+      "action": "Hold the real successful approval result while its terminal notice is processed, and reject any premature Done action that exits the grant flow. Hold one real pre-approval verification response until approval completes, then release it and require the grant entry to remain available. Before the CLI activation poll, click the active Join management grant and require a retryable PreKey wait. Activate that same CLI member, retry through the visible Join button, require a fresh summary without sending or extra presence, then cancel preparation. Approve the CLI as a rootless member, close the short-lived Join sheet, clear its transient state, open Devices on the ready AWiki Me admin, select the exact eligible member, let Core perform a fresh prepare and display a safe recipient summary, complete exactly one E2E-only user-presence decision, stop the App sender flow at standard P5 accepted, bring the CLI receiver online to import and complete readiness directly, then create a Group immediately after the sender observes the fresh Registry.",
       "exactOracles": [
+        "A terminal Join notice cannot expose Done while approval is still pending; the grant step becomes available after the authorized-device result arrives. A delayed verification response must not replace the authorized Join or hide its management-grant entry. An approved but unactivated CLI member yields retryable root_transfer.prekey_unavailable; after activation, the visible Join retry re-prepares the same recipient and stops at fresh confirmation without exporting or sending Root material.",
         "Before receiver completion, the exact recipient remains active member with management_ready false; no Init-only pending, sender waiting, or App-owned transfer state is projected.",
+        "The later-grant action remains available after the Join sheet and active Join presentation state are gone, and its Core preparation is bound to the exact eligible Devices row rather than a retained Join session or handle. Clicking that row must perform a new authoritative Registry read before Core preparation; display cache alone never authorizes a grant.",
         "The App displays only Core's safe recipient summary, delegates exactly one E2E-only user-presence decision without changing production LocalAuthentication, and treats the closed standard P5 accepted receipt as the end of the sender operation.",
-        "The CLI receiver imports the envelope, completes directly with User Service, and becomes active admin with management_ready true after fresh device auth and Registry convergence; Root control never appears in either product inbox."
+        "The CLI receiver imports the envelope, completes directly with User Service, and becomes active admin with management_ready true after fresh device auth and Registry convergence; Root control never appears in either product inbox.",
+        "The sender refreshes its same-identity client from the changed authoritative Registry before the immediate Group create, so no stale identity_binding_conflict is possible."
       ],
       "negativeChecks": [
-        "A wrong or ineligible target, caller-supplied message ID, old list/retry/pending state, a second user-presence action, treating accepted as receiver readiness, waiting for or emitting an imported ACK/Reply, root/control JSON in inbox or UI, Root bytes in logs/errors/reports, or management actions before Registry readiness fails."
+        "Overwriting successful approval with an earlier response, silently ignoring an enabled grant, or preparing solely from cached device state fails. A wrong or ineligible target, dependence on retained Join presentation state, reuse of an old authorization handle, caller-supplied message ID, automatic pending send before fresh user presence, a second user-presence action, treating accepted as receiver readiness, waiting for or emitting an imported ACK/Reply, root/control JSON in inbox or UI, Root bytes in logs/errors/reports, management actions before Registry readiness, a fixed sleep, or retrying Group create with a stale identity binding fails."
       ],
       "environment": "awiki_info_remote",
-      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "cleanupPolicy": "isolated_root_transfer_residual_ledger",
       "requiredFor": [
         "nightly",
         "release"
@@ -2880,15 +3745,34 @@
       "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
+          "ROOT-TRANSFER-E2E-001:active_join_missing_prekey_retryable",
+          "ROOT-TRANSFER-E2E-001:active_join_retry_requires_fresh_confirmation",
           "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion",
+          "ROOT-TRANSFER-E2E-001:join_sheet_closed_before_later_grant",
+          "ROOT-TRANSFER-E2E-001:device_list_fresh_prepare",
           "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
           "ROOT-TRANSFER-E2E-001:sender_accepted_terminal",
           "ROOT-TRANSFER-E2E-001:receiver_completion_ready",
-          "ROOT-TRANSFER-E2E-001:root_p5_not_projected"
+          "ROOT-TRANSFER-E2E-001:root_p5_not_projected",
+          "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding",
+          "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
+          "ROOT-TRANSFER-E2E-001:device_list_click_refreshes_registry",
+          "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape"
         ],
         "exactOracleAssertions": [
           [
+            "ROOT-TRANSFER-E2E-001:active_join_missing_prekey_retryable",
+            "ROOT-TRANSFER-E2E-001:active_join_retry_requires_fresh_confirmation",
+            "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
+            "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape"
+          ],
+          [
             "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion"
+          ],
+          [
+            "ROOT-TRANSFER-E2E-001:join_sheet_closed_before_later_grant",
+            "ROOT-TRANSFER-E2E-001:device_list_fresh_prepare",
+            "ROOT-TRANSFER-E2E-001:device_list_click_refreshes_registry"
           ],
           [
             "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
@@ -2897,15 +3781,26 @@
           [
             "ROOT-TRANSFER-E2E-001:receiver_completion_ready",
             "ROOT-TRANSFER-E2E-001:root_p5_not_projected"
+          ],
+          [
+            "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding"
           ]
         ],
         "negativeCheckAssertions": [
           [
+            "ROOT-TRANSFER-E2E-001:active_join_missing_prekey_retryable",
+            "ROOT-TRANSFER-E2E-001:active_join_retry_requires_fresh_confirmation",
             "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion",
+            "ROOT-TRANSFER-E2E-001:join_sheet_closed_before_later_grant",
+            "ROOT-TRANSFER-E2E-001:device_list_fresh_prepare",
             "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
             "ROOT-TRANSFER-E2E-001:sender_accepted_terminal",
             "ROOT-TRANSFER-E2E-001:receiver_completion_ready",
-            "ROOT-TRANSFER-E2E-001:root_p5_not_projected"
+            "ROOT-TRANSFER-E2E-001:root_p5_not_projected",
+            "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding",
+            "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
+            "ROOT-TRANSFER-E2E-001:device_list_click_refreshes_registry",
+            "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape"
           ]
         ]
       }
@@ -2954,7 +3849,28 @@
       "owner": "awiki-me-groups",
       "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "STEP4-GROUP-PAGINATION-E2E-001:real_group_first_page_has_opaque_cursor",
+          "STEP4-GROUP-PAGINATION-E2E-001:explicit_next_cursor_loaded",
+          "STEP4-GROUP-PAGINATION-E2E-001:stable_group_projection_retained"
+        ],
+        "exactOracleAssertions": [
+          [
+            "STEP4-GROUP-PAGINATION-E2E-001:real_group_first_page_has_opaque_cursor",
+            "STEP4-GROUP-PAGINATION-E2E-001:explicit_next_cursor_loaded",
+            "STEP4-GROUP-PAGINATION-E2E-001:stable_group_projection_retained"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "STEP4-GROUP-PAGINATION-E2E-001:real_group_first_page_has_opaque_cursor",
+            "STEP4-GROUP-PAGINATION-E2E-001:explicit_next_cursor_loaded",
+            "STEP4-GROUP-PAGINATION-E2E-001:stable_group_projection_retained"
+          ]
+        ]
+      }
     },
     {
       "caseId": "DEVICE-REVOKE-E2E-001",
@@ -3124,7 +4040,7 @@
     {
       "caseId": "MULTI-DEVICE-CAPABILITY-GATE-E2E-001",
       "feature": "AWiki Me local Join surface with available E2EE capabilities and default-plain product policy",
-      "layer": "product_ui",
+      "layer": "portable_product_ui",
       "preconditions": "Flutter desktop and debug native IM Core artifacts are available; no backend, OTP, CLI peer, or pre-existing identity is used.",
       "action": "Open one temporary Storage Scope through production AppBootstrap/native Core, verify the default device-management composition, and mount the Join surface inside the production App provider tree without submitting an OTP.",
       "exactOracles": [
@@ -3650,6 +4566,67 @@
             "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:recent_plain_messages_converged_once",
             "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:older_local_messages_preserved",
             "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:current_state_and_post_anchor_delta_converged"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001",
+      "feature": "An existing AWiki Me replica completes real Schema 3 multi-page recovery",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated Apps share one joined awiki.info account, an independent exact-source CLI peer has committed one ordinary Direct baseline, the joining App is offline, and the reviewed exact-device operator is enabled for messages_501 with managed cleanup.",
+      "action": "Prepare exactly 501 recoverable ordinary messages for the offline joining device, force its account stream behind retention, resume through the normal App lifecycle, then send one fresh Direct message after recovery.",
+      "exactOracles": [
+        "The normal App coordinator completes the Core-owned Schema 3 recovery chain without exposing or supplying a cursor, token, page ref, manifest, page count, item count, or byte count.",
+        "The previously committed ordinary baseline remains exact-once after recovery, and the App reports neither capacityExceeded nor olderHistoryExcluded for the 501-message package.",
+        "A fresh post-recovery Direct message converges exactly once, and the safe diagnostics refresh sequence advances without sensitive protocol fields."
+      ],
+      "negativeChecks": [
+        "A database-cloned projection oracle, App-side page merge, App recovery API, supplied recovery selector, capacity or bounded-history outcome, lost/duplicate baseline, missing/duplicate positive-control message, unsafe diagnostics, skip, or full App suite substitution prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:joined_replica_committed_ordinary_baseline",
+          "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:exact_device_messages_501_fixture_prepared",
+          "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:core_owned_schema3_paged_recovery_completed",
+          "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:pre_recovery_projection_preserved_exactly_once",
+          "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:capacity_and_bounded_history_remained_false",
+          "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:post_recovery_delta_converged_exactly_once",
+          "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:diagnostics_remained_secret_free"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:joined_replica_committed_ordinary_baseline",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:exact_device_messages_501_fixture_prepared",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:core_owned_schema3_paged_recovery_completed"
+          ],
+          [
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:pre_recovery_projection_preserved_exactly_once",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:capacity_and_bounded_history_remained_false"
+          ],
+          [
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:post_recovery_delta_converged_exactly_once",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:diagnostics_remained_secret_free"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:joined_replica_committed_ordinary_baseline",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:exact_device_messages_501_fixture_prepared",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:core_owned_schema3_paged_recovery_completed",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:pre_recovery_projection_preserved_exactly_once",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:capacity_and_bounded_history_remained_false",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:post_recovery_delta_converged_exactly_once",
+            "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001:diagnostics_remained_secret_free"
           ]
         ]
       }
@@ -4864,6 +5841,7 @@
         "assertionIds": [
           "HANDLE-RECOVERY-V1-E2E-003:old_app_peer_joined_before_recovery",
           "HANDLE-RECOVERY-V1-E2E-003:old_principal_remote_action_fenced",
+          "HANDLE-RECOVERY-V1-E2E-003:old_app_returned_to_login_after_auth_fence",
           "HANDLE-RECOVERY-V1-E2E-003:fresh_ordinary_rejoin_authorized_to_recovery_did",
           "HANDLE-RECOVERY-V1-E2E-003:two_app_registry_session_converged",
           "HANDLE-RECOVERY-V1-E2E-003:app_to_external_direct_exact_one",
@@ -4872,7 +5850,8 @@
         "exactOracleAssertions": [
           [
             "HANDLE-RECOVERY-V1-E2E-003:old_app_peer_joined_before_recovery",
-            "HANDLE-RECOVERY-V1-E2E-003:old_principal_remote_action_fenced"
+            "HANDLE-RECOVERY-V1-E2E-003:old_principal_remote_action_fenced",
+            "HANDLE-RECOVERY-V1-E2E-003:old_app_returned_to_login_after_auth_fence"
           ],
           [
             "HANDLE-RECOVERY-V1-E2E-003:fresh_ordinary_rejoin_authorized_to_recovery_did",
@@ -4887,6 +5866,7 @@
           [
             "HANDLE-RECOVERY-V1-E2E-003:old_app_peer_joined_before_recovery",
             "HANDLE-RECOVERY-V1-E2E-003:old_principal_remote_action_fenced",
+            "HANDLE-RECOVERY-V1-E2E-003:old_app_returned_to_login_after_auth_fence",
             "HANDLE-RECOVERY-V1-E2E-003:fresh_ordinary_rejoin_authorized_to_recovery_did",
             "HANDLE-RECOVERY-V1-E2E-003:two_app_registry_session_converged",
             "HANDLE-RECOVERY-V1-E2E-003:app_to_external_direct_exact_one",
@@ -4903,7 +5883,7 @@
       "action": "Complete visible Handle Recovery, prove the old peer is fenced, submit the recovered Handle through the peer App registration UI, select the Core-owned opaque Join continuation, approve the exact member Join, send standard Root/P5 to that device, and verify bidirectional Direct delivery.",
       "exactOracles": [
         "Registration produces one opaque Recovery-rebind continuation, requests one user-presence decision, and creates one pending joined-device-marked Join for the Recovery DID without exposing grant or transition material to Dart.",
-        "Both App Registry and session views converge after approval, then standard Root/P5 makes the rejoined current peer an active management-ready admin while the recovered sender remains a ready admin; the promoted peer refreshes its same-device authorization generation without being logged out.",
+        "Both App Registry and session views converge after approval, then standard Root/P5 makes the rejoined current peer an active management-ready admin while the recovered sender remains a ready admin; two concurrent explicit recipient syncs alongside App background recovery converge the same-device authorization generation without logout or a spurious permission failure.",
         "The old principal stays fenced, Root/P5 is absent from ordinary message history, and both post-transfer Direct directions project exactly once with correct ownership."
       ],
       "negativeChecks": [
@@ -4923,6 +5903,7 @@
         "assertionIds": [
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_peer_joined_before_recovery",
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_principal_remote_action_fenced",
+          "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_returned_to_login_after_auth_fence",
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_returned_opaque_recovery_join_continuation",
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_continuation_rejoined_recovery_did",
           "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:two_app_registry_session_converged",
@@ -4944,6 +5925,7 @@
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:root_promotion_authorization_converged_without_logout"
           ],
           [
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_returned_to_login_after_auth_fence",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:app_to_external_direct_exact_one",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:external_to_app_and_sibling_direct_exact_one"
           ]
@@ -4952,6 +5934,7 @@
           [
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_peer_joined_before_recovery",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_principal_remote_action_fenced",
+            "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:old_app_returned_to_login_after_auth_fence",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_returned_opaque_recovery_join_continuation",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:registration_continuation_rejoined_recovery_did",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:two_app_registry_session_converged",
@@ -4959,6 +5942,495 @@
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:root_promotion_authorization_converged_without_logout",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:app_to_external_direct_exact_one",
             "HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001:external_to_app_and_sibling_direct_exact_one"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001",
+      "feature": "A fenced old App peer resumes one durable Recovery-rebind Join after App/Core interruption",
+      "layer": "remote_product_ui_security",
+      "preconditions": "An explicit Linux/Xvfb or macOS awiki.info configuration, protected fixed OTP account, and two fresh isolated App roots are available; the Apps share the old DID before visible Recovery, and the runner can execute two isolated Flutter processes against the same roots.",
+      "action": "Phase A completes visible Recovery, registers the fenced peer, confirms the rebind continuation, durably creates one pending Join, writes an opaque handoff and exits; Phase B opens the same App/Core roots in a new process, obtains a fresh OTP, registers again, continues the adopted Join, approves and activates it.",
+      "exactOracles": [
+        "Phase A shows only Continue Join and Cancel, never a new Recovery action; Core durably creates one joined-device Join before the first Flutter process exits.",
+        "A distinct Phase B App/Core process has no process-local preparation, uses a fresh OTP registration, shows the same rebind-only choice and returns the original Join session without generic conflict.",
+        "The admin completes one Join authority, both App Registry/session views converge at the Recovery DID, and no second Recovery authority is created."
+      ],
+      "negativeChecks": [
+        "A public fault API/header, in-process hang/exception cut, Recovery action in the rebind dialog, reused OTP, second Join session/device key/Recovery operation, copied state root, raw authority output, generic local-state conflict, missing approval/activation, or skipped step prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:old_app_peer_joined_before_recovery",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:old_principal_remote_action_fenced",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:registration_returned_opaque_recovery_join_continuation",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:recovery_action_absent_from_rebind_dialog",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:core_begin_committed_before_app_interruption",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:app_and_core_reopened_on_same_state_root",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:fresh_otp_registration_adopted_durable_join",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:registration_resume_returned_original_join_session",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:single_admin_join_authority_completed",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:two_app_registry_session_converged",
+          "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:no_second_recovery_authority"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:registration_returned_opaque_recovery_join_continuation",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:recovery_action_absent_from_rebind_dialog",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:core_begin_committed_before_app_interruption"
+          ],
+          [
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:app_and_core_reopened_on_same_state_root",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:fresh_otp_registration_adopted_durable_join",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:registration_resume_returned_original_join_session"
+          ],
+          [
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:single_admin_join_authority_completed",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:two_app_registry_session_converged",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:no_second_recovery_authority"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:old_app_peer_joined_before_recovery",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:old_principal_remote_action_fenced",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:registration_returned_opaque_recovery_join_continuation",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:recovery_action_absent_from_rebind_dialog",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:core_begin_committed_before_app_interruption",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:app_and_core_reopened_on_same_state_root",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:fresh_otp_registration_adopted_durable_join",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:registration_resume_returned_original_join_session",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:single_admin_join_authority_completed",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:two_app_registry_session_converged",
+            "HANDLE-RECOVERY-REGISTRATION-RESUME-E2E-001:no_second_recovery_authority"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001",
+      "feature": "Explicit App identity deletion ends unfinished recovery and resumes cleanup",
+      "layer": "remote_product_ui_security",
+      "preconditions": "An explicit Linux/Xvfb or macOS remote configuration with externally supplied HTTPS service URLs and DID domain, protected fixed OTP account, one fresh App/Core root, and the production Settings deletion coordinator are available.",
+      "action": "Register and activate one identity, seed a Product sentinel, create a pre-attempt Recovery, check the deletion impact, then confirm deletion once and verify the recovery ends before the deliberate Product/Core cleanup cut.",
+      "exactOracles": [
+        "The read-only impact query reports unfinished recovery before deletion and reports none after the deletion decision.",
+        "Explicit deletion marks the operation locally_deleted without submitting or resuming recovery; the original commit-attempt flag is preserved.",
+        "One confirmed deletion creates one ticket and reaches the deliberate Product-deleted/Core-not-complete process cut."
+      ],
+      "negativeChecks": [
+        "Unconfirmed deletion, remote recovery submission/resume, Product deletion before ticket, a second ticket, same-process-only simulation, leaked secrets, or skipped steps prevent pass attestation."
+      ],
+      "environment": "configured_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:pending_recovery_reported_before_confirmation",
+          "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:explicit_deletion_ends_recovery_without_resume",
+          "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:single_confirmation_creates_one_deletion_ticket"
+        ],
+        "exactOracleAssertions": [
+          [
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:pending_recovery_reported_before_confirmation"
+          ],
+          [
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:explicit_deletion_ends_recovery_without_resume"
+          ],
+          [
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:single_confirmation_creates_one_deletion_ticket"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:pending_recovery_reported_before_confirmation",
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:explicit_deletion_ends_recovery_without_resume",
+            "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001:single_confirmation_creates_one_deletion_ticket"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "IDENTITY-DATA-DELETION-RESUME-E2E-001",
+      "feature": "Full App identity data deletion resumes one committed ticket in a distinct process",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Phase A has one durable full-data deletion ticket and committed Product delete on an isolated configured-remote App/Core root, but Core completion has not run.",
+      "action": "Terminate Phase A, launch a distinct Phase B Flutter process on the same root, inspect the one pending ticket before widget startup, start the real App, and let AppRuntime bootstrap replay Product deletion and Core completion before session restoration.",
+      "exactOracles": [
+        "Phase A exits with Product data absent, one local identity still present, and exactly one pending ticket.",
+        "Phase B has a different process ID, reads the same ticket/owner/current-DID authority, and repeats the already-committed Product delete without failure.",
+        "Bootstrap completes Core retirement, clears the pending ticket and target identity, and restores no session for the deleted identity."
+      ],
+      "negativeChecks": [
+        "A widget rebuild, same process, new ticket, cancellation, non-idempotent Product delete, session restoration before resume, retained target identity, awiki.info target, leaked raw handoff in reports, or skipped step prevents pass attestation."
+      ],
+      "environment": "configured_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "IDENTITY-DATA-DELETION-RESUME-E2E-001:phase_a_product_delete_committed_before_core_complete",
+          "IDENTITY-DATA-DELETION-RESUME-E2E-001:phase_b_used_a_distinct_app_process",
+          "IDENTITY-DATA-DELETION-RESUME-E2E-001:bootstrap_replayed_the_same_pending_ticket",
+          "IDENTITY-DATA-DELETION-RESUME-E2E-001:product_delete_replay_was_idempotent",
+          "IDENTITY-DATA-DELETION-RESUME-E2E-001:core_completion_removed_only_the_target_identity",
+          "IDENTITY-DATA-DELETION-RESUME-E2E-001:no_session_restored_for_the_deleted_identity"
+        ],
+        "exactOracleAssertions": [
+          [
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:phase_a_product_delete_committed_before_core_complete"
+          ],
+          [
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:phase_b_used_a_distinct_app_process",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:bootstrap_replayed_the_same_pending_ticket",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:product_delete_replay_was_idempotent"
+          ],
+          [
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:core_completion_removed_only_the_target_identity",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:no_session_restored_for_the_deleted_identity"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:phase_a_product_delete_committed_before_core_complete",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:phase_b_used_a_distinct_app_process",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:bootstrap_replayed_the_same_pending_ticket",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:product_delete_replay_was_idempotent",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:core_completion_removed_only_the_target_identity",
+            "IDENTITY-DATA-DELETION-RESUME-E2E-001:no_session_restored_for_the_deleted_identity"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001",
+      "feature": "A recovered current App identity retires locally and ordinary-rejoins with the same stable owner",
+      "layer": "remote_product_ui_security",
+      "preconditions": "An explicit Linux/Xvfb or macOS remote configuration with externally supplied HTTPS service URLs and DID domain, protected fixed OTP account, and two fresh isolated App roots are available; one Recovery has completed, the sibling has rejoined, and standard Root transfer has made that sibling a management-ready admin.",
+      "action": "Retire the recovered current credential through the App public local-credential path, submit the same Handle with a new registration OTP, require an opaque Ordinary continuation with no user-presence request, approve from the sibling admin, activate the fresh protocol device, compare stable owner/Recovery/sibling inventories, then reopen the same App/Core root.",
+      "exactOracles": [
+        "Exactly one Recovery is applied before retirement; the sibling becomes and remains a management-ready admin while public local retirement leaves no target Registry credential in the joining root. The retired owner cannot log in through an alias placeholder, and reopening Recovery in the same provider tree clears the old completed result without starting another Recovery.",
+        "Registration returns Ordinary mode, consumes the OTP, requests no user presence, emits no Recovery reset authority, and authorizes a protocol device distinct from the retired device.",
+        "The active local identity and binding remain unique on the same stable owner/current DID/new device; Recovery operation IDs and sibling identity IDs do not change.",
+        "A cold App/Core reopen authenticates the same stable owner and current DID, proving the old tombstone did not delete the new Vault material."
+      ],
+      "negativeChecks": [
+        "Settings data deletion, scope reset, direct SQLite/Vault/marker mutation, old OTP or device reuse, Recovery-rebind mode, any user-presence call, non-null reset authority, changed stable owner, additional Recovery operation, sibling mutation, duplicate local identity/binding, failed cold reopen, non-Linux/macOS execution, implicit config or mismatched/insecure service URLs and DID domain, secret-bearing evidence, or a skipped business step prevents pass attestation."
+      ],
+      "environment": "configured_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:single_recovery_applied_before_retirement",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:sibling_promoted_to_management_ready_admin",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:current_credential_retired_through_public_app_path",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:registration_returned_ordinary_join_without_user_presence",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:ordinary_join_exposed_no_recovery_reset_authority",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:fresh_protocol_device_reused_stable_local_owner",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:active_local_binding_and_identity_remained_unique",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:recovery_operation_inventory_did_not_increase",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:sibling_identity_inventory_remained_unchanged",
+          "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:cold_app_core_reopen_preserved_new_identity_and_vault"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:single_recovery_applied_before_retirement",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:sibling_promoted_to_management_ready_admin",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:current_credential_retired_through_public_app_path"
+          ],
+          [
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:registration_returned_ordinary_join_without_user_presence",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:ordinary_join_exposed_no_recovery_reset_authority",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:fresh_protocol_device_reused_stable_local_owner"
+          ],
+          [
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:active_local_binding_and_identity_remained_unique",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:recovery_operation_inventory_did_not_increase",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:sibling_identity_inventory_remained_unchanged"
+          ],
+          [
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:cold_app_core_reopen_preserved_new_identity_and_vault"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:single_recovery_applied_before_retirement",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:sibling_promoted_to_management_ready_admin",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:current_credential_retired_through_public_app_path",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:registration_returned_ordinary_join_without_user_presence",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:ordinary_join_exposed_no_recovery_reset_authority",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:fresh_protocol_device_reused_stable_local_owner",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:active_local_binding_and_identity_remained_unique",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:recovery_operation_inventory_did_not_increase",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:sibling_identity_inventory_remained_unchanged",
+            "HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001:cold_app_core_reopen_preserved_new_identity_and_vault"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-JOIN-E2E-006",
+      "feature": "AWiki Me joins a Handle created and managed by DSH",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The protected awiki.info config provides the fixed registration OTP; dsh-awiki is built against its declared @awiki/im-core-node dependency; AWiki Me and DSH use independent empty Core roots; all service URLs resolve exactly to HTTPS awiki.info; the suite uses its audited isolated_device_join_residual_ledger policy instead of granting Handle mutation to the DSH driver.",
+      "action": "Start the real DSH Host driver, create a fresh Handle and prove DSH bootstrap admin_ready, use visible AWiki Me onboarding to choose ordinary Join, let DSH reliable sync/local inbox discover an opaque requestRef, start verification, compare independently rendered SAS, approve with APPROVE, wait for AWiki Me member activation, revoke the App through opaque deviceRef with REVOKE, then record the dedicated test identity through the suite residual ledger.",
+      "exactOracles": [
+        "DSH is the unique ready-admin and AWiki Me remains pending without SAS before explicit DSH verification.",
+        "The independently rendered App and DSH six-digit SAS values match without entering evidence, and DSH approval activates AWiki Me as current member with management_ready false.",
+        "DSH Registry contains exactly admin+member, then the non-current member is revoked and the dedicated identity remains covered by the suite's explicit residual-ledger policy."
+      ],
+      "negativeChecks": [
+        "Missing published Node v11/DSH build, awiki.ai or mixed endpoint, copied state, Recovery instead of ordinary Join, raw native IDs at the Browser boundary, early/mismatched/persisted SAS, missing APPROVE/REVOKE, admin-role join, automatic approval, failed member revoke, DSH-side Handle mutation, missing residual ledger, mock, or skip prevents attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/dsh_device_join_interop_test.part.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-JOIN-E2E-006:dsh_bootstrap_ready_admin",
+          "DEVICE-JOIN-E2E-006:app_ordinary_join_left_pending",
+          "DEVICE-JOIN-E2E-006:sas_matched_without_secret_evidence",
+          "DEVICE-JOIN-E2E-006:dsh_foreground_member_approval_completed",
+          "DEVICE-JOIN-E2E-006:app_joined_as_member",
+          "DEVICE-JOIN-E2E-006:dsh_revoked_member",
+          "DEVICE-JOIN-E2E-006:residual_identity_declared_by_suite_policy"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-JOIN-E2E-006:dsh_bootstrap_ready_admin",
+            "DEVICE-JOIN-E2E-006:app_ordinary_join_left_pending"
+          ],
+          [
+            "DEVICE-JOIN-E2E-006:sas_matched_without_secret_evidence",
+            "DEVICE-JOIN-E2E-006:dsh_foreground_member_approval_completed",
+            "DEVICE-JOIN-E2E-006:app_joined_as_member"
+          ],
+          [
+            "DEVICE-JOIN-E2E-006:dsh_revoked_member",
+            "DEVICE-JOIN-E2E-006:residual_identity_declared_by_suite_policy"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-JOIN-E2E-006:dsh_bootstrap_ready_admin",
+            "DEVICE-JOIN-E2E-006:app_ordinary_join_left_pending",
+            "DEVICE-JOIN-E2E-006:sas_matched_without_secret_evidence",
+            "DEVICE-JOIN-E2E-006:dsh_foreground_member_approval_completed",
+            "DEVICE-JOIN-E2E-006:app_joined_as_member",
+            "DEVICE-JOIN-E2E-006:dsh_revoked_member",
+            "DEVICE-JOIN-E2E-006:residual_identity_declared_by_suite_policy"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "TENANT-SWITCH-SMOKE-E2E-001",
+      "feature": "Official tenant switch and restart continuity",
+      "layer": "portable_product_ui",
+      "preconditions": "Flutter desktop and the no-service fake application boundary are available with both built-in official tenants.",
+      "action": "Open tenant management from onboarding, switch to the secondary official tenant through the visible product UI, rebuild the app with the persisted registry projection, and inspect the official tenant actions.",
+      "exactOracles": [
+        "Both official tenants are visible as managed entries and expose no edit or delete action.",
+        "The secondary official tenant becomes active after the visible switch action.",
+        "A fresh app widget rebuild restores the same active official tenant."
+      ],
+      "negativeChecks": [
+        "A missing official tenant, editable or deletable official entry, action-only switch without visible UI, or active-tenant rollback after rebuild fails the case."
+      ],
+      "environment": "no_service",
+      "cleanupPolicy": "none",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me",
+      "implementationPath": "tests/e2e/flutter/app/app_smoke_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "TENANT-SWITCH-SMOKE-E2E-001:official_tenant_visible_and_immutable",
+          "TENANT-SWITCH-SMOKE-E2E-001:official_tenant_switched_through_product_ui",
+          "TENANT-SWITCH-SMOKE-E2E-001:active_tenant_preserved_after_app_rebuild"
+        ],
+        "exactOracleAssertions": [
+          [
+            "TENANT-SWITCH-SMOKE-E2E-001:official_tenant_visible_and_immutable"
+          ],
+          [
+            "TENANT-SWITCH-SMOKE-E2E-001:official_tenant_switched_through_product_ui"
+          ],
+          [
+            "TENANT-SWITCH-SMOKE-E2E-001:active_tenant_preserved_after_app_rebuild"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "TENANT-SWITCH-SMOKE-E2E-001:official_tenant_visible_and_immutable",
+            "TENANT-SWITCH-SMOKE-E2E-001:official_tenant_switched_through_product_ui",
+            "TENANT-SWITCH-SMOKE-E2E-001:active_tenant_preserved_after_app_rebuild"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "APP-UPDATE-SMOKE-E2E-001",
+      "feature": "Cached minimum version gates startup and recovers through the update UI",
+      "layer": "portable_product_ui",
+      "preconditions": "Flutter desktop and the no-service fake application boundary are available with a cached minimum version and a controllable policy response.",
+      "action": "Start the actual App with a cached restriction, open its manual download action, complete an offline refresh, and retry with a confirmed absent policy.",
+      "exactOracles": [
+        "The restriction is visible before business startup and leaves tenant switching available.",
+        "The manual download action is invoked without unlocking the App.",
+        "An offline refresh retains the restriction.",
+        "A confirmed policy removal clears the gate and displays onboarding after retry."
+      ],
+      "negativeChecks": [
+        "Starting business work before applying the cache, unlocking on a download action or network error, or retaining the old restriction after policy removal fails the case."
+      ],
+      "environment": "no_service",
+      "cleanupPolicy": "none",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me",
+      "implementationPath": "tests/e2e/flutter/app/app_smoke_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "APP-UPDATE-SMOKE-E2E-001:cached_gate_precedes_business_startup",
+          "APP-UPDATE-SMOKE-E2E-001:manual_download_action_preserves_gate",
+          "APP-UPDATE-SMOKE-E2E-001:offline_refresh_preserves_gate",
+          "APP-UPDATE-SMOKE-E2E-001:policy_removal_recovers_through_retry"
+        ],
+        "exactOracleAssertions": [
+          [
+            "APP-UPDATE-SMOKE-E2E-001:cached_gate_precedes_business_startup"
+          ],
+          [
+            "APP-UPDATE-SMOKE-E2E-001:manual_download_action_preserves_gate"
+          ],
+          [
+            "APP-UPDATE-SMOKE-E2E-001:offline_refresh_preserves_gate"
+          ],
+          [
+            "APP-UPDATE-SMOKE-E2E-001:policy_removal_recovers_through_retry"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "APP-UPDATE-SMOKE-E2E-001:cached_gate_precedes_business_startup",
+            "APP-UPDATE-SMOKE-E2E-001:manual_download_action_preserves_gate",
+            "APP-UPDATE-SMOKE-E2E-001:offline_refresh_preserves_gate",
+            "APP-UPDATE-SMOKE-E2E-001:policy_removal_recovers_through_retry"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "ROOT-TRANSFER-APP-PAIR-E2E-001",
+      "feature": "Two real Apps grant administrator permissions after Join",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Two isolated real App processes complete ordinary member Join on awiki.info; no CLI substitutes for either device.",
+      "action": "Check the grant entry immediately after approval, prepare from that entry without sending, leave the sheet through its Back action, then grant from Devices with one explicit confirmation. The joining App receives the root material and both real App Registries must show two ready admins. After local deletion of the joining credential, actually complete a fresh third-device Join and another management grant from the original admin, not merely reopen the form.",
+      "exactOracles": [
+        "The approving App exposes the management grant step rather than premature Done, and preparation does not send or invoke user presence.",
+        "The Devices grant opens confirmation and sends only after exactly one additional user-presence decision.",
+        "The receiving App completes root import and both App Registries contain exactly two active management-ready admins.",
+        "With two existing ready admins and independent Document/Registry versions, the next Join exposes grant rather than Done; the new third device then becomes management-ready without reusing the deleted local identity."
+      ],
+      "negativeChecks": [
+        "CLI receiver substitution, forged identity facts, direct state injection, hidden/no-op grant actions, early root send, extra confirmation, or a receiver left as member prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:active_join_grant_visible",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:device_list_grant_confirmed",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:single_root_presence",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:receiver_app_management_ready",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:both_apps_ready_admins",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_after_registry_only_promotion",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_grant_visible_without_done",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:third_device_management_ready"
+        ],
+        "exactOracleAssertions": [
+          [
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:active_join_grant_visible"
+          ],
+          [
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:device_list_grant_confirmed",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:single_root_presence"
+          ],
+          [
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:receiver_app_management_ready",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:both_apps_ready_admins"
+          ],
+          [
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_after_registry_only_promotion",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_grant_visible_without_done",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:third_device_management_ready"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:active_join_grant_visible",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:device_list_grant_confirmed",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:single_root_presence",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:receiver_app_management_ready",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:both_apps_ready_admins",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_after_registry_only_promotion",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_grant_visible_without_done",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:third_device_management_ready"
           ]
         ]
       }

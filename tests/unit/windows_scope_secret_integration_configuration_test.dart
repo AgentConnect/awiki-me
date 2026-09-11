@@ -34,7 +34,8 @@ void main() {
     expect(probe, contains('Platform.isWindows'));
     expect(probe, contains('!kReleaseMode'));
     expect(probe, contains('main(List<String> arguments)'));
-    expect(probe, contains('fromEnvironment(widget.arguments)'));
+    expect(probe, contains('fromArguments(widget.arguments)'));
+    expect(probe, isNot(contains('String.fromEnvironment')));
     expect(probe, isNot(contains('Platform.executableArguments')));
     expect(probe, contains('PlatformScopeSecretRepository.forCurrentBuild()'));
     expect(probe, contains("'ai.awiki.awikime.scope-secrets'"));

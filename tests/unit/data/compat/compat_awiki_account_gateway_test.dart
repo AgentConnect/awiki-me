@@ -148,6 +148,9 @@ class _FakeSessions
   Future<void> logout() async {}
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
     deletedIdentities.add(identityIdOrAlias);
     return _defaultSession ?? _session(identityIdOrAlias);
@@ -155,6 +158,11 @@ class _FakeSessions
 
   @override
   Future<AppSession?> refreshSession() async => _defaultSession;
+
+  @override
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation() async =>
+      _defaultSession ??
+      (throw StateError('identity_binding_refresh_unavailable'));
 
   @override
   Future<AppSession?> restoreSession() async => _defaultSession;

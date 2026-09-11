@@ -2,12 +2,40 @@
 
 The App-pair harness is the reusable Linux/Xvfb and macOS E2E boundary for
 scenarios that need two independently runnable AWiki Me processes on one
-computer. It exposes focused member-Join, functional, and content-sync suites:
+computer. It exposes focused member-Join, functional, content-sync, and paged
+recovery suites:
 
-- `multi-device-app-pair`: security acceptance for `DEVICE-JOIN-E2E-004`,
-  including one real macOS LocalAuthentication decision;
+- `multi-device-app-pair` (also `multi-device-app-pair-later-admin-grant`):
+  real two-App Join (`DEVICE-JOIN-E2E-004`), management grant
+  (`ROOT-TRANSFER-APP-PAIR-E2E-001`), and local deletion/re-Join entry
+  (`DEVICE-JOIN-E2E-005`). The unattended run uses the test-only user-presence
+  port; it does not attest physical macOS LocalAuthentication;
 - `multi-device-app-pair-functional`: unattended functional acceptance for
-  cross-device Agent inventory and Direct-message convergence.
+  cross-device Agent inventory and Direct-message convergence;
+- `multi-device-app-pair-content-sync`: one Join plus Group, attachment, and
+  read-state convergence;
+- `multi-device-app-pair-paging-recovery`: one Join plus one exact-device
+  `messages_501` Schema 3 recovery case.
+
+The management-grant case observes the grant entry immediately after approval,
+previews it without sending, navigates through the UI to Devices, and completes
+one explicit root-transfer confirmation there. The receiving endpoint is a
+second App, never a CLI. Both fresh Registry reads must eventually show exactly
+two active, management-ready admins without either App losing its session.
+The read-only completion observer tolerates only the exact missing-Bearer error
+or the exact DID-WBA signing/provider-generation conflict while the receiver's
+asynchronous root import converges, within a two-minute bound. Every public
+Registry read opens a fresh identity client; it does not refresh auth, inject
+state, repeat a Root transfer, or initiate synchronization.
+Other errors and final readiness failures remain failures.
+
+The same case then deletes only the joining App's local credential and completes
+another real Join from its fresh form. The server still has two ready admins;
+the original admin must approve the distinct third device, expose management
+grant instead of Done, and successfully grant Root again. Both App views must
+converge to three ready-admin Registry rows. The coordinator clears the first
+SAS round before new submissions; opening the fresh form alone cannot pass this
+checkpoint regression.
 
 ## Isolation model
 
@@ -16,22 +44,30 @@ The two roles are product processes, not two widget trees in one test process:
 | Boundary | Admin App | Joining App |
 | --- | --- | --- |
 | Artifact identity | macOS bundle ID or Linux manifest role `admin` | macOS bundle ID or Linux manifest role `joiner` |
-| Flutter build directory | macOS stable role cache; Linux standard shared build cache used sequentially | macOS separate stable role cache; Linux standard shared build cache used sequentially |
-| App bundle | `AWikiMe-admin.app` or `AWikiMe-admin-linux/` | `AWikiMe-joiner.app` or `AWikiMe-joiner-linux/` |
+| Compiled artifact | compile-keyed `admin` bundle | compile-keyed `joiner` bundle |
+| Immutable cache | `.e2e/build-cache/v2/<platform>/<arch>/<compile-key>/` | same store, distinct role compile key |
 | App/native Core state | fresh admin Storage Scope | fresh joiner Storage Scope |
 | Simulated desktop | Linux-only isolated Xvfb display | Linux-only separate Xvfb display |
 | Flutter driver | attaches to the admin VM service | attaches to the joiner VM service |
 
-The runner builds the roles sequentially, launches both bundles directly on
+Prepare builds the two role artifacts once. Required execution imports and
+verifies them, launches both bundles directly on
 macOS or under separate Xvfb displays on Linux, then attaches two
-`flutter drive --use-existing-app` processes concurrently. Stable per-role
-macOS build roots and the sequential Linux build preserve role-specific Dart
-defines before each artifact is copied; the two runtime artifacts and state
-roots remain separate. Build roots may reuse only compiler intermediates;
+`flutter drive --use-existing-app --no-build` processes concurrently. The
+role is a compile-time input, while Functional, Content Sync and Paging fixture
+differences stay runtime inputs and reuse the same pair. The two runtime state
+roots remain separate. The immutable store contains no run identity;
 per-run state roots and E2E scope-secret repositories prevent either role from
 reusing another run's product data or credential material.
 The Linux GTK runner is explicitly non-unique, so both processes may coexist
 even though Linux does not use the macOS bundle-ID mechanism.
+
+Each driver preserves the parent HTTP/HTTPS proxy settings and effective
+`no_proxy` exclusions, then adds `localhost`, `127.0.0.1` and `::1` to its own
+`NO_PROXY`/`no_proxy`. Dart's lowercase precedence is retained. VM Service HTTP
+and WebSocket traffic stays local even when external requests use a proxy;
+locale and per-role Flutter settings remain isolated. This does not alter the
+parent shell or the App/backend proxy configuration.
 
 ## Coordination boundary
 
@@ -65,25 +101,18 @@ before surfacing that bounded diagnostic.
 
 ## Reusable builder
 
-`tool/build_isolated_e2e_app.dart` is the generic build boundary. It accepts an
-`integration_test/*_test.dart` target, isolated state/work/artifact roots, a
-platform, an App identity, and repeated Dart defines. It makes a Debug macOS or
-Linux build with `--no-pub`; each work root owns its Flutter XDG settings.
-The App-pair runner keeps one stable work root per role under
-`.e2e/build-cache/multi-device-app-pair/`. macOS keeps separate role build
-directories. Linux uses Flutter's standard `build/linux` directory
-sequentially because Linux native build hooks resolve compiler configuration
-from that location, then copies each completed role bundle to its isolated
-artifact directory before building the next role. Only the fixed E2E gate and
-role are compile-time inputs. Run config, attestation paths, scenario IDs, and
-run IDs are supplied to the launched processes, so a new run does not
-invalidate the role build. Runtime state, E2E credential storage, and copied
-App artifacts remain per-run, and the Admin and Joiner retain distinct
-identities. All three roots must be non-overlapping descendants of the
-repository so the cleanup boundary remains auditable. macOS still requires the
-signed x86_64 Debug bundle; Linux does not claim macOS signing or
-LocalAuthentication evidence. The output is one JSON artifact manifest
-containing the copied App and executable paths.
+`tool/isolated_e2e_app_builder.dart` is the generic build boundary, and
+`tool/prepare_e2e_app_artifacts.dart` prepares the product-owned specs from
+`tests/e2e/app_artifact_specs.json`. The compile key includes the selected
+integration target's transitive Dart source graph, product sources/assets,
+platform files, sorted compile defines, native Core and host/toolchain inputs;
+artifact names and run-time values do not create extra builds. Run config,
+coordinator fixtures, attestation paths, scenario IDs, OTP and run IDs are
+supplied only to launched processes. Required import recomputes the key and
+complete bundle digest before launch and fails closed instead of invoking the
+builder. The Admin and Joiner retain distinct runtime identities and state.
+macOS native evidence remains platform-specific; Linux does not claim signing,
+Keychain or LocalAuthentication attestation.
 
 The App-pair runner is the supported caller today. Future E2E modes may reuse
 the builder, but must define their own orchestration, isolation oracle, secret
@@ -163,8 +192,22 @@ normal lifecycle and request bus. This prevents a realtime hint or the periodic
 foreground reconcile from consuming the one-shot fixture before the asserted
 request without changing production scheduling or weakening the remote
 protocol assertions.
-The Stage-3 retention-gap action follows the same reviewed boundary. It runs
-only through the fixed `ssh ali -- sudo -n /usr/bin/env ...` command, executes
+The Stage-3 retention-gap action follows the same reviewed boundary. External
+hosts use the fixed `ssh ali -- sudo -n /usr/bin/env ...` command; the Linux
+service host may use the reviewed local equivalent. The cross-repo App runner
+automatically selects the reviewed SSH profile on macOS. External Linux hosts
+select `--app-operator-mode ali`; an explicit local mode requires Linux and
+passes the same-host readiness checks. Both Recovery and Account State use the
+same selected profile; the global target manifest is not rewritten.
+
+Before building or launching Apps, real operator-dependent runs check the
+interpreter, script/config paths and exact sudo command permission on the
+selected host. SSH checks are non-interactive and time-bounded. File tests and
+`sudo -n -l -- <approved command>` are read-only; they do not execute `--apply`.
+Prepare-only and dry-run modes do not perform these remote probes.
+Operator nonzero exits are reported before JSON parsing, using the exit code
+and a closed stderr category without raw secret-bearing output. A zero exit
+still requires the exact closed receipt. The operator executes
 the immutable `/opt/awiki/services/message-service/current` helper with
 `--apply`, pins the reviewed Ali `/usr/bin/python3.11` stdlib runtime, and reads
 only the root-owned, service-group-readable, non-group-writable
@@ -175,6 +218,9 @@ protocol device and resolves exactly one account; the managed User operator
 then authorizes that account through the active Handle test-phone binding and
 confirms the same active device. Message Service revalidates the mapping,
 requires the replica to be bootstrapped, and updates exactly one active stream.
+The paging-recovery alias permits only the closed `messages_501` action; the
+operator receipt is preparation evidence, while the product oracle remains the
+App/Core committed projection and typed outcome.
 The App runner supplies neither an account ID nor a dynamic account allowlist.
 Its closed receipt is fault-injection evidence only, never a message/recovery
 oracle.
@@ -183,6 +229,13 @@ disables the Direct E2EE gate as an additional test guard. Its ordinary Direct
 texts therefore use P3 Base on every participant; the test
 fails if multi-device synchronization silently creates a P5 session or upgrades
 the message security level.
+
+The independent peer registration must create a distinct DID even when both
+fixtures use the same protected test phone. CLI registration failures carry the
+secret-free `cli_ready_admin_registration` action label. Concurrent managed
+cleanup versus registration is covered by the System Test
+`test_account_cleanup_preserves_concurrent_same_phone_registration`; deterministic
+MySQL lock ordering is covered by the User Service isolated-database test.
 
 The functional suite proves:
 
@@ -284,3 +337,44 @@ and `DEVICE-AGENT-SYNC-E2E-001`; both isolated Debug Apps completed in
 8 minutes 43 seconds. This is the first recorded App↔App acceptance proving a
 prompt sent through the joining App's visible runtime-Agent composer converges
 to the admin App.
+
+### Delete confirmation readiness
+
+The joined-device deletion flow waits for the local recovery-impact query and an
+enabled `local-credential-delete-confirm:<selector>` button before clicking once.
+A visible confirmation dialog or label is insufficient: the destructive action
+is disabled while that query is pending or failed. Query failures and readiness
+timeouts are reported before the existing onboarding/session/cleanup assertions;
+the test does not bypass the product's deletion check.
+
+### App-pair Message cleanup
+
+The functional and paging-recovery suites retain the freshly registered admin
+and CLI peer account IDs in the authenticated loopback coordinator. Each slot is
+immutable. Selectors never enter argv, logs or public reports. The default
+`appmd` prefix is required by the User operator's fresh-test Handle fence.
+
+A selector-free read-only cleanup preflight runs before either App is built.
+After both App processes close, the runner sends at most two registered account
+IDs on stdin using `cleanup_test_app_scope`. User Service first checks the
+Controller's active test-phone binding, one fresh `appmd` Handle (24-hour window),
+and every real Agent's inventory, DID/User and consumed registration-token owner
+links. Retired Agent identities remain eligible only with those ownership links.
+Inventory-only fixtures with neither DID documents nor registration tokens add
+no Message account and remain User residuals. The separate Recovery operator
+contract is unchanged. Message authorizes the whole bounded Controller/Agent
+union before the existing transactional SQL; unrelated-account references still
+cause rollback. A matching scope fingerprint, closed domain counts and a
+zero-residual receipt are required.
+
+The runner writes a mode-0600 `cleanup_scope.private.json` before cleanup and
+removes it after a verified receipt. Failure retains this ignored, private retry
+checkpoint and still completes local teardown; an otherwise successful suite
+fails its cleanup gate. The public `messageCleanup` record contains only the
+fingerprint and counts. Build failures before App launch report no remote side
+effects.
+
+User accounts, Handles and User-owned inventory remain explicit residuals; this
+is not a User-account deletion API. Historical ledgers without exact account
+selectors cannot authorize deletion, and scope is never inferred from shared
+phone numbers or name-prefix scans.

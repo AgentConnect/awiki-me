@@ -206,6 +206,12 @@ runner. `ROOT-TRANSFER-E2E-002` and `MLS-MULTI-DEVICE-E2E-001` remain planned.
 `step4-revoke-mls`; their scenario-owned attestations, not catalog text, are
 required remote pass evidence.
 
+`--case multi-device-app-pair-later-admin-grant` selects the real two-App
+`multi-device-app-pair` flow, including `ROOT-TRANSFER-APP-PAIR-E2E-001`.
+Both endpoints are isolated Apps: ordinary Join must expose the grant step,
+Devices must open the confirmation, and the receiving App must become a ready
+administrator. `root-transfer` remains the distinct App + CLI suite.
+
 `--case multi-device-app-pair-content-sync` is the focused two-App content
 entry. It reuses one real member Join and one independent CLI peer to attest
 pre-Join Group/attachment absence (ordinary Direct reuses its existing focused
@@ -214,6 +220,15 @@ digest, and isolated Direct/Group `0 -> 1 -> 0` unread convergence. It does not
 run Agent, Profile, Recovery, Registry, or MLS flows.
 On Linux, both product Apps and their existing-App drivers run in isolated
 Xvfb displays; Linux execution is a real remote E2E run, not a macOS dry-run.
+
+`--case multi-device-app-pair-paging-recovery` is the single-case Schema 3
+paging entry. It reuses the same real member Join and audited CLI peer, commits
+one ordinary baseline, takes only the joining App offline, prepares the closed
+`messages_501` exact-device fixture, and resumes through the normal App
+lifecycle. Pass requires the old projection to remain exact-once, no capacity
+or bounded-history outcome, one fresh post-recovery Direct projection, and
+secret-free diagnostics. It does not run the functional Agent/Account State
+matrix or the content Group/attachment matrix.
 
 `--case personal-agent` is the durable acceptance entry for Personal Agent
 product behavior. It is a fail-fast real-backend gate: local YAML must provide

@@ -174,11 +174,24 @@ class RemotePushMessageSyncCoordinator {
     try {
       receipt = await _sync.requestRemotePushSync(
         presentation: _presentationDisposition(batch),
+        messageReferences: _ordinaryMessageReferences(batch),
       );
     } on Object {
       return;
     }
     if (!_isCurrent(context) || !receipt.canAcknowledge) return;
+    final references = _ordinaryMessageReferences(batch);
+    if (!references.every(
+      (reference) =>
+          receipt.committedIncomingMessages.any(
+            (message) => _matchesCommittedMessage(reference, message),
+          ) ||
+          receipt.recoveredIncomingMessages.any(
+            (message) => message.opaqueMessageReferences.contains(reference),
+          ),
+    )) {
+      return;
+    }
 
     final openedEvent = _lastOpenedEvent(batch);
     if (openedEvent != null) {
@@ -244,6 +257,21 @@ class RemotePushMessageSyncCoordinator {
     return null;
   }
 
+  Set<String> _ordinaryMessageReferences(List<RemotePushEvent> batch) {
+    final references = <String>{};
+    for (final event in batch) {
+      final extra = event.payload['extraMap'];
+      if (extra is! Map || !_ordinaryMessageTypes.contains(extra['ty'])) {
+        continue;
+      }
+      final reference = extra['mid'];
+      if (reference is String && _opaqueMessagePattern.hasMatch(reference)) {
+        references.add(reference);
+      }
+    }
+    return references;
+  }
+
   RemotePushPresentationDisposition _presentationDisposition(
     List<RemotePushEvent> batch,
   ) {
@@ -265,6 +293,17 @@ class RemotePushMessageSyncCoordinator {
     for (final committed in receipt.committedIncomingMessages) {
       if (!_matchesCommittedMessage(opaqueReference, committed)) continue;
       final conversationId = committed.message.conversationId;
+      if (conversationId != null &&
+          conversationId.isNotEmpty &&
+          conversationId.trim() == conversationId) {
+        return conversationId;
+      }
+    }
+    for (final recovered in receipt.recoveredIncomingMessages) {
+      if (!recovered.opaqueMessageReferences.contains(opaqueReference)) {
+        continue;
+      }
+      final conversationId = recovered.message.conversationId;
       if (conversationId != null &&
           conversationId.isNotEmpty &&
           conversationId.trim() == conversationId) {
@@ -296,6 +335,9 @@ class RemotePushMessageSyncCoordinator {
     String opaqueReference,
     CommittedIncomingMessage committed,
   ) {
+    if (committed.opaqueMessageReferences.contains(opaqueReference)) {
+      return true;
+    }
     final messageIds = <String?>[
       committed.logicalMessageId,
       committed.message.remoteId,

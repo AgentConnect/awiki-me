@@ -14,16 +14,21 @@ import 'widgets/app_widgets.dart';
 
 /// Opens the complete tenant-management surface using the app's adaptive
 /// dialog route on both compact and expanded layouts.
-Future<void> showTenantManagementDialog(BuildContext context) async {
+Future<void> showTenantManagementDialog(
+  BuildContext context, {
+  bool switchOnly = false,
+}) async {
   await AppNavigator.showDialog<void>(
     context,
-    (_) => const TenantManagementDialog(),
+    (_) => TenantManagementDialog(switchOnly: switchOnly),
   );
 }
 
 /// Shared tenant-management UI used before and after authentication.
 class TenantManagementDialog extends ConsumerStatefulWidget {
-  const TenantManagementDialog({super.key});
+  const TenantManagementDialog({super.key, this.switchOnly = false});
+
+  final bool switchOnly;
 
   @override
   ConsumerState<TenantManagementDialog> createState() =>
@@ -95,11 +100,13 @@ class _TenantManagementDialogState
                   active: tenant.id == activeTenant.id,
                   busy: _busyTenantIds.contains(tenant.id),
                   onUse: () => _useTenant(tenant),
-                  onEdit: tenant.isPrimaryTenant
+                  onEdit: widget.switchOnly || tenant.isPrimaryTenant
                       ? null
                       : () => _openForm(tenant: tenant),
                   onDelete:
-                      tenant.isPrimaryTenant || tenant.id == activeTenant.id
+                      widget.switchOnly ||
+                          tenant.isPrimaryTenant ||
+                          tenant.id == activeTenant.id
                       ? null
                       : () => _deleteTenant(tenant),
                 );
@@ -119,37 +126,19 @@ class _TenantManagementDialogState
                 danger: true,
               ),
             ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              responsive.spacing(18),
-              responsive.spacing(4),
-              responsive.spacing(18),
-              responsive.spacing(18),
-            ),
-            child: responsive.isCompact
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      Text(
-                        context.l10n.tenantPrimaryAgentNote,
-                        style: TextStyle(
-                          color: theme.secondaryText,
-                          fontSize: responsive.metaSm,
-                          height: 1.3,
-                        ),
-                      ),
-                      SizedBox(height: responsive.spacing(12)),
-                      AppPrimaryButton(
-                        key: const Key('tenant-management-create-button'),
-                        label: context.l10n.tenantCreate,
-                        onPressed: () => _openForm(),
-                      ),
-                    ],
-                  )
-                : Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
+          if (!widget.switchOnly)
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                responsive.spacing(18),
+                responsive.spacing(4),
+                responsive.spacing(18),
+                responsive.spacing(18),
+              ),
+              child: responsive.isCompact
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        Text(
                           context.l10n.tenantPrimaryAgentNote,
                           style: TextStyle(
                             color: theme.secondaryText,
@@ -157,19 +146,38 @@ class _TenantManagementDialogState
                             height: 1.3,
                           ),
                         ),
-                      ),
-                      SizedBox(width: responsive.spacing(14)),
-                      SizedBox(
-                        width: responsive.displayScaled(152),
-                        child: AppPrimaryButton(
+                        SizedBox(height: responsive.spacing(12)),
+                        AppPrimaryButton(
                           key: const Key('tenant-management-create-button'),
                           label: context.l10n.tenantCreate,
                           onPressed: () => _openForm(),
                         ),
-                      ),
-                    ],
-                  ),
-          ),
+                      ],
+                    )
+                  : Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            context.l10n.tenantPrimaryAgentNote,
+                            style: TextStyle(
+                              color: theme.secondaryText,
+                              fontSize: responsive.metaSm,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: responsive.spacing(14)),
+                        SizedBox(
+                          width: responsive.displayScaled(152),
+                          child: AppPrimaryButton(
+                            key: const Key('tenant-management-create-button'),
+                            label: context.l10n.tenantCreate,
+                            onPressed: () => _openForm(),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
         ],
       ),
     );
@@ -326,7 +334,7 @@ class _TenantListTile extends StatelessWidget {
                   ],
                 ],
               ),
-              if (tenant.isPrimaryTenant) ...<Widget>[
+              if (tenant.isOfficialTenant) ...<Widget>[
                 SizedBox(height: responsive.spacing(4)),
                 _TenantManagedLabel(
                   key: Key('tenant-primary-managed:${tenant.id}'),

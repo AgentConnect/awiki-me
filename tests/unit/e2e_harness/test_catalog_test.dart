@@ -6,19 +6,78 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/test_catalog.dart';
 
 void main() {
+  test('Recovery continuation retains existing and new exact UI attestations', () {
+    final catalog = AppTestCatalog.load(Directory.current);
+    final contract = catalog
+        .caseById['HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001']!
+        .assertionContract!;
+    expect(
+      contract.assertionIds,
+      containsAll(<String>[
+        'HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:local_continuation_without_login_otp',
+        'HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:committed_reentry_hides_factor_and_first_commit',
+        'HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:registration_redirected_to_exact_recovery',
+        'HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001:recovered_session_entered_messages',
+      ]),
+    );
+    final source = File(
+      'tests/e2e/flutter/app/handle_recovery_state_machine_test.part.dart',
+    ).readAsStringSync();
+    final tap = source.substring(
+      source.indexOf('Future<void> _smTap('),
+      source.indexOf('Future<void> _smOpenSettingsRecovery('),
+    );
+    expect(tap, contains('finder.hitTestable().evaluate().length == 1'));
+    expect(tap, contains('await _tapOne('));
+    expect(tap, isNot(contains('onPressed')));
+  });
+
+  test('root-transfer retains retry and full completion attestations', () {
+    final catalog = AppTestCatalog.load(Directory.current);
+    expect(
+      catalog
+          .caseById['ROOT-TRANSFER-E2E-001']!
+          .assertionContract!
+          .assertionIds,
+      containsAll(<String>[
+        'ROOT-TRANSFER-E2E-001:active_join_missing_prekey_retryable',
+        'ROOT-TRANSFER-E2E-001:active_join_retry_requires_fresh_confirmation',
+        'ROOT-TRANSFER-E2E-001:receiver_completion_ready',
+      ]),
+    );
+  });
+
   test(
     'checked-in catalog matches every audited suite case and implementation',
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(118));
+      final manifest =
+          jsonDecode(File(appSuiteManifestPath).readAsStringSync())
+              as Map<String, dynamic>;
+      final suites = manifest['suites'] as Map<String, dynamic>;
+      final activeManifestCaseIds = suites.values
+          .expand((suite) => (suite as Map<String, dynamic>)['caseIds'] as List)
+          .cast<String>()
+          .where((id) => catalog.caseById[id]?.catalogStatus == 'active')
+          .toSet();
+      expect(
+        catalog.cases
+            .where((entry) => entry.catalogStatus == 'active')
+            .map((entry) => entry.caseId),
+        unorderedEquals(activeManifestCaseIds),
+      );
+      expect(catalog.cases, hasLength(catalog.caseById.length));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
+          'APP-UPDATE-SMOKE-E2E-001',
           'ROOT-TRANSFER-E2E-001',
+          'ROOT-TRANSFER-APP-PAIR-E2E-001',
           'ROOT-TRANSFER-E2E-002',
           'DEVICE-JOIN-E2E-001',
           'DEVICE-JOIN-E2E-002',
+          'DEVICE-JOIN-E2E-006',
           'DEVICE-JOIN-MESSAGE-CORE-E2E-001',
           'DEVICE-JOIN-E2E-004',
           'DEVICE-AGENT-SYNC-E2E-001',
@@ -35,10 +94,14 @@ void main() {
           'MLS-MULTI-DEVICE-E2E-001',
           'MLS-MULTI-DEVICE-E2E-002',
           'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
+          'HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001',
+          'HANDLE-RECOVERY-STATE-MACHINE-RESUME-E2E-001',
+          'HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001',
           'HANDLE-RECOVERY-V1-E2E-001',
           'HANDLE-RECOVERY-V1-E2E-002',
           'HANDLE-RECOVERY-V1-E2E-003',
           'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
+          'HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001',
           'IDENTITY-DELETE-E2E-001',
           'ANDROID-DEVICE-JOIN-E2E-001',
           'IOS-DEVICE-JOIN-E2E-001',
@@ -57,9 +120,11 @@ void main() {
           'multi-device-remote-recovery',
           'multi-device-remote-recovery-fresh',
           'handle-recovery-local-data',
+          'multi-device-app-pair-recovery-retirement-ordinary-rejoin',
           'multi-device-app-pair',
           'multi-device-app-pair-functional',
           'step4-revoke-mls',
+          'root-transfer',
           'full',
           'direct',
           'identity-switch',
@@ -79,6 +144,7 @@ void main() {
       expect(catalog.suiteCaseIds['multi-device-remote-join'], <String>[
         'DEVICE-JOIN-E2E-001',
         'DEVICE-JOIN-E2E-002',
+        'DEVICE-JOIN-E2E-006',
         'DEVICE-JOIN-MESSAGE-CORE-E2E-001',
       ]);
       expect(catalog.suiteCaseIds['multi-device-remote-recovery'], <String>[
@@ -89,6 +155,11 @@ void main() {
       expect(catalog.suiteCaseIds['handle-recovery-local-data'], <String>[
         'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001',
       ]);
+      expect(
+        catalog
+            .suiteCaseIds['multi-device-app-pair-recovery-retirement-ordinary-rejoin'],
+        <String>['HANDLE-RECOVERY-RETIREMENT-ORDINARY-REJOIN-E2E-001'],
+      );
       expect(
         catalog.suiteCaseIds['multi-device-remote-recovery-fresh'],
         <String>[
@@ -103,6 +174,7 @@ void main() {
       expect(catalog.suiteCaseIds['multi-device-app-pair'], <String>[
         'DEVICE-JOIN-E2E-004',
         'DEVICE-JOIN-E2E-005',
+        'ROOT-TRANSFER-APP-PAIR-E2E-001',
       ]);
       expect(catalog.suiteCaseIds['multi-device-app-pair-functional'], <String>[
         'DEVICE-AGENT-SYNC-E2E-001',
@@ -128,6 +200,9 @@ void main() {
         'DEVICE-MESSAGE-GENERATION-FENCE-E2E-001',
       ]);
       expect(catalog.suiteCaseIds['full'], contains('ROOT-TRANSFER-E2E-001'));
+      expect(catalog.suiteCaseIds['root-transfer'], <String>[
+        'ROOT-TRANSFER-E2E-001',
+      ]);
       expect(catalog.suiteCaseIds['step4-revoke-mls'], <String>[
         'STEP4-GROUP-PAGINATION-E2E-001',
         'DEVICE-REVOKE-E2E-001',
@@ -200,42 +275,16 @@ void main() {
     expect(source, contains('have been deleted'));
   });
 
-  test('every active conversation-correctness case has claim mapping', () {
+  test('every active case has a machine-checkable claim mapping', () {
     final catalog = AppTestCatalog.load(Directory.current);
-    const caseIds = <String>{
-      'CONTACT-E2E-001',
-      'CONTACT-E2E-002',
-      'CONTACT-FIRST-CONV-E2E-001',
-      'CONTACT-MSG-E2E-001',
-      'CONTACT-REG-001',
-      'CONV-CANON-E2E-001',
-      'CONV-LIST-E2E-001',
-      'DISPLAY-NAME-E2E-001',
-      'DISPLAY-NAME-E2E-002',
-      'DISPLAY-NAME-E2E-004',
-      'DISPLAY-NAME-REG-001',
-      'GROUP-CANON-E2E-001',
-      'GROUP-E2E-001',
-      'GROUP-E2E-002',
-      'GROUP-P9-001',
-      'GROUP-P9-002',
-      'GROUP-REG-001',
-      'INBOUND-FIRST-CONV-E2E-001',
-      'MSG-E2E-001',
-      'MSG-E2E-002',
-      'MSG-REG-001',
-      'MSG-SEQUENCE-E2E-001',
-      'PROCESS-RESTART-E2E-001',
-      'UNREAD-MULTI-E2E-001',
-    };
-
-    for (final caseId in caseIds) {
-      final catalogCase = catalog.caseById[caseId];
-      expect(catalogCase, isNotNull, reason: '$caseId must remain cataloged');
+    for (final catalogCase in catalog.cases.where(
+      (value) => value.catalogStatus == 'active',
+    )) {
       expect(
-        catalogCase!.assertionContract,
+        catalogCase.assertionContract,
         isNotNull,
-        reason: '$caseId must map every claim to executable evidence',
+        reason:
+            '${catalogCase.caseId} must map every claim to executable evidence',
       );
     }
   });
@@ -471,9 +520,12 @@ Future<Directory> _temporaryCatalogRoot() async {
   File('${e2e.path}/suite_manifest.json').writeAsStringSync(
     jsonEncode(<String, Object?>{
       'schemaVersion': 1,
+      'sourceRevision': 'unit-test',
       'suites': <String, Object?>{
         'focused': <String, Object?>{
-          'tier': 'product_ui',
+          'tier': 'remote_product_ui',
+          'supportedPlatforms': <String>['macos', 'linux'],
+          'requiredTools': <String>['flutter', 'awiki-cli'],
           'requiredFor': <String>['release'],
           'owner': 'owner-a',
           'cleanupPolicy': 'none',
@@ -501,7 +553,7 @@ Future<void> complete() {
           'caseId': 'CASE-001',
           'catalogStatus': 'active',
           'feature': 'Feature',
-          'layer': 'product_ui',
+          'layer': 'remote_product_ui',
           'preconditions': 'A precondition.',
           'action': 'Perform an action.',
           'exactOracles': <String>['Exactly one result.'],

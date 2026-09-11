@@ -15,7 +15,6 @@ import '../shared/app_dialog.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
-import '../app_shell/providers/session_provider.dart';
 import 'group_chat_navigation.dart';
 import 'group_provider.dart';
 
@@ -90,7 +89,7 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
             goal: '',
             rules: '',
             messagePrompt: '',
-            identity: _identitySelection(),
+            identity: const GroupIdentitySelection.didOnly(),
           );
       await ref.read(groupProvider.notifier).loadGroupMembers(group.groupId);
       if (!mounted) {
@@ -108,15 +107,6 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
   }
 
   String _generatedSlug() => 'slug_${DateTime.now().millisecondsSinceEpoch}';
-
-  String? get _activeHandle {
-    final session = ref.read(sessionProvider).session;
-    return groupHandleForDid(handle: session?.handle, did: session?.did ?? '');
-  }
-
-  GroupIdentitySelection _identitySelection() {
-    return GroupIdentitySelection.handle(_activeHandle ?? '');
-  }
 
   @override
   Widget build(BuildContext context) {

@@ -11,7 +11,6 @@ import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/application/realtime_application_service.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
-import 'package:awiki_me/src/data/im_core/pending_im_core_group_mutation_adapter.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
@@ -98,12 +97,12 @@ void main() {
         goal: 'goal',
         rules: 'rules',
         identity: GroupIdentitySelection.handle('alice.example.com'),
+        secureRequired: true,
       );
       await service.joinGroup(
         'did:group',
         identity: GroupIdentitySelection.handle('alice.example.com'),
       );
-      final recovery = await service.resumeRebindRecovery(limit: 25);
       await service.listGroups(limit: 10);
       await service.addMember(
         groupDid: 'did:group',
@@ -118,17 +117,10 @@ void main() {
         'handle/alice.example.com',
         'handle/alice.example.com',
       ]);
-      expect(groups.recoveryLimit, 25);
-      expect(recovery.pending, 1);
+      expect(groups.secureRequirements, [isTrue]);
       expect(groups.listLimit, 10);
       expect(groups.addedMembers, ['did:group/alice.awiki.ai/admin']);
       expect(groups.removedMembers, ['did:group/did:alice']);
-
-      const pending = PendingImCoreGroupMutationAdapter();
-      expect(
-        () => pending.addMember(groupDid: 'did:group', memberRef: 'did:bob'),
-        throwsA(isA<UnsupportedError>()),
-      );
     },
   );
 
@@ -198,6 +190,9 @@ class _FakeDirectory implements DirectoryCorePort {
   final List<List<String>> cachedProfileRequests = <List<String>>[];
 
   @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(Iterable<String> dids, {bool force = false}) async => const <PeerDisplayProfile>[];
+
+  @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
   ) async {
@@ -223,8 +218,8 @@ class _FakeGroups implements GroupCorePort {
   final List<String> addedMembers = <String>[];
   final List<String> removedMembers = <String>[];
   int? listLimit;
-  int? recoveryLimit;
   final List<String> identities = <String>[];
+  final List<bool> secureRequirements = <bool>[];
 
   @override
   Future<GroupSummary> createGroup({
@@ -235,9 +230,11 @@ class _FakeGroups implements GroupCorePort {
     required String rules,
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+    bool secureRequired = false,
   }) async {
     createdNames.add(name);
     identities.add('${identity.mode.name}/${identity.handle ?? ''}');
+    secureRequirements.add(secureRequired);
     return _group();
   }
 
@@ -261,19 +258,6 @@ class _FakeGroups implements GroupCorePort {
   }) async {
     identities.add('${identity.mode.name}/${identity.handle ?? ''}');
     return _group();
-  }
-
-  @override
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({
-    int limit = 100,
-  }) async {
-    recoveryLimit = limit;
-    return const GroupRebindRecoverySummary(
-      processed: 1,
-      completed: 0,
-      pending: 1,
-      blocked: 0,
-    );
   }
 
   @override

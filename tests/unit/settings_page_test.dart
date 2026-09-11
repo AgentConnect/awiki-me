@@ -2,6 +2,7 @@ import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/desktop_window_placement_service.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -23,6 +24,7 @@ import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'app_update_provider_test.dart' show buildManifest;
 import 'test_support.dart';
 
 void main() {
@@ -440,6 +442,7 @@ void main() {
 
   testWidgets('设置页退出并删除当前数据会删除本地凭证而不显示未实现错误', (tester) async {
     final gateway = FakeAwikiGateway();
+    final productLocalStore = FakeProductLocalStore();
     const session = SessionIdentity(
       did: 'did:test:123',
       credentialName: 'default',
@@ -455,6 +458,9 @@ void main() {
         home: const SettingsPage(),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          productLocalStoreProvider.overrideWithValue(productLocalStore),
+        ],
       ),
     );
 
@@ -473,6 +479,9 @@ void main() {
       find.textContaining('删除的本地历史消息和端到端加密密钥不能通过恢复或加入设备找回'),
       findsOneWidget,
     );
+    expect(gateway.prepareLocalIdentityDataDeletionCalls, 0);
+    expect(gateway.completeLocalIdentityDataDeletionCalls, 0);
+    expect(productLocalStore.deleteOwnerDataCalls, 0);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(SettingsPage)),
@@ -483,6 +492,9 @@ void main() {
 
     expect(gateway.deleteLocalCredentialCalls, 1);
     expect(gateway.deleteLocalIdentityDataCalls, 1);
+    expect(gateway.prepareLocalIdentityDataDeletionCalls, 1);
+    expect(gateway.completeLocalIdentityDataDeletionCalls, 1);
+    expect(productLocalStore.deleteOwnerDataCalls, 1);
     expect(gateway.logoutCalls, 0);
     expect(container.read(uiFeedbackProvider), isNull);
   });
@@ -615,8 +627,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('设置页检查更新调用真实更新服务', (tester) async {
-    final updateService = FakeUpdateService();
+  testWidgets('设置页查询到当前版本时提示已最新', (tester) async {
+    final updateService = FakeUpdateService()
+      ..latestManifest = buildManifest(version: '0.1.0', buildNumber: 1);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -693,6 +706,54 @@ void main() {
 
     expect(actions.useTenantCalls, 1);
     expect(actions.registry.activeTenant.id, custom.id);
+  });
+
+  testWidgets('租户管理同时展示中国与全球官方租户且不提供修改操作', (tester) async {
+    final registry = defaultTenantRegistry(now: DateTime.utc(2026, 7, 1));
+    late StateSetter refresh;
+    final actions = FakeAppTenantActions(initialRegistry: registry)
+      ..onChanged = () => refresh(() {});
+
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) {
+          refresh = setState;
+          return buildLocalizedTestApp(
+            home: const TenantManagementDialog(),
+            providerOverrides: <Override>[
+              appTenantRegistryProvider.overrideWithValue(actions.registry),
+              activeAppTenantProvider.overrideWithValue(
+                actions.registry.activeTenant,
+              ),
+              appTenantActionsProvider.overrideWithValue(actions),
+            ],
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(primaryBuiltinTenantName), findsOneWidget);
+    expect(find.text(secondaryBuiltinTenantName), findsOneWidget);
+    expect(find.text('官方租户'), findsNWidgets(2));
+    for (final tenant in registry.tenants) {
+      final card = find.byKey(Key('settings-tenant-option:${tenant.id}'));
+      expect(
+        find.descendant(
+          of: card,
+          matching: find.byKey(Key('tenant-primary-managed:${tenant.id}')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: card, matching: find.byTooltip('编辑租户')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: card, matching: find.byTooltip('删除')),
+        findsNothing,
+      );
+    }
   });
 
   testWidgets('移动端租户卡片使用扁平操作按钮且无数据租户只锁定 DID Host', (tester) async {
@@ -1231,6 +1292,16 @@ void main() {
               'bootstrap_public_key_b64u':
                   'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
               'bootstrap_key_algorithm': 'x25519',
+              'config_summary': <String, Object?>{
+                'delegated_subkey_proposal': <String, Object?>{
+                  'schema': userSubkeyPackageSchema,
+                  'user_did': 'did:human:me',
+                  'verification_method': 'did:human:me#daemon-key-1',
+                  'key_type': 'Multikey/Ed25519',
+                  'key_algorithm': 'Ed25519',
+                  'public_key_multibase': 'zPublic',
+                },
+              },
             },
           ),
         ),
@@ -1270,7 +1341,7 @@ void main() {
     await tester.tap(find.text('启用个人助理'));
     await tester.pumpAndSettle();
 
-    expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
+    expect(identities.lastAuthorizedDaemonSubkeySelector, 'default');
     expect(control.lastBootstrapDaemonDid, 'did:agent:daemon');
     expect(control.lastBootstrapControllerDid, 'did:human:me');
     expect(
@@ -1324,7 +1395,7 @@ void main() {
     expect(find.text('Personal Agent'), findsNothing);
     expect(find.text('实验功能关闭'), findsNothing);
     expect(find.text('个人助理'), findsNothing);
-    expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+    expect(identities.lastAuthorizedDaemonSubkeySelector, isNull);
     expect(control.lastBootstrapDaemonDid, isNull);
   });
 
@@ -1371,7 +1442,7 @@ void main() {
     await tester.tap(find.text('启用个人助理'));
     await tester.pumpAndSettle();
 
-    expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+    expect(identities.lastAuthorizedDaemonSubkeySelector, isNull);
     expect(control.lastBootstrapDaemonDid, isNull);
   });
 

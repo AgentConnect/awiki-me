@@ -54,6 +54,10 @@ void main() {
           'joinedDeviceId': 'member-device',
         },
       );
+      await admin.publish('admin', 'root_grant_sent');
+      expect(await joiner.waitFor('admin', 'root_grant_sent'), isEmpty);
+      await joiner.publish('joiner', 'management_ready');
+      expect(await admin.waitFor('joiner', 'management_ready'), isEmpty);
       await admin.publish('admin', 'complete');
 
       final results = await Future.wait<bool>(<Future<bool>>[
@@ -61,6 +65,46 @@ void main() {
         joiner.submitAndCompareSas('joiner', '123456'),
       ]);
       expect(results, everyElement(isTrue));
+      const rejoin = <String, Object?>{
+        'joinSessionId': 'join-second',
+        'joinedDeviceId': 'third-device',
+      };
+      await joiner.publish('joiner', 'rejoin_pending', data: rejoin);
+      var compared = false;
+      final nextAdmin = admin
+          .submitAndCompareSas(
+            'admin',
+            '123456',
+            timeout: const Duration(seconds: 3),
+          )
+          .then((value) {
+            compared = true;
+            return value;
+          });
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(
+        compared,
+        isFalse,
+        reason: 'The prior Join SAS must not satisfy re-Join.',
+      );
+      await joiner.publish('joiner', 'rejoin_pending', data: rejoin);
+      expect(
+        await joiner.submitAndCompareSas(
+          'joiner',
+          '123456',
+          timeout: const Duration(seconds: 3),
+        ),
+        isTrue,
+      );
+      expect(
+        await nextAdmin,
+        isTrue,
+        reason: 'A checkpoint replay must not clear the new admin submission.',
+      );
+      await admin.publish('admin', 'rejoin_verification_started');
+      await joiner.publish('joiner', 'rejoin_authorized');
+      await admin.publish('admin', 'rejoin_root_grant_sent');
+      await joiner.publish('joiner', 'rejoin_management_ready');
     },
   );
 
@@ -171,6 +215,19 @@ void main() {
         data: const <String, Object?>{'messageId': 'msg-2'},
       );
       await client.publish('joiner', 'functional_reply_visible');
+      await client.publish(
+        'admin',
+        'functional_group_read_ready',
+        data: const <String, Object?>{'conversationId': 'group-conv-1'},
+      );
+      await client.publish('joiner', 'functional_group_read_observer_ready');
+      await client.publish(
+        'admin',
+        'functional_group_read_message_sent',
+        data: const <String, Object?>{'messageId': 'group-msg-1'},
+      );
+      await client.publish('joiner', 'functional_group_read_committed');
+      await client.publish('admin', 'functional_group_read_converged');
       await client.publish('joiner', 'functional_agent_observer_ready');
 
       await expectLater(
@@ -234,6 +291,58 @@ void main() {
             'attachmentMessageId': 'f1',
             'attachmentId': 'attachment-1',
             'content': 'forbidden',
+          },
+        ),
+        throwsA(isA<AppPairProtocolException>()),
+      );
+    },
+  );
+
+  test(
+    'paging-recovery checkpoints accept only their exact public fields',
+    () async {
+      final server = await AppPairCoordinatorServer.start(
+        token: List<String>.filled(48, 't').join(),
+      );
+      addTearDown(server.close);
+      final client = AppPairCoordinatorClient(
+        endpoint: server.endpoint,
+        token: server.token,
+      );
+
+      await client.publish(
+        'admin',
+        'paging_peer_ready',
+        data: const <String, Object?>{
+          'peerDid': 'did:wba:awiki.info:peer',
+          'conversationId': 'dm:peer-scope:v1:peer',
+        },
+      );
+      await client.publish('joiner', 'paging_joiner_ready');
+      await client.publish(
+        'admin',
+        'paging_baseline_sent',
+        data: const <String, Object?>{'messageId': 'baseline-1'},
+      );
+      await client.publish('joiner', 'paging_baseline_visible');
+      await client.publish('joiner', 'paging_offline_ready');
+      await client.publish('admin', 'paging_fixture_ready');
+      await client.publish('joiner', 'paging_recovery_completed');
+      await client.publish(
+        'admin',
+        'paging_post_recovery_sent',
+        data: const <String, Object?>{'messageId': 'post-recovery-1'},
+      );
+      await client.publish('joiner', 'paging_post_recovery_visible');
+
+      await expectLater(
+        client.publish(
+          'admin',
+          'paging_peer_ready',
+          data: const <String, Object?>{
+            'peerDid': 'did:wba:awiki.info:peer',
+            'conversationId': 'dm:peer-scope:v1:peer',
+            'pageCount': 6,
           },
         ),
         throwsA(isA<AppPairProtocolException>()),
@@ -368,5 +477,23 @@ void main() {
       ),
       'exit=4',
     );
+  });
+
+  test('CLI failure diagnostics classify messages without exposing them', () {
+    const secret = 'root import failed around secret-bearing-value';
+
+    final diagnostic = safeCliFailureDiagnostic(
+      exitCode: 1,
+      stdout: '',
+      stderr:
+          '{"error":{"code":"internal_error",'
+          '"message":"$secret"}}',
+    );
+
+    expect(
+      diagnostic,
+      'exit=1, code=internal_error, messageCategory=root_import',
+    );
+    expect(diagnostic, isNot(contains('secret-bearing-value')));
   });
 }

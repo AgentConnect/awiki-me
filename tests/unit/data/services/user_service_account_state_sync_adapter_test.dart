@@ -221,6 +221,10 @@ class _Sessions with AppSessionTransitionGuard implements AppSessionService {
   Future<AppSession?> refreshSession() async => session;
 
   @override
+  Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation() async =>
+      session;
+
+  @override
   Future<AppSession> activateIdentity(
     AppSession identity, {
     AppSessionTransition? transition,
@@ -238,6 +242,9 @@ class _Sessions with AppSessionTransitionGuard implements AppSessionService {
   @override
   Future<AppSessionLease?> currentSessionLease() async =>
       sessionLeaseFor(session);
+
+  @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) =>

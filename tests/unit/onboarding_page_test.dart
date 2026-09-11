@@ -15,10 +15,12 @@ import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/ports/user_presence_port.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
+import 'package:awiki_me/src/core/app_error_classifier.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
@@ -49,6 +51,23 @@ void _resetTestViewSize(WidgetTester tester) {
   tester.view.resetPhysicalSize();
   tester.view.resetDevicePixelRatio();
 }
+
+const _committedPhoneRegistrationIdentity = SessionIdentity(
+  did: 'did:wba:awiki.me:users:alice:e1_committed',
+  localIdentityId: 'identity-alice',
+  credentialName: 'alice-local',
+  displayName: 'Alice',
+  handle: 'alice.awiki.me',
+  jwtToken: 'registered-token',
+  accountBinding: SessionAccountBinding(
+    ownerIdentityId: 'identity-alice',
+    accountId: 'account-alice',
+    currentDid: 'did:wba:awiki.me:users:alice:e1_committed',
+    protocolDeviceId: 'device-alice',
+    identityGeneration: '1',
+    deviceAuthGeneration: '1',
+  ),
+);
 
 void main() {
   testWidgets('首页不展示独立的加入设备或恢复入口', (tester) async {
@@ -401,8 +420,8 @@ void main() {
 
     expect(support.phone, '13800138000');
     expect(support.handle, 'alice-0714');
-    expect(support.domain, 'awiki.ai');
-    expect(support.fullHandle, 'alice-0714.awiki.ai');
+    expect(support.domain, 'awiki.me');
+    expect(support.fullHandle, 'alice-0714.awiki.me');
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -751,11 +770,13 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.byType(OnboardingPage), findsOneWidget);
+    // Keep the current screen until Core has actually accepted/completed deletion.
+    expect(find.byType(OnboardingPage), findsNothing);
     deleteCompleter.complete();
     await deleteFuture;
     await tester.pumpAndSettle();
 
+    expect(find.byType(OnboardingPage), findsOneWidget);
     expect(gateway.deleteLocalCredentialCalls, 1);
     expect(find.text('发送验证码'), findsOneWidget);
     expect(find.text('导入身份凭证'), findsNothing);
@@ -1045,7 +1066,7 @@ void main() {
     expect(tenantActions.createTenantCalls, 0);
     expect(
       find.text(
-        '公网租户地址必须使用 HTTPS，例如 https://anpclaw.com。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。',
+        '公网租户地址必须使用 HTTPS，例如 https://tenant.example。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。',
       ),
       findsOneWidget,
     );
@@ -1652,7 +1673,7 @@ void main() {
       );
       expect(
         container.read(onboardingProvider).otpTargetFullHandle,
-        'alice.awiki.ai',
+        'alice.awiki.me',
       );
 
       await tester.enterText(
@@ -1865,13 +1886,14 @@ void main() {
 
   testWidgets('服务端拒绝已失效验证码后清空输入并阻止重复提交', (tester) async {
     final gateway = FakeAwikiGateway()
-      ..nextOnboardingPhoneRegistrationError = const core.AwikiImCoreException(
-        code: 'service_error',
-        message: 'diagnostic text may change',
-        statusCode: 409,
-        serviceCode: '-32003',
-        serviceDataJson:
-            '{"awiki_code":"identity.registration_verification_unavailable","retryable":true}',
+      ..nextOnboardingPhoneRegistrationError = const AppStructuredError(
+        code: 'identity.registration_verification_unavailable',
+        cause: core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'diagnostic text may change',
+          statusCode: 409,
+          serviceCode: '-32003',
+        ),
       );
 
     await tester.pumpWidget(
@@ -1920,6 +1942,183 @@ void main() {
     expect(duplicate, isNull);
     expect(gateway.onboardingPhoneRegistrationCalls, 1);
   });
+
+  testWidgets('旧本地身份不能把注册失败改写成本次提交成功', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..localCredentials = const <SessionIdentity>[
+        _committedPhoneRegistrationIdentity,
+      ]
+      ..nextOnboardingPhoneRegistrationError = AppStructuredError(
+        code: 'handle_recovery.transition_missing',
+        cause: StateError('transition_missing'),
+      )
+      ..loginResult = _committedPhoneRegistrationIdentity;
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('登录或注册'));
+    await tester.pumpAndSettle();
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.enterText(fields.at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
+    expect(gateway.loginCalls, 0);
+    expect(container.read(onboardingProvider).isPhoneOtpConsumed, isTrue);
+    expect(
+      container.read(onboardingProvider).existingHandleContinuationId,
+      isNull,
+    );
+    expect(container.read(sessionProvider).session, isNull);
+    expect(
+      gateway.localCredentials.single,
+      _committedPhoneRegistrationIdentity,
+    );
+  });
+
+  testWidgets('注册已落本地但激活失败时恢复同一身份且不重复注册', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..nextOnboardingPhoneRegistrationError = StateError(
+        'post_registration_activation_failed',
+      )
+      ..committedIdentityBeforePhoneRegistrationError =
+          _committedPhoneRegistrationIdentity
+      ..loginResult = _committedPhoneRegistrationIdentity;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.enterText(fields.at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
+    expect(gateway.loginCalls, 1);
+    expect(gateway.lastLoginCredentialName, 'identity-alice');
+    expect(container.read(onboardingProvider).isPhoneOtpConsumed, isTrue);
+    expect(
+      container.read(sessionProvider).session?.localIdentityId,
+      'identity-alice',
+    );
+
+    final resumed = await container
+        .read(onboardingProvider.notifier)
+        .registerWithPhone(
+          phone: '13800138000',
+          otp: '',
+          handle: 'alice',
+          handleDomain: 'awiki.me',
+          nickName: 'alice',
+          profileMarkdown: '# alice\n\n',
+        );
+
+    expect(resumed, isNull);
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
+  });
+
+  testWidgets('注册已落本地但暂时无法恢复登录时展示本地账号自救入口', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..nextOnboardingPhoneRegistrationError = StateError(
+        'post_registration_activation_failed',
+      )
+      ..committedIdentityBeforePhoneRegistrationError =
+          _committedPhoneRegistrationIdentity;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.enterText(fields.at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
+    expect(gateway.loginCalls, 1);
+    expect(container.read(onboardingProvider).entryMode, 'login');
+    expect(
+      container.read(uiFeedbackProvider)?.message.id,
+      'registrationCommittedActivationPending',
+    );
+    expect(
+      container.read(sessionProvider).localCredentials.single.localIdentityId,
+      'identity-alice',
+    );
+    expect(find.text('Alice'), findsOneWidget);
+  });
+
+  for (final continuityCase in <String, String>{
+    'handle_recovery.local_state_conflict':
+        'registrationLocalStateNeedsAttention',
+    'handle_recovery.transition_missing': 'registrationContinuityChanged',
+    'handle_recovery.join_terminal_wait': 'registrationJoinTerminalWait',
+  }.entries) {
+    testWidgets('continuity error ${continuityCase.key} 消费 OTP 并要求重新获取', (
+      tester,
+    ) async {
+      final gateway = FakeAwikiGateway()
+        ..nextOnboardingPhoneRegistrationError = AppStructuredError(
+          code: continuityCase.key,
+          cause: core.AwikiImCoreException(
+            code: 'service_error',
+            message: 'unstable native diagnostic',
+            serviceCode: continuityCase.key,
+          ),
+        );
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+      );
+      await tester.pumpAndSettle();
+
+      final fields = find.byType(CupertinoTextField);
+      await tester.enterText(fields.at(0), '13800138000');
+      await tester.enterText(fields.at(1), 'alice');
+      await tester.enterText(fields.at(2), '123456');
+      await _tapVisible(tester, find.text('发送验证码'));
+      await tester.pump();
+      await _tapVisible(tester, find.text('登录/注册'));
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
+      );
+      final state = container.read(onboardingProvider);
+      expect(state.isPhoneOtpConsumed, isTrue);
+      expect(state.canSubmitPhoneOtp, isFalse);
+      expect(
+        container.read(uiFeedbackProvider)?.message.id,
+        continuityCase.value,
+      );
+      expect(gateway.onboardingPhoneRegistrationCalls, 1);
+    });
+  }
 
   testWidgets('手机号注册在 provider 边界阻止并发重复提交', (tester) async {
     final pending = Completer<void>();
@@ -1970,6 +2169,9 @@ void main() {
     tester,
   ) async {
     final gateway = FakeAwikiGateway()
+      ..localCredentials = const <SessionIdentity>[
+        _committedPhoneRegistrationIdentity,
+      ]
       ..registrationStatus = IdentityRegistrationStatus.joinRequired
       ..existingHandleJoinMode = ExistingHandleJoinMode.handleRecoveryRebind
       ..existingHandleJoinRequiresUserPresence = true;
@@ -2002,6 +2204,22 @@ void main() {
     await tester.pump();
     await _tapVisible(tester, find.text('登录/注册'));
     await tester.pumpAndSettle();
+
+    expect(gateway.onboardingPhoneRegistrationCalls, 1);
+    expect(gateway.loginCalls, 0);
+
+    expect(
+      find.byKey(const Key('existing-handle-recovery-action')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('existing-handle-join-action')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('existing-handle-cancel-action')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const Key('existing-handle-join-action')));
     await tester.pumpAndSettle();
@@ -2054,6 +2272,42 @@ void main() {
     expect(
       find.text('当前服务器暂未提供 Handle 恢复。你仍可将本设备加入现有身份，或取消后稍后重试。'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('Core 在途 Recovery 阻止误注册并进入默认续跑页', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..registrationStatus = IdentityRegistrationStatus.recoveryRequired;
+    final recoveryCore = _RecordingHandleRecoveryCorePort();
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          handleRecoveryCorePortProvider.overrideWithValue(recoveryCore),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'Alice');
+    await tester.enterText(fields.at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pumpAndSettle();
+    final page = tester.widget<HandleRecoveryPage>(
+      find.byType(HandleRecoveryPage),
+    );
+    expect(page.initialHandle, 'alice.awiki.me');
+    expect(page.startNew, isFalse);
+    expect(page.autoRequestOtp, isFalse);
+    expect(recoveryCore.handle, isNull);
+    expect(gateway.registerHandleCalls, 0);
+    expect(
+      find.byKey(const Key('existing-handle-recovery-action')),
+      findsNothing,
     );
   });
 
@@ -2117,10 +2371,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(HandleRecoveryPage), findsOneWidget);
-    expect(find.text('alice.awiki.ai'), findsOneWidget);
+    expect(find.text('alice.awiki.me'), findsOneWidget);
     expect(find.text('+8613800138000'), findsOneWidget);
     expect(find.byType(CupertinoTextField), findsOneWidget);
-    expect(recoveryCore.handle, 'alice.awiki.ai');
+    expect(recoveryCore.handle, 'alice.awiki.me');
     expect(recoveryCore.phone, '+8613800138000');
     expect(recoveryCore.localIdentityId, isNull);
     expect(identityPort.discardedContinuationId, 'existing-handle-test');
@@ -2348,6 +2602,16 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
   String? handle;
   String? phone;
   String? localIdentityId;
+
+  @override
+  Future<HandleRecoveryContext> inspectContext({
+    required String handle,
+    String? localIdentityId,
+  }) async => HandleRecoveryContext(
+    handle: handle,
+    localIdentityId: localIdentityId,
+    allowedActions: const [HandleRecoveryAction.startNew],
+  );
 
   @override
   Future<HandleRecoveryOtpResult> requestOtp({

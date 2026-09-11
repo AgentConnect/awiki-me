@@ -32,13 +32,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+import 'support/app_shell_ready.dart';
 
 void main() {
   group('AwikiMeApp localization', () {
     late AppBootstrap bootstrap;
+    late FakeAwikiGateway gateway;
 
     setUp(() {
-      final gateway = FakeAwikiGateway();
+      gateway = FakeAwikiGateway();
       final realtimeGateway = FakeRealtimeGateway();
       final tenant = defaultTenantProfile().copyWith(
         backendBaseUrl: 'https://awiki.info',
@@ -52,10 +54,8 @@ void main() {
           tenants: <AppTenantProfile>[tenant],
         ),
         accountGateway: gateway,
-        gateway: gateway,
         realtimeGateway: realtimeGateway,
         notificationFacade: FakeNotificationFacade(),
-        e2eeFacade: FakeE2eeFacade(),
         localePreferenceService: FakeLocalePreferenceService(),
         updateService: FakeUpdateService(),
         appSessionService: FakeAppSessionService(gateway),
@@ -79,7 +79,7 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-      await tester.pump();
+      await pumpUntilAppShellReady(tester, loggedIn: false);
 
       final container = ProviderScope.containerOf(
         tester.element(find.byType(OnboardingPage)),
@@ -118,7 +118,6 @@ void main() {
     testWidgets(
       'profile service remains usable without optional account-state sync',
       (tester) async {
-        final gateway = bootstrap.gateway as FakeAwikiGateway;
         gateway.publicProfilesByQuery['did:test:peer'] = const UserProfile(
           did: 'did:test:peer',
           displayName: 'Peer',
@@ -128,7 +127,7 @@ void main() {
         );
 
         await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-        await tester.pump();
+        await pumpUntilAppShellReady(tester, loggedIn: false);
 
         final container = ProviderScope.containerOf(
           tester.element(find.byType(OnboardingPage)),
@@ -175,7 +174,7 @@ void main() {
           ],
         ),
       );
-      await tester.pump();
+      await pumpUntilAppShellReady(tester, loggedIn: false);
 
       await tester.tap(find.text('Log in or register'));
       await tester.pumpAndSettle();
@@ -204,7 +203,7 @@ void main() {
           ],
         ),
       );
-      await tester.pump();
+      await pumpUntilAppShellReady(tester, loggedIn: false);
 
       await tester.tap(find.text('Log in or register'));
       await tester.pumpAndSettle();
@@ -404,10 +403,8 @@ void main() {
         bootstrap: AppBootstrap(
           environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
           accountGateway: gateway,
-          gateway: gateway,
           realtimeGateway: realtimeGateway,
           notificationFacade: FakeNotificationFacade(),
-          e2eeFacade: FakeE2eeFacade(),
           localePreferenceService: FakeLocalePreferenceService(),
           updateService: FakeUpdateService(),
           appSessionService: FakeAppSessionService(gateway),
@@ -485,10 +482,8 @@ void main() {
         bootstrap: AppBootstrap(
           environment: environment,
           accountGateway: gateway,
-          gateway: gateway,
           realtimeGateway: realtimeGateway,
           notificationFacade: FakeNotificationFacade(),
-          e2eeFacade: FakeE2eeFacade(),
           localePreferenceService: FakeLocalePreferenceService(),
           updateService: FakeUpdateService(),
           appSessionService: FakeAppSessionService(gateway),

@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/desktop_startup_presentation_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
+import 'package:awiki_me/src/application/models/thread_message_patch.dart';
 import 'package:awiki_me/src/application/ports/skill_onboarding_port.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
+import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/skill_onboarding_instruction.dart';
@@ -14,6 +19,7 @@ import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/domain/services/update_service.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/agents/skill_onboarding_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
@@ -29,18 +35,30 @@ import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/startup_splash.dart';
+import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
 import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 import 'package:flutter/services.dart'
     show JSONMessageCodec, LogicalKeyboardKey, SystemChannels;
 import 'package:flutter/widgets.dart'
-    show AppLifecycleState, Container, Key, ListView, MediaQuery, Size, Text;
+    show
+        AppLifecycleState,
+        Container,
+        Key,
+        ListView,
+        MediaQuery,
+        Size,
+        StateSetter,
+        StatefulBuilder,
+        Text,
+        Widget;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import '../../../unit/test_support.dart' as test_support;
+import '../../../unit/app_update_provider_test.dart' show buildManifest;
 import '../../case_attestation.dart';
 import '../support/fake_app_bootstrap.dart';
 
@@ -51,6 +69,20 @@ final class _RecordingDesktopStartupPresentationService
   @override
   Future<void> presentReadyContent() async {
     callCount += 1;
+  }
+}
+
+class _StartupUpdateService extends test_support.FakeUpdateService {
+  final firstCheck = Completer<AppUpdateCheckResult>();
+  bool _started = false;
+
+  @override
+  Future<AppUpdateCheckResult> checkForUpdates({required bool force}) {
+    if (!_started) {
+      _started = true;
+      return firstCheck.future;
+    }
+    return super.checkForUpdates(force: force);
   }
 }
 
@@ -86,6 +118,83 @@ class _ControllableMessageSyncCoordinator extends MessageSyncCoordinator {
   Future<void> requestSync(String reason, {bool immediate = false}) async {}
 }
 
+class _RecoveringDirectMessagingService
+    extends test_support.FakeMessagingService {
+  _RecoveringDirectMessagingService(
+    super.gateway, {
+    required this.ownerDid,
+    required this.targetDid,
+  });
+
+  final String ownerDid;
+  final String targetDid;
+  final StreamController<ThreadMessagePatch> _patches =
+      StreamController<ThreadMessagePatch>.broadcast();
+  final Completer<void> _recovery = Completer<void>();
+  int _version = 0;
+  int sendCalls = 0;
+  String? lastClientMessageId;
+  String? lastIdempotencyKey;
+
+  @override
+  Stream<ThreadMessagePatch> watchConversationTimelinePatches(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  }) => _patches.stream;
+
+  @override
+  Future<ChatMessage> sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    sendCalls += 1;
+    lastClientMessageId = clientMessageId;
+    lastIdempotencyKey = idempotencyKey;
+    final messageId = clientMessageId!;
+    final pending = ChatMessage(
+      localId: messageId,
+      remoteId: messageId,
+      conversationId: conversation.conversationId,
+      threadId: conversation.conversationId,
+      senderDid: ownerDid,
+      senderDidSnapshot: ownerDid,
+      receiverDid: targetDid,
+      content: content,
+      createdAt: DateTime.now(),
+      isMine: true,
+      sendState: MessageSendState.sending,
+    );
+    conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+      pending,
+    ];
+    _patches.add(
+      ThreadMessagePatch(
+        kind: ThreadMessagePatchKind.upsert,
+        ownerDid: ownerDid,
+        version: ++_version,
+        threadKind: 'thread',
+        threadId: conversation.conversationId,
+        conversationId: conversation.conversationId,
+        message: pending,
+      ),
+    );
+    await _recovery.future;
+    final sent = pending.copyWith(sendState: MessageSendState.sent);
+    conversationTimelineById[conversation.conversationId] = <ChatMessage>[sent];
+    return sent;
+  }
+
+  void completeRecovery() {
+    if (!_recovery.isCompleted) {
+      _recovery.complete();
+    }
+  }
+
+  Future<void> dispose() => _patches.close();
+}
+
 Future<void> _activateRuntimeSession(
   ProviderContainer container,
   SessionIdentity session,
@@ -110,7 +219,85 @@ Future<void> _activateRuntimeSession(
 }
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
+
+  testWidgets(
+    'cached update gate survives offline startup and recovers through retry',
+    (tester) async {
+      final harness = createFakeAwikiMeAppHarness();
+      final service = _StartupUpdateService();
+      final manifest = buildManifest();
+      service.cachedUpdate = AppUpdateCheckResult(
+        currentVersion: service.currentVersion,
+        latestManifest: manifest,
+        versionUnsupported: true,
+        usedCache: true,
+      );
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: harness.bootstrap,
+          providerOverrides: [
+            ...harness.providerOverrides,
+            updateServiceProvider.overrideWithValue(service),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.byKey(const Key('restricted-update-install')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('restricted-update-switch-tenant')),
+        findsOneWidget,
+      );
+      expect(find.byType(OnboardingPage), findsNothing);
+      expect(harness.gateway.listLocalCredentialsCalls, 0);
+
+      await tester.tap(find.byKey(const Key('restricted-update-install')));
+      await tester.pump();
+      expect(service.installUpdateCalled, isTrue);
+      expect(find.byType(OnboardingPage), findsNothing);
+
+      service.firstCheck.complete(
+        AppUpdateCheckResult(
+          currentVersion: service.currentVersion,
+          latestManifest: manifest,
+          versionUnsupported: true,
+          usedCache: true,
+          failureReason: 'simulated offline response',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('restricted-update-install')),
+        findsOneWidget,
+      );
+      expect(harness.gateway.listLocalCredentialsCalls, 0);
+
+      service.policyUnavailable = true;
+      await tester.tap(find.byKey(const Key('restricted-update-refresh')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('restricted-update-install')), findsNothing);
+      expect(find.byType(OnboardingPage), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await E2eCaseAttestationWriter.markPassed(
+        'APP-UPDATE-SMOKE-E2E-001',
+        phases: const [
+          'cached_gate_precedes_business_startup',
+          'manual_download_action_preserves_gate',
+          'offline_refresh_preserves_gate',
+          'policy_removal_recovers_through_retry',
+        ],
+      );
+    },
+  );
 
   testWidgets('desktop startup excludes the mobile branded splash', (
     tester,
@@ -205,10 +392,10 @@ void main() {
       await tester.pump();
       expect(harness.gateway.lastRegistrationOtpPhone, '13800138000');
       expect(harness.gateway.lastRegistrationOtpHandle, 'smoke-otp');
-      expect(harness.gateway.lastRegistrationOtpDomain, 'awiki.ai');
+      expect(harness.gateway.lastRegistrationOtpDomain, primaryTenantDomain);
       expect(
         harness.gateway.lastRegistrationOtpFullHandle,
-        'smoke-otp.awiki.ai',
+        'smoke-otp.$primaryTenantDomain',
       );
     } else {
       expect(
@@ -241,6 +428,91 @@ void main() {
       ],
     );
   });
+
+  testWidgets(
+    'official tenant switch survives an app rebuild and stays immutable',
+    (tester) async {
+      final initialRegistry = defaultTenantRegistry(
+        now: DateTime.utc(2026, 9, 4),
+      );
+      final actions = test_support.FakeAppTenantActions(
+        initialRegistry: initialRegistry,
+      );
+      late StateSetter refreshApp;
+      actions.onChanged = () => refreshApp(() {});
+
+      Widget buildApp() {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            refreshApp = setState;
+            final harness = createFakeAwikiMeAppHarness(
+              tenantRegistry: actions.registry,
+              tenantActions: actions,
+            );
+            return AwikiMeApp(
+              bootstrap: harness.bootstrap,
+              providerOverrides: harness.providerOverrides,
+            );
+          },
+        );
+      }
+
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('onboarding-tenant-switcher-button')),
+      );
+      await tester.pumpAndSettle();
+
+      final secondary = initialRegistry.tenants.singleWhere(
+        (tenant) => tenant.officialKey == AppTenantOfficialKey.secondary,
+      );
+      final secondaryRow = find.byKey(
+        Key('settings-tenant-option:${secondary.id}'),
+      );
+      expect(find.byType(TenantManagementDialog), findsOneWidget);
+      expect(
+        find.descendant(
+          of: secondaryRow,
+          matching: find.byKey(Key('tenant-primary-managed:${secondary.id}')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: secondaryRow, matching: find.byTooltip('编辑租户')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: secondaryRow, matching: find.byTooltip('删除')),
+        findsNothing,
+      );
+
+      await tester.tap(
+        find.descendant(of: secondaryRow, matching: find.byTooltip('使用')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(actions.useTenantCalls, 1);
+      expect(actions.registry.activeTenant.id, secondary.id);
+      expect(find.byType(TenantManagementDialog), findsNothing);
+
+      await tester.pumpWidget(Container());
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      expect(actions.registry.activeTenant.id, secondary.id);
+      expect(find.text(secondary.name), findsWidgets);
+      await E2eCaseAttestationWriter.markPassed(
+        'TENANT-SWITCH-SMOKE-E2E-001',
+        phases: const <String>[
+          'official_tenant_visible_and_immutable',
+          'official_tenant_switched_through_product_ui',
+          'active_tenant_preserved_after_app_rebuild',
+        ],
+      );
+    },
+  );
 
   testWidgets('AwikiMeApp starts authenticated shell', (tester) async {
     const session = SessionIdentity(
@@ -445,6 +717,16 @@ void main() {
       );
       await tester.pump();
       expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsOneWidget);
+
+      coordinator.publish(
+        const MessageSyncCoordinatorState(
+          status: MessageSyncCoordinatorStatus.blocked,
+          lastFailureCode: 'message_wire_identity_conflict',
+        ),
+      );
+      await tester.pump();
+      expect(find.text('消息同步已暂停，请升级客户端或修复此设备后继续。'), findsOneWidget);
+      expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsNothing);
 
       coordinator.publish(
         const MessageSyncCoordinatorState(
@@ -994,14 +1276,14 @@ void main() {
         targetDid: 'did:human:bob',
       ),
       ConversationSummary(
-        threadId: 'direct:did:test:personal-agent',
-        conversationId: 'direct:did:test:personal-agent',
+        threadId: 'direct:did:test:agent:personal-agent',
+        conversationId: 'direct:did:test:agent:personal-agent',
         displayName: 'Hermes Personal Agent',
         lastMessagePreview: 'ready',
         lastMessageAt: DateTime(2026, 8, 11, 11),
         unreadCount: 7,
         isGroup: false,
-        targetDid: 'did:test:personal-agent',
+        targetDid: 'did:test:agent:personal-agent',
       ),
     ];
     final control =
@@ -1027,7 +1309,7 @@ void main() {
         ),
       ),
       AgentSummary(
-        agentDid: 'did:test:personal-agent',
+        agentDid: 'did:test:agent:personal-agent',
         kind: AgentKind.runtime,
         daemonAgentDid: 'did:test:daemon:message',
         runtime: 'hermes',
@@ -1201,10 +1483,10 @@ void main() {
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    const session = SessionIdentity(
-      did: 'did:wba:awiki.info:user:alice',
+    final session = SessionIdentity(
+      did: 'did:wba:$primaryTenantDomain:user:alice',
       credentialName: 'alice',
-      handle: 'alice.awiki.info',
+      handle: 'alice.$primaryTenantDomain',
       displayName: 'Alice',
       jwtToken: 'test-jwt',
     );
@@ -1234,8 +1516,8 @@ void main() {
             ...harness.providerOverrides,
             awikiEnvironmentConfigProvider.overrideWithValue(
               AwikiEnvironmentConfig(
-                baseUrl: 'https://awiki.info',
-                didDomain: 'awiki.info',
+                baseUrl: primaryTenantBaseUrl,
+                didDomain: primaryTenantDomain,
               ),
             ),
             agentImEnabledProvider.overrideWithValue(true),
@@ -1591,7 +1873,135 @@ void main() {
   });
 
   testWidgets(
-    'UI optimization smoke keeps conversation info closed and opens Agent info popup',
+    'Direct stale-route recovery keeps one sending bubble through the real composer',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1400, 900));
+      const session = SessionIdentity(
+        did: 'did:test:zhuocheng',
+        credentialName: 'zhuocheng',
+        handle: 'zhuocheng.awiki.ai',
+        displayName: 'zhuocheng',
+        jwtToken: 'test-jwt',
+      );
+      final conversation = ConversationSummary(
+        threadId: 'dm:peer-scope:v1:ocean-smoke',
+        conversationId: 'dm:peer-scope:v1:ocean-smoke',
+        displayName: 'Ocean',
+        lastMessagePreview: '',
+        lastMessageAt: DateTime(2026, 8, 19, 11),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:test:ocean-old',
+        targetPeer: 'ocean.awiki.ai',
+      );
+      final harness = createFakeAwikiMeAppHarness(session: session);
+      harness.gateway.conversations = <ConversationSummary>[conversation];
+      final messaging = _RecoveringDirectMessagingService(
+        harness.gateway,
+        ownerDid: session.did,
+        targetDid: conversation.targetDid!,
+      );
+      addTearDown(messaging.dispose);
+
+      try {
+        await tester.pumpWidget(
+          AwikiMeApp(
+            bootstrap: harness.bootstrap,
+            providerOverrides: <Override>[
+              ...harness.providerOverrides,
+              messagingServiceProvider.overrideWithValue(messaging),
+              conversationListProvider.overrideWith(
+                (ref) => _StaticConversationListController(
+                  ref,
+                  <ConversationSummary>[conversation],
+                ),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(AppShell), findsOneWidget);
+        await tester.tap(
+          find
+              .byKey(Key('conversation-row:${conversation.conversationId}'))
+              .first,
+        );
+        await tester.pumpAndSettle();
+
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(AppShell)),
+        );
+        final remoteHistoryCalls = harness.gateway.fetchDmHistoryCalls;
+        final timelineCalls = messaging.conversationTimelineCalls;
+        const text = '发送期间自动恢复旧路由';
+        await tester.enterText(
+          find.byKey(const Key('chat-composer-input')),
+          text,
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('chat-send-button')));
+        await _pumpSmokeFrame(tester);
+
+        expect(messaging.sendCalls, 1);
+        final messageId = messaging.lastClientMessageId;
+        expect(messageId, isNotNull);
+        expect(messaging.lastIdempotencyKey, 'op-$messageId');
+        final pending = container
+            .read(chatThreadProvider(conversation.threadId))
+            .messages;
+        expect(pending, hasLength(1));
+        expect(pending.single.localId, messageId);
+        expect(pending.single.sendState, MessageSendState.sending);
+        final bubble = find.byKey(Key('chat-message-bubble:$messageId'));
+        expect(bubble, findsOneWidget);
+        expect(
+          find.descendant(of: bubble, matching: find.text(text)),
+          findsOneWidget,
+        );
+        await tester.pump(const Duration(seconds: 3));
+        expect(
+          find.byKey(Key('chat-sending-indicator:$messageId')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('chat-local-history-hydrating-mask')),
+          findsNothing,
+        );
+        expect(harness.gateway.fetchDmHistoryCalls, remoteHistoryCalls);
+        expect(messaging.conversationTimelineCalls, timelineCalls);
+
+        messaging.completeRecovery();
+        await tester.pumpAndSettle();
+
+        final delivered = container
+            .read(chatThreadProvider(conversation.threadId))
+            .messages;
+        expect(delivered, hasLength(1));
+        expect(delivered.single.localId, messageId);
+        expect(delivered.single.sendState, MessageSendState.sent);
+        expect(bubble, findsOneWidget);
+        expect(
+          find.descendant(of: bubble, matching: find.text(text)),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(Key('chat-sending-indicator:$messageId')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('chat-local-history-hydrating-mask')),
+          findsNothing,
+        );
+        expect(harness.gateway.fetchDmHistoryCalls, remoteHistoryCalls);
+        expect(messaging.conversationTimelineCalls, timelineCalls);
+      } finally {
+        await tester.binding.setSurfaceSize(null);
+      }
+    },
+  );
+
+  testWidgets(
+    'UI optimization smoke uses Agent inventory title and opens Agent info popup',
     (tester) async {
       const session = SessionIdentity(
         did: 'did:test:me',
@@ -1723,8 +2133,19 @@ void main() {
         } else {
           expect(find.text('消息'), findsWidgets);
         }
-        expect(find.text('Hermes Cached'), findsOneWidget);
-        await tester.tap(find.text('Hermes Cached').first);
+        final conversationRow = find.byKey(
+          Key('conversation-row:${conversation.conversationId}'),
+        );
+        expect(conversationRow, findsOneWidget);
+        expect(
+          find.descendant(
+            of: conversationRow,
+            matching: find.text('Hermes UI'),
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('Hermes Cached'), findsNothing);
+        await tester.tap(conversationRow);
         await tester.pumpAndSettle();
 
         expect(find.text('会话信息'), findsNothing);
@@ -1792,9 +2213,9 @@ class _SmokeSkillOnboardingPort implements SkillOnboardingPort {
       token: 'awsk1_smoke_secret_value',
       tokenId: 'agtok_smoke_$calls',
       controllerHandle: controllerHandle,
-      agentHandle: 'skill-smoke.awiki.info',
+      agentHandle: 'skill-smoke.$primaryTenantDomain',
       displayName: displayName,
-      serviceOrigin: 'https://awiki.info',
+      serviceOrigin: primaryTenantBaseUrl,
       expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
     );
   }

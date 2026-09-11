@@ -20,7 +20,12 @@ const String _caseId = 'MULTI-DEVICE-CAPABILITY-GATE-E2E-001';
 const String _unreachableLoopback = 'http://127.0.0.1:1';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets(
     'production bootstrap keeps E2EE available but defaults ordinary messaging to plain',

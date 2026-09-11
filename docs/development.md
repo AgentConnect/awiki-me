@@ -106,14 +106,16 @@ tests/e2e/             E2E runner and platform implementations
 
 Use the in-app tenant switcher during normal development. Do not add a new Flutter flag for every service URL.
 
-The only built-in primary-tenant compile-time override is:
+To test a different pair of built-in tenants, copy the default JSON, replace
+both slots, and pass the complete document to the packaging entry point:
 
 ```bash
-flutter build macos --debug \
-  --dart-define=AWIKI_PRIMARY_TENANT_DOMAIN=awiki.info
+scripts/package_app.sh --tenant-config /absolute/path/to/test-tenants.json
 ```
 
-This value only changes the initial built-in tenant for a new tenant registry. It is not a runtime selector and does not rewrite an existing scope.
+The override is validated and embedded with its SHA-256 in every platform
+artifact. It is not a runtime selector. Existing data scopes remain bound to
+their original Origin; an endpoint replacement creates a new built-in scope.
 
 ## 8. Packaging
 

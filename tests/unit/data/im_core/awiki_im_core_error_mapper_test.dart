@@ -1,9 +1,47 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/application/models/message_sync_diagnostics.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_error_mapper.dart';
+import 'package:awiki_me/src/core/app_error_classifier.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('maps only safe Core service data into an SDK-neutral App error', () {
+    final mapped = const AwikiImCoreErrorMapper().appError(
+      const core.AwikiImCoreException(
+        code: 'service_error',
+        message: 'registration unavailable',
+        serviceDataJson:
+            '{"awiki_code":"identity.registration_verification_unavailable"}',
+      ),
+    );
+
+    expect(mapped, isA<AppStructuredError>());
+    expect(
+      structuredAppErrorCode(mapped),
+      'identity.registration_verification_unavailable',
+    );
+    expect(normalizeAppError(mapped), contains('registration unavailable'));
+  });
+
+  for (final code in <String>[
+    'handle_recovery.local_state_conflict',
+    'handle_recovery.transition_missing',
+    'handle_recovery.join_terminal_wait',
+  ]) {
+    test('allowlists continuity serviceCode $code without service data', () {
+      final mapped = const AwikiImCoreErrorMapper().appError(
+        core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'unstable native diagnostic',
+          serviceCode: code,
+        ),
+      );
+
+      expect(mapped, isA<AppStructuredError>());
+      expect(structuredAppErrorCode(mapped), code);
+    });
+  }
+
   const mapper = AwikiImCoreErrorMapper();
 
   test('maps unsupported capability with stable code', () {
@@ -89,6 +127,29 @@ void main() {
     expect(failure.code, 'transport_unavailable');
     expect(failure.httpStatus, isNull);
   });
+
+  test(
+    'root completion conflict does not masquerade as revoked permission',
+    () {
+      final conflict = mapper.messageSyncFailure(
+        const core.AwikiImCoreException(
+          code: 'identity_binding_conflict',
+          message:
+              'root import completion phase conflicts with the stored transfer',
+        ),
+      );
+      final denied = mapper.messageSyncFailure(
+        const core.AwikiImCoreException(
+          code: 'permission_denied',
+          message: 'device is not eligible',
+        ),
+      );
+
+      expect(conflict.category, AppMessageSyncFailureCategory.protocol);
+      expect(conflict.code, 'identity_binding_conflict');
+      expect(denied.category, AppMessageSyncFailureCategory.auth);
+    },
+  );
 
   test('sync failure projection rejects unsafe service codes', () {
     final failure = mapper.messageSyncFailure(

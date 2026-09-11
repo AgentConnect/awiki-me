@@ -1,5 +1,9 @@
 # Copy this file to an ignored *.local.yaml and fill in remote awiki.info
 # account-pool values. The config is local secret storage; the services are not.
+# --case full aggregates all active suites; --case messaging is the old 24-case flow.
+# Full retains each leaf's explicit operator/provider/capability prerequisites.
+# On macOS, export AWIKI_E2E_PRODUCTION_KEYCHAIN_MANIFEST for the separately
+# prepared native gate, plus its AWIKI_MACOS_DEVELOPMENT_TEAM. See docs/testing.md.
 
 # Use `linux` on a Linux host so desktop E2E runs under Xvfb; use `macos` on
 # macOS. Do not substitute a macOS-shaped dry-run for a real Linux execution.
@@ -20,13 +24,13 @@ otp:
 
 accounts:
   appUser:
-    handle: awiki-e2e-app
+    handle: e1awikie2eapp
   # Required only by `--case identity-switch`. Keep this as a second account
   # owned by the configured non-production OTP credential.
   appSecondaryUser:
-    handle: awiki-e2e-app-secondary
+    handle: e1awikie2eappsecondary
   cliPeer:
-    handle: awiki-e2e-cli
+    handle: e1awikie2ecli
 
 # For --case display-name-fallback, use a separate ignored *.local.yaml whose
 # cliPeer is a dedicated awiki.info actor with no nickname and one stable full

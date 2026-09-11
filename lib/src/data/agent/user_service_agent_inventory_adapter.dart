@@ -72,7 +72,8 @@ class UserServiceAgentInventoryAdapter
     );
   }
 
-  static const String inventoryEndpoint = '/user-service/v1/agent-inventory/rpc';
+  static const String inventoryEndpoint =
+      '/user-service/v1/agent-inventory/rpc';
   static const String registrationEndpoint =
       '/user-service/v1/agent-registration/rpc';
 

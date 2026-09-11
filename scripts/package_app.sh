@@ -22,7 +22,7 @@ fail() {
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/package_app.sh [--primary-tenant-domain DOMAIN]
+Usage: scripts/package_app.sh [--tenant-config FILE]
 
 Dispatch the pinned GitHub Actions package workflow, wait for its exact run,
 and verify its exact aggregate artifact. A complete four-target run replaces
@@ -31,8 +31,8 @@ dist/validation/<version>+<build>/<request-id>/. The script never changes
 pubspec.yaml or builds locally.
 
 Options:
-  --primary-tenant-domain DOMAIN  Override the built-in primary tenant domain.
-  -h, --help                      Show this help.
+  --tenant-config FILE  Replace the complete two-slot built-in tenant catalog.
+  -h, --help            Show this help.
 USAGE
 }
 
@@ -71,14 +71,6 @@ derive_release_base_url() {
   esac
 }
 
-validate_primary_tenant_domain() {
-  local domain="$1"
-  if [[ "${#domain}" -gt 253 ]] ||
-    [[ ! "$domain" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$ ]]; then
-    fail "PACKAGE_PRIMARY_TENANT_DOMAIN must be a lowercase hostname without scheme, port, or path"
-  fi
-}
-
 resolve_repo_path() {
   local value="$1"
   case "$value" in
@@ -99,6 +91,7 @@ install_aggregate_output() {
   local request_id="$9"
   local download_base_url="${10}"
   local download_page_url="${11}"
+  local tenant_config_sha256="${12:-}"
   local manifest_path="$download_root/package-manifest.json"
   local latest_path="$download_root/latest.json"
   local prepared_dir="$download_root/.prepared-$request_id"
@@ -117,7 +110,8 @@ install_aggregate_output() {
     "$normalized_targets" \
     "$FULL_PACKAGE_TARGETS" \
     "$download_base_url" \
-    "$download_page_url" <<'PY'
+    "$download_page_url" \
+    "$tenant_config_sha256" <<'PY'
 import datetime, hashlib, json, pathlib, shutil, sys
 
 manifest_path = pathlib.Path(sys.argv[1])
@@ -130,6 +124,8 @@ expected = {
     "sourceRefs": {"app": sys.argv[7], "imCore": sys.argv[8], "anp": sys.argv[9]},
     "requestId": sys.argv[10],
 }
+if sys.argv[15]:
+    expected["tenantConfigSha256"] = sys.argv[15]
 normalized_targets = sys.argv[11]
 targets = normalized_targets.split(",")
 is_complete_release = normalized_targets == sys.argv[12]
@@ -200,6 +196,7 @@ def platform_entry(target):
     return {
         "downloadUrl": f"{download_base_url}/{expected['version']}/{artifact['filename']}",
         "sha256": artifact["sha256"],
+        "sizeBytes": artifact["sizeBytes"],
     }
 
 expected_platforms = {}
@@ -373,16 +370,16 @@ publish_release_output() (
 main() {
 cd "$ROOT_DIR"
 
-PACKAGE_PRIMARY_TENANT_DOMAIN_OVERRIDE=""
+PACKAGE_TENANT_CONFIG_OVERRIDE=""
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
-    --primary-tenant-domain)
-      [[ "$#" -ge 2 ]] || fail "--primary-tenant-domain requires a value"
-      PACKAGE_PRIMARY_TENANT_DOMAIN_OVERRIDE="$2"
+    --tenant-config)
+      [[ "$#" -ge 2 ]] || fail "--tenant-config requires a value"
+      PACKAGE_TENANT_CONFIG_OVERRIDE="$2"
       shift 2
       ;;
-    --primary-tenant-domain=*)
-      PACKAGE_PRIMARY_TENANT_DOMAIN_OVERRIDE="${1#*=}"
+    --tenant-config=*)
+      PACKAGE_TENANT_CONFIG_OVERRIDE="${1#*=}"
       shift
       ;;
     -h|--help)
@@ -400,13 +397,13 @@ if [[ -f "$LOCAL_CONFIG_PATH" ]]; then
   # shellcheck source=scripts/package_app.local.config
   source "$LOCAL_CONFIG_PATH"
 fi
-if [[ -n "$PACKAGE_PRIMARY_TENANT_DOMAIN_OVERRIDE" ]]; then
-  PACKAGE_PRIMARY_TENANT_DOMAIN="$PACKAGE_PRIMARY_TENANT_DOMAIN_OVERRIDE"
+if [[ -n "$PACKAGE_TENANT_CONFIG_OVERRIDE" ]]; then
+  PACKAGE_TENANT_CONFIG="$PACKAGE_TENANT_CONFIG_OVERRIDE"
 fi
 
 for name in \
   PACKAGE_RELEASE_DOMAIN \
-  PACKAGE_PRIMARY_TENANT_DOMAIN \
+  PACKAGE_TENANT_CONFIG \
   PACKAGE_TARGETS \
   PACKAGE_VERSION_BUMP \
   PACKAGE_WORKFLOW_FILE \
@@ -418,12 +415,51 @@ done
   fail "PACKAGE_VERSION_BUMP must be none; commit the version before packaging"
 [[ "$PACKAGE_RUN_DISCOVERY_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] ||
   fail "PACKAGE_RUN_DISCOVERY_TIMEOUT_SECONDS must be a positive integer"
-validate_primary_tenant_domain "$PACKAGE_PRIMARY_TENANT_DOMAIN"
-
 require_cmd awk
 require_cmd gh
 require_cmd git
 require_cmd python3
+
+TENANT_CONFIG_PATH="$(resolve_repo_path "$PACKAGE_TENANT_CONFIG")"
+[[ -f "$TENANT_CONFIG_PATH" ]] || fail "tenant config does not exist: $TENANT_CONFIG_PATH"
+TENANT_CONFIG_METADATA="$(python3 - "$TENANT_CONFIG_PATH" <<'PY'
+import base64, hashlib, json, pathlib, sys, urllib.parse
+
+raw = pathlib.Path(sys.argv[1]).read_bytes()
+value = json.loads(raw)
+if value.get("schema_version") != 1 or value.get("default_slot") not in ("primary", "secondary"):
+    raise SystemExit("invalid tenant config schema")
+tenants = value.get("tenants")
+if not isinstance(tenants, dict) or set(tenants) != {"primary", "secondary"}:
+    raise SystemExit("tenant config must contain exactly primary and secondary")
+origins = []
+for slot in ("primary", "secondary"):
+    tenant = tenants[slot]
+    names = tenant.get("display_name") if isinstance(tenant, dict) else None
+    if not isinstance(names, dict) or not all(isinstance(names.get(key), str) and names[key].strip() for key in ("zh-CN", "en")):
+        raise SystemExit(f"invalid tenant display names for {slot}")
+    parsed = urllib.parse.urlparse(tenant.get("backend_origin", ""))
+    host = tenant.get("did_host", "").strip().lower().rstrip(".")
+    loopback = parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1", "::1")
+    try:
+        port = parsed.port
+    except ValueError as error:
+        raise SystemExit(f"invalid tenant port for {slot}") from error
+    if ((parsed.scheme != "https" and not loopback) or parsed.username or parsed.password
+            or parsed.path not in ("", "/") or parsed.query or parsed.fragment
+            or (port is not None and not loopback) or parsed.hostname != host):
+        raise SystemExit(f"invalid tenant endpoint for {slot}")
+    origins.append(parsed.geturl().rstrip("/"))
+if len(set(origins)) != 2:
+    raise SystemExit("tenant endpoints must be distinct")
+print(base64.b64encode(raw).decode("ascii"))
+print(hashlib.sha256(raw).hexdigest())
+PY
+)" || fail "invalid tenant config: $TENANT_CONFIG_PATH"
+TENANT_CONFIG_BASE64="$(printf '%s\n' "$TENANT_CONFIG_METADATA" | sed -n '1p')"
+TENANT_CONFIG_SHA256="$(printf '%s\n' "$TENANT_CONFIG_METADATA" | sed -n '2p')"
+[[ -n "$TENANT_CONFIG_BASE64" && "$TENANT_CONFIG_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
+  fail "tenant config encoder returned invalid metadata"
 
 SDK_REPO_DIR="$(resolve_repo_path "${PACKAGE_SDK_REPO_DIR:-../awiki-cli-rs2}")"
 ANP_RELEASE_CONFIG="$SDK_REPO_DIR/scripts/release/cli/release-config.json"
@@ -597,6 +633,7 @@ log "targets:         $NORMALIZED_TARGETS"
 log "App source ref:  $APP_SOURCE_REF"
 log "Core source ref: $IM_CORE_SOURCE_REF"
 log "ANP source ref:  $ANP_SOURCE_REF"
+log "tenant config:   $TENANT_CONFIG_PATH ($TENANT_CONFIG_SHA256)"
 
 gh workflow run "$PACKAGE_WORKFLOW_FILE" \
   --repo "$REPOSITORY" \
@@ -608,7 +645,8 @@ gh workflow run "$PACKAGE_WORKFLOW_FILE" \
   --raw-field "targets=$NORMALIZED_TARGETS" \
   --raw-field "version=$VERSION_NAME" \
   --raw-field "build_number=$BUILD_NUMBER" \
-  --raw-field "primary_tenant_domain=$PACKAGE_PRIMARY_TENANT_DOMAIN" \
+  --raw-field "tenant_config_base64=$TENANT_CONFIG_BASE64" \
+  --raw-field "tenant_config_sha256=$TENANT_CONFIG_SHA256" \
   --raw-field "download_base_url=$DOWNLOAD_BASE_URL" \
   --raw-field "download_page_url=$DOWNLOAD_PAGE_URL"
 
@@ -666,7 +704,8 @@ install_aggregate_output \
   "$NORMALIZED_TARGETS" \
   "$REQUEST_ID" \
   "$DOWNLOAD_BASE_URL" \
-  "$DOWNLOAD_PAGE_URL"
+  "$DOWNLOAD_PAGE_URL" \
+  "$TENANT_CONFIG_SHA256"
 
 log "done"
 log "output:           $PACKAGE_OUTPUT_DIR"

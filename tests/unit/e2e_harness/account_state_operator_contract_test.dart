@@ -14,6 +14,20 @@ void main() {
     );
   });
 
+  test('accepts only the reviewed same-host managed-release argv', () {
+    expect(
+      parseAccountStateOperatorCommand(
+        jsonEncode(reviewedLocalAccountStateOperatorCommand),
+        mode: 'local',
+      ),
+      reviewedLocalAccountStateOperatorCommand,
+    );
+    expect(
+      reviewedLocalAccountStateOperatorCommand.join(' '),
+      isNot(contains('/home/ecs-user/awiki-space')),
+    );
+  });
+
   test('rejects the obsolete same-host mutable-workspace argv', () {
     expect(
       () => parseAccountStateOperatorCommand(

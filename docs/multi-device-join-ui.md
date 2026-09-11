@@ -127,7 +127,9 @@ AWiki Me 只维护一个当前 access token 会话，不引入 refresh token 或
 
 Join V1 不提供 `admin` 选择，也不因批准 Join 触发根密钥传输；结果固定为
 `active + member + management_ready=false`。管理员升级和普通 P5 RootKeyEnvelope 属于
-第三步，当前保留的旧 root-control 实现不能从本 Join 流程被调用。
+独立的 Root Transfer：用户可以在 Join 完成页立即执行，也可以以后从设备列表对 eligible
+member 执行。两条入口都重新调用 Core fresh prepare，不改变 Join 授权结果，也不复用 Join
+Session、旧 handle 或旧 root-control 实现。
 
 ## 4. 永久撤销
 
@@ -161,6 +163,12 @@ split claim/admin poll、admin toggle 或旧 root-control 的场景不能作为�
 `im.device.join.requested` host event 唤醒，App 管理端等待 AppShell 全局审批入口；测试
 不得直接调用 Message Inbox hydration、`requestSync()` 或 `refreshJoinInbox()` 代替唤醒。
 实现存在不等于远端已通过，仍需独立的 `awiki.info` pass attestation。
+
+`DEVICE-JOIN-E2E-006` 追加真实 DSH→AWiki Me 互操作：DSH 创建 Handle 并证明 bootstrap
+`admin_ready`，AWiki Me 通过可见 onboarding 发起 ordinary Join，DSH 只用 reliable sync/Core
+local inbox 和 opaque refs 完成 SAS + `APPROVE` member 审批，再以 `REVOKE` 撤销测试 App 并
+通过公开 Handle revoke 回收 quota。该 case 只在 Node v10 `0.1.8` 已发布、DSH 已构建且受保护
+revoke factor fixture 可用时执行；任何 `awiki.ai` 或混合 endpoint 在创建账号前失败。
 
 App↔App 验证使用独立的 `multi-device-app-pair` suite 和
 `DEVICE-JOIN-E2E-004`。它在同一台 macOS 上运行两个 bundle/build/state 均隔离的真实

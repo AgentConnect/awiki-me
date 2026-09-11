@@ -95,6 +95,7 @@ enum DesktopCliPeerIntegrationCase {
   group,
   attachment,
   contacts,
+  contactFirst,
   inboundFirst,
   identitySwitch,
   processRestart,
@@ -103,7 +104,7 @@ enum DesktopCliPeerIntegrationCase {
 
   static DesktopCliPeerIntegrationCase parse(String value) {
     return switch (value.trim().toLowerCase()) {
-      '' || 'full' => DesktopCliPeerIntegrationCase.full,
+      '' || 'full' || 'messaging' => DesktopCliPeerIntegrationCase.full,
       'direct' ||
       'dm' ||
       'message' ||
@@ -122,6 +123,9 @@ enum DesktopCliPeerIntegrationCase {
       'people' ||
       'follow' ||
       'contact-only' => DesktopCliPeerIntegrationCase.contacts,
+      'contact-first' ||
+      'contact_first' ||
+      'contact-first-only' => DesktopCliPeerIntegrationCase.contactFirst,
       'inbound' ||
       'inbound-first' ||
       'inbound_first' ||
@@ -170,6 +174,7 @@ enum DesktopCliPeerIntegrationCase {
   bool get runsContacts =>
       this == DesktopCliPeerIntegrationCase.full ||
       this == DesktopCliPeerIntegrationCase.contacts ||
+      this == DesktopCliPeerIntegrationCase.contactFirst ||
       this == DesktopCliPeerIntegrationCase.displayNameFallback;
 
   bool get runsInboundFirst =>
@@ -182,6 +187,11 @@ enum DesktopCliPeerIntegrationCase {
 
   bool get runsDisplayNameFallback =>
       this == DesktopCliPeerIntegrationCase.displayNameFallback;
+
+  bool get ownsAuthenticationCase =>
+      this != DesktopCliPeerIntegrationCase.contactFirst &&
+      this != DesktopCliPeerIntegrationCase.inboundFirst &&
+      this != DesktopCliPeerIntegrationCase.displayNameFallback;
 }
 
 DesktopCliPeerIntegrationCase desktopCliPeerCaseFromRunConfig() =>
@@ -193,7 +203,12 @@ void runDesktopCliPeerE2e({
   String description =
       'Desktop App and CLI peer cover direct, group, and attachment basics',
 }) {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets(
     description,
@@ -290,7 +305,8 @@ void runDesktopCliPeerE2e({
           ? await robot.awaitFirstConversationRowVisible(appLaunchWatch!)
           : null;
       appLaunchWatch?.stop();
-      if (!selectedCase.runsPerformance) {
+      if (!selectedCase.runsPerformance &&
+          selectedCase.ownsAuthenticationCase) {
         await E2eCaseAttestationWriter.markPassed(
           'AUTH-E2E-001',
           phases: const <String>[
@@ -429,31 +445,40 @@ void runDesktopCliPeerE2e({
           config: config,
           nonce: messageNonce,
           expectContactFirst:
-              selectedCase == DesktopCliPeerIntegrationCase.contacts,
+              selectedCase == DesktopCliPeerIntegrationCase.contacts ||
+              selectedCase == DesktopCliPeerIntegrationCase.contactFirst,
         );
-        final contactCases = <String, List<String>>{
-          'CONTACT-E2E-001': const <String>[
-            'inbound_follower_contact_opened',
-            'app_ui_follow_converged_to_friend',
-          ],
-          'CONTACT-E2E-002': const <String>[
-            'cli_unfollow_refollow_transitions_completed',
-            'app_ui_unfollow_confirmed',
-          ],
-          'CONTACT-REG-001': const <String>[
-            'exact_none_follower_friend_following_transitions_checked',
-          ],
-          'CONTACT-MSG-E2E-001': const <String>[
-            'exact_contact_row_clicked',
-            'canonical_send_message_summary_ui_overlay_exact_one',
-            'restart_unread_read_closed_loop_verified',
-          ],
-          if (selectedCase == DesktopCliPeerIntegrationCase.contacts)
-            'CONTACT-FIRST-CONV-E2E-001': const <String>[
-              'no_direct_before_follower_contact_open',
-              'contact_first_canonical_direct_exact_one',
-            ],
-        };
+        final contactCases =
+            selectedCase == DesktopCliPeerIntegrationCase.contactFirst
+            ? <String, List<String>>{
+                'CONTACT-FIRST-CONV-E2E-001': const <String>[
+                  'no_direct_before_follower_contact_open',
+                  'contact_first_canonical_direct_exact_one',
+                ],
+              }
+            : <String, List<String>>{
+                'CONTACT-E2E-001': const <String>[
+                  'inbound_follower_contact_opened',
+                  'app_ui_follow_converged_to_friend',
+                ],
+                'CONTACT-E2E-002': const <String>[
+                  'cli_unfollow_refollow_transitions_completed',
+                  'app_ui_unfollow_confirmed',
+                ],
+                'CONTACT-REG-001': const <String>[
+                  'exact_none_follower_friend_following_transitions_checked',
+                ],
+                'CONTACT-MSG-E2E-001': const <String>[
+                  'exact_contact_row_clicked',
+                  'canonical_send_message_summary_ui_overlay_exact_one',
+                  'restart_unread_read_closed_loop_verified',
+                ],
+                if (selectedCase == DesktopCliPeerIntegrationCase.contacts)
+                  'CONTACT-FIRST-CONV-E2E-001': const <String>[
+                    'no_direct_before_follower_contact_open',
+                    'contact_first_canonical_direct_exact_one',
+                  ],
+              };
         if (!selectedCase.runsDisplayNameFallback) {
           await _attestPassedCases(contactCases);
         }

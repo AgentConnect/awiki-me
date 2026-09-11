@@ -108,6 +108,16 @@ void main() {
             'bootstrap_public_key_b64u':
                 'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
             'bootstrap_key_algorithm': 'x25519',
+            'config_summary': <String, Object?>{
+              'delegated_subkey_proposal': <String, Object?>{
+                'schema': userSubkeyPackageSchema,
+                'user_did': 'did:test:me',
+                'verification_method': 'did:test:me#daemon-key-1',
+                'key_type': 'Multikey/Ed25519',
+                'key_algorithm': 'Ed25519',
+                'public_key_multibase': 'zPublic',
+              },
+            },
           },
         ),
       ),
@@ -355,6 +365,16 @@ void main() {
   );
 }
 
+void realBackendMain() {
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
+  runPersonalAgentRealBackendE2e();
+}
+
 void runPersonalAgentRealBackendE2e() {
   testWidgets(
     'Personal Agent full UI drives real backend daemon and recovery',
@@ -576,10 +596,8 @@ AppBootstrap _copyBootstrapForPersonalAgentUiTest(
   return AppBootstrap(
     environment: source.environment,
     accountGateway: source.accountGateway,
-    gateway: source.gateway,
     realtimeGateway: source.realtimeGateway,
     notificationFacade: source.notificationFacade,
-    e2eeFacade: source.e2eeFacade,
     localePreferenceService: source.localePreferenceService,
     updateService: source.updateService,
     appSessionService: source.appSessionService,
@@ -1869,7 +1887,8 @@ class _UiPersonalAgentBindingPort implements PersonalAgentBindingPort {
   }
 }
 
-class _UiIdentityCorePort implements IdentityCorePort {
+class _UiIdentityCorePort
+    implements IdentityCorePort, DaemonSubkeyAuthorizationCorePort {
   final List<String> calls = <String>[];
 
   @override
@@ -1908,15 +1927,12 @@ class _UiIdentityCorePort implements IdentityCorePort {
   }
 
   @override
-  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
+  Future<UserSubkeyPackage> authorizeDaemonSubkey(
     String identityIdOrAlias,
+    UserSubkeyPackage proposal,
   ) async {
-    return const UserSubkeyPackage(
-      userDid: 'did:test:me',
-      verificationMethod: 'did:test:me#daemon-key-1',
-      publicKeyMultibase: 'zPublic',
-      privateKeyMultibase: 'zPrivate',
-    );
+    calls.add('authorize:$identityIdOrAlias');
+    return proposal;
   }
 
   @override
@@ -1933,9 +1949,7 @@ class _UiIdentityCorePort implements IdentityCorePort {
   ];
 
   @override
-  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias) {
-    return ensureDaemonSubkeyPackage(identityIdOrAlias);
-  }
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {

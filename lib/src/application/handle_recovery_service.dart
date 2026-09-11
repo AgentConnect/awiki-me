@@ -25,6 +25,36 @@ class HandleRecoveryService {
     handle: _normalizedHandle(handle),
   );
 
+  Future<HandleRecoveryContext> inspectContext({
+    required String handle,
+    String? localIdentityId,
+  }) async {
+    final target = _normalizedHandle(handle);
+    final context = await _core.inspectContext(
+      handle: target,
+      localIdentityId: localIdentityId == null
+          ? null
+          : _validatedOwnerReference(localIdentityId),
+    );
+    if (context.handle != target ||
+        (localIdentityId != null &&
+            context.localIdentityId != localIdentityId)) {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.transitionMismatch,
+      );
+    }
+    final progress = context.progress;
+    if (progress != null) {
+      _validateOperation(progress);
+      if (progress.handle != target) {
+        throw const HandleRecoveryFailure(
+          HandleRecoveryFailureCode.transitionMismatch,
+        );
+      }
+    }
+    return context;
+  }
+
   Future<HandleRecoveryOtpResult> requestOtp({
     required String handle,
     required String phone,
@@ -56,7 +86,7 @@ class HandleRecoveryService {
         operation.lifecycleClass == HandleRecoveryLifecycleClass.preCommit &&
         !operation.commitAttempted &&
         operation.keyState == HandleRecoveryKeyState.available &&
-        operation.phase == HandleRecoveryProgressPhase.otpRequested;
+        operation.allowedActions.contains(HandleRecoveryAction.prepare);
     final postAttemptFactorRetry =
         (expected == null || operation.operationId == expected) &&
         operation.lifecycleClass ==
@@ -113,46 +143,35 @@ class HandleRecoveryService {
     required HandleRecoveryIdentityScope scope,
     required String handle,
   }) async {
-    final operations = await listOperations(scope: scope, handle: handle);
-    final actionable = operations.where((item) => item.isActionable).toList();
-    if (actionable.length > 1) {
-      throw const HandleRecoveryFailure(
-        HandleRecoveryFailureCode.localStateUnavailable,
-      );
-    }
-    if (actionable.length == 1) {
-      return status(actionable.single.operationId);
-    }
-    // Reopening the latest applied operation closes the crash window between
-    // Core transition and central App activation. Timestamps are Core-owned
-    // projections; the App does not persist this selection.
-    HandleRecoveryProgress? latestApplied;
-    for (final operation in operations) {
-      if (operation.lifecycleClass != HandleRecoveryLifecycleClass.applied) {
-        continue;
-      }
-      final current = latestApplied;
-      if (current == null ||
-          operation.updatedAt.isAfter(current.updatedAt) ||
-          (operation.updatedAt.compareTo(current.updatedAt) == 0 &&
-              operation.operationId.compareTo(current.operationId) > 0)) {
-        latestApplied = operation;
-      }
-    }
-    return latestApplied == null ? null : status(latestApplied.operationId);
+    return (await inspectContext(
+      handle: handle,
+      localIdentityId: scope.localIdentityId,
+    )).progress;
   }
 
   Future<HandleRecoveryProgress> activate({
     required String operationId,
     required String presenceReason,
+    bool Function()? isCurrent,
+    Future<void> Function()? beforeAdvance,
   }) async {
     final normalizedOperationId = _validatedOperationId(operationId);
     final current = await status(normalizedOperationId);
-    if (current.isCompleted) {
-      return current;
+    if (isCurrent != null && !isCurrent()) {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.actionNotAllowed,
+      );
     }
-    if (current.canResume) {
-      return _core.reconcile(normalizedOperationId);
+    if (current.isCompleted || current.canResume) {
+      await beforeAdvance?.call();
+      if (isCurrent?.call() == false) {
+        throw const HandleRecoveryFailure(
+          HandleRecoveryFailureCode.actionNotAllowed,
+        );
+      }
+      return current.isCompleted
+          ? current
+          : _core.reconcile(normalizedOperationId);
     }
     if (!current.canActivate) {
       throw HandleRecoveryFailure(
@@ -168,6 +187,17 @@ class HandleRecoveryService {
         HandleRecoveryFailureCode.userPresenceRequired,
       );
     }
+    if (isCurrent != null && !isCurrent()) {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.actionNotAllowed,
+      );
+    }
+    await beforeAdvance?.call();
+    if (isCurrent?.call() == false) {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.actionNotAllowed,
+      );
+    }
     final progress = await _core.activate(
       operationId: normalizedOperationId,
       userPresenceConfirmed: true,
@@ -176,8 +206,22 @@ class HandleRecoveryService {
     return progress;
   }
 
-  Future<HandleRecoveryProgress> resume(String operationId) async {
+  Future<HandleRecoveryProgress> resume(
+    String operationId, {
+    bool Function()? isCurrent,
+  }) async {
     final normalizedOperationId = _validatedOperationId(operationId);
+    final current = await status(normalizedOperationId);
+    if (isCurrent?.call() == false) {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.actionNotAllowed,
+      );
+    }
+    if (!current.canResume) {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.activationRequired,
+      );
+    }
     final progress = await _core.reconcile(normalizedOperationId);
     _validateOperation(progress, expectedOperationId: normalizedOperationId);
     return progress;
@@ -204,12 +248,18 @@ class HandleRecoveryService {
   Future<HandleRecoveryProgress> quarantineKeyUnavailable({
     required String operationId,
     required String presenceReason,
+    bool Function()? isCurrent,
   }) async {
     final normalizedOperationId = _validatedOperationId(operationId);
     final confirmed = await _userPresence.confirm(reason: presenceReason);
     if (!confirmed) {
       throw const HandleRecoveryFailure(
         HandleRecoveryFailureCode.userPresenceRequired,
+      );
+    }
+    if (isCurrent != null && !isCurrent()) {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.actionNotAllowed,
       );
     }
     final progress = await _core.quarantineKeyUnavailable(
@@ -386,7 +436,8 @@ void _validateOperation(
     HandleRecoveryLifecycleClass.discardedPreAttempt ||
     HandleRecoveryLifecycleClass.quarantinedKeyUnavailable ||
     HandleRecoveryLifecycleClass.supersededByStateChange ||
-    HandleRecoveryLifecycleClass.failedTerminal => false,
+    HandleRecoveryLifecycleClass.failedTerminal ||
+    HandleRecoveryLifecycleClass.locallyDeleted => false,
   };
   if ((stateRootRequired &&
           !_isSha256Fingerprint(operation.stateRootFingerprint)) ||

@@ -13,7 +13,9 @@ void main() {
     expect(script, contains('ai.awiki.awikime.dev'));
     expect(script, contains('ai.awiki.awikime.dev.manual.joiner'));
     expect(script, contains('joiner-flutter-build'));
-    expect(script, contains('AWIKI_PRIMARY_TENANT_DOMAIN'));
+    expect(script, contains('AWIKI_TENANT_CONFIG_PATH'));
+    expect(script, contains('AWIKI_BUILTIN_TENANTS_BASE64'));
+    expect(script, contains('AWIKI_BUILTIN_TENANTS_SHA256'));
     expect(
       script,
       isNot(contains('AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED')),

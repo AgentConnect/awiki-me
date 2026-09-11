@@ -79,7 +79,6 @@ void main() {
         };
     container = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(
           gateway,
@@ -182,7 +181,6 @@ void main() {
     ]);
     final fencedContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(fencedGateway),
         notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
         ...fakeApplicationServiceOverrides(
           fencedGateway,
@@ -252,7 +250,6 @@ void main() {
         };
     final fencedContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(fencedGateway),
         notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
         ...fakeApplicationServiceOverrides(
           fencedGateway,
@@ -906,7 +903,6 @@ void main() {
     gateway.conversations = const <ConversationSummary>[];
     final patchContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         messagingServiceProvider.overrideWithValue(patchMessaging),
@@ -1039,7 +1035,6 @@ void main() {
       );
       final patchContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           ...fakeApplicationServiceOverrides(gateway),
           messagingServiceProvider.overrideWithValue(patchMessaging),
@@ -1086,7 +1081,6 @@ void main() {
     );
     final patchContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         messagingServiceProvider.overrideWithValue(patchMessaging),
@@ -1141,7 +1135,6 @@ void main() {
     );
     final patchContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         messagingServiceProvider.overrideWithValue(patchMessaging),
@@ -1272,7 +1265,6 @@ void main() {
     );
     final patchContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(
           gateway,
@@ -1347,7 +1339,6 @@ void main() {
     ]);
     final staleGuardContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(
           gateway,
@@ -1401,7 +1392,6 @@ void main() {
       final blockingMessaging = _BlockingTimelineMessagingService(gateway);
       final identityContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -1497,7 +1487,6 @@ void main() {
         ..repairConversationTimelineCompleter = repairCompleter;
       final identityContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -1575,7 +1564,6 @@ void main() {
       final sendMessaging = FakeMessagingService(gateway);
       final identityContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -1654,7 +1642,6 @@ void main() {
     );
     final patchContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(
           gateway,
@@ -1738,7 +1725,6 @@ void main() {
     );
     final patchContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(
           gateway,
@@ -1877,7 +1863,6 @@ void main() {
     );
     final patchContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(
           gateway,
@@ -1990,7 +1975,6 @@ void main() {
     );
     final patchContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(
           gateway,
@@ -2110,7 +2094,6 @@ void main() {
       );
       final patchContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           ...fakeApplicationServiceOverrides(gateway),
           messagingServiceProvider.overrideWithValue(patchMessaging),
@@ -2179,7 +2162,6 @@ void main() {
     );
     final patchContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         messagingServiceProvider.overrideWithValue(patchMessaging),
@@ -2262,7 +2244,6 @@ void main() {
     );
     final patchContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         messagingServiceProvider.overrideWithValue(patchMessaging),
@@ -2343,7 +2324,6 @@ void main() {
       };
       final patchContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           ...fakeApplicationServiceOverrides(
             gateway,
@@ -2404,7 +2384,6 @@ void main() {
       );
       final patchContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           ...fakeApplicationServiceOverrides(gateway),
           messagingServiceProvider.overrideWithValue(patchMessaging),
@@ -2498,7 +2477,6 @@ void main() {
       );
       final patchContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           ...fakeApplicationServiceOverrides(gateway),
           messagingServiceProvider.overrideWithValue(patchMessaging),
@@ -2581,7 +2559,6 @@ void main() {
       );
       final patchContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           ...fakeApplicationServiceOverrides(gateway),
           messagingServiceProvider.overrideWithValue(patchMessaging),
@@ -2706,7 +2683,6 @@ void main() {
       );
       final patchContainer = ProviderContainer(
         overrides: <Override>[
-          awikiGatewayProvider.overrideWithValue(gateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           ...fakeApplicationServiceOverrides(gateway),
           messagingServiceProvider.overrideWithValue(patchMessaging),
@@ -4922,7 +4898,6 @@ void main() {
       };
     final markReadContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(throwingGateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(throwingGateway),
       ],
@@ -5072,7 +5047,6 @@ void main() {
       };
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -5111,7 +5085,6 @@ void main() {
     gateway.conversations = const <ConversationSummary>[];
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -5176,7 +5149,6 @@ void main() {
     );
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -5249,7 +5221,6 @@ void main() {
     final agentMessaging = FakeMessagingService(gateway);
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(
           gateway,
@@ -5298,7 +5269,6 @@ void main() {
     final humanMessaging = FakeMessagingService(gateway);
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(
           gateway,
@@ -5335,7 +5305,6 @@ void main() {
     gateway.sendDelay = const Duration(milliseconds: 50);
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -5385,7 +5354,6 @@ void main() {
   test('发送成功后由权威 running 进入处理中，收到智能体回复后清除', () async {
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -5493,7 +5461,6 @@ void main() {
     );
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -5558,7 +5525,6 @@ void main() {
   test('发送给智能体后的旧历史回补不会误清处理中状态', () async {
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -5627,7 +5593,6 @@ void main() {
   test('连续发给智能体时只按精确关联清理，多候选旧回复不猜测', () async {
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -5832,7 +5797,6 @@ void main() {
     gateway.sendDelay = const Duration(milliseconds: 10);
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -5978,7 +5942,6 @@ void main() {
       };
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -6212,7 +6175,6 @@ void main() {
   test('发送私聊附件会生成 pending 并用服务端附件消息替换', () async {
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -6280,7 +6242,6 @@ void main() {
     gateway.nextSentMessageId = 'sent-agent-attachment';
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -6361,7 +6322,6 @@ void main() {
     );
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         messagingServiceProvider.overrideWithValue(lowFidelityMessaging),
@@ -6419,7 +6379,6 @@ void main() {
     );
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         messagingServiceProvider.overrideWithValue(lowFidelityMessaging),
@@ -6488,7 +6447,6 @@ void main() {
     );
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -6586,7 +6544,6 @@ void main() {
     );
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         messagingServiceProvider.overrideWithValue(lowFidelityMessaging),
@@ -6674,7 +6631,6 @@ void main() {
     );
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         messagingServiceProvider.overrideWithValue(lowFidelityMessaging),
@@ -6746,7 +6702,6 @@ void main() {
   test('普通用户附件不会误显示智能体处理中状态', () async {
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -6795,7 +6750,6 @@ void main() {
     final cache = FakeAttachmentCacheService();
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(
           gateway,
@@ -6856,7 +6810,6 @@ void main() {
       ..failNextListConversations = true;
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(flakyGateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(flakyGateway),
         sessionProvider.overrideWith((ref) {
@@ -6913,7 +6866,6 @@ void main() {
     );
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -7004,7 +6956,6 @@ void main() {
     );
     final retryContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         messagingServiceProvider.overrideWithValue(patchMessaging),
@@ -7069,7 +7020,7 @@ void main() {
       conversation.conversationId,
     );
     expect(patchMessaging.lastClientMessageId, 'failed-text');
-    expect(patchMessaging.lastIdempotencyKey, 'retry-failed-text');
+    expect(patchMessaging.lastIdempotencyKey, 'op-failed-text');
     expect(patchMessaging.lastSendContent, '重试文本');
     final messages = retryContainer
         .read(chatThreadProvider(_timelineThreadId(conversation)))
@@ -7084,13 +7035,165 @@ void main() {
     expect(gateway.fetchDmHistoryCalls, 0);
   });
 
+  test('文本重试等待 Core 时原消息保持 sending 且不产生重复气泡', () async {
+    final resultCompleter = Completer<ChatMessage>();
+    final patchMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[],
+      textSendCompleter: resultCompleter,
+    );
+    final retryContainer = ProviderContainer(
+      overrides: <Override>[
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        messagingServiceProvider.overrideWithValue(patchMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(retryContainer.dispose);
+    final failedMessage = ChatMessage(
+      localId: 'failed-pending-rebind',
+      remoteId: 'failed-pending-rebind',
+      conversationId: conversation.conversationId,
+      threadId: _timelineThreadId(conversation),
+      senderDid: 'did:me',
+      receiverDid: conversation.targetDid,
+      content: '等待路由恢复',
+      originalType: 'text',
+      createdAt: DateTime(2026, 5, 8, 10, 3),
+      isMine: true,
+      sendState: MessageSendState.failed,
+    );
+    retryContainer
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
+          failedMessage,
+          threadId: _timelineThreadId(conversation),
+        );
+
+    final retry = retryContainer
+        .read(chatThreadsProvider.notifier)
+        .retryMessage(conversation: conversation, message: failedMessage);
+    await Future<void>.delayed(Duration.zero);
+
+    final pending = retryContainer
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
+        .messages;
+    expect(pending, hasLength(1));
+    expect(pending.single.localId, 'failed-pending-rebind');
+    expect(pending.single.sendState, MessageSendState.sending);
+    expect(patchMessaging.lastIdempotencyKey, 'op-failed-pending-rebind');
+
+    resultCompleter.complete(
+      failedMessage.copyWith(sendState: MessageSendState.sent),
+    );
+    await retry;
+    final delivered = retryContainer
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
+        .messages;
+    expect(delivered, hasLength(1));
+    expect(delivered.single.sendState, MessageSendState.sent);
+  });
+
+  test('Mention 文本重试复用原消息操作幂等键', () async {
+    const mention = ChatMessageMention(
+      id: 'mention-retry-ocean',
+      surface: '@ocean',
+      start: 0,
+      end: 6,
+      target: ChatMentionTargetDraft.member(
+        kind: ChatMentionTargetKind.human,
+        did: 'did:example:ocean',
+        handle: 'ocean.awiki.test',
+        displayName: 'Ocean',
+      ),
+    );
+    const draft = ChatMentionDraft(
+      localId: 'mention-retry-ocean',
+      surface: '@ocean',
+      start: 0,
+      end: 6,
+      target: ChatMentionTargetDraft.member(
+        kind: ChatMentionTargetKind.human,
+        did: 'did:example:ocean',
+        handle: 'ocean.awiki.test',
+        displayName: 'Ocean',
+      ),
+    );
+    final patchMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[],
+    );
+    final retryContainer = ProviderContainer(
+      overrides: <Override>[
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        messagingServiceProvider.overrideWithValue(patchMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(retryContainer.dispose);
+    const text = '@ocean 再试一次';
+    final failedMessage = ChatMessage(
+      localId: 'failed-mention',
+      remoteId: 'failed-mention',
+      conversationId: conversation.conversationId,
+      threadId: _timelineThreadId(conversation),
+      senderDid: 'did:me',
+      receiverDid: conversation.targetDid,
+      content: text,
+      originalType: 'application/json',
+      createdAt: DateTime(2026, 5, 8, 10, 3),
+      isMine: true,
+      sendState: MessageSendState.failed,
+      payloadJson: jsonEncode(
+        ChatMentionPayload.toP9Json(
+          text: text,
+          draftMentions: const <ChatMentionDraft>[draft],
+        ),
+      ),
+      mentions: const <ChatMessageMention>[mention],
+    );
+    retryContainer
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
+          failedMessage,
+          threadId: _timelineThreadId(conversation),
+        );
+
+    await retryContainer
+        .read(chatThreadsProvider.notifier)
+        .retryMessage(conversation: conversation, message: failedMessage);
+
+    expect(patchMessaging.sendConversationMentionTextCalls, 1);
+    expect(patchMessaging.lastClientMessageId, 'failed-mention');
+    expect(patchMessaging.lastIdempotencyKey, 'op-failed-mention');
+  });
+
   test('附件重试成功后不触发 full refresh 或 force history 补拉', () async {
     final patchMessaging = _PatchMessagingService(
       localHistory: <ChatMessage>[],
     );
     final retryContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         messagingServiceProvider.overrideWithValue(patchMessaging),
@@ -7160,7 +7263,7 @@ void main() {
       conversation.conversationId,
     );
     expect(patchMessaging.lastClientMessageId, 'failed-attachment-retry');
-    expect(patchMessaging.lastIdempotencyKey, 'retry-failed-attachment-retry');
+    expect(patchMessaging.lastIdempotencyKey, 'op-failed-attachment-retry');
     expect(gateway.lastSentAttachment, isNull);
     final messages = retryContainer
         .read(chatThreadProvider(_timelineThreadId(conversation)))
@@ -7842,7 +7945,6 @@ void main() {
       };
     final sendContainer = ProviderContainer(
       overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
         ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
@@ -7993,6 +8095,7 @@ class _PatchMessagingService
     this.repairConversationResult,
     this.emitPendingBeforeTextResult = false,
     this.textSendError,
+    this.textSendCompleter,
   }) : repairPatch =
            repairPatch ??
            const ThreadMessagePatch(
@@ -8007,6 +8110,7 @@ class _PatchMessagingService
   final String ownerIdentityId;
   final bool emitPendingBeforeTextResult;
   final Object? textSendError;
+  final Completer<ChatMessage>? textSendCompleter;
   final Future<ThreadMessagePatch>? repairConversationResult;
   ThreadMessagePatch repairPatch;
   final Map<String, List<ChatMessage>> projectionByConversationId =
@@ -8325,6 +8429,10 @@ class _PatchMessagingService
     final error = textSendError;
     if (error != null) {
       throw error;
+    }
+    final completer = textSendCompleter;
+    if (completer != null) {
+      return completer.future;
     }
     return sent;
   }

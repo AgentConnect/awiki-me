@@ -5,7 +5,12 @@ const String _patchRestartCaseId = 'MESSAGE-PATCH-RESTART-E2E-001';
 const String _credentialDeleteCaseId = 'IDENTITY-DELETE-E2E-001';
 
 void runDesktopCliPeerProcessRestartPhaseA() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets('Process restart phase A persists real App state', (
     tester,
@@ -231,7 +236,12 @@ void runDesktopCliPeerProcessRestartPhaseA() {
 }
 
 void runDesktopCliPeerProcessRestartPhaseB() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets('Process restart phase B restores only persisted App state', (
     tester,
@@ -292,16 +302,17 @@ void runDesktopCliPeerProcessRestartPhaseB() {
     expect(find.byType(AppShell), findsOneWidget);
     final robot = _DesktopAppRobot(tester);
     await robot.awaitRestoredSession(restored);
-    final startupPatchObservation = robot.container
-        .read(conversationListProvider.notifier)
-        .patchStartupObservation;
-    if (startupPatchObservation == null ||
-        !startupPatchObservation.provesSubscribeBeforeFirstReliableSync) {
-      fail(
-        'Phase B did not prove Patch subscription and reset before startup '
-        'reliable sync.',
-      );
-    }
+    await robot.pumpUntil(
+      description:
+          'Phase B Patch subscription and reset before startup reliable sync',
+      condition: () =>
+          robot.container
+              .read(conversationListProvider.notifier)
+              .patchStartupObservation
+              ?.provesSubscribeBeforeFirstReliableSync ==
+          true,
+      timeout: const Duration(seconds: 30),
+    );
 
     await _waitForUiConversationUnread(
       robot: robot,
@@ -494,7 +505,12 @@ void runDesktopCliPeerProcessRestartPhaseB() {
 }
 
 void runDesktopCliPeerCredentialDeletePhaseC() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(
+    () => E2eInvocationCompletionWriter.markFinished(
+      failedTestCount: binding.failureMethodsDetails.length,
+    ),
+  );
 
   testWidgets('Credential deletion survives a cold App restart', (
     tester,

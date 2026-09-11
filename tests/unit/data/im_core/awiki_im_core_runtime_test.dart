@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
@@ -398,6 +399,70 @@ void main() {
     expect(await Directory(layout.identityRootDir).exists(), isFalse);
   });
 
+  test(
+    'disposed tenant runtime rejects stale callers and closes a late open',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_runtime_late_open_',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final layout = AwikiImCorePathLayout.fromRoots(
+        appSupportRoot: '${root.path}/support',
+        cacheRoot: '${root.path}/cache',
+        tempRoot: '${root.path}/tmp',
+        scopeId: StorageScopeId.parse(scopeValue),
+      );
+      await layout.scopeLayout.createScopeRootExclusive();
+      final started = Completer<void>();
+      final release = Completer<core.AwikiImCore>();
+      final opened = _LateOpenCore();
+      var opens = 0;
+      final runtime = AwikiImCoreRuntime(
+        config: const AwikiImCoreEnvironmentConfig(
+          serviceBaseUrl: 'https://example.test',
+          didDomain: 'example.test',
+        ),
+        paths: layout,
+        scopeId: StorageScopeId.parse(scopeValue),
+        vaultSecretProvider: _FakeVaultSecretProvider(),
+        multiDeviceAudience: 'awiki-user-service',
+        inspectLocalStateUpgrade: (_) async =>
+            const core.LocalStateUpgradeInspection(
+              eligibility: core.LocalStateUpgradeEligibility.notRequired,
+              sourceSchemaVersion: 41,
+              targetSchemaVersion: 41,
+            ),
+        upgradeLocalState: (_) async => const core.LocalStateUpgradeResult(
+          status: core.LocalStateUpgradeStatus.notRequired,
+          migratedPersonas: 0,
+          migratedConversations: 0,
+          unresolvedMessages: 0,
+          aliasCount: 0,
+          backupAvailable: false,
+          sourceSchemaVersion: 41,
+          targetSchemaVersion: 41,
+        ),
+        openCore: ({required config, required paths, openOptions}) {
+          opens++;
+          started.complete();
+          return release.future;
+        },
+      );
+      final opening = runtime.open();
+      await started.future;
+      final disposing = runtime.dispose();
+      final assertion = expectLater(opening, throwsStateError);
+      release.complete(opened);
+      await assertion;
+      await disposing;
+      expect(opened.disposes, 1);
+      expect(runtime.isOpen, isFalse);
+      await expectLater(runtime.coreInstance(), throwsStateError);
+      await expectLater(runtime.open(), throwsStateError);
+      expect(opens, 1);
+    },
+  );
+
   test('currentClient fails clearly before an identity is selected', () async {
     final root = await Directory.systemTemp.createTemp(
       'awiki_me_runtime_test_',
@@ -463,4 +528,18 @@ Future<void> _writeSqliteHeaderWithUserVersion(String path, int version) async {
   bytes[62] = (version >> 8) & 0xff;
   bytes[63] = version & 0xff;
   await File(path).writeAsBytes(bytes, flush: true);
+}
+
+class _LateOpenCore implements core.AwikiImCore {
+  int disposes = 0;
+  @override
+  Future<List<core.IdentitySummary>> listIdentities() async => [];
+  @override
+  Future<void> dispose() async {
+    disposes++;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('unexpected runtime call');
 }

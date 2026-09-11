@@ -93,27 +93,30 @@ void main() {
     expect(mapper.appSessionFromIdentity(withDidOnly).displayName, 'carol');
   });
 
-  test('daemon subkey package maps to bootstrap user subkey package', () {
-    const package = core.DaemonSubkeyPrivatePackage(
-      schema: 'awiki.daemon.user_subkey_package.v2',
-      userDid: 'did:human:me',
-      verificationMethod: 'did:human:me#daemon-key-1',
-      keyType: 'Multikey/Ed25519',
-      keyAlgorithm: 'Ed25519',
-      publicKeyMultibase: 'zPublic',
-      privateKeyEncoding: 'pem',
-      privateKeyPem: 'pemPrivate',
-      privateKeyMultibase: 'pemPrivate',
-    );
+  test(
+    'daemon public subkey package maps to bootstrap user subkey package',
+    () {
+      const package = core.DaemonSubkeyPublicPackage(
+        schema: 'awiki.daemon.user_subkey_package.v3',
+        userDid: 'did:human:me',
+        verificationMethod: 'did:human:me#daemon-key-1',
+        keyType: 'Multikey/Ed25519',
+        keyAlgorithm: 'Ed25519',
+        publicKeyMultibase: 'zPublic',
+      );
 
-    final mapped = mapper.userSubkeyPackageFromCore(package);
+      final mapped = mapper.userSubkeyPublicPackageFromCore(package);
 
-    expect(mapped.userDid, 'did:human:me');
-    expect(mapped.verificationMethod, 'did:human:me#daemon-key-1');
-    expect(mapped.keyType, 'Multikey/Ed25519');
-    expect(mapped.publicKeyMultibase, 'zPublic');
-    expect(mapped.privateKeyPem, 'pemPrivate');
-  });
+      expect(mapped.userDid, 'did:human:me');
+      expect(mapped.verificationMethod, 'did:human:me#daemon-key-1');
+      expect(mapped.keyType, 'Multikey/Ed25519');
+      expect(mapped.publicKeyMultibase, 'zPublic');
+      expect(
+        mapped.toJson().keys.any((key) => key.contains('private')),
+        isFalse,
+      );
+    },
+  );
 
   test('thread refs map to SDK thread refs and message targets', () {
     expect(

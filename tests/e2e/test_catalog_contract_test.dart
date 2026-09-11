@@ -3,8 +3,35 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_catalog.dart';
+import 'runner/manifest.dart';
 
 void main() {
+  test(
+    'full E2E entry covers all active oracles without duplicate execution',
+    () {
+      final root = Directory.current;
+      final catalog = AppTestCatalog.load(root);
+      final leaves = DesktopE2eSuiteManifest.load(root).fullSuites();
+      final ids = leaves.expand((suite) => suite.caseIds).toList();
+      expect(ids.length, ids.toSet().length);
+      expect(
+        ids.toSet(),
+        catalog.cases
+            .where((c) => c.catalogStatus == 'active')
+            .map((c) => c.caseId)
+            .toSet(),
+      );
+      expect(
+        leaves.map((s) => s.name),
+        containsAll(<String>[
+          'multi-device-app-pair',
+          'multi-device-remote-recovery',
+          'root-transfer',
+        ]),
+      );
+    },
+  );
+
   group('active case attestation registration', () {
     test('rejects a case ID that is only declared', () {
       const source = '''

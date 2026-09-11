@@ -16,11 +16,20 @@ const Set<String> _forbiddenCheckpointKeys = <String>{
   'authorization',
 };
 const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
+  'admin\u0000cleanup_scope': <String>{'accountId'},
+  'admin\u0000cleanup_peer': <String>{'accountId'},
   'admin\u0000ready': <String>{'did', 'handle', 'adminDeviceId'},
   'joiner\u0000pending': <String>{'joinSessionId', 'joinedDeviceId'},
   'admin\u0000verification_started': <String>{},
   'joiner\u0000authorized': <String>{'adminDeviceId', 'joinedDeviceId'},
   'admin\u0000complete': <String>{},
+  'admin\u0000root_grant_sent': <String>{},
+  'joiner\u0000management_ready': <String>{},
+  'joiner\u0000rejoin_pending': <String>{'joinSessionId', 'joinedDeviceId'},
+  'admin\u0000rejoin_verification_started': <String>{},
+  'joiner\u0000rejoin_authorized': <String>{},
+  'admin\u0000rejoin_root_grant_sent': <String>{},
+  'joiner\u0000rejoin_management_ready': <String>{},
   'joiner\u0000functional_ready': <String>{},
   'admin\u0000content_fixture_ready': <String>{
     'peerDid',
@@ -47,6 +56,15 @@ const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
   'admin\u0000content_direct_read_converged': <String>{},
   'joiner\u0000content_group_read_committed': <String>{},
   'admin\u0000content_group_read_converged': <String>{},
+  'admin\u0000paging_peer_ready': <String>{'peerDid', 'conversationId'},
+  'joiner\u0000paging_joiner_ready': <String>{},
+  'admin\u0000paging_baseline_sent': <String>{'messageId'},
+  'joiner\u0000paging_baseline_visible': <String>{},
+  'joiner\u0000paging_offline_ready': <String>{},
+  'admin\u0000paging_fixture_ready': <String>{},
+  'joiner\u0000paging_recovery_completed': <String>{},
+  'admin\u0000paging_post_recovery_sent': <String>{'messageId'},
+  'joiner\u0000paging_post_recovery_visible': <String>{},
   'joiner\u0000functional_tail_only_verified': <String>{},
   'admin\u0000functional_agents_created': <String>{
     'daemonDid',
@@ -86,6 +104,11 @@ const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
   'joiner\u0000functional_read_unread_visible': <String>{},
   'joiner\u0000functional_read_committed': <String>{},
   'admin\u0000functional_read_converged': <String>{},
+  'admin\u0000functional_group_read_ready': <String>{'conversationId'},
+  'joiner\u0000functional_group_read_observer_ready': <String>{},
+  'admin\u0000functional_group_read_message_sent': <String>{'messageId'},
+  'joiner\u0000functional_group_read_committed': <String>{},
+  'admin\u0000functional_group_read_converged': <String>{},
   'joiner\u0000functional_offline_ready': <String>{},
   'admin\u0000functional_recovery_gap_prepared': <String>{'messageId'},
   'joiner\u0000functional_recovery_completed': <String>{},
@@ -142,6 +165,7 @@ String safeCliFailureDiagnostic({
 }) {
   String? errorCode;
   String? serviceCode;
+  String? messageCategory;
   for (final output in <Object?>[stderr, stdout]) {
     if (output == null || output.toString().trim().isEmpty) continue;
     Object? decoded;
@@ -163,13 +187,33 @@ String safeCliFailureDiagnostic({
     if (_isSafeDiagnosticCode(candidateServiceCode, requireNamespace: true)) {
       serviceCode = candidateServiceCode;
     }
+    messageCategory = _safeCliMessageCategory(error['message']);
     break;
   }
   return <String>[
     'exit=$exitCode',
     if (errorCode != null) 'code=$errorCode',
     if (serviceCode != null) 'serviceCode=$serviceCode',
+    if (messageCategory != null) 'messageCategory=$messageCategory',
   ].join(', ');
+}
+
+String? _safeCliMessageCategory(Object? value) {
+  if (value is! String) return null;
+  final message = value.toLowerCase();
+  for (final entry in const <(String, String)>[
+    ('root import', 'root_import'),
+    ('identity provider', 'identity_provider'),
+    ('secret vault', 'vault'),
+    ('vault', 'vault'),
+    ('local state', 'local_state'),
+    ('remote service', 'remote_service'),
+    ('serialization', 'serialization'),
+    ('permission denied', 'permission'),
+  ]) {
+    if (message.contains(entry.$1)) return entry.$2;
+  }
+  return null;
 }
 
 bool _isSafeDiagnosticCode(String? value, {required bool requireNamespace}) {
@@ -186,6 +230,11 @@ class AppPairCoordinatorServer {
   final Map<String, Map<String, Object?>> _checkpoints =
       <String, Map<String, Object?>>{};
   final Map<String, String> _sasByRole = <String, String>{};
+  List<String> get cleanupAccountIds => [
+    for (final phase in ['cleanup_scope', 'cleanup_peer'])
+      if (_checkpoints['admin\u0000$phase']?['accountId'] case final String id)
+        id,
+  ];
   StreamSubscription<HttpRequest>? _subscription;
 
   Uri get endpoint => Uri(
@@ -276,6 +325,17 @@ class AppPairCoordinatorServer {
     };
     _validateCheckpointData(data);
     _validateCheckpointRoute(role, phase, data);
+    if ((phase == 'cleanup_scope' || phase == 'cleanup_peer') &&
+        _checkpoints.containsKey('$role\u0000$phase') &&
+        _checkpoints['$role\u0000$phase']?['accountId'] != data['accountId']) {
+      throw const AppPairProtocolException('Cleanup scope cannot change.');
+    }
+    if (role == 'joiner' &&
+        phase == 'rejoin_pending' &&
+        !_checkpoints.containsKey('$role\u0000$phase')) {
+      // The second Join must compare new submissions, not the previous SAS.
+      _sasByRole.clear();
+    }
     _checkpoints['$role\u0000$phase'] = Map<String, Object?>.unmodifiable(data);
     await _json(request.response, HttpStatus.ok, const {'accepted': true});
   }

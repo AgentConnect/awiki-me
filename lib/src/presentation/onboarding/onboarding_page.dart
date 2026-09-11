@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_locale.dart';
 import '../../app/app_router.dart';
+import '../../app/app_services.dart';
 import '../../app/e2e_semantics.dart';
 import '../../application/models/onboarding_server_info.dart';
 import '../../application/ports/identity_core_port.dart';
@@ -16,6 +17,8 @@ import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../devices/device_join_page.dart';
 import '../recovery/handle_recovery_page.dart';
+import '../recovery/handle_recovery_provider.dart';
+import '../recovery/pending_handle_recovery_entry.dart';
 import '../shared/app_language_menu.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
@@ -42,6 +45,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   static const int _e2eOtpMaxAttempts = 15;
   static const Duration _e2eOtpRetryInterval = Duration(seconds: 5);
 
+  bool _checkingLocalRecovery = false;
+  int _recoveryLookupGeneration = 0;
+  (String, String, String) _lastRecoveryLookupInputs = ('', '', '');
+
   final phoneController = TextEditingController();
   final otpController = TextEditingController();
   final emailController = TextEditingController();
@@ -61,12 +68,20 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     handleController.addListener(_resetEmailActivationTarget);
     handleController.addListener(_resetPhoneOtpTarget);
     phoneController.addListener(_updatePhoneOtpState);
+    for (final controller in [
+      handleController,
+      phoneController,
+      emailController,
+    ]) {
+      controller.addListener(_onRecoveryLookupInputsChanged);
+    }
     _tenantSubscription = ref.listenManual<AppTenantProfile>(
       activeAppTenantProvider,
       (previous, next) {
         if (previous?.id == next.id) {
           return;
         }
+        _invalidateRecoveryLookup();
         unawaited(
           ref.read(onboardingProvider.notifier).loadServerInfo(force: true),
         );
@@ -88,6 +103,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     handleController.removeListener(_resetEmailActivationTarget);
     handleController.removeListener(_resetPhoneOtpTarget);
     phoneController.removeListener(_updatePhoneOtpState);
+    for (final controller in [
+      handleController,
+      phoneController,
+      emailController,
+    ]) {
+      controller.removeListener(_onRecoveryLookupInputsChanged);
+    }
     phoneController.dispose();
     otpController.dispose();
     emailController.dispose();
@@ -323,6 +345,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           placeholder: context.l10n.onboardingHandlePlaceholder,
           semanticsIdentifier: 'e2e-handle-input',
         ),
+        PendingHandleRecoveryEntry(
+          handleController: handleController,
+          phoneController: phoneController,
+        ),
         SizedBox(height: responsive.spacing(20)),
         _OnboardingAlignedAction(
           key: const Key('onboarding-no-verification-complete-action'),
@@ -369,6 +395,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           showLabel: !responsive.isPhone,
           semanticsIdentifier: 'e2e-handle-input',
         ),
+        PendingHandleRecoveryEntry(
+          handleController: handleController,
+          phoneController: phoneController,
+        ),
         SizedBox(height: responsive.spacing(14)),
         AppTextField(
           controller: otpController,
@@ -411,6 +441,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           placeholder: context.l10n.onboardingHandlePlaceholder,
           showLabel: !responsive.isPhone,
           semanticsIdentifier: 'e2e-handle-input',
+        ),
+        PendingHandleRecoveryEntry(
+          handleController: handleController,
+          phoneController: phoneController,
         ),
         SizedBox(height: responsive.spacing(14)),
         AppTextField(
@@ -465,6 +499,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   Future<void> _submitRegister(BuildContext context) async {
     final notifier = ref.read(onboardingProvider.notifier);
     final handle = handleController.text.trim();
+    if (_checkingLocalRecovery) return;
+    if (handle.isNotEmpty && await _openPendingRecovery(handle)) return;
+    if (!mounted) return;
+    final tenant = ref.read(activeAppTenantProvider);
+    final phone = _normalizedPhone;
     final profileMarkdown = '# $handle\n\n';
     final onboarding = ref.read(onboardingProvider);
     IdentityRegistrationStatus? result;
@@ -492,8 +531,29 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         profileMarkdown: profileMarkdown,
       );
     }
+    if (!mounted) {
+      return;
+    }
     if (ref.read(onboardingProvider).isPhoneOtpConsumed) {
       otpController.clear();
+    }
+    if (result == IdentityRegistrationStatus.recoveryRequired &&
+        context.mounted &&
+        ref.read(activeAppTenantProvider).id == tenant.id &&
+        handleController.text.trim() == handle &&
+        _normalizedPhone == phone) {
+      await AppNavigator.push<void>(
+        context,
+        (_) => HandleRecoveryPage(
+          initialHandle:
+              '${handle.toLowerCase()}.${tenant.didHost.toLowerCase()}',
+          initialPhone: phone,
+          autoRequestOtp: false,
+          allowPhoneInput: phone.isEmpty,
+        ),
+      );
+      if (mounted) ref.invalidate(pendingHandleRecoveryProvider);
+      return;
     }
     if (result == IdentityRegistrationStatus.joinRequired && context.mounted) {
       final verifiedOnboarding = ref.read(onboardingProvider);
@@ -507,12 +567,81 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
   }
 
+  void _invalidateRecoveryLookup() {
+    _recoveryLookupGeneration++;
+    _checkingLocalRecovery = false;
+  }
+
+  void _onRecoveryLookupInputsChanged() {
+    final inputs = (
+      handleController.text.trim().toLowerCase(),
+      _normalizedPhone,
+      emailController.text.trim(),
+    );
+    if (inputs == _lastRecoveryLookupInputs) return;
+    _lastRecoveryLookupInputs = inputs;
+    _invalidateRecoveryLookup();
+  }
+
+  Future<bool> _openPendingRecovery(String handle) async {
+    if (ref.read(onboardingProvider).serverInfo?.supportsPhoneHandleRecovery !=
+        true) {
+      return false;
+    }
+    final generation = ++_recoveryLookupGeneration;
+    _checkingLocalRecovery = true;
+    final tenant = ref.read(activeAppTenantProvider);
+    bool current() =>
+        mounted &&
+        generation == _recoveryLookupGeneration &&
+        ref.read(activeAppTenantProvider) == tenant;
+    final fullHandle =
+        '${handle.toLowerCase()}.${tenant.didHost.toLowerCase()}';
+    final phone = _normalizedPhone;
+    try {
+      final pending = await ref
+          .read(handleRecoveryServiceProvider)
+          .inspectContext(handle: fullHandle);
+      if (!mounted || !current()) return true;
+      if (!hasPendingHandleRecovery(pending)) return false;
+      otpController.clear();
+      await AppNavigator.push<void>(
+        context,
+        (_) => HandleRecoveryPage(
+          initialHandle: fullHandle,
+          initialPhone: phone,
+          allowPhoneInput: true,
+          autoRequestOtp: false,
+        ),
+      );
+      if (mounted) ref.invalidate(pendingHandleRecoveryProvider);
+      return true;
+    } catch (_) {
+      if (mounted && current()) {
+        await showAwikiMeErrorDetailDialog(
+          context,
+          message: context.l10n.handleRecoveryErrorLocalStateUnavailable,
+          detail: context.l10n.handleRecoveryErrorLocalStateUnavailable,
+        );
+      }
+      return true;
+    } finally {
+      if (generation == _recoveryLookupGeneration) {
+        _checkingLocalRecovery = false;
+      }
+    }
+  }
+
   Future<void> _chooseExistingHandleAction(
     BuildContext context, {
     required String fullHandle,
     required String phone,
   }) async {
+    final rebindContinuation =
+        ref.read(onboardingProvider).existingHandleJoinMode ==
+        ExistingHandleJoinMode.handleRecoveryRebind;
     final recoveryAvailable =
+        !rebindContinuation &&
         phone.isNotEmpty &&
         (ref.read(onboardingProvider).serverInfo?.supportsPhoneHandleRecovery ??
             false);
@@ -560,15 +689,20 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         );
         if (started && context.mounted) await openDeviceJoinPage(context);
       case _ExistingHandleAction.recoverHandle:
+        if (rebindContinuation) {
+          throw StateError('rebind_join_recovery_action_forbidden');
+        }
         await controller.discardExistingHandleContinuation();
         if (context.mounted) {
           await AppNavigator.push<void>(
             context,
             (_) => HandleRecoveryPage(
+              startNew: true,
               initialHandle: fullHandle,
               initialPhone: phone,
             ),
           );
+          if (mounted) ref.invalidate(pendingHandleRecoveryProvider);
         }
       case _ExistingHandleAction.cancel:
         await controller.discardExistingHandleContinuation();
@@ -639,6 +773,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
   void _setAuthMode(String value) {
     final controller = ref.read(onboardingProvider.notifier);
+    if (ref.read(onboardingProvider).authMode != value) {
+      _invalidateRecoveryLookup();
+    }
     controller.setAuthMode(value);
     if (value == 'phone') {
       controller.updateOtpPhone(phoneController.text);
@@ -659,6 +796,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       context,
       (dialogContext) => LocalCredentialDeleteDialog(
         identity: identity,
+        loadRecoveryImpact: () => ref
+            .read(appSessionServiceProvider)
+            .hasPendingLocalIdentityRecovery(identity.localIdentitySelector),
         signsOut: false,
         onConfirm: () {
           Navigator.of(dialogContext).pop();

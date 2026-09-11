@@ -996,6 +996,107 @@ void main() {
     },
   );
 
+  test(
+    'refreshed higher server sequence wins over a skewed local timestamp',
+    () async {
+      final serverTime = DateTime.utc(2026, 9, 1, 12);
+      final local =
+          _conversation(
+            threadId: 'dm:alice:bob',
+            displayName: 'Bob',
+            lastMessageAt: serverTime.add(const Duration(minutes: 5)),
+          ).copyWith(
+            lastMessagePreview: 'older local message',
+            lastMessageSnapshot: _messageSnapshot(
+              threadId: 'dm:alice:bob',
+              remoteId: 'remote-10',
+              serverSequence: 10,
+              createdAt: serverTime.add(const Duration(minutes: 5)),
+            ),
+          );
+      final refreshed = local.copyWith(
+        lastMessagePreview: 'newer server message',
+        lastMessageAt: serverTime,
+        lastMessageSnapshot: _messageSnapshot(
+          threadId: 'dm:alice:bob',
+          remoteId: 'remote-11',
+          serverSequence: 11,
+          createdAt: serverTime,
+        ),
+      );
+      final container = _conversationContainer(
+        service: _StaticConversationService(
+          conversations: <ConversationSummary>[refreshed],
+        ),
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(local);
+      await notifier.refresh();
+
+      final conversation = container
+          .read(conversationListProvider)
+          .conversations
+          .single;
+      expect(conversation.lastMessagePreview, 'newer server message');
+      expect(conversation.lastMessageSnapshot?.serverSequence, 11);
+      expect(conversation.lastMessageAt, serverTime);
+    },
+  );
+
+  test(
+    'sequenced refresh replaces a committed local preview awaiting sequence',
+    () async {
+      final serverTime = DateTime.utc(2026, 9, 1, 12);
+      final local =
+          _conversation(
+            threadId: 'dm:alice:bob',
+            displayName: 'Bob',
+            lastMessageAt: serverTime.add(const Duration(milliseconds: 500)),
+          ).copyWith(
+            lastMessagePreview: 'committed local message',
+            lastMessageSnapshot: _messageSnapshot(
+              threadId: 'dm:alice:bob',
+              remoteId: 'remote-awaiting-sequence',
+              createdAt: serverTime.add(const Duration(milliseconds: 500)),
+            ),
+          );
+      final refreshed = local.copyWith(
+        lastMessagePreview: 'sequenced peer reply',
+        lastMessageAt: serverTime,
+        lastMessageSnapshot: _messageSnapshot(
+          threadId: 'dm:alice:bob',
+          remoteId: 'remote-12',
+          serverSequence: 12,
+          createdAt: serverTime,
+        ),
+      );
+      final container = _conversationContainer(
+        service: _StaticConversationService(
+          conversations: <ConversationSummary>[refreshed],
+        ),
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(local);
+      await notifier.refresh();
+
+      final conversation = container
+          .read(conversationListProvider)
+          .conversations
+          .single;
+      expect(conversation.lastMessagePreview, 'sequenced peer reply');
+      expect(conversation.lastMessageSnapshot?.serverSequence, 12);
+      expect(conversation.lastMessageAt, serverTime);
+    },
+  );
+
   test('mark read is no-op when conversation is already read', () async {
     final service = _StaticConversationService(conversations: const []);
     final notifications = FakeNotificationFacade();
@@ -4201,6 +4302,9 @@ class _DelayedCachedDirectoryService implements DirectoryApplicationService {
   void complete(List<PeerDisplayProfile> profiles) {
     _completer.complete(profiles);
   }
+
+  @override
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(Iterable<String> dids, {bool force = false}) async => const <PeerDisplayProfile>[];
 
   @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(

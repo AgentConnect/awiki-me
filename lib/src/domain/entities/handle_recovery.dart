@@ -25,6 +25,32 @@ class HandleRecoveryOwner {
   final String handle;
 }
 
+enum HandleRecoveryAction {
+  startNew,
+  requestOtp,
+  prepare,
+  activate,
+  resume,
+  discardPreAttempt,
+  quarantineKeyUnavailable,
+  activateIdentity,
+}
+
+class HandleRecoveryContext {
+  const HandleRecoveryContext({
+    required this.handle,
+    this.localIdentityId,
+    this.progress,
+    required this.allowedActions,
+    this.blockedReason,
+  });
+  final String handle;
+  final String? localIdentityId;
+  final HandleRecoveryProgress? progress;
+  final List<HandleRecoveryAction> allowedActions;
+  final HandleRecoveryFailureCode? blockedReason;
+}
+
 enum HandleRecoveryProgressPhase {
   otpRequested,
   prepared,
@@ -46,6 +72,7 @@ enum HandleRecoveryLifecycleClass {
   quarantinedKeyUnavailable,
   supersededByStateChange,
   failedTerminal,
+  locallyDeleted,
 }
 
 enum HandleRecoveryKeyState {
@@ -53,6 +80,7 @@ enum HandleRecoveryKeyState {
   temporarilyLocked,
   permanentlyUnavailable,
   destroyedPreAttempt,
+  destroyedByDeletion,
 }
 
 /// V4.0 exposes only the minimum pre-commit migration decision. Transparent
@@ -64,6 +92,10 @@ enum HandleRecoveryLocalMigration {
 }
 
 enum HandleRecoveryFailureCode {
+  activationRequired,
+  recoveryInProgress,
+  actionNotAllowed,
+  stateChanged,
   factorRetryRequired,
   notPrepared,
   userPresenceRequired,
@@ -75,6 +107,7 @@ enum HandleRecoveryFailureCode {
   localStateUnavailable,
   localKeyUnavailable,
   localTransitionPending,
+  localTransitionSuperseded,
   localMigrationUnsupported,
   unknownEpoch,
   blocked,
@@ -94,17 +127,10 @@ class HandleRecoveryImpact {
   const HandleRecoveryImpact({
     required this.localOrdinaryDataWillMigrate,
     required this.otherDevicesMustRejoin,
-    this.unsupportedE2eeGroupCount = 0,
-    this.unsupportedDidOnlyGroupCount = 0,
   });
 
   final bool localOrdinaryDataWillMigrate;
   final bool otherDevicesMustRejoin;
-  final int unsupportedE2eeGroupCount;
-  final int unsupportedDidOnlyGroupCount;
-
-  bool get hasUnsupportedE2eeGroups => unsupportedE2eeGroupCount > 0;
-  bool get hasUnsupportedDidOnlyGroups => unsupportedDidOnlyGroupCount > 0;
 }
 
 class HandleRecoveryOtpResult {
@@ -191,6 +217,7 @@ class HandleRecoveryProgress {
     this.registryEpochReset,
     this.failureCode,
     this.retryable = false,
+    this.allowedActions = const [],
   }) : assert(!discardAllowed || !commitAttempted);
 
   final String operationId;
@@ -218,6 +245,7 @@ class HandleRecoveryProgress {
   final HandleRecoveryRegistryEpochReset? registryEpochReset;
   final HandleRecoveryFailureCode? failureCode;
   final bool retryable;
+  final List<HandleRecoveryAction> allowedActions;
 
   HandleRecoveryProgressPhase get phase => switch (lifecycleClass) {
     HandleRecoveryLifecycleClass.preCommit =>
@@ -235,7 +263,8 @@ class HandleRecoveryProgress {
     HandleRecoveryLifecycleClass.discardedPreAttempt ||
     HandleRecoveryLifecycleClass.quarantinedKeyUnavailable ||
     HandleRecoveryLifecycleClass.supersededByStateChange ||
-    HandleRecoveryLifecycleClass.failedTerminal =>
+    HandleRecoveryLifecycleClass.failedTerminal ||
+    HandleRecoveryLifecycleClass.locallyDeleted =>
       HandleRecoveryProgressPhase.blocked,
   };
 
@@ -248,23 +277,19 @@ class HandleRecoveryProgress {
       lifecycleClass == HandleRecoveryLifecycleClass.remoteCommitted ||
       lifecycleClass == HandleRecoveryLifecycleClass.localTransitionPending;
 
-  bool get canDiscard => discardAllowed && !commitAttempted;
+  bool get canDiscard =>
+      allowedActions.contains(HandleRecoveryAction.discardPreAttempt) &&
+      !commitAttempted;
 
   bool get isStillConfirming =>
       resultAbsent ||
       lifecycleClass == HandleRecoveryLifecycleClass.remoteUnresolved;
 
   bool get canActivate =>
-      lifecycleClass == HandleRecoveryLifecycleClass.preCommit &&
-      readyToCommit &&
-      localMigration != HandleRecoveryLocalMigration.preCommitUnsupported &&
-      keyState == HandleRecoveryKeyState.available;
+      allowedActions.contains(HandleRecoveryAction.activate);
 
   bool get canResume =>
-      commitAttempted &&
-      !isCompleted &&
-      keyState == HandleRecoveryKeyState.available &&
-      isActionable;
+      allowedActions.contains(HandleRecoveryAction.resume) && commitAttempted;
 }
 
 class HandleRecoveryAuthorizedJoinProgress {

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../application/app_session_service.dart';
+import '../../application/models/app_session.dart';
 import '../../application/models/onboarding_server_info.dart';
 import '../../application/onboarding_support_service.dart';
 import '../../application/ports/identity_core_port.dart';
@@ -14,12 +15,24 @@ import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../l10n/app_message.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
+import '../app_shell/providers/session_provider.dart';
 import '../devices/devices_provider.dart';
 import '../shared/sms_otp_cooldown_provider.dart';
 
 const Object _unset = Object();
 
 enum OnboardingServerInfoStatus { loading, ready, failed }
+
+enum OnboardingPhoneRegistrationOutcome {
+  idle,
+  inFlight,
+  joinRequired,
+  recoveryRequired,
+  registered,
+  superseded,
+  timedOut,
+  failed,
+}
 
 class OnboardingState {
   const OnboardingState({
@@ -39,6 +52,8 @@ class OnboardingState {
     this.serverInfoStatus = OnboardingServerInfoStatus.loading,
     this.serverInfo,
     this.serverInfoError,
+    this.phoneRegistrationOutcome = OnboardingPhoneRegistrationOutcome.idle,
+    this.phoneRegistrationFailureCode,
   });
 
   final String entryMode;
@@ -57,6 +72,8 @@ class OnboardingState {
   final OnboardingServerInfoStatus serverInfoStatus;
   final OnboardingServerInfo? serverInfo;
   final String? serverInfoError;
+  final OnboardingPhoneRegistrationOutcome phoneRegistrationOutcome;
+  final String? phoneRegistrationFailureCode;
 
   bool get isEmailResendCoolingDown => emailResendCountdown > 0;
   bool get isServerInfoLoading =>
@@ -130,6 +147,8 @@ class OnboardingState {
     OnboardingServerInfoStatus? serverInfoStatus,
     Object? serverInfo = _unset,
     Object? serverInfoError = _unset,
+    OnboardingPhoneRegistrationOutcome? phoneRegistrationOutcome,
+    Object? phoneRegistrationFailureCode = _unset,
   }) {
     return OnboardingState(
       entryMode: entryMode ?? this.entryMode,
@@ -166,6 +185,12 @@ class OnboardingState {
       serverInfoError: identical(serverInfoError, _unset)
           ? this.serverInfoError
           : serverInfoError as String?,
+      phoneRegistrationOutcome:
+          phoneRegistrationOutcome ?? this.phoneRegistrationOutcome,
+      phoneRegistrationFailureCode:
+          identical(phoneRegistrationFailureCode, _unset)
+          ? this.phoneRegistrationFailureCode
+          : phoneRegistrationFailureCode as String?,
     );
   }
 }
@@ -186,6 +211,8 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   Timer? _emailResendTimer;
   int _busyGeneration = 0;
   AppSessionTransition? _activeSessionTransition;
+  OnboardingPhoneRegistrationOutcome? _lastBusyFailureOutcome;
+  String? _lastBusyFailureCode;
 
   @override
   void dispose() {
@@ -291,6 +318,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     if (!await cooldown.beginSend()) return;
     var success = false;
     try {
+      if (!mounted) return;
       await _runBusy(() async {
         final normalizedHandle = _normalizeHandleForOtp(handle);
         final domain = _normalizeHandleDomain(handleDomain);
@@ -306,6 +334,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
               );
         } on RegistrationOtpRateLimited catch (error) {
           await cooldown.completeRateLimitedAt(error.retryAt);
+          if (!mounted) return;
           ref
               .read(uiFeedbackProvider.notifier)
               .showError(AppMessage.otpRateLimited(error.retryAfterSeconds));
@@ -314,12 +343,15 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         success = true;
       });
       if (success && receipt != null && normalizedPhone != null) {
+        // The server receipt still owns the shared resend boundary when the
+        // originating page/controller has gone away. Only UI state is stale.
+        await cooldown.completeAcceptedAt(receipt!.retryAt);
+        if (!mounted) return;
         state = state.copyWith(
           otpTargetFullHandle: fullHandle!,
           otpTargetPhone: normalizedPhone,
           isPhoneOtpConsumed: false,
         );
-        await cooldown.completeAcceptedAt(receipt!.retryAt);
         ref.read(uiFeedbackProvider.notifier).showInfo(AppMessage.otpSent());
       }
     } finally {
@@ -427,25 +459,31 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .showError(AppMessage.registrationMethodUnavailable());
       return null;
     }
-    if (state.isPhoneOtpConsumed) {
-      ref
-          .read(uiFeedbackProvider.notifier)
-          .showError(AppMessage.registrationVerificationUnavailable());
-      return null;
-    }
     final domain = _normalizeHandleDomain(handleDomain);
     final normalizedHandle = handle.trim().toLowerCase();
+    final fullHandle = '$normalizedHandle.$domain';
     final normalizedPhone = _normalizePhoneForOtpCooldown(phone);
     if (normalizedPhone == null ||
         state.otpTargetPhone != normalizedPhone ||
-        state.otpTargetFullHandle != '$normalizedHandle.$domain') {
+        state.otpTargetFullHandle != fullHandle) {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.operationFailedRetry());
       return null;
     }
     final transition = _sessionService.beginSessionTransition();
-    return _runBusy(() async {
+    state = state.copyWith(
+      phoneRegistrationOutcome: OnboardingPhoneRegistrationOutcome.inFlight,
+      phoneRegistrationFailureCode: null,
+    );
+    final status = await _runBusy(() async {
+      final existingIdentity = await _localIdentityForFullHandle(fullHandle);
+      if (state.isPhoneOtpConsumed) {
+        throw AppStructuredError(
+          code: 'identity.registration_verification_unavailable',
+          cause: StateError('registration_verification_unavailable'),
+        );
+      }
       try {
         final result = await ref
             .read(onboardingServiceProvider)
@@ -458,16 +496,98 @@ class OnboardingController extends StateNotifier<OnboardingState> {
               transition: transition,
             );
         state = state.copyWith(isPhoneOtpConsumed: true);
-        final status = await _activateRegistrationResult(result, transition);
-        return status;
+        return _activateRegistrationResult(result, transition);
       } catch (error) {
-        if (structuredAppErrorCode(error) ==
-            'identity.registration_verification_unavailable') {
+        final committedIdentity = await _localIdentityForFullHandle(fullHandle);
+        // A fenced device still has its old local identity. Only a new local
+        // identity observed during this attempt is evidence of registration
+        // having committed; Core must decide how an existing Handle rejoins.
+        if (committedIdentity != null &&
+            (committedIdentity.identityId != existingIdentity?.identityId ||
+                committedIdentity.did != existingIdentity?.did)) {
+          state = state.copyWith(isPhoneOtpConsumed: true);
+          return _resumeCommittedPhoneRegistration(
+            committedIdentity,
+            transition,
+          );
+        }
+        if (const <String>{
+          'identity.registration_verification_unavailable',
+          'handle_recovery.local_state_conflict',
+          'handle_recovery.transition_missing',
+          'handle_recovery.join_terminal_wait',
+        }.contains(structuredAppErrorCode(error))) {
           state = state.copyWith(isPhoneOtpConsumed: true);
         }
         rethrow;
       }
     }, sessionTransition: transition);
+    if (status != null && mounted) {
+      state = state.copyWith(
+        phoneRegistrationOutcome:
+            status == IdentityRegistrationStatus.recoveryRequired
+            ? OnboardingPhoneRegistrationOutcome.recoveryRequired
+            : status == IdentityRegistrationStatus.joinRequired
+            ? OnboardingPhoneRegistrationOutcome.joinRequired
+            : OnboardingPhoneRegistrationOutcome.registered,
+      );
+    } else if (status == null &&
+        mounted &&
+        state.phoneRegistrationOutcome ==
+            OnboardingPhoneRegistrationOutcome.inFlight) {
+      state = state.copyWith(
+        phoneRegistrationOutcome:
+            _lastBusyFailureOutcome ??
+            OnboardingPhoneRegistrationOutcome.failed,
+        phoneRegistrationFailureCode: _lastBusyFailureCode,
+      );
+    }
+    return status;
+  }
+
+  Future<AppSession?> _localIdentityForFullHandle(String fullHandle) async {
+    final expected = _normalizeLocalFullHandle(fullHandle);
+    final matches = (await _sessionService.listLocalIdentities())
+        .where(
+          (identity) => _normalizeLocalFullHandle(identity.handle) == expected,
+        )
+        .toList(growable: false);
+    if (matches.length > 1) {
+      throw AppStructuredError(
+        code: 'handle_recovery.local_state_conflict',
+        cause: StateError('multiple_local_identities_for_handle'),
+      );
+    }
+    return matches.firstOrNull;
+  }
+
+  Future<IdentityRegistrationStatus> _resumeCommittedPhoneRegistration(
+    AppSession identity,
+    AppSessionTransition registrationTransition,
+  ) async {
+    ref
+        .read(sessionProvider.notifier)
+        .upsertLocalCredential(identity.toLegacySessionIdentity());
+    await _cancelOrAbortSessionTransition(registrationTransition);
+    final activated = await ref
+        .read(appRuntimeProvider.notifier)
+        .loginWithLocalCredentialAndConfirm(
+          identity.identityId,
+          reportFailure: false,
+        );
+    if (activated) {
+      return IdentityRegistrationStatus.registered;
+    }
+    state = state.copyWith(
+      entryMode: 'login',
+      otpTargetFullHandle: null,
+      otpTargetPhone: null,
+      isPhoneOtpConsumed: false,
+    );
+    throw AppStructuredError(
+      code: 'identity.registration_committed_activation_pending',
+      cause: StateError('registration_committed_activation_pending'),
+    );
   }
 
   Future<IdentityRegistrationStatus?> registerWithEmail({
@@ -542,6 +662,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     IdentityRegistrationResult result,
     AppSessionTransition transition,
   ) async {
+    if (result.status == IdentityRegistrationStatus.recoveryRequired) {
+      if (!_sessionService.isLatestSessionTransition(transition)) {
+        throw const AppSessionTransitionSuperseded();
+      }
+      return IdentityRegistrationStatus.recoveryRequired;
+    }
     if (result.status == IdentityRegistrationStatus.joinRequired) {
       if (!_sessionService.isLatestSessionTransition(transition)) {
         throw const AppSessionTransitionSuperseded();
@@ -731,6 +857,8 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     if (state.isBusy) {
       return null;
     }
+    _lastBusyFailureOutcome = null;
+    _lastBusyFailureCode = null;
     final generation = ++_busyGeneration;
     if (sessionTransition != null) {
       _activeSessionTransition = sessionTransition;
@@ -739,6 +867,8 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     try {
       return await action().timeout(_requestTimeout);
     } on TimeoutException {
+      _lastBusyFailureOutcome = OnboardingPhoneRegistrationOutcome.timedOut;
+      _lastBusyFailureCode = 'request_timeout';
       await _cancelOrAbortSessionTransition(sessionTransition);
       if (generation != _busyGeneration) {
         return null;
@@ -747,9 +877,19 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.requestTimeoutRetry());
     } on AppSessionTransitionSuperseded {
+      _lastBusyFailureOutcome = OnboardingPhoneRegistrationOutcome.superseded;
+      _lastBusyFailureCode = 'session_transition_superseded';
       await _cancelOrAbortSessionTransition(sessionTransition);
       return null;
     } catch (error) {
+      _lastBusyFailureOutcome = OnboardingPhoneRegistrationOutcome.failed;
+      _lastBusyFailureCode =
+          structuredAppErrorCode(error) ??
+          switch (error) {
+            StateError() => 'state_error',
+            ArgumentError() => 'invalid_argument',
+            _ => 'unclassified_error',
+          };
       await _cancelOrAbortSessionTransition(sessionTransition);
       if (generation != _busyGeneration) {
         return null;
@@ -877,6 +1017,14 @@ String _normalizeHandleDomain(String domain) {
     throw ArgumentError('did_domain_invalid');
   }
   return normalized;
+}
+
+String? _normalizeLocalFullHandle(String? value) {
+  var normalized = value?.trim().toLowerCase() ?? '';
+  while (normalized.startsWith('@')) {
+    normalized = normalized.substring(1).trimLeft();
+  }
+  return normalized.isEmpty ? null : normalized;
 }
 
 final onboardingProvider =

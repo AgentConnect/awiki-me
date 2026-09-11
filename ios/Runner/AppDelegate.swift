@@ -5,13 +5,10 @@ import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, UIDocumentPickerDelegate {
-  private let documentChannelName = "ai.awiki.awikime/document_picker"
   private let attachmentChannelName = "ai.awiki.awikime/attachment_picker"
-  private var documentChannel: FlutterMethodChannel?
   private var attachmentChannel: FlutterMethodChannel?
   private var pendingSaveData: Data?
   private var pendingSaveResult: FlutterResult?
-  private var pendingPickResult: FlutterResult?
   private var pendingAttachmentPickResult: FlutterResult?
 
   override func application(
@@ -26,7 +23,6 @@ import UserNotifications
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     let registry = engineBridge.pluginRegistry
     GeneratedPluginRegistrant.register(with: registry)
-    registerDocumentChannel(with: registry)
     registerAttachmentChannel(with: registry)
     registerRemotePushChannel(with: registry)
   }
@@ -111,45 +107,6 @@ import UserNotifications
     completionHandler()
   }
 
-  private func registerDocumentChannel(with registry: FlutterPluginRegistry) {
-    guard documentChannel == nil else {
-      return
-    }
-    guard let registrar = registry.registrar(forPlugin: documentChannelName) else {
-      return
-    }
-    let channel = FlutterMethodChannel(
-      name: documentChannelName,
-      binaryMessenger: registrar.messenger()
-    )
-    channel.setMethodCallHandler { [weak self] call, result in
-      guard let self else { return }
-      switch call.method {
-      case "saveZipFile":
-        guard
-          let args = call.arguments as? [String: Any],
-          let fileName = args["file_name"] as? String,
-          let bytes = args["bytes"] as? FlutterStandardTypedData
-        else {
-          result(
-            FlutterError(
-              code: "save_failed",
-              message: "file_name 和 bytes 为必填参数。",
-              details: nil
-            )
-          )
-          return
-        }
-        self.presentExportPicker(fileName: fileName, data: bytes.data, result: result)
-      case "pickZipFile":
-        self.presentImportPicker(result: result)
-      default:
-        result(FlutterMethodNotImplemented)
-      }
-    }
-    documentChannel = channel
-  }
-
   private func registerAttachmentChannel(with registry: FlutterPluginRegistry) {
     guard attachmentChannel == nil else {
       return
@@ -208,21 +165,6 @@ import UserNotifications
     }
   }
 
-  private func presentImportPicker(result: @escaping FlutterResult) {
-    guard pendingPickResult == nil else {
-      result(FlutterError(code: "pick_in_progress", message: "已有导入任务正在进行。", details: nil))
-      return
-    }
-    pendingPickResult = result
-    let picker = UIDocumentPickerViewController(
-      documentTypes: ["public.zip-archive"],
-      in: .import
-    )
-    picker.delegate = self
-    picker.modalPresentationStyle = .formSheet
-    presentFromTopController(picker)
-  }
-
   private func presentAttachmentPicker(result: @escaping FlutterResult) {
     guard pendingAttachmentPickResult == nil else {
       result(FlutterError(code: "pick_in_progress", message: "已有文件选择任务正在进行。", details: nil))
@@ -247,11 +189,6 @@ import UserNotifications
       result(nil)
       return
     }
-    if let result = pendingPickResult {
-      pendingPickResult = nil
-      result(nil)
-      return
-    }
     if let result = pendingAttachmentPickResult {
       pendingAttachmentPickResult = nil
       result(nil)
@@ -273,26 +210,6 @@ import UserNotifications
       }
       readAttachment(url: url, result: result)
       return
-    }
-    guard let result = pendingPickResult else {
-      return
-    }
-    pendingPickResult = nil
-    guard let url = urls.first else {
-      result(nil)
-      return
-    }
-    let accessGranted = url.startAccessingSecurityScopedResource()
-    defer {
-      if accessGranted {
-        url.stopAccessingSecurityScopedResource()
-      }
-    }
-    do {
-      let data = try Data(contentsOf: url)
-      result(FlutterStandardTypedData(bytes: data))
-    } catch {
-      result(FlutterError(code: "pick_failed", message: error.localizedDescription, details: nil))
     }
   }
 

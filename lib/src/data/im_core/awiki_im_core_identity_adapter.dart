@@ -9,11 +9,13 @@ import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_device_management_adapter.dart';
+import 'awiki_im_core_error_mapper.dart';
 import 'awiki_im_core_runtime.dart';
 
 class AwikiImCoreIdentityAdapter
     implements
         IdentityCorePort,
+        DaemonSubkeyAuthorizationCorePort,
         LocalIdentityDataDeletionPort,
         ExistingHandleContinuationPort,
         LegacyIdentityUpgradePort {
@@ -21,9 +23,18 @@ class AwikiImCoreIdentityAdapter
     required AwikiImCoreRuntime runtime,
     AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
   }) : _runtime = runtime,
+       _coreInstance = runtime.coreInstance,
        _mappers = mappers;
 
-  final AwikiImCoreRuntime _runtime;
+  AwikiImCoreIdentityAdapter.withCoreInstance({
+    required Future<core.AwikiImCore> Function() coreInstance,
+    AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
+  }) : _runtime = null,
+       _coreInstance = coreInstance,
+       _mappers = mappers;
+
+  final AwikiImCoreRuntime? _runtime;
+  final Future<core.AwikiImCore> Function() _coreInstance;
   final AwikiImCoreMappers _mappers;
   final Map<String, _PendingExistingHandleRegistration>
   _existingHandleContinuations = <String, _PendingExistingHandleRegistration>{};
@@ -31,21 +42,21 @@ class AwikiImCoreIdentityAdapter
 
   @override
   Future<List<AppSession>> listLocalIdentities() async {
-    final coreInstance = await _runtime.coreInstance();
+    final coreInstance = await _coreInstance();
     final identities = await coreInstance.listIdentities();
     return identities.map(_mappers.appSessionFromIdentity).toList();
   }
 
   @override
   Future<AppSession?> defaultIdentity() async {
-    final coreInstance = await _runtime.coreInstance();
+    final coreInstance = await _coreInstance();
     final identity = await coreInstance.defaultIdentity();
     return identity == null ? null : _mappers.appSessionFromIdentity(identity);
   }
 
   @override
   Future<AppSession> resolveIdentity(String identityIdOrAlias) async {
-    final coreInstance = await _runtime.coreInstance();
+    final coreInstance = await _coreInstance();
     final identity = await _resolveIdentity(coreInstance, identityIdOrAlias);
     return _mappers.appSessionFromIdentity(identity);
   }
@@ -59,7 +70,7 @@ class AwikiImCoreIdentityAdapter
     if (normalizedIdentityId.isEmpty) {
       throw ArgumentError.value(identityId, 'identityId', 'must not be empty');
     }
-    final coreInstance = await _runtime.coreInstance();
+    final coreInstance = await _coreInstance();
     final identity = await coreInstance.updateDisplayNameProjection(
       identityId: normalizedIdentityId,
       displayName: _nonEmpty(displayName),
@@ -69,61 +80,49 @@ class AwikiImCoreIdentityAdapter
 
   @override
   Future<SessionAccountBinding> activeSyncAccountBinding() {
-    return _runtime.withCurrentClient((client) async {
+    return _requiredRuntime.withCurrentClient((client) async {
       final binding = await client.activeSyncAccountBinding();
       return _mappers.sessionAccountBindingFromCore(binding);
     });
   }
 
   @override
-  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(
+  Future<UserSubkeyPackage> authorizeDaemonSubkey(
     String identityIdOrAlias,
+    UserSubkeyPackage proposal,
   ) async {
-    final coreInstance = await _runtime.coreInstance();
+    final coreInstance = await _coreInstance();
     final selector = _selectorFromString(identityIdOrAlias);
+    final coreProposal = core.DaemonSubkeyPublicProposal(
+      userDid: proposal.userDid,
+      verificationMethod: proposal.verificationMethod,
+      publicKeyMultibase: proposal.publicKeyMultibase,
+    );
     try {
-      final package = await coreInstance.loadDaemonSubkeyPackage(selector);
-      return _mappers.userSubkeyPackageFromCore(package);
+      final package = await coreInstance.authorizeDaemonSubkey(
+        selector: selector,
+        proposal: coreProposal,
+      );
+      return _mappers.userSubkeyPublicPackageFromCore(package);
     } on core.AwikiImCoreException catch (error) {
       if (!_shouldTryLocalAliasFallback(selector, error)) {
         rethrow;
       }
     }
-    final package = await coreInstance.loadDaemonSubkeyPackage(
-      core.IdentitySelector.localAlias(
+    final package = await coreInstance.authorizeDaemonSubkey(
+      selector: core.IdentitySelector.localAlias(
         _trimLeadingAt(identityIdOrAlias.trim()),
       ),
+      proposal: coreProposal,
     );
-    return _mappers.userSubkeyPackageFromCore(package);
-  }
-
-  @override
-  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
-    String identityIdOrAlias,
-  ) async {
-    final coreInstance = await _runtime.coreInstance();
-    final selector = _selectorFromString(identityIdOrAlias);
-    try {
-      final package = await coreInstance.ensureDaemonSubkeyPackage(selector);
-      return _mappers.userSubkeyPackageFromCore(package);
-    } on core.AwikiImCoreException catch (error) {
-      if (!_shouldTryLocalAliasFallback(selector, error)) {
-        rethrow;
-      }
-    }
-    final package = await coreInstance.ensureDaemonSubkeyPackage(
-      core.IdentitySelector.localAlias(
-        _trimLeadingAt(identityIdOrAlias.trim()),
-      ),
-    );
-    return _mappers.userSubkeyPackageFromCore(package);
+    return _mappers.userSubkeyPublicPackageFromCore(package);
   }
 
   @override
   Future<DaemonSubkeyAuthorizationRevokeResult> revokeDaemonSubkeyAuthorization(
     String identityIdOrAlias,
   ) async {
-    final coreInstance = await _runtime.coreInstance();
+    final coreInstance = await _coreInstance();
     final selector = _selectorFromString(identityIdOrAlias);
     try {
       final result = await coreInstance.revokeDaemonSubkeyAuthorization(
@@ -144,27 +143,89 @@ class AwikiImCoreIdentityAdapter
   }
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async {
+    final instance = await _coreInstance();
+    return _withMappedAppError(
+      () => _withIdentitySelectorFallback(
+        identityIdOrAlias,
+        instance.hasPendingLocalIdentityRecovery,
+      ),
+    );
+  }
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
-    final coreInstance = await _runtime.coreInstance();
-    final result = await _deleteLocalIdentity(coreInstance, identityIdOrAlias);
+    final coreInstance = await _coreInstance();
+    final result = await _withMappedAppError(
+      () => _deleteLocalIdentity(coreInstance, identityIdOrAlias),
+    );
     return _mappers.appSessionFromIdentity(result.deleted);
   }
 
   @override
   Future<AppSession> deleteLocalIdentityData(String identityIdOrAlias) async {
-    final coreInstance = await _runtime.coreInstance();
-    final result = await _withIdentitySelectorFallback(
-      identityIdOrAlias,
-      coreInstance.deleteLocalIdentityData,
+    final coreInstance = await _coreInstance();
+    final result = await _withMappedAppError(
+      () => _withIdentitySelectorFallback(
+        identityIdOrAlias,
+        coreInstance.deleteLocalIdentityData,
+      ),
     );
     return _mappers.appSessionFromIdentity(result.deleted);
+  }
+
+  @override
+  Future<LocalIdentityDeletionTicket> prepareLocalIdentityDataDeletion(
+    String identityIdOrAlias,
+  ) async {
+    final coreInstance = await _coreInstance();
+    final ticket = await _withMappedAppError(
+      () => _withIdentitySelectorFallback(
+        identityIdOrAlias,
+        coreInstance.prepareLocalIdentityDataDeletion,
+      ),
+    );
+    return LocalIdentityDeletionTicket(
+      deletionId: ticket.deletionId,
+      ownerIdentityId: ticket.ownerIdentityId,
+      currentDid: ticket.currentDid,
+    );
+  }
+
+  @override
+  Future<AppSession> completeLocalIdentityDataDeletion(
+    String deletionId,
+  ) async {
+    final coreInstance = await _coreInstance();
+    final result = await _withMappedAppError(
+      () => coreInstance.completeLocalIdentityDataDeletion(deletionId),
+    );
+    return _mappers.appSessionFromIdentity(result.deleted);
+  }
+
+  @override
+  Future<List<LocalIdentityDeletionTicket>>
+  pendingLocalIdentityDataDeletions() async {
+    final coreInstance = await _coreInstance();
+    final tickets = await _withMappedAppError(
+      coreInstance.pendingLocalIdentityDataDeletions,
+    );
+    return tickets
+        .map(
+          (ticket) => LocalIdentityDeletionTicket(
+            deletionId: ticket.deletionId,
+            ownerIdentityId: ticket.ownerIdentityId,
+            currentDid: ticket.currentDid,
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
   Future<LegacyIdentityUpgradeStatus> legacyUpgradeStatus(
     String identityIdOrAlias,
   ) async {
-    final coreInstance = await _runtime.coreInstance();
+    final coreInstance = await _coreInstance();
     final status = await _withIdentitySelectorFallback(
       identityIdOrAlias,
       coreInstance.legacyUpgradeStatus,
@@ -176,10 +237,12 @@ class AwikiImCoreIdentityAdapter
   Future<LegacyIdentityUpgradeStatus> upgradeLegacyIdentity(
     String identityIdOrAlias,
   ) async {
-    final coreInstance = await _runtime.coreInstance();
-    final status = await _withIdentitySelectorFallback(
-      identityIdOrAlias,
-      coreInstance.upgradeLegacyIdentity,
+    final coreInstance = await _coreInstance();
+    final status = await _withMappedAppError(
+      () => _withIdentitySelectorFallback(
+        identityIdOrAlias,
+        coreInstance.upgradeLegacyIdentity,
+      ),
     );
     return _legacyUpgradeStatus(status);
   }
@@ -192,17 +255,19 @@ class AwikiImCoreIdentityAdapter
     String? inviteCode,
     String? displayName,
   }) async {
-    final coreInstance = await _runtime.coreInstance();
-    final result = await coreInstance.registerHandleWithPhone(
-      localAlias: handle,
-      requestedHandle: handle,
-      phone: phone,
-      otp: otp,
-      inviteCode: inviteCode,
-      profile: core.InitialProfile(displayName: displayName),
-      makeDefault: true,
+    final coreInstance = await _coreInstance();
+    return _registerWithRecoveryAdmission(
+      coreInstance,
+      () => coreInstance.registerHandleWithPhone(
+        localAlias: handle,
+        requestedHandle: handle,
+        phone: phone,
+        otp: otp,
+        inviteCode: inviteCode,
+        profile: core.InitialProfile(displayName: displayName),
+        makeDefault: true,
+      ),
     );
-    return _registrationResult(coreInstance, result);
   }
 
   @override
@@ -212,16 +277,18 @@ class AwikiImCoreIdentityAdapter
     String? inviteCode,
     String? displayName,
   }) async {
-    final coreInstance = await _runtime.coreInstance();
-    final result = await coreInstance.registerHandleWithEmail(
-      localAlias: handle,
-      requestedHandle: handle,
-      email: email,
-      inviteCode: inviteCode,
-      profile: core.InitialProfile(displayName: displayName),
-      makeDefault: true,
+    final coreInstance = await _coreInstance();
+    return _registerWithRecoveryAdmission(
+      coreInstance,
+      () => coreInstance.registerHandleWithEmail(
+        localAlias: handle,
+        requestedHandle: handle,
+        email: email,
+        inviteCode: inviteCode,
+        profile: core.InitialProfile(displayName: displayName),
+        makeDefault: true,
+      ),
     );
-    return _registrationResult(coreInstance, result);
   }
 
   @override
@@ -230,15 +297,39 @@ class AwikiImCoreIdentityAdapter
     String? inviteCode,
     String? displayName,
   }) async {
-    final coreInstance = await _runtime.coreInstance();
-    final result = await coreInstance.registerHandleWithoutContactVerification(
-      localAlias: handle,
-      requestedHandle: handle,
-      inviteCode: inviteCode,
-      profile: core.InitialProfile(displayName: displayName),
-      makeDefault: true,
+    final coreInstance = await _coreInstance();
+    return _registerWithRecoveryAdmission(
+      coreInstance,
+      () => coreInstance.registerHandleWithoutContactVerification(
+        localAlias: handle,
+        requestedHandle: handle,
+        inviteCode: inviteCode,
+        profile: core.InitialProfile(displayName: displayName),
+        makeDefault: true,
+      ),
     );
-    return _registrationResult(coreInstance, result);
+  }
+
+  Future<IdentityRegistrationResult> _registerWithRecoveryAdmission(
+    core.AwikiImCore instance,
+    Future<core.HandleRegistrationResult> Function() register,
+  ) async {
+    try {
+      return await _registrationResult(
+        instance,
+        await _withMappedAppError(register),
+      );
+    } on core.AwikiImCoreException catch (error) {
+      if (error.handleRecoveryFailureCode !=
+          core.HandleRecoveryFailureCode.recoveryInProgress) {
+        rethrow;
+      }
+      // Core refused candidate admission. This is not a registration success
+      // or a reusable Join grant; the Recovery page must inspect its own target.
+      return const IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.recoveryRequired,
+      );
+    }
   }
 
   Future<IdentityRegistrationResult> _registrationResult(
@@ -264,10 +355,16 @@ class AwikiImCoreIdentityAdapter
       }
       final continuationId =
           'existing-handle-${DateTime.now().microsecondsSinceEpoch}-${_continuationSequence++}';
+      _existingHandleContinuations.removeWhere(
+        (_, pending) =>
+            identical(pending.coreInstance, coreInstance) &&
+            pending.fullHandle == continuation.fullHandle,
+      );
       _existingHandleContinuations[continuationId] =
           _PendingExistingHandleRegistration(
             coreInstance: coreInstance,
             preparationId: continuation.preparationId,
+            fullHandle: continuation.fullHandle,
             mode: mode,
             requiresUserPresence: continuation.requiresUserPresence,
           );
@@ -308,12 +405,13 @@ class AwikiImCoreIdentityAdapter
     if (pending.requiresUserPresence && !userPresenceConfirmed) {
       throw StateError('registration_join_user_presence_required');
     }
-    final progress = await pending.coreInstance
-        .beginPreparedRegistrationDeviceJoin(
-          preparationId: pending.preparationId,
-          operationId: 'awiki-me-register-join-${pending.preparationId}',
-          userPresenceConfirmed: userPresenceConfirmed,
-        );
+    final progress = await _withMappedAppError(
+      () => pending.coreInstance.beginPreparedRegistrationDeviceJoin(
+        preparationId: pending.preparationId,
+        operationId: 'awiki-me-register-join-${pending.preparationId}',
+        userPresenceConfirmed: userPresenceConfirmed,
+      ),
+    );
     final mapped = preparedRegistrationJoinProgressFromCore(
       progress,
       pending.mode,
@@ -326,6 +424,23 @@ class AwikiImCoreIdentityAdapter
   Future<void> discardExistingHandleContinuation(String continuationId) async {
     _existingHandleContinuations.remove(continuationId);
   }
+
+  AwikiImCoreRuntime get _requiredRuntime =>
+      _runtime ??
+      (throw StateError(
+        'Current-client operations require the production IM Core runtime.',
+      ));
+}
+
+Future<T> _withMappedAppError<T>(Future<T> Function() action) async {
+  try {
+    return await action();
+  } on core.AwikiImCoreException catch (error, stackTrace) {
+    Error.throwWithStackTrace(
+      const AwikiImCoreErrorMapper().appError(error),
+      stackTrace,
+    );
+  }
 }
 
 String? _nonEmpty(String? value) {
@@ -337,12 +452,14 @@ class _PendingExistingHandleRegistration {
   const _PendingExistingHandleRegistration({
     required this.coreInstance,
     required this.preparationId,
+    required this.fullHandle,
     required this.mode,
     required this.requiresUserPresence,
   });
 
   final core.AwikiImCore coreInstance;
   final String preparationId;
+  final String fullHandle;
   final ExistingHandleJoinMode mode;
   final bool requiresUserPresence;
 }

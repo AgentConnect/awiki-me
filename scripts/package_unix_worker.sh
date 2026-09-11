@@ -38,7 +38,8 @@ BUILD_NUMBER=""
 APP_REF=""
 CORE_REF=""
 ANP_REF=""
-PRIMARY_TENANT_DOMAIN=""
+TENANT_CONFIG_BASE64=""
+TENANT_CONFIG_SHA256=""
 ANDROID_STARTUP_SMOKE_TEST="auto"
 OUTPUT_DIR=""
 CORE_DIR="$(cd "$ROOT_DIR/../awiki-cli-rs2" 2>/dev/null && pwd || true)"
@@ -52,13 +53,14 @@ while [[ "$#" -gt 0 ]]; do
     --app-ref) APP_REF="$(option_value "$1" "${2:-}")"; shift 2 ;;
     --core-ref) CORE_REF="$(option_value "$1" "${2:-}")"; shift 2 ;;
     --anp-ref) ANP_REF="$(option_value "$1" "${2:-}")"; shift 2 ;;
-    --primary-tenant-domain) PRIMARY_TENANT_DOMAIN="$(option_value "$1" "${2:-}")"; shift 2 ;;
+    --tenant-config-base64) TENANT_CONFIG_BASE64="$(option_value "$1" "${2:-}")"; shift 2 ;;
+    --tenant-config-sha256) TENANT_CONFIG_SHA256="$(option_value "$1" "${2:-}")"; shift 2 ;;
     --android-startup-smoke-test) ANDROID_STARTUP_SMOKE_TEST="$(option_value "$1" "${2:-}")"; shift 2 ;;
     --output-dir) OUTPUT_DIR="$(option_value "$1" "${2:-}")"; shift 2 ;;
     --core-dir) CORE_DIR="$(option_value "$1" "${2:-}")"; shift 2 ;;
     --anp-dir) ANP_DIR="$(option_value "$1" "${2:-}")"; shift 2 ;;
     -h|--help)
-      printf '%s\n' 'Usage: package_unix_worker.sh --target android-arm64|macos-arm64|macos-x64 --version VERSION --build-number NUMBER --app-ref SHA --core-ref SHA --anp-ref SHA --primary-tenant-domain DOMAIN [--android-startup-smoke-test auto|always|never] --output-dir DIR'
+      printf '%s\n' 'Usage: package_unix_worker.sh --target android-arm64|macos-arm64|macos-x64 --version VERSION --build-number NUMBER --app-ref SHA --core-ref SHA --anp-ref SHA --tenant-config-base64 BASE64 --tenant-config-sha256 SHA256 [--android-startup-smoke-test auto|always|never] --output-dir DIR'
       exit 0
       ;;
     *) fail "unknown argument: $1" ;;
@@ -75,8 +77,9 @@ esac
 for ref in "$APP_REF" "$CORE_REF" "$ANP_REF"; do
   [[ "$ref" =~ ^[0-9a-f]{40}$ ]] || fail "source refs must be lowercase full SHAs"
 done
-[[ -n "$PRIMARY_TENANT_DOMAIN" && -n "$OUTPUT_DIR" ]] ||
-  fail "primary tenant domain and output directory are required"
+[[ -n "$TENANT_CONFIG_BASE64" && -n "$TENANT_CONFIG_SHA256" && -n "$OUTPUT_DIR" ]] ||
+  fail "tenant config, its SHA-256, and output directory are required"
+[[ "$TENANT_CONFIG_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "invalid tenant config SHA-256"
 case "$ANDROID_STARTUP_SMOKE_TEST" in
   auto|always|never) ;;
   *) fail "Android startup smoke policy must be auto, always, or never" ;;
@@ -87,6 +90,39 @@ require_cmd dart
 require_cmd flutter
 require_cmd git
 require_cmd python3
+
+python3 - "$TENANT_CONFIG_BASE64" "$TENANT_CONFIG_SHA256" <<'PY'
+import base64, hashlib, json, sys, urllib.parse
+
+try:
+    raw = base64.b64decode(sys.argv[1], validate=True)
+except ValueError as error:
+    raise SystemExit("tenant config is not canonical base64") from error
+if hashlib.sha256(raw).hexdigest() != sys.argv[2]:
+    raise SystemExit("tenant config SHA-256 mismatch")
+value = json.loads(raw)
+if value.get("schema_version") != 1 or value.get("default_slot") not in ("primary", "secondary"):
+    raise SystemExit("invalid tenant config schema")
+tenants = value.get("tenants")
+if not isinstance(tenants, dict) or set(tenants) != {"primary", "secondary"}:
+    raise SystemExit("tenant config must contain exactly two slots")
+origins = []
+for slot in ("primary", "secondary"):
+    tenant = tenants[slot]
+    names = tenant.get("display_name") if isinstance(tenant, dict) else None
+    if not isinstance(names, dict) or not all(isinstance(names.get(key), str) and names[key].strip() for key in ("zh-CN", "en")):
+        raise SystemExit(f"invalid tenant display names for {slot}")
+    origin = urllib.parse.urlparse(tenant.get("backend_origin", ""))
+    host = tenant.get("did_host", "").strip().lower().rstrip(".")
+    loopback = origin.scheme == "http" and origin.hostname in ("localhost", "127.0.0.1", "::1")
+    if ((origin.scheme != "https" and not loopback) or origin.username or origin.password
+            or origin.path not in ("", "/") or origin.query or origin.fragment
+            or (origin.port is not None and not loopback) or origin.hostname != host):
+        raise SystemExit(f"invalid tenant endpoint for {slot}")
+    origins.append(origin.geturl().rstrip("/"))
+if len(set(origins)) != 2:
+    raise SystemExit("tenant endpoints must be distinct")
+PY
 
 [[ "$(git rev-parse 'HEAD^{commit}')" == "$APP_REF" ]] || fail "APP checkout ref mismatch"
 [[ "$(git -C "$CORE_DIR" rev-parse 'HEAD^{commit}')" == "$CORE_REF" ]] || fail "Core checkout ref mismatch"
@@ -182,6 +218,7 @@ metadata() {
     --app-ref "$APP_REF" \
     --core-ref "$CORE_REF" \
     --anp-ref "$ANP_REF" \
+    --tenant-config-sha256 "$TENANT_CONFIG_SHA256" \
     --output "$OUTPUT_DIR/artifact-metadata.json"
 }
 
@@ -241,7 +278,7 @@ build_android() {
   python3 "$ANDROID_EMAS_CONFIG_TOOL" validate \
     --path android/emas.properties || fail "Android Release EMAS configuration is invalid"
   (cd "$CORE_DIR" &&
-    scripts/flutter/build-sdk-native.sh \
+    AWIKI_RELEASE_REGISTRY=1 scripts/flutter/build-sdk-native.sh \
       --android-only \
       --android-abi arm64-v8a \
       --skip-codegen-check)
@@ -252,7 +289,8 @@ build_android() {
     --no-pub \
     --target-platform android-arm64 \
     --split-per-abi \
-    --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$PRIMARY_TENANT_DOMAIN" \
+    --dart-define="AWIKI_BUILTIN_TENANTS_BASE64=$TENANT_CONFIG_BASE64" \
+    --dart-define="AWIKI_BUILTIN_TENANTS_SHA256=$TENANT_CONFIG_SHA256" \
     --dart-define="AWIKI_APP_SOURCE_REF=$APP_REF" \
     --dart-define="AWIKI_IM_CORE_SOURCE_REF=$CORE_REF" \
     --build-name "$VERSION" \
@@ -450,7 +488,7 @@ build_macos() {
     arch_label="x64"
   fi
   (cd "$CORE_DIR" &&
-    scripts/flutter/build-sdk-native.sh \
+    AWIKI_RELEASE_REGISTRY=1 scripts/flutter/build-sdk-native.sh \
       --macos-only \
       --macos-arch "$arch" \
       --skip-codegen-check)
@@ -465,7 +503,8 @@ build_macos() {
     --release \
     --no-pub \
     --config-only \
-    --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$PRIMARY_TENANT_DOMAIN" \
+    --dart-define="AWIKI_BUILTIN_TENANTS_BASE64=$TENANT_CONFIG_BASE64" \
+    --dart-define="AWIKI_BUILTIN_TENANTS_SHA256=$TENANT_CONFIG_SHA256" \
     --dart-define="AWIKI_APP_SOURCE_REF=$APP_REF" \
     --dart-define="AWIKI_IM_CORE_SOURCE_REF=$CORE_REF" \
     --build-name "$VERSION" \
@@ -485,7 +524,6 @@ build_macos() {
     ENABLE_HARDENED_RUNTIME=YES \
     AWIKI_APP_SOURCE_REF="$APP_REF" \
     AWIKI_IM_CORE_SOURCE_REF="$CORE_REF" \
-    AWIKI_PRIMARY_TENANT_DOMAIN="$PRIMARY_TENANT_DOMAIN" \
     FLUTTER_BUILD_NAME="$VERSION" \
     FLUTTER_BUILD_NUMBER="$BUILD_NUMBER" \
     build

@@ -14,14 +14,13 @@ abstract interface class GroupApplicationService {
     required String rules,
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+    bool secureRequired = false,
   });
 
   Future<GroupSummary> joinGroup(
     String groupDid, {
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   });
-
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({int limit = 100});
 
   Future<GroupSummary> getGroup(String groupDid);
 
@@ -71,6 +70,7 @@ class ImCoreGroupApplicationService implements GroupApplicationService {
     required String rules,
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+    bool secureRequired = false,
   }) {
     return _groups.createGroup(
       name: name,
@@ -80,6 +80,7 @@ class ImCoreGroupApplicationService implements GroupApplicationService {
       rules: rules,
       messagePrompt: messagePrompt,
       identity: identity,
+      secureRequired: secureRequired,
     );
   }
 
@@ -88,10 +89,6 @@ class ImCoreGroupApplicationService implements GroupApplicationService {
     String groupDid, {
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   }) => _groups.joinGroup(groupDid, identity: identity);
-
-  @override
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({int limit = 100}) =>
-      _groups.resumeRebindRecovery(limit: limit);
 
   @override
   Future<GroupSummary> getGroup(String groupDid) => _groups.getGroup(groupDid);

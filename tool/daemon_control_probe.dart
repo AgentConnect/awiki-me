@@ -153,10 +153,8 @@ Future<Map<String, Object?>> _personalAgentBootstrap(
     userDid: controllerDid,
     verificationMethod: _required(options, 'verification-method'),
     publicKeyMultibase: _required(options, 'public-key-multibase'),
-    privateKeyPem: await _readPrivateKeyPem(options),
     keyType: options['key-type'] ?? 'Multikey/Ed25519',
     keyAlgorithm: options['key-algorithm'] ?? 'Ed25519',
-    privateKeyEncoding: options['private-key-encoding'] ?? 'pem',
     allowedScopes:
         _csvOption(options, 'allowed-scopes') ?? defaultPersonalAgentScopes,
   );
@@ -327,13 +325,6 @@ Map<String, String> _parseOptions(List<String> args) {
   return options;
 }
 
-Future<String> _readPrivateKeyPem(Map<String, String> options) async {
-  if (options.containsKey('private-key-pem-file')) {
-    return File(_required(options, 'private-key-pem-file')).readAsString();
-  }
-  return _required(options, 'private-key-pem');
-}
-
 Future<String> _readPayloadJson(Map<String, String> options) async {
   if (options.containsKey('json')) {
     return _required(options, 'json');
@@ -401,7 +392,7 @@ const _usageLines = <String>[
   '',
   'Commands:',
   '  create-agent --controller-did DID --registration-token TOKEN [--daemon-agent-did DID] [--runtime RUNTIME] [--driver-id DRIVER] [--name NAME] [--client-request-id ID] [--handle HANDLE] [--workspace PATH] [--workspace-mode MODE] [--default-sandbox MODE] [--default-model MODEL] [--driver-config-json JSON]',
-  '  personal-agent-bootstrap --controller-did DID --daemon-agent-did DID --app-instance-id ID --verification-method DID#daemon-key-1 --public-key-multibase KEY --private-key-pem-file PATH --recipient-key-id DID#key-3 --recipient-public-key-b64u KEY [--runtime-registration-token TOKEN] [--run-id ID]',
+  '  personal-agent-bootstrap --controller-did DID --daemon-agent-did DID --app-instance-id ID --verification-method DID#daemon-key-1 --public-key-multibase KEY --recipient-key-id DID#key-3 --recipient-public-key-b64u KEY [--runtime-registration-token TOKEN] [--run-id ID]',
   '  submit-task --runtime-agent-did DID --text TEXT [--command-id ID] [--task-id ID] [--conversation-id ID]',
   '  parse-status (--json JSON | --json-file PATH | --stdin)',
   '  parse-upgrade-failure (--json JSON | --json-file PATH | --stdin)',

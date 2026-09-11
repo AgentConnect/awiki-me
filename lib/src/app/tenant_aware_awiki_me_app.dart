@@ -749,6 +749,7 @@ bool tenantBootstrapAllowsLocalRecovery(String diagnosticCode) =>
       'identity_vault_device_mismatch',
       'identity_vault_record_open_failed',
       'identity_vault_verification_failed',
+      'identity_custody_unavailable',
     }.contains(diagnosticCode);
 
 Future<T> openTenantRuntimeAfterDispose<T>({

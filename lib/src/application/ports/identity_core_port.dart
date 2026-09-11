@@ -4,7 +4,7 @@ import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 
-enum IdentityRegistrationStatus { registered, joinRequired }
+enum IdentityRegistrationStatus { registered, joinRequired, recoveryRequired }
 
 enum ExistingHandleJoinMode { ordinary, handleRecoveryRebind }
 
@@ -40,13 +40,11 @@ abstract interface class IdentityCorePort {
 
   Future<SessionAccountBinding> activeSyncAccountBinding();
 
-  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias);
-
-  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(String identityIdOrAlias);
-
   Future<DaemonSubkeyAuthorizationRevokeResult> revokeDaemonSubkeyAuthorization(
     String identityIdOrAlias,
   );
+
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias);
 
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias);
 
@@ -72,8 +70,35 @@ abstract interface class IdentityCorePort {
   });
 }
 
+abstract interface class DaemonSubkeyAuthorizationCorePort {
+  Future<UserSubkeyPackage> authorizeDaemonSubkey(
+    String identityIdOrAlias,
+    UserSubkeyPackage proposal,
+  );
+}
+
+class LocalIdentityDeletionTicket {
+  const LocalIdentityDeletionTicket({
+    required this.deletionId,
+    required this.ownerIdentityId,
+    required this.currentDid,
+  });
+
+  final String deletionId;
+  final String ownerIdentityId;
+  final String currentDid;
+}
+
 abstract interface class LocalIdentityDataDeletionPort {
   Future<AppSession> deleteLocalIdentityData(String identityIdOrAlias);
+
+  Future<LocalIdentityDeletionTicket> prepareLocalIdentityDataDeletion(
+    String identityIdOrAlias,
+  );
+
+  Future<AppSession> completeLocalIdentityDataDeletion(String deletionId);
+
+  Future<List<LocalIdentityDeletionTicket>> pendingLocalIdentityDataDeletions();
 }
 
 abstract interface class ExistingHandleContinuationPort {

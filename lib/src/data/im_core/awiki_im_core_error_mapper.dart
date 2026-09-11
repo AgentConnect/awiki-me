@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/models/message_sync_diagnostics.dart';
 import '../../application/ports/message_sync_core_port.dart';
+import '../../core/app_error_classifier.dart';
 
 class ImCoreMappedError {
   const ImCoreMappedError({
@@ -57,6 +60,23 @@ class AwikiImCoreErrorMapper {
     );
   }
 
+  Object appError(core.AwikiImCoreException error) {
+    final serviceCode = error.serviceCode?.trim();
+    final code =
+        const <String>{
+          'handle_recovery.local_state_conflict',
+          'handle_recovery.transition_missing',
+          'handle_recovery.join_terminal_wait',
+          'handle_recovery.transition_must_complete',
+          'handle_recovery.join_must_complete',
+          'identity.local_data_deletion_pending',
+          'identity.local_deletion_conflict',
+        }.contains(serviceCode)
+        ? serviceCode
+        : _structuredAppErrorCode(error.serviceDataJson);
+    return code == null ? error : AppStructuredError(code: code, cause: error);
+  }
+
   UnsupportedError unsupported(String capability) {
     return UnsupportedError('IM Core $capability is not available yet');
   }
@@ -96,6 +116,20 @@ class AwikiImCoreErrorMapper {
       ),
       httpStatus: mapped.statusCode,
     );
+  }
+}
+
+String? _structuredAppErrorCode(String? raw) {
+  if (raw == null || raw.trim().isEmpty) return null;
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map<String, dynamic>) return null;
+    final value = decoded['awiki_code'];
+    if (value is! String) return null;
+    final code = value.trim();
+    return _stableDiagnosticCode(code) == code ? code : null;
+  } on FormatException {
+    return null;
   }
 }
 

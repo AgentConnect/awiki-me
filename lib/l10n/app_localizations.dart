@@ -626,11 +626,59 @@ abstract class AppLocalizations {
   /// **'这个验证码已过期或已被使用，请重新发送验证码后再试。'**
   String get registrationVerificationUnavailable;
 
+  /// No description provided for @registrationCommittedActivationPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'账号已创建并安全保存在本机，但登录初始化尚未完成。请在本地账号列表中重新登录，无需重新获取验证码。'**
+  String get registrationCommittedActivationPending;
+
   /// No description provided for @registrationRecoveryStateInvalid.
   ///
   /// In zh, this message translates to:
   /// **'当前 Handle 的身份状态需要服务器处理，请联系支持后重试。'**
   String get registrationRecoveryStateInvalid;
+
+  /// No description provided for @registrationLocalStateNeedsAttention.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机存在无法安全自动收敛的身份状态。请先处理本地状态，然后重新发送验证码。'**
+  String get registrationLocalStateNeedsAttention;
+
+  /// No description provided for @registrationContinuityChanged.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份连续性状态已变化。请重新发送验证码后再试。'**
+  String get registrationContinuityChanged;
+
+  /// No description provided for @registrationJoinTerminalWait.
+  ///
+  /// In zh, this message translates to:
+  /// **'旧的设备 Join 正在安全结束。请稍候片刻，然后重新发送验证码再试。'**
+  String get registrationJoinTerminalWait;
+
+  /// No description provided for @identityDeletionCompleteTransitionFirst.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份切换仍在落地。请先完成身份切换，再删除此身份。'**
+  String get identityDeletionCompleteTransitionFirst;
+
+  /// No description provided for @identityDeletionCompleteJoinFirst.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备 Join 仍在进行。请先完成设备加入，再删除此身份。'**
+  String get identityDeletionCompleteJoinFirst;
+
+  /// No description provided for @identityDeletionPendingWillResume.
+  ///
+  /// In zh, this message translates to:
+  /// **'这项已确认的删除尚未完成，应用将在启动时自动继续。'**
+  String get identityDeletionPendingWillResume;
+
+  /// No description provided for @identityDeletionConflict.
+  ///
+  /// In zh, this message translates to:
+  /// **'本地身份控制状态存在冲突，尚未删除任何 App 产品数据。'**
+  String get identityDeletionConflict;
 
   /// No description provided for @tenantSwitcherLabel.
   ///
@@ -683,7 +731,7 @@ abstract class AppLocalizations {
   /// No description provided for @tenantDefaultBadge.
   ///
   /// In zh, this message translates to:
-  /// **'默认配置'**
+  /// **'官方租户'**
   String get tenantDefaultBadge;
 
   /// No description provided for @tenantName.
@@ -815,7 +863,7 @@ abstract class AppLocalizations {
   /// No description provided for @tenantValidationBackendHttpsRequired.
   ///
   /// In zh, this message translates to:
-  /// **'公网租户地址必须使用 HTTPS，例如 https://anpclaw.com。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。'**
+  /// **'公网租户地址必须使用 HTTPS，例如 https://tenant.example。只有 localhost、127.0.0.1 等本地开发地址可以使用 HTTP。'**
   String get tenantValidationBackendHttpsRequired;
 
   /// No description provided for @tenantValidationDidHostInvalid.
@@ -1878,6 +1926,12 @@ abstract class AppLocalizations {
   /// **'设备已撤销，受影响的群正在同步安全状态。'**
   String get deviceRevokeSucceededGroupsSyncing;
 
+  /// No description provided for @deviceRevokeSucceededGroupsRepairPartial.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备已撤销；部分相关群本次未能更新安全状态，但不影响继续收发消息。'**
+  String get deviceRevokeSucceededGroupsRepairPartial;
+
   /// No description provided for @deviceRevokeOutcomeUnknown.
   ///
   /// In zh, this message translates to:
@@ -2106,6 +2160,12 @@ abstract class AppLocalizations {
   /// **'设备已加入'**
   String get deviceJoinAuthorized;
 
+  /// No description provided for @deviceJoinFinalizing.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在完成设备操作...'**
+  String get deviceJoinFinalizing;
+
   /// No description provided for @deviceJoinCancelled.
   ///
   /// In zh, this message translates to:
@@ -2322,6 +2382,30 @@ abstract class AppLocalizations {
   /// **'正在准备安装更新...'**
   String get settingsUpdateStatusInstalling;
 
+  /// No description provided for @settingsUpdateStatusUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前租户暂未提供更新信息'**
+  String get settingsUpdateStatusUnavailable;
+
+  /// No description provided for @settingsUpdateStatusUnchecked.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未检查更新'**
+  String get settingsUpdateStatusUnchecked;
+
+  /// No description provided for @settingsUpdateStatusCached.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查失败，保留上次确认的版本信息'**
+  String get settingsUpdateStatusCached;
+
+  /// No description provided for @updatePolicyUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前租户暂未提供更新信息，你仍可打开下载页面。'**
+  String get updatePolicyUnavailable;
+
   /// No description provided for @settingsUpdateStatusFailed.
   ///
   /// In zh, this message translates to:
@@ -2405,6 +2489,18 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'暂时无法同步新消息，请检查网络后重试。'**
   String get messageSyncStatusRetryableFailure;
+
+  /// No description provided for @messageSyncStatusBlocked.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息同步已暂停，请升级客户端或修复此设备后继续。'**
+  String get messageSyncStatusBlocked;
+
+  /// No description provided for @messageSyncStatusCapacityExceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复所需的账号状态超过安全容量，消息恢复无法继续，请联系支持人员。'**
+  String get messageSyncStatusCapacityExceeded;
 
   /// No description provided for @messageSyncStatusProjectionRefreshFailed.
   ///
@@ -3351,8 +3447,92 @@ abstract class AppLocalizations {
   /// No description provided for @screenshotPermissionRequired.
   ///
   /// In zh, this message translates to:
-  /// **'录屏权限尚未生效。请在系统设置的“录屏与系统录音”中允许当前 AWiki Me 应用，然后完全退出并重新打开。'**
+  /// **'macOS 要求开启“屏幕录制”权限才能截图。请在系统设置中允许 AWiki Me，完成后退出并重新打开应用。'**
   String get screenshotPermissionRequired;
+
+  /// No description provided for @screenshotPermissionTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'截图需要屏幕录制权限'**
+  String get screenshotPermissionTitle;
+
+  /// No description provided for @screenshotPermissionRecovery.
+  ///
+  /// In zh, this message translates to:
+  /// **'先完全退出 AWiki Me，再重新打开并尝试截图。\n\n如果仍然不行，请退出应用，在屏幕录制设置中移除旧的 AWiki Me 条目，再添加下方位置的应用并允许访问，然后重新打开。这里只调整系统权限，不会删除聊天记录。'**
+  String get screenshotPermissionRecovery;
+
+  /// No description provided for @screenshotPermissionSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开系统设置'**
+  String get screenshotPermissionSettings;
+
+  /// No description provided for @screenshotPermissionLater.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂不设置'**
+  String get screenshotPermissionLater;
+
+  /// No description provided for @screenshotPermissionHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'已开启权限，仍无法截图？'**
+  String get screenshotPermissionHelp;
+
+  /// No description provided for @screenshotShowDiagnostics.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看排查信息'**
+  String get screenshotShowDiagnostics;
+
+  /// No description provided for @screenshotPermissionSettingsFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法自动打开设置。请手动打开系统设置 → 隐私与安全 → 屏幕与系统音频录制（部分系统显示为“录屏与系统录音”）。'**
+  String get screenshotPermissionSettingsFailed;
+
+  /// No description provided for @screenshotPermissionCheckFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'截图暂时不可用。请退出并重新打开 AWiki Me 后重试。'**
+  String get screenshotPermissionCheckFailed;
+
+  /// No description provided for @screenshotCaptureFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'截图未完成，请重试。若持续失败，可先用系统截图工具保存图片，再添加为附件。'**
+  String get screenshotCaptureFailed;
+
+  /// No description provided for @screenshotCurrentApplication.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前运行的应用'**
+  String get screenshotCurrentApplication;
+
+  /// No description provided for @screenshotApplicationUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法读取当前应用信息，请确认正在使用的版本和安装位置。'**
+  String get screenshotApplicationUnavailable;
+
+  /// No description provided for @screenshotBuildMode.
+  ///
+  /// In zh, this message translates to:
+  /// **'运行模式'**
+  String get screenshotBuildMode;
+
+  /// No description provided for @screenshotCopyDiagnostics.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制排查信息'**
+  String get screenshotCopyDiagnostics;
+
+  /// No description provided for @screenshotDiagnosticsPrivacy.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制内容包含版本和应用位置（可能含电脑用户名），不含账号或截图。分享前请检查。'**
+  String get screenshotDiagnosticsPrivacy;
 
   /// No description provided for @chatRemoveAttachment.
   ///
@@ -5670,6 +5850,40 @@ abstract class AppLocalizations {
   /// **'更新失败，请打开下载页手动安装。'**
   String get updateInstallFailed;
 
+  /// No description provided for @updateRestrictedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前租户需要更新'**
+  String get updateRestrictedTitle;
+
+  /// No description provided for @updateRestrictedMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'{tenantName} 要求 AWiki Me {minimumVersion} 或更高版本，当前版本为 {currentVersion}。请更新客户端后继续使用；你也可以切换租户。'**
+  String updateRestrictedMessage(
+    Object tenantName,
+    Object minimumVersion,
+    Object currentVersion,
+  );
+
+  /// No description provided for @updateRestrictedInstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开官方下载页面'**
+  String get updateRestrictedInstall;
+
+  /// No description provided for @updateRestrictedSwitchTenant.
+  ///
+  /// In zh, this message translates to:
+  /// **'切换租户'**
+  String get updateRestrictedSwitchTenant;
+
+  /// No description provided for @updateRestrictedSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'设置和本地数据'**
+  String get updateRestrictedSettings;
+
   /// No description provided for @daemonUpgradeStarted.
   ///
   /// In zh, this message translates to:
@@ -6078,6 +6292,18 @@ abstract class AppLocalizations {
   /// **'当前版本不支持 Handle 恢复，未对身份做任何更改。'**
   String get handleRecoveryUnavailable;
 
+  /// No description provided for @handleRecoveryFactorRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复资格需要重新验证。请为同一操作获取新的验证码，验证后重新确认风险。'**
+  String get handleRecoveryFactorRequired;
+
+  /// No description provided for @handleRecoveryLocalSuperseded.
+  ///
+  /// In zh, this message translates to:
+  /// **'远端恢复已经提交，但本机恢复身份已被新的绑定或授权状态取代。已停止旧操作；恢复记录和材料仍保留。请返回登录页加入当前身份，或明确开始新的恢复。'**
+  String get handleRecoveryLocalSuperseded;
+
   /// No description provided for @handleRecoveryTitle.
   ///
   /// In zh, this message translates to:
@@ -6377,6 +6603,60 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'旧身份升级失败，请重试。'**
   String get legacyIdentityUpgradeFailed;
+
+  /// No description provided for @localCredentialDeleteRecoveryHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'同时会清除本机尚未完成的恢复进度。'**
+  String get localCredentialDeleteRecoveryHint;
+
+  /// No description provided for @localCredentialDeleteInspectFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法确认本机身份状态，请重试。'**
+  String get localCredentialDeleteInspectFailed;
+
+  /// No description provided for @handleRecoveryFreshDataNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机没有可迁移的原身份数据，恢复后不会自动找回此前的私聊历史。'**
+  String get handleRecoveryFreshDataNotice;
+
+  /// No description provided for @handleRecoveryAwaitingResult.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂未确认账号恢复结果，请继续确认。不要重新发起恢复。'**
+  String get handleRecoveryAwaitingResult;
+
+  /// No description provided for @handleRecoveryAwaitingLocal.
+  ///
+  /// In zh, this message translates to:
+  /// **'账号恢复已生效，本机设置尚未完成。请继续恢复，无需再次接收短信验证码。'**
+  String get handleRecoveryAwaitingLocal;
+
+  /// No description provided for @handleRecoveryChecking.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在检查恢复进度…'**
+  String get handleRecoveryChecking;
+
+  /// No description provided for @handleRecoveryRunning.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在处理恢复操作，请稍候…'**
+  String get handleRecoveryRunning;
+
+  /// No description provided for @handleRecoveryEntering.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复已完成，正在进入消息…'**
+  String get handleRecoveryEntering;
+
+  /// No description provided for @handleRecoveryContinueExisting.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续上次恢复'**
+  String get handleRecoveryContinueExisting;
 }
 
 class _AppLocalizationsDelegate

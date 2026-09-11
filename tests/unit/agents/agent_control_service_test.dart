@@ -408,7 +408,6 @@ void main() {
           userDid: 'did:human:me',
           verificationMethod: 'did:human:me#daemon-key-1',
           publicKeyMultibase: 'zPublic',
-          privateKeyMultibase: 'zPrivate',
         ),
       );
 
@@ -494,7 +493,6 @@ void main() {
         userDid: 'did:human:me',
         verificationMethod: 'did:human:me#daemon-key-1',
         publicKeyMultibase: 'zPublic',
-        privateKeyPem: 'private-pem',
       ),
       desiredPersonalAgent: DesiredPersonalAgent(
         preferredLanguage: 'en',
@@ -652,7 +650,6 @@ void main() {
             userDid: 'did:human:me',
             verificationMethod: 'did:human:me#daemon-key-1',
             publicKeyMultibase: 'zPublic',
-            privateKeyMultibase: 'zPrivate',
           ),
         ),
         throwsStateError,
@@ -699,7 +696,6 @@ void main() {
             userDid: 'did:human:me',
             verificationMethod: 'did:human:me#daemon-key-1',
             publicKeyMultibase: 'zPublic',
-            privateKeyMultibase: 'zPrivate',
           ),
           runId: runId,
         );
@@ -733,33 +729,69 @@ void main() {
         userDid: 'did:human:me',
         verificationMethod: 'did:human:me#other-key',
         publicKeyMultibase: 'zPublic',
-        privateKeyMultibase: 'zPrivate',
       ).toJson(),
       throwsArgumentError,
     );
   });
 
-  test('bootstrap rejects empty private key material locally', () {
+  test('bootstrap rejects empty public key material locally', () {
     expect(
       () => const UserSubkeyPackage(
         userDid: 'did:human:me',
         verificationMethod: 'did:human:me#daemon-key-1',
-        publicKeyMultibase: 'zPublic',
-        privateKeyMultibase: ' ',
+        publicKeyMultibase: ' ',
       ).toJson(),
       throwsArgumentError,
     );
   });
 
-  test('bootstrap rejects unsupported private key encoding locally', () {
+  test('bootstrap emits public-only v3 package locally', () {
+    final encoded = const UserSubkeyPackage(
+      userDid: 'did:human:me',
+      verificationMethod: 'did:human:me#daemon-key-1',
+      publicKeyMultibase: 'zPublic',
+    ).toJson();
+    expect(encoded['schema'], 'awiki.daemon.user_subkey_package.v3');
+    expect(encoded.keys.any((key) => key.contains('private')), isFalse);
+  });
+
+  test('bootstrap reads a public-only daemon proposal from diagnostics', () {
+    final package = UserSubkeyPackage.fromDaemonDiagnostics(
+      const <String, Object?>{
+        'config_summary': <String, Object?>{
+          'delegated_subkey_proposal': <String, Object?>{
+            'schema': userSubkeyPackageSchema,
+            'user_did': 'did:human:me',
+            'verification_method': 'did:human:me#daemon-key-1',
+            'key_type': 'Multikey/Ed25519',
+            'key_algorithm': 'Ed25519',
+            'public_key_multibase': 'zPublic',
+          },
+        },
+      },
+    );
+
+    expect(package.userDid, 'did:human:me');
+    expect(package.publicKeyMultibase, 'zPublic');
     expect(
-      () => const UserSubkeyPackage(
-        userDid: 'did:human:me',
-        verificationMethod: 'did:human:me#daemon-key-1',
-        publicKeyMultibase: 'zPublic',
-        privateKeyPem: 'pemPrivate',
-        privateKeyEncoding: 'multibase-ed25519-private',
-      ).toJson(),
+      package.toJson().keys.any((key) => key.contains('private')),
+      isFalse,
+    );
+  });
+
+  test('bootstrap rejects private fields in a daemon proposal', () {
+    expect(
+      () => UserSubkeyPackage.fromDaemonDiagnostics(const <String, Object?>{
+        'config_summary': <String, Object?>{
+          'delegated_subkey_proposal': <String, Object?>{
+            'schema': userSubkeyPackageSchema,
+            'user_did': 'did:human:me',
+            'verification_method': 'did:human:me#daemon-key-1',
+            'public_key_multibase': 'zPublic',
+            'private_key_pem': 'forbidden',
+          },
+        },
+      }),
       throwsArgumentError,
     );
   });
@@ -863,24 +895,24 @@ void main() {
       expect(command.command, isNot(contains('did:human:me')));
       expect(
         command.command,
-        "curl -fsSL 'https://awiki.ai/daemon/install.sh' | "
-        "AWIKI_DAEMON_BASE_URL='https://awiki.ai' "
-        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://awiki.ai/daemon' "
+        "curl -fsSL 'https://awiki.me/daemon/install.sh' | "
+        "AWIKI_DAEMON_BASE_URL='https://awiki.me' "
+        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://awiki.me/daemon' "
         "sh -s -- --token 'daemon-token'",
       );
       expect(
         command.fallbackCommand,
-        'awiki-deamon install --token daemon-token --base-url https://awiki.ai',
+        'awiki-deamon install --token daemon-token --base-url https://awiki.me',
       );
-      expect(command.installerUrl, 'https://awiki.ai/daemon/install.sh');
-      expect(command.cleanupUrl, 'https://awiki.ai/daemon/cleanup.sh');
+      expect(command.installerUrl, 'https://awiki.me/daemon/install.sh');
+      expect(command.cleanupUrl, 'https://awiki.me/daemon/cleanup.sh');
       expect(
         command.cleanupCommand,
-        'curl -fsSL https://awiki.ai/daemon/cleanup.sh | sh',
+        'curl -fsSL https://awiki.me/daemon/cleanup.sh | sh',
       );
       expect(
         command.packageUrlTemplate,
-        'https://awiki.ai/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
+        'https://awiki.me/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
       );
     },
   );
@@ -892,25 +924,25 @@ void main() {
       final service = DefaultAgentControlService(
         inventory: inventory,
         messages: _MessagesStub(),
-        environment: AwikiEnvironmentConfig(baseUrl: 'https://anpclaw.com'),
+        environment: AwikiEnvironmentConfig(baseUrl: primaryTenantBaseUrl),
       );
 
       final command = await service.createDaemonInstallCommand(
         controllerDid: 'did:human:me',
-        controllerHandle: 'alice.anpclaw.com',
+        controllerHandle: 'alice.$primaryTenantDomain',
         clientPlatform: 'macos',
       );
 
       expect(
         command.command,
-        "curl -fsSL 'https://anpclaw.com/daemon/install.sh' | "
-        "AWIKI_DAEMON_BASE_URL='https://anpclaw.com' "
-        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://anpclaw.com/daemon' "
+        "curl -fsSL '$primaryTenantBaseUrl/daemon/install.sh' | "
+        "AWIKI_DAEMON_BASE_URL='$primaryTenantBaseUrl' "
+        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='$primaryTenantBaseUrl/daemon' "
         "sh -s -- --token 'daemon-token'",
       );
       expect(
         command.fallbackCommand,
-        'awiki-deamon install --token daemon-token --base-url https://anpclaw.com',
+        'awiki-deamon install --token daemon-token --base-url $primaryTenantBaseUrl',
       );
     },
   );
@@ -1325,24 +1357,15 @@ class _IdentityCoreStub implements IdentityCorePort {
   }
 
   @override
+  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {
     throw UnimplementedError();
   }
 
   @override
-  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
-    String identityIdOrAlias,
-  ) {
-    throw UnimplementedError();
-  }
-
-  @override
   Future<List<AppSession>> listLocalIdentities() {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias) {
     throw UnimplementedError();
   }
 

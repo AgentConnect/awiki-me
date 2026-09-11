@@ -21,14 +21,13 @@ abstract interface class GroupCorePort {
     required String rules,
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+    bool secureRequired = false,
   });
 
   Future<GroupSummary> joinGroup(
     String groupDid, {
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   });
-
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({int limit = 100});
 
   Future<GroupSummary> getGroup(String groupDid);
 

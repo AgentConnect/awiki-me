@@ -133,9 +133,8 @@ class _ConversationOwnerOperation {
 
 /// Payload-free ordering evidence for one bound-session Patch generation.
 ///
-/// It exists so startup and release tests can fail closed on the required
-/// subscribe -> committed reset -> reliable sync ordering without reading
-/// account, device, cursor, or message identifiers.
+/// It records Patch subscription/readiness and the point where a completed
+/// Core sync starts projection refresh. It does not describe Core RPC order.
 @immutable
 class ConversationPatchStartupObservation {
   const ConversationPatchStartupObservation({
@@ -261,10 +260,10 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   ConversationPatchStartupObservation? get patchStartupObservation =>
       _patchStartupObservation;
 
-  /// Records the first reliable pull for the current bound Patch generation.
+  /// Records the first completed Core pull projected into this Patch generation.
   ///
   /// The coordinator calls this only after [preparePatchGeneration] completes.
-  /// Throwing here makes an ordering regression fail closed before remote sync.
+  /// Throwing here prevents projection refresh against an unready Patch stream.
   void recordReliableSyncStartedForCurrentPatchGeneration() {
     final observation = _patchStartupObservation;
     final fence = _patchSessionFence;
@@ -3061,6 +3060,26 @@ ConversationSummary _mergeConversationLastMessage({
       lastMessagePayloadJson: local.lastMessagePayloadJson,
       lastMessageSnapshot: local.lastMessageSnapshot,
     );
+  }
+  final localSequence = local.lastMessageSnapshot?.serverSequence;
+  final refreshedSequence = refreshed.lastMessageSnapshot?.serverSequence;
+  if (localSequence != null && refreshedSequence != null) {
+    if (localSequence <= refreshedSequence) {
+      return refreshed;
+    }
+    return refreshed.copyWith(
+      lastMessagePreview: local.lastMessagePreview,
+      lastMessageAt: local.lastMessageAt,
+      lastMessagePayloadJson: local.lastMessagePayloadJson,
+      lastMessageSnapshot: local.lastMessageSnapshot,
+    );
+  }
+  final localSnapshot = local.lastMessageSnapshot;
+  if (localSequence == null &&
+      refreshedSequence != null &&
+      localSnapshot?.sendState == MessageSendState.sent &&
+      localSnapshot?.remoteId?.trim().isNotEmpty == true) {
+    return refreshed;
   }
   if (!local.lastMessageAt.isAfter(refreshed.lastMessageAt)) {
     return refreshed;
