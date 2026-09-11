@@ -2183,15 +2183,19 @@ class _JoinCli {
     required String phone,
     required String otp,
   }) async {
-    final payload = await _run(<String>[
-      '--format',
-      'json',
-      'id',
-      'register',
-      '--handle',
-      handle,
-      '--verification-stdin',
-    ], stdinText: jsonEncode(<String, String>{'phone': phone, 'otp': otp}));
+    final payload = await _run(
+      <String>[
+        '--format',
+        'json',
+        'id',
+        'register',
+        '--handle',
+        handle,
+        '--verification-stdin',
+      ],
+      safeAction: 'cli_ready_admin_registration',
+      stdinText: jsonEncode(<String, String>{'phone': phone, 'otp': otp}),
+    );
     final identity = _data(payload, action: 'register_handle')['identity'];
     if (identity is! Map) {
       fail('The CLI registration returned no safe identity projection.');
