@@ -230,6 +230,13 @@ texts therefore use P3 Base on every participant; the test
 fails if multi-device synchronization silently creates a P5 session or upgrades
 the message security level.
 
+The independent peer registration must create a distinct DID even when both
+fixtures use the same protected test phone. CLI registration failures carry the
+secret-free `cli_ready_admin_registration` action label. Concurrent managed
+cleanup versus registration is covered by the System Test
+`test_account_cleanup_preserves_concurrent_same_phone_registration`; deterministic
+MySQL lock ordering is covered by the User Service isolated-database test.
+
 The functional suite proves:
 
 1. the joining App starts its normal Agents-page inventory observer before the

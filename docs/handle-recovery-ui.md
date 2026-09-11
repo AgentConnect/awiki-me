@@ -141,6 +141,13 @@ App/Core、daemon、User Service 和 Message Service，测试 gateway 只替代�
 `default-plain` Direct；普通恢复用例显式关闭人与人 Direct E2EE 以验证 transport 连续性，
 registration rejoin/P5 用例则显式开启 Direct E2EE。
 
+Runtime 准备按三个独立条件记录脱敏诊断：精确设备身份映射、Daemon 同步完成审计、Core
+bootstrap 状态及错误码；审计尚未出现时也读取 Core，避免把所有超时混为同步失败。
+`tail_bootstrapped` 和 `active` 都是已完成初始化的合法状态；无错误的新 Runtime 可以停留在
+前者，Core 公开同步诊断将其映射为 idle，不能要求它在第一条 prompt 之前先变成 `active`。
+准备完成前另核对 Daemon 公开 `status.sync_probe` 的 V2 协商、bootstrap、reconcile 与无 Legacy
+回退条件。原有 120 秒准备边界、恢复前后真实 prompt/reply、exact-one 和连续性验收保持不变。
+
 恢复 E2E 的公共 fixture 合同位于
 `tests/e2e/handle_recovery_fixture_contract.dart`。它分别定义 Fresh Root 与 Local Data 的固定
 资源形状；ready checkpoint 只允许 `sha256:` 脱敏引用、非负期望计数、fixture kind 和阶段，

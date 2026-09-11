@@ -3460,6 +3460,9 @@ Future<void> _prepareAppPairFunctionalHistory({
     phone: account.phone,
     otp: peerOtp,
   );
+  if (peerDid == adminDid) {
+    fail('Functional peer registration must create a distinct identity.');
+  }
   final peerResolution = await bootstrap.directoryApplicationService!
       .resolvePeer(peerDid);
   final conversationId = peerResolution.conversationId?.trim() ?? '';

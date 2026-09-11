@@ -52,12 +52,28 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(131));
+      final manifest =
+          jsonDecode(File(appSuiteManifestPath).readAsStringSync())
+              as Map<String, dynamic>;
+      final suites = manifest['suites'] as Map<String, dynamic>;
+      final activeManifestCaseIds = suites.values
+          .expand((suite) => (suite as Map<String, dynamic>)['caseIds'] as List)
+          .cast<String>()
+          .where((id) => catalog.caseById[id]?.catalogStatus == 'active')
+          .toSet();
+      expect(
+        catalog.cases
+            .where((entry) => entry.catalogStatus == 'active')
+            .map((entry) => entry.caseId),
+        unorderedEquals(activeManifestCaseIds),
+      );
+      expect(catalog.cases, hasLength(catalog.caseById.length));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
           'APP-UPDATE-SMOKE-E2E-001',
           'ROOT-TRANSFER-E2E-001',
+          'ROOT-TRANSFER-APP-PAIR-E2E-001',
           'ROOT-TRANSFER-E2E-002',
           'DEVICE-JOIN-E2E-001',
           'DEVICE-JOIN-E2E-002',
@@ -183,10 +199,7 @@ void main() {
         'DEVICE-REGISTRY-SYNC-E2E-001',
         'DEVICE-MESSAGE-GENERATION-FENCE-E2E-001',
       ]);
-      expect(
-        catalog.suiteCaseIds['full'],
-        contains('ROOT-TRANSFER-E2E-001'),
-      );
+      expect(catalog.suiteCaseIds['full'], contains('ROOT-TRANSFER-E2E-001'));
       expect(catalog.suiteCaseIds['root-transfer'], <String>[
         'ROOT-TRANSFER-E2E-001',
       ]);

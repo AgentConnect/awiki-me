@@ -86,6 +86,7 @@ import '../../case_attestation.dart';
 import '../../handle_recovery_commit_cut_proxy.dart';
 import '../../e2e_user_presence_port.dart';
 import '../../handle_recovery_fixture_contract.dart';
+import '../../runtime_message_sync_readiness.dart';
 import '../../remote_multi_device_join_contract.dart';
 import '../support/protected_otp_config.dart';
 
@@ -1991,6 +1992,8 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
       );
       await _waitForRuntimeMessageSyncReady(
         daemonStateRoot: daemonConfig.stateRoot,
+        daemonBinary: daemonConfig.binary,
+        daemonEnvironment: _continuityDaemonEnvironment(config),
         runtimeDid: runtimeAgent.agentDid,
       );
       final agentConversation = await _waitForRuntimeConversationRoute(
@@ -2762,11 +2765,15 @@ Future<AgentSummary> _waitForContinuityDaemonReady({
 
 Future<void> _waitForRuntimeMessageSyncReady({
   required String daemonStateRoot,
+  required String daemonBinary,
+  required Map<String, String> daemonEnvironment,
   required String runtimeDid,
 }) async {
   final daemonDbPath = '$daemonStateRoot/daemon.db';
   final coreDbPath = '$daemonStateRoot/im-core/local-state.sqlite';
   final deadline = DateTime.now().add(const Duration(seconds: 120));
+  Map<String, Object?> lastObservation = const <String, Object?>{};
+  var lastDiagnostic = '';
   while (DateTime.now().isBefore(deadline)) {
     try {
       final daemonDb = await databaseFactoryFfi.openDatabase(
@@ -2774,32 +2781,105 @@ Future<void> _waitForRuntimeMessageSyncReady({
         options: OpenDatabaseOptions(readOnly: true),
       );
       String? ownerIdentityId;
+      String? accountId;
+      String? protocolDeviceId;
       var completedSyncCount = 0;
+      final observation = <String, Object?>{};
       try {
         final identities = await daemonDb.query(
           'agent_device_identity',
-          columns: const <String>['identity_id'],
+          columns: const <String>[
+            'identity_id',
+            'account_id',
+            'protocol_device_id',
+            'identity_status',
+            'authorization_status',
+            'last_error_code',
+          ],
           where: 'agent_did = ?',
           whereArgs: <Object?>[runtimeDid],
           limit: 2,
         );
+        observation['deviceMappingCount'] = identities.length;
         if (identities.length == 1) {
-          ownerIdentityId = identities.single['identity_id']?.toString();
+          final identity = identities.single;
+          ownerIdentityId = identity['identity_id']?.toString();
+          accountId = identity['account_id']?.toString();
+          protocolDeviceId = identity['protocol_device_id']?.toString();
+          observation['identityStatus'] = _safeDiagnosticToken(
+            identity['identity_status']?.toString(),
+          );
+          observation['authorizationStatus'] = _safeDiagnosticToken(
+            identity['authorization_status']?.toString(),
+          );
+          observation['identityErrorCode'] = _safeDiagnosticToken(
+            identity['last_error_code']?.toString(),
+          );
         }
         final completed = await daemonDb.rawQuery(
-          '''
-        SELECT COUNT(*) AS count
-        FROM audit_log
-        WHERE event_type = 'daemon.realtime.sync.completed'
-          AND agent_did = ?
-        ''',
+          "SELECT COUNT(*) AS count FROM audit_log WHERE event_type = 'daemon.realtime.sync.completed' AND agent_did = ?",
           <Object?>[runtimeDid],
         );
         completedSyncCount = completed.single['count'] as int? ?? 0;
+        observation['completedSyncCount'] = completedSyncCount;
+        final probes = await daemonDb.query(
+          'agent_sync_probe',
+          columns: const <String>[
+            'v2_subprotocol_negotiated',
+            'v2_bootstrap_completed',
+            'last_reconcile_protocol',
+            'legacy_sync_used',
+          ],
+          where: 'agent_did = ?',
+          whereArgs: <Object?>[runtimeDid],
+          limit: 2,
+        );
+        observation['syncProbeCount'] = probes.length;
+        if (probes.length == 1) {
+          observation['v2Negotiated'] =
+              probes.single['v2_subprotocol_negotiated'] == 1;
+          observation['v2BootstrapCompleted'] =
+              probes.single['v2_bootstrap_completed'] == 1;
+          observation['lastReconcileProtocol'] = _safeDiagnosticToken(
+            probes.single['last_reconcile_protocol']?.toString(),
+          );
+          observation['legacySyncUsed'] =
+              probes.single['legacy_sync_used'] == 1;
+        }
+        final audits = await daemonDb.query(
+          'audit_log',
+          columns: const <String>['event_type', 'detail_json'],
+          where: "agent_did = ? AND event_type LIKE 'daemon.realtime.sync.%'",
+          whereArgs: <Object?>[runtimeDid],
+          orderBy: 'created_at_ms DESC',
+          limit: 1,
+        );
+        if (audits.isNotEmpty) {
+          observation['lastRealtimeEvent'] = _safeDiagnosticToken(
+            audits.single['event_type']?.toString(),
+          );
+          final detail = jsonDecode(
+            audits.single['detail_json']?.toString() ?? '{}',
+          );
+          if (detail is Map) {
+            observation['lastRealtimeErrorCode'] = _safeDiagnosticToken(
+              detail['error_code']?.toString(),
+            );
+            final warnings = detail['warnings'];
+            if (warnings is List) {
+              observation['lastRealtimeWarnings'] = warnings
+                  .map((value) => _safeDiagnosticToken(value?.toString()))
+                  .toList(growable: false);
+            }
+          }
+        }
       } finally {
         await daemonDb.close();
       }
-      if (ownerIdentityId != null && completedSyncCount > 0) {
+      var coreReady = false;
+      // Observe Core independently of the audit gate so a missing audit row
+      // cannot hide whether registration/authentication/bootstrap succeeded.
+      if (ownerIdentityId != null) {
         final coreDb = await databaseFactoryFfi.openDatabase(
           coreDbPath,
           options: OpenDatabaseOptions(readOnly: true),
@@ -2812,15 +2892,68 @@ Future<void> _waitForRuntimeMessageSyncReady({
             whereArgs: <Object?>[ownerIdentityId],
             limit: 2,
           );
-          if (states.length == 1 &&
-              states.single['bootstrap_state'] == 'active' &&
-              states.single['last_error_code'] == null) {
-            await Future<void>.delayed(const Duration(seconds: 2));
-            return;
+          observation['coreBootstrapCount'] = states.length;
+          if (states.length == 1) {
+            observation['coreBootstrapState'] = _safeDiagnosticToken(
+              states.single['bootstrap_state']?.toString(),
+            );
+            observation['coreLastErrorCode'] = _safeDiagnosticToken(
+              states.single['last_error_code']?.toString(),
+            );
+            coreReady = runtimeCoreBootstrapReady(
+              bootstrapState: states.single['bootstrap_state']?.toString(),
+              lastErrorCode: states.single['last_error_code']?.toString(),
+            );
           }
+          final bindings = await coreDb.query(
+            'identity_account_bindings',
+            columns: const <String>['account_id', 'device_id'],
+            where: 'owner_identity_id = ?',
+            whereArgs: <Object?>[ownerIdentityId],
+            limit: 2,
+          );
+          observation['coreBindingCount'] = bindings.length;
+          observation['coreBindingMatchesDevice'] =
+              bindings.length == 1 &&
+              bindings.single['account_id'] == accountId &&
+              bindings.single['device_id'] == protocolDeviceId;
         } finally {
           await coreDb.close();
         }
+      }
+      observation['deviceMappingReady'] = ownerIdentityId != null;
+      observation['daemonAuditReady'] = completedSyncCount > 0;
+      observation['coreBootstrapReady'] = coreReady;
+      var publicReady = false;
+      if (ownerIdentityId != null && completedSyncCount > 0 && coreReady) {
+        final status = await Process.run(
+          daemonBinary,
+          <String>['status', '--state-root', daemonStateRoot],
+          environment: daemonEnvironment,
+        );
+        observation['publicStatusExitCode'] = status.exitCode;
+        if (status.exitCode == 0) {
+          try {
+            publicReady = daemonPublicSyncV2Ready(
+              jsonDecode(status.stdout.toString()),
+            );
+          } on FormatException {
+            observation['publicStatusInvalidJson'] = true;
+          }
+        }
+        observation['publicSyncV2Ready'] = publicReady;
+      }
+      lastObservation = observation;
+      final diagnostic = jsonEncode(observation);
+      if (diagnostic != lastDiagnostic) {
+        // Only closed states/counts are emitted; identities, paths and payloads
+        // stay in memory and are never included in this diagnostic.
+        debugPrint('Runtime message sync readiness: $diagnostic');
+        lastDiagnostic = diagnostic;
+      }
+      if (ownerIdentityId != null && completedSyncCount > 0 && coreReady && publicReady) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        return;
       }
     } on DatabaseException catch (error) {
       final code = error.getResultCode();
@@ -2828,7 +2961,10 @@ Future<void> _waitForRuntimeMessageSyncReady({
     }
     await Future<void>.delayed(const Duration(milliseconds: 500));
   }
-  fail('The Runtime Agent did not establish reliable message sync.');
+  fail(
+    'The Runtime Agent did not establish reliable message sync. '
+    'Readiness: ${jsonEncode(lastObservation)}',
+  );
 }
 
 Future<AppConversationReadRef> _waitForRuntimeConversationRoute({
