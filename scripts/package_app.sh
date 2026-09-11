@@ -413,6 +413,11 @@ for name in \
 done
 [[ "$PACKAGE_VERSION_BUMP" == "none" ]] ||
   fail "PACKAGE_VERSION_BUMP must be none; commit the version before packaging"
+PACKAGE_SKIP_ANDROID_STARTUP_SMOKE="${PACKAGE_SKIP_ANDROID_STARTUP_SMOKE:-false}"
+case "$PACKAGE_SKIP_ANDROID_STARTUP_SMOKE" in
+  true|false) ;;
+  *) fail "PACKAGE_SKIP_ANDROID_STARTUP_SMOKE must be true or false" ;;
+esac
 [[ "$PACKAGE_RUN_DISCOVERY_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] ||
   fail "PACKAGE_RUN_DISCOVERY_TIMEOUT_SECONDS must be a positive integer"
 require_cmd awk
@@ -645,6 +650,7 @@ gh workflow run "$PACKAGE_WORKFLOW_FILE" \
   --raw-field "targets=$NORMALIZED_TARGETS" \
   --raw-field "version=$VERSION_NAME" \
   --raw-field "build_number=$BUILD_NUMBER" \
+  --raw-field "skip_android_startup_smoke=$PACKAGE_SKIP_ANDROID_STARTUP_SMOKE" \
   --raw-field "tenant_config_base64=$TENANT_CONFIG_BASE64" \
   --raw-field "tenant_config_sha256=$TENANT_CONFIG_SHA256" \
   --raw-field "download_base_url=$DOWNLOAD_BASE_URL" \

@@ -32,6 +32,11 @@ on:
         description: Positive App build number already committed to pubspec.yaml
         required: true
         type: string
+      skip_android_startup_smoke:
+        description: Skip the optional Android emulator startup smoke for this request
+        required: false
+        default: false
+        type: boolean
       tenant_config_base64:
         description: Complete UTF-8 two-slot tenant config encoded as base64
         required: true
@@ -500,7 +505,7 @@ jobs:
         working-directory: awiki-me
         shell: bash
         env:
-          ANDROID_STARTUP_SMOKE_TEST: ${{ vars.AWIKI_ANDROID_STARTUP_SMOKE_TEST || 'auto' }}
+          ANDROID_STARTUP_SMOKE_TEST: ${{ inputs.skip_android_startup_smoke && 'never' || vars.AWIKI_ANDROID_STARTUP_SMOKE_TEST || 'auto' }}
         run: |
           scripts/package_unix_worker.sh \
             --target "${{ matrix.target }}" \
