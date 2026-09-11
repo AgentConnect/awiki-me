@@ -253,7 +253,7 @@ revision、专用测试账号/OTP 和测试 scoped user-presence。最终双 App
 验收由发布负责人在 macOS 手工执行，不作为 Linux 自动化退出条件。
 
 Linux 仍必须执行其可运行的真实 App + CLI peer/backend E2E，包括 `direct`、`group`、
-`attachment`、`restart`、`performance` 以及 `full` 中进入真实设备 Join 前的主链路。
+`attachment`、`restart`、`performance` 以及 `messaging` 中进入真实设备 Join 前的主链路。
 Linux 结果不能冒充 macOS 双 App/user-presence attestation，但 macOS 手工项也不能阻止这些
 Linux 用例独立报告真实通过或失败。
 
@@ -482,7 +482,8 @@ For the single paged-recovery product case, use
 `--case multi-device-app-pair-paging-recovery`. It reuses the content-sync
 CLI/App-pair configuration and additionally requires the reviewed Stage-3
 recovery operator environment. It does not require a Daemon or Account State
-operator and must not be replaced by `full` or the 21-case functional suite.
+operator and must not be replaced by `messaging` or the 21-case functional suite.
+The `full` aggregate invokes this paging leaf with its original prerequisites.
 
 The macOS runner is not the service host. Account State test actions therefore
 require `AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE=ali` and the exact reviewed
@@ -521,14 +522,58 @@ When dedicated test-account, OTP, operator, or platform prerequisites are
 unavailable, the suite fails closed before claiming success. Those prerequisites
 protect the test execution and do not imply a product account rollout.
 
+### Full aggregate (all active cases)
+
+Since 2026-09-11, `--case full` is the all-active-case aggregate, not the old
+24-case message flow. Use `--case messaging` for that narrower flow.
+The checked-in [suite manifest](../tests/e2e/suite_manifest.json) owns the
+`full.includes` execution order and exact case union: currently 27 disjoint
+leaf suites / 114 active cases. This includes all App-pair multi-device suites,
+Handle Recovery variants, Root Key Transfer, restart, performance, supported
+Agent providers, and the macOS production-Keychain gate. The 13 planned and
+4 unsupported catalog entries are reported as non-executable, not passes.
+Adding an active case without adding exact-one aggregate coverage fails catalog
+validation. Focused overlapping slices remain independently selectable.
+
+```bash
+dart run tests/e2e/runner.dart --case full --config <protected-host-config> --dry-run
+dart run tests/e2e/runner.dart --case full --config <protected-host-config>
+```
+
+Full executes existing leaf runners sequentially with distinct child run IDs,
+identity Handles and isolated state. It preserves each leaf's capability,
+operator, OTP, provider, timeout and cleanup requirements; it does not enable
+security gates or restart services on the operator's behalf. Configure the
+prerequisites documented for every selected leaf before execution. Missing
+prerequisites fail/block that leaf while independent leaves continue.
+A missing/invalid report, stale attestation, or zero-exit/no-case run cannot pass.
+Only manifest-declared platform exclusions are `not_applicable`; a single-host
+result is not cross-platform acceptance.
+
+The production-Keychain leaf uses the existing prepared signed artifact gate.
+Set `AWIKI_E2E_PRODUCTION_KEYCHAIN_MANIFEST` to its artifact manifest and retain
+`AWIKI_MACOS_DEVELOPMENT_TEAM` as required by
+[the native gate](../scripts/run_macos_production_scope_restart_gate.sh).
+Preparation remains an explicit release/native prerequisite: full never
+implicitly builds a universal Release artifact. On Linux this macOS-only case
+is explicitly `not_applicable`. `--prepare-only` never attests a case as passed.
+
+The incremental aggregate is `.e2e/full/<run-id>/reports/timings.json`, with all
+active case IDs, per-case statuses, child commands/evidence locations, and
+planned/unsupported catalog entries. Every child retains its own case
+attestation, timing report and resource ledger. Remote residuals are not
+converted to cleaned; full reports `see_child_ledgers`. A used full run ID is
+rejected, preserving the earlier attempt. Dry-run records plans only and runs
+no child process.
+
 Run real App + CLI peer flows when the `awiki.info` remote test account pool,
 test OTP, and CLI peer are configured:
 
 ```bash
-dart run tests/e2e/runner.dart --case full
+dart run tests/e2e/runner.dart --case messaging
 ```
 
-同一安装内双身份消息闭环使用独立 focused suite，避免扩大既有 `full` UI
+同一安装内双身份消息闭环使用独立 focused suite，避免扩大既有 `messaging` UI
 流程。配置文件需提供同一非生产 OTP 账号池中的第二个本地身份 Handle：
 
 ```bash
@@ -542,7 +587,7 @@ conversation catch-up 得到精确正文并清零未读；最后快速切换确�
 的产品语义，不能把 bootstrap 之前的消息误当成应由增量同步投影的数据。它是
 application/runtime 闭环，不替代账户选择器的视觉人工验收。
 
-`full` additionally runs the cross-conversation correctness slice: one Direct
+`messaging` additionally runs the cross-conversation correctness slice: one Direct
 and one Group receive messages in alternating order, then the test verifies
 exact visible row title/preview/order, per-row and global unread isolation,
 exact canonical message sequences with no leakage, and one nickname projection
@@ -574,7 +619,7 @@ assertions remain the App row, badge, timeline, sender label, and read state.
 Detailed CLI product behavior belongs to the CLI-owned test project and must not
 replace a missing App assertion here.
 
-The `direct` and `full` slices also inspect the scoped chat-header title from
+The `direct` and `messaging` slices also inspect the scoped chat-header title from
 the first frame after a restarted App shell selects the cached Direct
 conversation. `DISPLAY-NAME-REG-001` fails immediately if that first non-empty
 title is a Handle, DID, `Unknown`, a duplicate title widget, or later changes
@@ -603,13 +648,13 @@ or Handle. `CONTACT-FIRST-CONV-E2E-001` opens the visible follower row, waits
 for the same peer's real profile, and uses the explicit send-message action
 before identity lookup or a first message. It then requires one empty canonical
 peer-scope conversation and reuses the same ID for the later contact message
-closed loop. The combined `full` slice does not attest this first-create case
+closed loop. The combined `messaging` slice does not attest this first-create case
 because it intentionally creates the Direct in the earlier Direct flow.
 
 On macOS, pass an explicit macOS config such as:
 
 ```bash
-dart run tests/e2e/runner.dart --case full \
+dart run tests/e2e/runner.dart --case messaging \
   --config tests/e2e/configs/e2e.codex-macos-allowed.local.yaml
 
 dart run tests/e2e/runner.dart --case restart \
@@ -674,7 +719,7 @@ Required configuration values:
   owned by an earlier run. Set `AWIKI_E2E_CLI_HANDLE` only when an operator
   intentionally provides a prepared fixed identity/root pair.
 - Keep the checked-in example prefixes beginning with `e1`: this is valid
-  Handle text, not a DID credential segment, and the Direct/full product E2E
+  Handle text, not a DID credential segment, and the Direct/messaging product E2E
   intentionally protects canonical Handle-history lookup for that boundary.
 - `cliPeer.binary`: fallback `awiki-cli` binary path used by dry-run planning.
   Real App + CLI peer runs build a stable-versioned artifact from
@@ -735,15 +780,16 @@ Supported E2E cases:
 - `attachment`: App and CLI peer attachment flow.
 - `contacts`: App and CLI peer follow/contact flow，包含从可见联系人行打开 canonical Direct 的发送、restart 和 unread/read 闭环。
 - `restart`: release-only two-Flutter-process cold restart using one isolated App state root; the second process must restore the active identity, canonical Direct/Group rows, exact messages, unread state, and cached display names without in-memory Provider reuse.
-- `full`: all App + CLI peer flows.
+- `messaging`: the 24-case Direct/Group/Contacts/Attachment flow.
+- `full`: all active audited leaf cases; see the aggregate contract above.
 
 群组 E2E 使用协议级身份规则：有 Handle 时必须发送完整 `local-part.provider-domain`，bare Handle 只能从当前已认证 `did:wba` 的 provider domain 补全；无法可信补全时只允许用户显式选择 DID-only。App 和测试不得把内部 User ID 放入 ANP group body，也不得先把 Handle 解析成 DID 后丢失 Handle-backed membership 语义。
 
-`group` / `full` case 会通过当前 tenant-scoped CLI workspace 建群和添加成员。Handle-backed recovery 的跨域 P4 continuity 由 `awiki-system-test/tests_v2/multi_tenant/test_cross_domain_message_flows.py` 负责；AWiki Me full case负责证明真实 App/CLI peer产品入口仍发送完整 Handle并完成后续群消息。
+`group` / `messaging` case 会通过当前 tenant-scoped CLI workspace 建群和添加成员。Handle-backed recovery 的跨域 P4 continuity 由 `awiki-system-test/tests_v2/multi_tenant/test_cross_domain_message_flows.py` 负责；AWiki Me messaging case负责证明真实 App/CLI peer产品入口仍发送完整 Handle并完成后续群消息。
 
 ### UI-driven full acceptance
 
-The required `direct`, `group`, `attachment`, `contacts`, and `full` cases are
+The required `direct`, `group`, `attachment`, `contacts`, and `messaging` cases are
 product E2E, not service-client scripts. App-side sends, retry, navigation,
 follow/unfollow, group creation/member invitation, structured mention, and
 attachment staging are performed through `WidgetTester` against visible
@@ -811,7 +857,7 @@ conversation row; service snapshot/hydration calls remain separate metrics and
 must not be used to infer UI visibility. Its results must not be relabeled as
 required UI acceptance. Profile editing, directory-wide search, onboarding, group
 role/remove/leave flows, and secure-trust UI remain roadmap cases until they
-receive their own case IDs and vertical slices; `full` does not imply those
+receive their own case IDs and vertical slices; `messaging` does not imply those
 features are covered. The focused identity-switch suite covers the runtime and
 message lifecycle, while account-picker visual acceptance remains manual.
 
@@ -912,7 +958,7 @@ context-specific primary/identity policy; it is not a substitute
 for the remaining DID-only remote case.
 
 Suite `timeoutMinutes` must be greater than or equal to `estimatedMinutes`.
-The current `full` suite declares 24 active cases, a 40-minute estimate, and a
+The current `messaging` suite declares 24 active cases, a 40-minute estimate, and a
 45-minute runner/Flutter timeout. These values come from
 `tests/e2e/suite_manifest.json`; documentation must not maintain a second
 hand-written budget.

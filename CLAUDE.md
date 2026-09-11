@@ -47,7 +47,7 @@
 ## 权威入口
 
 - [README.md](README.md)：产品定位、架构、运行、测试、打包与安全边界。
-- [docs/testing.md](docs/testing.md)：unit/smoke/full E2E 分层。
+- [docs/testing.md](docs/testing.md)：unit/smoke/messaging 与全 active `full` 聚合 E2E 分层；full 包含双 App、Recovery、Root Transfer 和平台原生专项。
 - [docs/test-case-catalog.md](docs/test-case-catalog.md)：由 catalog 生成的 case→oracle→gate→evidence 追踪表。
 - [docs/test-quality.md](docs/test-quality.md)：line/branch baseline、mutation proof 与大文件治理入口。
 - [docs/conversation-presentation-ownership.md](docs/conversation-presentation-ownership.md)：conversation-first 显示与 overlay 边界。

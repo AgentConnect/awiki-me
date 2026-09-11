@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-09-01.prepared-app-artifacts-v1",
+  "sourceRevision": "2026-09-11.messaging-artifact-v1",
   "artifacts": [
     {
       "name": "smoke-app",
@@ -19,12 +19,12 @@
       "consumerSuites": ["smoke"]
     },
     {
-      "name": "full",
+      "name": "messaging",
       "target": "integration_test/desktop_cli_peer_smoke_test.dart",
       "bundleId": "ai.awiki.awikime.dev.e2e.full",
       "supportedPlatforms": ["macos", "linux"],
       "dartDefines": ["AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true"],
-      "consumerSuites": ["full"]
+      "consumerSuites": ["messaging"]
     },
     {
       "name": "direct",

@@ -74,6 +74,49 @@ class DesktopE2eSuiteManifest {
     );
   }
 
+  /// Every active leaf case has exactly one executor in full. Adding a new
+  /// audited case without updating the aggregate is a catalog error.
+  List<DesktopE2eSuiteDefinition> fullSuites() {
+    final full = definitions['full'];
+    if (full == null ||
+        full.includes.isEmpty ||
+        full.includes.toSet().length != full.includes.length) {
+      throw E2eFailure('full must include unique audited leaf suites.');
+    }
+    final selected = <DesktopE2eSuiteDefinition>[];
+    final covered = <String>{};
+    for (final name in full.includes) {
+      final suite = definitions[name];
+      if (suite == null ||
+          suite.includes.isNotEmpty ||
+          suite.catalogStatus != 'active') {
+        throw E2eFailure(
+          'full includes an unknown, aggregate, or unsupported suite.',
+        );
+      }
+      for (final id in suite.caseIds) {
+        if (!covered.add(id)) {
+          throw E2eFailure('full duplicates case $id.');
+        }
+      }
+      selected.add(suite);
+    }
+    final active = <String>{
+      for (final suite in definitions.values)
+        if (suite.includes.isEmpty && suite.catalogStatus == 'active')
+          ...suite.caseIds,
+    };
+    if (covered.length != active.length ||
+        !covered.containsAll(active) ||
+        !_sameOrderedStrings(
+          full.caseIds,
+          selected.expand((suite) => suite.caseIds).toList()..sort(),
+        )) {
+      throw E2eFailure('full must cover every active case exactly once.');
+    }
+    return selected;
+  }
+
   DesktopE2eSuiteDefinition definitionFor(DesktopE2eCaseContract e2eCase) {
     final definition = definitions[e2eCase.caseName];
     if (definition == null) {
@@ -103,6 +146,7 @@ class DesktopE2eSuiteDefinition {
     required this.supportedPlatforms,
     required this.requiredTools,
     required this.caseIds,
+    this.includes = const <String>[],
   });
 
   final String name;
@@ -121,6 +165,7 @@ class DesktopE2eSuiteDefinition {
   final List<String> supportedPlatforms;
   final List<String> requiredTools;
   final List<String> caseIds;
+  final List<String> includes;
 
   static DesktopE2eSuiteDefinition fromJson(String name, Map raw) {
     List<String> stringList(String key) {
@@ -232,6 +277,9 @@ class DesktopE2eSuiteDefinition {
       supportedPlatforms: supportedPlatforms,
       requiredTools: requiredTools,
       caseIds: caseIds,
+      includes: raw.containsKey('includes')
+          ? stringList('includes')
+          : const <String>[],
     );
   }
 

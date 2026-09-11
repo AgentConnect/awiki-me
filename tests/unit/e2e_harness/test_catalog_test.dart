@@ -52,7 +52,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(130));
+      expect(catalog.cases, hasLength(131));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -158,6 +158,7 @@ void main() {
       expect(catalog.suiteCaseIds['multi-device-app-pair'], <String>[
         'DEVICE-JOIN-E2E-004',
         'DEVICE-JOIN-E2E-005',
+        'ROOT-TRANSFER-APP-PAIR-E2E-001',
       ]);
       expect(catalog.suiteCaseIds['multi-device-app-pair-functional'], <String>[
         'DEVICE-AGENT-SYNC-E2E-001',
@@ -184,7 +185,7 @@ void main() {
       ]);
       expect(
         catalog.suiteCaseIds['full'],
-        isNot(contains('ROOT-TRANSFER-E2E-001')),
+        contains('ROOT-TRANSFER-E2E-001'),
       );
       expect(catalog.suiteCaseIds['root-transfer'], <String>[
         'ROOT-TRANSFER-E2E-001',

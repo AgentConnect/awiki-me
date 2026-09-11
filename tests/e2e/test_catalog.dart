@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'host_platform.dart';
+import 'runner/manifest.dart';
 
 const String appSuiteManifestPath = 'tests/e2e/suite_manifest.json';
 const String appCaseCatalogPath = 'tests/e2e/case_catalog.json';
@@ -90,6 +91,10 @@ class AppTestCatalog {
         );
       }
       suiteCaseIds[suiteName] = caseIds;
+      if (suite.containsKey('includes')) {
+        // Aggregate policy does not replace each case's owning leaf metadata.
+        continue;
+      }
       for (final caseId in caseIds) {
         expectedByCaseId
             .putIfAbsent(caseId, _ExpectedCase.new)
@@ -114,6 +119,12 @@ class AppTestCatalog {
               ),
             );
       }
+    }
+
+    if (suites.values.any(
+      (value) => value is Map && value.containsKey('includes'),
+    )) {
+      DesktopE2eSuiteManifest.load(root).fullSuites();
     }
 
     final rawCases = catalog['cases'];
@@ -360,13 +371,13 @@ class AppTestCatalog {
       ..writeln('## Known coverage boundaries')
       ..writeln()
       ..writeln(
-        '- `full` means the audited Direct, Group, P9 Mention, Contacts and '
-        'Attachment product slices. The capability-gated '
-        '`ROOT-TRANSFER-E2E-001` readiness-completion lifecycle is owned by '
-        'the separate release `root-transfer` suite. `full` does '
-        '**not** claim onboarding beyond that isolated lifecycle, '
-        'profile editing/search, identity switching, group role/remove/leave, '
-        'secure-trust UI, mobile-device, or optional runtime-provider coverage.',
+        '- `full` aggregates every active audited case exactly once, including '
+        'multi-device App pairs, Handle Recovery, Root Key Transfer, native '
+        'Keychain, provider and performance suites. `messaging` is the former '
+        '24-case Direct/Group/Contacts/Attachment flow. Platform-inapplicable '
+        'cases and planned/unsupported catalog entries are explicitly reported, '
+        'never counted as passes. Missing capabilities, credentials or prepared '
+        'native artifacts block the affected suite; independent suites continue.',
       )
       ..writeln(
         '- `identity-switch` separately covers bidirectional messaging, unread '
@@ -406,7 +417,7 @@ class AppTestCatalog {
         'and idle Core-directed sync case. '
         'It does not execute root transfer or MLS; revoke is limited to the '
         'DSH-owned test member and public cleanup. The root lifecycle '
-        'is registered by `full`. A checked-in '
+        'is registered by `messaging`. A checked-in '
         'implementation is not evidence of a remote pass while the protected '
         'test-phone fixture or operator prerequisites are unavailable. The '
         'focused Join suite supports Linux and macOS desktop hosts.',

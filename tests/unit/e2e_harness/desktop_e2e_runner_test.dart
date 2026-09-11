@@ -303,7 +303,7 @@ void main() {
         '--dry-run',
         '--prepare-only',
         '--case',
-        'full',
+        'messaging',
         '--config',
         'tests/e2e/configs/custom.local.yaml',
         '--run-id',
@@ -314,7 +314,7 @@ void main() {
       expect(options.prepareOnly, isTrue);
       expect(options.configPath, 'tests/e2e/configs/custom.local.yaml');
       expect(options.runId, 'run123');
-      expect(options.e2eCase, DesktopE2eCase.full);
+      expect(options.e2eCase, DesktopE2eCase.messaging);
     });
 
     test('parses group-only case', () {
@@ -612,6 +612,7 @@ void main() {
       expect(hyphen.e2eCase.caseIds, <String>[
         'DEVICE-JOIN-E2E-004',
         'DEVICE-JOIN-E2E-005',
+        'ROOT-TRANSFER-APP-PAIR-E2E-001',
       ]);
       expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 25));
       expect(
@@ -770,7 +771,7 @@ void main() {
 
       expect(hyphen.e2eCase, DesktopE2eCase.rootTransfer);
       expect(underscore.e2eCase, DesktopE2eCase.rootTransfer);
-      expect(laterGrant.e2eCase, DesktopE2eCase.rootTransfer);
+      expect(laterGrant.e2eCase, DesktopE2eCase.multiDeviceAppPair);
       expect(hyphen.e2eCase.caseIds, <String>['ROOT-TRANSFER-E2E-001']);
       expect(hyphen.e2eCase.caseName, 'root-transfer');
     });
@@ -884,7 +885,7 @@ void main() {
         'integration_test/desktop_cli_peer_display_name_fallback_test.dart',
       );
       expect(fallback.e2eCase.publishesNicknameFixture, isFalse);
-      expect(DesktopE2eCase.full.publishesNicknameFixture, isTrue);
+      expect(DesktopE2eCase.messaging.publishesNicknameFixture, isTrue);
     });
 
     test('parses performance case aliases', () {
@@ -983,7 +984,7 @@ void main() {
                 'multi-device-app-pair-content-sync, '
                 'multi-device-app-pair-paging-recovery, '
                 'step4-revoke-mls, '
-                'root-transfer, full, performance, direct, '
+                'root-transfer, full, messaging, performance, direct, '
                 'group, attachment, contacts, inbound, identity-switch, restart, '
                 'display-name-fallback, '
                 'personal-agent, codex-agent, or claude-code-agent.',
@@ -2011,7 +2012,7 @@ cliHandle: legacy-cli
   group('DesktopCliPeerConfig', () {
     test('accepts run-scoped App and CLI Handle overrides', () {
       final config = DesktopCliPeerConfig.from(
-        DesktopE2eOptions.parse(const <String>['--case', 'full']),
+        DesktopE2eOptions.parse(const <String>['--case', 'messaging']),
         const DesktopE2eFileConfig(
           path: '/tmp/e2e.local.yaml',
           platform: DesktopE2ePlatform.linux,
@@ -2033,7 +2034,7 @@ cliHandle: legacy-cli
 
     test('loads all E2E values from file config only', () {
       final config = DesktopCliPeerConfig.from(
-        DesktopE2eOptions.parse(const <String>['--case', 'full']),
+        DesktopE2eOptions.parse(const <String>['--case', 'messaging']),
         const DesktopE2eFileConfig(
           path: '/tmp/e2e.local.yaml',
           platform: DesktopE2ePlatform.linux,
@@ -2097,7 +2098,7 @@ cliHandle: legacy-cli
     test('requires the local config file for real App + CLI peer cases', () {
       expect(
         () => DesktopCliPeerConfig.from(
-          DesktopE2eOptions.parse(const <String>['--case', 'full']),
+          DesktopE2eOptions.parse(const <String>['--case', 'messaging']),
           const DesktopE2eFileConfig.empty(),
         ),
         throwsA(
@@ -2113,7 +2114,7 @@ cliHandle: legacy-cli
     test('requires complete file config values', () {
       expect(
         () => DesktopCliPeerConfig.from(
-          DesktopE2eOptions.parse(const <String>['--case', 'full']),
+          DesktopE2eOptions.parse(const <String>['--case', 'messaging']),
           const DesktopE2eFileConfig(
             path: '/tmp/e2e.local.yaml',
             didDomain: 'example.test',
@@ -2132,7 +2133,7 @@ cliHandle: legacy-cli
     test('requires different App and CLI handles', () {
       expect(
         () => DesktopCliPeerConfig.from(
-          DesktopE2eOptions.parse(const <String>['--case', 'full']),
+          DesktopE2eOptions.parse(const <String>['--case', 'messaging']),
           const DesktopE2eFileConfig(
             path: '/tmp/e2e.local.yaml',
             serviceBaseUrl: 'https://service.example.test',
@@ -2286,7 +2287,7 @@ cliHandle: legacy-cli
 
     test('keeps non-personal-agent cases disabled by default', () {
       final config = DesktopCliPeerConfig.from(
-        DesktopE2eOptions.parse(const <String>['--case', 'full']),
+        DesktopE2eOptions.parse(const <String>['--case', 'messaging']),
         const DesktopE2eFileConfig(
           path: '/tmp/e2e.local.yaml',
           platform: DesktopE2ePlatform.linux,
@@ -2421,7 +2422,7 @@ cliHandle: legacy-cli
     });
     test('suite timeout cannot be shorter than its estimate', () {
       expect(
-        () => DesktopE2eSuiteDefinition.fromJson('full', <String, Object?>{
+        () => DesktopE2eSuiteDefinition.fromJson('messaging', <String, Object?>{
           'tier': 'remote_product_ui',
           'supportedPlatforms': <String>['macos', 'linux'],
           'requiredTools': <String>['flutter', 'awiki-cli'],
@@ -2539,7 +2540,7 @@ cliHandle: legacy-cli
     test('remote product suites reject local or non-audited targets', () {
       final definition = DesktopE2eSuiteManifest.load(
         Directory.current,
-      ).definitionFor(DesktopE2eCase.full);
+      ).definitionFor(DesktopE2eCase.messaging);
       final config = DesktopCliPeerConfig(
         platform: DesktopE2ePlatform.macos,
         serviceBaseUrl: 'http://127.0.0.1:9800',
@@ -2550,7 +2551,7 @@ cliHandle: legacy-cli
         cliHandle: 'cli',
         cliBin: '/tmp/awiki-cli',
         cliSourceRef: '1111111111111111111111111111111111111111',
-        e2eCase: DesktopE2eCase.full,
+        e2eCase: DesktopE2eCase.messaging,
         performance: DesktopPerformanceConfig.defaults,
       );
 
@@ -2842,7 +2843,7 @@ cliPeer:
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
           '--case',
-          'full',
+          'messaging',
           '--dry-run',
           '--run-id',
           'run-file',
@@ -2884,7 +2885,7 @@ cliPeer:
       );
       final decoded =
           jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
-      expect(decoded['case'], 'full');
+      expect(decoded['case'], 'messaging');
       expect(decoded['awikiMeSourceRef'], isNotEmpty);
       expect(decoded['platform'], 'linux');
       expect(decoded['appHandle'], 'app-from-file');
@@ -3114,7 +3115,7 @@ cliPeer:
       final options = DesktopE2eOptions.parse(const <String>[
         '--dry-run',
         '--case',
-        'full',
+        'messaging',
         '--run-id',
         'run123',
       ]);
@@ -3191,7 +3192,7 @@ cliPeer:
       expect(decoded['status'], 'dry_run');
       expect(decoded['mode'], 'dry_run');
       expect(decoded['scenario'], 'desktop-app-cli-peer');
-      expect(decoded['case'], 'full');
+      expect(decoded['case'], 'messaging');
       expect(decoded['caseIds'], <dynamic>[
         'AUTH-E2E-001',
         'CONV-CANON-E2E-001',
@@ -3276,7 +3277,7 @@ cliPeer:
           root: root,
           options: DesktopE2eOptions.parse(const <String>[
             '--case',
-            'full',
+            'messaging',
             '--dry-run',
             '--run-id',
             'run-config',
@@ -3302,7 +3303,7 @@ cliPeer:
             jsonDecode(await runConfig.readAsString()) as Map<String, dynamic>;
         expect(decoded['enabled'], isTrue);
         expect(decoded['runId'], 'run-config');
-        expect(decoded['case'], 'full');
+        expect(decoded['case'], 'messaging');
         expect(decoded['platform'], 'macos');
         expect(decoded['service'], isA<Map<String, dynamic>>());
         expect(decoded['otp'], isA<Map<String, dynamic>>());
@@ -4303,7 +4304,7 @@ performance:
         options: DesktopE2eOptions.parse(const <String>[
           '--dry-run',
           '--case',
-          'full',
+          'messaging',
           '--run-id',
           'run-macos',
         ]),
@@ -4350,7 +4351,7 @@ performance:
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
           '--case',
-          'full',
+          'messaging',
           '--prepare-only',
           '--run-id',
           'run-prepare',

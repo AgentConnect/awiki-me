@@ -786,7 +786,7 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
       'HOME': homeDir.path,
       'AWIKI_CLI_WORKSPACE_HOME_DIR': workspaceDir.path,
       if (_requireConfig().e2eCase ==
-          DesktopE2eCase.full) ...const <String, String>{
+          DesktopE2eCase.messaging) ...const <String, String>{
         'AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED': '1',
       },
     };
@@ -822,7 +822,7 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
   }
 
   List<String> _multiDeviceProductDartDefines(DesktopE2eCase e2eCase) {
-    if (e2eCase != DesktopE2eCase.full) {
+    if (e2eCase != DesktopE2eCase.messaging) {
       return const <String>[];
     }
     return const <String>[

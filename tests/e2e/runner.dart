@@ -4,6 +4,9 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:yaml/yaml.dart';
+import 'package:crypto/crypto.dart' show sha256;
+
+import 'test_catalog.dart';
 
 import 'account_state_operator_contract.dart';
 import 'app_artifact_spec.dart';
@@ -44,6 +47,7 @@ part 'runner/cli_artifact.dart';
 part 'runner/config.dart';
 part 'runner/app_artifacts.dart';
 part 'runner/options.dart';
+part 'runner/full.dart';
 part 'runner/performance.dart';
 part 'runner/reporting.dart';
 
@@ -486,6 +490,10 @@ class DesktopE2eRunner {
   bool _resourceSideEffectsPossible = false;
 
   Future<void> run() async {
+    if (options.e2eCase == DesktopE2eCase.full) {
+      await runDesktopFull(root: root, options: options, commands: commands);
+      return;
+    }
     suiteManifest = DesktopE2eSuiteManifest.load(root);
     suiteDefinition = suiteManifest.definitionFor(options.e2eCase);
     suiteDefinition.validateCodeCaseIds(options.e2eCase.caseIds);
@@ -742,8 +750,8 @@ class DesktopE2eRunner {
           await _runRemoteMultiDeviceJoin();
         case DesktopE2eCase.rootTransfer:
           await _runRemoteMultiDeviceJoin();
-        case DesktopE2eCase.full:
-          await _runFull();
+        case DesktopE2eCase.messaging:
+          await _runAppCliPeer();
         default:
           await _runAppCliPeer();
       }
@@ -792,10 +800,6 @@ class DesktopE2eRunner {
         totalElapsed: totalStopwatch.elapsed,
       );
     }
-  }
-
-  Future<void> _runFull() async {
-    await _runAppCliPeer();
   }
 
   Future<void> _runLocalSmoke() async {
@@ -1134,7 +1138,8 @@ class DesktopE2eRunner {
         e2eCaseRunIdDefine: runId,
         e2eCaseIdsDefine: (runtimeCaseIds ?? suiteDefinition.caseIds).join(','),
         ...flutterBuildIsolation.environment,
-        if (config?.e2eCase == DesktopE2eCase.full) ...const <String, String>{
+        if (config?.e2eCase ==
+            DesktopE2eCase.messaging) ...const <String, String>{
           _multiDeviceRemoteJoinGateEnv: '1',
           'AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED': '1',
         },

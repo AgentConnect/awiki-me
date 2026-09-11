@@ -104,7 +104,7 @@ enum DesktopCliPeerIntegrationCase {
 
   static DesktopCliPeerIntegrationCase parse(String value) {
     return switch (value.trim().toLowerCase()) {
-      '' || 'full' => DesktopCliPeerIntegrationCase.full,
+      '' || 'full' || 'messaging' => DesktopCliPeerIntegrationCase.full,
       'direct' ||
       'dm' ||
       'message' ||

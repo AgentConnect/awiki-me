@@ -299,7 +299,7 @@ case = {
     "assertions": [{"assertionId": f"NATIVE-E2E-002:{value}", "status": "passed", "observedAt": now} for value in assertions],
 }
 (root / "case_attestation.json").write_text(json.dumps({
-    "schemaVersion": 2, "scenario": "production-keychain", "runId": run_id, "cases": [case],
+    "schemaVersion": 2, "scenario": "production-keychain", "runId": run_id, "mode": "real", "cases": [case],
 }, indent=2) + "\n")
 (root / "resource_ledger.json").write_text(json.dumps({
     "schemaVersion": 1, "containsSecrets": False, "cleanupStatus": "cleaned",

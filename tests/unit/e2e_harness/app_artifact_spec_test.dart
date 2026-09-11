@@ -31,6 +31,7 @@ void main() {
         .where(
           (entry) =>
               entry.value['tier'] != 'native_release_security' &&
+              entry.value['includes'] == null &&
               entry.value['catalogStatus'] != 'unsupported',
         )
         .map((entry) => entry.key)

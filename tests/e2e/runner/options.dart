@@ -68,7 +68,7 @@ class DesktopE2eOptions {
 
   static void printUsage() {
     stdout.writeln('''
-Run the AWiki Me Desktop App + CLI peer E2E smoke.
+Run AWiki Me E2E. full aggregates every active audited case; messaging is the former 24-case flow.
 
 Usage:
   dart run tests/e2e/runner.dart --case smoke
@@ -100,7 +100,7 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|handle-recovery-state-machine|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair-recovery-registration-resume|multi-device-app-pair-recovery-retirement-ordinary-rejoin|identity-deletion-recovery-guard|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|multi-device-app-pair-paging-recovery|step4-revoke-mls|multi-device-app-pair-later-admin-grant|root-transfer|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
+  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|handle-recovery-state-machine|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair-recovery-registration-resume|multi-device-app-pair-recovery-retirement-ordinary-rejoin|identity-deletion-recovery-guard|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|multi-device-app-pair-paging-recovery|step4-revoke-mls|multi-device-app-pair-later-admin-grant|root-transfer|full|messaging|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
                                unattended real App/CLI message-driven
@@ -155,7 +155,7 @@ Options:
                                claude-code-agent are user-visible runtime
                                Agent reply gates. Probes are only lower level
                                helpers.
-  --prepare-only               Prepare CLI peer but do not start Flutter test.
+  --prepare-only               Prepare selected leaf prerequisites; never attest a pass.
   --dry-run                    Print planned commands without side effects.
 ''');
   }
@@ -183,7 +183,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   multiDeviceAppPairPagingRecovery(_multiDeviceAppPairPagingRecoveryCaseIds),
   step4RevokeMls(_step4RevokeMlsCaseIds),
   rootTransfer(_rootTransferCaseIds),
-  full(_desktopCliPeerCaseIds),
+  full(<String>[]),
+  messaging(_desktopCliPeerCaseIds),
   performance(_desktopCliPeerPerformanceCaseIds),
   direct(_desktopCliPeerDirectCaseIds),
   group(_desktopCliPeerGroupCaseIds),
@@ -198,13 +199,26 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   codexAgent(_codexAgentCaseIds),
   claudeCodeAgent(_claudeCodeAgentCaseIds);
 
-  const DesktopE2eCase(this.caseIds);
+  const DesktopE2eCase(this._caseIds);
+
+  final List<String> _caseIds;
 
   @override
-  final List<String> caseIds;
+  List<String> get caseIds => this == DesktopE2eCase.full
+      ? (<String>{
+          for (final value in DesktopE2eCase.values)
+            if (value != DesktopE2eCase.full &&
+                value != DesktopE2eCase.personalAgent)
+              ...value._caseIds,
+          'NATIVE-E2E-002',
+        }.toList(growable: false)..sort())
+      : _caseIds;
 
   String get testFile {
     return switch (this) {
+      DesktopE2eCase.full => throw StateError(
+        'full is an aggregate, not a Flutter target',
+      ),
       DesktopE2eCase.smoke => 'integration_test/app_smoke_test.dart',
       DesktopE2eCase.multiDevice =>
         'integration_test/multi_device_capability_gate_test.dart',
@@ -235,7 +249,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         'integration_test/multi_device_join_ui_test.dart',
       DesktopE2eCase.rootTransfer =>
         'integration_test/multi_device_join_ui_test.dart',
-      DesktopE2eCase.full =>
+      DesktopE2eCase.messaging =>
         'integration_test/desktop_cli_peer_smoke_test.dart',
       DesktopE2eCase.performance =>
         'integration_test/desktop_cli_peer_performance_test.dart',
@@ -312,6 +326,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       this == DesktopE2eCase.multiDeviceAppPairPagingRecovery;
 
   bool get requiresCliPeer =>
+      this != DesktopE2eCase.full &&
       this != DesktopE2eCase.smoke &&
       this != DesktopE2eCase.multiDevice &&
       this != DesktopE2eCase.multiDeviceRemoteRecovery &&
@@ -330,6 +345,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
 
   String get reportScope {
     return switch (this) {
+      DesktopE2eCase.full => 'full',
       DesktopE2eCase.smoke => 'smoke',
       DesktopE2eCase.multiDevice => 'multi-device',
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
@@ -410,6 +426,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
 
   String get scenario {
     return switch (this) {
+      DesktopE2eCase.full => 'awiki-me-full',
       DesktopE2eCase.personalAgent => _personalAgentScenario,
       DesktopE2eCase.codexAgent => _codexAgentScenario,
       DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentScenario,
@@ -536,6 +553,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       'step4-revoke-mls' || 'step4_revoke_mls' => DesktopE2eCase.step4RevokeMls,
       'root-transfer' || 'root_transfer' => DesktopE2eCase.rootTransfer,
       'full' => DesktopE2eCase.full,
+      'messaging' => DesktopE2eCase.messaging,
       'performance' ||
       'perf' ||
       'startup-performance' ||
@@ -609,7 +627,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         'multi-device-app-pair, multi-device-app-pair-functional, '
         'multi-device-app-pair-content-sync, '
         'multi-device-app-pair-paging-recovery, '
-        'step4-revoke-mls, root-transfer, full, performance, direct, '
+        'step4-revoke-mls, root-transfer, full, messaging, performance, direct, '
         'group, attachment, contacts, inbound, identity-switch, restart, '
         'display-name-fallback, '
         'personal-agent, codex-agent, or claude-code-agent.',

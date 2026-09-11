@@ -38,6 +38,11 @@ void main() {
     expect(script, contains('nativeDependencyBuildCount'));
     expect(script, contains('appBuildCount'));
     expect(script, contains('case_attestation.json'));
+    expect(
+      script,
+      contains('"runId": run_id, "mode": "real", "cases": [case]'),
+    );
+
     expect(script, contains('resource_ledger.json'));
     expect(script, contains('"executionBuildCommands": 0'));
     expect(script, contains(r'"--awiki-scope-probe-phase=$phase"'));

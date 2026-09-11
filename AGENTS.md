@@ -100,10 +100,12 @@ supported by the E2E runner (`platform: linux`), which runs Flutter under Xvfb
 and therefore requires `xvfb-run`. Linux-hosted desktop E2E, including the
 isolated dual-App multi-device suites, must execute in that simulated desktop
 environment; do not replace the real run with a macOS-shaped dry-run or skip it
-only because the host is Linux. The full App + CLI peer flow and product-level
+only because the host is Linux. The messaging App + CLI peer flow and product-level
 multi-device account, messaging, attachment, and read-state assertions are
 valid on both hosts; by default run `dart run tests/e2e/runner.dart --case full`
-with a local config for the detected platform. Require macOS only for an
+with a local config for the detected platform. `full` aggregates every active
+audited case, including App-pair, Recovery, Root Transfer and native gates;
+`messaging` selects only the former 24-case flow. Require macOS only for an
 assertion that genuinely depends on macOS operating-system behavior, such as
 codesigning, Keychain, or LocalAuthentication, and never claim that Linux
 simulates or attests those macOS-specific behaviors.

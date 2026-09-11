@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-08-31.compact-recovery-paging-v1",
+  "sourceRevision": "2026-09-11.full-active-case-aggregate-v1",
   "cases": [
     {
       "caseId": "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001",
