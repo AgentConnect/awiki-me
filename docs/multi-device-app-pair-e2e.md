@@ -354,6 +354,12 @@ and CLI peer account IDs in the authenticated loopback coordinator. Each slot is
 immutable. Selectors never enter argv, logs or public reports. The default
 `appmd` prefix is required by the User operator's fresh-test Handle fence.
 
+全量与定向入口共用 `appmd` 前缀，注册时再生成 10 位随机后缀；运行隔离仍由独立状态目录、
+随机账号和已登记的账号 ID 保证。不能给这个前缀追加 run 摘要，否则会越过服务端清理授权边界，
+也可能让 Recovery 的 `external` 派生 handle 超过 32 字符。需要 Message cleanup 的
+functional 和 paging-recovery 入口会在产生测试数据前拒绝其他前缀；清理授权、归属检查及
+零残留回执要求保持不变。
+
 A selector-free read-only cleanup preflight runs before either App is built.
 After both App processes close, the runner sends at most two registered account
 IDs on stdin using `cleanup_test_app_scope`. User Service first checks the

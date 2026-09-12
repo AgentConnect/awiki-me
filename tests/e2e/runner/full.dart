@@ -196,7 +196,7 @@ Future<void> runDesktopFull({
             _e2eAppHandleEnv: 'e2ea$digest',
             _e2eSecondaryAppHandleEnv: 'e2eb$digest',
             _e2eCliHandleEnv: 'e2ec$digest',
-            _multiDeviceRemoteHandlePrefixEnv: 'app$digest',
+            _multiDeviceRemoteHandlePrefixEnv: appPairCleanupHandlePrefix,
             _e2eDaemonStateRootEnv:
                 '${Directory.systemTemp.path}/aw-full-$digest',
             _e2eDaemonReadyFileEnv:

@@ -21,6 +21,9 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           options.e2eCase == DesktopE2eCase.multiDeviceAppPairContentSync ||
           pagingRecovery,
     );
+    if (pairConfig.functional || pagingRecovery) {
+      validateAppPairCleanupHandlePrefix(pairConfig.handlePrefix);
+    }
     remoteMultiDeviceAppPairConfig = pairConfig;
     _addRuntimeSecret(pairConfig.phone);
     _addRuntimeSecret(pairConfig.fixedOtp);
