@@ -1342,6 +1342,8 @@ void main() {
       }
 
       if (_invocationExpects(_caseId)) {
+        // Group continuity has separate fresh-Recovery case IDs and fixtures;
+        // this basic lifecycle must only attest checks executed in this flow.
         await E2eCaseAttestationWriter.markPassed(
           _caseId,
           startedAt: startedAt,
@@ -1357,9 +1359,6 @@ void main() {
             'recovery_navigation_followed_confirmed_session_activation',
             'new_local_owner_handle_and_replacement_did_verified',
             'old_did_absent_from_fresh_local_projection',
-            'old_transport_group_rebound_to_recovered_did',
-            'old_group_message_recognized_as_account_owned',
-            'recovered_identity_sent_in_old_group',
           ],
         );
       }

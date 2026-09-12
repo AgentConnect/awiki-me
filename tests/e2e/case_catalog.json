@@ -3745,19 +3745,19 @@
       "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
+          "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape",
+          "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
           "ROOT-TRANSFER-E2E-001:active_join_missing_prekey_retryable",
           "ROOT-TRANSFER-E2E-001:active_join_retry_requires_fresh_confirmation",
           "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion",
           "ROOT-TRANSFER-E2E-001:join_sheet_closed_before_later_grant",
           "ROOT-TRANSFER-E2E-001:device_list_fresh_prepare",
+          "ROOT-TRANSFER-E2E-001:device_list_click_refreshes_registry",
           "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
           "ROOT-TRANSFER-E2E-001:sender_accepted_terminal",
           "ROOT-TRANSFER-E2E-001:receiver_completion_ready",
           "ROOT-TRANSFER-E2E-001:root_p5_not_projected",
-          "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding",
-          "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
-          "ROOT-TRANSFER-E2E-001:device_list_click_refreshes_registry",
-          "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape"
+          "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding"
         ],
         "exactOracleAssertions": [
           [
@@ -3788,19 +3788,19 @@
         ],
         "negativeCheckAssertions": [
           [
+            "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape",
+            "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
             "ROOT-TRANSFER-E2E-001:active_join_missing_prekey_retryable",
             "ROOT-TRANSFER-E2E-001:active_join_retry_requires_fresh_confirmation",
             "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion",
             "ROOT-TRANSFER-E2E-001:join_sheet_closed_before_later_grant",
             "ROOT-TRANSFER-E2E-001:device_list_fresh_prepare",
+            "ROOT-TRANSFER-E2E-001:device_list_click_refreshes_registry",
             "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
             "ROOT-TRANSFER-E2E-001:sender_accepted_terminal",
             "ROOT-TRANSFER-E2E-001:receiver_completion_ready",
             "ROOT-TRANSFER-E2E-001:root_p5_not_projected",
-            "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding",
-            "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
-            "ROOT-TRANSFER-E2E-001:device_list_click_refreshes_registry",
-            "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape"
+            "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding"
           ]
         ]
       }
@@ -5612,10 +5612,11 @@
       "exactOracles": [
         "The fresh App has no local identity, unified onboarding exposes Join/Recovery only after existing-Handle verification, and Recovery reuses the exact verified Handle and phone as read-only context with only one OTP input before requesting one OTP bound to purpose awiki.identity.handle-recovery.v1 plus the exact opaque operation ID without supplying a local selector.",
         "The UI reaches prepared, visibly presents irreversible consequences, requires explicit confirmation, and uses exactly one test-only user-presence decision before activation; any intermediate Core phase completes only through the visible bounded resume action.",
-        "Completion preserves the canonical Handle, installs the Core-returned new local owner, replaces the old DID with the Core-authorized current DID, leaves one ready current admin Registry device, and keeps the old DID absent from the fresh local projection."
+        "Completion preserves the canonical Handle, installs the Core-returned new local owner, replaces the old DID with the Core-authorized current DID, leaves one ready current admin Registry device, and keeps the old DID absent from the fresh local projection.",
+        "The App automatically opens the message workspace with the recovered session DID and activated runtime DID, and the Recovery page is no longer visible."
       ],
       "negativeChecks": [
-        "A fake Core/provider, retained or copied setup identity, checked-in or reported OTP, staged SMS-error continuation, supplied local selector, missing operation binding, legacy recovery purpose, direct activation/resume service call, bypassed risk UI, production LocalAuthentication claim, unchanged DID, changed Handle, non-ready replacement Registry, old DID in the fresh local projection, secret-bearing evidence, or unaudited remote host prevents pass attestation."
+        "A fake Core/provider, retained or copied setup identity, checked-in or reported OTP, staged SMS-error continuation, supplied local selector, missing operation binding, legacy recovery purpose, direct activation/resume service call, bypassed risk UI, production LocalAuthentication claim, unchanged DID, changed Handle, non-ready replacement Registry, old DID in the fresh local projection, secret-bearing evidence, or unaudited remote host prevents pass attestation. A retained Recovery page, missing message workspace, or workspace without the recovered active session/runtime also prevents pass."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
@@ -5636,6 +5637,8 @@
           "HANDLE-RECOVERY-V1-E2E-001:operation_bound_otp_prepared_through_ui",
           "HANDLE-RECOVERY-V1-E2E-001:irreversible_risks_confirmed_through_ui",
           "HANDLE-RECOVERY-V1-E2E-001:recovery_completed_through_ui_resume",
+          "HANDLE-RECOVERY-V1-E2E-001:recovery_opened_message_workspace",
+          "HANDLE-RECOVERY-V1-E2E-001:recovery_navigation_followed_confirmed_session_activation",
           "HANDLE-RECOVERY-V1-E2E-001:new_local_owner_handle_and_replacement_did_verified",
           "HANDLE-RECOVERY-V1-E2E-001:old_did_absent_from_fresh_local_projection"
         ],
@@ -5654,6 +5657,10 @@
             "HANDLE-RECOVERY-V1-E2E-001:existing_ready_admin_created",
             "HANDLE-RECOVERY-V1-E2E-001:new_local_owner_handle_and_replacement_did_verified",
             "HANDLE-RECOVERY-V1-E2E-001:old_did_absent_from_fresh_local_projection"
+          ],
+          [
+            "HANDLE-RECOVERY-V1-E2E-001:recovery_opened_message_workspace",
+            "HANDLE-RECOVERY-V1-E2E-001:recovery_navigation_followed_confirmed_session_activation"
           ]
         ],
         "negativeCheckAssertions": [
@@ -5665,6 +5672,8 @@
             "HANDLE-RECOVERY-V1-E2E-001:operation_bound_otp_prepared_through_ui",
             "HANDLE-RECOVERY-V1-E2E-001:irreversible_risks_confirmed_through_ui",
             "HANDLE-RECOVERY-V1-E2E-001:recovery_completed_through_ui_resume",
+            "HANDLE-RECOVERY-V1-E2E-001:recovery_opened_message_workspace",
+            "HANDLE-RECOVERY-V1-E2E-001:recovery_navigation_followed_confirmed_session_activation",
             "HANDLE-RECOVERY-V1-E2E-001:new_local_owner_handle_and_replacement_did_verified",
             "HANDLE-RECOVERY-V1-E2E-001:old_did_absent_from_fresh_local_projection"
           ]

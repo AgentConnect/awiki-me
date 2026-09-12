@@ -1254,7 +1254,7 @@ Future<void> _continueStep4RevokeAndMls({
   final revokeNotice = container.read(devicesProvider).revokeNotice;
   if (!status.canSendSecure || revokeNotice != DeviceRevokeNotice.revoked) {
     fail(
-      'The App immediate one-shot group repair did not complete successfully.',
+      'The App did not reach ready state after exact-device removal convergence.',
     );
   }
   final members = await groups.listMembers(group.groupId);
@@ -1281,7 +1281,7 @@ Future<void> _continueStep4RevokeAndMls({
     _mlsRevokeCaseId,
     phases: const <String>[
       'exact_device_revoked_with_remove_commit',
-      'app_immediate_one_shot_repair_completed',
+      'app_ready_only_after_remove_convergence',
       'revoked_endpoint_rejected_future_group_data',
       'surviving_app_leaf_and_business_member_retained',
     ],
