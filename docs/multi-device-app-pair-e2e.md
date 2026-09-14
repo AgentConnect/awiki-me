@@ -302,6 +302,39 @@ disposed. On the App that accepted a runtime-create intent, the pending intent
 also drives a bounded, quiet Inventory reconciliation until the exact runtime
 appears or the intent deadline expires.
 
+## DID Web product case
+
+`dart run tests/e2e/runner.dart --case did-method-web --config <protected-config>`
+selects only `DID-WEB-APP-E2E-001`. The selected configuration must advertise Web
+creation and bind the DID domain and every service URL to the same HTTPS origin.
+It reuses the two isolated App roles and the Content Sync peer configuration,
+with an independently registered WBA CLI. No Daemon or Recovery operator is needed.
+Linux executes both Apps under separate Xvfb displays; macOS uses its native
+desktop runner. CLI sourceRef must match the binary commit; native Core must be
+built from the matching source inputs.
+
+The admin registers through the visible WBA-default picker, explicitly selecting
+Web. The joining App uses the existing Handle choice, closes and reopens its
+AppBootstrap/Core root while Join is pending, and completes the original Join
+with in-memory SAS comparison. This verifies persisted state reopening within
+each App process; it does not attest a cold operating-system process restart.
+The case checks Web Recovery/Root Transfer limitations, member read-only UI,
+ordinary service edits with protected entries preserved, WBA CLI ↔ Web App
+Direct messages, visible member reply, exact member revoke, current-auth fencing,
+and the surviving admin reopening its root and sending again.
+
+The coordinator retains only public resource references. The runner writes
+`web_resources.private.json` with mode 0600 beside the run report for exact
+remote cleanup. Success removes local roots after both processes exit. Failure
+retains both App roots and the CLI root/key for result inspection; do not delete
+pending registration or publication candidates before their outcome is known.
+The case uses the E2E-only user-presence port and does not attest native biometric
+confirmation. Ordinary-service lost-response recovery remains covered by Core
+and focused widget tests; this case does not inject a service response loss.
+
+Adding the case and validating its catalog are not evidence of a real backend pass.
+Record actual runs and cleanup separately.
+
 ## Verification evidence
 
 The `awiki.info` run `20260726150342-hkr9m42wlk` passed

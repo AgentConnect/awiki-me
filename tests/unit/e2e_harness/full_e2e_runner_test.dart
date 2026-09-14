@@ -106,7 +106,7 @@ void main() {
       expect(commands.suites, isEmpty);
       expect(result['status'], 'dry_run');
       expect(result['passedCaseIds'], isEmpty);
-      expect(result['caseResults'], hasLength(114));
+      expect(result['caseResults'], hasLength(115));
       expect(result['catalogNotExecutable'], hasLength(17));
       AppTestCatalog.load(source).validateReport(result);
       await expectLater(
@@ -183,7 +183,7 @@ void main() {
       );
       final result = report('success');
       expect(result['status'], 'passed');
-      expect(result['passedCaseIds'], hasLength(Platform.isMacOS ? 114 : 113));
+      expect(result['passedCaseIds'], hasLength(Platform.isMacOS ? 115 : 114));
       AppTestCatalog.load(source).validateReport(result);
       expect(
         (result['children'] as List).singleWhere(

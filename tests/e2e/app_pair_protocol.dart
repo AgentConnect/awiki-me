@@ -16,6 +16,14 @@ const Set<String> _forbiddenCheckpointKeys = <String>{
   'authorization',
 };
 const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
+  'admin\u0000web_peer_ready': <String>{'peerDid', 'conversationId'},
+  'joiner\u0000web_member_readonly': <String>{},
+  'admin\u0000web_incoming': <String>{'messageId'},
+  'joiner\u0000web_reply': <String>{'messageId'},
+  'admin\u0000web_revoked': <String>{},
+  'joiner\u0000web_auth_fenced': <String>{},
+  'admin\u0000web_registration_intent': <String>{'handle'},
+  'admin\u0000web_peer_registration_intent': <String>{'handle'},
   'admin\u0000cleanup_scope': <String>{'accountId'},
   'admin\u0000cleanup_peer': <String>{'accountId'},
   'admin\u0000ready': <String>{'did', 'handle', 'adminDeviceId'},
@@ -235,6 +243,25 @@ class AppPairCoordinatorServer {
       if (_checkpoints['admin\u0000$phase']?['accountId'] case final String id)
         id,
   ];
+
+  /// Exact public resource references only; the runner stores this in its
+  /// private residual ledger, never in the public attestation.
+  Map<String, Object?> get webCleanupLedger => {
+    'accountIds': cleanupAccountIds,
+    for (final phase in const [
+      'web_registration_intent',
+      'web_peer_registration_intent',
+      'ready',
+      'web_peer_ready',
+      'web_incoming',
+    ])
+      if (_checkpoints['admin\u0000$phase']
+          case final Map<String, Object?> data)
+        phase: data,
+    if (_checkpoints['joiner\u0000web_reply']
+        case final Map<String, Object?> data)
+      'web_reply': data,
+  };
   StreamSubscription<HttpRequest>? _subscription;
 
   Uri get endpoint => Uri(
@@ -329,6 +356,14 @@ class AppPairCoordinatorServer {
         _checkpoints.containsKey('$role\u0000$phase') &&
         _checkpoints['$role\u0000$phase']?['accountId'] != data['accountId']) {
       throw const AppPairProtocolException('Cleanup scope cannot change.');
+    }
+    if ((phase == 'web_registration_intent' ||
+            phase == 'web_peer_registration_intent') &&
+        _checkpoints.containsKey('$role\u0000$phase') &&
+        _checkpoints['$role\u0000$phase']?['handle'] != data['handle']) {
+      throw const AppPairProtocolException(
+        'Cleanup registration intent cannot change.',
+      );
     }
     if (role == 'joiner' &&
         phase == 'rejoin_pending' &&
