@@ -18,6 +18,7 @@ import '../shared/widgets/app_widgets.dart';
 import 'device_join_approval_sheet.dart';
 import 'device_labels.dart';
 import 'devices_provider.dart';
+import 'identity_services_page.dart';
 
 class DevicesPage extends ConsumerStatefulWidget {
   const DevicesPage({super.key});
@@ -110,6 +111,25 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                 ),
               ),
               const SizedBox(height: 12),
+            ],
+            if (registry?.methodCapabilities?.servicesUpdate ==
+                true) ...<Widget>[
+              Text(
+                context.l10n.identityWebAdminLimitation,
+                key: const Key('devices-web-admin-limitation'),
+              ),
+              const SizedBox(height: 12),
+              if (canManage)
+                CupertinoButton(
+                  key: const Key('identity-services-open'),
+                  onPressed: () => Navigator.of(context).push<void>(
+                    CupertinoPageRoute(
+                      builder: (_) =>
+                          IdentityServicesPage(selector: registry!.did),
+                    ),
+                  ),
+                  child: Text(context.l10n.identityServicesTitle),
+                ),
             ],
             _SectionLabel(context.l10n.devicesAuthorizedTitle),
             const SizedBox(height: 8),

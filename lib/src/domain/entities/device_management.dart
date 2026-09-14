@@ -1,3 +1,5 @@
+import 'identity_method.dart';
+
 // [INPUT]: Secret-free Device Registry, Join, and revoke projections from IM Core.
 // [OUTPUT]: Device roles, readiness, Join progress, safe root-transfer receipts, and revoke results.
 // [POS]: Domain truth used by AWiki Me's multi-device application and presentation layers.
@@ -269,11 +271,13 @@ class DeviceRegistrySnapshot {
   const DeviceRegistrySnapshot({
     required this.did,
     this.registryVersion = '0',
+    this.methodCapabilities,
     this.devices = const [],
   });
 
   final String did;
   final String registryVersion;
+  final IdentityMethodCapabilities? methodCapabilities;
   final List<DeviceSummary> devices;
 
   DeviceSummary? get currentDevice {

@@ -251,6 +251,7 @@ class _DeviceJoinApprovalSheetState
     final recipient = progress?.authorizedDevice;
     final sender = state.registry?.currentDevice;
     final eligible =
+        state.registry?.methodCapabilities?.rootTransfer == true &&
         progress?.side == DeviceJoinSide.admin &&
         progress?.phase == DeviceJoinPhase.authorized &&
         recipient != null &&

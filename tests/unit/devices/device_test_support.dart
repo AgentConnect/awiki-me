@@ -1,3 +1,4 @@
+import '../identity_method_test_support.dart';
 import 'dart:async';
 
 import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
@@ -30,7 +31,10 @@ DeviceJoinProgress testJoinProgress({
 
 class FakeDeviceManagementCore implements DeviceManagementCorePort {
   String resolvedJoinDid = testDid;
-  DeviceRegistrySnapshot registry = const DeviceRegistrySnapshot(did: testDid);
+  DeviceRegistrySnapshot registry = const DeviceRegistrySnapshot(
+    methodCapabilities: wbaMethodCapabilities,
+    did: testDid,
+  );
   List<DeviceJoinRequestNotice> joinRequests =
       const <DeviceJoinRequestNotice>[];
   List<DeviceJoinProgress> localSessions = const <DeviceJoinProgress>[];
@@ -226,6 +230,7 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
     }
     if (revokeError != null) throw revokeError!;
     registry = DeviceRegistrySnapshot(
+      methodCapabilities: wbaMethodCapabilities,
       did: registry.did,
       devices: <DeviceSummary>[
         for (final device in registry.devices)

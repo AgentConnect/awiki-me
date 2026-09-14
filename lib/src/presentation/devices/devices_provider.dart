@@ -136,6 +136,7 @@ class DevicesState {
   }
 
   bool canGrantManagement(DeviceSummary device) =>
+      displayRegistry?.methodCapabilities?.rootTransfer == true &&
       currentDeviceCanManage &&
       !device.isCurrent &&
       device.status == DeviceStatus.active &&
@@ -1023,6 +1024,7 @@ class DevicesController extends StateNotifier<DevicesState> {
         : _findDevice(registry, recipient.protocolDeviceId);
     if (selector == null ||
         registry == null ||
+        registry.methodCapabilities?.rootTransfer != true ||
         registry.did != selector ||
         progress?.did != selector ||
         progress?.side != DeviceJoinSide.admin ||

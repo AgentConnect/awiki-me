@@ -9,6 +9,53 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String get identityMethodLabel => 'Identity method';
+
+  @override
+  String get identityWebAdminLimitation =>
+      'Web identities do not support account recovery, root key import, or management transfer. Keep the first administrator device safe; management access cannot be recovered if it is lost.';
+
+  @override
+  String get identityRegistrationPending => 'Continue pending registration';
+
+  @override
+  String get identityRegistrationResumeHint =>
+      'Continue the same identity registration using the original contact details. Request a fresh verification code if needed.';
+
+  @override
+  String get identityServicesTitle => 'Identity services';
+
+  @override
+  String get identityServicesHint =>
+      'Manage other public services for this identity. Handle, messaging, and profile entries use their existing settings.';
+
+  @override
+  String get identityServicesFailed =>
+      'The operation could not be completed. Refresh its progress and resume the pending operation if shown.';
+
+  @override
+  String get identityServicesPending =>
+      'A service update is awaiting confirmation. Resume it before submitting further changes.';
+
+  @override
+  String get identityServicesResume => 'Resume service update';
+
+  @override
+  String get identityServiceAdd => 'Add service';
+
+  @override
+  String get identityServiceId => 'Service ID';
+
+  @override
+  String get identityServiceType => 'Service type';
+
+  @override
+  String get identityServiceEndpoint => 'Service address';
+
+  @override
+  String get identityServiceEdit => 'Edit';
+
+  @override
   String get appTitle => 'AWikiMe';
 
   @override

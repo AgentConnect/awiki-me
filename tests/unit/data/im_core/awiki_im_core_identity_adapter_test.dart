@@ -1,3 +1,4 @@
+import '../../identity_method_test_support.dart';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/core/app_error_classifier.dart';
@@ -6,6 +7,46 @@ import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'Web selection is forwarded while existing Handle capability comes from Core',
+    () async {
+      final native = _IdentityErrorCore();
+      final adapter = AwikiImCoreIdentityAdapter.withCoreInstance(
+        coreInstance: () async => native,
+      );
+      final existingWba = await adapter.registerHandleWithPhone(
+        didMethod: IdentityDidMethod.web,
+        phone: 'test-contact',
+        otp: 'test-code',
+        handle: 'alice',
+      );
+      expect(native.lastDidMethod, core.DidMethod.web);
+      expect(
+        existingWba.existingHandleMethodCapabilities?.method,
+        IdentityDidMethod.wba,
+      );
+      expect(
+        existingWba.existingHandleMethodCapabilities?.handleRecovery,
+        isTrue,
+      );
+      native.methodCapabilities = coreWebMethodCapabilities;
+      final existingWeb = await adapter.registerHandleWithPhone(
+        didMethod: IdentityDidMethod.web,
+        phone: 'test-contact',
+        otp: 'test-code',
+        handle: 'alice',
+      );
+      expect(
+        existingWeb.existingHandleMethodCapabilities?.method,
+        IdentityDidMethod.web,
+      );
+      expect(
+        existingWeb.existingHandleMethodCapabilities?.handleRecovery,
+        isFalse,
+      );
+    },
+  );
+
   test(
     'deletion impact reads the exact Core identity and preserves errors',
     () async {
@@ -317,6 +358,15 @@ const _recoveryStateError = core.AwikiImCoreException(
 );
 
 class _IdentityErrorCore implements core.AwikiImCore {
+  core.IdentityMethodCapabilities methodCapabilities =
+      coreWbaMethodCapabilities;
+  core.DidMethod? lastDidMethod;
+
+  @override
+  Future<core.IdentityMethodCapabilities> identityMethodCapabilities(
+    String did,
+  ) async => methodCapabilities;
+
   bool pendingRecovery = false;
   Object? impactError;
   final impactSelectors = <core.IdentitySelector>[];
@@ -367,6 +417,7 @@ class _IdentityErrorCore implements core.AwikiImCore {
 
   @override
   Future<core.HandleRegistrationResult> registerHandleWithPhone({
+    core.DidMethod didMethod = core.DidMethod.wba,
     String? localAlias,
     required String requestedHandle,
     required String phone,
@@ -375,6 +426,7 @@ class _IdentityErrorCore implements core.AwikiImCore {
     core.InitialProfile profile = const core.InitialProfile(),
     bool makeDefault = true,
   }) async {
+    lastDidMethod = didMethod;
     final error = registrationError;
     if (error != null) throw error;
     return const core.HandleRegistrationResult(

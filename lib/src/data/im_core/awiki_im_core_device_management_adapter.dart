@@ -8,6 +8,8 @@ import '../../application/models/device_revoke_outcome.dart';
 import '../../domain/entities/device_management.dart';
 import '../services/awiki_onboarding_utility_client.dart';
 import 'awiki_im_core_runtime.dart';
+import 'identity_method_mapper.dart';
+import '../../domain/entities/identity_method.dart';
 
 typedef AwikiImCoreBeginDeviceJoin =
     Future<core.DeviceJoinProgress> Function({
@@ -90,7 +92,6 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
              httpClient: httpClient,
              timeout: timeout,
            ),
-       _timeout = timeout,
        _beginDeviceJoin =
            beginDeviceJoin ??
            (({
@@ -128,12 +129,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
              return instance.identityDeviceRegistry(selector);
            }) {
     _resolveJoinTarget =
-        resolveJoinTarget ??
-        _publicJoinTargetResolver(
-          userServiceUrl,
-          serviceClient: _userServiceClient,
-          timeout: _timeout,
-        );
+        resolveJoinTarget ?? _publicJoinTargetResolver(coreInstance);
   }
 
   static const String accountVerificationExchangePath =
@@ -145,7 +141,6 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
   final String userServiceUrl;
   final String targetHandleDomain;
   final AwikiOnboardingUtilityHttpClient _userServiceClient;
-  final Duration _timeout;
   late final AwikiJoinTargetResolver _resolveJoinTarget;
   final AwikiImCoreBeginDeviceJoin _beginDeviceJoin;
   final AwikiImCoreRevokeDevice _revokeDevice;
@@ -194,7 +189,10 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
       handle: target.handle,
       domain: target.domain,
     );
-    if (!did.startsWith('did:wba:') || did.trim() != did) {
+    try {
+      final instance = await _coreInstance();
+      await instance.identityMethodCapabilities(did);
+    } on core.AwikiImCoreException {
       throw const DeviceManagementTransportException('join_target_invalid_did');
     }
     return did;
@@ -242,10 +240,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     required int ttlSeconds,
   }) async {
     final handleTarget = _handleTarget(handle, targetHandleDomain);
-    final did = await _resolveJoinTarget(
-      handle: handleTarget.handle,
-      domain: handleTarget.domain,
-    );
+    final did = await resolveJoinDid(handle);
     final token = await _exchangeSmsOtp(
       phone: phone,
       otp: otp,
@@ -294,7 +289,12 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
       }
       rethrow;
     }
-    return deviceRegistryFromCore(result);
+    final instance = await _coreInstance();
+    final capabilities = await instance.identityMethodCapabilities(result.did);
+    return deviceRegistryFromCore(
+      result,
+      methodCapabilities: identityMethodCapabilitiesFromCore(capabilities),
+    );
   }
 
   @override
@@ -561,11 +561,13 @@ DeviceJoinProgress deviceJoinProgressFromCore(core.DeviceJoinProgress value) {
 }
 
 DeviceRegistrySnapshot deviceRegistryFromCore(
-  core.DeviceJoinRegistrySnapshot value,
-) {
+  core.DeviceJoinRegistrySnapshot value, {
+  IdentityMethodCapabilities? methodCapabilities,
+}) {
   return DeviceRegistrySnapshot(
     did: value.did,
     registryVersion: value.registryVersion,
+    methodCapabilities: methodCapabilities,
     devices: value.devices.map(_registryDeviceFromCore).toList(growable: false),
   );
 }
@@ -691,34 +693,26 @@ core.IdentitySelector _identitySelector(String value) {
 }
 
 AwikiJoinTargetResolver _publicJoinTargetResolver(
-  String userServiceUrl, {
-  required AwikiOnboardingUtilityHttpClient serviceClient,
-  required Duration timeout,
-}) {
-  final client = AwikiOnboardingUtilityClient(
-    serviceClient: serviceClient,
-    timeout: timeout,
-  );
+  AwikiImCoreInstance coreInstance,
+) {
   return ({required String handle, required String domain}) async {
-    final Map<String, Object?> profile;
     try {
-      profile = await client.getPublicProfile(didOrHandle: '$handle.$domain');
+      final instance = await coreInstance();
+      return await instance.resolveHandleForDeviceJoin('$handle.$domain');
+    } on core.AwikiImCoreException catch (error) {
+      throw DeviceManagementTransportException(
+        const {
+              'invalid_input',
+              'permission_denied',
+              'peer_not_found',
+            }.contains(error.code)
+            ? 'join_target_resolution_invalid'
+            : 'join_target_resolution_failed',
+      );
     } on Object {
       throw const DeviceManagementTransportException(
         'join_target_resolution_failed',
       );
     }
-    final did = profile['did']?.toString().trim() ?? '';
-    final segments = did.split(':');
-    if (segments.length < 4 ||
-        segments[0] != 'did' ||
-        segments[1] != 'wba' ||
-        segments[2].toLowerCase() != domain ||
-        !segments.last.startsWith('e1_')) {
-      throw const DeviceManagementTransportException(
-        'join_target_resolution_invalid',
-      );
-    }
-    return did;
   };
 }
