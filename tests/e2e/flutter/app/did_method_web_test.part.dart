@@ -2,19 +2,6 @@ part of 'multi_device_join_ui_test.dart';
 
 const String _didWebAppCaseId = 'DID-WEB-APP-E2E-001';
 
-String _webProtectedServices(List<IdentityDocumentService> services) =>
-    jsonEncode([
-      for (final s in services.where((s) => s.isProtected))
-        [
-          s.id,
-          s.type,
-          s.endpoint,
-          s.serviceDid,
-          s.profiles,
-          s.securityProfiles,
-        ],
-    ]);
-
 Future<IdentityRegistrationResult> _registerWebThroughUi(
   WidgetTester tester,
   AppBootstrap bootstrap,
@@ -247,18 +234,22 @@ Future<void> _runWebAdmin({
   );
   await _pumpUntil(
     tester,
-    () => find.text(endpoint).evaluate().isNotEmpty,
+    () => find.byKey(const Key('identity-service-save')).evaluate().isEmpty &&
+        find.text(endpoint).evaluate().isNotEmpty &&
+        find.byType(CupertinoActivityIndicator).evaluate().isEmpty,
     timeout: const Duration(seconds: 60),
     failure: 'Web service update did not become visible.',
   );
   final after = await port.identityServices(did);
-  if (after.pending ||
-      !after.services.any((s) => s.id == id && s.endpoint == endpoint) ||
-      _webProtectedServices(protected) !=
-          _webProtectedServices(after.services)) {
-    fail(
-      'Web service update changed protected entries or left an unresolved operation.',
-    );
+  if (after.pending) {
+    fail('Web service update left an unresolved operation.');
+  }
+  if (!after.services.any((s) => s.id == id && s.endpoint == endpoint)) {
+    fail('Web service update did not retain the exact new entry.');
+  }
+  if (canonicalProtectedWebServices(protected) !=
+      canonicalProtectedWebServices(after.services)) {
+    fail('Web service update changed protected entry fields or multiplicity.');
   }
   Navigator.of(tester.element(find.byType(IdentityServicesPage))).pop();
   await tester.pumpAndSettle();

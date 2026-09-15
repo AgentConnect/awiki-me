@@ -1,13 +1,45 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:awiki_me/src/domain/entities/identity_method.dart';
 
 import '../../e2e/app_pair_protocol.dart';
 import '../../e2e/did_method_web_failure.dart';
+import '../../e2e/did_method_web_oracles.dart';
 import '../../e2e/runner.dart';
 import '../../e2e/test_catalog.dart';
 
 void main() {
+  test(
+    'Web protected services allow ordering but retain all fields and duplicates',
+    () {
+      const a = IdentityDocumentService(
+        id: '#z',
+        type: 'AgentDescription',
+        endpoint: 'https://example.test/ad',
+      );
+      const b = IdentityDocumentService(
+        id: '#a',
+        type: 'ANPMessageService',
+        endpoint: 'https://example.test/im',
+        serviceDid: 'did:web:example.test',
+        profiles: ['p4'],
+        securityProfiles: ['transport-protected'],
+      );
+      const changed = IdentityDocumentService(
+        id: '#a',
+        type: 'ANPMessageService',
+        endpoint: 'https://example.test/im',
+        serviceDid: 'did:web:example.test',
+        profiles: ['p5'],
+        securityProfiles: ['transport-protected'],
+      );
+      final baseline = canonicalProtectedWebServices([a, b]);
+      expect(canonicalProtectedWebServices([b, a]), baseline);
+      expect(canonicalProtectedWebServices([b, a, b]), isNot(baseline));
+      expect(canonicalProtectedWebServices([a, changed]), isNot(baseline));
+    },
+  );
   test('Web diagnostics disclose only closed stage identifiers', () {
     expect(
       didWebRegistrationFailureStage(
