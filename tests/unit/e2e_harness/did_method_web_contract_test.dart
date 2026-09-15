@@ -3,10 +3,33 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../e2e/app_pair_protocol.dart';
+import '../../e2e/did_method_web_failure.dart';
 import '../../e2e/runner.dart';
 import '../../e2e/test_catalog.dart';
 
 void main() {
+  test('Web diagnostics disclose only closed stage identifiers', () {
+    expect(
+      didWebRegistrationFailureStage(
+        'Configured service did not advertise both creation methods.',
+      ),
+      'creation_discovery',
+    );
+    expect(
+      didWebRegistrationFailureStage(
+        'Visible Web registration did not activate a Web identity.',
+      ),
+      'activation',
+    );
+    for (final message in [
+      null,
+      'unknown failure',
+      'secret=synthetic-private-value',
+      'did:web:private.example',
+    ]) {
+      expect(didWebRegistrationFailureStage(message), isNull);
+    }
+  });
   test('Web selection is one App pair with a CLI peer on configured HTTPS', () {
     final selected = DesktopE2eOptions.parse([
       '--case',

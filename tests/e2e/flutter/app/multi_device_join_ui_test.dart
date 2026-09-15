@@ -80,6 +80,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../account_state_operator_contract.dart';
 import '../../app_pair_protocol.dart';
+import '../../did_method_web_failure.dart';
 import '../../case_attestation.dart';
 import '../../desktop_process_host.dart';
 import '../../e2e_user_presence_port.dart';

@@ -417,3 +417,7 @@ User accounts, Handles and User-owned inventory remain explicit residuals; this
 is not a User-account deletion API. Historical ledgers without exact account
 selectors cannot authorize deletion, and scope is never inferred from shared
 phone numbers or name-prefix scans.
+
+Web 创建失败时，driver 只输出闭合阶段/错误码/HTTP 状态；activation 超时还在保留的
+admin root 写入 `web-registration-diagnostic.json`，只含状态、枚举、布尔值及 pending phase，
+不包含手机号、OTP、DID、Token、私钥或消息正文。它用于诊断，不是成功 attestation。

@@ -20,8 +20,20 @@ Future<IdentityRegistrationResult> _registerWebThroughUi(
   AppBootstrap bootstrap,
   _DedicatedAccount account,
   String handle,
-  E2eUserPresencePort presence,
-) async {
+  E2eUserPresencePort presence, {
+  required String diagnosticPath,
+}) async {
+  // Observe the same production capability reads independently so a failing
+  // Core/Server Info prerequisite retains its closed error code in the driver.
+  await bootstrap.identityCorePort!.identityCreationMethods().timeout(
+    const Duration(seconds: 45),
+  );
+  await bootstrap.identityCorePort!.pendingIdentityRegistrations().timeout(
+    const Duration(seconds: 45),
+  );
+  await bootstrap.onboardingSupportService!.loadServerInfo().timeout(
+    const Duration(seconds: 45),
+  );
   await tester.pumpWidget(
     AwikiMeApp(
       bootstrap: bootstrap,
@@ -76,17 +88,53 @@ Future<IdentityRegistrationResult> _registerWebThroughUi(
         : find.byKey(const Key('onboarding-phone-submit-action')),
     failure: 'Web registration submit was unavailable.',
   );
-  await _pumpUntil(
-    tester,
-    () {
-      final session = container.read(sessionProvider).session;
-      return session?.did.startsWith('did:web:') == true &&
-          find.bySemanticsIdentifier('e2e-authenticated').evaluate().length ==
-              1;
-    },
-    timeout: const Duration(seconds: 90),
-    failure: 'Visible Web registration did not activate a Web identity.',
-  );
+  try {
+    await _pumpUntil(
+      tester,
+      () {
+        final session = container.read(sessionProvider).session;
+        return session?.did.startsWith('did:web:') == true &&
+            find.bySemanticsIdentifier('e2e-authenticated').evaluate().length ==
+                1;
+      },
+      timeout: const Duration(seconds: 90),
+      failure: 'Visible Web registration did not activate a Web identity.',
+    );
+  } on Object {
+    final state = container.read(onboardingProvider);
+    final session = container.read(sessionProvider).session;
+    final observation = <String, Object?>{
+      'stage': 'activation',
+      'outcome': state.phoneRegistrationOutcome.name,
+      'failureCode': _appPairSafeToken(
+        state.phoneRegistrationFailureCode ?? 'none',
+      ),
+      'selectedMethod': state.didMethod.name,
+      'sessionPresent': session != null,
+      'sessionWeb': session?.did.startsWith('did:web:') ?? false,
+      'sessionHasBearer': session?.jwtToken?.isNotEmpty ?? false,
+      'authenticatedMarkerCount': find
+          .bySemanticsIdentifier('e2e-authenticated')
+          .evaluate()
+          .length,
+    };
+    try {
+      final identity = await bootstrap.identityCorePort!.defaultIdentity();
+      observation['coreIdentityPresent'] = identity != null;
+      observation['coreIdentityWeb'] =
+          identity?.did.startsWith('did:web:') ?? false;
+      observation['coreIdentityAuthenticated'] =
+          identity?.authenticated ?? false;
+      observation['pendingPhases'] =
+          (await bootstrap.identityCorePort!.pendingIdentityRegistrations())
+              .map((item) => item.phase)
+              .toList();
+    } on Object catch (error) {
+      observation['coreReadError'] = _appPairClosedRegistrationError(error);
+    }
+    await File(diagnosticPath).writeAsString(jsonEncode(observation));
+    rethrow;
+  }
   return IdentityRegistrationResult(
     status: IdentityRegistrationStatus.registered,
     identity: await container.read(identityCorePortProvider).defaultIdentity(),

@@ -84,6 +84,7 @@ void appPairAdminMain() {
         registration = didWeb
             ? await _registerWebThroughUi(
                 tester, bootstrap, account, handle, presence,
+                diagnosticPath: '${config.adminStateRoot}/web-registration-diagnostic.json',
               )
             : await bootstrap.onboardingService!
                 .registerHandleWithPhone(
@@ -4937,13 +4938,18 @@ String _appPairErrorDiagnostic(Object? error) {
 }
 
 String _appPairClosedRegistrationError(Object error) {
+  if (error is TestFailure) {
+    final stage = didWebRegistrationFailureStage(error.message);
+    if (stage != null) return 'type=TestFailure,stage=$stage';
+  }
   final appCode = structuredAppErrorCode(error);
   if (appCode != null) {
     return 'type=AppStructuredError,code=${_appPairSafeToken(appCode)}';
   }
   if (error is core.AwikiImCoreException) {
     return 'type=AwikiImCoreException,code=${_appPairSafeToken(error.code)},'
-        'service=${_appPairSafeToken(error.serviceCode ?? 'none')}';
+        'service=${_appPairSafeToken(error.serviceCode ?? 'none')},'
+        'status=${error.statusCode ?? 0}';
   }
   return 'type=${_appPairSafeToken(error.runtimeType.toString())}';
 }
