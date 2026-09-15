@@ -135,9 +135,15 @@ Future<IdentityRegistrationResult> _registerWebThroughUi(
     await File(diagnosticPath).writeAsString(jsonEncode(observation));
     rethrow;
   }
+  // The identity registry is a static projection; authentication belongs to
+  // the App session established by the visible onboarding flow.
+  final active = await container.read(appSessionServiceProvider).currentSession();
+  if (active?.did != container.read(sessionProvider).session?.did) {
+    fail('Web registration App session does not match the visible identity.');
+  }
   return IdentityRegistrationResult(
     status: IdentityRegistrationStatus.registered,
-    identity: await container.read(identityCorePortProvider).defaultIdentity(),
+    identity: active,
   );
 }
 
