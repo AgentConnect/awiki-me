@@ -536,3 +536,6 @@ Production不读取或迁移：
 ### 单身份删除与 Scope 生命周期
 
 删除当前身份数据由 Core 按 stable owner 完成 durable purge，App 停止该身份 realtime 并释放 selected client，但保留同 Scope runtime，供其他身份和统一登录/Recovery 继续使用。它不是租户/Scope dispose；真正的 dispose 永久禁止迟到 adapter 重开旧 runtime。两者不能混用，否则删除后同进程的新 Recovery 会错误地使用已销毁 runtime。
+
+会话激活与本地身份列表按 Core 已验证身份的 WBA/Web 域检查当前租户；未知方法或
+跨租户身份在切换 Core owner、启动认证之前被拒绝。识别 Web 域不授予设备管理权限。
