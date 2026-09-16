@@ -61,6 +61,8 @@ class DevicesState {
     this.revokeRetryAllowedDeviceId,
     this.revokeNotice,
     this.rootTransfer = const RootKeyTransferUiState(),
+    this.managementStatuses = const <DeviceJoinManagementStatus>[],
+    this.localManagementReady = false,
     this.error,
   });
 
@@ -81,6 +83,8 @@ class DevicesState {
   final String? revokeRetryAllowedDeviceId;
   final DeviceRevokeNotice? revokeNotice;
   final RootKeyTransferUiState rootTransfer;
+  final List<DeviceJoinManagementStatus> managementStatuses;
+  final bool localManagementReady;
   final DeviceManagementErrorKind? error;
 
   List<DeviceJoinRequestNotice> get visibleJoinRequests => joinRequests
@@ -88,7 +92,7 @@ class DevicesState {
       .toList(growable: false);
 
   bool get currentDeviceCanManage =>
-      registry?.currentDevice?.canManageDevices == true;
+      localManagementReady && registry?.currentDevice?.canManageDevices == true;
 
   DeviceRegistrySnapshot? get displayRegistry {
     final fresh = registry;
@@ -113,7 +117,7 @@ class DevicesState {
         device.status != DeviceStatus.active) {
       return null;
     }
-    if (device.managementReady) {
+    if (device.managementReady && (!device.isCurrent || localManagementReady)) {
       return DeviceManagementReadiness.ready;
     }
     return DeviceManagementReadiness.adminAwaitingRoot;
@@ -135,12 +139,21 @@ class DevicesState {
         revokeRetryAllowedDeviceId == device.protocolDeviceId;
   }
 
+  DeviceJoinManagementStatus? managementFor(DeviceSummary device) {
+    for (final status in managementStatuses) {
+      if (status.recipientDeviceId == device.protocolDeviceId) return status;
+    }
+    return null;
+  }
+
   bool canGrantManagement(DeviceSummary device) =>
       currentDeviceCanManage &&
       !device.isCurrent &&
       device.status == DeviceStatus.active &&
       device.role == DeviceRole.member &&
-      !device.managementReady;
+      !device.managementReady &&
+      (managementFor(device) == null ||
+          managementFor(device)?.phase == 'failed');
 
   DevicesState copyWith({
     DeviceRegistrySnapshot? registry,
@@ -162,11 +175,15 @@ class DevicesState {
     DeviceRevokeNotice? revokeNotice,
     bool clearRevokeNotice = false,
     RootKeyTransferUiState? rootTransfer,
+    List<DeviceJoinManagementStatus>? managementStatuses,
+    bool? localManagementReady,
     bool clearRootTransfer = false,
     DeviceManagementErrorKind? error,
     bool clearError = false,
   }) {
     return DevicesState(
+      managementStatuses: managementStatuses ?? this.managementStatuses,
+      localManagementReady: localManagementReady ?? this.localManagementReady,
       registry: clearRegistry ? null : (registry ?? this.registry),
       cachedRegistry: clearCachedRegistry
           ? null
@@ -308,6 +325,12 @@ class DevicesController extends StateNotifier<DevicesState> {
         service.restoreLocalJoins(),
         if (registry.currentDevice?.canManageDevices == true)
           service.restoreAdminJoinRequests(selector),
+        if (registry.currentDevice?.canManageDevices == true)
+          service.managementStatus(selector),
+        service.localManagementReady(
+          selector,
+          registry.currentDevice?.protocolDeviceId,
+        ),
       ]);
       if (!mounted ||
           generation != _generation ||
@@ -321,6 +344,11 @@ class DevicesController extends StateNotifier<DevicesState> {
       final joinRequests = registry.currentDevice?.canManageDevices == true
           ? results[resultIndex++] as List<DeviceJoinRequestNotice>
           : const <DeviceJoinRequestNotice>[];
+      final managementStatuses =
+          registry.currentDevice?.canManageDevices == true
+          ? results[resultIndex++] as List<DeviceJoinManagementStatus>
+          : const <DeviceJoinManagementStatus>[];
+      final localManagementReady = results[resultIndex++] as bool;
       final securityFactsChanged =
           _registrySecurityFingerprint(state.registry) !=
           _registrySecurityFingerprint(registry);
@@ -332,6 +360,8 @@ class DevicesController extends StateNotifier<DevicesState> {
         activeJoin: state.activeJoin,
         isActionPending: state.isActionPending,
         rootTransfer: state.rootTransfer,
+        managementStatuses: managementStatuses,
+        localManagementReady: localManagementReady,
         revokeSubmittingDeviceId: state.revokeSubmittingDeviceId,
         revokeConfirmingDeviceId: state.revokeConfirmingDeviceId,
         revokeRetryAllowedDeviceId: state.revokeRetryAllowedDeviceId,
@@ -734,6 +764,48 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
   }
 
+  bool _managementReadPending = false;
+
+  Future<void> refreshManagementStatus() async {
+    final selector = _selector;
+    final generation = _generation;
+    if (selector == null || _managementReadPending) return;
+    _managementReadPending = true;
+    try {
+      final statuses = await ref
+          .read(deviceManagementServiceProvider)
+          .managementStatus(selector);
+      if (mounted && generation == _generation && selector == _selector) {
+        state = state.copyWith(managementStatuses: statuses);
+      }
+    } catch (_) {
+      // Preserve the last authoritative phase; a failed read is never success.
+    } finally {
+      _managementReadPending = false;
+    }
+  }
+
+  Future<void> retryJoinManagement(String joinSessionId) async {
+    final selector = _selector;
+    final generation = _generation;
+    if (selector == null || state.isActionPending) return;
+    state = state.copyWith(isActionPending: true, clearError: true);
+    try {
+      await ref
+          .read(deviceManagementServiceProvider)
+          .retryManagement(selector: selector, joinSessionId: joinSessionId);
+      await refreshManagementStatus();
+    } catch (error) {
+      if (mounted && generation == _generation) {
+        state = state.copyWith(error: _classifyDeviceError(error));
+      }
+    } finally {
+      if (mounted && generation == _generation) {
+        state = state.copyWith(isActionPending: false);
+      }
+    }
+  }
+
   Future<bool> approveActiveAsMember({
     required bool sasConfirmed,
     required String presenceReason,
@@ -804,11 +876,6 @@ class DevicesController extends StateNotifier<DevicesState> {
       );
       return false;
     }
-  }
-
-  Future<bool> prepareRootTransferForActiveJoin() async {
-    final target = _activeRootTransferTarget();
-    return _prepareRootTransfer(target);
   }
 
   Future<bool> prepareRootTransferForDevice(DeviceSummary device) async {
@@ -1012,47 +1079,6 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
   }
 
-  _RootTransferTarget? _activeRootTransferTarget() {
-    final selector = _selector;
-    final registry = state.registry;
-    final progress = state.activeJoin;
-    final recipient = progress?.authorizedDevice;
-    final sender = registry?.currentDevice;
-    final authoritativeRecipient = recipient == null
-        ? null
-        : _findDevice(registry, recipient.protocolDeviceId);
-    if (selector == null ||
-        registry == null ||
-        registry.did != selector ||
-        progress?.did != selector ||
-        progress?.side != DeviceJoinSide.admin ||
-        progress?.phase != DeviceJoinPhase.authorized ||
-        recipient == null ||
-        sender?.canManageDevices != true ||
-        authoritativeRecipient == null ||
-        sender!.protocolDeviceId == authoritativeRecipient.protocolDeviceId ||
-        authoritativeRecipient.protocolDeviceId != progress!.protocolDeviceId ||
-        authoritativeRecipient.signingKeyId != recipient.signingKeyId ||
-        authoritativeRecipient.e2eeKeyId != recipient.e2eeKeyId ||
-        authoritativeRecipient.status != recipient.status ||
-        authoritativeRecipient.role != recipient.role ||
-        authoritativeRecipient.managementReady != recipient.managementReady ||
-        authoritativeRecipient.isCurrent != recipient.isCurrent) {
-      return null;
-    }
-    return (
-      context: RootKeyTransferContext(
-        origin: RootKeyTransferOrigin.activeJoin,
-        flowId: progress.joinSessionId,
-        did: selector,
-        recipientDeviceId: authoritativeRecipient.protocolDeviceId,
-        recipientSigningKeyId: authoritativeRecipient.signingKeyId,
-        recipientE2eeKeyId: authoritativeRecipient.e2eeKeyId,
-      ),
-      recipient: authoritativeRecipient,
-    );
-  }
-
   _RootTransferTarget? _deviceListRootTransferTarget(String recipientDeviceId) {
     final selector = _selector;
     final registry = state.registry;
@@ -1082,8 +1108,7 @@ class DevicesController extends StateNotifier<DevicesState> {
 
   bool _isRootTransferContextCurrent(RootKeyTransferContext context) =>
       switch (context.origin) {
-        RootKeyTransferOrigin.activeJoin =>
-          _activeRootTransferTarget()?.context == context,
+        RootKeyTransferOrigin.activeJoin => false,
         RootKeyTransferOrigin.deviceList =>
           _deviceListRootTransferTarget(context.recipientDeviceId)?.context ==
               context,

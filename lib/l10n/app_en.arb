@@ -426,7 +426,7 @@
       "expiresAt": {"type": "String"}
     }
   },
-  "deviceJoinApprove": "Confirm and authorize",
+  "deviceJoinApprove": "Allow join and management access",
   "deviceJoinCancel": "Cancel pairing",
   "deviceJoinAuthorized": "Device added",
   "deviceJoinFinalizing": "Finishing device operation...",
@@ -434,7 +434,7 @@
   "deviceJoinExpired": "Device pairing expired. Start again.",
   "deviceJoinActivating": "Activating this device...",
   "deviceJoinActivationRetry": "Retry device activation",
-  "deviceJoinUserPresenceReason": "Confirm authorization of a new device",
+  "deviceJoinUserPresenceReason": "Allow this device to join and become a management device",
   "deviceJoinErrorUnavailable": "Multi-device support is not available",
   "deviceJoinErrorConflict": "The state changed. Refresh and try again.",
   "deviceJoinErrorSas": "The verification code state did not match. Authorization stopped.",
@@ -1550,5 +1550,9 @@
   "handleRecoveryChecking": "Checking recovery progress…",
   "handleRecoveryRunning": "Processing recovery. Please wait…",
   "handleRecoveryEntering": "Recovery is complete. Opening messages…",
-  "handleRecoveryContinueExisting": "Continue previous recovery"
+  "handleRecoveryContinueExisting": "Continue previous recovery",
+  "deviceJoinManagementConfiguring": "Device joined. Configuring management access. You can safely leave this page.",
+  "deviceJoinManagementWaiting": "Root key delivery accepted. Waiting for the new device to finish setup.",
+  "deviceJoinManagementRegistered": "Management access registered. Confirm readiness on the new device.",
+  "deviceJoinManagementFailed": "Device joined; management configuration failed"
 }

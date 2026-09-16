@@ -257,6 +257,16 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
   }
 
   Future<void> _grantManagement(DeviceSummary device) async {
+    final automatic = ref.read(devicesProvider).managementFor(device);
+    if (automatic != null) {
+      if (automatic.phase == 'failed') {
+        await ref
+            .read(devicesProvider.notifier)
+            .retryJoinManagement(automatic.joinSessionId);
+      }
+      return;
+    }
+
     if (_grantingDeviceId != null) return;
     setState(() => _grantingDeviceId = device.protocolDeviceId);
     try {

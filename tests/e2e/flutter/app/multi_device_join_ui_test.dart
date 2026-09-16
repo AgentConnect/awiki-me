@@ -393,8 +393,7 @@ void main() {
               progress?.remoteState == DeviceJoinRemoteState.consumed &&
               progress?.sas == null &&
               authorized?.protocolDeviceId == initialPending.protocolDeviceId &&
-              authorized?.role == DeviceRole.member &&
-              authorized?.managementReady == false &&
+              _validJoinedDeviceRole(authorized) &&
               authorized?.isCurrent == true;
         },
         timeout: const Duration(seconds: 45),
@@ -418,6 +417,14 @@ void main() {
         await bootstrap.deviceManagementCorePort!.identityDeviceRegistry(did),
         bootstrapAdminDeviceId: bootstrapAdminDeviceId,
         joinedDeviceId: initialPending.protocolDeviceId,
+      );
+
+      await cli.ensureManagementDelivered(initialPending.joinSessionId);
+      await _waitForLocalAndRegistryAdmins(
+        tester,
+        bootstrap.deviceManagementCorePort!,
+        did,
+        container,
       );
 
       if (_invocationExpects(_joinMessageCoreCaseId)) {
@@ -531,6 +538,7 @@ void main() {
           'sas_matched_without_secret_evidence',
           'cli_foreground_member_approval_completed',
           'app_joined_after_authority_reresolution',
+          'joined_app_management_ready',
         ],
       );
       if (_invocationExpects(_joinMessageCoreCaseId)) {
@@ -927,6 +935,7 @@ void main() {
       _requireCliJoinedMember(
         await cli.waitForRegistryDeviceCount(2),
         joinedDeviceId: started.protocolDeviceId,
+        allowManagement: true,
       );
       _requireAppAdminAndMember(
         await bootstrap.deviceManagementCorePort!.identityDeviceRegistry(
@@ -945,7 +954,7 @@ void main() {
             'app_global_join_review_entry_received',
             'sas_matched_without_secret_evidence',
             'single_e2e_user_presence_confirmed',
-            'joined_device_active_member_not_admin',
+            'joined_device_active_with_consistent_management_state',
           ],
         );
       }
@@ -1296,60 +1305,31 @@ Future<void> _verifyActiveJoinWaitsForRecipientPrekey(
   final callsBefore = presence.calls;
   await _pumpUntil(
     tester,
-    () => !container.read(devicesProvider).isActionPending,
-    failure: 'The sender Join approval did not finish its Registry refresh.',
-  );
-  await _pumpUntil(
-    tester,
-    () =>
-        find
-            .byKey(const Key('root-transfer-grant-management'))
-            .hitTestable()
-            .evaluate()
-            .length ==
-        1,
-    failure: 'The approved-device management grant entry is missing.',
-  );
-  await _tapOne(
-    tester,
-    find.byKey(const Key('root-transfer-grant-management')),
-    failure: 'The approved-device management grant entry is missing.',
-  );
-  await _pumpUntil(
-    tester,
     () {
-      final transfer = container.read(devicesProvider).rootTransfer;
-      final phase = transfer.phase;
-      if (phase == RootKeyTransferPhase.idle) {
-        fail('The active Join management grant did not start preparation.');
-      }
-      return phase == RootKeyTransferPhase.failed ||
-          phase == RootKeyTransferPhase.awaitingConfirmation;
+      final state = container.read(devicesProvider);
+      final matches = state.managementStatuses
+          .where(
+            (task) => task.joinSessionId == state.activeJoin?.joinSessionId,
+          )
+          .toList();
+      return matches.length == 1 &&
+          matches.single.phase == 'failed' &&
+          matches.single.attempts == 3;
     },
-    timeout: const Duration(seconds: 45),
-    failure: 'The active Join root preparation did not finish.',
+    timeout: const Duration(minutes: 3),
+    failure:
+        'Unavailable recipient PreKeys did not exhaust exactly three automatic attempts.',
   );
-  final transfer = container.read(devicesProvider).rootTransfer;
-  if (presence.calls != callsBefore || transfer.receipt != null) {
-    fail(
-      'Root preparation sent material or requested presence before confirmation.',
-    );
+  if (presence.calls != callsBefore ||
+      find
+          .byKey(const Key('root-transfer-confirm-send'))
+          .evaluate()
+          .isNotEmpty) {
+    fail('Automatic management configuration requested a second approval.');
   }
-  final code = _appPairSafeToken(transfer.errorCode ?? 'missing');
-  // Closed code only: never record a handle, DID, key, or transport body.
-  debugPrint(
-    '[root-transfer-e2e] origin=active_join stage=prepare code=$code retryable=${transfer.retryable}',
-  );
-  if (transfer.phase != RootKeyTransferPhase.failed ||
-      transfer.errorCode != 'root_transfer.prekey_unavailable' ||
-      !transfer.retryable) {
-    fail(
-      'An unactivated recipient did not produce a retryable PreKey wait ($code).',
-    );
-  }
-  if (find.byKey(const Key('root-transfer-failed')).evaluate().length != 1 ||
-      find.byKey(const Key('root-transfer-retry')).evaluate().length != 1) {
-    fail('The approved sender did not offer an explicit retry.');
+  if (find.byKey(const Key('device-join-management-retry')).evaluate().length !=
+      1) {
+    fail('Exhausted automatic configuration did not expose exact-Join retry.');
   }
 }
 
@@ -1361,27 +1341,31 @@ Future<void> _retryActiveJoinRootPreparation(
   final callsBefore = presence.calls;
   await _tapOne(
     tester,
-    find.byKey(const Key('root-transfer-retry')),
-    failure: 'The active Join retry action was unavailable.',
+    find.byKey(const Key('device-join-management-retry')),
+    failure: 'The exact Join retry action was unavailable.',
   );
-  await _pumpUntil(tester, () {
-    final transfer = container.read(devicesProvider).rootTransfer;
-    if (transfer.phase == RootKeyTransferPhase.failed) {
-      fail(
-        'Active Join retry failed (${_appPairSafeToken(transfer.errorCode ?? 'missing')}).',
-      );
-    }
-    return transfer.phase == RootKeyTransferPhase.awaitingConfirmation;
-  }, failure: 'Active Join retry did not prepare the now-active recipient.');
+  await _pumpUntil(
+    tester,
+    () {
+      final state = container.read(devicesProvider);
+      final matches = state.managementStatuses
+          .where(
+            (task) => task.joinSessionId == state.activeJoin?.joinSessionId,
+          )
+          .toList();
+      return matches.length == 1 &&
+          matches.single.phase == 'waiting_for_recipient';
+    },
+    timeout: const Duration(minutes: 3),
+    failure: 'Retry did not stop at accepted delivery to the active recipient.',
+  );
   if (presence.calls != callsBefore ||
-      container.read(devicesProvider).rootTransfer.receipt != null ||
-      find.byKey(const Key('root-transfer-confirm-send')).evaluate().length !=
-          1) {
-    fail('Active Join retry crossed the explicit confirmation boundary.');
+      find
+          .byKey(const Key('root-transfer-confirm-send'))
+          .evaluate()
+          .isNotEmpty) {
+    fail('An already authorized Join retry requested another root approval.');
   }
-  // Keep the existing later-grant delivery/completion oracle independent.
-  await container.read(devicesProvider.notifier).cancelRootTransfer();
-  await tester.pump();
 }
 
 Future<void> _verifyRootTransferCompletion({
@@ -1395,232 +1379,64 @@ Future<void> _verifyRootTransferCompletion({
   required String recipientDeviceId,
 }) async {
   final before = container.read(devicesProvider);
-  final activeJoin = before.activeJoin;
-  final recipient = activeJoin?.authorizedDevice;
-  if (activeJoin?.joinSessionId != joinSessionId ||
-      activeJoin?.did != did ||
-      activeJoin?.protocolDeviceId != recipientDeviceId ||
-      activeJoin?.side != DeviceJoinSide.admin ||
-      activeJoin?.phase != DeviceJoinPhase.authorized ||
-      recipient?.protocolDeviceId != recipientDeviceId ||
-      recipient?.role != DeviceRole.member ||
-      recipient?.managementReady != false ||
-      recipient?.isCurrent != false) {
-    fail('Root transfer did not retain the exact authorized Join context.');
+  final tasks = before.managementStatuses
+      .where(
+        (task) =>
+            task.joinSessionId == joinSessionId &&
+            task.recipientDeviceId == recipientDeviceId,
+      )
+      .toList();
+  if (tasks.length != 1 ||
+      tasks.single.phase != 'waiting_for_recipient' ||
+      before.activeJoin?.did != did ||
+      before.registry?.currentDevice?.protocolDeviceId != senderDeviceId) {
+    fail('Automatic sender status did not bind the exact authorized Join.');
   }
+  final attempts = tasks.single.attempts;
+  final presenceBeforeCompletion = presence.calls;
   await cli.requireRootlessCurrentMember(
     expectedDid: did,
     expectedDeviceId: recipientDeviceId,
   );
-
-  Navigator.of(tester.element(find.byType(DeviceJoinApprovalSheet))).pop();
-  await _pumpUntil(
-    tester,
-    () => find.byType(DeviceJoinApprovalSheet).evaluate().isEmpty,
-    failure: 'The App could not leave the short-lived Join completion sheet.',
-  );
-  container.read(devicesProvider.notifier).clearActive();
-  await container.read(devicesProvider.notifier).loadManagement();
-  if (container.read(devicesProvider).activeJoin != null) {
-    fail('The later Root transfer entry still depended on Join UI state.');
-  }
-  await _openDevicesPage(tester);
-
-  final responseGate = container.read(deviceManagementServiceProvider);
-  if (responseGate is! JoinAdminResponseGateService) {
-    fail('The real Registry read witness is missing.');
-  }
-  final registryReadsBeforeGrant = responseGate.registryReadCount;
-  final presenceCallsBeforePrepare = presence.calls;
-  final grantAction = find.byKey(
-    Key('device-grant-management-$recipientDeviceId'),
-  );
-  await _pumpUntil(
-    tester,
-    () {
-      _failOnDeviceError(
-        container.read(devicesProvider),
-        'The App failed to project the authorized member',
-      );
-      return grantAction.evaluate().length == 1;
-    },
-    timeout: const Duration(seconds: 45),
-    failure:
-        'The eligible member did not expose later management grant in Devices.',
-  );
-  await _tapOne(
-    tester,
-    grantAction,
-    failure: 'The Devices later-grant action was unavailable.',
-  );
-  await _pumpUntil(
-    tester,
-    () {
-      final state = container.read(devicesProvider);
-      _failOnDeviceError(state, 'The App failed root-transfer preparation');
-      return state.rootTransfer.phase ==
-              RootKeyTransferPhase.awaitingConfirmation &&
-          state.rootTransfer.preparation != null;
-    },
-    timeout: const Duration(seconds: 45),
-    failure: 'Core did not prepare the exact root-transfer recipient.',
-  );
-  final prepared = container.read(devicesProvider).rootTransfer;
-  final preparation = prepared.preparation!;
-  if (prepared.context?.origin != RootKeyTransferOrigin.deviceList ||
-      prepared.context?.flowId != recipientDeviceId ||
-      prepared.context?.did != did ||
-      prepared.context?.recipientDeviceId != recipientDeviceId ||
-      preparation.recipient.did != did ||
-      preparation.recipient.deviceId != recipientDeviceId ||
-      preparation.recipient.signingKeyId !=
-          prepared.context?.recipientSigningKeyId ||
-      preparation.recipient.e2eeKeyId != prepared.context?.recipientE2eeKeyId ||
-      preparation.recipient.registryVersion < 1 ||
-      presence.calls != presenceCallsBeforePrepare ||
-      prepared.receipt != null) {
-    fail('Root transfer preparation escaped the exact Devices recipient.');
-  }
-  if (responseGate.registryReadCount <= registryReadsBeforeGrant) {
-    fail('The device-list grant did not refresh Registry authority on click.');
-  }
-
-  if (find
-              .byKey(const Key('device-root-transfer-recipient-summary'))
-              .evaluate()
-              .length !=
-          1 ||
-      find
-              .byKey(const Key('device-root-transfer-confirm-action'))
-              .evaluate()
-              .length !=
-          1 ||
-      find
-          .byKey(const Key('device-root-transfer-sent-dialog'))
-          .evaluate()
-          .isNotEmpty) {
-    fail('The App did not stop at the safe prepare-before-confirm boundary.');
-  }
-  final summaryText = tester
-      .widget<Text>(
-        find.byKey(const Key('device-root-transfer-recipient-summary')),
-      )
-      .data;
-  final expectedSummary = tester
-      .element(find.byType(DevicesPage))
-      .l10n
-      .deviceRootTransferTarget(
-        preparation.recipient.deviceId,
-        preparation.recipient.signingKeyId,
-        preparation.recipient.e2eeKeyId,
-      );
-  if (summaryText != expectedSummary) {
-    fail('The App did not render only Core safe recipient summary fields.');
-  }
-
-  await _tapOne(
-    tester,
-    find.byKey(const Key('device-root-transfer-confirm-action')),
-    failure: 'The prepared root-transfer confirmation was unavailable.',
-  );
-  await _pumpUntil(
-    tester,
-    () {
-      if (presence.calls > presenceCallsBeforePrepare + 1) {
-        fail('Root transfer requested user presence twice.');
-      }
-      final state = container.read(devicesProvider);
-      _failOnDeviceError(state, 'The App failed root transfer');
-      if (state.rootTransfer.phase == RootKeyTransferPhase.failed) {
-        fail(
-          'The App root transfer failed with closed code '
-          '${_appPairSafeToken(state.rootTransfer.errorCode ?? 'missing')} '
-          '(presenceCalls=${presence.calls},'
-          'presenceCompletions=${presence.completions}).',
-        );
-      }
-      return state.rootTransfer.phase == RootKeyTransferPhase.sent &&
-          state.rootTransfer.receipt != null;
-    },
-    timeout: const Duration(minutes: 2),
-    failure: 'The sender did not stop at standard P5 accepted.',
-  );
-  if (presence.calls != presenceCallsBeforePrepare + 1 ||
-      presence.completions != presenceCallsBeforePrepare + 1 ||
-      !presence.lastResult) {
-    fail('Root transfer did not complete exactly one fresh user presence.');
-  }
-  final sent = container.read(devicesProvider).rootTransfer;
-  final receipt = sent.receipt!;
-  if (sent.context != prepared.context ||
-      receipt.did != did ||
-      receipt.senderDeviceId != senderDeviceId ||
-      receipt.recipientDeviceId != recipientDeviceId ||
-      receipt.messageId.trim().isEmpty ||
-      receipt.acceptedAt.isAfter(
-        DateTime.now().toUtc().add(const Duration(seconds: 5)),
-      )) {
-    fail('The sender returned an invalid standard P5 accepted receipt.');
-  }
-  _requireAppAdminAndMember(
-    container.read(devicesProvider).registry!,
-    bootstrapAdminDeviceId: senderDeviceId,
-    joinedDeviceId: recipientDeviceId,
-  );
-
   await cli.waitForRootImportCompletion(
     expectedDid: did,
     expectedDeviceId: recipientDeviceId,
   );
-
   await container
       .read(messageSyncCoordinatorProvider.notifier)
       .requestSync('e2e_root_transfer_receiver_completed', immediate: true);
   await container.read(conversationListProvider.notifier).refresh();
-  final projectedConversations = container
-      .read(conversationListProvider)
-      .conversations;
-  final storedConversations = await container
+  final projected = container.read(conversationListProvider).conversations;
+  final stored = await container
       .read(conversationServiceProvider)
       .listConversations(ownerDid: did);
-  if (projectedConversations.isNotEmpty || storedConversations.isNotEmpty) {
+  if (projected.isNotEmpty || stored.isNotEmpty) {
     fail('Root P5 entered the ordinary App conversation projection.');
   }
-  final senderAfterReceiverCompletion = container
-      .read(devicesProvider)
-      .rootTransfer;
-  if (senderAfterReceiverCompletion.phase != RootKeyTransferPhase.sent ||
-      senderAfterReceiverCompletion.receipt?.messageId != receipt.messageId ||
-      presence.calls != presenceCallsBeforePrepare + 1) {
-    fail('Receiver completion changed the terminal sender boundary.');
-  }
-
-  final done = find.descendant(
-    of: find.byKey(const Key('device-root-transfer-sent-dialog')),
-    matching: find.text(
-      tester.element(find.byType(DevicesPage)).l10n.commonDone,
-    ),
-  );
-  await _tapOne(
-    tester,
-    done,
-    failure: 'The sent later-grant result could not be closed.',
-  );
   await _pumpUntil(
     tester,
-    () => find
-        .byKey(const Key('device-root-transfer-sent-dialog'))
-        .evaluate()
-        .isEmpty,
-    failure: 'The later-grant result remained open after completion.',
+    () {
+      final statuses = container
+          .read(devicesProvider)
+          .managementStatuses
+          .where((task) => task.joinSessionId == joinSessionId)
+          .toList();
+      return statuses.length == 1 &&
+          statuses.single.phase == 'management_registered' &&
+          statuses.single.attempts == attempts;
+    },
+    timeout: const Duration(minutes: 2),
+    failure:
+        'Sender did not reconcile recipient registration without another send.',
   );
-  await container.read(devicesProvider.notifier).refreshRegistryOnly();
-  await tester.pump();
-  if (grantAction.evaluate().isNotEmpty) {
-    fail('The Devices later-grant action remained after Registry readiness.');
+  if (presence.calls != presenceBeforeCompletion) {
+    fail('Receiver completion triggered another user presence.');
   }
+  Navigator.of(tester.element(find.byType(DeviceJoinApprovalSheet))).pop();
+  await tester.pumpAndSettle();
+  await container.read(devicesProvider.notifier).loadManagement();
   final postTransferNonce = _nonce(8);
-  final postTransferGroup = await container
+  final group = await container
       .read(groupApplicationServiceProvider)
       .createGroup(
         name: 'Root transfer barrier $postTransferNonce',
@@ -1629,24 +1445,19 @@ Future<void> _verifyRootTransferCompletion({
         goal: 'Reject stale post-transfer binding',
         rules: 'E2E only',
       );
-  if (postTransferGroup.groupId.trim().isEmpty) {
+  if (group.groupId.trim().isEmpty) {
     fail('Group create returned no identity-bound result after Root transfer.');
   }
-
   if (_invocationExpects(_rootTransferCaseId)) {
     await E2eCaseAttestationWriter.markPassed(
       _rootTransferCaseId,
       phases: const <String>[
         'pending_approval_has_no_done_escape',
         'late_verification_preserves_authorized_join',
-        'active_join_missing_prekey_retryable',
-        'active_join_retry_requires_fresh_confirmation',
+        'automatic_prekey_budget_exhausted',
+        'exact_join_retry_without_second_approval',
         'member_not_ready_before_completion',
-        'join_sheet_closed_before_later_grant',
-        'device_list_fresh_prepare',
-        'device_list_click_refreshes_registry',
-        'safe_summary_single_presence',
-        'sender_accepted_terminal',
+        'sender_accepted_waits_for_recipient',
         'receiver_completion_ready',
         'root_p5_not_projected',
         'post_transfer_group_create_used_refreshed_binding',
@@ -2785,6 +2596,52 @@ class _JoinCli {
         .toList(growable: false);
   }
 
+  Future<void> ensureManagementDelivered(String joinSessionId) async {
+    Future<List<Map<String, Object?>>> states(List<String> command) async {
+      final payload = await _run(command);
+      final raw = _data(payload, action: 'device_join_management')['result'];
+      if (raw is! List) fail('CLI management state is not a safe list.');
+      return raw
+          .whereType<Map>()
+          .map(_stringMap)
+          .where((task) => task['join_session_id'] == joinSessionId)
+          .toList();
+    }
+
+    var current = await states(const [
+      '--format',
+      'json',
+      'id',
+      'device',
+      'join',
+      'management-status',
+    ]);
+    if (current.length != 1) {
+      fail('CLI did not retain the exact Join management task.');
+    }
+    if (current.single['phase'] == 'failed') {
+      current = await states([
+        '--format',
+        'json',
+        'id',
+        'device',
+        'join',
+        'management-retry',
+        '--session',
+        joinSessionId,
+      ]);
+    }
+    if (current.length != 1 ||
+        ![
+          'waiting_for_recipient',
+          'management_registered',
+        ].contains(current.single['phase'])) {
+      fail(
+        'CLI automatic management did not accept delivery for the exact Join.',
+      );
+    }
+  }
+
   Future<List<Map<String, Object?>>> waitForRegistryDeviceCount(
     int expected,
   ) async {
@@ -3656,8 +3513,10 @@ void _requireCliAdminAndMember(
         (device) =>
             device['protocol_device_id'] == joinedDeviceId &&
             device['is_current'] != true &&
-            device['role'] == 'member' &&
-            device['management_ready'] == false &&
+            ((device['role'] == 'member' &&
+                    device['management_ready'] == false) ||
+                (device['role'] == 'admin' &&
+                    device['management_ready'] == true)) &&
             device['status'] == 'active',
       )
       .toList(growable: false);
@@ -3669,14 +3528,18 @@ void _requireCliAdminAndMember(
 void _requireCliJoinedMember(
   List<Map<String, Object?>> devices, {
   required String joinedDeviceId,
+  bool allowManagement = false,
 }) {
   final currentMember = devices
       .where(
         (device) =>
             device['protocol_device_id'] == joinedDeviceId &&
             device['is_current'] == true &&
-            device['role'] == 'member' &&
-            device['management_ready'] == false &&
+            ((device['role'] == 'member' &&
+                    device['management_ready'] == false) ||
+                (allowManagement &&
+                    device['role'] == 'admin' &&
+                    device['management_ready'] == true)) &&
             device['status'] == 'active',
       )
       .toList(growable: false);
@@ -3697,6 +3560,11 @@ void _requireCliJoinedMember(
   }
 }
 
+bool _validJoinedDeviceRole(DeviceSummary? device) =>
+    device != null &&
+    ((device.role == DeviceRole.member && !device.managementReady) ||
+        (device.role == DeviceRole.admin && device.managementReady));
+
 void _requireAppCurrentMember(
   DeviceRegistrySnapshot registry, {
   required String bootstrapAdminDeviceId,
@@ -3707,8 +3575,8 @@ void _requireAppCurrentMember(
         (device) =>
             device.protocolDeviceId == joinedDeviceId &&
             device.isCurrent &&
-            device.role == DeviceRole.member &&
-            !device.managementReady &&
+            ((device.role == DeviceRole.member && !device.managementReady) ||
+                (device.role == DeviceRole.admin && device.managementReady)) &&
             device.status == DeviceStatus.active,
       )
       .toList(growable: false);
@@ -3749,8 +3617,8 @@ void _requireAppAdminAndMember(
         (device) =>
             device.protocolDeviceId == joinedDeviceId &&
             !device.isCurrent &&
-            device.role == DeviceRole.member &&
-            !device.managementReady &&
+            ((device.role == DeviceRole.member && !device.managementReady) ||
+                (device.role == DeviceRole.admin && device.managementReady)) &&
             device.status == DeviceStatus.active,
       )
       .toList(growable: false);

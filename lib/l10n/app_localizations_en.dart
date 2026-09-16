@@ -1141,7 +1141,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get deviceJoinApprove => 'Confirm and authorize';
+  String get deviceJoinApprove => 'Allow join and management access';
 
   @override
   String get deviceJoinCancel => 'Cancel pairing';
@@ -1166,7 +1166,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceJoinUserPresenceReason =>
-      'Confirm authorization of a new device';
+      'Allow this device to join and become a management device';
 
   @override
   String get deviceJoinErrorUnavailable =>
@@ -3790,4 +3790,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryContinueExisting => 'Continue previous recovery';
+
+  @override
+  String get deviceJoinManagementConfiguring =>
+      'Device joined. Configuring management access. You can safely leave this page.';
+
+  @override
+  String get deviceJoinManagementWaiting =>
+      'Root key delivery accepted. Waiting for the new device to finish setup.';
+
+  @override
+  String get deviceJoinManagementRegistered =>
+      'Management access registered. Confirm readiness on the new device.';
+
+  @override
+  String get deviceJoinManagementFailed =>
+      'Device joined; management configuration failed';
 }

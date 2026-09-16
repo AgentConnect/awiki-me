@@ -1087,7 +1087,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get deviceJoinApprove => '确认并授权';
+  String get deviceJoinApprove => '允许加入并成为管理设备';
 
   @override
   String get deviceJoinCancel => '取消关联';
@@ -1111,7 +1111,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceJoinActivationRetry => '重试设备激活';
 
   @override
-  String get deviceJoinUserPresenceReason => '确认授权新设备';
+  String get deviceJoinUserPresenceReason => '允许该设备加入并成为管理设备';
 
   @override
   String get deviceJoinErrorUnavailable => '多设备功能当前未开放';
@@ -3551,4 +3551,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get handleRecoveryContinueExisting => '继续上次恢复';
+
+  @override
+  String get deviceJoinManagementConfiguring => '设备已加入，正在配置管理权限。可安全离开此页面。';
+
+  @override
+  String get deviceJoinManagementWaiting => '根密钥发送已接受，等待新设备完成管理权限配置。';
+
+  @override
+  String get deviceJoinManagementRegistered => '管理权限已登记，请在新设备确认管理能力已就绪。';
+
+  @override
+  String get deviceJoinManagementFailed => '设备已加入，管理权限配置失败';
 }

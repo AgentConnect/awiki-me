@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-09-11.full-active-case-aggregate-v1",
+  "sourceRevision": "2026-09-15.auto-join-root-import-v2",
   "suites": {
     "smoke": {
       "tier": "portable_product_ui",

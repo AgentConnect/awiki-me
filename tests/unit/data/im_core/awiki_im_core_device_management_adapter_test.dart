@@ -9,6 +9,52 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test(
+    'App approval selects the explicit SDK management authorization',
+    () async {
+      final sdk = _ManagementApprovalCore();
+      final adapter = _adapterWithCore(sdk);
+      await adapter.confirmDeviceJoinApproval(
+        approvalHandle: 'opaque-prompt-handle',
+        userPresenceConfirmed: true,
+      );
+      expect(sdk.managementCalls, 1);
+      expect(sdk.confirmed, isTrue);
+    },
+  );
+
+  test(
+    'local management readiness requires exact-device active root capability',
+    () async {
+      for (final ready in [false, true]) {
+        final sdk = _IdentityDeviceSummaryCore(
+          (_) async => _identityDeviceSummary(
+            protocolDeviceId: 'device-new',
+            role: core.IdentityDeviceRole.admin,
+            readiness: ready
+                ? core.IdentityDeviceReadiness.adminReady
+                : core.IdentityDeviceReadiness.memberReady,
+          ),
+        );
+        final adapter = _adapterWithCore(sdk);
+        expect(
+          await adapter.localManagementReady(
+            selector: _did,
+            protocolDeviceId: 'device-new',
+          ),
+          ready,
+        );
+        expect(
+          await adapter.localManagementReady(
+            selector: _did,
+            protocolDeviceId: 'other-device',
+          ),
+          isFalse,
+        );
+      }
+    },
+  );
+
   test('sends Join SMS codes through the mounted auth endpoint', () async {
     late http.Request request;
     final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
@@ -610,6 +656,9 @@ AwikiImCoreDeviceManagementAdapter _adapterWithCore(core.AwikiImCore sdk) {
 
 core.IdentityDeviceSummary _identityDeviceSummary({
   required String protocolDeviceId,
+  core.IdentityDeviceRole role = core.IdentityDeviceRole.member,
+  core.IdentityDeviceReadiness readiness =
+      core.IdentityDeviceReadiness.memberReady,
 }) {
   return core.IdentityDeviceSummary(
     identity: const core.IdentitySummary(
@@ -621,8 +670,8 @@ core.IdentityDeviceSummary _identityDeviceSummary({
     ),
     mode: core.IdentityDeviceMode.vNext,
     protocolDeviceId: protocolDeviceId,
-    role: core.IdentityDeviceRole.member,
-    readiness: core.IdentityDeviceReadiness.memberReady,
+    role: role,
+    readiness: readiness,
   );
 }
 
@@ -663,4 +712,27 @@ Future<String> _resolveAwikiJoinTarget({
   expect(handle, 'alice');
   expect(domain, 'awiki.info');
   return _did;
+}
+
+class _ManagementApprovalCore implements core.AwikiImCore {
+  int managementCalls = 0;
+  bool? confirmed;
+  @override
+  Future<core.DeviceJoinProgress> confirmDeviceJoinWithManagement({
+    required String approvalHandle,
+    required bool userPresenceConfirmed,
+  }) async {
+    managementCalls++;
+    confirmed = userPresenceConfirmed;
+    return _coreProgress();
+  }
+
+  @override
+  Future<core.DeviceJoinProgress> confirmDeviceJoinApproval({
+    required String approvalHandle,
+    required bool userPresenceConfirmed,
+  }) async =>
+      throw StateError('App must explicitly select management authorization');
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

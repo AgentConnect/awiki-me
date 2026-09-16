@@ -378,3 +378,9 @@ User accounts, Handles and User-owned inventory remain explicit residuals; this
 is not a User-account deletion API. Historical ledgers without exact account
 selectors cannot authorize deletion, and scope is never inferred from shared
 phone numbers or name-prefix scans.
+
+## 自动管理的Root completion V2验证边界
+
+自动Join使用显式V2 completion，运行ROOT-TRANSFER-APP-PAIR-E2E-001、ROOT-TRANSFER-E2E-001及CLI→App自动管理分支前，User Service与双方native Core均须支持V2。现有产品断言继续覆盖一次presence、接受后等待、接收端本机Root激活、Registry管理角色、无Root普通会话投影与后续设备加入；产品状态/API没有新增证明时间或内部版本展示。
+
+15分钟/24小时、provider前后崩溃、证明刷新时钟与跨进程幂等由Core/User Service拥有方故障注入验证；System自动Join用例另核对V2 completion及提交响应丢失后的相同结果收敛。产品E2E不注入假的系统时间或改写imported_at，也不把这些局部测试当作真实长期离线验收。当前真实App/设备/服务运行仍需独立授权。旧接收端会安全拒绝新completion_contract字段，不保证升级后能恢复被旧端消费的Root消息，不能把新旧客户端混用的运行报告为V2通过。
