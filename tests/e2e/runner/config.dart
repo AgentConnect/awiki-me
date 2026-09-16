@@ -157,6 +157,7 @@ class RemoteMultiDeviceAppPairConfig {
     this._base, {
     required this.functional,
     required this.contentSync,
+    this.acp = false,
     this.cliBin,
     this.cliSourceRef,
     this.daemonBinary,
@@ -167,6 +168,7 @@ class RemoteMultiDeviceAppPairConfig {
   final _RemoteMultiDeviceBaseConfig _base;
   final bool functional;
   final bool contentSync;
+  final bool acp;
   final String? cliBin;
   final String? cliSourceRef;
   final String? daemonBinary;
@@ -190,6 +192,7 @@ class RemoteMultiDeviceAppPairConfig {
     required Map<String, String> environment,
     bool functional = false,
     bool contentSync = false,
+    bool acp = false,
   }) {
     final base = _RemoteMultiDeviceBaseConfig.from(
       fileConfig: fileConfig,
@@ -199,10 +202,10 @@ class RemoteMultiDeviceAppPairConfig {
         DesktopE2ePlatform.linux,
       },
     );
-    if (functional && contentSync) {
+    if ([functional, contentSync, acp].where((value) => value).length > 1) {
       throw E2eFailure('App-pair functional and content-sync modes conflict.');
     }
-    if (!functional && !contentSync) {
+    if (!functional && !contentSync && !acp) {
       return RemoteMultiDeviceAppPairConfig._(
         base,
         functional: false,
@@ -229,23 +232,24 @@ class RemoteMultiDeviceAppPairConfig {
       base,
       functional: functional,
       contentSync: contentSync,
+      acp: acp,
       cliBin: cliBin,
       cliSourceRef: cliSourceRef,
-      daemonBinary: functional
+      daemonBinary: functional || acp
           ? _requiredConfig(
               fileConfig.daemonBinary,
               'daemon.binary',
               sourcePath,
             )
           : null,
-      daemonHandle: functional
+      daemonHandle: functional || acp
           ? _requiredConfig(
               fileConfig.daemonHandle,
               'daemon.handle',
               sourcePath,
             )
           : null,
-      daemonEnvFile: functional ? fileConfig.daemonEnvFile : null,
+      daemonEnvFile: functional || acp ? fileConfig.daemonEnvFile : null,
     );
   }
 }
@@ -690,6 +694,7 @@ String _defaultClaudeCodePrompt(String runId) {
 class DesktopE2eFileConfig {
   const DesktopE2eFileConfig({
     this.path,
+    this.acpPreparedIdentityRunId,
     this.platform,
     this.serviceBaseUrl,
     this.userServiceUrl,
@@ -730,6 +735,7 @@ class DesktopE2eFileConfig {
 
   const DesktopE2eFileConfig.empty()
     : path = null,
+      acpPreparedIdentityRunId = null,
       platform = null,
       serviceBaseUrl = null,
       userServiceUrl = null,
@@ -768,6 +774,7 @@ class DesktopE2eFileConfig {
       performance = null;
 
   final String? path;
+  final String? acpPreparedIdentityRunId;
   final DesktopE2ePlatform? platform;
   final String? serviceBaseUrl;
   final String? userServiceUrl;
@@ -830,6 +837,7 @@ class DesktopE2eFileConfig {
         ? _mapAt(raw, 'personalAgent', optional: true)
         : _mapAt(raw, 'messageAgent', optional: true);
     final codexAgent = _mapAt(raw, 'codexAgent', optional: true);
+    final acpAgent = _mapAt(raw, 'acpAgent', optional: true);
     final claudeCodeAgent = _mapAt(raw, 'claudeCodeAgent', optional: true);
     final performance = _mapAt(raw, 'performance', optional: true);
     final otp = _mapAt(raw, 'otp', optional: true);
@@ -883,6 +891,7 @@ class DesktopE2eFileConfig {
 
     return DesktopE2eFileConfig(
       path: file.path,
+      acpPreparedIdentityRunId: _stringAt(acpAgent, 'preparedIdentityRunId'),
       platform: platformValue == null
           ? null
           : DesktopE2ePlatform.parse(platformValue),

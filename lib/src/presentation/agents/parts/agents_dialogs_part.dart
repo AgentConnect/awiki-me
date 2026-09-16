@@ -497,35 +497,15 @@ class _AgentTypeSelector extends StatelessWidget {
           ),
         ),
         SizedBox(height: responsive.spacing(6)),
-        _RuntimeKindTile(
-          kind: RuntimeAgentKind.hermes,
-          selected: selected == RuntimeAgentKind.hermes,
-          status: runtimeCapability.statusFor(
-            context.l10n,
-            RuntimeAgentKind.hermes,
+        for (final kind in RuntimeAgentKind.values) ...<Widget>[
+          _RuntimeKindTile(
+            kind: kind,
+            selected: selected == kind,
+            status: runtimeCapability.statusFor(context.l10n, kind),
+            onTap: () => onSelected(kind),
           ),
-          onTap: () => onSelected(RuntimeAgentKind.hermes),
-        ),
-        SizedBox(height: responsive.spacing(8)),
-        _RuntimeKindTile(
-          kind: RuntimeAgentKind.codex,
-          selected: selected == RuntimeAgentKind.codex,
-          status: runtimeCapability.statusFor(
-            context.l10n,
-            RuntimeAgentKind.codex,
-          ),
-          onTap: () => onSelected(RuntimeAgentKind.codex),
-        ),
-        SizedBox(height: responsive.spacing(8)),
-        _RuntimeKindTile(
-          kind: RuntimeAgentKind.claudeCode,
-          selected: selected == RuntimeAgentKind.claudeCode,
-          status: runtimeCapability.statusFor(
-            context.l10n,
-            RuntimeAgentKind.claudeCode,
-          ),
-          onTap: () => onSelected(RuntimeAgentKind.claudeCode),
-        ),
+          SizedBox(height: responsive.spacing(8)),
+        ],
       ],
     );
   }
@@ -590,24 +570,22 @@ class _RuntimeKindTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Row(
+                  Wrap(
+                    spacing: responsive.spacing(6),
+                    runSpacing: responsive.spacing(4),
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: <Widget>[
-                      Flexible(
-                        child: Text(
-                          kind.displayLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: enabled
-                                ? AwikiMePalette.inkNeutral
-                                : AwikiMePalette.mutedNeutral,
-                            fontSize: responsive.bodyMd,
-                            fontWeight: FontWeight.w400,
-                          ),
+                      Text(
+                        kind.displayLabel,
+                        style: TextStyle(
+                          color: enabled
+                              ? AwikiMePalette.inkNeutral
+                              : AwikiMePalette.mutedNeutral,
+                          fontSize: responsive.bodyMd,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       if (!enabled) ...<Widget>[
-                        SizedBox(width: responsive.spacing(6)),
                         Text(
                           status.reasonLabel ??
                               context.l10n.agentStatusDisabled,
@@ -623,8 +601,6 @@ class _RuntimeKindTile extends StatelessWidget {
                   SizedBox(height: responsive.spacing(3)),
                   Text(
                     status.description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: AwikiMePalette.mutedNeutral,
                       fontSize: responsive.metaSm,
@@ -651,6 +627,7 @@ IconData _runtimeKindIcon(RuntimeAgentKind kind) => switch (kind) {
   RuntimeAgentKind.hermes => CupertinoIcons.sparkles,
   RuntimeAgentKind.codex => CupertinoIcons.chevron_left_slash_chevron_right,
   RuntimeAgentKind.claudeCode => CupertinoIcons.text_bubble,
+  _ => CupertinoIcons.sparkles,
 };
 
 class _RuntimeKindStatus {
@@ -668,6 +645,7 @@ class _RuntimeKindStatus {
 class _RuntimeCreateCapability {
   const _RuntimeCreateCapability({
     required this.hasGenericCliSchema,
+    required this.acpDrivers,
     required this.supportedDrivers,
     required this.supportedWorkspaceModes,
     required this.supportedSandboxModes,
@@ -679,9 +657,13 @@ class _RuntimeCreateCapability {
     final diagnostics = daemon.latest.diagnosticsSummary;
     final config = _objectMap(diagnostics['config_summary']);
     final genericCli = _objectMap(config['generic_cli']);
+    final acp = _objectMap(config['acp']);
     final schemaVersion = _intValue(genericCli['capability_schema_version']);
     return _RuntimeCreateCapability(
       hasGenericCliSchema: schemaVersion == 1,
+      acpDrivers: acp['capability_schema_version'] == 1
+          ? _stringSet(acp['supported_drivers'])
+          : <String>{},
       supportedDrivers: _stringSet(genericCli['supported_drivers']),
       supportedWorkspaceModes: _stringSet(
         genericCli['supported_workspace_modes'],
@@ -693,6 +675,7 @@ class _RuntimeCreateCapability {
   }
 
   final bool hasGenericCliSchema;
+  final Set<String> acpDrivers;
   final Set<String> supportedDrivers;
   final Set<String> supportedWorkspaceModes;
   final Set<String> supportedSandboxModes;
@@ -704,6 +687,16 @@ class _RuntimeCreateCapability {
       return _RuntimeKindStatus(
         enabled: true,
         description: l10n.agentCreateHermesDescription,
+      );
+    }
+    if (kind.isAcp) {
+      final supported = acpDrivers.contains(kind.driverId);
+      return _RuntimeKindStatus(
+        enabled: supported,
+        description: supported
+            ? kind.displayLabel
+            : l10n.agentCreateUnsupportedDriver(kind.displayLabel),
+        reasonLabel: supported ? null : l10n.agentStatusNeedsUpgrade,
       );
     }
     final driverId = kind.driverId;

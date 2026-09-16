@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-09-11.full-active-case-aggregate-v1",
+  "sourceRevision": "2026-09-15.acp-runtime-v1",
   "suites": {
     "smoke": {
       "tier": "portable_product_ui",
@@ -974,6 +974,77 @@
         "PERSONALAGENT-E2E-004"
       ]
     },
+    "acp-agent": {
+      "tier": "optional_provider_product_ui",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "requiredTools": [
+        "flutter",
+        "awiki-cli",
+        "awiki-daemon"
+      ],
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "estimatedMinutes": 30,
+      "timeoutMinutes": 45,
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "allowedHosts": [
+        "awiki.info",
+        "agentwiki.info",
+        "anpclaw.com"
+      ],
+      "allowedDidDomains": [
+        "awiki.info",
+        "agentwiki.info",
+        "anpclaw.com"
+      ],
+      "resourceCategories": [
+        "runtime_agents",
+        "direct_messages"
+      ],
+      "caseIds": [
+        "ACP-OPENCODE-E2E-001",
+        "ACP-OPENCODE-E2E-002",
+        "ACP-OPENCODE-E2E-003",
+        "ACP-OPENCODE-E2E-004",
+        "ACP-OPENCODE-E2E-005",
+        "ACP-OPENCODE-E2E-006",
+        "ACP-OPENCODE-E2E-007",
+        "ACP-OPENCODE-E2E-008",
+        "ACP-OPENCODE-E2E-009",
+        "ACP-GEMINI-E2E-001",
+        "ACP-GEMINI-E2E-002",
+        "ACP-GEMINI-E2E-003",
+        "ACP-GEMINI-E2E-004",
+        "ACP-GEMINI-E2E-005",
+        "ACP-GEMINI-E2E-006",
+        "ACP-GEMINI-E2E-007",
+        "ACP-GEMINI-E2E-008",
+        "ACP-GEMINI-E2E-009",
+        "ACP-KIMI-E2E-001",
+        "ACP-KIMI-E2E-002",
+        "ACP-KIMI-E2E-003",
+        "ACP-KIMI-E2E-004",
+        "ACP-KIMI-E2E-005",
+        "ACP-KIMI-E2E-006",
+        "ACP-KIMI-E2E-007",
+        "ACP-KIMI-E2E-008",
+        "ACP-KIMI-E2E-009",
+        "ACP-DEEPSEEK-HARNESS-E2E-001",
+        "ACP-DEEPSEEK-HARNESS-E2E-002",
+        "ACP-DEEPSEEK-HARNESS-E2E-003",
+        "ACP-DEEPSEEK-HARNESS-E2E-004",
+        "ACP-DEEPSEEK-HARNESS-E2E-005",
+        "ACP-DEEPSEEK-HARNESS-E2E-006",
+        "ACP-DEEPSEEK-HARNESS-E2E-007",
+        "ACP-DEEPSEEK-HARNESS-E2E-008",
+        "ACP-DEEPSEEK-HARNESS-E2E-009"
+      ]
+    },
     "codex-agent": {
       "tier": "optional_provider_product_ui",
       "supportedPlatforms": ["macos","linux"],
@@ -1077,6 +1148,42 @@
         "isolated_cli_state"
       ],
       "caseIds": [
+        "ACP-DEEPSEEK-HARNESS-E2E-001",
+        "ACP-DEEPSEEK-HARNESS-E2E-002",
+        "ACP-DEEPSEEK-HARNESS-E2E-003",
+        "ACP-DEEPSEEK-HARNESS-E2E-004",
+        "ACP-DEEPSEEK-HARNESS-E2E-005",
+        "ACP-DEEPSEEK-HARNESS-E2E-006",
+        "ACP-DEEPSEEK-HARNESS-E2E-007",
+        "ACP-DEEPSEEK-HARNESS-E2E-008",
+        "ACP-DEEPSEEK-HARNESS-E2E-009",
+        "ACP-GEMINI-E2E-001",
+        "ACP-GEMINI-E2E-002",
+        "ACP-GEMINI-E2E-003",
+        "ACP-GEMINI-E2E-004",
+        "ACP-GEMINI-E2E-005",
+        "ACP-GEMINI-E2E-006",
+        "ACP-GEMINI-E2E-007",
+        "ACP-GEMINI-E2E-008",
+        "ACP-GEMINI-E2E-009",
+        "ACP-KIMI-E2E-001",
+        "ACP-KIMI-E2E-002",
+        "ACP-KIMI-E2E-003",
+        "ACP-KIMI-E2E-004",
+        "ACP-KIMI-E2E-005",
+        "ACP-KIMI-E2E-006",
+        "ACP-KIMI-E2E-007",
+        "ACP-KIMI-E2E-008",
+        "ACP-KIMI-E2E-009",
+        "ACP-OPENCODE-E2E-001",
+        "ACP-OPENCODE-E2E-002",
+        "ACP-OPENCODE-E2E-003",
+        "ACP-OPENCODE-E2E-004",
+        "ACP-OPENCODE-E2E-005",
+        "ACP-OPENCODE-E2E-006",
+        "ACP-OPENCODE-E2E-007",
+        "ACP-OPENCODE-E2E-008",
+        "ACP-OPENCODE-E2E-009",
         "AGENT-NOTIFY-SMOKE-E2E-001",
         "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001",
         "APP-UPDATE-SMOKE-E2E-001",
@@ -1100,6 +1207,8 @@
         "CONV-CANON-E2E-001",
         "CONV-LIST-E2E-001",
         "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001",
+        "DEVICE-ACP-SYNC-E2E-001",
+        "DEVICE-ACP-SYNC-E2E-002",
         "DEVICE-AGENT-ADD-SYNC-E2E-001",
         "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001",
         "DEVICE-AGENT-DELETE-SYNC-E2E-001",
@@ -1158,6 +1267,10 @@
         "HANDLE-RECOVERY-V1-E2E-001",
         "HANDLE-RECOVERY-V1-E2E-002",
         "HANDLE-RECOVERY-V1-E2E-003",
+        "HERMESAGENT-E2E-001",
+        "HERMESAGENT-E2E-002",
+        "HERMESAGENT-E2E-003",
+        "HERMESAGENT-E2E-004",
         "IDENTITY-DATA-DELETION-RESUME-E2E-001",
         "IDENTITY-DELETE-E2E-001",
         "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001",
@@ -1218,8 +1331,87 @@
         "restart",
         "display-name-fallback",
         "codex-agent",
+        "acp-agent",
         "claude-code-agent",
-        "production-keychain"
+        "production-keychain",
+        "hermes-agent",
+        "multi-device-app-pair-acp"
+      ]
+    },
+    "hermes-agent": {
+      "tier": "optional_provider_product_ui",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "requiredTools": [
+        "flutter",
+        "awiki-cli",
+        "awiki-daemon"
+      ],
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "estimatedMinutes": 15,
+      "timeoutMinutes": 15,
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "allowedHosts": [
+        "awiki.info",
+        "agentwiki.info",
+        "anpclaw.com"
+      ],
+      "allowedDidDomains": [
+        "awiki.info",
+        "agentwiki.info",
+        "anpclaw.com"
+      ],
+      "resourceCategories": [
+        "runtime_agents",
+        "direct_messages"
+      ],
+      "caseIds": [
+        "HERMESAGENT-E2E-001",
+        "HERMESAGENT-E2E-002",
+        "HERMESAGENT-E2E-003",
+        "HERMESAGENT-E2E-004"
+      ]
+    },
+    "multi-device-app-pair-acp": {
+      "tier": "remote_product_ui",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "requiredTools": [
+        "flutter",
+        "dart",
+        "awiki-cli"
+      ],
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "estimatedMinutes": 15,
+      "timeoutMinutes": 27,
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "device_join_session",
+        "isolated_app_state",
+        "daemon",
+        "runtime_agent",
+        "direct_message"
+      ],
+      "caseIds": [
+        "DEVICE-ACP-SYNC-E2E-001",
+        "DEVICE-ACP-SYNC-E2E-002"
       ]
     }
   }

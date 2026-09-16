@@ -367,11 +367,14 @@ class _AgentInstallDaemonRow extends StatelessWidget {
       semanticLabel: context.l10n.agentInstallDaemonAction,
       enabled: !disabled,
       borderRadius: BorderRadius.zero,
-      child: SizedBox(
-        height: 56,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 56),
         child: Container(
           width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: responsive.spacing(24)),
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.spacing(24),
+            vertical: 12,
+          ),
           decoration: BoxDecoration(
             color: theme.surface,
             border: Border(top: BorderSide(color: theme.border)),
@@ -384,12 +387,14 @@ class _AgentInstallDaemonRow extends StatelessWidget {
                 size: responsive.iconSm,
               ),
               SizedBox(width: responsive.spacing(12)),
-              Text(
-                context.l10n.agentInstallDaemonAction,
-                style: TextStyle(
-                  color: theme.primary,
-                  fontSize: responsive.bodySm,
-                  fontWeight: FontWeight.w400,
+              Expanded(
+                child: Text(
+                  context.l10n.agentInstallDaemonAction,
+                  style: TextStyle(
+                    color: theme.primary,
+                    fontSize: responsive.bodySm,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
               ),
             ],
@@ -1064,8 +1069,10 @@ class _AgentListTile extends StatelessWidget {
         border: responsive.isCompact
             ? Border(bottom: BorderSide(color: theme.border))
             : null,
-        child: SizedBox(
-          height: responsive.isCompact ? (isChild ? 74.5 : 64) : null,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: responsive.isCompact ? (isChild ? 74.5 : 64) : 0,
+          ),
           child: Stack(
             alignment: Alignment.centerLeft,
             children: <Widget>[

@@ -70,6 +70,16 @@ void main() {
       specs.requireSpec('personal-agent').target,
       'integration_test/personal_agent_real_backend_test.dart',
     );
+    for (final platform in ['macos', 'linux']) {
+      expect(
+        specs.specsForSuite('acp-agent', platform: platform).single.target,
+        'integration_test/acp_agent_full_ui_test.dart',
+      );
+      expect(
+        specs.specsForSuite('hermes-agent', platform: platform).single.target,
+        'integration_test/hermes_agent_full_ui_test.dart',
+      );
+    }
   });
 
   test('compile-time defines are canonical and runtime fixtures stay out', () {

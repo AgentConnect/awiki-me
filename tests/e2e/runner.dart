@@ -15,6 +15,7 @@ import 'app_pair_protocol.dart';
 import 'case_attestation.dart';
 import 'host_platform.dart';
 import 'performance_contract.dart';
+import 'prepared_coding_identity.dart';
 import 'prepared_integration_process.dart';
 import 'remote_multi_device_join_contract.dart';
 import 'sync_recovery_operator_contract.dart';
@@ -265,6 +266,10 @@ const List<String> _multiDeviceAppPairFunctionalCaseIds = <String>[
   'DEVICE-REGISTRY-SYNC-E2E-001',
   'DEVICE-MESSAGE-GENERATION-FENCE-E2E-001',
 ];
+const List<String> _multiDeviceAppPairAcpCaseIds = [
+  'DEVICE-ACP-SYNC-E2E-001',
+  'DEVICE-ACP-SYNC-E2E-002',
+];
 const List<String> _multiDeviceAppPairContentSyncCaseIds = <String>[
   'DEVICE-CONTENT-TAIL-ONLY-E2E-001',
   'DEVICE-GROUP-SYNC-E2E-001',
@@ -388,11 +393,55 @@ const List<String> _personalAgentCaseIds = <String>[
   'PERSONALAGENT-E2E-002', // CLI peer message is recovered into App UI.
   'PERSONALAGENT-E2E-004', // UI revoke converges in User Service and daemon state.
 ];
+const List<String> _acpAgentCaseIds = <String>[
+  'ACP-OPENCODE-E2E-001',
+  'ACP-OPENCODE-E2E-002',
+  'ACP-OPENCODE-E2E-003',
+  'ACP-OPENCODE-E2E-004',
+  'ACP-OPENCODE-E2E-005',
+  'ACP-OPENCODE-E2E-006',
+  'ACP-OPENCODE-E2E-007',
+  'ACP-OPENCODE-E2E-008',
+  'ACP-OPENCODE-E2E-009',
+  'ACP-GEMINI-E2E-001',
+  'ACP-GEMINI-E2E-002',
+  'ACP-GEMINI-E2E-003',
+  'ACP-GEMINI-E2E-004',
+  'ACP-GEMINI-E2E-005',
+  'ACP-GEMINI-E2E-006',
+  'ACP-GEMINI-E2E-007',
+  'ACP-GEMINI-E2E-008',
+  'ACP-GEMINI-E2E-009',
+  'ACP-KIMI-E2E-001',
+  'ACP-KIMI-E2E-002',
+  'ACP-KIMI-E2E-003',
+  'ACP-KIMI-E2E-004',
+  'ACP-KIMI-E2E-005',
+  'ACP-KIMI-E2E-006',
+  'ACP-KIMI-E2E-007',
+  'ACP-KIMI-E2E-008',
+  'ACP-KIMI-E2E-009',
+  'ACP-DEEPSEEK-HARNESS-E2E-001',
+  'ACP-DEEPSEEK-HARNESS-E2E-002',
+  'ACP-DEEPSEEK-HARNESS-E2E-003',
+  'ACP-DEEPSEEK-HARNESS-E2E-004',
+  'ACP-DEEPSEEK-HARNESS-E2E-005',
+  'ACP-DEEPSEEK-HARNESS-E2E-006',
+  'ACP-DEEPSEEK-HARNESS-E2E-007',
+  'ACP-DEEPSEEK-HARNESS-E2E-008',
+  'ACP-DEEPSEEK-HARNESS-E2E-009',
+];
 const List<String> _codexAgentCaseIds = <String>[
   'CODEXAGENT-E2E-001', // App creates/selects a Codex runtime Agent.
   'CODEXAGENT-E2E-002', // App UI sends a deterministic prompt to Codex.
   'CODEXAGENT-E2E-003', // daemon records runtime_run + runtime_final_outbox sent.
   'CODEXAGENT-E2E-004', // App local history and visible UI show the Codex reply.
+];
+const List<String> _hermesAgentCaseIds = <String>[
+  'HERMESAGENT-E2E-001',
+  'HERMESAGENT-E2E-002',
+  'HERMESAGENT-E2E-003',
+  'HERMESAGENT-E2E-004',
 ];
 const List<String> _claudeCodeAgentCaseIds = <String>[
   'CLAUDECODEAGENT-E2E-001', // App creates/selects a Claude Code runtime Agent.
@@ -437,6 +486,7 @@ class DesktopE2eRunner {
 
   DesktopE2eFileConfig fileConfig = const DesktopE2eFileConfig.empty();
   DesktopCliPeerConfig? config;
+  PreparedCodingIdentity? preparedCodingIdentity;
   RemoteMultiDeviceJoinConfig? remoteMultiDeviceJoinConfig;
   RemoteHandleRecoveryConfig? remoteHandleRecoveryConfig;
   RemoteMultiDeviceAppPairConfig? remoteMultiDeviceAppPairConfig;
@@ -521,12 +571,22 @@ class DesktopE2eRunner {
       platform: platform,
     );
     runId = options.runId ?? _newRunId();
+    preparedCodingIdentity = PreparedCodingIdentity.resolve(
+      root: root,
+      suite: options.e2eCase.caseName,
+      currentRunId: runId,
+      preparedRunId: fileConfig.acpPreparedIdentityRunId,
+    );
     final runScope = options.e2eCase.reportScope;
     reportDir = Directory('${root.path}/.e2e/$runScope/$runId/reports')
       ..createSync(recursive: true);
     commands.diagnosticDirectory = reportDir;
-    cliWorkspaceDir = Directory('${root.path}/.e2e/$runScope/$runId/cli-peer');
-    cliHomeDir = Directory('${root.path}/.e2e/$runScope/$runId/cli-home');
+    cliWorkspaceDir =
+        preparedCodingIdentity?.cli ??
+        Directory('${root.path}/.e2e/$runScope/$runId/cli-peer');
+    cliHomeDir =
+        preparedCodingIdentity?.cliHome ??
+        Directory('${root.path}/.e2e/$runScope/$runId/cli-home');
     multiDeviceCliAdminWorkspaceDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/cli-admin',
     );
@@ -545,7 +605,9 @@ class DesktopE2eRunner {
     rootTransferCliMemberHomeDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/root-transfer-cli-member-home',
     );
-    appStateRootDir = Directory('${root.path}/.e2e/$runScope/$runId/app');
+    appStateRootDir =
+        preparedCodingIdentity?.app ??
+        Directory('${root.path}/.e2e/$runScope/$runId/app');
     multiDeviceAppJoiningStateRootDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/app-joining-device',
     );
@@ -698,7 +760,8 @@ class DesktopE2eRunner {
     if (!options.dryRun && options.e2eCase.usesRemoteAppPairScenario) {
       resetAppPairRuntimeDirectories(
         functional:
-            options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional,
+            options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional ||
+            options.e2eCase == DesktopE2eCase.multiDeviceAppPairAcp,
         contentSync:
             options.e2eCase == DesktopE2eCase.multiDeviceAppPairContentSync ||
             options.e2eCase == DesktopE2eCase.multiDeviceAppPairPagingRecovery,
@@ -714,7 +777,9 @@ class DesktopE2eRunner {
 
     final totalStopwatch = Stopwatch()..start();
     var orchestrationSucceeded = false;
+    RandomAccessFile? identityLease;
     try {
+      identityLease = preparedCodingIdentity?.acquireLease();
       switch (options.e2eCase) {
         case DesktopE2eCase.smoke:
           await _runLocalSmoke();
@@ -742,6 +807,7 @@ class DesktopE2eRunner {
           await _runRemoteMultiDeviceAppPair();
         case DesktopE2eCase.multiDeviceAppPairFunctional:
           await _runRemoteMultiDeviceAppPair();
+        case DesktopE2eCase.multiDeviceAppPairAcp:
         case DesktopE2eCase.multiDeviceAppPairContentSync:
           await _runRemoteMultiDeviceAppPair();
         case DesktopE2eCase.multiDeviceAppPairPagingRecovery:
@@ -782,6 +848,7 @@ class DesktopE2eRunner {
       }
       rethrow;
     } finally {
+      identityLease?.closeSync();
       totalStopwatch.stop();
       if (processRestartHandoffFile.existsSync()) {
         processRestartHandoffFile.deleteSync();

@@ -20,7 +20,8 @@ void appPairAdminMain() {
         config.localConfigPath,
       );
       final coordinator = config.coordinator;
-      final rootGrant = !config.functional && !config.contentSync;
+      final rootGrant =
+          !config.functional && !config.contentSync && !config.acp;
       final pagingRecovery = _invocationExplicitlyExpects(
         _appPairPagingRecoveryCaseId,
       );
@@ -34,7 +35,7 @@ void appPairAdminMain() {
         config.adminStateRoot,
         if (config.functional) config.cliWorkspace,
         if (config.functional) config.cliHome,
-        if (config.functional) config.daemonStateRoot,
+        if (config.functional || config.acp) config.daemonStateRoot,
         if (config.contentSync) config.cliWorkspace,
         if (config.contentSync) config.cliHome,
       ]);
@@ -53,9 +54,9 @@ void appPairAdminMain() {
       bootstrap = await AppBootstrap.create(
         environment: _joinOnlyEnvironment(
           config,
-          enableAppPairFunctional: config.functional,
+          enableAppPairFunctional: config.functional || config.acp,
           enableRootTransfer: rootGrant,
-          enableMessageSyncCore: config.contentSync || rootGrant,
+          enableMessageSyncCore: config.contentSync || config.acp || rootGrant,
         ),
         appStateRoot: config.adminStateRoot,
       );
@@ -446,7 +447,18 @@ void appPairAdminMain() {
           ],
         );
       }
-      if (config.functional) {
+      if (config.acp) {
+        await _runAppPairAcp(
+          tester: tester,
+          config: config,
+          bootstrap: bootstrap,
+          container: container,
+          accountDid: adminSession.did,
+          handle: handle,
+          resources: functionalResources,
+          admin: true,
+        );
+      } else if (config.functional) {
         await _runAppPairAdminFunctional(
           tester: tester,
           config: config,
@@ -509,7 +521,8 @@ void appPairJoinerMain() {
         config.localConfigPath,
       );
       final coordinator = config.coordinator;
-      final rootGrant = !config.functional && !config.contentSync;
+      final rootGrant =
+          !config.functional && !config.contentSync && !config.acp;
       final pagingRecovery = _invocationExplicitlyExpects(
         _appPairPagingRecoveryCaseId,
       );
@@ -539,9 +552,9 @@ void appPairJoinerMain() {
       bootstrap = await AppBootstrap.create(
         environment: _joinOnlyEnvironment(
           config,
-          enableAppPairFunctional: config.functional,
+          enableAppPairFunctional: config.functional || config.acp,
           enableRootTransfer: rootGrant,
-          enableMessageSyncCore: config.contentSync || rootGrant,
+          enableMessageSyncCore: config.contentSync || config.acp || rootGrant,
         ),
         appStateRoot: config.joinerStateRoot,
       );
@@ -715,7 +728,17 @@ void appPairJoinerMain() {
         'complete',
         timeout: const Duration(minutes: 2),
       );
-      if (config.functional) {
+      if (config.acp) {
+        await _runAppPairAcp(
+          tester: tester,
+          config: config,
+          bootstrap: bootstrap,
+          container: container,
+          accountDid: did,
+          handle: handle,
+          admin: false,
+        );
+      } else if (config.functional) {
         await _runAppPairJoinerFunctional(
           tester: tester,
           config: config,
@@ -1311,14 +1334,27 @@ void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
       _invocationExpects(_appPairAttachmentSyncCaseId) ||
       _invocationExpects(_appPairGroupReadSyncCaseId) ||
       _invocationExpects(_appPairPagingRecoveryCaseId);
+  final expectsAcp =
+      _invocationExpects('DEVICE-ACP-SYNC-E2E-001') ||
+      _invocationExpects('DEVICE-ACP-SYNC-E2E-002');
   final expectsSecurity =
       _invocationExpects(_appPairCaseId) ||
       _invocationExpects(_appPairCredentialResetCaseId);
-  if (config.functional != expectsFunctional ||
+  if (config.acp != expectsAcp ||
+      config.functional != expectsFunctional ||
       config.contentSync != expectsContentSync ||
-      (config.functional && config.contentSync) ||
-      (expectsSecurity && (config.functional || config.contentSync)) ||
-      (!expectsFunctional && !expectsContentSync && !expectsSecurity) ||
+      ([
+            config.functional,
+            config.contentSync,
+            config.acp,
+          ].where((v) => v).length >
+          1) ||
+      (expectsSecurity &&
+          (config.functional || config.contentSync || config.acp)) ||
+      (!expectsFunctional &&
+          !expectsContentSync &&
+          !expectsSecurity &&
+          !expectsAcp) ||
       !config.automatedUserPresence) {
     fail(
       'The App-pair run config mixed suite roles or omitted the E2E-only '

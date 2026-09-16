@@ -31,6 +31,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/acp_session_provider.dart';
 import 'package:awiki_me/src/presentation/agents/personal_agent_feature_visibility.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
@@ -592,6 +593,357 @@ ConversationSummary _scrollConversation(String id) {
 }
 
 void main() {
+  for (final desktop in [false, true]) {
+    for (final mine in [false, true]) {
+      testWidgets(
+        'ACP footer stays in the bubble lane desktop=$desktop mine=$mine',
+        (tester) async {
+          final conversation = _scrollConversation('acp-footer');
+          final message = ChatMessage(
+            localId: 'prompt',
+            remoteId: 'remote-prompt',
+            conversationId: conversation.conversationId,
+            threadId: conversation.threadId,
+            senderDid: mine ? 'did:test:me' : 'did:test:alice',
+            content: 'Please help with this task',
+            createdAt: DateTime(2026, 4, 5, 12),
+            isMine: mine,
+            sendState: MessageSendState.sent,
+          );
+          final container = await _pumpScrollableChatView(
+            tester,
+            gateway: FakeAwikiGateway(),
+            conversation: conversation,
+            messages: [message],
+            surfaceSize: desktop ? const Size(1100, 760) : const Size(320, 700),
+            macStyle: desktop,
+          );
+          void project(
+            int revision, {
+            bool details = false,
+            bool finished = false,
+          }) {
+            container
+                .read(acpSessionsProvider.notifier)
+                .applyConversation(
+                  ChatMessage(
+                    localId: 'status',
+                    conversationId: conversation.conversationId,
+                    threadId: conversation.threadId,
+                    senderDid: 'did:test:alice',
+                    content: '',
+                    createdAt: DateTime(2026),
+                    isMine: false,
+                    sendState: MessageSendState.sent,
+                    payloadJson: jsonEncode({
+                      'schema': 'awiki.acp.status.v1',
+                      'acp': {
+                        'schema': 'awiki.acp.session.v1',
+                        'session_key': 'footer',
+                        'agent_did': 'did:test:alice',
+                        'conversation_id': conversation.conversationId,
+                        'revision': revision,
+                        'group': false,
+                        'active': finished
+                            ? {}
+                            : {
+                                'run_id': 'task',
+                                'source_message_id': 'remote-prompt',
+                                'requester_did': 'did:test:me',
+                              },
+                        'history': [
+                          if (finished)
+                            {
+                              'run_id': 'task',
+                              'source_message_id': 'remote-prompt',
+                              'state': 'finished',
+                            },
+                        ],
+                        'text': details
+                            ? 'Here is a longer streaming answer that uses the available content width.'
+                            : '',
+                        'tools': [
+                          if (details)
+                            {
+                              'title': 'Read the project notes',
+                              'status': 'completed',
+                            },
+                        ],
+                      },
+                    }),
+                  ),
+                  conversation.conversationId,
+                );
+          }
+
+          project(1);
+          await tester.pumpAndSettle();
+          final bubbleFinder = find.byKey(
+            const Key('chat-message-bubble:prompt'),
+          );
+          final stateFinder = find.byKey(const ValueKey('acp-state:task'));
+          final bubble = tester.getRect(bubbleFinder);
+          final state = tester.getRect(stateFinder);
+          final statusRow = find
+              .ancestor(of: stateFinder, matching: find.byType(Wrap))
+              .first;
+          final row = tester.getRect(statusRow);
+          expect(
+            mine ? row.right : row.left,
+            closeTo(mine ? bubble.right : bubble.left, 0.1),
+          );
+          expect(state.top - bubble.bottom, closeTo(8, 0.1));
+          project(2, details: true);
+          await tester.pumpAndSettle();
+          final expandedState = tester.getRect(stateFinder);
+          final expandedBubble = tester.getRect(bubbleFinder);
+          expect(
+            expandedState.left - expandedBubble.left,
+            closeTo(state.left - bubble.left, 0.1),
+          );
+          expect(expandedState.top - expandedBubble.bottom, closeTo(8, 0.1));
+          project(3, finished: true);
+          await tester.pumpAndSettle();
+          final completed = tester.getRect(stateFinder);
+          final finalBubble = tester.getRect(bubbleFinder);
+          expect(
+            mine ? completed.right : completed.left,
+            closeTo(mine ? finalBubble.right : finalBubble.left, 0.1),
+          );
+          expect(completed.top - finalBubble.bottom, closeTo(8, 0.1));
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+        },
+      );
+    }
+  }
+
+  for (final selector in [
+    ChatMentionSelector.all,
+    ChatMentionSelector.agents,
+  ]) {
+    for (final membership in ['absent', 'inactive', 'active']) {
+      testWidgets(
+        'ACP broadcast ${selector.name} only checks $membership current group membership',
+        (tester) async {
+          final gateway = FakeAwikiGateway();
+          const groupDid = 'did:test:acp-broadcast-group';
+          final conversation = ConversationSummary(
+            conversationId: 'group:$groupDid',
+            threadId: 'group:$groupDid',
+            groupId: groupDid,
+            displayName: 'Current group',
+            lastMessagePreview: '',
+            lastMessageAt: DateTime.utc(2026),
+            unreadCount: 0,
+            isGroup: true,
+          );
+          final container = await _pumpScrollableChatView(
+            tester,
+            gateway: gateway,
+            conversation: conversation,
+            messages: [],
+            additionalProviderOverrides: [
+              groupMembersProvider(groupDid).overrideWithValue([
+                if (membership != 'absent')
+                  GroupMemberSummary(
+                    userId: 'agent',
+                    did: 'did:test:acp-agent',
+                    handle: 'agent',
+                    role: 'member',
+                    subjectType: GroupMemberSubjectType.agent,
+                    membershipStatus: membership == 'active'
+                        ? GroupMemberMembershipStatus.active
+                        : GroupMemberMembershipStatus.inactive,
+                  ),
+              ]),
+              agentsProvider.overrideWith((ref) {
+                final controller = AgentsController(ref);
+                controller.state = const AgentsState(
+                  agents: [
+                    AgentSummary(
+                      agentDid: 'did:test:offline-daemon',
+                      kind: AgentKind.daemon,
+                      displayName: 'Daemon',
+                      activeState: 'active',
+                      latest: AgentLatestStatus(status: 'offline'),
+                    ),
+                    AgentSummary(
+                      agentDid: 'did:test:acp-agent',
+                      kind: AgentKind.runtime,
+                      daemonAgentDid: 'did:test:offline-daemon',
+                      runtime: 'opencode',
+                      displayName: 'OpenCode',
+                      activeState: 'active',
+                      latest: AgentLatestStatus(status: 'ready'),
+                    ),
+                  ],
+                );
+                return controller;
+              }),
+            ],
+          );
+          final surface = '@${selector.name}';
+          final text = '$surface group message';
+          await tester.enterText(find.byType(CupertinoTextField), text);
+          container
+              .read(chatComposerDraftsProvider.notifier)
+              .setDraft(
+                conversation,
+                ChatComposerDraft(
+                  text: text,
+                  mentions: [
+                    ChatMentionDraft(
+                      localId: 'broadcast',
+                      surface: surface,
+                      start: 0,
+                      end: surface.length,
+                      target: ChatMentionTargetDraft.groupSelector(selector),
+                    ),
+                  ],
+                ),
+              );
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('chat-send-button')));
+          await tester.pumpAndSettle();
+          if (membership == 'active') {
+            expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+            expect(gateway.lastSentPayload, isNull);
+            expect(
+              container
+                  .read(chatComposerDraftsProvider.notifier)
+                  .draftFor(conversation)
+                  .text,
+              text,
+            );
+          } else {
+            expect(find.byType(CupertinoAlertDialog), findsNothing);
+            expect(gateway.lastSentPayload?['text'], text);
+            expect(gateway.lastSentPayload?['mentions'], isNotEmpty);
+            expect(
+              container
+                  .read(chatComposerDraftsProvider.notifier)
+                  .draftFor(conversation)
+                  .text,
+              isEmpty,
+            );
+          }
+        },
+      );
+    }
+  }
+
+  for (final blocker in ['offline', 'waiting_full', 'context_lost']) {
+    testWidgets('ACP $blocker keeps text and attachment without sending', (
+      tester,
+    ) async {
+      final gateway = FakeAwikiGateway();
+      final attachment = AttachmentDraft(
+        filename: 'unsent.txt',
+        mimeType: 'text/plain',
+        bytes: Uint8List.fromList([1, 2, 3]),
+        sizeBytes: 3,
+      );
+      final picker = FakeAttachmentPickerService()..nextPick = attachment;
+      final conversation = _scrollConversation('dm:acp-$blocker');
+      final inventory = [
+        AgentSummary(
+          agentDid: 'did:test:daemon',
+          kind: AgentKind.daemon,
+          displayName: 'Daemon',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: blocker == 'offline' ? 'offline' : 'ready',
+          ),
+        ),
+        const AgentSummary(
+          agentDid: 'did:test:alice',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:test:daemon',
+          runtime: 'opencode',
+          displayName: 'OpenCode',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+      final container = await _pumpScrollableChatView(
+        tester,
+        gateway: gateway,
+        conversation: conversation,
+        messages: [],
+        attachmentPickerService: picker,
+        additionalProviderOverrides: [
+          agentsProvider.overrideWith((ref) {
+            final controller = AgentsController(ref);
+            controller.state = AgentsState(agents: inventory);
+            return controller;
+          }),
+        ],
+      );
+      if (blocker != 'offline') {
+        container
+            .read(acpSessionsProvider.notifier)
+            .applyConversation(
+              ChatMessage(
+                localId: 'status',
+                threadId: conversation.threadId,
+                conversationId: conversation.conversationId,
+                senderDid: 'did:test:alice',
+                content: '',
+                createdAt: DateTime.utc(2026),
+                isMine: false,
+                sendState: MessageSendState.sent,
+                payloadJson: jsonEncode({
+                  'schema': 'awiki.acp.status.v1',
+                  'acp': {
+                    'schema': 'awiki.acp.session.v1',
+                    'session_key': 'session',
+                    'agent_did': 'did:test:alice',
+                    'conversation_id': conversation.conversationId,
+                    'revision': 1,
+                    'context_lost': blocker == 'context_lost',
+                    if (blocker == 'waiting_full')
+                      'waiting': {'run_id': 'waiting'},
+                  },
+                }),
+              ),
+              conversation.conversationId,
+            );
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.byKey(const Key('chat-attachment-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byType(CupertinoTextField),
+        'Keep this draft',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('chat-send-button')));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      expect(gateway.lastSentContent, isNull);
+      expect(gateway.lastSentAttachment, isNull);
+      expect(
+        tester
+            .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+            .controller!
+            .text,
+        'Keep this draft',
+      );
+      final draft = container
+          .read(chatComposerDraftsProvider.notifier)
+          .draftFor(conversation);
+      expect(draft.text, 'Keep this draft');
+      expect(draft.pendingAttachment, same(attachment));
+      await tester.tap(find.text('知道了'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('chat-pending-attachment-preview')),
+        findsOneWidget,
+      );
+    });
+  }
+
   testWidgets('compact 聊天使用暖中性整面背景、双方头像和 44px composer', (tester) async {
     final gateway = FakeAwikiGateway();
     final conversation = _scrollConversation('dm:compact-visual-contract');

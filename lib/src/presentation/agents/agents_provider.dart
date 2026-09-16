@@ -108,6 +108,16 @@ class PendingRuntimeCreation {
   final DateTime createdAt;
   final PendingRuntimeCreationState state;
 
+  Duration get confirmationTimeout =>
+      RuntimeAgentKind.values.any(
+        (kind) => kind.isAcp && kind.runtime == runtime,
+      )
+      ? const Duration(minutes: 2)
+      : agentRuntimeCreationTimeout;
+
+  bool canReconcileAt(DateTime now) =>
+      now.isBefore(createdAt.add(confirmationTimeout));
+
   bool get isWaitingForStatus =>
       state == PendingRuntimeCreationState.waitingForStatus;
 
@@ -1274,18 +1284,21 @@ class AgentsController extends StateNotifier<AgentsState> {
               options: options,
               clientRequestId: requestId,
             );
-      } catch (_) {
+      } catch (error) {
         if (!_isOwnerOperationCurrent(operation)) {
           return;
         }
-        _runtimeCreationTimeouts.remove(requestId)?.cancel();
-        state = state.copyWith(
-          pendingRuntimeCreations: _removePendingRuntimeCreation(
-            state.pendingRuntimeCreations,
-            requestId,
-          ),
-        );
-        rethrow;
+        if (!(options.kind.isAcp &&
+            error is RuntimeAgentCreateDeliveryPending)) {
+          _runtimeCreationTimeouts.remove(requestId)?.cancel();
+          state = state.copyWith(
+            pendingRuntimeCreations: _removePendingRuntimeCreation(
+              state.pendingRuntimeCreations,
+              requestId,
+            ),
+          );
+          rethrow;
+        }
       }
       if (!_isOwnerOperationCurrent(operation)) {
         return;
@@ -1308,9 +1321,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     final pending = _pendingRuntimeCreation(requestId);
     if (ref.read(sessionProvider).session == null ||
         pending == null ||
-        !DateTime.now().isBefore(
-          pending.createdAt.add(agentRuntimeCreationTimeout),
-        )) {
+        !pending.canReconcileAt(DateTime.now())) {
       return;
     }
     await syncRemoteInventory(
@@ -1324,9 +1335,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     final remaining = _pendingRuntimeCreation(requestId);
     if (ref.read(sessionProvider).session == null ||
         remaining == null ||
-        !DateTime.now().isBefore(
-          remaining.createdAt.add(agentRuntimeCreationTimeout),
-        )) {
+        !remaining.canReconcileAt(DateTime.now())) {
       return;
     }
     _runtimeCreationReconcileTimers[requestId] = Timer(
@@ -2890,21 +2899,25 @@ class AgentsController extends StateNotifier<AgentsState> {
   ) {
     _runtimeCreationTimeouts.remove(requestId)?.cancel();
     late final Timer timer;
-    timer = Timer(agentRuntimeCreationTimeout, () {
-      if (!identical(_runtimeCreationTimeouts[requestId], timer)) {
-        return;
-      }
-      _runtimeCreationTimeouts.remove(requestId);
-      if (!_isOwnerOperationCurrent(operation)) {
-        return;
-      }
-      state = state.copyWith(
-        pendingRuntimeCreations: _markPendingRuntimeCreationWaiting(
-          state.pendingRuntimeCreations,
-          requestId,
-        ),
-      );
-    });
+    timer = Timer(
+      _pendingRuntimeCreation(requestId)?.confirmationTimeout ??
+          agentRuntimeCreationTimeout,
+      () {
+        if (!identical(_runtimeCreationTimeouts[requestId], timer)) {
+          return;
+        }
+        _runtimeCreationTimeouts.remove(requestId);
+        if (!_isOwnerOperationCurrent(operation)) {
+          return;
+        }
+        state = state.copyWith(
+          pendingRuntimeCreations: _markPendingRuntimeCreationWaiting(
+            state.pendingRuntimeCreations,
+            requestId,
+          ),
+        );
+      },
+    );
     _runtimeCreationTimeouts[requestId] = timer;
   }
 

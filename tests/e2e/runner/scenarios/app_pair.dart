@@ -17,6 +17,7 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
       environment: Platform.environment,
       functional:
           options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional,
+      acp: options.e2eCase == DesktopE2eCase.multiDeviceAppPairAcp,
       contentSync:
           options.e2eCase == DesktopE2eCase.multiDeviceAppPairContentSync ||
           pagingRecovery,
@@ -87,6 +88,8 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           root: root,
           environment: Platform.environment,
         );
+      }
+      if (pairConfig.functional || pairConfig.acp) {
         if (!daemonStateRootFitsUnixSocket(appPairDaemonStateRootDir.path)) {
           throw E2eFailure(
             'The App-pair Daemon state root exceeds the macOS Unix-domain socket path limit.',
@@ -97,7 +100,7 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           await commands.requireFile(pairConfig.daemonEnvFile!);
         }
       }
-      if (pairConfig.functional || pairConfig.contentSync) {
+      if (pairConfig.functional || pairConfig.contentSync || pairConfig.acp) {
         await commands.requireFile(pairConfig.cliBin!);
         final version = await commands.captureResult(pairConfig.cliBin!, const [
           '--format',
@@ -121,7 +124,9 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
         'automatedUserPresence': true,
         'realUserPresenceAttested': false,
         'cliSourceVerified':
-            (pairConfig.functional || pairConfig.contentSync) &&
+            (pairConfig.functional ||
+                pairConfig.contentSync ||
+                pairConfig.acp) &&
             !options.dryRun &&
             !commands.dryRun,
         'containsRawDids': false,
@@ -238,7 +243,9 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           await _deleteDirectoryBestEffort(appPairAdminStateRootDir);
           await _deleteDirectoryBestEffort(appPairJoinerStateRootDir);
           await _deleteDirectoryBestEffort(appPairDaemonStateRootDir);
-          if (pairConfig.functional || pairConfig.contentSync) {
+          if (pairConfig.functional ||
+              pairConfig.contentSync ||
+              pairConfig.acp) {
             await _deleteDirectoryBestEffort(cliWorkspaceDir);
             await _deleteDirectoryBestEffort(cliHomeDir);
           }
@@ -402,8 +409,8 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           'bundleId': 'ai.awiki.awikime.dev.e2e.pair.joiner',
         },
       },
-      if (pairConfig.functional)
-        'functional': <String, Object?>{
+      if (pairConfig.functional || pairConfig.acp)
+        (pairConfig.acp ? 'acp' : 'functional'): <String, Object?>{
           'cliPeer': <String, Object?>{
             'binary': pairConfig.cliBin,
             'sourceRef': pairConfig.cliSourceRef,
@@ -417,11 +424,12 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
             'handle': pairConfig.daemonHandle,
             'envFile': pairConfig.daemonEnvFile,
           },
-          'accountState': <String, Object?>{
-            'operatorCommand': _accountStateOperatorCommand(
-              Platform.environment,
-            ),
-          },
+          if (pairConfig.functional)
+            'accountState': <String, Object?>{
+              'operatorCommand': _accountStateOperatorCommand(
+                Platform.environment,
+              ),
+            },
         },
       if (pairConfig.contentSync)
         'contentSync': <String, Object?>{

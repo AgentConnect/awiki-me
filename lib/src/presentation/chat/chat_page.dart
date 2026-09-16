@@ -69,6 +69,9 @@ import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../../app/ui_feedback.dart';
 import '../agents/agent_inbox_panel.dart';
+import '../agents/acp_session_provider.dart';
+import '../agents/acp_task_status.dart';
+import '../../domain/entities/agent/acp_session.dart';
 import '../agents/agent_rename_dialog.dart';
 import '../agents/agent_runtime_display.dart';
 import '../agents/agent_visual_status.dart';
@@ -957,6 +960,16 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final displayThreadId = _displayThreadId;
     final thread = ref.watch(chatThreadProvider(displayThreadId));
     final currentConversation = _currentConversationForTitle();
+    ref.watch(
+      acpConversationProjectionProvider((
+        conversationId: currentConversation.conversationId,
+        threadId: currentConversation.threadId,
+      )),
+    );
+    final acpProjection = ref.watch(acpSessionsProvider);
+    final acpSessions = acpProjection.forConversation(
+      currentConversation.conversationId,
+    );
     _requestAgentsIfNeeded(currentConversation);
     final agentsState = ref.watch(agentsProvider);
     final agents = agentsState.agents;
@@ -1236,8 +1249,33 @@ class _ChatViewState extends ConsumerState<ChatView> {
                           }
                           final messageIndex = entry.sourceIndex;
                           final message = messages[messageIndex];
-                          final pendingTurns = thread
-                              .pendingAgentTurnsForMessage(message);
+                          final acpMessageIds = {
+                            message.localId,
+                            if (message.remoteId != null) message.remoteId!,
+                          };
+                          final acpTasks =
+                              <
+                                ({
+                                  AcpSession session,
+                                  Map<String, Object?> task,
+                                })
+                              >[
+                                for (final session in acpSessions)
+                                  if (session.taskFor(acpMessageIds)
+                                      case final task?)
+                                    (session: session, task: task),
+                              ];
+                          final acpRejections = [
+                            for (final id in acpMessageIds)
+                              if (acpProjection
+                                      .rejections['${currentConversation.conversationId}:$id']
+                                  case final rejection?)
+                                rejection,
+                          ];
+                          final pendingTurns =
+                              acpTasks.isNotEmpty || acpRejections.isNotEmpty
+                              ? <AgentPendingTurn>[]
+                              : thread.pendingAgentTurnsForMessage(message);
                           final previous = messageIndex == 0
                               ? null
                               : messages[messageIndex - 1];
@@ -1316,6 +1354,57 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                         senderAvatarUri: senderAvatarUri,
                                         senderAvatarUserId: senderAvatarUserId,
                                         showSenderLabel: showSenderLabel,
+                                        footer:
+                                            acpTasks.isEmpty &&
+                                                acpRejections.isEmpty
+                                            ? null
+                                            : Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment:
+                                                    message.isMine
+                                                    ? CrossAxisAlignment.end
+                                                    : CrossAxisAlignment.start,
+                                                children: [
+                                                  for (final item in acpTasks)
+                                                    AcpTaskStatus(
+                                                      key: ValueKey(
+                                                        'acp-task:${item.task['run_id']}',
+                                                      ),
+                                                      session: item.session,
+                                                      task: item.task,
+                                                      viewerDid:
+                                                          currentSessionDid ??
+                                                          '',
+                                                      alignEnd: message.isMine,
+                                                    ),
+                                                  for (final rejection
+                                                      in acpRejections)
+                                                    Align(
+                                                      alignment: message.isMine
+                                                          ? Alignment
+                                                                .centerRight
+                                                          : Alignment
+                                                                .centerLeft,
+                                                      child: Padding(
+                                                        padding:
+                                                            const EdgeInsets.only(
+                                                              top: 8,
+                                                            ),
+                                                        child: Text(
+                                                          acpRejectionText(
+                                                            context,
+                                                            rejection['reason'],
+                                                          ),
+                                                          style: TextStyle(
+                                                            fontSize: 12,
+                                                            height: 1.4,
+                                                            color: theme.danger,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
                                         macStyle: macStyle,
                                         onRetry:
                                             message.sendState ==
@@ -1448,6 +1537,20 @@ class _ChatViewState extends ConsumerState<ChatView> {
               ),
             ),
           ),
+          if (acpSessions.isNotEmpty)
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    for (final session in acpSessions)
+                      AcpSessionOptions(session: session),
+                  ],
+                ),
+              ),
+            ),
           _Composer(
             conversation: currentConversation,
             embedded: widget.embedded,
@@ -2010,6 +2113,22 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final validMentionDrafts = conversation.isGroup
         ? draft.validMentions
         : const <ChatMentionDraft>[];
+    final block = _acpComposerBlock(conversation, validMentionDrafts);
+    if (block != null) {
+      await showCupertinoDialog<void>(
+        context: context,
+        builder: (dialogContext) => CupertinoAlertDialog(
+          content: Text(acpBlockText(context, block)),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(acpText(context, '知道了', 'OK')),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final messageContent = validMentionDrafts.isEmpty ? content : rawContent;
     textController.clear();
     ref.read(chatComposerDraftsProvider.notifier).clearDraft(conversation);
@@ -2048,6 +2167,105 @@ class _ChatViewState extends ConsumerState<ChatView> {
           expectedAgentReplyDid: expectedAgentReplyDid,
           displayThreadId: _displayThreadId,
         );
+  }
+
+  AcpSendBlock? _acpComposerBlock(
+    ConversationSummary conversation,
+    List<ChatMentionDraft> mentions,
+  ) {
+    final agents = ref.read(agentsProvider).agents;
+    final sessions = ref
+        .read(acpSessionsProvider)
+        .forConversation(conversation.conversationId);
+    final targeted = conversation.isGroup
+        ? mentions
+              .where((m) => m.role == ChatMentionRole.addressee)
+              .map((m) => m.target.did)
+              .whereType<String>()
+              .toSet()
+        : {if (conversation.targetDid != null) conversation.targetDid!};
+    final broadcast =
+        conversation.isGroup &&
+        mentions.any(
+          (m) =>
+              m.role == ChatMentionRole.addressee &&
+              m.target.kind == ChatMentionTargetKind.groupSelector &&
+              (m.target.selector == ChatMentionSelector.agents ||
+                  m.target.selector == ChatMentionSelector.all),
+        );
+    final groupDid = _mentionGroupDidForConversation(conversation);
+    final broadcastMembers = {
+      if (broadcast && groupDid != null)
+        for (final member in ref.read(groupMembersProvider(groupDid)))
+          if (member.membershipStatus == GroupMemberMembershipStatus.active)
+            member.did,
+    };
+    final acpAgents = {
+      for (final a in agents)
+        if (a.runtime == 'acp' ||
+            const {
+              'opencode',
+              'gemini',
+              'kimi',
+              'deepseek-harness',
+            }.contains(a.runtime))
+          a.agentDid,
+      for (final s in sessions) s.agentDid,
+    };
+    for (final agentDid in acpAgents) {
+      // A personal runtime inventory includes agents outside this group.
+      // Only the current roster can expand a group broadcast into targets.
+      if (!targeted.contains(agentDid) &&
+          !(broadcast && broadcastMembers.contains(agentDid))) {
+        continue;
+      }
+      final session = sessions.where((s) => s.agentDid == agentDid).firstOrNull;
+      final agent = agents.where((a) => a.agentDid == agentDid).firstOrNull;
+      final daemon = agents
+          .where((a) => a.isDaemon && a.agentDid == agent?.daemonAgentDid)
+          .firstOrNull;
+      final offline =
+          (daemon?.daemonEffectiveStatus?.primaryStatus ??
+              daemon?.latest.status) ==
+          'offline';
+      final block = acpSendBlock(
+        session: session,
+        daemonOffline: offline,
+        group: conversation.isGroup,
+        invokesAgent: true,
+      );
+      if (block != null) return block;
+      // Messages sent by this device can precede their committed acceptance.
+      // Reserve input capacity locally until the Daemon snapshot resolves them.
+      final completed = {
+        for (final task in session?.history ?? <Map<String, Object?>>[])
+          task['source_message_id'],
+      };
+      final accepted = {
+        if (session?.active['source_message_id'] != null)
+          session!.active['source_message_id'],
+        if (session?.waiting['source_message_id'] != null)
+          session!.waiting['source_message_id'],
+      };
+      final pending = ref
+          .read(chatThreadProvider(_displayThreadId))
+          .agentPendingTurns
+          .where(
+            (turn) =>
+                turn.agentDid == agentDid &&
+                !completed.contains(turn.remoteMessageId) &&
+                !completed.contains(turn.localMessageId) &&
+                !accepted.contains(turn.remoteMessageId) &&
+                !accepted.contains(turn.localMessageId),
+          )
+          .length;
+      if (pending + accepted.length >= (conversation.isGroup ? 1 : 2)) {
+        return conversation.isGroup
+            ? AcpSendBlock.groupBusy
+            : AcpSendBlock.waitingFull;
+      }
+    }
+    return null;
   }
 
   Future<void> _openAttachment(

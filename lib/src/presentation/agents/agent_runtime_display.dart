@@ -17,7 +17,10 @@ class AgentRuntimeDisplay {
 
 AgentRuntimeDisplay agentRuntimeDisplay(AgentSummary agent) {
   final runtime = _normalizeToken(agent.runtime);
-  final driverId = _normalizeToken(agent.latest.runtimeCard?.driverId);
+  final driverId = _normalizeToken(
+    agent.latest.runtimeCard?.driverId ??
+        agent.latest.diagnosticsSummary['driver_id']?.toString(),
+  );
   return agentRuntimeDisplayFor(runtime: runtime, driverId: driverId);
 }
 

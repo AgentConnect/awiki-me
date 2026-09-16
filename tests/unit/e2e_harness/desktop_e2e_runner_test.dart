@@ -970,6 +970,25 @@ void main() {
       expect(hyphen.e2eCase.runConfigPath, contains('claude-code-agent'));
     });
 
+    test('ACP and current Hermes use distinct audited runtime scopes', () {
+      for (final (name, count, prefix) in [
+        ('acp-agent', 36, 'ACP-'),
+        ('hermes-agent', 4, 'HERMESAGENT-'),
+      ]) {
+        final selected = DesktopE2eOptions.parse([
+          '--case',
+          name,
+          '--dry-run',
+        ]).e2eCase;
+        expect(selected.caseName, name);
+        expect(selected.reportScope, name);
+        expect(selected.runConfigPath, '.e2e/$name/current/run_config.json');
+        expect(selected.caseIds.length, count);
+        expect(selected.caseIds.every((id) => id.startsWith(prefix)), isTrue);
+        expect(DesktopE2eCase.full.caseIds, containsAll(selected.caseIds));
+      }
+    });
+
     test('rejects unsupported case', () {
       expect(
         () => DesktopE2eOptions.parse(const <String>['--case', 'unknown']),
@@ -992,7 +1011,7 @@ void main() {
                 'root-transfer, full, messaging, performance, direct, '
                 'group, attachment, contacts, inbound, identity-switch, restart, '
                 'display-name-fallback, '
-                'personal-agent, codex-agent, or claude-code-agent.',
+                'personal-agent, codex-agent, hermes-agent, acp-agent, or claude-code-agent.',
           ),
         ),
       );
@@ -1352,6 +1371,47 @@ void main() {
       expect(config.contentSync, isTrue);
       expect(config.cliBin, '/tmp/awiki-cli');
       expect(config.daemonBinary, isNull);
+    });
+    test('ACP pair uses a daemon without account-state operator mode', () {
+      const inputs = DesktopE2eFileConfig(
+        path: '/tmp/e2e.local.yaml',
+        platform: DesktopE2ePlatform.macos,
+        serviceBaseUrl: 'https://awiki.info',
+        didDomain: 'awiki.info',
+        otpPhone: 'local-test-phone',
+        otpCode: '123456',
+        cliBin: '/tmp/awiki-cli',
+        cliSourceRef: '1111111111111111111111111111111111111111',
+        daemonBinary: '/tmp/awiki-deamon',
+        daemonHandle: 'pair-daemon',
+      );
+      const environment = {'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1'};
+      final config = RemoteMultiDeviceAppPairConfig.from(
+        fileConfig: inputs,
+        environment: environment,
+        acp: true,
+      );
+      expect(config.acp, isTrue);
+      expect(config.functional, isFalse);
+      expect(config.daemonBinary, '/tmp/awiki-deamon');
+      expect(
+        () => RemoteMultiDeviceAppPairConfig.from(
+          fileConfig: inputs,
+          environment: environment,
+          acp: true,
+          functional: true,
+        ),
+        throwsA(isA<E2eFailure>()),
+      );
+      final options = DesktopE2eOptions.parse([
+        '--case',
+        'multi-device-app-pair-acp',
+      ]);
+      expect(options.e2eCase.usesRemoteAppPairScenario, isTrue);
+      expect(options.e2eCase.caseIds, [
+        'DEVICE-ACP-SYNC-E2E-001',
+        'DEVICE-ACP-SYNC-E2E-002',
+      ]);
     });
   });
 

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' show Size;
+import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
@@ -17,17 +18,30 @@ import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
+import 'package:awiki_me/src/domain/entities/chat_mention.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
+import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../case_attestation.dart';
+import 'package:awiki_me/src/presentation/agents/acp_session_provider.dart';
+import 'package:awiki_me/src/presentation/agents/acp_task_status.dart';
+import 'package:awiki_me/src/domain/entities/agent/acp_session.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import '../support/protected_otp_config.dart';
+import '../support/coding_agent_oracles.dart';
+import '../support/coding_agent_diagnostics.dart';
+import '../support/desktop_test_input.dart';
 
 const String _codexAgentRunConfigPath =
     '.e2e/codex-agent/current/run_config.json';
@@ -37,7 +51,256 @@ const String _daemonCliProxyPassthrough =
     'HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY '
     'http_proxy https_proxy all_proxy no_proxy';
 
-void main() {
+const _codingCasePhases = <String, List<String>>{
+  'HERMESAGENT-E2E-001': <String>[
+    'daemon_selected',
+    'runtime_agent_created',
+    'runtime_creation_row_unique_throughout',
+    'runtime_chat_opened',
+  ],
+  'HERMESAGENT-E2E-002': <String>[
+    'prompt_entered_through_ui',
+    'send_action_completed',
+  ],
+  'HERMESAGENT-E2E-003': <String>[
+    'runtime_run_finished',
+    'runtime_final_outbox_sent',
+  ],
+  'HERMESAGENT-E2E-004': <String>[
+    'app_history_exact_reply_verified',
+    'visible_reply_verified',
+  ],
+  'ACP-OPENCODE-E2E-009': <String>[
+    'group_task_accepted',
+    'busy_instruction_rejected',
+    'ordinary_chat_continues',
+    'requester_answers_in_group',
+  ],
+  'ACP-GEMINI-E2E-009': <String>[
+    'group_task_accepted',
+    'busy_instruction_rejected',
+    'ordinary_chat_continues',
+    'requester_answers_in_group',
+  ],
+  'ACP-KIMI-E2E-009': <String>[
+    'group_task_accepted',
+    'busy_instruction_rejected',
+    'ordinary_chat_continues',
+    'requester_answers_in_group',
+  ],
+  'ACP-DEEPSEEK-HARNESS-E2E-009': <String>[
+    'group_task_accepted',
+    'busy_instruction_rejected',
+    'ordinary_chat_continues',
+    'requester_answers_in_group',
+  ],
+  'CODEXAGENT-E2E-001': <String>[
+    'daemon_selected',
+    'runtime_agent_created',
+    'runtime_creation_row_unique_throughout',
+    'runtime_chat_opened',
+  ],
+  'CODEXAGENT-E2E-002': <String>[
+    'prompt_entered_through_ui',
+    'send_action_completed',
+  ],
+  'CODEXAGENT-E2E-003': <String>[
+    'runtime_run_finished',
+    'runtime_final_outbox_sent',
+  ],
+  'CODEXAGENT-E2E-004': <String>[
+    'app_history_exact_reply_verified',
+    'visible_reply_verified',
+  ],
+  'ACP-OPENCODE-E2E-001': <String>[
+    'daemon_selected',
+    'runtime_agent_created',
+    'runtime_creation_row_unique_throughout',
+    'runtime_chat_opened',
+  ],
+  'ACP-OPENCODE-E2E-002': <String>[
+    'prompt_entered_through_ui',
+    'send_action_completed',
+  ],
+  'ACP-OPENCODE-E2E-003': <String>[
+    'runtime_run_finished',
+    'runtime_final_outbox_sent',
+  ],
+  'ACP-OPENCODE-E2E-004': <String>[
+    'app_history_exact_reply_verified',
+    'visible_reply_verified',
+  ],
+  'ACP-OPENCODE-E2E-005': <String>[
+    'single_waiting_slot',
+    'third_draft_retained',
+    'stop_pauses_waiting',
+    'manual_execute_finishes',
+    'idle_model_selection_applied',
+    'immediate_execution_stops_active',
+  ],
+  'ACP-OPENCODE-E2E-006': <String>[
+    'waiting_cancelled',
+    'message_retained',
+    'active_stopped',
+  ],
+  'ACP-OPENCODE-E2E-007': <String>[
+    'question_waited',
+    'real_ui_answer',
+    'answer_draft_independent',
+    'answer_final_visible',
+    'normal_completion_executes_waiting_once',
+  ],
+  'ACP-GEMINI-E2E-001': <String>[
+    'daemon_selected',
+    'runtime_agent_created',
+    'runtime_creation_row_unique_throughout',
+    'runtime_chat_opened',
+  ],
+  'ACP-GEMINI-E2E-002': <String>[
+    'prompt_entered_through_ui',
+    'send_action_completed',
+  ],
+  'ACP-GEMINI-E2E-003': <String>[
+    'runtime_run_finished',
+    'runtime_final_outbox_sent',
+  ],
+  'ACP-GEMINI-E2E-004': <String>[
+    'app_history_exact_reply_verified',
+    'visible_reply_verified',
+  ],
+  'ACP-GEMINI-E2E-005': <String>[
+    'single_waiting_slot',
+    'third_draft_retained',
+    'stop_pauses_waiting',
+    'manual_execute_finishes',
+    'idle_model_selection_applied',
+    'immediate_execution_stops_active',
+  ],
+  'ACP-GEMINI-E2E-006': <String>[
+    'waiting_cancelled',
+    'message_retained',
+    'active_stopped',
+  ],
+  'ACP-GEMINI-E2E-007': <String>[
+    'question_waited',
+    'real_ui_answer',
+    'answer_draft_independent',
+    'answer_final_visible',
+    'normal_completion_executes_waiting_once',
+  ],
+  'ACP-KIMI-E2E-001': <String>[
+    'daemon_selected',
+    'runtime_agent_created',
+    'runtime_creation_row_unique_throughout',
+    'runtime_chat_opened',
+  ],
+  'ACP-KIMI-E2E-002': <String>[
+    'prompt_entered_through_ui',
+    'send_action_completed',
+  ],
+  'ACP-KIMI-E2E-003': <String>[
+    'runtime_run_finished',
+    'runtime_final_outbox_sent',
+  ],
+  'ACP-KIMI-E2E-004': <String>[
+    'app_history_exact_reply_verified',
+    'visible_reply_verified',
+  ],
+  'ACP-KIMI-E2E-005': <String>[
+    'single_waiting_slot',
+    'third_draft_retained',
+    'stop_pauses_waiting',
+    'manual_execute_finishes',
+    'idle_model_selection_applied',
+    'immediate_execution_stops_active',
+  ],
+  'ACP-KIMI-E2E-006': <String>[
+    'waiting_cancelled',
+    'message_retained',
+    'active_stopped',
+  ],
+  'ACP-KIMI-E2E-007': <String>[
+    'question_waited',
+    'real_ui_answer',
+    'answer_draft_independent',
+    'answer_final_visible',
+    'normal_completion_executes_waiting_once',
+  ],
+  'ACP-DEEPSEEK-HARNESS-E2E-001': <String>[
+    'daemon_selected',
+    'runtime_agent_created',
+    'runtime_creation_row_unique_throughout',
+    'runtime_chat_opened',
+  ],
+  'ACP-DEEPSEEK-HARNESS-E2E-002': <String>[
+    'prompt_entered_through_ui',
+    'send_action_completed',
+  ],
+  'ACP-DEEPSEEK-HARNESS-E2E-003': <String>[
+    'runtime_run_finished',
+    'runtime_final_outbox_sent',
+  ],
+  'ACP-DEEPSEEK-HARNESS-E2E-004': <String>[
+    'app_history_exact_reply_verified',
+    'visible_reply_verified',
+  ],
+  'ACP-DEEPSEEK-HARNESS-E2E-005': <String>[
+    'single_waiting_slot',
+    'third_draft_retained',
+    'stop_pauses_waiting',
+    'manual_execute_finishes',
+    'idle_model_selection_applied',
+    'immediate_execution_stops_active',
+  ],
+  'ACP-DEEPSEEK-HARNESS-E2E-006': <String>[
+    'waiting_cancelled',
+    'message_retained',
+    'active_stopped',
+  ],
+  'ACP-DEEPSEEK-HARNESS-E2E-007': <String>[
+    'question_waited',
+    'real_ui_answer',
+    'answer_draft_independent',
+    'answer_final_visible',
+    'normal_completion_executes_waiting_once',
+  ],
+  'ACP-OPENCODE-E2E-008': <String>[
+    'attachment_staged_through_ui',
+    'file_roundtrip_bytes_equal',
+    'image_model_reply_verified',
+    'attachment_replies_visible',
+  ],
+  'ACP-GEMINI-E2E-008': <String>[
+    'attachment_staged_through_ui',
+    'file_roundtrip_bytes_equal',
+    'image_model_reply_verified',
+    'attachment_replies_visible',
+  ],
+  'ACP-KIMI-E2E-008': <String>[
+    'attachment_staged_through_ui',
+    'file_roundtrip_bytes_equal',
+    'image_model_reply_verified',
+    'attachment_replies_visible',
+  ],
+  'ACP-DEEPSEEK-HARNESS-E2E-008': <String>[
+    'attachment_staged_through_ui',
+    'file_roundtrip_bytes_equal',
+    'image_model_reply_verified',
+    'attachment_replies_visible',
+  ],
+};
+Future<void> _markCodingCase(String caseId) async {
+  final entry = _codingCasePhases.entries.singleWhere(
+    (entry) => entry.key == caseId,
+  );
+  await E2eCaseAttestationWriter.markPassed(entry.key, phases: entry.value);
+  debugPrint('Coding Agent case passed: $caseId');
+}
+
+void main() => codingAgentAcceptance();
+
+/// Shared real App/Daemon acceptance; ACP adds its controls to the same chat flow.
+void codingAgentAcceptance({bool acp = false, bool hermes = false}) {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   tearDownAll(
     () => E2eInvocationCompletionWriter.markFinished(
@@ -46,9 +309,14 @@ void main() {
   );
 
   testWidgets(
-    'Codex Agent full UI sends deterministic prompt and shows visible reply',
+    acp
+        ? 'Four ACP agents use the real App chat and task controls'
+        : '${hermes ? 'Hermes' : 'Codex'} Agent full UI sends deterministic prompt and shows visible reply',
     (tester) async {
-      final config = _CodexAgentRealBackendConfig.tryLoad();
+      final config = _CodexAgentRealBackendConfig.tryLoad(
+        acp: acp,
+        hermes: hermes,
+      );
       if (config == null || !config.enabled || !config.realBackend) {
         fail(
           'Codex Agent full UI acceptance requires an enabled real-backend '
@@ -57,6 +325,9 @@ void main() {
       }
       if (!File(config.daemonBinary).existsSync()) {
         fail('daemon binary was not found: ${config.daemonBinary}');
+      }
+      if (acp) {
+        addTearDown(disableDesktopPointerInspector(tester.binding));
       }
       debugDefaultTargetPlatformOverride = config.targetPlatform;
       await tester.binding.setSurfaceSize(const Size(1400, 900));
@@ -67,29 +338,59 @@ void main() {
       );
       Process? daemon;
       try {
+        final session = await prepareCodingAgentSession(
+          reusePreparedIdentity: config.reusePreparedIdentity,
+          expectedFullHandle:
+              '${config.appHandle}.${config.environment.didDomain}',
+          restore: () => restorePreparedCodingAccount(
+            expectedFullHandle:
+                '${config.appHandle}.${config.environment.didDomain}',
+            list: bootstrap.appSessionService!.listLocalIdentities,
+            login: bootstrap.appSessionService!.loginWithIdentity,
+          ),
+          register: () => _prepareRealAppIdentity(
+            bootstrap.onboardingService!,
+            bootstrap.onboardingSupportService!,
+            config,
+          ),
+        );
+        // Finish the Core identity transition before App initialization starts
+        // its own restore. Both transitions own the same session lease.
         await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
         await _pumpFrame(tester);
         expect(find.byType(AppShell), findsOneWidget);
 
-        final session = await _prepareRealAppIdentity(
-          bootstrap.onboardingService!,
-          bootstrap.onboardingSupportService!,
-          config,
-        );
-        await ProviderScope.containerOf(
-          tester.element(find.byType(AppShell)),
-        ).read(appRuntimeProvider.notifier).activateCommittedSession(session);
-        await _pumpFrame(tester);
-
         final appContainer = ProviderScope.containerOf(
           tester.element(find.byType(AppShell)),
+        );
+        await _pumpUntil(
+          tester,
+          () {
+            final runtime = appContainer.read(appRuntimeProvider);
+            if (!runtime.isInitialized || runtime.isBusy) return false;
+            expect(runtime.activatedDid, session.did);
+            expect(
+              appContainer.read(sessionProvider).session?.did,
+              session.did,
+            );
+            return find
+                    .bySemanticsIdentifier('e2e-authenticated')
+                    .evaluate()
+                    .length ==
+                1;
+          },
+          timeout: const Duration(seconds: 45),
+          description: 'restored authenticated App shell',
         );
         final install = await _installRealDaemon(
           config: config,
           inventory: appContainer.read(agentInventoryPortProvider),
           controllerDid: session.did,
         );
-        daemon = await _startRealDaemon(config: config);
+        daemon = await _startRealDaemon(
+          config: config,
+          maxRuntimeMs: acp ? '2700000' : _codexDaemonMaxRuntimeMs,
+        );
         await _waitForFile(config.daemonReadyFile);
 
         final agents = appContainer.read(agentsProvider.notifier);
@@ -109,116 +410,178 @@ void main() {
         ]);
         agents.select(install.daemonDid);
         await _pumpFrame(tester);
-        await _waitForDaemonGenericCliCapability(
-          tester: tester,
-          agents: agents,
-          daemonDid: install.daemonDid,
-        );
-
-        final runtimeHandle = _codexRuntimeHandle(config.runId);
-        final createRuntimeFuture = agents.createRuntimeAgent(
-          install.daemonDid,
-          options: RuntimeAgentCreateOptions(
-            kind: RuntimeAgentKind.codex,
-            handle: runtimeHandle,
-            displayName: 'Codex E2E',
-            workspaceMode: runtimeWorkspaceModeRouteRoot,
-          ),
-        );
-        await _pumpFrame(tester);
-        final pendingCreateState = ProviderScope.containerOf(
-          tester.element(find.byType(AppShell)),
-        ).read(agentsProvider);
-        expect(
-          pendingCreateState.pendingRuntimeCreations.any(
-            (pending) =>
-                pending.daemonAgentDid == install.daemonDid &&
-                pending.handle.trim().toLowerCase() ==
-                    runtimeHandle.trim().toLowerCase(),
-          ),
-          isTrue,
-          reason:
-              'the real creation path must expose its optimistic pending row',
-        );
-        _expectSingleRuntimeAgentRowForHandle(runtimeHandle);
-        await createRuntimeFuture;
-        await _pumpUntil(
-          tester,
-          () => !ProviderScope.containerOf(
-            tester.element(find.byType(AppShell)),
-          ).read(agentsProvider).isActing,
-          timeout: const Duration(seconds: 30),
-          description: 'Codex runtime create action to finish',
-        );
-        final stateAfterCreate = ProviderScope.containerOf(
-          tester.element(find.byType(AppShell)),
-        ).read(agentsProvider);
-        if (stateAfterCreate.error != null) {
-          fail(
-            'Codex runtime create failed: ${stateAfterCreate.error}. '
-            'Raw error: ${stateAfterCreate.debugLastError}. '
-            'Agents: ${_agentsDebugSummary(stateAfterCreate)}',
+        if (!hermes) {
+          await _waitForDaemonGenericCliCapability(
+            tester: tester,
+            agents: agents,
+            daemonDid: install.daemonDid,
+            acp: acp,
           );
         }
 
-        final runtime = await _waitForRuntimeAgentByHandle(
-          tester: tester,
-          daemonDid: install.daemonDid,
-          handle: runtimeHandle,
-        );
-        await _expectSingleRuntimeAgentRow(tester: tester, runtime: runtime);
-        agents.select(runtime.agentDid);
-        await _pumpFrame(tester);
-        await _tapFirstFound(tester, <Finder>[find.text('打开聊天')]);
-        await _pumpFrame(tester);
-        expect(find.text('Codex E2E'), findsWidgets);
-        await E2eCaseAttestationWriter.markPassed(
-          'CODEXAGENT-E2E-001',
-          phases: const <String>[
-            'daemon_selected',
-            'runtime_agent_created',
-            'runtime_creation_row_unique_throughout',
-            'runtime_chat_opened',
-          ],
-        );
+        final kinds = acp
+            ? [
+                RuntimeAgentKind.opencode,
+                RuntimeAgentKind.gemini,
+                RuntimeAgentKind.kimi,
+                RuntimeAgentKind.deepseekHarness,
+              ]
+            : [hermes ? RuntimeAgentKind.hermes : RuntimeAgentKind.codex];
+        final independentFailures = <String>[];
+        for (final kind in kinds) {
+          final prefix = acp
+              ? 'ACP-${kind.driverId!.toUpperCase()}-E2E'
+              : hermes
+              ? 'HERMESAGENT-E2E'
+              : 'CODEXAGENT-E2E';
+          final runtimeHandle = acp
+              ? 'e2acp-${kind.name.toLowerCase()}-${config.runId.hashCode.abs()}'
+              : hermes
+              ? 'e2hermes-${config.runId.hashCode.abs()}'
+              : _codexRuntimeHandle(config.runId);
+          final createRuntimeFuture = agents.createRuntimeAgent(
+            install.daemonDid,
+            options: RuntimeAgentCreateOptions(
+              kind: kind,
+              handle: runtimeHandle,
+              displayName: '${kind.displayLabel} E2E',
+              workspaceMode: acp
+                  ? runtimeWorkspaceModeSharedRoot
+                  : runtimeWorkspaceModeRouteRoot,
+            ),
+          );
+          await _pumpFrame(tester);
+          final pendingCreateState = ProviderScope.containerOf(
+            tester.element(find.byType(AppShell)),
+          ).read(agentsProvider);
+          expect(
+            pendingCreateState.pendingRuntimeCreations.any(
+              (pending) =>
+                  pending.daemonAgentDid == install.daemonDid &&
+                  pending.handle.trim().toLowerCase() ==
+                      runtimeHandle.trim().toLowerCase(),
+            ),
+            isTrue,
+            reason:
+                'the real creation path must expose its optimistic pending row',
+          );
+          _expectSingleRuntimeAgentRowForHandle(runtimeHandle);
+          await createRuntimeFuture;
+          await _pumpUntil(
+            tester,
+            () => !ProviderScope.containerOf(
+              tester.element(find.byType(AppShell)),
+            ).read(agentsProvider).isActing,
+            timeout: const Duration(seconds: 30),
+            description: 'Codex runtime create action to finish',
+          );
+          final stateAfterCreate = ProviderScope.containerOf(
+            tester.element(find.byType(AppShell)),
+          ).read(agentsProvider);
+          if (stateAfterCreate.error != null) {
+            fail(
+              'Codex runtime create failed: ${stateAfterCreate.error}. '
+              'Raw error: ${stateAfterCreate.debugLastError}. '
+              'Agents: ${_agentsDebugSummary(stateAfterCreate)}',
+            );
+          }
 
-        await _sendPromptThroughUi(tester, config.prompt);
-        await E2eCaseAttestationWriter.markPassed(
-          'CODEXAGENT-E2E-002',
-          phases: const <String>[
-            'prompt_entered_through_ui',
-            'send_action_completed',
-          ],
-        );
-        await _waitForDaemonCodexFinalSent(
-          daemonStateRoot: config.daemonStateRoot,
-          runtimeAgentDid: runtime.agentDid,
-          prompt: config.prompt,
-          expectedReply: config.expectedReply,
-        );
-        await E2eCaseAttestationWriter.markPassed(
-          'CODEXAGENT-E2E-003',
-          phases: const <String>[
-            'runtime_run_finished',
-            'runtime_final_outbox_sent',
-          ],
-        );
-        await _waitForAppIncomingCodexReply(
-          messaging: bootstrap.messagingService!,
-          runtimeAgentDid: runtime.agentDid,
-          expectedReply: config.expectedReply,
-        );
-        await _waitForVisibleCodexReply(
-          tester: tester,
-          expectedReply: config.expectedReply,
-        );
-        await E2eCaseAttestationWriter.markPassed(
-          'CODEXAGENT-E2E-004',
-          phases: const <String>[
-            'app_history_exact_reply_verified',
-            'visible_reply_verified',
-          ],
-        );
+          if (acp) {
+            debugPrint(
+              'Coding Agent create delivery: ${jsonEncode(await codingAgentDeliveryDiagnostics(bootstrap.messagingService!, install.daemonDid))}',
+            );
+          }
+          final runtime = await _waitForRuntimeAgentByHandle(
+            tester: tester,
+            daemonDid: install.daemonDid,
+            handle: runtimeHandle,
+            acp: acp,
+            hermes: hermes,
+          );
+          await _expectSingleRuntimeAgentRow(tester: tester, runtime: runtime);
+          agents.select(runtime.agentDid);
+          await _pumpFrame(tester);
+          await _tapFirstFound(tester, <Finder>[find.text('打开聊天')]);
+          await _pumpFrame(tester);
+          expect(find.text('${kind.displayLabel} E2E'), findsWidgets);
+          await _markCodingCase('$prefix-001');
+
+          await _sendPromptThroughUi(tester, config.prompt);
+          await _markCodingCase('$prefix-002');
+          await _waitForDaemonCodexFinalSent(
+            daemonStateRoot: config.daemonStateRoot,
+            runtimeAgentDid: runtime.agentDid,
+            prompt: config.prompt,
+            expectedReply: config.expectedReply,
+            runtimePluginId: acp
+                ? 'acp'
+                : hermes
+                ? 'runtime.hermes'
+                : 'generic-cli',
+          );
+          await _markCodingCase('$prefix-003');
+          await _waitForAppIncomingCodexReply(
+            messaging: bootstrap.messagingService!,
+            runtimeAgentDid: runtime.agentDid,
+            expectedReply: config.expectedReply,
+          );
+          await _waitForVisibleCodexReply(
+            tester: tester,
+            expectedReply: config.expectedReply,
+          );
+          await _markCodingCase('$prefix-004');
+          if (acp) {
+            await _verifyAcpChatControls(
+              tester,
+              appContainer,
+              runtime,
+              prefix,
+              config.daemonStateRoot,
+            );
+            try {
+              await _verifyAcpAttachments(
+                tester,
+                bootstrap.messagingService!,
+                runtime,
+                prefix,
+                config.daemonStateRoot,
+              );
+            } catch (error) {
+              // Preserve this failure and its missing attestation. Independent
+              // clients/group checks still run; the invocation fails below.
+              final detail = _sanitizeDiagnostic(error.toString(), config);
+              independentFailures.add('$prefix-008: $detail');
+              debugPrint('ACP attachment case failed: $prefix-008: $detail');
+            }
+            try {
+              await _verifyAcpGroup(
+                tester,
+                appContainer,
+                bootstrap,
+                runtime,
+                prefix,
+                config.daemonStateRoot,
+                config.appHandle,
+              );
+            } catch (error) {
+              final detail = _sanitizeDiagnostic(error.toString(), config);
+              independentFailures.add('$prefix-009: $detail');
+              debugPrint('ACP group case failed: $prefix-009: $detail');
+            }
+          }
+          if (acp) {
+            await _tapFirstFound(tester, <Finder>[
+              find.bySemanticsIdentifier('e2e-agents-tab'),
+              find.text('智能体'),
+              find.text('Agents'),
+            ]);
+            agents.select(install.daemonDid);
+            await _pumpFrame(tester);
+          }
+        }
+        if (independentFailures.isNotEmpty) {
+          fail(independentFailures.join('\n'));
+        }
       } finally {
         if (daemon != null) {
           _terminateProcess(daemon);
@@ -228,8 +591,601 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       }
     },
-    timeout: const Timeout(Duration(minutes: 15)),
+    timeout: Timeout(Duration(minutes: acp ? 75 : 15)),
   );
+}
+
+Future<AcpSession> _waitAcp(
+  WidgetTester tester,
+  ProviderContainer container,
+  String agent,
+  bool Function(AcpSession) predicate,
+) async {
+  AcpSession? found;
+  await _pumpUntil(
+    tester,
+    () {
+      for (final session
+          in container.read(acpSessionsProvider).sessions.values) {
+        if (session.agentDid == agent && predicate(session)) {
+          found = session;
+          return true;
+        }
+      }
+      return false;
+    },
+    timeout: const Duration(minutes: 3),
+    description: 'committed ACP task state',
+  );
+  return found!;
+}
+
+Future<void> _tapAcpAction(
+  WidgetTester tester,
+  String action,
+  Object? run,
+) async {
+  final button = find.byKey(ValueKey('acp-$action:$run'));
+  await tester.ensureVisible(button);
+  await tester.tap(button);
+  await _pumpFrame(tester);
+}
+
+Future<void> _verifyAcpChatControls(
+  WidgetTester tester,
+  ProviderContainer container,
+  AgentSummary agent,
+  String prefix,
+  String daemonStateRoot,
+) async {
+  const stopQuestion =
+      'Use awiki_questions request_user_input to ask me a required stop_test_choice string with enum proceed_with_stop_test. Wait for my real answer. Do not answer for me.';
+  const cancelWaitingQuestion =
+      'This is a different task and question. Use awiki_questions request_user_input to ask me a required waiting_test_choice string with enum proceed_with_waiting_test. Wait for my real answer. Do not answer for me.';
+  bool waitingForUser(AcpSession session) => hasAcpBlockingQuestion(
+    session,
+    nowMs: DateTime.now().millisecondsSinceEpoch,
+  );
+  var idle = await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => !s.busy && s.models.isNotEmpty,
+  );
+  final model = idle.models.first;
+  final modelPicker = find.descendant(
+    of: find.byType(AcpSessionOptions),
+    matching: find.byType(CupertinoButton),
+  );
+  await tester.ensureVisible(modelPicker);
+  await tester.tap(modelPicker);
+  await _pumpFrame(tester);
+  final modelAction = find.byWidgetPredicate(
+    (widget) =>
+        widget is AcpActionButton &&
+        widget.action == 'set_model' &&
+        widget.values['model_id'] == model['id'],
+  );
+  await tester.ensureVisible(modelAction);
+  await tester.tap(modelAction);
+  await _pumpFrame(tester);
+  await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => s.revision > idle.revision && s.data['model_id'] == model['id'],
+  );
+  await _pumpUntil(
+    tester,
+    () => find.byKey(const Key('acp-model-picker')).evaluate().isEmpty,
+    timeout: const Duration(seconds: 30),
+    description: 'model choice committed',
+  );
+  await _sendPromptThroughUi(tester, stopQuestion);
+  var session = await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    waitingForUser,
+  );
+  final active = session.active['run_id'];
+  await _sendPromptThroughUi(tester, 'Reply exactly QUEUED_TASK_DONE.');
+  session = await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => s.waiting.isNotEmpty,
+  );
+  final waiting = session.waiting['run_id'];
+  final input = find.bySemanticsIdentifier('e2e-chat-input');
+  await _sendPromptThroughUi(tester, 'THIRD_MESSAGE_MUST_REMAIN_A_DRAFT');
+  expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+  expect(
+    tester
+        .widget<EditableText>(
+          find.descendant(
+            of: input,
+            matching: find.byType(EditableText),
+            matchRoot: true,
+          ),
+        )
+        .controller
+        .text,
+    'THIRD_MESSAGE_MUST_REMAIN_A_DRAFT',
+  );
+  await _tapFirstFound(tester, [find.text('知道了'), find.text('OK')]);
+  await _tapAcpAction(tester, 'stop', active);
+  session = await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => !s.busy && s.waitingPaused,
+  );
+  expect(session.waiting['run_id'], waiting);
+  await _tapAcpAction(tester, 'execute_waiting', waiting);
+  await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => s.history.any(
+      (t) => t['run_id'] == waiting && t['state'] == 'finished',
+    ),
+  );
+  await _waitForVisibleCodexReply(
+    tester: tester,
+    expectedReply: 'QUEUED_TASK_DONE',
+  );
+  const insertionQuestion =
+      'This is a new insertion test. Use awiki_questions request_user_input to ask a required insertion_choice string with enum continue_insertion_test. Wait for my real answer. Do not answer for me.';
+  await _sendPromptThroughUi(tester, insertionQuestion);
+  session = await _waitAcp(tester, container, agent.agentDid, waitingForUser);
+  final interruptedRun = session.active['run_id'];
+  await _sendPromptThroughUi(tester, 'Reply exactly INSERTED_TASK_DONE.');
+  session = await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => s.waiting.isNotEmpty,
+  );
+  final insertedRun = session.waiting['run_id'];
+  await _tapAcpAction(tester, 'execute_waiting', insertedRun);
+  session = await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => s.history.any(
+      (t) => t['run_id'] == insertedRun && t['state'] == 'finished',
+    ),
+  );
+  expect(
+    session.history.where(
+      (t) => t['run_id'] == interruptedRun && t['state'] == 'cancelled',
+    ),
+    hasLength(1),
+  );
+  expect(
+    session.history.where((t) => t['run_id'] == insertedRun),
+    hasLength(1),
+  );
+  await _waitForVisibleCodexReply(
+    tester: tester,
+    expectedReply: 'INSERTED_TASK_DONE',
+  );
+  await _markCodingCase('$prefix-005');
+
+  await _sendPromptThroughUi(tester, cancelWaitingQuestion);
+  session = await _waitAcp(tester, container, agent.agentDid, waitingForUser);
+  final secondActive = session.active['run_id'];
+  await _sendPromptThroughUi(tester, 'THIS_WAITING_TASK_WILL_BE_CANCELLED');
+  session = await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => s.waiting.isNotEmpty,
+  );
+  final cancelled = session.waiting['run_id'];
+  await _tapAcpAction(tester, 'cancel_waiting', cancelled);
+  await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) =>
+        s.waiting.isEmpty &&
+        s.history.any(
+          (t) => t['run_id'] == cancelled && t['state'] == 'cancelled',
+        ),
+  );
+  expect(find.text('THIS_WAITING_TASK_WILL_BE_CANCELLED'), findsWidgets);
+  await _tapAcpAction(tester, 'stop', secondActive);
+  await _waitAcp(tester, container, agent.agentDid, (s) => !s.busy);
+  await _markCodingCase('$prefix-006');
+
+  const questionPrompt =
+      'Use awiki_questions request_user_input to ask me a required color string with enum red and blue. Wait for my real answer. If I choose blue reply exactly USER_CHOSE_BLUE. Do not answer for me.';
+  await _sendPromptThroughUi(tester, questionPrompt);
+  session = await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => s.questions.isNotEmpty,
+  );
+  final questionRun = session.active['run_id'];
+  expect(find.byType(AcpQuestionForm), findsOneWidget);
+  expect(
+    tester.widget<AcpQuestionForm>(find.byType(AcpQuestionForm)).canAnswer,
+    isTrue,
+    reason: 'The task requester must be allowed to answer the real question',
+  );
+  await _sendPromptThroughUi(
+    tester,
+    'Reply exactly AUTOMATIC_WAITING_TASK_DONE.',
+  );
+  session = await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => s.waiting.isNotEmpty,
+  );
+  final automaticWaiting = session.waiting['run_id'];
+  await tester.ensureVisible(input);
+  await tester.tap(input);
+  await _pumpFrame(tester);
+  await tester.enterText(input, 'QUESTION_MUST_NOT_OVERWRITE_THIS_DRAFT');
+  await _pumpFrame(tester);
+  final blue = find.descendant(
+    of: find.byType(AcpQuestionForm),
+    matching: find.text('blue'),
+  );
+  await tester.ensureVisible(blue);
+  await tester.tap(blue);
+  await _pumpFrame(tester);
+  expect(
+    find.ancestor(
+      of: blue,
+      matching: find.byWidgetPredicate(
+        (widget) => widget is Semantics && widget.properties.checked == true,
+      ),
+    ),
+    findsOneWidget,
+  );
+  await _tapFirstFound(tester, [find.text('提交回答'), find.text('Submit answer')]);
+  await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => s.history.any(
+      (t) => t['run_id'] == questionRun && t['state'] == 'finished',
+    ),
+  );
+  final questionReply = await _waitForDaemonCodexFinalSent(
+    daemonStateRoot: daemonStateRoot,
+    runtimeAgentDid: agent.agentDid,
+    prompt: questionPrompt,
+    expectedReply: 'USER_CHOSE_BLUE',
+    runtimePluginId: 'acp',
+    allowProgressText: true,
+  );
+  await _waitForVisibleCodexReply(tester: tester, expectedReply: questionReply);
+  session = await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => s.history.any(
+      (t) => t['run_id'] == automaticWaiting && t['state'] == 'finished',
+    ),
+  );
+  expect(
+    session.history.where((t) => t['run_id'] == automaticWaiting),
+    hasLength(1),
+  );
+  await _waitForVisibleCodexReply(
+    tester: tester,
+    expectedReply: 'AUTOMATIC_WAITING_TASK_DONE',
+  );
+  expect(
+    tester
+        .widget<EditableText>(
+          find.descendant(
+            of: input,
+            matching: find.byType(EditableText),
+            matchRoot: true,
+          ),
+        )
+        .controller
+        .text,
+    'QUESTION_MUST_NOT_OVERWRITE_THIS_DRAFT',
+  );
+  await _markCodingCase('$prefix-007');
+}
+
+Future<void> _verifyAcpGroup(
+  WidgetTester tester,
+  ProviderContainer container,
+  AppBootstrap bootstrap,
+  AgentSummary agent,
+  String prefix,
+  String daemonStateRoot,
+  String requesterHandle,
+) async {
+  final groups = bootstrap.groupApplicationService!;
+  final messages = bootstrap.messagingService!;
+  final group = await groups.createGroup(
+    name: 'ACP group ${DateTime.now().microsecondsSinceEpoch}',
+    slug: 'acp-${DateTime.now().microsecondsSinceEpoch}',
+    description: 'ACP isolated verification',
+    goal: 'Verify group task admission and requester answers',
+    rules: 'Verification participants only',
+  );
+  final groupDid = group.groupId;
+  await groups.addMember(groupDid: groupDid, memberRef: agent.agentDid);
+  final thread = AppThreadRef.group(groupDid);
+  await messages.sendText(thread: thread, content: 'ACP_GROUP_READY');
+  await container.read(conversationListProvider.notifier).refresh();
+  container
+      .read(selectedConversationProvider.notifier)
+      .selectConversationId('group:$groupDid');
+  await _pumpFrame(tester);
+  const surface = '@agent';
+  final mention = ChatMentionDraft(
+    localId: 'group-agent',
+    surface: surface,
+    start: 0,
+    end: surface.length,
+    target: ChatMentionTargetDraft.member(
+      kind: ChatMentionTargetKind.agent,
+      did: agent.agentDid,
+    ),
+  );
+  const prompt =
+      '$surface Use awiki_questions request_user_input to ask me a required color string with enum red and blue. Wait for my real answer. If I choose blue reply exactly GROUP_USER_CHOSE_BLUE. Do not answer for me.';
+  await messages.sendMentionText(
+    thread: thread,
+    text: prompt,
+    mentions: [mention],
+  );
+  var session = await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => s.group && s.questions.isNotEmpty,
+  );
+  final run = session.active['run_id'];
+  expect(session.waiting, isEmpty);
+  expect(find.byKey(ValueKey('acp-stop:$run')), findsNothing);
+  expect(find.byType(AcpQuestionForm), findsOneWidget);
+
+  // A second device can race the UI's admission hint. Send via the existing
+  // Core facade and require the authoritative Daemon rejection to converge.
+  const competing = '$surface Reply GROUP_BUSY_MUST_NOT_RUN.';
+  final rejected = await messages.sendMentionText(
+    thread: thread,
+    text: competing,
+    mentions: [mention],
+  );
+  await _pumpUntil(
+    tester,
+    () => container
+        .read(acpSessionsProvider)
+        .rejections
+        .values
+        .any(
+          (r) =>
+              r['agent_did'] == agent.agentDid &&
+              r['reason'] == 'group_busy' &&
+              {
+                rejected.localId,
+                rejected.remoteId,
+              }.contains(r['source_message_id']),
+        ),
+    timeout: const Duration(minutes: 2),
+    description: 'committed group_busy rejection',
+  );
+  await _sendPromptThroughUi(tester, 'ORDINARY_GROUP_MESSAGE_WHILE_AGENT_BUSY');
+  await _waitForVisibleCodexReply(
+    tester: tester,
+    expectedReply: 'ORDINARY_GROUP_MESSAGE_WHILE_AGENT_BUSY',
+  );
+  expect(
+    tester.widget<AcpQuestionForm>(find.byType(AcpQuestionForm)).canAnswer,
+    isTrue,
+  );
+  final blue = find.descendant(
+    of: find.byType(AcpQuestionForm),
+    matching: find.text('blue'),
+  );
+  await tester.ensureVisible(blue);
+  await tester.tap(blue);
+  await _pumpFrame(tester);
+  await _tapFirstFound(tester, [find.text('提交回答'), find.text('Submit answer')]);
+  session = await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) =>
+        s.group &&
+        !s.busy &&
+        s.history.any((t) => t['run_id'] == run && t['state'] == 'finished'),
+  );
+  expect(session.waiting, isEmpty);
+  final groupReply = await _waitForDaemonCodexFinalSent(
+    daemonStateRoot: daemonStateRoot,
+    runtimeAgentDid: agent.agentDid,
+    prompt: prompt,
+    expectedReply: 'GROUP_USER_CHOSE_BLUE',
+    runtimePluginId: 'acp',
+    allowProgressText: true,
+  );
+  await _waitForVisibleCodexReply(
+    tester: tester,
+    expectedReply: '@$requesterHandle $groupReply',
+  );
+  expect(find.text('GROUP_BUSY_MUST_NOT_RUN'), findsNothing);
+  await _markCodingCase('$prefix-009');
+}
+
+Future<void> _stageAcpFile(
+  WidgetTester tester,
+  String name,
+  List<int> bytes,
+) async {
+  final target = find.byWidgetPredicate(
+    (widget) => widget.key.toString().contains('chat-attachment-drop-target:'),
+  );
+  expect(target, findsOneWidget);
+  Future<void> drop(String method, Object arguments) async {
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .handlePlatformMessage(
+          'desktop_drop',
+          const StandardMethodCodec().encodeMethodCall(
+            MethodCall(method, arguments),
+          ),
+          (_) {},
+        );
+    await _pumpFrame(tester);
+  }
+
+  final point = tester.getCenter(target);
+  await drop('entered', [point.dx, point.dy]);
+  await drop('updated', [point.dx, point.dy]);
+  expect(find.byKey(const Key('chat-attachment-drop-overlay')), findsOneWidget);
+  final directory = await Directory.systemTemp.createTemp('awiki-acp-ui-file-');
+  try {
+    final file = File('${directory.path}/$name');
+    await file.writeAsBytes(bytes, flush: true);
+    await drop(
+      Platform.isMacOS ? 'performOperation_macos' : 'performOperation',
+      Platform.isMacOS
+          ? [
+              {'path': file.path, 'isDirectory': false, 'fromPromise': false},
+            ]
+          : [file.path],
+    );
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('chat-pending-attachment-preview'))
+          .evaluate()
+          .isNotEmpty,
+      timeout: const Duration(seconds: 20),
+      description: 'ACP attachment staged by desktop drop',
+    );
+    expect(find.text(name), findsWidgets);
+  } finally {
+    await directory.delete(recursive: true);
+  }
+}
+
+Future<void> _verifyAcpAttachments(
+  WidgetTester tester,
+  MessagingService messages,
+  AgentSummary agent,
+  String prefix,
+  String daemonStateRoot,
+) async {
+  final proof = utf8.encode(
+    'ACP_FILE_${DateTime.now().microsecondsSinceEpoch}\n中文内容与第二行必须保留。\n',
+  );
+  await _stageAcpFile(tester, 'acp-input.txt', proof);
+  const filePrompt =
+      'Read the attached file. Make an exact byte-for-byte copy named acp-roundtrip.txt and send that copy back using the AWiki file delivery wrapper. After successful delivery reply exactly FILE_ROUNDTRIP_DONE.';
+  await _sendPromptThroughUi(tester, filePrompt);
+  final fileReply = await _waitForDaemonCodexFinalSent(
+    daemonStateRoot: daemonStateRoot,
+    runtimeAgentDid: agent.agentDid,
+    prompt: filePrompt,
+    expectedReply: 'FILE_ROUNDTRIP_DONE',
+    runtimePluginId: 'acp',
+    allowProgressText: true,
+  );
+  ChatMessage? returned;
+  await _poll(
+    description: 'authorized ACP file round trip in App history',
+    action: () async {
+      final history = await messages.loadHistory(
+        AppThreadRef.direct(agent.agentDid),
+        limit: 50,
+      );
+      final files = history
+          .where(
+            (m) =>
+                !m.isMine &&
+                m.senderDid == agent.agentDid &&
+                m.attachment?.filename == 'acp-roundtrip.txt',
+          )
+          .toList();
+      expect(
+        files.length,
+        lessThanOrEqualTo(1),
+        reason: 'The returned file must not be duplicated',
+      );
+      if (files.isEmpty) return false;
+      returned = files.single;
+      return true;
+    },
+  );
+  final downloaded = await messages.downloadAttachment(
+    thread: AppThreadRef.direct(agent.agentDid),
+    messageId: returned!.remoteId ?? returned!.localId,
+    attachmentId: returned!.attachment!.attachmentId,
+  );
+  final received =
+      downloaded.bytes ?? await File(downloaded.localPath!).readAsBytes();
+  expect(received, orderedEquals(proof));
+  debugPrint('ACP authorized file byte roundtrip passed: $prefix');
+  await _waitForVisibleCodexReply(tester: tester, expectedReply: fileReply);
+
+  // The answer exists only in the pixels, never in the filename or prompt.
+  // A flat-color fixture is sensitive to the model's color perception and
+  // cannot reliably distinguish dropped images from semantic errors.
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  final random = Random.secure();
+  final visualCode = List.generate(
+    8,
+    (_) => alphabet[random.nextInt(alphabet.length)],
+  ).join();
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  canvas.drawColor(const ui.Color(0xffffffff), ui.BlendMode.src);
+  canvas.drawRect(
+    const ui.Rect.fromLTWH(10, 10, 700, 220),
+    ui.Paint()
+      ..color = const ui.Color(0xff000000)
+      ..style = ui.PaintingStyle.stroke
+      ..strokeWidth = 4,
+  );
+  final builder =
+      ui.ParagraphBuilder(
+          ui.ParagraphStyle(fontFamily: 'monospace', fontSize: 70),
+        )
+        ..pushStyle(ui.TextStyle(color: const ui.Color(0xff000000)))
+        ..addText(visualCode);
+  final paragraph = builder.build()
+    ..layout(const ui.ParagraphConstraints(width: 620));
+  canvas.drawParagraph(paragraph, const ui.Offset(50, 75));
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(720, 240);
+  final data = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  picture.dispose();
+  paragraph.dispose();
+  await _stageAcpFile(tester, 'acp-image.png', data!.buffer.asUint8List());
+  const imagePrompt =
+      'Read the eight-character code printed inside the rectangular frame in the attached image. Reply with only the code exactly as shown. Do not use tools.';
+  await _sendPromptThroughUi(tester, imagePrompt);
+  await _waitForDaemonCodexFinalSent(
+    daemonStateRoot: daemonStateRoot,
+    runtimeAgentDid: agent.agentDid,
+    prompt: imagePrompt,
+    expectedReply: visualCode,
+    runtimePluginId: 'acp',
+  );
+  await _waitForAppIncomingCodexReply(
+    messaging: messages,
+    runtimeAgentDid: agent.agentDid,
+    expectedReply: visualCode,
+  );
+  await _waitForVisibleCodexReply(tester: tester, expectedReply: visualCode);
+  await _markCodingCase('$prefix-008');
 }
 
 Future<AppSession> _prepareRealAppIdentity(
@@ -289,8 +1245,6 @@ Future<_DaemonInstallResult> _installRealDaemon({
     config.daemonBinary,
     <String>[
       'install',
-      '--token',
-      token.token,
       '--base-url',
       config.environment.baseUrl,
       '--no-service',
@@ -298,7 +1252,10 @@ Future<_DaemonInstallResult> _installRealDaemon({
       '--state-root',
       config.daemonStateRoot,
     ],
-    environment: _daemonEnvironment(config),
+    environment: {
+      ..._daemonEnvironment(config),
+      'AWIKI_DAEMON_INSTALL_TOKEN': token.token,
+    },
     timeout: const Duration(minutes: 2),
     secrets: <String>[token.token, ...config.secrets],
   );
@@ -319,6 +1276,7 @@ Future<_DaemonInstallResult> _installRealDaemon({
 
 Future<Process> _startRealDaemon({
   required _CodexAgentRealBackendConfig config,
+  String maxRuntimeMs = _codexDaemonMaxRuntimeMs,
 }) async {
   final readyFile = File(config.daemonReadyFile);
   if (readyFile.existsSync()) {
@@ -333,7 +1291,7 @@ Future<Process> _startRealDaemon({
       '--ready-file',
       config.daemonReadyFile,
       '--max-runtime-ms',
-      _codexDaemonMaxRuntimeMs,
+      maxRuntimeMs,
       '--poll-interval-ms',
       '100',
     ],
@@ -472,6 +1430,7 @@ Future<void> _waitForDaemonGenericCliCapability({
   required WidgetTester tester,
   required AgentsController agents,
   required String daemonDid,
+  bool acp = false,
 }) async {
   Object? lastState;
   final deadline = DateTime.now().add(const Duration(seconds: 45));
@@ -484,7 +1443,7 @@ Future<void> _waitForDaemonGenericCliCapability({
     ).read(agentsProvider);
     lastState = _agentsDebugSummary(state);
     final daemon = _agentByDid(state, daemonDid);
-    if (daemon != null && _daemonSupportsCodex(daemon)) {
+    if (daemon != null && _daemonSupportsCodex(daemon, acp: acp)) {
       return;
     }
     await Future<void>.delayed(const Duration(seconds: 1));
@@ -499,9 +1458,11 @@ Future<AgentSummary> _waitForRuntimeAgentByHandle({
   required WidgetTester tester,
   required String daemonDid,
   required String handle,
+  bool acp = false,
+  bool hermes = false,
 }) async {
   Object? lastState;
-  final deadline = DateTime.now().add(const Duration(seconds: 60));
+  final deadline = DateTime.now().add(Duration(seconds: acp ? 150 : 60));
   while (DateTime.now().isBefore(deadline)) {
     await _pumpFrame(tester);
     final state = ProviderScope.containerOf(
@@ -515,7 +1476,15 @@ Future<AgentSummary> _waitForRuntimeAgentByHandle({
               agent.daemonAgentDid == daemonDid &&
               agent.handle?.trim().toLowerCase() ==
                   handle.trim().toLowerCase() &&
-              (agent.runtime == 'codex' || agent.runtime == 'generic-cli'),
+              (acp
+                  ? (agent.runtime == 'acp' ||
+                        RuntimeAgentKind.values.any(
+                          (kind) => kind.isAcp && kind.runtime == agent.runtime,
+                        ))
+                  : hermes
+                  ? agent.runtime == 'hermes'
+                  : (agent.runtime == 'codex' ||
+                        agent.runtime == 'generic-cli')),
         )
         .toList(growable: false);
     final hasMatchingPending = state.pendingRuntimeCreations.any(
@@ -537,9 +1506,39 @@ Future<AgentSummary> _waitForRuntimeAgentByHandle({
     }
     await Future<void>.delayed(const Duration(seconds: 1));
   }
+  Object? routeDiagnostic;
+  if (acp) {
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AppShell)),
+    );
+    final candidates = container
+        .read(agentsProvider)
+        .agents
+        .where((agent) => agent.handle == handle);
+    if (candidates.isNotEmpty) {
+      final started = Stopwatch()..start();
+      try {
+        final route = await container
+            .read(directoryApplicationServiceProvider)
+            .resolvePeer(candidates.first.agentDid)
+            .timeout(const Duration(seconds: 25));
+        routeDiagnostic = {
+          'elapsedMs': started.elapsedMilliseconds,
+          'didMatches': route.did == candidates.first.agentDid,
+          'conversationId': route.conversationId,
+          'warnings': route.warnings,
+        };
+      } catch (error) {
+        routeDiagnostic = {
+          'elapsedMs': started.elapsedMilliseconds,
+          'error': error.toString(),
+        };
+      }
+    }
+  }
   fail(
     'Timed out waiting for Codex runtime handle=$handle. '
-    'Last agents: ${lastState ?? '<none>'}',
+    'Last agents: ${lastState ?? '<none>'}. Route diagnostic: $routeDiagnostic',
   );
 }
 
@@ -575,22 +1574,76 @@ Future<void> _sendPromptThroughUi(WidgetTester tester, String prompt) async {
     timeout: const Duration(seconds: 15),
     description: 'Codex chat input to become visible',
   );
-  await tester.enterText(input, prompt);
-  await _pumpFrame(tester);
+  await tester.ensureVisible(input);
+  await enterStableCodingAgentText(
+    expected: prompt,
+    read: () => tester
+        .widget<EditableText>(
+          find.descendant(
+            of: input,
+            matching: find.byType(EditableText),
+            matchRoot: true,
+          ),
+        )
+        .controller
+        .text,
+    enter: () async {
+      await tester.tap(input);
+      await tester.pump();
+      await tester.showKeyboard(input);
+      tester.testTextInput.enterText(prompt);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+    },
+  );
+  await _pumpUntil(
+    tester,
+    () => find
+        .bySemanticsIdentifier('e2e-chat-send-button')
+        .evaluate()
+        .isNotEmpty,
+    timeout: const Duration(seconds: 60),
+    description: 'chat send button enabled after the previous send completes',
+    lastError: () {
+      final field = tester.widget<EditableText>(
+        find.descendant(
+          of: input,
+          matching: find.byType(EditableText),
+          matchRoot: true,
+        ),
+      );
+      final buttons = find.byKey(const Key('chat-send-button'));
+      final button = buttons.evaluate().isEmpty
+          ? null
+          : tester.widget(buttons.first);
+      return {
+        'textLength': field.controller.text.length,
+        'expectedLength': prompt.length,
+        'composing': field.controller.value.composing.toString(),
+        'focused': field.focusNode.hasFocus,
+        'buttonType': button.runtimeType.toString(),
+        'enabled': button is AppPressable ? button.enabled : null,
+        'dialogs': find.byType(CupertinoAlertDialog).evaluate().length,
+      };
+    },
+  );
   await _tapFirstFound(tester, <Finder>[
     find.bySemanticsIdentifier('e2e-chat-send-button'),
   ]);
   await _pumpFrame(tester);
 }
 
-Future<void> _waitForDaemonCodexFinalSent({
+Future<String> _waitForDaemonCodexFinalSent({
   required String daemonStateRoot,
   required String runtimeAgentDid,
   required String prompt,
   required String expectedReply,
+  String runtimePluginId = 'generic-cli',
+  bool allowProgressText = false,
 }) async {
   final dbPath = '${daemonStateRoot.replaceAll(RegExp(r'/+$'), '')}/daemon.db';
   String lastState = 'daemon.db not found';
+  String finalText = '';
   await _poll(
     description: 'daemon sent Codex runtime final reply "$expectedReply"',
     action: () async {
@@ -637,11 +1690,24 @@ Future<void> _waitForDaemonCodexFinalSent({
             'Last state: $lastState',
           );
         }
-        return row['runtime_plugin_id'] == 'generic-cli' &&
+        final matches = matchesCodingAgentFinal(
+          row['final_text'],
+          expectedReply,
+          allowProgressText: allowProgressText,
+        );
+        if (row['run_status'] == 'finished' &&
+            row['final_status'] == 'sent' &&
+            !matches) {
+          fail(
+            'Runtime delivered a different final reply. Last state: $lastState',
+          );
+        }
+        finalText = row['final_text']?.toString() ?? '';
+        return row['runtime_plugin_id'] == runtimePluginId &&
             row['run_status'] == 'finished' &&
             row['final_status'] == 'sent' &&
             row['final_message_id'] != null &&
-            row['final_text'] == expectedReply;
+            matches;
       } finally {
         await db.close();
       }
@@ -650,6 +1716,7 @@ Future<void> _waitForDaemonCodexFinalSent({
     interval: const Duration(seconds: 1),
     lastError: () => lastState,
   );
+  return finalText;
 }
 
 Future<ChatMessage> _waitForAppIncomingCodexReply({
@@ -723,9 +1790,7 @@ Future<void> _waitForVisibleCodexReply({
     },
     timeout: const Duration(seconds: 90),
     description: 'Codex reply bubble visible in App UI',
-    lastError: () =>
-        'App history already contained the Codex reply; '
-        'the visible chat bubble did not render in time.',
+    lastError: () => 'The expected reply bubble did not render in time.',
   );
   expect(replyBubble, findsOneWidget);
 }
@@ -861,12 +1926,20 @@ String? _shortDid(String? did) {
   return '${did.substring(0, 24)}...${did.substring(did.length - 6)}';
 }
 
-bool _daemonSupportsCodex(AgentSummary daemon) {
+bool _daemonSupportsCodex(AgentSummary daemon, {bool acp = false}) {
   final config = _objectMap(daemon.latest.diagnosticsSummary['config_summary']);
-  final genericCli = _objectMap(config['generic_cli']);
+  final genericCli = _objectMap(config[acp ? 'acp' : 'generic_cli']);
   final schemaVersion = _intValue(genericCli['capability_schema_version']);
   final drivers = _stringSet(genericCli['supported_drivers']);
-  return schemaVersion == 1 && drivers.contains('codex');
+  return schemaVersion == 1 &&
+      (acp
+          ? drivers.containsAll([
+              'opencode',
+              'gemini',
+              'kimi',
+              'deepseek-harness',
+            ])
+          : drivers.contains('codex'));
 }
 
 Map<String, Object?> _objectMap(Object? value) {
@@ -952,6 +2025,7 @@ class _CodexAgentRealBackendConfig {
     required this.otpPhone,
     required this.otpCode,
     required this.appStateRoot,
+    required this.reusePreparedIdentity,
     required this.daemonBinary,
     required this.daemonStateRoot,
     required this.daemonReadyFile,
@@ -963,8 +2037,17 @@ class _CodexAgentRealBackendConfig {
     required this.expectedReply,
   });
 
-  static _CodexAgentRealBackendConfig? tryLoad() {
-    final file = File(_codexAgentRunConfigPath);
+  static _CodexAgentRealBackendConfig? tryLoad({
+    bool acp = false,
+    bool hermes = false,
+  }) {
+    final file = File(
+      acp
+          ? '.e2e/acp-agent/current/run_config.json'
+          : hermes
+          ? '.e2e/hermes-agent/current/run_config.json'
+          : _codexAgentRunConfigPath,
+    );
     if (!file.existsSync()) {
       return null;
     }
@@ -973,7 +2056,14 @@ class _CodexAgentRealBackendConfig {
       throw StateError('$_codexAgentRunConfigPath must be a JSON object.');
     }
     final map = _stringKeyMap(raw, path: _codexAgentRunConfigPath);
-    final codexAgent = _optionalMapAt(map, 'codexAgent');
+    final codexAgent = _optionalMapAt(
+      map,
+      acp
+          ? 'acpAgent'
+          : hermes
+          ? 'hermesAgent'
+          : 'codexAgent',
+    );
     final enabled = _boolConfig(codexAgent, 'enabled');
     final realBackend = _boolConfig(codexAgent, 'realBackend');
     if (!enabled || !realBackend) {
@@ -1018,6 +2108,7 @@ class _CodexAgentRealBackendConfig {
       otpPhone: protectedOtp.phone,
       otpCode: protectedOtp.code,
       appStateRoot: _requiredConfig(app, 'stateRoot', 'app.stateRoot'),
+      reusePreparedIdentity: acp && app['reusePreparedIdentity'] == true,
       daemonBinary: _requiredConfig(daemon, 'binary', 'daemon.binary'),
       daemonStateRoot: _requiredConfig(daemon, 'stateRoot', 'daemon.stateRoot'),
       daemonReadyFile: _requiredConfig(daemon, 'readyFile', 'daemon.readyFile'),
@@ -1040,6 +2131,7 @@ class _CodexAgentRealBackendConfig {
   final String otpPhone;
   final String otpCode;
   final String appStateRoot;
+  final bool reusePreparedIdentity;
   final String daemonBinary;
   final String daemonStateRoot;
   final String daemonReadyFile;

@@ -470,14 +470,18 @@ extension DesktopE2eReporting on DesktopE2eRunner {
           'messageCleanup': appPairMessageCleanup,
         'resourceCategories': suiteDefinition.resourceCategories,
         'resourceCounts': <String, Object?>{
-          'fixedIdentityPool': config != null
+          'fixedIdentityPool': preparedCodingIdentity != null
+              ? 2
+              : config != null
               ? 0
               : remoteMultiDeviceJoinConfig != null
               ? 1
               : remoteHandleRecoveryConfig != null
               ? 2
               : 0,
-          'runScopedIdentities': config != null && _resourceSideEffectsPossible
+          'runScopedIdentities': preparedCodingIdentity != null
+              ? 0
+              : config != null && _resourceSideEffectsPossible
               ? 'at_most_2'
               : 0,
           'createdIdentities': _resourceSideEffectsPossible ? 'unknown' : 0,

@@ -120,7 +120,7 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.pair.admin",
       "supportedPlatforms": ["macos", "linux"],
       "dartDefines": ["AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=admin"],
-      "consumerSuites": ["multi-device-app-pair", "multi-device-app-pair-functional", "multi-device-app-pair-content-sync", "multi-device-app-pair-paging-recovery"]
+      "consumerSuites": ["multi-device-app-pair", "multi-device-app-pair-functional", "multi-device-app-pair-content-sync", "multi-device-app-pair-paging-recovery", "multi-device-app-pair-acp"]
     },
     {
       "name": "joiner",
@@ -128,7 +128,7 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.pair.joiner",
       "supportedPlatforms": ["macos", "linux"],
       "dartDefines": ["AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=joiner"],
-      "consumerSuites": ["multi-device-app-pair", "multi-device-app-pair-functional", "multi-device-app-pair-content-sync", "multi-device-app-pair-paging-recovery"]
+      "consumerSuites": ["multi-device-app-pair", "multi-device-app-pair-functional", "multi-device-app-pair-content-sync", "multi-device-app-pair-paging-recovery", "multi-device-app-pair-acp"]
     },
     {
       "name": "recovery-main",
@@ -235,12 +235,38 @@
       "consumerSuites": ["codex-agent"]
     },
     {
+      "name": "acp-agent",
+      "target": "integration_test/acp_agent_full_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.acp.agent",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "dartDefines": [],
+      "consumerSuites": [
+        "acp-agent"
+      ]
+    },
+    {
       "name": "claude-code-agent",
       "target": "integration_test/claude_code_agent_full_ui_test.dart",
       "bundleId": "ai.awiki.awikime.dev.e2e.claude.code.agent",
       "supportedPlatforms": ["macos", "linux"],
       "dartDefines": [],
       "consumerSuites": ["claude-code-agent"]
+    },
+    {
+      "name": "hermes-agent",
+      "target": "integration_test/hermes_agent_full_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.hermes.agent",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "dartDefines": [],
+      "consumerSuites": [
+        "hermes-agent"
+      ]
     }
   ]
 }

@@ -80,7 +80,7 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
                 'accounts.cliPeer.handle',
                 fileConfig.path ?? options.configPath,
               ),
-              runId,
+              preparedCodingIdentity?.runId ?? runId,
             )
           : null,
       appHandleOverride:
@@ -91,7 +91,7 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
                 'accounts.appUser.handle',
                 fileConfig.path ?? options.configPath,
               ),
-              runId,
+              preparedCodingIdentity?.runId ?? runId,
             )
           : null,
     );
@@ -234,6 +234,9 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
       existing = cliTenantConfigFromListJson(list.output, tenantName);
     }
     if (existing == null) {
+      if (preparedCodingIdentity != null) {
+        throw E2eFailure('Prepared ACP CLI tenant is missing.');
+      }
       await _cliForWorkspace(
         workspaceDir: workspaceDir,
         homeDir: homeDir,
@@ -273,7 +276,8 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
     );
   }
 
-  String get _tenantName => desktopE2eTenantName(runId);
+  String get _tenantName =>
+      desktopE2eTenantName(preparedCodingIdentity?.runId ?? runId);
 
   Future<void> _writeCliConfig(Directory workspaceDir) async {
     final peerConfig = _requireConfig();
@@ -332,6 +336,11 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
       }
     }
     if (!reuseReadyIdentity) {
+      if (preparedCodingIdentity != null) {
+        throw E2eFailure(
+          'Prepared ACP CLI identity is not the exact ready identity.',
+        );
+      }
       final otpArgs = <String>[
         '--format',
         'json',
@@ -395,6 +404,12 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
           );
         }
       }
+    }
+
+    if (reuseReadyIdentity && preparedCodingIdentity != null) {
+      // Old test state can retain signing keys and account metadata after its
+      // exact-device bearer expires. Renew through the public DID auth command.
+      await _cli(const ['--format', 'json', 'id', 'refresh-token']);
     }
 
     if (peerConfig.e2eCase.publishesNicknameFixture) {
@@ -702,7 +717,10 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
         'tier': suiteDefinition.tier,
         'cleanupPolicy': suiteDefinition.cleanupPolicy,
       },
-      'app': <String, Object?>{'stateRoot': appStateRootDir.path},
+      'app': <String, Object?>{
+        'stateRoot': appStateRootDir.path,
+        'reusePreparedIdentity': preparedCodingIdentity != null,
+      },
       'processRestart': <String, Object?>{
         'handoffPath': processRestartHandoffFile.path,
       },
@@ -732,6 +750,18 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
         'runtimeProvider': peerConfig.personalAgentRuntimeProvider,
         'processingScope': peerConfig.personalAgentProcessingScope,
         'realBackend': peerConfig.personalAgentRealBackend,
+      },
+      'acpAgent': <String, Object?>{
+        'enabled': options.e2eCase == DesktopE2eCase.acpAgent,
+        'realBackend': true,
+        'prompt': 'Reply exactly ACP_APP_READY. Do not use tools.',
+        'expectedReply': 'ACP_APP_READY',
+      },
+      'hermesAgent': <String, Object?>{
+        'enabled': options.e2eCase == DesktopE2eCase.hermesAgent,
+        'realBackend': true,
+        'prompt': 'Reply exactly HERMES_APP_READY. Do not use tools.',
+        'expectedReply': 'HERMES_APP_READY',
       },
       'codexAgent': <String, Object?>{
         'enabled': peerConfig.codexAgentEnabled,

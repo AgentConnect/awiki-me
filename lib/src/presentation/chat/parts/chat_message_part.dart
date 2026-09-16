@@ -1071,6 +1071,7 @@ class _MessageBubble extends StatelessWidget {
     this.onSaveImage,
     this.isDownloading = false,
     this.onSenderInfoTap,
+    this.footer,
   });
 
   final ChatMessage message;
@@ -1089,6 +1090,9 @@ class _MessageBubble extends StatelessWidget {
   final Future<void> Function(String path)? onSaveImage;
   final bool isDownloading;
   final VoidCallback? onSenderInfoTap;
+  // Task status belongs to the same content lane as its message, inside the
+  // avatar row. Its width must never move the bubble or its trailing edge.
+  final Widget? footer;
 
   Widget _withE2eMessageSemantics({required Widget child}) {
     return e2eSemantics(
@@ -1277,6 +1281,7 @@ class _MessageBubble extends StatelessWidget {
             child: child,
           ),
         ),
+        if (footer != null) footer!,
         if (message.sendState == MessageSendState.failed) ...<Widget>[
           SizedBox(height: responsive.displayScaled(8)),
           Row(
@@ -1457,6 +1462,7 @@ class _MessageBubble extends StatelessWidget {
             child: content,
           ),
         ),
+        if (footer != null) footer!,
         if (message.sendState == MessageSendState.failed) ...<Widget>[
           SizedBox(height: responsive.spacing(6)),
           Row(
