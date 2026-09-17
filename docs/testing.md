@@ -1406,3 +1406,13 @@ acceptance. Build with `flutter build ios --simulator --debug --target
 integration_test/registration_account_first_test.dart --dart-define=AWIKI_E2E=true`
 after building and verifying the iOS Core XCFramework. Provision the restricted
 fixture before launching; compilation alone does not execute the registration case.
+
+
+For the prepared macOS runner path on newer Xcode, set
+`AWIKI_E2E_MACOS_DEPLOYMENT_TARGET=12.0` explicitly when the local toolchain no
+longer accepts the project's older target. The isolated builder validates this
+numeric version, writes it beside its own bundle identity settings, and includes
+it in the compile key and artifact provenance. It does not inherit arbitrary
+external xcconfig contents, and Linux builds ignore this macOS-only setting.
+The default keeps the project target. This local override is not evidence for
+older macOS compatibility.
