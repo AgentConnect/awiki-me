@@ -113,8 +113,12 @@ For each name length, the case follows the visible account/invitation/phone
 steps, registers through Core, then uses a second fresh App scope to verify that
 the existing short name
 reaches authenticated Join/Recovery choices without an invitation and completes
-real notification-driven member Join. It does not claim completed Recovery or
-ordinary messaging. The invoking service
+real notification-driven member Join. A third fresh scope for each name then
+completes Recovery through its separate operation-bound OTP, risk confirmation,
+and user-presence decision. The case checks the same durable operation completes,
+the old DID changes to the successor, the App activates that successor, and its
+registry has an active management-ready admin. The nine-phase attestation covers
+both name lengths; ordinary messaging is outside this case. The invoking service
 fixture owns database readback (two accounts and one database-invitation use)
 and remote-row cleanup; the algorithm invitation keeps its existing stateless policy;
 the App case deletes its temporary local scopes before attesting success.
@@ -124,7 +128,8 @@ the real Join notification, verifies the challenge/response and matching SAS, th
 approves through the existing user-presence boundary. The joining App must activate
 the same account and appear as one active member device. Its local Message Service
 must listen on port 19992; the provisioner must clean both User and Message Service
-rows for the exact disposable account. The user-presence adapter is E2E-only.
+rows for the exact disposable account, including Recovery transition edges before
+removing their owning account. The user-presence adapter is E2E-only.
 
 The runner conservatively records possible service resources as `residual` after
 launch; the provisioner must attach its own database cleanup readback. A successful

@@ -12,6 +12,9 @@ import 'package:awiki_me/src/application/device_management_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
+import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
+import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
+import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
@@ -46,19 +49,31 @@ void main() {
       );
       final fixture =
           jsonDecode(await File(path).readAsString()) as Map<String, dynamic>;
-      await _runInvitedHandleJoin(
+      final threeDid = await _runInvitedHandleJoin(
         tester,
         fixture,
         handle: fixture['handle'] as String,
         invite: fixture['inviteCode'] as String,
         expectedLength: 3,
       );
-      await _runInvitedHandleJoin(
+      final fourDid = await _runInvitedHandleJoin(
         tester,
         fixture,
         handle: fixture['fourCharHandle'] as String,
         invite: fixture['fourCharInviteCode'] as String,
         expectedLength: 4,
+      );
+      await _runExistingHandleRecovery(
+        tester,
+        fixture,
+        handle: fixture['handle'] as String,
+        previousDid: threeDid,
+      );
+      await _runExistingHandleRecovery(
+        tester,
+        fixture,
+        handle: fixture['fourCharHandle'] as String,
+        previousDid: fourDid,
       );
       await E2eCaseAttestationWriter.markPassed(
         _registrationCaseId,
@@ -70,13 +85,15 @@ void main() {
           'existing_account_join_choice',
           'existing_account_member_join_completed',
           'four_character_registration_and_join_completed',
+          'three_character_recovery_completed',
+          'four_character_recovery_completed',
         ],
       );
     },
   );
 }
 
-Future<void> _runInvitedHandleJoin(
+Future<String> _runInvitedHandleJoin(
   WidgetTester tester,
   Map<String, dynamic> fixture, {
   required String handle,
@@ -256,6 +273,189 @@ Future<void> _runInvitedHandleJoin(
     for (final root in roots) {
       if (await root.exists()) await root.delete(recursive: true);
     }
+  }
+  return adminDid!;
+}
+
+Future<void> _runExistingHandleRecovery(
+  WidgetTester tester,
+  Map<String, dynamic> fixture, {
+  required String handle,
+  required String previousDid,
+}) async {
+  final domain = fixture['domain'] as String;
+  final phone = fixture['phone'] as String;
+  final otp = fixture['otp'] as String;
+  final root = await Directory.systemTemp.createTemp('awiki_recovery_native_');
+  final presence = E2eUserPresencePort();
+  final bootstrap = await AppBootstrap.create(
+    environment: AwikiEnvironmentConfig(
+      baseUrl: 'http://127.0.0.1:19992',
+      userServiceUrl: fixture['userServiceUrl'] as String,
+      didDomain: domain,
+      messageServiceUrl: 'http://127.0.0.1:19992',
+      mailServiceUrl: 'http://127.0.0.1:19993',
+      anpServiceUrl: 'http://127.0.0.1:19992/im/rpc',
+      anpServiceDid: 'did:wba:$domain',
+      caBundle: fixture['caBundle'] as String?,
+      agentImEnabled: false,
+    ),
+    appStateRoot: root.path,
+  );
+  try {
+    await tester.pumpWidget(
+      AwikiMeApp(
+        bootstrap: bootstrap,
+        providerOverrides: [
+          userPresencePortProvider.overrideWithValue(presence),
+        ],
+      ),
+    );
+    await _until(
+      tester,
+      () => find.byType(OnboardingPage).evaluate().isNotEmpty,
+      'Recovery starts in a new scope',
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    await _until(
+      tester,
+      () => container.read(onboardingProvider).serverInfo != null,
+      'Recovery tenant capabilities loaded',
+    );
+    await _enter(tester, 'e2e-handle-input', handle);
+    await _tap(tester, find.bySemanticsIdentifier('e2e-account-next'));
+    await _until(
+      tester,
+      () => find.bySemanticsIdentifier('e2e-phone-input').evaluate().isNotEmpty,
+      'Existing short account goes directly to contact verification',
+    );
+    expect(find.bySemanticsIdentifier('e2e-invite-input'), findsNothing);
+    await _enter(tester, 'e2e-phone-input', phone);
+    await _tap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));
+    await _until(
+      tester,
+      () =>
+          container.read(onboardingProvider).otpTargetFullHandle ==
+          '$handle.$domain',
+      'Existing account OTP is scoped',
+    );
+    await _enter(tester, 'e2e-otp-input', otp);
+    await _tap(
+      tester,
+      find.byKey(const Key('onboarding-mac-phone-submit-action')),
+    );
+    await _until(
+      tester,
+      () => find
+          .byKey(const Key('existing-handle-recovery-action'))
+          .evaluate()
+          .isNotEmpty,
+      'Authenticated existing-account Recovery choice',
+    );
+    await _until(
+      tester,
+      () => container.read(smsOtpCooldownProvider).canSend,
+      'Respect the accepted OTP cooldown before Recovery',
+    );
+    await _tap(
+      tester,
+      find.byKey(const Key('existing-handle-recovery-action')),
+    );
+    await _until(
+      tester,
+      () => find.byKey(const Key('handle-recovery-page')).evaluate().isNotEmpty,
+      'Recovery page opens from the account-first flow',
+    );
+    final recovery = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('handle-recovery-page'))),
+    );
+    String diagnostic() =>
+        'recovery_error=${recovery.read(handleRecoveryProvider).error}; '
+        'phase=${recovery.read(handleRecoveryProvider).progress?.phase}';
+    await _until(
+      tester,
+      () {
+        final state = recovery.read(handleRecoveryProvider);
+        return !state.isBusy &&
+            state.otpRequested &&
+            state.otpOperationId != null;
+      },
+      'Recovery accepts a separate operation-bound OTP',
+      diagnostic: diagnostic,
+    );
+    final otpField = find.descendant(
+      of: find.byKey(const Key('handle-recovery-otp')),
+      matching: find.byType(CupertinoTextField),
+    );
+    await tester.ensureVisible(otpField);
+    await tester.enterText(otpField, otp);
+    await _tap(tester, find.bySemanticsIdentifier('handle-recovery-verify'));
+    await _until(
+      tester,
+      () {
+        final state = recovery.read(handleRecoveryProvider);
+        return !state.isBusy &&
+            state.progress?.phase == HandleRecoveryProgressPhase.prepared;
+      },
+      'Recovery reaches the prepared phase',
+      diagnostic: diagnostic,
+    );
+    final operationId = recovery
+        .read(handleRecoveryProvider)
+        .progress!
+        .operationId;
+    await _tap(
+      tester,
+      find.byKey(const Key('handle-recovery-risk-confirmation')),
+    );
+    expect(recovery.read(handleRecoveryProvider).riskConfirmed, isTrue);
+    HandleRecoveryProgress? observed;
+    final subscription = recovery.listen(handleRecoveryProvider, (_, state) {
+      if (state.progress != null) observed = state.progress;
+    }, fireImmediately: true);
+    try {
+      await _tap(
+        tester,
+        find.bySemanticsIdentifier('handle-recovery-activate'),
+      );
+      await _until(
+        tester,
+        () => observed?.isCompleted == true,
+        'Recovery finishes the same durable operation',
+        diagnostic: diagnostic,
+      );
+      expect(observed!.operationId, operationId);
+      final reset = observed!.registryEpochReset!;
+      expect(reset.previousDid, previousDid);
+      expect(reset.currentDid == previousDid, isFalse);
+      expect(reset.handle, '$handle.$domain');
+      expect(reset.sourceKind, HandleRecoveryTransitionSourceKind.initiator);
+      await _until(
+        tester,
+        () => container.read(sessionProvider).session?.did == reset.currentDid,
+        'Recovered identity becomes the active App session',
+      );
+      final identities = await bootstrap.appSessionService!
+          .listLocalIdentities();
+      expect(identities.length, 1);
+      expect(identities.single.did, reset.currentDid);
+      expect(identities.single.handle, '$handle.$domain');
+      final registry = await bootstrap.deviceManagementCorePort!
+          .identityDeviceRegistry(reset.currentDid);
+      expect(registry.currentDevice!.status, DeviceStatus.active);
+      expect(registry.currentDevice!.role, DeviceRole.admin);
+      expect(registry.currentDevice!.managementReady, isTrue);
+      expect(presence.completions, 1);
+    } finally {
+      subscription.close();
+    }
+  } finally {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await bootstrap.dispose();
+    await root.delete(recursive: true);
   }
 }
 
