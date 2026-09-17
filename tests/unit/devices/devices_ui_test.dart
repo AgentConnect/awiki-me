@@ -2171,6 +2171,54 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  for (final retry in [false, true]) {
+    testWidgets(
+      'identity read failure preserves new task phase and disables retry ($retry)',
+      (tester) async {
+        const failed = DeviceJoinManagementStatus(
+          joinSessionId: 'join-1',
+          recipientDeviceId: 'device-new',
+          phase: 'failed',
+          attempts: 3,
+          nextAttemptAtMs: 0,
+        );
+        const scheduled = DeviceJoinManagementStatus(
+          joinSessionId: 'join-1',
+          recipientDeviceId: 'device-new',
+          phase: 'scheduled',
+          attempts: 0,
+          nextAttemptAtMs: 0,
+        );
+        final core = FakeDeviceManagementCore()
+          ..registry = _rootTransferRegistry()
+          ..managementStatuses = [failed];
+        await tester.pumpWidget(_app(const DevicesPage(), core));
+        await tester.pumpAndSettle();
+        final container = ProviderScope.containerOf(
+          tester.element(find.byKey(const Key('devices-page'))),
+        );
+        final controller = container.read(devicesProvider.notifier);
+        expect(container.read(devicesProvider).currentDeviceCanManage, isTrue);
+        core.managementStatusLoader = () async => [scheduled];
+        core.localManagementReadyError = StateError('identity_not_found');
+        if (retry) {
+          await controller.retryJoinManagement('join-1');
+        } else {
+          await controller.refreshManagementStatus();
+        }
+        final state = container.read(devicesProvider);
+        expect(state.managementStatuses.single.phase, 'scheduled');
+        expect(state.currentDeviceCanManage, isFalse);
+        expect(state.error, isNotNull);
+        core.managementStatusLoader = () async => [failed];
+        await controller.refreshManagementStatus();
+        await controller.retryJoinManagement('join-1');
+        expect(core.managementRetries, retry ? ['join-1'] : isEmpty);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
   testWidgets('management retry denial is not reported as device revocation', (
     tester,
   ) async {

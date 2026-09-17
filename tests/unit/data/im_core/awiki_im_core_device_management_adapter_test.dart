@@ -44,12 +44,19 @@ void main() {
           ),
           ready,
         );
-        expect(
-          await adapter.localManagementReady(
+        await expectLater(
+          adapter.localManagementReady(
             selector: _did,
             protocolDeviceId: 'other-device',
           ),
-          isFalse,
+          throwsA(isA<StateError>()),
+        );
+        await expectLater(
+          adapter.localManagementReady(
+            selector: 'did:wba:example.test:other',
+            protocolDeviceId: 'device-new',
+          ),
+          throwsA(isA<StateError>()),
         );
       }
     },

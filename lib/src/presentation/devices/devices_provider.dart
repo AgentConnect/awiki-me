@@ -796,22 +796,33 @@ class DevicesController extends StateNotifier<DevicesState> {
       final statuses = registry?.currentDevice?.canManageDevices == true
           ? await service.managementStatus(selector)
           : const <DeviceJoinManagementStatus>[];
-      final ready = await service.localManagementReady(
-        selector,
-        registry?.currentDevice?.protocolDeviceId,
-      );
-      if (mounted &&
+      bool isCurrentRead() =>
+          mounted &&
           generation == _generation &&
           selector == _selector &&
           readSequence == _managementReadSequence &&
-          identical(registry, state.registry)) {
-        state = state.copyWith(
-          managementStatuses: statuses,
-          localManagementReady: ready,
+          identical(registry, state.registry);
+      if (!isCurrentRead()) return;
+      // A later identity read must not discard an authoritative task phase.
+      state = state.copyWith(managementStatuses: statuses);
+      try {
+        final ready = await service.localManagementReady(
+          selector,
+          registry?.currentDevice?.protocolDeviceId,
         );
+        if (isCurrentRead()) {
+          state = state.copyWith(localManagementReady: ready);
+        }
+      } catch (error) {
+        if (isCurrentRead()) {
+          state = state.copyWith(
+            localManagementReady: false,
+            error: _classifyDeviceError(error),
+          );
+        }
       }
     } catch (_) {
-      // Preserve the last authoritative phase; a failed read is never success.
+      // A failed task read cannot replace the last authoritative phase.
     } finally {
       if (_managementReadPending == readSequence) _managementReadPending = null;
     }
@@ -820,7 +831,10 @@ class DevicesController extends StateNotifier<DevicesState> {
   Future<void> retryJoinManagement(String joinSessionId) async {
     final selector = _selector;
     final generation = _generation;
-    if (selector == null || state.isActionPending) return;
+    if (selector == null ||
+        state.isActionPending ||
+        !state.currentDeviceCanManage)
+      return;
     final matches = state.managementStatuses.where(
       (task) => task.joinSessionId == joinSessionId,
     );

@@ -160,9 +160,11 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     final summary = await instance.identityDeviceSummary(
       _identitySelector(selector),
     );
-    return summary.identity.did == selector &&
-        summary.protocolDeviceId == protocolDeviceId &&
-        summary.role == core.IdentityDeviceRole.admin &&
+    if (summary.identity.did != selector ||
+        summary.protocolDeviceId != protocolDeviceId) {
+      throw StateError('device_registry_binding_mismatch');
+    }
+    return summary.role == core.IdentityDeviceRole.admin &&
         summary.readiness == core.IdentityDeviceReadiness.adminReady;
   }
 

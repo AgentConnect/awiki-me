@@ -30,14 +30,17 @@ DeviceJoinProgress testJoinProgress({
 
 class FakeDeviceManagementCore implements DeviceManagementCorePort {
   bool? localManagementReadyOverride;
+  Object? localManagementReadyError;
   @override
   Future<bool> localManagementReady({
     required String selector,
     required String protocolDeviceId,
-  }) async =>
-      localManagementReadyOverride ??
-      (registry.currentDevice?.protocolDeviceId == protocolDeviceId &&
-          registry.currentDevice?.canManageDevices == true);
+  }) async {
+    if (localManagementReadyError != null) throw localManagementReadyError!;
+    return localManagementReadyOverride ??
+        (registry.currentDevice?.protocolDeviceId == protocolDeviceId &&
+            registry.currentDevice?.canManageDevices == true);
+  }
 
   List<DeviceJoinManagementStatus> managementStatuses =
       <DeviceJoinManagementStatus>[];
