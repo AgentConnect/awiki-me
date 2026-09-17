@@ -139,7 +139,9 @@ Future<String> _runInvitedHandleJoin(
         ),
         appStateRoot: root.path,
       );
-      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      if (!Platform.isIOS && !Platform.isAndroid) {
+        await tester.binding.setSurfaceSize(const Size(1280, 900));
+      }
       await tester.pumpWidget(
         AwikiMeApp(
           bootstrap: bootstrap,
@@ -199,7 +201,13 @@ Future<String> _runInvitedHandleJoin(
       expect(container.read(onboardingProvider).isBusy, isFalse);
       await _tap(
         tester,
-        find.byKey(const Key('onboarding-mac-phone-submit-action')),
+        find.byKey(
+          Key(
+            Platform.isMacOS
+                ? 'onboarding-mac-phone-submit-action'
+                : 'onboarding-phone-submit-action',
+          ),
+        ),
       );
       if (existing) {
         await _until(
@@ -347,7 +355,13 @@ Future<void> _runExistingHandleRecovery(
     await _enter(tester, 'e2e-otp-input', otp);
     await _tap(
       tester,
-      find.byKey(const Key('onboarding-mac-phone-submit-action')),
+      find.byKey(
+        Key(
+          Platform.isMacOS
+              ? 'onboarding-mac-phone-submit-action'
+              : 'onboarding-phone-submit-action',
+        ),
+      ),
     );
     await _until(
       tester,
@@ -688,13 +702,31 @@ Future<void> _runEmailRegistration(
       () => container.read(onboardingProvider).isEmailResendCoolingDown,
       'Real SMTP activation delivery accepted',
     );
-    await _tap(tester, find.byKey(const Key('onboarding-mac-email-action')));
+    await _tap(
+      tester,
+      find.byKey(
+        Key(
+          Platform.isMacOS
+              ? 'onboarding-mac-email-action'
+              : 'onboarding-email-action',
+        ),
+      ),
+    );
     await _until(
       tester,
       () => container.read(onboardingProvider).emailVerified,
       'Real activation status is bound to this email and Handle',
     );
-    await _tap(tester, find.byKey(const Key('onboarding-mac-email-action')));
+    await _tap(
+      tester,
+      find.byKey(
+        Key(
+          Platform.isMacOS
+              ? 'onboarding-mac-email-action'
+              : 'onboarding-email-action',
+        ),
+      ),
+    );
     await _until(
       tester,
       () => container.read(sessionProvider).session != null,

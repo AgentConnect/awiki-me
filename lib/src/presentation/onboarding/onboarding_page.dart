@@ -449,6 +449,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         SizedBox(height: responsive.spacing(14)),
         AppTextField(
           controller: emailController,
+          semanticsIdentifier: 'e2e-email-input',
           label: context.l10n.onboardingEmail,
           placeholder: context.l10n.onboardingEmailPlaceholder,
           keyboardType: TextInputType.emailAddress,

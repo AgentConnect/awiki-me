@@ -112,7 +112,9 @@ void main() {
           }
           final fields = find.byType(CupertinoTextField);
           await tester.enterText(
-            fields.at(email ? 1 : 0),
+            email && !desktop
+                ? field('e2e-email-input')
+                : fields.at(email ? 1 : 0),
             email ? 'fixture@example.com' : '13800138000',
           );
           final sendLabel = email ? '发送激活邮件' : '发送验证码';
