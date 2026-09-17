@@ -833,8 +833,9 @@ class DevicesController extends StateNotifier<DevicesState> {
     final generation = _generation;
     if (selector == null ||
         state.isActionPending ||
-        !state.currentDeviceCanManage)
+        !state.currentDeviceCanManage) {
       return;
+    }
     final matches = state.managementStatuses.where(
       (task) => task.joinSessionId == joinSessionId,
     );
