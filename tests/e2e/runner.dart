@@ -1120,6 +1120,9 @@ class DesktopE2eRunner {
         stateRoot: appStateRootDir,
       );
       if (options.prepareOnly) return;
+      // The provisioner owns database cleanup; never report no side effects
+      // after launching a case that can consume an invitation and create a DID.
+      _resourceSideEffectsPossible = true;
       await _executePreparedIntegration(
         artifact: artifact,
         caseIds: options.e2eCase.caseIds,
@@ -1128,6 +1131,7 @@ class DesktopE2eRunner {
       );
       return;
     }
+    _resourceSideEffectsPossible = !options.dryRun && !commands.dryRun;
     await _runFlutterArgs(
       <String>[
         'test',

@@ -104,6 +104,9 @@ reaches authenticated Join/Recovery choices without an invitation. It does not
 claim completed multi-device Join, Recovery, or messaging. The invoking service
 fixture owns database readback (one invitation use) and remote-row cleanup;
 the App case deletes its temporary local scopes before attesting success.
+The runner conservatively records possible service resources as `residual` after
+launch; the provisioner must attach its own database cleanup readback. A successful
+case attestation alone is not evidence that the external fixture was removed.
 Existing Join/Recovery product cases use the explicit existing-account entrance
 before their unchanged authentication and continuation assertions.
 
