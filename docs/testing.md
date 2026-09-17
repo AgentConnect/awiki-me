@@ -89,7 +89,7 @@ record the service source, Core artifact source, target tenant and cleanup.
 native Core and disposable loopback User/Message Services. Set
 `AWIKI_REGISTRATION_FIXTURE` to an ignored, permission-restricted JSON file with
 `userServiceUrl`, `domain`, `handle`, `inviteCode`, `fourCharHandle`,
-`fourCharInviteCode`, `phone`, and `otp`. An optional
+`fourCharInviteCode`, `phone`, `otp`, `emailHandle`, `emailInviteCode`, and `email`. An optional
 `caBundle` names a local PEM CA file for disposable HTTPS DID resolution; default
 trust remains unchanged. The test process may use a loopback HTTPS CONNECT proxy,
 which must serve the real User Service DID documents for both account and system
@@ -103,7 +103,12 @@ three-character name, a valid algorithm invitation for the four-character name,
 and local development OTP in
 the disposable service before running the case. The domain must be a valid App
 tenant hostname; the ANP service DID is its bare-domain `did:wba` DID. Never use
-production credentials or an SMS provider for this local case.
+production credentials or an SMS provider for this local case. Email requires a
+loopback-only SMTP receiver and the actual activation-confirmation endpoint;
+use official Turnstile test credentials only in the disposable service. Capture
+activation links without logging tokens, and clean the exact email verification
+row after the case. Do not substitute a preverified database row for delivery
+and confirmation.
 
 ```bash
 dart run tests/e2e/runner.dart --case registration-account-first
@@ -117,9 +122,11 @@ real notification-driven member Join. A third fresh scope for each name then
 completes Recovery through its separate operation-bound OTP, risk confirmation,
 and user-presence decision. The case checks the same durable operation completes,
 the old DID changes to the successor, the App activates that successor, and its
-registry has an active management-ready admin. The nine-phase attestation covers
-both name lengths; ordinary messaging is outside this case. The invoking service
-fixture owns database readback (two accounts and one database-invitation use)
+registry has an active management-ready admin. A seventh fresh scope registers another three-character account using the
+required invitation and real SMTP activation. It checks the resulting local
+identity and active management-ready admin registry. The ten-phase attestation
+covers these phone and email flows; ordinary messaging is outside this case. The invoking service
+fixture owns database readback (three accounts and two database invitations, each used once)
 and remote-row cleanup; the algorithm invitation keeps its existing stateless policy;
 the App case deletes its temporary local scopes before attesting success.
 

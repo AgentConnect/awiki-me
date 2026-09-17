@@ -8,6 +8,7 @@ import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
+import 'package:awiki_me/src/l10n/l10n.dart';
 import 'package:awiki_me/src/application/device_management_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
@@ -75,6 +76,7 @@ void main() {
         handle: fixture['fourCharHandle'] as String,
         previousDid: fourDid,
       );
+      await _runEmailRegistration(tester, fixture);
       await E2eCaseAttestationWriter.markPassed(
         _registrationCaseId,
         phases: const <String>[
@@ -87,6 +89,7 @@ void main() {
           'four_character_registration_and_join_completed',
           'three_character_recovery_completed',
           'four_character_recovery_completed',
+          'three_character_email_registration_completed',
         ],
       );
     },
@@ -619,4 +622,98 @@ Future<void> _until(
     isTrue,
     reason: '$reason ${ready() ? "" : diagnostic?.call() ?? ""}',
   );
+}
+
+Future<void> _runEmailRegistration(
+  WidgetTester tester,
+  Map<String, dynamic> fixture,
+) async {
+  final handle = fixture['emailHandle'] as String;
+  final invite = fixture['emailInviteCode'] as String;
+  final email = fixture['email'] as String;
+  final domain = fixture['domain'] as String;
+  expect(handle.length, 3);
+  final root = await Directory.systemTemp.createTemp('awiki_email_native_');
+  final bootstrap = await AppBootstrap.create(
+    environment: AwikiEnvironmentConfig(
+      baseUrl: 'http://127.0.0.1:19992',
+      userServiceUrl: fixture['userServiceUrl'] as String,
+      didDomain: domain,
+      messageServiceUrl: 'http://127.0.0.1:19992',
+      mailServiceUrl: 'http://127.0.0.1:19993',
+      anpServiceUrl: 'http://127.0.0.1:19992/im/rpc',
+      anpServiceDid: 'did:wba:$domain',
+      caBundle: fixture['caBundle'] as String?,
+      agentImEnabled: false,
+    ),
+    appStateRoot: root.path,
+  );
+  try {
+    await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+    await _until(
+      tester,
+      () => find.byType(OnboardingPage).evaluate().isNotEmpty,
+      'Email registration starts with an isolated account step',
+    );
+    final element = tester.element(find.byType(OnboardingPage));
+    final container = ProviderScope.containerOf(element);
+    final labels = element.l10n;
+    await _until(
+      tester,
+      () => container.read(onboardingProvider).supportsEmailRegistration,
+      'Real service advertises email registration',
+    );
+    await _enter(tester, 'e2e-handle-input', handle);
+    await _tap(tester, find.bySemanticsIdentifier('e2e-account-next'));
+    await _until(
+      tester,
+      () =>
+          find.bySemanticsIdentifier('e2e-invite-input').evaluate().isNotEmpty,
+      'Email short Handle requires invitation',
+    );
+    await _tap(tester, find.bySemanticsIdentifier('e2e-invite-next'));
+    expect(find.bySemanticsIdentifier('e2e-email-input'), findsNothing);
+    await _enter(tester, 'e2e-invite-input', invite);
+    await _tap(tester, find.bySemanticsIdentifier('e2e-invite-next'));
+    await _tap(tester, find.byKey(const Key('auth-mode-email')));
+    await _until(
+      tester,
+      () => find.bySemanticsIdentifier('e2e-email-input').evaluate().isNotEmpty,
+      'Email form finishes switching verification method',
+    );
+    await _enter(tester, 'e2e-email-input', email);
+    await _tap(tester, find.text(labels.onboardingSendActivationEmail));
+    await _until(
+      tester,
+      () => container.read(onboardingProvider).isEmailResendCoolingDown,
+      'Real SMTP activation delivery accepted',
+    );
+    await _tap(tester, find.byKey(const Key('onboarding-mac-email-action')));
+    await _until(
+      tester,
+      () => container.read(onboardingProvider).emailVerified,
+      'Real activation status is bound to this email and Handle',
+    );
+    await _tap(tester, find.byKey(const Key('onboarding-mac-email-action')));
+    await _until(
+      tester,
+      () => container.read(sessionProvider).session != null,
+      'Native Core completes invited email registration',
+      diagnostic: () => container.read(uiFeedbackProvider)?.message.id ?? '',
+    );
+    final identities = await bootstrap.appSessionService!.listLocalIdentities();
+    expect(identities.length, 1);
+    expect(identities.single.handle, '$handle.$domain');
+    expect(identities.single.did, container.read(sessionProvider).session!.did);
+    final registry = await bootstrap.deviceManagementCorePort!
+        .identityDeviceRegistry(identities.single.did);
+    expect(registry.currentDevice!.status, DeviceStatus.active);
+    expect(registry.currentDevice!.role, DeviceRole.admin);
+    expect(registry.currentDevice!.managementReady, isTrue);
+  } finally {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await bootstrap.dispose();
+    await root.delete(recursive: true);
+  }
 }
