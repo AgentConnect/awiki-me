@@ -3,11 +3,17 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/app/awiki_me_app.dart';
+import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
+import 'package:awiki_me/src/application/device_management_service.dart';
+import 'package:awiki_me/src/application/message_sync_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
 import 'package:flutter/cupertino.dart';
@@ -16,6 +22,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import '../../case_attestation.dart';
+import '../../e2e_user_presence_port.dart';
+
+const String _registrationCaseId = 'REGISTRATION-ACCOUNT-FIRST-E2E-001';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -50,6 +59,9 @@ void main() {
       expect(handle.length, 3);
       final roots = <Directory>[];
       AppBootstrap? bootstrap;
+      AppBootstrap? admin;
+      String? adminDid;
+      final presence = E2eUserPresencePort();
       try {
         for (final existing in [false, true]) {
           final root = await Directory.systemTemp.createTemp(
@@ -58,19 +70,29 @@ void main() {
           roots.add(root);
           bootstrap = await AppBootstrap.create(
             environment: AwikiEnvironmentConfig(
-              baseUrl: url,
+              // Core's realtime origin follows serviceBaseUrl; User Service
+              // remains separately routed through the registration fault proxy.
+              baseUrl: 'http://127.0.0.1:19992',
               userServiceUrl: url,
               didDomain: domain,
               messageServiceUrl: 'http://127.0.0.1:19992',
               mailServiceUrl: 'http://127.0.0.1:19993',
               anpServiceUrl: 'http://127.0.0.1:19992/im/rpc',
               anpServiceDid: 'did:wba:$domain',
+              caBundle: fixture['caBundle'] as String?,
               agentImEnabled: false,
             ),
             appStateRoot: root.path,
           );
           await tester.binding.setSurfaceSize(const Size(1280, 900));
-          await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+          await tester.pumpWidget(
+            AwikiMeApp(
+              bootstrap: bootstrap,
+              providerOverrides: [
+                userPresencePortProvider.overrideWithValue(presence),
+              ],
+            ),
+          );
           await _until(
             tester,
             () => find.byType(OnboardingPage).evaluate().isNotEmpty,
@@ -145,6 +167,25 @@ void main() {
               find.byKey(const Key('existing-handle-recovery-action')),
               findsOneWidget,
             );
+            await _tap(
+              tester,
+              find.byKey(const Key('existing-handle-join-action')),
+            );
+            await _until(
+              tester,
+              () => find
+                  .byKey(const Key('device-join-page'))
+                  .evaluate()
+                  .isNotEmpty,
+              'Existing-account continuation opens real Join',
+            );
+            await _completeMemberJoin(
+              tester,
+              container,
+              admin!,
+              adminDid!,
+              presence,
+            );
           } else {
             await _until(
               tester,
@@ -172,32 +213,169 @@ void main() {
                   .startsWith('did:wba:$domain:'),
               isTrue,
             );
+            adminDid = container.read(sessionProvider).session!.did;
           }
           await tester.pumpWidget(const SizedBox.shrink());
           await tester.pump();
-          await bootstrap.dispose();
+          if (existing) {
+            await bootstrap.dispose();
+          } else {
+            admin = bootstrap;
+          }
           bootstrap = null;
         }
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
         await bootstrap?.dispose();
+        await admin?.dispose();
         for (final root in roots) {
           if (await root.exists()) await root.delete(recursive: true);
         }
       }
       await E2eCaseAttestationWriter.markPassed(
-        'REGISTRATION-ACCOUNT-FIRST-E2E-001',
-        phases: const [
+        _registrationCaseId,
+        phases: const <String>[
           'isolated_native_scopes',
           'short_handle_invite_required',
           'real_scoped_otp',
           'real_native_registration',
           'existing_account_join_choice',
+          'existing_account_member_join_completed',
         ],
       );
     },
   );
+}
+
+Future<void> _completeMemberJoin(
+  WidgetTester tester,
+  ProviderContainer joining,
+  AppBootstrap admin,
+  String adminDid,
+  E2eUserPresencePort presence,
+) async {
+  await _until(
+    tester,
+    () => joining.read(devicesProvider).activeJoin != null,
+    'New-device Join session persisted',
+  );
+  final sessionId = joining.read(devicesProvider).activeJoin!.joinSessionId;
+  final joiningDeviceId = joining
+      .read(devicesProvider)
+      .activeJoin!
+      .protocolDeviceId;
+  final port = admin.deviceManagementCorePort!;
+  final service = DeviceManagementService(core: port, userPresence: presence);
+  var started = false;
+  DeviceJoinProgress? verified;
+  final deadline = DateTime.now().add(const Duration(seconds: 30));
+  while (DateTime.now().isBefore(deadline)) {
+    // The peer drives the same public Core receive/process API as an admin
+    // client; no Registry polling substitutes for the delivered Join notice.
+    final receiver = admin.messageSyncService! as MessageReceiveService;
+    final processing = await receiver.openProcessingSession();
+    try {
+      final received = await receiver.receiveNow(reason: 'manual_refresh');
+      expect(
+        received.errorCode,
+        isNull,
+        reason: 'Admin receives real service events',
+      );
+      final processed = await processing.waitUntilSettled();
+      expect(
+        processed.errorCode,
+        isNull,
+        reason: 'Admin processes received Join events',
+      );
+    } finally {
+      await processing.close();
+    }
+    // Consume committed notices to advance the admin state before reading SAS.
+    final notices = await port.localDeviceJoinRequests(adminDid);
+    if (!started) {
+      if (notices.any(
+        (notice) =>
+            notice.joinSessionId == sessionId && notice.canStartVerification,
+      )) {
+        await service.startVerification(
+          selector: adminDid,
+          joinSessionId: sessionId,
+          operationId:
+              'registration-join-${DateTime.now().microsecondsSinceEpoch}',
+          challengeTtlSeconds: 120,
+        );
+        started = true;
+      }
+    } else {
+      await joining.read(devicesProvider.notifier).pollNewDeviceActive();
+      expect(joining.read(devicesProvider).error, isNull);
+      final DeviceJoinProgress progress;
+      try {
+        progress = await port.localDeviceJoinVerificationProgress(
+          selector: adminDid,
+          joinSessionId: sessionId,
+        );
+      } on core.AwikiImCoreException catch (error) {
+        if (error.code != 'local_state_unavailable' ||
+            !error.message.contains(
+              'admin Join verification progress is not available',
+            )) {
+          rethrow;
+        }
+        await tester.pump(const Duration(milliseconds: 200));
+        continue;
+      }
+      if (progress.phase == DeviceJoinPhase.responseVerified) {
+        verified = progress;
+        break;
+      }
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+  }
+  expect(started, isTrue, reason: 'Admin received the real Join notification');
+  expect(verified != null, isTrue, reason: 'Real challenge/response completed');
+  await _until(
+    tester,
+    () => joining.read(devicesProvider).activeJoin?.sas != null,
+    'New device displays the SAS',
+  );
+  expect(
+    verified!.sas == joining.read(devicesProvider).activeJoin!.sas,
+    isTrue,
+    reason: 'Both independently generated SAS values must match',
+  );
+  final approved = await service.approveAsMember(
+    selector: adminDid,
+    progress: verified,
+    displayedSas: verified.sas!,
+    sasConfirmed: true,
+    presenceReason: 'Approve disposable registration acceptance device',
+  );
+  expect(approved.phase, DeviceJoinPhase.authorized);
+  final refresh = find.bySemanticsIdentifier('multi-device-refresh-join');
+  if (refresh.evaluate().isNotEmpty) await _tap(tester, refresh);
+  await _until(
+    tester,
+    () => joining.read(sessionProvider).session?.did == adminDid,
+    'Joining App activates the same account',
+    diagnostic: () {
+      final state = joining.read(devicesProvider);
+      return 'phase=${state.activeJoin?.phase}; error=${state.error}; '
+          'feedback=${joining.read(uiFeedbackProvider)?.message.id}';
+    },
+  );
+  final registry = await port.identityDeviceRegistry(adminDid);
+  final members = registry.devices
+      .where(
+        (device) =>
+            device.role == DeviceRole.member &&
+            device.status == DeviceStatus.active,
+      )
+      .toList();
+  expect(members.length, 1);
+  expect(members.single.protocolDeviceId, joiningDeviceId);
+  expect(presence.completions, greaterThan(0));
 }
 
 Future<void> _enter(WidgetTester tester, String id, String text) async {

@@ -86,9 +86,17 @@ registration. Real service and product registration acceptance must separately
 record the service source, Core artifact source, target tenant and cleanup.
 
 `registration-account-first` / `REGISTRATION-ACCOUNT-FIRST-E2E-001` uses real
-native Core and a disposable loopback User Service. Set
+native Core and disposable loopback User/Message Services. Set
 `AWIKI_REGISTRATION_FIXTURE` to an ignored, permission-restricted JSON file with
-`userServiceUrl`, `domain`, `handle`, `inviteCode`, `phone`, and `otp`. Provision
+`userServiceUrl`, `domain`, `handle`, `inviteCode`, `phone`, and `otp`. An optional
+`caBundle` names a local PEM CA file for disposable HTTPS DID resolution; default
+trust remains unchanged. The test process may use a loopback HTTPS CONNECT proxy,
+which must serve the real User Service DID documents for both account and system
+notification Agent paths. The fixture must route both asynchronous and synchronous
+DID resolution to its loopback HTTPS listener: `HTTPS_PROXY` alone does not cover
+the synchronous Core HTTP client. A macOS process-local exact-host resolver can
+provide this without changing system DNS; its loading must be verified in the
+actual App process. Never disable certificate verification. Provision
 an unused three-character name, one-use invitation and local development OTP in
 the disposable service before running the case. The domain must be a valid App
 tenant hostname; the ANP service DID is its bare-domain `did:wba` DID. Never use
@@ -100,10 +108,19 @@ dart run tests/e2e/runner.dart --case registration-account-first
 
 The case follows the visible account/invitation/phone steps, registers through
 Core, then uses a second fresh App scope to verify that the existing short name
-reaches authenticated Join/Recovery choices without an invitation. It does not
-claim completed multi-device Join, Recovery, or messaging. The invoking service
+reaches authenticated Join/Recovery choices without an invitation and completes
+real notification-driven member Join. It does not claim completed Recovery or
+ordinary messaging. The invoking service
 fixture owns database readback (one invitation use) and remote-row cleanup;
 the App case deletes its temporary local scopes before attesting success.
+
+The registration case also completes member Join: the original admin Core receives
+the real Join notification, verifies the challenge/response and matching SAS, then
+approves through the existing user-presence boundary. The joining App must activate
+the same account and appear as one active member device. Its local Message Service
+must listen on port 19992; the provisioner must clean both User and Message Service
+rows for the exact disposable account. The user-presence adapter is E2E-only.
+
 The runner conservatively records possible service resources as `residual` after
 launch; the provisioner must attach its own database cleanup readback. A successful
 case attestation alone is not evidence that the external fixture was removed.
