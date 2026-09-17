@@ -12,6 +12,11 @@ on:
         description: Exact 40-character awiki-cli-rs2 commit SHA
         required: true
         type: string
+      validation_only:
+        description: Run deterministic validation and native build checks without remote account or OTP scenarios
+        required: false
+        default: false
+        type: boolean
       e2e_case:
         description: Audited remote product suite
         required: true
@@ -220,7 +225,7 @@ jobs:
           retention-days: 14
 
   remote-product:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.validation_only)
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 65

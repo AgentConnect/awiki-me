@@ -11,6 +11,27 @@ const Map<String, int> _minimumNode24ActionMajors = <String, int>{
 };
 
 void main() {
+  test('validation-only dispatch cannot start remote account and OTP jobs', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    final inputs = workflow['on']['workflow_dispatch']['inputs'] as YamlMap;
+    expect(inputs['validation_only']['type'], 'boolean');
+    expect(inputs['validation_only']['default'], isFalse);
+    expect(inputs['cli_ref']['required'], isTrue);
+    final jobs = workflow['jobs'] as YamlMap;
+    expect(
+      jobs['remote-product']['if'],
+      "github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.validation_only)",
+    );
+    expect(jobs['validate'].containsKey('if'), isFalse);
+    // Registry source and exact input selection remain shared with native CI.
+    expect(
+      jobs['windows-pr']['env']['WINDOWS_CORE_REF'],
+      contains('github.event.inputs.cli_ref'),
+    );
+  });
+
   test('E2E report uploads include hidden reports without runtime secrets', () {
     final workflow =
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())

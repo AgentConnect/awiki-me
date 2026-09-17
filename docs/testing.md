@@ -114,6 +114,13 @@ E2E OTP retries stop after an accepted receipt even when its cooldown is shorter
 than the retry interval. Verify this with
 `flutter test tests/unit/onboarding_page_test.dart --dart-define=AWIKI_E2E=true --plain-name 'accepted OTP with no cooldown does not trigger automatic resend'`.
 
+For a manual CI comparison against an exact compatible Core source, set the
+`cli_ref` input and `validation_only=true` on `ci.yml`. This runs deterministic
+and native build checks while excluding `remote-product`, so it does not use
+remote account/OTP scenarios. Scheduled runs and ordinary manual product runs
+retain their existing behavior. Record the explicit ref; do not treat a run
+against the repository's older default ref as evidence for the new baseline.
+
 ## Unit Gate
 
 Run the full local unit/widget/provider suite:
