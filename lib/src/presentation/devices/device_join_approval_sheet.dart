@@ -269,12 +269,15 @@ class _DeviceJoinApprovalSheetState
         break;
       }
     }
-    final label = switch (management?.phase) {
-      'failed' => context.l10n.deviceJoinManagementFailed,
-      'waiting_for_recipient' => context.l10n.deviceJoinManagementWaiting,
-      'management_registered' => context.l10n.deviceJoinManagementRegistered,
-      _ => context.l10n.deviceJoinManagementConfiguring,
-    };
+    final label = management?.requiresRejoin == true
+        ? context.l10n.deviceJoinManagementRejoinRequired
+        : switch (management?.phase) {
+            'failed' => context.l10n.deviceJoinManagementFailed,
+            'waiting_for_recipient' => context.l10n.deviceJoinManagementWaiting,
+            'management_registered' =>
+              context.l10n.deviceJoinManagementRegistered,
+            _ => context.l10n.deviceJoinManagementConfiguring,
+          };
     if (progress?.phase != DeviceJoinPhase.authorized) {
       return AppPrimaryButton(
         label: context.l10n.commonDone,
@@ -289,7 +292,7 @@ class _DeviceJoinApprovalSheetState
           key: const Key('device-join-management-phase'),
           textAlign: TextAlign.center,
         ),
-        if (management?.phase == 'failed') ...<Widget>[
+        if (management?.canRetry == true) ...<Widget>[
           const SizedBox(height: 12),
           AppPrimaryButton(
             key: const Key('device-join-management-retry'),

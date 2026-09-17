@@ -6681,6 +6681,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'设备已加入，管理权限配置失败'**
   String get deviceJoinManagementFailed;
+
+  /// No description provided for @deviceJoinManagementRejoinRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'根密钥投递已过期，请由管理设备撤销此设备后重新加入。'**
+  String get deviceJoinManagementRejoinRequired;
 }
 
 class _AppLocalizationsDelegate

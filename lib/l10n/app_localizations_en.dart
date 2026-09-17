@@ -3806,4 +3806,8 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get deviceJoinManagementFailed =>
       'Device joined; management configuration failed';
+
+  @override
+  String get deviceJoinManagementRejoinRequired =>
+      'Root key delivery expired. Have an administrator revoke this device, then join again.';
 }

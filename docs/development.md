@@ -153,3 +153,8 @@ Before submitting, confirm that:
 - platform behavior has Smoke E2E coverage;
 - cross-App/CLI/service behavior has a reproducible E2E record; and
 - the README, screenshots, and compatibility documentation match the behavior.
+
+
+### 自动管理权限进度
+
+设备页在前台每 3 秒刷新 Registry 与本机管理就绪状态，恢复前台也重新读取。显式重试会作废此前的状态读，避免旧 failed 覆盖新进度。`root_transfer.delivery_expired` 显示撤销后重新加入提示，不再提供自动任务重试或独立发送入口；所有根密钥状态和预算仍由 Core 拥有。读取本机身份状态失败仍按现有边界拒绝管理操作，不能将身份绑定错误当作普通未就绪吞掉。

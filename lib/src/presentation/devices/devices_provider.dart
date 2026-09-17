@@ -153,7 +153,7 @@ class DevicesState {
       device.role == DeviceRole.member &&
       !device.managementReady &&
       (managementFor(device) == null ||
-          managementFor(device)?.phase == 'failed');
+          managementFor(device)?.canRetry == true);
 
   DevicesState copyWith({
     DeviceRegistrySnapshot? registry,
@@ -294,7 +294,7 @@ class DevicesController extends StateNotifier<DevicesState> {
   ) {
     if (next == AppLifecycleState.resumed &&
         (state.registry != null || state.revokeConfirmingDeviceId != null)) {
-      unawaited(refreshRegistryOnly());
+      unawaited(refreshManagementProgress());
     }
   }
 
@@ -764,24 +764,56 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
   }
 
-  bool _managementReadPending = false;
+  int _managementReadSequence = 0;
+  int? _managementReadPending;
+  bool _managementProgressPending = false;
 
-  Future<void> refreshManagementStatus() async {
+  Future<void> refreshManagementProgress() async {
+    if (_managementProgressPending ||
+        state.isLoading ||
+        state.isActionPending) {
+      return;
+    }
+    _managementProgressPending = true;
+    final epoch = _sessionEpoch;
+    try {
+      await refreshRegistryOnly();
+      if (mounted && epoch == _sessionEpoch) await refreshManagementStatus();
+    } finally {
+      _managementProgressPending = false;
+    }
+  }
+
+  Future<void> refreshManagementStatus({bool force = false}) async {
     final selector = _selector;
     final generation = _generation;
-    if (selector == null || _managementReadPending) return;
-    _managementReadPending = true;
+    if (selector == null || (!force && _managementReadPending != null)) return;
+    final readSequence = ++_managementReadSequence;
+    _managementReadPending = readSequence;
     try {
-      final statuses = await ref
-          .read(deviceManagementServiceProvider)
-          .managementStatus(selector);
-      if (mounted && generation == _generation && selector == _selector) {
-        state = state.copyWith(managementStatuses: statuses);
+      final service = ref.read(deviceManagementServiceProvider);
+      final registry = state.registry;
+      final statuses = registry?.currentDevice?.canManageDevices == true
+          ? await service.managementStatus(selector)
+          : const <DeviceJoinManagementStatus>[];
+      final ready = await service.localManagementReady(
+        selector,
+        registry?.currentDevice?.protocolDeviceId,
+      );
+      if (mounted &&
+          generation == _generation &&
+          selector == _selector &&
+          readSequence == _managementReadSequence &&
+          identical(registry, state.registry)) {
+        state = state.copyWith(
+          managementStatuses: statuses,
+          localManagementReady: ready,
+        );
       }
     } catch (_) {
       // Preserve the last authoritative phase; a failed read is never success.
     } finally {
-      _managementReadPending = false;
+      if (_managementReadPending == readSequence) _managementReadPending = null;
     }
   }
 
@@ -789,15 +821,25 @@ class DevicesController extends StateNotifier<DevicesState> {
     final selector = _selector;
     final generation = _generation;
     if (selector == null || state.isActionPending) return;
+    final matches = state.managementStatuses.where(
+      (task) => task.joinSessionId == joinSessionId,
+    );
+    if (matches.length != 1 || !matches.single.canRetry) return;
+    ++_managementReadSequence; // Invalidate reads started before the mutation.
     state = state.copyWith(isActionPending: true, clearError: true);
     try {
       await ref
           .read(deviceManagementServiceProvider)
           .retryManagement(selector: selector, joinSessionId: joinSessionId);
-      await refreshManagementStatus();
+      await refreshManagementStatus(force: true);
     } catch (error) {
       if (mounted && generation == _generation) {
-        state = state.copyWith(error: _classifyDeviceError(error));
+        final kind = _classifyDeviceError(error);
+        state = state.copyWith(
+          error: kind == DeviceManagementErrorKind.protectedDevice
+              ? DeviceManagementErrorKind.failed
+              : kind,
+        );
       }
     } finally {
       if (mounted && generation == _generation) {

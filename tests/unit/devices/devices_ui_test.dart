@@ -2020,6 +2020,7 @@ void main() {
     'waiting_for_recipient',
     'management_registered',
     'failed',
+    'expired',
   ]) {
     testWidgets('Join uses one presence and Core management phase $phase', (
       tester,
@@ -2048,7 +2049,10 @@ void main() {
           DeviceJoinManagementStatus(
             joinSessionId: 'join-1',
             recipientDeviceId: 'device-new',
-            phase: phase,
+            phase: phase == 'expired' ? 'failed' : phase,
+            failureCode: phase == 'expired'
+                ? 'root_transfer.delivery_expired'
+                : null,
             attempts: phase == 'failed' ? 3 : 1,
             nextAttemptAtMs: 0,
           ),
@@ -2097,6 +2101,13 @@ void main() {
           findsNothing,
         );
       }
+      if (phase == 'expired') {
+        expect(find.textContaining('撤销此设备后重新加入'), findsOneWidget);
+        await container
+            .read(devicesProvider.notifier)
+            .retryJoinManagement('join-1');
+        expect(core.managementRetries, isEmpty);
+      }
       if (phase == 'waiting_for_recipient') {
         expect(find.textContaining('等待新设备完成'), findsOneWidget);
         expect(find.textContaining('管理权限已登记'), findsNothing);
@@ -2109,6 +2120,108 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
+
+  testWidgets('management retry discards an older pending status read', (
+    tester,
+  ) async {
+    const failed = DeviceJoinManagementStatus(
+      joinSessionId: 'join-1',
+      recipientDeviceId: 'device-new',
+      phase: 'failed',
+      attempts: 3,
+      nextAttemptAtMs: 0,
+    );
+    const scheduled = DeviceJoinManagementStatus(
+      joinSessionId: 'join-1',
+      recipientDeviceId: 'device-new',
+      phase: 'scheduled',
+      attempts: 0,
+      nextAttemptAtMs: 0,
+    );
+    final core = FakeDeviceManagementCore()
+      ..registry = _rootTransferRegistry()
+      ..managementStatuses = [failed];
+    await tester.pumpWidget(_app(const DevicesPage(), core));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('devices-page'))),
+    );
+    final controller = container.read(devicesProvider.notifier);
+    final stale = Completer<List<DeviceJoinManagementStatus>>();
+    final started = Completer<void>();
+    core.managementStatusLoader = () {
+      started.complete();
+      return stale.future;
+    };
+    final oldRead = controller.refreshManagementStatus();
+    await started.future;
+    core.managementStatusLoader = () async => [scheduled];
+    await controller.retryJoinManagement('join-1');
+    expect(
+      container.read(devicesProvider).managementStatuses.single.phase,
+      'scheduled',
+    );
+    stale.complete([failed]);
+    await oldRead;
+    expect(
+      container.read(devicesProvider).managementStatuses.single.phase,
+      'scheduled',
+    );
+    expect(core.managementRetries, ['join-1']);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('management retry denial is not reported as device revocation', (
+    tester,
+  ) async {
+    final core = FakeDeviceManagementCore()
+      ..registry = _rootTransferRegistry()
+      ..managementRetryError = StateError('permission_denied')
+      ..managementStatuses = [
+        const DeviceJoinManagementStatus(
+          joinSessionId: 'join-1',
+          recipientDeviceId: 'device-new',
+          phase: 'failed',
+          attempts: 3,
+          nextAttemptAtMs: 0,
+        ),
+      ];
+    await tester.pumpWidget(_app(const DevicesPage(), core));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('devices-page'))),
+    );
+    await container
+        .read(devicesProvider.notifier)
+        .retryJoinManagement('join-1');
+    expect(
+      container.read(devicesProvider).error,
+      DeviceManagementErrorKind.failed,
+    );
+    expect(container.read(devicesProvider).isActionPending, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+    'device page refreshes local readiness after delayed activation',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final core = FakeDeviceManagementCore()
+        ..registry = _rootTransferRegistry()
+        ..localManagementReadyOverride = false;
+      await tester.pumpWidget(_app(const DevicesPage(), core));
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('devices-page'))),
+      );
+      expect(container.read(devicesProvider).currentDeviceCanManage, isFalse);
+      core.localManagementReadyOverride = true;
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(container.read(devicesProvider).currentDeviceCanManage, isTrue);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   testWidgets(
     'device list grants management to an eligible member after fresh presence',

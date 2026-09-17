@@ -41,17 +41,22 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
 
   List<DeviceJoinManagementStatus> managementStatuses =
       <DeviceJoinManagementStatus>[];
+  Future<List<DeviceJoinManagementStatus>> Function()? managementStatusLoader;
+  Object? managementRetryError;
   final List<String> managementRetries = <String>[];
   @override
   Future<List<DeviceJoinManagementStatus>> deviceJoinManagementStatus(
     String selector,
-  ) async => managementStatuses;
+  ) async => managementStatusLoader == null
+      ? managementStatuses
+      : await managementStatusLoader!();
   @override
   Future<void> retryDeviceJoinManagement({
     required String selector,
     required String joinSessionId,
   }) async {
     managementRetries.add(joinSessionId);
+    if (managementRetryError != null) throw managementRetryError!;
   }
 
   String resolvedJoinDid = testDid;
