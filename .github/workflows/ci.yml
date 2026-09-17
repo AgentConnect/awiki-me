@@ -83,7 +83,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/dsh-awiki
-          ref: 32024ba848febd7f3a03e6b40e5a0afa0c6a1231
+          ref: f4b181f22c58bcc1a76f8099882ddc5191823eab
           path: dsh-awiki
           persist-credentials: false
 
@@ -91,10 +91,47 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/user-service
-          ref: a2b4852a1442873aaa816fc4964d4fde6e4d0a39
+          ref: 831cd43587baebe98f6aff9972d00e88850cdcd7
           token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
           path: user-service
           persist-credentials: false
+
+      - name: Checkout pinned Web contract source
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/awiki-web
+          ref: e0b9bf029338aa914169523ef09a729f58d8b028
+          token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
+          path: awiki-web
+          persist-credentials: false
+
+      - name: Checkout pinned Desktop contract source
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/deepseek-harness-desktop
+          ref: 82c36f3d3c850fe376e8cc5de3d3e1d07ab59ccf
+          path: deepseek-harness-desktop
+          persist-credentials: false
+
+      # Match the pinned System Test coordinator's update-wire fixtures.
+      - name: Setup Node for cross-repository contracts
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24.12.0'
+
+      - name: Install frozen DSH contract dependencies
+        working-directory: dsh-awiki
+        run: |
+          corepack enable
+          corepack pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Install frozen Desktop contract dependencies
+        working-directory: deepseek-harness-desktop
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          node scripts/prepare-runtime-inputs.mjs
+          corepack yarn install --immutable --mode=skip-build
 
       - name: Prepare canonical App source path for contracts
         run: ln -s test-awiki-me awiki-me
