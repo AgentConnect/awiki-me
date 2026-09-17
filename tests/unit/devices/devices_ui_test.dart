@@ -2107,7 +2107,7 @@ void main() {
         );
       }
       if (phase == 'expired' || phase == 'invalidated') {
-        expect(find.textContaining('撤销此设备后重新加入'), findsOneWidget);
+        expect(find.textContaining('退出本地身份（保留数据）后重新加入'), findsOneWidget);
         await container
             .read(devicesProvider.notifier)
             .retryJoinManagement('join-1');

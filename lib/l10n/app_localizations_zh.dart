@@ -3566,5 +3566,5 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get deviceJoinManagementRejoinRequired =>
-      '管理权限配置已失效，请由管理设备撤销此设备后重新加入。';
+      '管理权限配置已失效，请由管理设备撤销此设备，再在此设备上退出本地身份（保留数据）后重新加入。';
 }

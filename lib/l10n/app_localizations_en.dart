@@ -3809,5 +3809,5 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceJoinManagementRejoinRequired =>
-      'Management setup is no longer valid. Have an administrator revoke this device, then join again.';
+      'Management setup is no longer valid. Have an administrator revoke this device, then sign out locally on this device while keeping its data and join again.';
 }

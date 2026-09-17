@@ -6685,7 +6685,7 @@ abstract class AppLocalizations {
   /// No description provided for @deviceJoinManagementRejoinRequired.
   ///
   /// In zh, this message translates to:
-  /// **'管理权限配置已失效，请由管理设备撤销此设备后重新加入。'**
+  /// **'管理权限配置已失效，请由管理设备撤销此设备，再在此设备上退出本地身份（保留数据）后重新加入。'**
   String get deviceJoinManagementRejoinRequired;
 }
 
