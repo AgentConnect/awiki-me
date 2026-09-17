@@ -85,6 +85,32 @@ void main() {
     }
   });
 
+  test('release/0910 native lanes select the same compatible Core baseline', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    final jobs = workflow['jobs'] as YamlMap;
+    const pin =
+        "(github.base_ref == 'release/0910' && 'dd4b29d4d368ea91001a9b5c1c45449f1bdfa7f4')";
+    for (final name in ['validate', 'remote-product']) {
+      final checkout = (jobs[name]['steps'] as YamlList)
+          .cast<YamlMap>()
+          .singleWhere(
+            (step) =>
+                step['with'] is YamlMap &&
+                step['with']['path'] == 'awiki-cli-rs2',
+          );
+      expect(
+        checkout['with']['ref'],
+        '\u0024{{ github.event.inputs.cli_ref || $pin || vars.AWIKI_CLI_RS2_REF }}',
+      );
+    }
+    expect(
+      jobs['windows-pr']['env']['WINDOWS_CORE_REF'],
+      '\u0024{{ github.event.inputs.cli_ref || $pin || vars.AWIKI_CLI_RS2_WINDOWS_REF || vars.AWIKI_CLI_RS2_REF }}',
+    );
+  });
+
   test('PR checkout credentials are scoped to private contract sources', () {
     final workflow =
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())

@@ -120,6 +120,10 @@ and native build checks while excluding `remote-product`, so it does not use
 remote account/OTP scenarios. Scheduled runs and ordinary manual product runs
 retain their existing behavior. Record the explicit ref; do not treat a run
 against the repository's older default ref as evidence for the new baseline.
+PRs targeting `release/0910` pin Core source
+`dd4b29d4d368ea91001a9b5c1c45449f1bdfa7f4` in both native lanes because that App
+baseline already consumes the processing-session API. Explicit manual refs still
+take precedence; other target branches retain repository-managed defaults.
 
 ## Unit Gate
 
