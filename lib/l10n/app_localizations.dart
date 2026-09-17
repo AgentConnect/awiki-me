@@ -3162,6 +3162,18 @@ abstract class AppLocalizations {
   /// **'添加失败，请稍后重试'**
   String get groupInviteAddFailed;
 
+  /// No description provided for @groupInviteAdmissionDenied.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务器不允许此身份加入群聊'**
+  String get groupInviteAdmissionDenied;
+
+  /// No description provided for @groupInviteFederatedDenied.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务器策略不允许该外域身份加入群聊'**
+  String get groupInviteFederatedDenied;
+
   /// No description provided for @groupInviteConfirmCount.
   ///
   /// In zh, this message translates to:
@@ -4257,8 +4269,8 @@ abstract class AppLocalizations {
   /// No description provided for @agentInstallSupportedTypes.
   ///
   /// In zh, this message translates to:
-  /// **'支持的 Agent 类型：Hermes、Codex、Claude Code。安装宿主代理后，可在 Daemon 下创建 Runtime Agent。'**
-  String get agentInstallSupportedTypes;
+  /// **'支持 {types}。安装 Daemon 后可创建智能体；外部客户端需在同一设备上安装并完成配置。'**
+  String agentInstallSupportedTypes(String types);
 
   /// No description provided for @agentInstallTokenExpiresAt.
   ///
@@ -4521,43 +4533,43 @@ abstract class AppLocalizations {
   /// No description provided for @agentCreateNeedsRouteWorkspace.
   ///
   /// In zh, this message translates to:
-  /// **'{agentType} 需要按会话目录工作模式。'**
+  /// **'请升级此设备的 Daemon，以启用 {agentType}。'**
   String agentCreateNeedsRouteWorkspace(Object agentType);
 
   /// No description provided for @agentCreateHermesDescription.
   ///
   /// In zh, this message translates to:
-  /// **'内置 Hermes Runtime Agent。'**
+  /// **'使用 Daemon 内置的 Hermes 运行环境。'**
   String get agentCreateHermesDescription;
 
   /// No description provided for @agentCreateNeedsGenericCliCapability.
   ///
   /// In zh, this message translates to:
-  /// **'{agentType} 需要 Daemon 提供 generic-cli capability。'**
+  /// **'请先刷新设备状态，以确认是否支持 {agentType}。'**
   String agentCreateNeedsGenericCliCapability(Object agentType);
 
   /// No description provided for @agentCreateUnsupportedDriver.
   ///
   /// In zh, this message translates to:
-  /// **'当前 Daemon 不支持 {agentType} driver。'**
+  /// **'当前设备的 Daemon 尚不支持 {agentType}，请升级后重试。'**
   String agentCreateUnsupportedDriver(Object agentType);
 
   /// No description provided for @agentCreateNeedsRouteSession.
   ///
   /// In zh, this message translates to:
-  /// **'{agentType} 需要 route session 和 native resume 支持。'**
+  /// **'请升级此设备的 Daemon，以启用 {agentType}。'**
   String agentCreateNeedsRouteSession(Object agentType);
 
   /// No description provided for @agentCreateNeedsHostAccess.
   ///
   /// In zh, this message translates to:
-  /// **'{agentType} 需要 Daemon 支持宿主机全权限模式。'**
+  /// **'请升级此设备的 Daemon，以启用 {agentType}。'**
   String agentCreateNeedsHostAccess(Object agentType);
 
   /// No description provided for @agentCreateRequiresSignedInCli.
   ///
   /// In zh, this message translates to:
-  /// **'需要 Daemon 上已安装并登录的 {agentType} CLI。'**
+  /// **'使用宿主机上的 {agentType}，需安装并完成登录或 API 配置。'**
   String agentCreateRequiresSignedInCli(Object agentType);
 
   /// No description provided for @agentCreateHostAccessTitle.

@@ -5,7 +5,8 @@ String _modelName(AcpSession session, BuildContext context) {
   for (final model in session.models) {
     if (model['id'] == id) return '${model['name'] ?? id}';
   }
-  return id?.toString() ?? acpText(context, '选择模型', 'Choose model');
+  return id?.toString() ??
+      acpText(context, '客户端未提供当前模型', 'Client did not report the current model');
 }
 
 class AcpSessionOptions extends ConsumerWidget {
@@ -14,7 +15,7 @@ class AcpSessionOptions extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = context.awikiTheme;
-    if (!session.contextLost && (session.group || session.models.isEmpty)) {
+    if (!session.contextLost && session.group) {
       return const SizedBox.shrink();
     }
     return Padding(
@@ -57,28 +58,37 @@ class AcpSessionOptions extends ConsumerWidget {
                 ],
               ),
             ),
-          if (!session.group && session.models.isNotEmpty)
+          if (!session.group)
+            _AcpModelOperationStatus(
+              scope: (
+                agentDid: session.agentDid,
+                conversationId: session.conversationId,
+              ),
+            ),
+          if (!session.group)
             Align(
               alignment: Alignment.centerLeft,
               child: CupertinoButton(
                 key: const Key('acp-model-menu'),
                 minimumSize: const Size(44, 44),
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                onPressed: () {
-                  final epoch = ref.read(sessionProvider).activeEpoch;
-                  final projected = ref
-                      .read(acpSessionsProvider)
-                      .sessions
-                      .containsKey(session.key);
-                  showCupertinoModalPopup<void>(
-                    context: context,
-                    builder: (_) => _AcpModelPicker(
-                      initial: session,
-                      epoch: epoch,
-                      wasProjected: projected,
-                    ),
-                  );
-                },
+                onPressed: session.models.isEmpty
+                    ? null
+                    : () {
+                        final epoch = ref.read(sessionProvider).activeEpoch;
+                        final projected = ref
+                            .read(acpSessionsProvider)
+                            .sessions
+                            .containsKey(session.key);
+                        showCupertinoModalPopup<void>(
+                          context: context,
+                          builder: (_) => _AcpModelPicker(
+                            initial: session,
+                            epoch: epoch,
+                            wasProjected: projected,
+                          ),
+                        );
+                      },
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -131,8 +141,6 @@ class _AcpModelPicker extends ConsumerStatefulWidget {
 
 class _AcpModelPickerState extends ConsumerState<_AcpModelPicker> {
   String _query = '';
-  String? _busyModel;
-  String? _uncertainModel;
 
   @override
   Widget build(BuildContext context) {
@@ -141,6 +149,11 @@ class _AcpModelPickerState extends ConsumerState<_AcpModelPicker> {
       acpSessionsProvider.select((s) => s.sessions[widget.initial.key]),
     );
     final session = projected ?? widget.initial;
+    final scope = (
+      agentDid: session.agentDid,
+      conversationId: session.conversationId,
+    );
+    final operation = ref.watch(acpModelControllerProvider(scope));
     final sameOwner =
         ref.watch(sessionProvider.select((s) => s.activeEpoch)) == widget.epoch;
     final available =
@@ -177,6 +190,7 @@ class _AcpModelPickerState extends ConsumerState<_AcpModelPicker> {
                     onClose: () => Navigator.of(context).pop(),
                     closeLabel: acpText(context, '关闭', 'Close'),
                   ),
+                  _AcpModelOperationStatus(scope: scope),
                   if (!available)
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
@@ -215,7 +229,7 @@ class _AcpModelPickerState extends ConsumerState<_AcpModelPicker> {
                     Padding(
                       padding: const EdgeInsets.only(top: 14),
                       child: CupertinoSearchTextField(
-                        enabled: _busyModel == null && _uncertainModel == null,
+                        enabled: !operation.blocksSending,
                         key: const Key('acp-model-search'),
                         placeholder: acpText(context, '搜索模型', 'Search models'),
                         onChanged: (value) => setState(() => _query = value),
@@ -245,28 +259,25 @@ class _AcpModelPickerState extends ConsumerState<_AcpModelPicker> {
                 final selected = id == session.data['model_id'];
                 return Padding(
                   padding: const EdgeInsets.only(top: 4),
-                  child: AcpActionButton(
+                  child: CupertinoButton(
                     key: ValueKey('acp-model:$id'),
-                    session: session,
-                    action: 'set_model',
-                    values: {'model_id': id},
-                    label: '${model['name'] ?? id}',
-                    enabled:
-                        available &&
-                        id.isNotEmpty &&
-                        (_busyModel == null || _busyModel == id) &&
-                        (_uncertainModel == null || _uncertainModel == id),
-                    onBusyChanged: (busy) {
-                      if (mounted) {
-                        setState(() => _busyModel = busy ? id : null);
-                      }
-                    },
-                    onUncertain: (uncertain) {
-                      if (mounted) {
-                        setState(() => _uncertainModel = uncertain ? id : null);
-                      }
-                    },
-                    onDone: () => Navigator.of(context).pop(),
+                    padding: EdgeInsets.zero,
+                    onPressed:
+                        available && id.isNotEmpty && !operation.blocksSending
+                        ? () async {
+                            final done = await ref
+                                .read(
+                                  acpModelControllerProvider(scope).notifier,
+                                )
+                                .select(session, id);
+                            if (done &&
+                                context.mounted &&
+                                ref.read(sessionProvider).activeEpoch ==
+                                    widget.epoch) {
+                              Navigator.of(context).pop();
+                            }
+                          }
+                        : null,
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),

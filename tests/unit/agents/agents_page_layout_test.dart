@@ -1998,14 +1998,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('需刷新'), findsNWidgets(2));
-      expect(
-        find.text('Codex 需要 Daemon 提供 generic-cli capability。'),
-        findsOneWidget,
-      );
-      expect(
-        find.text('Claude Code 需要 Daemon 提供 generic-cli capability。'),
-        findsOneWidget,
-      );
+      expect(find.text('请先刷新设备状态，以确认是否支持 Codex。'), findsOneWidget);
+      expect(find.text('请先刷新设备状态，以确认是否支持 Claude Code。'), findsOneWidget);
 
       await tester.tap(find.text('Codex'));
       await tester.pumpAndSettle();
@@ -2026,10 +2020,7 @@ void main() {
       );
 
       expect(find.text('需刷新'), findsWidgets);
-      expect(
-        find.text('Codex 需要 Daemon 提供 generic-cli capability。'),
-        findsOneWidget,
-      );
+      expect(find.text('请先刷新设备状态，以确认是否支持 Codex。'), findsOneWidget);
 
       await tester.tap(find.text('Codex'));
       await tester.pumpAndSettle();
@@ -2052,7 +2043,7 @@ void main() {
       );
 
       expect(find.text('需要升级'), findsWidgets);
-      expect(find.text('Codex 需要按会话目录工作模式。'), findsOneWidget);
+      expect(find.text('请升级此设备的 Daemon，以启用 Codex。'), findsOneWidget);
 
       await tester.tap(find.text('Codex'));
       await tester.pumpAndSettle();
@@ -3020,7 +3011,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('到宿主机安装代理'), findsWidgets);
-    expect(find.textContaining('支持的 Agent 类型：Hermes'), findsWidgets);
+    expect(
+      find.textContaining(
+        '支持 Hermes、Codex、Claude Code、OpenCode、Gemini CLI、Kimi Code CLI、DeepSeek Harness。',
+      ),
+      findsWidgets,
+    );
     expect(find.byIcon(CupertinoIcons.xmark), findsOneWidget);
     expect(find.byKey(const Key('agent-install-copy-button')), findsOneWidget);
     expect(find.text('重新生成命令'), findsNothing);

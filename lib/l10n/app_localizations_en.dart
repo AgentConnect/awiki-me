@@ -1727,6 +1727,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not add this identity. Try again later.';
 
   @override
+  String get groupInviteAdmissionDenied =>
+      'The server does not allow this identity to join the group.';
+
+  @override
+  String get groupInviteFederatedDenied =>
+      'Server policy does not allow this external identity to join the group.';
+
+  @override
   String groupInviteConfirmCount(int count) {
     return 'Add ($count)';
   }
@@ -2362,8 +2370,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentInstallTitle => 'Install daemon on host';
 
   @override
-  String get agentInstallSupportedTypes =>
-      'Supported Agent types: Hermes, Codex, Claude Code. After installing the host daemon, you can create Runtime Agents under it.';
+  String agentInstallSupportedTypes(String types) {
+    return 'Supports $types. After installing Daemon, create an agent here. External clients must be installed and configured on the same device.';
+  }
 
   @override
   String agentInstallTokenExpiresAt(Object expiresAt) {
@@ -2519,35 +2528,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String agentCreateNeedsRouteWorkspace(Object agentType) {
-    return '$agentType requires per-conversation working directories.';
+    return 'Upgrade Daemon on this device to enable $agentType.';
   }
 
   @override
-  String get agentCreateHermesDescription => 'Built-in Hermes Runtime Agent.';
+  String get agentCreateHermesDescription =>
+      'Uses the Hermes runtime included with Daemon.';
 
   @override
   String agentCreateNeedsGenericCliCapability(Object agentType) {
-    return '$agentType requires generic-cli capability from the daemon.';
+    return 'Refresh the device status to check support for $agentType.';
   }
 
   @override
   String agentCreateUnsupportedDriver(Object agentType) {
-    return 'The current daemon does not support the $agentType driver.';
+    return 'This device’s Daemon does not yet support $agentType. Upgrade it and try again.';
   }
 
   @override
   String agentCreateNeedsRouteSession(Object agentType) {
-    return '$agentType requires route session and native resume support.';
+    return 'Upgrade Daemon on this device to enable $agentType.';
   }
 
   @override
   String agentCreateNeedsHostAccess(Object agentType) {
-    return '$agentType requires daemon support for full host access.';
+    return 'Upgrade Daemon on this device to enable $agentType.';
   }
 
   @override
   String agentCreateRequiresSignedInCli(Object agentType) {
-    return 'Requires an installed and signed-in $agentType CLI on the daemon host.';
+    return 'Uses $agentType on the host. Install it and sign in or configure API access first.';
   }
 
   @override

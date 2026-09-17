@@ -343,7 +343,7 @@ void main() {
             .enabled,
         isFalse,
       );
-      await tester.tap(find.text('Decline'));
+      await tester.tap(find.text('Skip question'));
       await tester.pump();
       expect(service.requests, hasLength(1));
       service.completion = Completer<Map<String, Object?>>();
@@ -354,7 +354,7 @@ void main() {
       service.completion!.complete({});
       await tester.pump();
       expect(
-        find.text('Response sent. Waiting for the agent.'),
+        find.text('Answer received. Waiting for the agent.'),
         findsOneWidget,
       );
       await tester.pumpWidget(const SizedBox());
@@ -425,7 +425,7 @@ void main() {
       );
       expect(find.text('Submit answer'), findsNothing);
       expect(find.textContaining('not supported'), findsOneWidget);
-      await tester.tap(find.text('Decline'));
+      await tester.tap(find.text('Skip question'));
       await tester.pump();
       expect(acpMap(service.requests.single['args'])['response'], {
         'action': 'decline',
@@ -477,7 +477,7 @@ void main() {
           .enabled,
       isFalse,
     );
-    await tester.tap(find.text('Decline'));
+    await tester.tap(find.text('Skip question'));
     await tester.pump();
     expect(service.requests, hasLength(1));
     service.completion!.complete({});

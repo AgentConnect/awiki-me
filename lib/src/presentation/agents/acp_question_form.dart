@@ -1,6 +1,6 @@
 part of 'acp_task_status.dart';
 
-class AcpQuestionForm extends StatefulWidget {
+class AcpQuestionForm extends ConsumerStatefulWidget {
   const AcpQuestionForm({
     super.key,
     required this.session,
@@ -11,10 +11,10 @@ class AcpQuestionForm extends StatefulWidget {
   final Map<String, Object?> question;
   final bool canAnswer;
   @override
-  State<AcpQuestionForm> createState() => _AcpQuestionFormState();
+  ConsumerState<AcpQuestionForm> createState() => _AcpQuestionFormState();
 }
 
-class _AcpQuestionFormState extends State<AcpQuestionForm>
+class _AcpQuestionFormState extends ConsumerState<AcpQuestionForm>
     with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
@@ -23,14 +23,79 @@ class _AcpQuestionFormState extends State<AcpQuestionForm>
   Map<String, String> _errors = {};
   Timer? _expiry;
   bool _expired = false;
-  bool _submitted = false;
-  String? _busyAction;
-  String? _uncertainAction;
+  AcpQuestionDraft _draft = const AcpQuestionDraft();
+  AcpQuestionScope? _restoredScope;
+  Object? _restoredEpoch;
+  final _custom = TextEditingController();
+  final _additional = TextEditingController();
+  bool _customMode = false;
+  bool _additionalExpanded = false;
+  AcpQuestionScope get _scope =>
+      acpQuestionScope(widget.session, widget.question);
+  bool get _submitted => _draft.phase == AcpAnswerPhase.accepted;
+  String? get _busyAction =>
+      _draft.phase == AcpAnswerPhase.sending ? _draft.action : null;
+  String? get _uncertainAction =>
+      _draft.phase == AcpAnswerPhase.uncertain ? _draft.action : null;
+  bool get _version2 =>
+      widget.question['interaction_version'] == 2 &&
+      widget.question['definition_hash'] is String;
+  bool get _hasChoices => acpMap(
+    _schema['properties'],
+  ).values.any((p) => _questionOptions(acpMap(p)).isNotEmpty);
+  bool get _canCustom =>
+      _version2 &&
+      widget.question['can_custom_answer'] == true &&
+      (_hasChoices ||
+          acpMap(_schema['properties']).length > 1 ||
+          acpMap(
+            _schema['properties'],
+          ).values.any((p) => acpMap(p)['type'] != 'string'));
+  bool get _canAdditional =>
+      _version2 &&
+      widget.question['can_additional_text'] == true &&
+      _hasChoices;
+  bool get _canCancel =>
+      !_version2 || widget.question['can_cancel_question'] == true;
+
+  void _persistDraft() =>
+      ref.read(acpQuestionControllerProvider(_scope).notifier).edit({
+        'answers': _answers,
+        'field_texts': {
+          for (final e in _controllers.entries) e.key: e.value.text,
+        },
+        'custom_text': _custom.text,
+        'additional_text': _additional.text,
+        'mode': _customMode ? 'custom' : 'structured',
+        'additional_expanded': _additionalExpanded,
+      });
+
+  void _restoreDraft() {
+    if (_draft.loading || _restoredScope == _scope) return;
+    _restoredScope = _scope;
+    final data = _draft.data;
+    _answers
+      ..clear()
+      ..addAll(acpMap(data['answers']));
+    for (final entry in acpMap(data['field_texts']).entries) {
+      _controllers.putIfAbsent(entry.key, TextEditingController.new).text =
+          entry.value?.toString() ?? '';
+    }
+    _custom.text = data['custom_text']?.toString() ?? '';
+    _additional.text = data['additional_text']?.toString() ?? '';
+    _customMode = _canCustom && data['mode'] == 'custom';
+    _additionalExpanded = data['additional_expanded'] == true;
+  }
 
   Map<String, Object?> get _request => acpMap(widget.question['request']);
   Map<String, Object?> get _schema => acpMap(_request['requestedSchema']);
   bool get _available =>
+      !_draft.loading &&
+      _draft.error != 'draft_load_failed' &&
       widget.canAnswer &&
+      widget.question['response'] == null &&
+      (widget.question['status'] == null ||
+          widget.question['status'] == 'pending') &&
       !widget.session.stopping &&
       !_expired &&
       widget.session.active['run_id'] == widget.question['run_id'] &&
@@ -61,9 +126,7 @@ class _AcpQuestionFormState extends State<AcpQuestionForm>
     if (changed) {
       _answers.clear();
       _errors.clear();
-      _submitted = false;
-      _busyAction = null;
-      _uncertainAction = null;
+      _restoredScope = null;
       for (final controller in _controllers.values) {
         controller.dispose();
       }
@@ -93,6 +156,8 @@ class _AcpQuestionFormState extends State<AcpQuestionForm>
   @override
   void dispose() {
     _expiry?.cancel();
+    _custom.dispose();
+    _additional.dispose();
     for (final controller in _controllers.values) {
       controller.dispose();
     }
@@ -111,14 +176,31 @@ class _AcpQuestionFormState extends State<AcpQuestionForm>
     final required = _schema['required'] is List
         ? _schema['required']! as List
         : const [];
-    for (final field in acpMap(_schema['properties']).entries) {
-      final error = _validateQuestionField(
+    if (!_customMode) {
+      for (final field in acpMap(_schema['properties']).entries) {
+        final error = _validateQuestionField(
+          context,
+          acpMap(field.value),
+          _answers[field.key],
+          required: required.contains(field.key),
+        );
+        if (error != null) errors[field.key] = error;
+      }
+    }
+    final text = _customMode
+        ? _custom.text
+        : _canAdditional
+        ? _additional.text
+        : '';
+    if (_customMode && text.trim().isEmpty) {
+      errors['_text'] = acpText(context, '请输入你的回答。', 'Enter your answer.');
+    }
+    if (utf8.encode(text).length > 16384) {
+      errors['_text'] = acpText(
         context,
-        acpMap(field.value),
-        _answers[field.key],
-        required: required.contains(field.key),
+        '文字过长，请缩短后提交（最多 16 KiB）。',
+        'Text is too long. Shorten it to 16 KiB or less.',
       );
-      if (error != null) errors[field.key] = error;
     }
     setState(() => _errors = errors);
     if (errors.isNotEmpty) {
@@ -139,20 +221,43 @@ class _AcpQuestionFormState extends State<AcpQuestionForm>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final epoch = ref.watch(sessionProvider.select((s) => s.activeEpoch));
+    if (_restoredEpoch != epoch) {
+      _restoredEpoch = epoch;
+      _restoredScope = null;
+      _answers.clear();
+      for (final controller in _controllers.values) {
+        controller.clear();
+      }
+      _custom.clear();
+      _additional.clear();
+    }
+    _draft = ref.watch(acpQuestionControllerProvider(_scope));
+    _restoreDraft();
     final theme = context.awikiTheme;
     final properties = acpMap(_schema['properties']);
     final required = _schema['required'] is List
         ? _schema['required']! as List
         : const [];
     final supported =
+        (widget.question['interaction_version'] == null ||
+            const {1, 2}.contains(widget.question['interaction_version'])) &&
         _schema['type'] == 'object' &&
         (_request['mode'] == null || _request['mode'] == 'form') &&
         properties.values.every((p) => _supportedQuestionField(acpMap(p)));
-    final notice = _submitted
+    final notice = _draft.loading
+        ? acpText(context, '正在恢复回答草稿…', 'Restoring your draft…')
+        : _draft.error == 'draft_load_failed'
         ? acpText(
             context,
-            '回答已发送，等待智能体继续。',
-            'Response sent. Waiting for the agent.',
+            '无法读取回答草稿，请重试。',
+            'Could not restore your answer. Please retry.',
+          )
+        : _submitted
+        ? acpText(
+            context,
+            '回答已接收，等待智能体继续。',
+            'Answer received. Waiting for the agent.',
           )
         : _expired || widget.session.stopping || !_available && widget.canAnswer
         ? acpText(
@@ -165,14 +270,20 @@ class _AcpQuestionFormState extends State<AcpQuestionForm>
         : !supported
         ? acpText(
             context,
-            '暂不支持这种问题形式，请拒绝回答或取消问题。',
-            'This question format is not supported. Decline or cancel to continue.',
+            '暂不支持这种问题形式，可以跳过此问题。',
+            'This question format is not supported. You can skip this question.',
           )
         : _uncertainAction != null
         ? acpText(
             context,
             '回答尚未确认。内容已保留，可重试同一操作。',
             'Response not confirmed. Your answer is kept; retry the same action.',
+          )
+        : _draft.error != null
+        ? acpText(
+            context,
+            '未能确认操作，内容已保留，请检查状态后重试。',
+            'The action was not confirmed. Your answer is kept; check the state and retry.',
           )
         : null;
     return Container(
@@ -242,7 +353,14 @@ class _AcpQuestionFormState extends State<AcpQuestionForm>
                 ),
               ),
             ),
-          if (supported)
+          if (_draft.error == 'draft_load_failed')
+            CupertinoButton(
+              onPressed: () => ref
+                  .read(acpQuestionControllerProvider(_scope).notifier)
+                  .reload(),
+              child: Text(acpText(context, '重试', 'Retry')),
+            ),
+          if (supported && !_customMode)
             for (final field in properties.entries)
               Padding(
                 key: _fieldKeys.putIfAbsent(field.key, GlobalKey.new),
@@ -266,9 +384,81 @@ class _AcpQuestionFormState extends State<AcpQuestionForm>
                       _answers[field.key] = value;
                     }
                     _errors.remove(field.key);
+                    _persistDraft();
                   }),
                 ),
               ),
+          if (supported && _customMode)
+            _textAnswer(
+              _custom,
+              'acp-custom-answer',
+              acpText(context, '你的回答', 'Your answer'),
+              autofocus: true,
+            ),
+          if (supported && !_customMode && _canAdditional) ...[
+            CupertinoButton(
+              key: const Key('acp-additional-toggle'),
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              onPressed: _editing
+                  ? () => setState(() {
+                      _additionalExpanded = !_additionalExpanded;
+                      _persistDraft();
+                    })
+                  : null,
+              child: Text(
+                acpText(
+                  context,
+                  _additionalExpanded ? '收起补充说明' : '＋ 补充说明（选填）',
+                  _additionalExpanded
+                      ? 'Hide additional details'
+                      : '+ Additional details (optional)',
+                ),
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+            if (_additionalExpanded)
+              _textAnswer(
+                _additional,
+                'acp-additional-text',
+                acpText(context, '补充说明', 'Additional details'),
+              ),
+          ],
+          if (_errors['_text'] != null)
+            Text(
+              _errors['_text']!,
+              style: TextStyle(fontSize: 12, color: theme.danger),
+            ),
+          if (supported && _canCustom)
+            CupertinoButton(
+              key: const Key('acp-answer-mode'),
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              onPressed: _editing
+                  ? () => setState(() {
+                      _customMode = !_customMode;
+                      _errors.clear();
+                      _persistDraft();
+                    })
+                  : null,
+              child: Text(
+                acpText(
+                  context,
+                  _customMode ? '返回选项' : '不选这些，自己回答',
+                  _customMode ? 'Back to fields' : 'Write my own answer',
+                ),
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          if (supported && _hasChoices && !_canCustom)
+            Text(
+              acpText(
+                context,
+                '此问题仅支持所列选项。',
+                'This question only accepts the listed choices.',
+              ),
+              style: TextStyle(fontSize: 12, color: theme.secondaryText),
+            ),
           const SizedBox(height: 18),
           if (supported)
             _action(
@@ -281,8 +471,24 @@ class _AcpQuestionFormState extends State<AcpQuestionForm>
             spacing: 8,
             runSpacing: 4,
             children: [
-              _action('decline', acpText(context, '拒绝回答', 'Decline')),
-              _action('cancel', acpText(context, '取消问题', 'Cancel question')),
+              _action('decline', acpText(context, '跳过此问题', 'Skip question')),
+              if (_canCancel)
+                CupertinoButton(
+                  key: const Key('acp-question-more'),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  onPressed:
+                      _available &&
+                          !_submitted &&
+                          _busyAction == null &&
+                          (_uncertainAction == null ||
+                              _uncertainAction == 'cancel')
+                      ? _showMore
+                      : null,
+                  child: Text(
+                    acpText(context, '更多操作', 'More'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
             ],
           ),
         ],
@@ -290,40 +496,103 @@ class _AcpQuestionFormState extends State<AcpQuestionForm>
     );
   }
 
-  Widget _action(
-    String action,
+  Widget _textAnswer(
+    TextEditingController controller,
+    String key,
     String label, {
-    bool primary = false,
-  }) => AcpActionButton(
-    key: ValueKey(
-      '${widget.session.key}:${widget.question['run_id']}:${widget.question['id']}:$action',
-    ),
-    session: widget.session,
-    action: 'answer',
-    label: label,
-    primary: primary,
-    enabled:
-        _available &&
-        !_submitted &&
-        (_busyAction == null || _busyAction == action) &&
-        (_uncertainAction == null || _uncertainAction == action),
-    values: {
-      'run_id': widget.question['run_id'],
-      'question_id': widget.question['id'],
-      'response': {
-        'action': action,
-        if (action == 'accept') 'content': Map<String, Object?>.from(_answers),
+    bool autofocus = false,
+  }) => Padding(
+    padding: const EdgeInsets.only(top: 10),
+    child: CupertinoTextField(
+      key: Key(key),
+      controller: controller,
+      enabled: _editing,
+      autofocus: autofocus,
+      minLines: 3,
+      maxLines: 8,
+      textInputAction: TextInputAction.newline,
+      placeholder: label,
+      padding: const EdgeInsets.all(12),
+      onChanged: (_) {
+        setState(() => _errors.remove('_text'));
+        _persistDraft();
       },
-    },
-    beforeSend: () => _beforeSend(action),
-    onBusyChanged: (busy) {
-      if (mounted) setState(() => _busyAction = busy ? action : null);
-    },
-    onUncertain: (uncertain) {
-      if (mounted) setState(() => _uncertainAction = uncertain ? action : null);
-    },
-    onDone: () {
-      if (mounted) setState(() => _submitted = true);
-    },
+    ),
   );
+
+  Future<void> _showMore() async {
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    final cancel = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        message: Text(
+          acpText(
+            context,
+            '取消本次询问，不会停止整个任务。',
+            'Dismiss this question without stopping the task.',
+          ),
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(acpText(context, '取消本次询问', 'Dismiss question')),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text(acpText(context, '返回', 'Back')),
+        ),
+      ),
+    );
+    if (cancel == true &&
+        mounted &&
+        ref.read(sessionProvider).activeEpoch == epoch) {
+      await _send('cancel');
+    }
+  }
+
+  Future<void> _send(String action) async {
+    if (!_beforeSend(action)) return;
+    final response = <String, Object?>{
+      'action': action,
+      if (_version2) 'answer_format': 'awiki.answer.v2',
+      if (action == 'accept') ...{
+        if (_version2) 'mode': _customMode ? 'custom' : 'structured',
+        if (!_customMode) 'content': Map<String, Object?>.from(_answers),
+        if (_customMode || _canAdditional && _additional.text.isNotEmpty)
+          'text': _customMode ? _custom.text : _additional.text,
+      },
+    };
+    await ref
+        .read(acpQuestionControllerProvider(_scope).notifier)
+        .submit(widget.session, widget.question, response);
+  }
+
+  Widget _action(String action, String label, {bool primary = false}) =>
+      CupertinoButton(
+        key: ValueKey('acp-answer:$action:${widget.question['id']}'),
+        minimumSize: const Size(44, 44),
+        padding: EdgeInsets.symmetric(
+          horizontal: primary ? 14 : 8,
+          vertical: primary ? 10 : 6,
+        ),
+        color: primary ? context.awikiTheme.primary : null,
+        borderRadius: BorderRadius.circular(10),
+        onPressed:
+            _available &&
+                !_submitted &&
+                _busyAction == null &&
+                (_uncertainAction == null || _uncertainAction == action)
+            ? () => _send(action)
+            : null,
+        child: _busyAction == action
+            ? const CupertinoActivityIndicator()
+            : Text(
+                label,
+                style: TextStyle(
+                  fontSize: primary ? 14 : 12,
+                  color: primary ? CupertinoColors.white : null,
+                ),
+              ),
+      );
 }

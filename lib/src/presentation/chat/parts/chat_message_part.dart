@@ -1072,6 +1072,7 @@ class _MessageBubble extends StatelessWidget {
     this.isDownloading = false,
     this.onSenderInfoTap,
     this.footer,
+    this.header,
   });
 
   final ChatMessage message;
@@ -1093,6 +1094,7 @@ class _MessageBubble extends StatelessWidget {
   // Task status belongs to the same content lane as its message, inside the
   // avatar row. Its width must never move the bubble or its trailing edge.
   final Widget? footer;
+  final Widget? header;
 
   Widget _withE2eMessageSemantics({required Widget child}) {
     return e2eSemantics(
@@ -1241,43 +1243,17 @@ class _MessageBubble extends StatelessWidget {
           : CrossAxisAlignment.start,
       children: <Widget>[
         if (showSenderLabel) _buildSenderLabel(context, macStyle: true),
+        if (header != null) header!,
         _withSendingIndicator(
           context,
           isMine: isMine,
           macStyle: true,
-          child: Container(
+          child: _MessageBubbleSurface(
             key: Key('chat-message-bubble:${message.localId}'),
-            constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-            padding: EdgeInsets.symmetric(
-              horizontal: responsive.displayScaled(13),
-              vertical: responsive.displayScaled(9),
-            ),
-            decoration: BoxDecoration(
-              color: attachment != null
-                  ? theme.surface
-                  : isMine
-                  ? theme.outgoingMessage
-                  : theme.incomingMessage,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(
-                  responsive.displayScaled(isMine ? 13 : 4),
-                ),
-                topRight: Radius.circular(
-                  responsive.displayScaled(isMine ? 4 : 13),
-                ),
-                bottomLeft: Radius.circular(responsive.displayScaled(13)),
-                bottomRight: Radius.circular(responsive.displayScaled(13)),
-              ),
-              boxShadow: attachment != null
-                  ? const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x0D000000),
-                        blurRadius: 2,
-                        offset: Offset(0, 1),
-                      ),
-                    ]
-                  : null,
-            ),
+            maxWidth: maxBubbleWidth,
+            isMine: isMine,
+            hasAttachment: attachment != null,
+            macStyle: true,
             child: child,
           ),
         ),
@@ -1410,55 +1386,23 @@ class _MessageBubble extends StatelessWidget {
       text: _copyableMessageText(context, message),
       child: messageContent,
     );
-    final bubbleColor = attachment != null
-        ? theme.surface
-        : isMine
-        ? theme.outgoingMessage
-        : theme.surface;
-    final bubbleBorderColor = isMine
-        ? AwikiMePalette.brandAccent.withValues(alpha: 0.28)
-        : theme.border;
-    final bubbleRadius = responsive.displayScaled(16);
-    final bubbleTailExtent = responsive.displayScaled(6);
-    final bubbleShape = _ChatBubbleShapeBorder(
-      isMine: isMine,
-      radius: bubbleRadius,
-      tailExtent: bubbleTailExtent,
-      side: BorderSide(color: bubbleBorderColor),
-    );
-    final horizontalPadding = responsive.displayScaled(13);
     final bubble = Column(
       crossAxisAlignment: isMine
           ? CrossAxisAlignment.end
           : CrossAxisAlignment.start,
       children: <Widget>[
         if (showSenderLabel) _buildSenderLabel(context, macStyle: false),
+        if (header != null) header!,
         _withSendingIndicator(
           context,
           isMine: isMine,
           macStyle: false,
-          child: Container(
+          child: _MessageBubbleSurface(
             key: Key('chat-message-bubble:${message.localId}'),
-            constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-            padding: EdgeInsets.fromLTRB(
-              horizontalPadding + (isMine ? 0 : bubbleTailExtent),
-              responsive.displayScaled(9),
-              horizontalPadding + (isMine ? bubbleTailExtent : 0),
-              responsive.displayScaled(9),
-            ),
-            decoration: ShapeDecoration(
-              color: bubbleColor,
-              shape: bubbleShape,
-              shadows: attachment != null
-                  ? const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x0D000000),
-                        blurRadius: 2,
-                        offset: Offset(0, 1),
-                      ),
-                    ]
-                  : null,
-            ),
+            maxWidth: maxBubbleWidth,
+            isMine: isMine,
+            hasAttachment: attachment != null,
+            macStyle: false,
             child: content,
           ),
         ),
@@ -2881,13 +2825,13 @@ String _copyableMessageText(BuildContext context, ChatMessage message) {
 class _MessageSelectableContent extends ConsumerStatefulWidget {
   const _MessageSelectableContent({
     super.key,
-    required this.message,
+    this.message,
     required this.conversation,
     required this.text,
     required this.child,
   });
 
-  final ChatMessage message;
+  final ChatMessage? message;
   final ConversationSummary conversation;
   final String text;
   final Widget child;

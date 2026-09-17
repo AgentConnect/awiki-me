@@ -28,6 +28,7 @@ Map<String, Object?> snapshot({int revision = 1, bool group = false}) => {
   'agent_did': 'did:agent:runtime',
   'conversation_id': 'conversation-1',
   'revision': revision,
+  'task_history_available': true,
   'group': group,
   'active': {
     'run_id': 'a',
@@ -64,8 +65,11 @@ ChatMessage control(
 class RecordingControl implements AcpControlService {
   final List<Map<String, Object?>> requests = [];
   Completer<Map<String, Object?>>? completion;
+  void Function(Map<String, Object?>)? onModelConfirmed;
   @override
   MessagingService get messages => throw UnimplementedError();
+  @override
+  void Function(ChatMessage)? get onCommittedResponse => null;
   @override
   Future<Map<String, Object?>> send({
     required String agentDid,
@@ -73,7 +77,21 @@ class RecordingControl implements AcpControlService {
     required Map<String, Object?> args,
   }) {
     requests.add({'agent': agentDid, 'command': commandId, 'args': args});
-    return completion?.future ?? Future.value({});
+    if (completion != null) return completion!.future;
+    if (args['action'] == 'set_model') {
+      final confirmed = {
+        ...snapshot(revision: (args['revision'] as int) + 1),
+        'active': null,
+        'waiting': null,
+        'model_id': args['model_id'],
+      };
+      onModelConfirmed?.call(confirmed);
+      return Future.value({
+        'prepared_session_key': 'session-1',
+        'sessions': [confirmed],
+      });
+    }
+    return Future.value({});
   }
 }
 
@@ -413,9 +431,15 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.text('Choose model'));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(AcpSessionOptions)),
+      );
+      service.onModelConfirmed = (value) => container
+          .read(acpSessionsProvider.notifier)
+          .applyConversation(control(value), 'conversation-1');
+      await tester.tap(find.byKey(const Key('acp-model-menu')));
       await tester.pumpAndSettle();
-      final row = find.byType(AcpActionButton);
+      final row = find.byKey(const ValueKey('acp-model:deepseek-flash'));
       final bounds = tester.getRect(row);
       await tester.tapAt(Offset(bounds.right - 16, bounds.center.dy));
       await tester.pumpAndSettle();

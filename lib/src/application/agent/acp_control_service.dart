@@ -2,13 +2,15 @@ import 'dart:async';
 import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/agent/acp_session.dart';
+import '../../domain/entities/chat_message.dart';
 import '../messaging_service.dart';
 import '../models/app_thread_ref.dart';
 import '../models/thread_message_patch.dart';
 
 class AcpControlService {
-  const AcpControlService(this.messages);
+  const AcpControlService(this.messages, {this.onCommittedResponse});
   final MessagingService messages;
+  final void Function(ChatMessage message)? onCommittedResponse;
 
   /// Subscribe before sending and wait for the committed response. Transport
   /// retries keep the caller's command ID and the exact original arguments.
@@ -37,7 +39,11 @@ class AcpControlService {
                 ...committed.messages,
                 if (committed.message != null) committed.message!,
               ]) {
-                if (message.senderDid != agentDid) continue;
+                if (message.senderDid != agentDid ||
+                    message.sendState != MessageSendState.sent ||
+                    message.groupId?.isNotEmpty == true) {
+                  continue;
+                }
                 final payload = AgentControlPayloads.decode(
                   message.payloadJson,
                 );
@@ -45,6 +51,7 @@ class AcpControlService {
                     payload?['command_id'] == commandId &&
                     payload?['runtime_agent_did'] == agentDid &&
                     !completer.isCompleted) {
+                  onCommittedResponse?.call(message);
                   completer.complete(payload!);
                 }
               }
@@ -57,7 +64,11 @@ class AcpControlService {
           },
         );
     // Install the error/timeout handler before transport can synchronously emit.
-    final response = completer.future.timeout(const Duration(seconds: 25));
+    final configuration =
+        args['action'] == 'prepare_session' || args['action'] == 'set_model';
+    final response = completer.future.timeout(
+      configuration ? const Duration(minutes: 2) : const Duration(seconds: 25),
+    );
     unawaited(
       response.then<void>((_) {}, onError: (Object _, StackTrace __) {}),
     );

@@ -1396,10 +1396,12 @@
       "timeoutMinutes": 27,
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",

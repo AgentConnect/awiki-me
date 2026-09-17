@@ -1,5 +1,23 @@
+import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/acp_session.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
+
+/// Match the current instruction, never a prior message in group context.
+/// The alias is shared by the read-only Daemon evidence query and its SQL test.
+const codingAgentCurrentPromptSql = '''
+CASE WHEN json_valid(t.task_text) THEN
+  CASE WHEN json_extract(t.task_text, '\$.schema') = 'awiki.runtime.user_message_task.v1'
+    THEN json_extract(t.task_text, '\$.content_text') ELSE t.task_text END
+  WHEN substr(t.task_text, 1, length('消息文本:\n')) = '消息文本:\n'
+    AND instr(t.task_text, '\n\n附件资源:\n') > 0
+    THEN substr(t.task_text, length('消息文本:\n') + 1,
+      instr(t.task_text, '\n\n附件资源:\n') - length('消息文本:\n') - 1)
+  WHEN substr(t.task_text, 1, length('Message text:\n')) = 'Message text:\n'
+    AND instr(t.task_text, '\n\nAttachment resources:\n') > 0
+    THEN substr(t.task_text, length('Message text:\n') + 1,
+      instr(t.task_text, '\n\nAttachment resources:\n') - length('Message text:\n') - 1)
+  ELSE t.task_text END
+''';
 
 /// A prepared fixture must restore the exact authenticated account. Missing or
 /// stale state never silently registers a replacement identity.
@@ -83,3 +101,28 @@ bool matchesCodingAgentFinal(
     (allowProgressText
         ? actual.trimRight().endsWith(expected)
         : actual == expected);
+
+/// A focused invocation keeps every case for one real client. Its attestation
+/// must declare that nine-case subset; it cannot represent the four-client suite.
+List<RuntimeAgentKind> codingAgentAcpKinds(String driver) {
+  const kinds = [
+    RuntimeAgentKind.opencode,
+    RuntimeAgentKind.gemini,
+    RuntimeAgentKind.kimi,
+    RuntimeAgentKind.deepseekHarness,
+  ];
+  if (driver.isEmpty) return kinds;
+  final matches = kinds.where((kind) => kind.driverId == driver).toList();
+  if (matches.length != 1) throw StateError('unsupported_focused_acp_driver');
+  return matches;
+}
+
+/// A group rerun still proves runtime creation and pre-prompt configuration.
+/// Requiring an exact driver prevents silently shrinking a normal suite.
+List<int> codingAgentAcpCaseNumbers(String driver, {bool groupOnly = false}) {
+  codingAgentAcpKinds(driver);
+  if (groupOnly && driver.isEmpty) {
+    throw StateError('group_focus_requires_one_acp_driver');
+  }
+  return groupOnly ? const [1, 9] : const [1, 2, 3, 4, 5, 6, 7, 8, 9];
+}

@@ -1634,6 +1634,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get groupInviteAddFailed => '添加失败，请稍后重试';
 
   @override
+  String get groupInviteAdmissionDenied => '服务器不允许此身份加入群聊';
+
+  @override
+  String get groupInviteFederatedDenied => '服务器策略不允许该外域身份加入群聊';
+
+  @override
   String groupInviteConfirmCount(int count) {
     return '确认添加 ($count)';
   }
@@ -2231,8 +2237,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentInstallTitle => '到宿主机安装代理';
 
   @override
-  String get agentInstallSupportedTypes =>
-      '支持的 Agent 类型：Hermes、Codex、Claude Code。安装宿主代理后，可在 Daemon 下创建 Runtime Agent。';
+  String agentInstallSupportedTypes(String types) {
+    return '支持 $types。安装 Daemon 后可创建智能体；外部客户端需在同一设备上安装并完成配置。';
+  }
 
   @override
   String agentInstallTokenExpiresAt(Object expiresAt) {
@@ -2375,35 +2382,35 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String agentCreateNeedsRouteWorkspace(Object agentType) {
-    return '$agentType 需要按会话目录工作模式。';
+    return '请升级此设备的 Daemon，以启用 $agentType。';
   }
 
   @override
-  String get agentCreateHermesDescription => '内置 Hermes Runtime Agent。';
+  String get agentCreateHermesDescription => '使用 Daemon 内置的 Hermes 运行环境。';
 
   @override
   String agentCreateNeedsGenericCliCapability(Object agentType) {
-    return '$agentType 需要 Daemon 提供 generic-cli capability。';
+    return '请先刷新设备状态，以确认是否支持 $agentType。';
   }
 
   @override
   String agentCreateUnsupportedDriver(Object agentType) {
-    return '当前 Daemon 不支持 $agentType driver。';
+    return '当前设备的 Daemon 尚不支持 $agentType，请升级后重试。';
   }
 
   @override
   String agentCreateNeedsRouteSession(Object agentType) {
-    return '$agentType 需要 route session 和 native resume 支持。';
+    return '请升级此设备的 Daemon，以启用 $agentType。';
   }
 
   @override
   String agentCreateNeedsHostAccess(Object agentType) {
-    return '$agentType 需要 Daemon 支持宿主机全权限模式。';
+    return '请升级此设备的 Daemon，以启用 $agentType。';
   }
 
   @override
   String agentCreateRequiresSignedInCli(Object agentType) {
-    return '需要 Daemon 上已安装并登录的 $agentType CLI。';
+    return '使用宿主机上的 $agentType，需安装并完成登录或 API 配置。';
   }
 
   @override

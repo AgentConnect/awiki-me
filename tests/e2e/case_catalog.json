@@ -6448,12 +6448,13 @@
       "caseId": "ACP-OPENCODE-E2E-001",
       "feature": "OPENCODE runtime creation",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Create/select a OPENCODE runtime Agent and open its chat through UI.",
       "exactOracles": [
         "The committed daemon create status converges the Agent page without a manual inventory refresh.",
         "From the optimistic pending intent through authoritative Inventory and canonical Direct route reconciliation, the exact runtime Handle has exactly one E2E-identified Agent row, including any pending-plus-Runtime overlap.",
-        "One canonical runtime Agent is selected and its chat is visible."
+        "One canonical runtime Agent is selected and its chat is visible.",
+        "Before the first prompt, the actual model is visible, selectable and confirmed without a task or model generation."
       ],
       "negativeChecks": [
         "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, more or fewer than one target row at any observed creation phase, duplicate authoritative Runtime, or backend/UI divergence fails."
@@ -6472,7 +6473,8 @@
           "ACP-OPENCODE-E2E-001:daemon_selected",
           "ACP-OPENCODE-E2E-001:runtime_agent_created",
           "ACP-OPENCODE-E2E-001:runtime_creation_row_unique_throughout",
-          "ACP-OPENCODE-E2E-001:runtime_chat_opened"
+          "ACP-OPENCODE-E2E-001:runtime_chat_opened",
+          "ACP-OPENCODE-E2E-001:initial_model_visible_and_selectable"
         ],
         "exactOracleAssertions": [
           [
@@ -6492,6 +6494,9 @@
             "ACP-OPENCODE-E2E-001:runtime_agent_created",
             "ACP-OPENCODE-E2E-001:runtime_creation_row_unique_throughout",
             "ACP-OPENCODE-E2E-001:runtime_chat_opened"
+          ],
+          [
+            "ACP-OPENCODE-E2E-001:initial_model_visible_and_selectable"
           ]
         ],
         "negativeCheckAssertions": [
@@ -6508,7 +6513,7 @@
       "caseId": "ACP-OPENCODE-E2E-002",
       "feature": "OPENCODE prompt send",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Enter and send the deterministic prompt through UI.",
       "exactOracles": [
         "Visible send action completes for the exact prompt."
@@ -6548,7 +6553,7 @@
       "caseId": "ACP-OPENCODE-E2E-003",
       "feature": "OPENCODE runtime completion",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Wait for daemon runtime_run and final outbox.",
       "exactOracles": [
         "One run reaches finished and one final outbox record reaches sent."
@@ -6588,7 +6593,7 @@
       "caseId": "ACP-OPENCODE-E2E-004",
       "feature": "OPENCODE reply visibility",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Sync App history and wait for the visible reply.",
       "exactOracles": [
         "Exact expected reply appears once in canonical history and UI."
@@ -6628,10 +6633,11 @@
       "caseId": "ACP-OPENCODE-E2E-005",
       "feature": "ACP 单等待位、草稿保留、停止与执行",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "ACP 单等待位、草稿保留、停止与执行",
       "exactOracles": [
-        "通过真实 APP 操作和已提交状态逐项验证：single_waiting_slot, third_draft_retained, stop_pauses_waiting, manual_execute_finishes；空闲模型选择经真实控制链路提交，执行等待项会先取消当前任务，再完成等待任务且各状态唯一。"
+        "通过真实 APP 操作和已提交状态逐项验证：single_waiting_slot, third_draft_retained, stop_pauses_waiting, manual_execute_finishes；空闲模型选择经真实控制链路提交，执行等待项会先取消当前任务，再完成等待任务且各状态唯一。",
+        "After stopping A and completing B, the shared Agent activity projection is idle."
       ],
       "negativeChecks": [
         "超时、错会话、草稿丢失、自动回答或终态缺失均失败。"
@@ -6652,7 +6658,8 @@
           "ACP-OPENCODE-E2E-005:stop_pauses_waiting",
           "ACP-OPENCODE-E2E-005:manual_execute_finishes",
           "ACP-OPENCODE-E2E-005:idle_model_selection_applied",
-          "ACP-OPENCODE-E2E-005:immediate_execution_stops_active"
+          "ACP-OPENCODE-E2E-005:immediate_execution_stops_active",
+          "ACP-OPENCODE-E2E-005:idle_after_stop_then_completion"
         ],
         "exactOracleAssertions": [
           [
@@ -6662,6 +6669,9 @@
             "ACP-OPENCODE-E2E-005:manual_execute_finishes",
             "ACP-OPENCODE-E2E-005:idle_model_selection_applied",
             "ACP-OPENCODE-E2E-005:immediate_execution_stops_active"
+          ],
+          [
+            "ACP-OPENCODE-E2E-005:idle_after_stop_then_completion"
           ]
         ],
         "negativeCheckAssertions": [
@@ -6680,7 +6690,7 @@
       "caseId": "ACP-OPENCODE-E2E-006",
       "feature": "ACP 取消等待项保留消息",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "ACP 取消等待项保留消息",
       "exactOracles": [
         "通过真实 APP 操作和已提交状态逐项验证：waiting_cancelled, message_retained, active_stopped"
@@ -6723,10 +6733,11 @@
       "caseId": "ACP-OPENCODE-E2E-007",
       "feature": "ACP 消息内真实问答",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "ACP 消息内真实问答",
       "exactOracles": [
-        "通过真实 APP 操作和已提交状态逐项验证：question_waited, real_ui_answer, answer_draft_independent, answer_final_visible；真实回答使当前任务正常完成后，等待任务自动执行且仅完成一次。"
+        "通过真实 APP 操作和已提交状态逐项验证：question_waited, real_ui_answer, answer_draft_independent, answer_final_visible；真实回答使当前任务正常完成后，等待任务自动执行且仅完成一次。",
+        "The V2 structured answer carries exact supplemental text and retains the independent chat draft."
       ],
       "negativeChecks": [
         "超时、错会话、草稿丢失、自动回答或终态缺失均失败。"
@@ -6746,7 +6757,8 @@
           "ACP-OPENCODE-E2E-007:real_ui_answer",
           "ACP-OPENCODE-E2E-007:answer_draft_independent",
           "ACP-OPENCODE-E2E-007:answer_final_visible",
-          "ACP-OPENCODE-E2E-007:normal_completion_executes_waiting_once"
+          "ACP-OPENCODE-E2E-007:normal_completion_executes_waiting_once",
+          "ACP-OPENCODE-E2E-007:supplement_returned_without_changing_draft"
         ],
         "exactOracleAssertions": [
           [
@@ -6755,6 +6767,9 @@
             "ACP-OPENCODE-E2E-007:answer_draft_independent",
             "ACP-OPENCODE-E2E-007:answer_final_visible",
             "ACP-OPENCODE-E2E-007:normal_completion_executes_waiting_once"
+          ],
+          [
+            "ACP-OPENCODE-E2E-007:supplement_returned_without_changing_draft"
           ]
         ],
         "negativeCheckAssertions": [
@@ -6772,12 +6787,13 @@
       "caseId": "ACP-GEMINI-E2E-001",
       "feature": "GEMINI runtime creation",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Create/select a GEMINI runtime Agent and open its chat through UI.",
       "exactOracles": [
         "The committed daemon create status converges the Agent page without a manual inventory refresh.",
         "From the optimistic pending intent through authoritative Inventory and canonical Direct route reconciliation, the exact runtime Handle has exactly one E2E-identified Agent row, including any pending-plus-Runtime overlap.",
-        "One canonical runtime Agent is selected and its chat is visible."
+        "One canonical runtime Agent is selected and its chat is visible.",
+        "Before the first prompt, the actual model is visible, selectable and confirmed without a task or model generation."
       ],
       "negativeChecks": [
         "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, more or fewer than one target row at any observed creation phase, duplicate authoritative Runtime, or backend/UI divergence fails."
@@ -6796,7 +6812,8 @@
           "ACP-GEMINI-E2E-001:daemon_selected",
           "ACP-GEMINI-E2E-001:runtime_agent_created",
           "ACP-GEMINI-E2E-001:runtime_creation_row_unique_throughout",
-          "ACP-GEMINI-E2E-001:runtime_chat_opened"
+          "ACP-GEMINI-E2E-001:runtime_chat_opened",
+          "ACP-GEMINI-E2E-001:initial_model_visible_and_selectable"
         ],
         "exactOracleAssertions": [
           [
@@ -6816,6 +6833,9 @@
             "ACP-GEMINI-E2E-001:runtime_agent_created",
             "ACP-GEMINI-E2E-001:runtime_creation_row_unique_throughout",
             "ACP-GEMINI-E2E-001:runtime_chat_opened"
+          ],
+          [
+            "ACP-GEMINI-E2E-001:initial_model_visible_and_selectable"
           ]
         ],
         "negativeCheckAssertions": [
@@ -6832,7 +6852,7 @@
       "caseId": "ACP-GEMINI-E2E-002",
       "feature": "GEMINI prompt send",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Enter and send the deterministic prompt through UI.",
       "exactOracles": [
         "Visible send action completes for the exact prompt."
@@ -6872,7 +6892,7 @@
       "caseId": "ACP-GEMINI-E2E-003",
       "feature": "GEMINI runtime completion",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Wait for daemon runtime_run and final outbox.",
       "exactOracles": [
         "One run reaches finished and one final outbox record reaches sent."
@@ -6912,7 +6932,7 @@
       "caseId": "ACP-GEMINI-E2E-004",
       "feature": "GEMINI reply visibility",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Sync App history and wait for the visible reply.",
       "exactOracles": [
         "Exact expected reply appears once in canonical history and UI."
@@ -6952,10 +6972,11 @@
       "caseId": "ACP-GEMINI-E2E-005",
       "feature": "ACP 单等待位、草稿保留、停止与执行",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "ACP 单等待位、草稿保留、停止与执行",
       "exactOracles": [
-        "通过真实 APP 操作和已提交状态逐项验证：single_waiting_slot, third_draft_retained, stop_pauses_waiting, manual_execute_finishes；空闲模型选择经真实控制链路提交，执行等待项会先取消当前任务，再完成等待任务且各状态唯一。"
+        "通过真实 APP 操作和已提交状态逐项验证：single_waiting_slot, third_draft_retained, stop_pauses_waiting, manual_execute_finishes；空闲模型选择经真实控制链路提交，执行等待项会先取消当前任务，再完成等待任务且各状态唯一。",
+        "After stopping A and completing B, the shared Agent activity projection is idle."
       ],
       "negativeChecks": [
         "超时、错会话、草稿丢失、自动回答或终态缺失均失败。"
@@ -6976,7 +6997,8 @@
           "ACP-GEMINI-E2E-005:stop_pauses_waiting",
           "ACP-GEMINI-E2E-005:manual_execute_finishes",
           "ACP-GEMINI-E2E-005:idle_model_selection_applied",
-          "ACP-GEMINI-E2E-005:immediate_execution_stops_active"
+          "ACP-GEMINI-E2E-005:immediate_execution_stops_active",
+          "ACP-GEMINI-E2E-005:idle_after_stop_then_completion"
         ],
         "exactOracleAssertions": [
           [
@@ -6986,6 +7008,9 @@
             "ACP-GEMINI-E2E-005:manual_execute_finishes",
             "ACP-GEMINI-E2E-005:idle_model_selection_applied",
             "ACP-GEMINI-E2E-005:immediate_execution_stops_active"
+          ],
+          [
+            "ACP-GEMINI-E2E-005:idle_after_stop_then_completion"
           ]
         ],
         "negativeCheckAssertions": [
@@ -7004,7 +7029,7 @@
       "caseId": "ACP-GEMINI-E2E-006",
       "feature": "ACP 取消等待项保留消息",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "ACP 取消等待项保留消息",
       "exactOracles": [
         "通过真实 APP 操作和已提交状态逐项验证：waiting_cancelled, message_retained, active_stopped"
@@ -7047,10 +7072,11 @@
       "caseId": "ACP-GEMINI-E2E-007",
       "feature": "ACP 消息内真实问答",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "ACP 消息内真实问答",
       "exactOracles": [
-        "通过真实 APP 操作和已提交状态逐项验证：question_waited, real_ui_answer, answer_draft_independent, answer_final_visible；真实回答使当前任务正常完成后，等待任务自动执行且仅完成一次。"
+        "通过真实 APP 操作和已提交状态逐项验证：question_waited, real_ui_answer, answer_draft_independent, answer_final_visible；真实回答使当前任务正常完成后，等待任务自动执行且仅完成一次。",
+        "The V2 structured answer carries exact supplemental text and retains the independent chat draft."
       ],
       "negativeChecks": [
         "超时、错会话、草稿丢失、自动回答或终态缺失均失败。"
@@ -7070,7 +7096,8 @@
           "ACP-GEMINI-E2E-007:real_ui_answer",
           "ACP-GEMINI-E2E-007:answer_draft_independent",
           "ACP-GEMINI-E2E-007:answer_final_visible",
-          "ACP-GEMINI-E2E-007:normal_completion_executes_waiting_once"
+          "ACP-GEMINI-E2E-007:normal_completion_executes_waiting_once",
+          "ACP-GEMINI-E2E-007:supplement_returned_without_changing_draft"
         ],
         "exactOracleAssertions": [
           [
@@ -7079,6 +7106,9 @@
             "ACP-GEMINI-E2E-007:answer_draft_independent",
             "ACP-GEMINI-E2E-007:answer_final_visible",
             "ACP-GEMINI-E2E-007:normal_completion_executes_waiting_once"
+          ],
+          [
+            "ACP-GEMINI-E2E-007:supplement_returned_without_changing_draft"
           ]
         ],
         "negativeCheckAssertions": [
@@ -7096,12 +7126,13 @@
       "caseId": "ACP-KIMI-E2E-001",
       "feature": "KIMI runtime creation",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Create/select a KIMI runtime Agent and open its chat through UI.",
       "exactOracles": [
         "The committed daemon create status converges the Agent page without a manual inventory refresh.",
         "From the optimistic pending intent through authoritative Inventory and canonical Direct route reconciliation, the exact runtime Handle has exactly one E2E-identified Agent row, including any pending-plus-Runtime overlap.",
-        "One canonical runtime Agent is selected and its chat is visible."
+        "One canonical runtime Agent is selected and its chat is visible.",
+        "Before the first prompt, the actual model is visible, selectable and confirmed without a task or model generation."
       ],
       "negativeChecks": [
         "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, more or fewer than one target row at any observed creation phase, duplicate authoritative Runtime, or backend/UI divergence fails."
@@ -7120,7 +7151,8 @@
           "ACP-KIMI-E2E-001:daemon_selected",
           "ACP-KIMI-E2E-001:runtime_agent_created",
           "ACP-KIMI-E2E-001:runtime_creation_row_unique_throughout",
-          "ACP-KIMI-E2E-001:runtime_chat_opened"
+          "ACP-KIMI-E2E-001:runtime_chat_opened",
+          "ACP-KIMI-E2E-001:initial_model_visible_and_selectable"
         ],
         "exactOracleAssertions": [
           [
@@ -7140,6 +7172,9 @@
             "ACP-KIMI-E2E-001:runtime_agent_created",
             "ACP-KIMI-E2E-001:runtime_creation_row_unique_throughout",
             "ACP-KIMI-E2E-001:runtime_chat_opened"
+          ],
+          [
+            "ACP-KIMI-E2E-001:initial_model_visible_and_selectable"
           ]
         ],
         "negativeCheckAssertions": [
@@ -7156,7 +7191,7 @@
       "caseId": "ACP-KIMI-E2E-002",
       "feature": "KIMI prompt send",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Enter and send the deterministic prompt through UI.",
       "exactOracles": [
         "Visible send action completes for the exact prompt."
@@ -7196,7 +7231,7 @@
       "caseId": "ACP-KIMI-E2E-003",
       "feature": "KIMI runtime completion",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Wait for daemon runtime_run and final outbox.",
       "exactOracles": [
         "One run reaches finished and one final outbox record reaches sent."
@@ -7236,7 +7271,7 @@
       "caseId": "ACP-KIMI-E2E-004",
       "feature": "KIMI reply visibility",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Sync App history and wait for the visible reply.",
       "exactOracles": [
         "Exact expected reply appears once in canonical history and UI."
@@ -7276,10 +7311,11 @@
       "caseId": "ACP-KIMI-E2E-005",
       "feature": "ACP 单等待位、草稿保留、停止与执行",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "ACP 单等待位、草稿保留、停止与执行",
       "exactOracles": [
-        "通过真实 APP 操作和已提交状态逐项验证：single_waiting_slot, third_draft_retained, stop_pauses_waiting, manual_execute_finishes；空闲模型选择经真实控制链路提交，执行等待项会先取消当前任务，再完成等待任务且各状态唯一。"
+        "通过真实 APP 操作和已提交状态逐项验证：single_waiting_slot, third_draft_retained, stop_pauses_waiting, manual_execute_finishes；空闲模型选择经真实控制链路提交，执行等待项会先取消当前任务，再完成等待任务且各状态唯一。",
+        "After stopping A and completing B, the shared Agent activity projection is idle."
       ],
       "negativeChecks": [
         "超时、错会话、草稿丢失、自动回答或终态缺失均失败。"
@@ -7300,7 +7336,8 @@
           "ACP-KIMI-E2E-005:stop_pauses_waiting",
           "ACP-KIMI-E2E-005:manual_execute_finishes",
           "ACP-KIMI-E2E-005:idle_model_selection_applied",
-          "ACP-KIMI-E2E-005:immediate_execution_stops_active"
+          "ACP-KIMI-E2E-005:immediate_execution_stops_active",
+          "ACP-KIMI-E2E-005:idle_after_stop_then_completion"
         ],
         "exactOracleAssertions": [
           [
@@ -7310,6 +7347,9 @@
             "ACP-KIMI-E2E-005:manual_execute_finishes",
             "ACP-KIMI-E2E-005:idle_model_selection_applied",
             "ACP-KIMI-E2E-005:immediate_execution_stops_active"
+          ],
+          [
+            "ACP-KIMI-E2E-005:idle_after_stop_then_completion"
           ]
         ],
         "negativeCheckAssertions": [
@@ -7328,7 +7368,7 @@
       "caseId": "ACP-KIMI-E2E-006",
       "feature": "ACP 取消等待项保留消息",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "ACP 取消等待项保留消息",
       "exactOracles": [
         "通过真实 APP 操作和已提交状态逐项验证：waiting_cancelled, message_retained, active_stopped"
@@ -7371,10 +7411,11 @@
       "caseId": "ACP-KIMI-E2E-007",
       "feature": "ACP 消息内真实问答",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "ACP 消息内真实问答",
       "exactOracles": [
-        "通过真实 APP 操作和已提交状态逐项验证：question_waited, real_ui_answer, answer_draft_independent, answer_final_visible；真实回答使当前任务正常完成后，等待任务自动执行且仅完成一次。"
+        "通过真实 APP 操作和已提交状态逐项验证：question_waited, real_ui_answer, answer_draft_independent, answer_final_visible；真实回答使当前任务正常完成后，等待任务自动执行且仅完成一次。",
+        "The V2 structured answer carries exact supplemental text and retains the independent chat draft."
       ],
       "negativeChecks": [
         "超时、错会话、草稿丢失、自动回答或终态缺失均失败。"
@@ -7394,7 +7435,8 @@
           "ACP-KIMI-E2E-007:real_ui_answer",
           "ACP-KIMI-E2E-007:answer_draft_independent",
           "ACP-KIMI-E2E-007:answer_final_visible",
-          "ACP-KIMI-E2E-007:normal_completion_executes_waiting_once"
+          "ACP-KIMI-E2E-007:normal_completion_executes_waiting_once",
+          "ACP-KIMI-E2E-007:supplement_returned_without_changing_draft"
         ],
         "exactOracleAssertions": [
           [
@@ -7403,6 +7445,9 @@
             "ACP-KIMI-E2E-007:answer_draft_independent",
             "ACP-KIMI-E2E-007:answer_final_visible",
             "ACP-KIMI-E2E-007:normal_completion_executes_waiting_once"
+          ],
+          [
+            "ACP-KIMI-E2E-007:supplement_returned_without_changing_draft"
           ]
         ],
         "negativeCheckAssertions": [
@@ -7420,12 +7465,13 @@
       "caseId": "ACP-DEEPSEEK-HARNESS-E2E-001",
       "feature": "DEEPSEEK-HARNESS runtime creation",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Create/select a DEEPSEEK-HARNESS runtime Agent and open its chat through UI.",
       "exactOracles": [
         "The committed daemon create status converges the Agent page without a manual inventory refresh.",
         "From the optimistic pending intent through authoritative Inventory and canonical Direct route reconciliation, the exact runtime Handle has exactly one E2E-identified Agent row, including any pending-plus-Runtime overlap.",
-        "One canonical runtime Agent is selected and its chat is visible."
+        "One canonical runtime Agent is selected and its chat is visible.",
+        "Before the first prompt, the actual model is visible, selectable and confirmed without a task or model generation."
       ],
       "negativeChecks": [
         "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, more or fewer than one target row at any observed creation phase, duplicate authoritative Runtime, or backend/UI divergence fails."
@@ -7444,7 +7490,8 @@
           "ACP-DEEPSEEK-HARNESS-E2E-001:daemon_selected",
           "ACP-DEEPSEEK-HARNESS-E2E-001:runtime_agent_created",
           "ACP-DEEPSEEK-HARNESS-E2E-001:runtime_creation_row_unique_throughout",
-          "ACP-DEEPSEEK-HARNESS-E2E-001:runtime_chat_opened"
+          "ACP-DEEPSEEK-HARNESS-E2E-001:runtime_chat_opened",
+          "ACP-DEEPSEEK-HARNESS-E2E-001:initial_model_visible_and_selectable"
         ],
         "exactOracleAssertions": [
           [
@@ -7464,6 +7511,9 @@
             "ACP-DEEPSEEK-HARNESS-E2E-001:runtime_agent_created",
             "ACP-DEEPSEEK-HARNESS-E2E-001:runtime_creation_row_unique_throughout",
             "ACP-DEEPSEEK-HARNESS-E2E-001:runtime_chat_opened"
+          ],
+          [
+            "ACP-DEEPSEEK-HARNESS-E2E-001:initial_model_visible_and_selectable"
           ]
         ],
         "negativeCheckAssertions": [
@@ -7480,7 +7530,7 @@
       "caseId": "ACP-DEEPSEEK-HARNESS-E2E-002",
       "feature": "DEEPSEEK-HARNESS prompt send",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Enter and send the deterministic prompt through UI.",
       "exactOracles": [
         "Visible send action completes for the exact prompt."
@@ -7520,7 +7570,7 @@
       "caseId": "ACP-DEEPSEEK-HARNESS-E2E-003",
       "feature": "DEEPSEEK-HARNESS runtime completion",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Wait for daemon runtime_run and final outbox.",
       "exactOracles": [
         "One run reaches finished and one final outbox record reaches sent."
@@ -7560,7 +7610,7 @@
       "caseId": "ACP-DEEPSEEK-HARNESS-E2E-004",
       "feature": "DEEPSEEK-HARNESS reply visibility",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "Sync App history and wait for the visible reply.",
       "exactOracles": [
         "Exact expected reply appears once in canonical history and UI."
@@ -7600,10 +7650,11 @@
       "caseId": "ACP-DEEPSEEK-HARNESS-E2E-005",
       "feature": "ACP 单等待位、草稿保留、停止与执行",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "ACP 单等待位、草稿保留、停止与执行",
       "exactOracles": [
-        "通过真实 APP 操作和已提交状态逐项验证：single_waiting_slot, third_draft_retained, stop_pauses_waiting, manual_execute_finishes；空闲模型选择经真实控制链路提交，执行等待项会先取消当前任务，再完成等待任务且各状态唯一。"
+        "通过真实 APP 操作和已提交状态逐项验证：single_waiting_slot, third_draft_retained, stop_pauses_waiting, manual_execute_finishes；空闲模型选择经真实控制链路提交，执行等待项会先取消当前任务，再完成等待任务且各状态唯一。",
+        "After stopping A and completing B, the shared Agent activity projection is idle."
       ],
       "negativeChecks": [
         "超时、错会话、草稿丢失、自动回答或终态缺失均失败。"
@@ -7624,7 +7675,8 @@
           "ACP-DEEPSEEK-HARNESS-E2E-005:stop_pauses_waiting",
           "ACP-DEEPSEEK-HARNESS-E2E-005:manual_execute_finishes",
           "ACP-DEEPSEEK-HARNESS-E2E-005:idle_model_selection_applied",
-          "ACP-DEEPSEEK-HARNESS-E2E-005:immediate_execution_stops_active"
+          "ACP-DEEPSEEK-HARNESS-E2E-005:immediate_execution_stops_active",
+          "ACP-DEEPSEEK-HARNESS-E2E-005:idle_after_stop_then_completion"
         ],
         "exactOracleAssertions": [
           [
@@ -7634,6 +7686,9 @@
             "ACP-DEEPSEEK-HARNESS-E2E-005:manual_execute_finishes",
             "ACP-DEEPSEEK-HARNESS-E2E-005:idle_model_selection_applied",
             "ACP-DEEPSEEK-HARNESS-E2E-005:immediate_execution_stops_active"
+          ],
+          [
+            "ACP-DEEPSEEK-HARNESS-E2E-005:idle_after_stop_then_completion"
           ]
         ],
         "negativeCheckAssertions": [
@@ -7652,7 +7707,7 @@
       "caseId": "ACP-DEEPSEEK-HARNESS-E2E-006",
       "feature": "ACP 取消等待项保留消息",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "ACP 取消等待项保留消息",
       "exactOracles": [
         "通过真实 APP 操作和已提交状态逐项验证：waiting_cancelled, message_retained, active_stopped"
@@ -7695,10 +7750,11 @@
       "caseId": "ACP-DEEPSEEK-HARNESS-E2E-007",
       "feature": "ACP 消息内真实问答",
       "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "Remote endpoints use the explicitly configured audited HTTPS/WSS target; isolated App and CLI identities pass canonical preflight.",
       "action": "ACP 消息内真实问答",
       "exactOracles": [
-        "通过真实 APP 操作和已提交状态逐项验证：question_waited, real_ui_answer, answer_draft_independent, answer_final_visible；真实回答使当前任务正常完成后，等待任务自动执行且仅完成一次。"
+        "通过真实 APP 操作和已提交状态逐项验证：question_waited, real_ui_answer, answer_draft_independent, answer_final_visible；真实回答使当前任务正常完成后，等待任务自动执行且仅完成一次。",
+        "The V2 structured answer carries exact supplemental text and retains the independent chat draft."
       ],
       "negativeChecks": [
         "超时、错会话、草稿丢失、自动回答或终态缺失均失败。"
@@ -7718,7 +7774,8 @@
           "ACP-DEEPSEEK-HARNESS-E2E-007:real_ui_answer",
           "ACP-DEEPSEEK-HARNESS-E2E-007:answer_draft_independent",
           "ACP-DEEPSEEK-HARNESS-E2E-007:answer_final_visible",
-          "ACP-DEEPSEEK-HARNESS-E2E-007:normal_completion_executes_waiting_once"
+          "ACP-DEEPSEEK-HARNESS-E2E-007:normal_completion_executes_waiting_once",
+          "ACP-DEEPSEEK-HARNESS-E2E-007:supplement_returned_without_changing_draft"
         ],
         "exactOracleAssertions": [
           [
@@ -7727,6 +7784,9 @@
             "ACP-DEEPSEEK-HARNESS-E2E-007:answer_draft_independent",
             "ACP-DEEPSEEK-HARNESS-E2E-007:answer_final_visible",
             "ACP-DEEPSEEK-HARNESS-E2E-007:normal_completion_executes_waiting_once"
+          ],
+          [
+            "ACP-DEEPSEEK-HARNESS-E2E-007:supplement_returned_without_changing_draft"
           ]
         ],
         "negativeCheckAssertions": [
@@ -7931,7 +7991,8 @@
       "preconditions": "使用 runner 明确选定且位于 suite 允许列表的远程测试域名；独立 APP、CLI 与 Daemon 身份通过预检。",
       "action": "创建群并加入 Runtime Agent，通过 Core 发送定向任务和竞争指令；在 APP 内发送普通消息并回答问题。",
       "exactOracles": [
-        "群内只接受首个任务，竞争指令收到 group_busy；普通消息继续发送，任务发起人的真实回答产生唯一最终回复。"
+        "群内只接受首个任务，竞争指令收到 group_busy；普通消息继续发送，任务发起人的真实回答产生唯一最终回复。",
+        "A random marker from an ordinary earlier group message is returned; the mention prompt does not contain its value."
       ],
       "negativeChecks": [
         "群内不提供停止或等待位，竞争指令不得补执行，问题不得自动代答。"
@@ -7950,7 +8011,8 @@
           "ACP-OPENCODE-E2E-009:group_task_accepted",
           "ACP-OPENCODE-E2E-009:busy_instruction_rejected",
           "ACP-OPENCODE-E2E-009:ordinary_chat_continues",
-          "ACP-OPENCODE-E2E-009:requester_answers_in_group"
+          "ACP-OPENCODE-E2E-009:requester_answers_in_group",
+          "ACP-OPENCODE-E2E-009:prior_group_context_returned"
         ],
         "exactOracleAssertions": [
           [
@@ -7958,6 +8020,9 @@
             "ACP-OPENCODE-E2E-009:busy_instruction_rejected",
             "ACP-OPENCODE-E2E-009:ordinary_chat_continues",
             "ACP-OPENCODE-E2E-009:requester_answers_in_group"
+          ],
+          [
+            "ACP-OPENCODE-E2E-009:prior_group_context_returned"
           ]
         ],
         "negativeCheckAssertions": [
@@ -7977,7 +8042,8 @@
       "preconditions": "使用 runner 明确选定且位于 suite 允许列表的远程测试域名；独立 APP、CLI 与 Daemon 身份通过预检。",
       "action": "创建群并加入 Runtime Agent，通过 Core 发送定向任务和竞争指令；在 APP 内发送普通消息并回答问题。",
       "exactOracles": [
-        "群内只接受首个任务，竞争指令收到 group_busy；普通消息继续发送，任务发起人的真实回答产生唯一最终回复。"
+        "群内只接受首个任务，竞争指令收到 group_busy；普通消息继续发送，任务发起人的真实回答产生唯一最终回复。",
+        "A random marker from an ordinary earlier group message is returned; the mention prompt does not contain its value."
       ],
       "negativeChecks": [
         "群内不提供停止或等待位，竞争指令不得补执行，问题不得自动代答。"
@@ -7996,7 +8062,8 @@
           "ACP-GEMINI-E2E-009:group_task_accepted",
           "ACP-GEMINI-E2E-009:busy_instruction_rejected",
           "ACP-GEMINI-E2E-009:ordinary_chat_continues",
-          "ACP-GEMINI-E2E-009:requester_answers_in_group"
+          "ACP-GEMINI-E2E-009:requester_answers_in_group",
+          "ACP-GEMINI-E2E-009:prior_group_context_returned"
         ],
         "exactOracleAssertions": [
           [
@@ -8004,6 +8071,9 @@
             "ACP-GEMINI-E2E-009:busy_instruction_rejected",
             "ACP-GEMINI-E2E-009:ordinary_chat_continues",
             "ACP-GEMINI-E2E-009:requester_answers_in_group"
+          ],
+          [
+            "ACP-GEMINI-E2E-009:prior_group_context_returned"
           ]
         ],
         "negativeCheckAssertions": [
@@ -8023,7 +8093,8 @@
       "preconditions": "使用 runner 明确选定且位于 suite 允许列表的远程测试域名；独立 APP、CLI 与 Daemon 身份通过预检。",
       "action": "创建群并加入 Runtime Agent，通过 Core 发送定向任务和竞争指令；在 APP 内发送普通消息并回答问题。",
       "exactOracles": [
-        "群内只接受首个任务，竞争指令收到 group_busy；普通消息继续发送，任务发起人的真实回答产生唯一最终回复。"
+        "群内只接受首个任务，竞争指令收到 group_busy；普通消息继续发送，任务发起人的真实回答产生唯一最终回复。",
+        "A random marker from an ordinary earlier group message is returned; the mention prompt does not contain its value."
       ],
       "negativeChecks": [
         "群内不提供停止或等待位，竞争指令不得补执行，问题不得自动代答。"
@@ -8042,7 +8113,8 @@
           "ACP-KIMI-E2E-009:group_task_accepted",
           "ACP-KIMI-E2E-009:busy_instruction_rejected",
           "ACP-KIMI-E2E-009:ordinary_chat_continues",
-          "ACP-KIMI-E2E-009:requester_answers_in_group"
+          "ACP-KIMI-E2E-009:requester_answers_in_group",
+          "ACP-KIMI-E2E-009:prior_group_context_returned"
         ],
         "exactOracleAssertions": [
           [
@@ -8050,6 +8122,9 @@
             "ACP-KIMI-E2E-009:busy_instruction_rejected",
             "ACP-KIMI-E2E-009:ordinary_chat_continues",
             "ACP-KIMI-E2E-009:requester_answers_in_group"
+          ],
+          [
+            "ACP-KIMI-E2E-009:prior_group_context_returned"
           ]
         ],
         "negativeCheckAssertions": [
@@ -8069,7 +8144,8 @@
       "preconditions": "使用 runner 明确选定且位于 suite 允许列表的远程测试域名；独立 APP、CLI 与 Daemon 身份通过预检。",
       "action": "创建群并加入 Runtime Agent，通过 Core 发送定向任务和竞争指令；在 APP 内发送普通消息并回答问题。",
       "exactOracles": [
-        "群内只接受首个任务，竞争指令收到 group_busy；普通消息继续发送，任务发起人的真实回答产生唯一最终回复。"
+        "群内只接受首个任务，竞争指令收到 group_busy；普通消息继续发送，任务发起人的真实回答产生唯一最终回复。",
+        "A random marker from an ordinary earlier group message is returned; the mention prompt does not contain its value."
       ],
       "negativeChecks": [
         "群内不提供停止或等待位，竞争指令不得补执行，问题不得自动代答。"
@@ -8088,7 +8164,8 @@
           "ACP-DEEPSEEK-HARNESS-E2E-009:group_task_accepted",
           "ACP-DEEPSEEK-HARNESS-E2E-009:busy_instruction_rejected",
           "ACP-DEEPSEEK-HARNESS-E2E-009:ordinary_chat_continues",
-          "ACP-DEEPSEEK-HARNESS-E2E-009:requester_answers_in_group"
+          "ACP-DEEPSEEK-HARNESS-E2E-009:requester_answers_in_group",
+          "ACP-DEEPSEEK-HARNESS-E2E-009:prior_group_context_returned"
         ],
         "exactOracleAssertions": [
           [
@@ -8096,6 +8173,9 @@
             "ACP-DEEPSEEK-HARNESS-E2E-009:busy_instruction_rejected",
             "ACP-DEEPSEEK-HARNESS-E2E-009:ordinary_chat_continues",
             "ACP-DEEPSEEK-HARNESS-E2E-009:requester_answers_in_group"
+          ],
+          [
+            "ACP-DEEPSEEK-HARNESS-E2E-009:prior_group_context_returned"
           ]
         ],
         "negativeCheckAssertions": [
@@ -8292,7 +8372,7 @@
       "caseId": "DEVICE-ACP-SYNC-E2E-001",
       "feature": "双 APP 竞争回答同一 ACP 问题",
       "layer": "remote_product_ui",
-      "preconditions": "awiki.info 的两个独立真实 APP 经生产 Join 加入同账号；隔离 Daemon 运行官方 OpenCode ACP 和真实模型。",
+      "preconditions": "已审计测试域（awiki.info／anpclaw.com）的两个独立真实 APP 经生产 Join 加入同账号；隔离 Daemon 运行官方 OpenCode ACP 和真实模型。",
       "action": "两端展示同一问题、保留独立草稿，同时从 UI 提交不同答案并观察可靠同步。",
       "exactOracles": [
         "问题和任务 ID 相同；最终答案只对应一个提交，两个草稿保持，双端展示同一唯一最终消息。"
@@ -8338,7 +8418,7 @@
       "caseId": "DEVICE-ACP-SYNC-E2E-002",
       "feature": "双 APP 等待项与 Daemon 重启恢复",
       "layer": "remote_product_ui",
-      "preconditions": "awiki.info 的两个独立真实 APP 经生产 Join 加入同账号；隔离 Daemon 运行官方 OpenCode ACP 和真实模型。",
+      "preconditions": "已审计测试域（awiki.info／anpclaw.com）的两个独立真实 APP 经生产 Join 加入同账号；隔离 Daemon 运行官方 OpenCode ACP 和真实模型。",
       "action": "两端竞争唯一等待位，终止并重启测试 Daemon，等待项保持暂停后由第二端手动执行。",
       "exactOracles": [
         "两端等待任务 ID 相同；旧任务中断且不重跑；等待项暂停，第二端执行后双端只有同一条最终消息。"

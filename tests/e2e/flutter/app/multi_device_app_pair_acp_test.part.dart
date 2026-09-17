@@ -114,6 +114,25 @@ Future<void> _runAppPairAcp({
     timeout: const Duration(seconds: 30),
     failure: 'ACP composer was unavailable.',
   );
+  final prepared = await _pairAcpWait(
+    tester,
+    container,
+    agentDid,
+    (s) => s.data['model_configuration_ready'] == true && !s.busy,
+  );
+  await _pumpUntil(
+    tester,
+    () => !container
+        .read(
+          acpModelControllerProvider((
+            agentDid: agentDid,
+            conversationId: prepared.conversationId,
+          )),
+        )
+        .blocksSending,
+    timeout: const Duration(seconds: 30),
+    failure: 'Initial model configuration was not committed on this App.',
+  );
   await coordinator.publish(role, 'acp_chat_ready');
   await coordinator.waitFor(peer, 'acp_chat_ready');
   if (admin) {
@@ -198,6 +217,7 @@ Future<void> _runAppPairAcp({
     ),
   );
   expect(session.questions, isEmpty);
+  expect(container.read(acpSessionsProvider).busyForAgent(agentDid), isFalse);
   expect(
     session.history.where((t) => t['run_id'] == questionRun),
     hasLength(1),
@@ -306,6 +326,7 @@ Future<void> _runAppPairAcp({
     ),
   );
   expect(session.history.where((t) => t['run_id'] == waiting), hasLength(1));
+  expect(container.read(acpSessionsProvider).busyForAgent(agentDid), isFalse);
   final queued = await _pairAcpFinal(
     tester,
     bootstrap.messagingService!,

@@ -20,6 +20,7 @@ class AgentVisualStatus {
   factory AgentVisualStatus.fromAgent(
     AgentSummary? agent, {
     bool hasPendingTurn = false,
+    bool? authoritativeBusy,
     bool isPendingUpgrade = false,
     bool hasUpgradeError = false,
     bool hasStatusQueryError = false,
@@ -56,16 +57,20 @@ class AgentVisualStatus {
         return criticalRuntimeStatus;
       }
     }
-    if (hasPendingTurn || agent.recentRuns.any(AgentVisualStatus.isActiveRun)) {
+    if (hasPendingTurn ||
+        (authoritativeBusy ??
+            agent.recentRuns.any(AgentVisualStatus.isActiveRun))) {
       return const AgentVisualStatus(AgentVisualStatusKind.processing);
     }
     if (agent.isRuntime) {
       final runtimeStatus = _fromRuntimeCard(
         agent.latest.runtimeCard,
-        processingAllowed: _hasFreshRuntimeCardActiveState(
-          agent.latest,
-          now ?? DateTime.now(),
-        ),
+        processingAllowed:
+            authoritativeBusy != false &&
+            _hasFreshRuntimeCardActiveState(
+              agent.latest,
+              now ?? DateTime.now(),
+            ),
       );
       if (runtimeStatus != null) {
         return runtimeStatus;

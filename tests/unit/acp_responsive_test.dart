@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:awiki_me/src/domain/entities/agent/acp_session.dart';
+import 'package:awiki_me/src/domain/entities/agent/acp_task.dart';
+import 'package:awiki_me/src/presentation/agents/acp_execution_record.dart';
 import 'package:awiki_me/src/presentation/agents/acp_session_provider.dart';
 import 'package:awiki_me/src/presentation/agents/acp_task_status.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
@@ -230,11 +232,15 @@ void main() {
             SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: AcpTaskStatus(
+                child: AcpExecutionRecord(
                   session: session,
-                  task: session.taskFor({'message-a'})!,
+                  task: AcpTask.parse({
+                    ...session.data,
+                    ...session.active,
+                    'schema': 'awiki.acp.task.v1',
+                    'state': 'running',
+                  }, localConversationId: session.conversationId)!,
                   viewerDid: 'did:alice',
-                  alignEnd: true,
                 ),
               ),
             ),
@@ -323,6 +329,12 @@ void main() {
             service: service,
           ),
         );
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(AcpSessionOptions)),
+        );
+        service.onModelConfirmed = (value) => container
+            .read(acpSessionsProvider.notifier)
+            .applyConversation(control(value), 'conversation-1');
         await tester.tap(find.byKey(const Key('acp-model-menu')));
         await tester.pumpAndSettle();
         expect(find.byType(CupertinoActionSheet), findsNothing);

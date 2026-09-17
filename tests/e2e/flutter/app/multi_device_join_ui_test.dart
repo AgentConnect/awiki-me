@@ -10,11 +10,13 @@
 import 'dart:async';
 import 'package:awiki_me/src/domain/entities/agent/acp_session.dart';
 import 'package:awiki_me/src/presentation/agents/acp_session_provider.dart';
+import 'package:awiki_me/src/presentation/agents/acp_model_controller.dart';
 import 'package:awiki_me/src/presentation/agents/acp_task_status.dart';
 import '../support/coding_agent_oracles.dart';
 import '../support/coding_agent_diagnostics.dart';
 import 'dart:convert';
 import 'dart:io';
+import '../support/app_pair_target.dart';
 
 import '../../root_transfer_fixture_state.dart';
 import '../../root_transfer_registry_observer.dart';
@@ -1866,8 +1868,7 @@ class _AppPairRunConfig implements _CliEndpointConfig {
           ? const <String>[]
           : _requiredStringList(accountState, 'operatorCommand'),
     );
-    if (config.didDomain != 'awiki.info' ||
-        config.adminStateRoot == config.joinerStateRoot) {
+    if (config.adminStateRoot == config.joinerStateRoot) {
       throw StateError('The App-pair target or state isolation is invalid.');
     }
     if (!config.automatedUserPresence) {
@@ -1876,18 +1877,17 @@ class _AppPairRunConfig implements _CliEndpointConfig {
         'user-presence port.',
       );
     }
-    for (final value in <String>[
-      config.baseUrl,
-      config.userServiceUrl,
-      config.messageServiceUrl,
-      config.mailServiceUrl,
-      config.anpServiceUrl,
-    ]) {
-      final uri = Uri.tryParse(value);
-      if (uri == null || uri.scheme != 'https' || uri.host != 'awiki.info') {
-        throw StateError('Remote multi-device service target is not audited.');
-      }
-    }
+    validateAppPairRemoteTarget(
+      acp: config.acp,
+      didDomain: config.didDomain,
+      serviceUrls: <String>[
+        config.baseUrl,
+        config.userServiceUrl,
+        config.messageServiceUrl,
+        config.mailServiceUrl,
+        config.anpServiceUrl,
+      ],
+    );
     if (config.functional || config.acp) {
       if (!config.automatedUserPresence ||
           config.cliBin.isEmpty ||

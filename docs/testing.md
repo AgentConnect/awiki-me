@@ -59,7 +59,7 @@ the exception and follow-up are explicitly documented.
 
 桌面后台消息测试通过 `runInHiddenDesktopLifecycle` 执行真实后台操作：进入 `hidden` 后不等待绘制帧，操作结束或失败时均经过 `inactive` 恢复 `resumed`，随后再校验 UI。`hidden` 会关闭 Live test binding 的帧调度，在此状态等待 `tester.pump()` 会使测试无法推进。
 
-`acp-agent` 使用真实 APP、Daemon 和四种 ACP 客户端，每种 9 项，共 36 项；覆盖创建与聊天、空闲模型选择、单等待位与草稿、停止／插队执行／取消、正常完成后的自动执行、真实问答、文件字节往返、图片和群聊竞争拒绝。工具执行前的进度说明可以保留，但完成标记／用户答案必须正确，APP 展示必须与 Daemon 的完整最终文本一致。图片使用随机八字符码，答案只存在于像素中，不进入提示或文件名，必须在规范历史和可见气泡中准确返回。纯色识别的历史失败应保留为具体客户端／模型的已知限制，不能由随机码通过推断所有图片语义均正确。
+`acp-agent` 使用真实 APP、Daemon 和四种 ACP 客户端，每种 9 项，共 36 项；覆盖创建与聊天、首条消息前实际模型可见及可选、单等待位与草稿、停止／插队执行／取消、正常完成后的自动执行、V2 选择加说明、问答草稿独立、文件字节往返、图片和群聊竞争拒绝。工具执行前的进度说明可以保留，但完成标记／用户答案必须正确，APP 展示必须与 Daemon 的完整最终文本一致。图片使用随机八字符码，答案只存在于像素中，不进入提示或文件名，必须在规范历史和可见气泡中准确返回。纯色识别的历史失败应保留为具体客户端／模型的已知限制，不能由随机码通过推断所有图片语义均正确。
 
 此专项的 runner 与 Flutter 整轮上限为 75 分钟，包含四个真实客户端的多次原生恢复、问答和附件。逐步等待仍使用各自的有界期限；整轮预算不改变任务、问题或生产请求的超时语义。桌面窗口需保持可见，避免 macOS 遮挡导致测试画面停止推进。
 
@@ -67,8 +67,11 @@ ACP 自动化期间关闭 Flutter live binding 的物理鼠标 Finder inspector�
 
 重复 ACP 验证可在受限本地配置设置 `acpAgent.preparedIdentityRunId`，显式复用本仓 `.e2e/acp-agent/<旧runId>/` 中的 APP／CLI 测试身份。必须存在匹配的 ownership ledger、原始状态目录、同域 tenant 与准确的已认证账号；缺失、符号链接重定向或账号不匹配均失败，不回退到注册。配置中的账号前缀须与旧轮次相同。runner 对该身份目录持有独占租约，新报告与 Runtime Agent 仍使用新 run ID。此模式用于 ACP 功能复验，不算新账号注册验收，也不能用于日常 APP 数据目录。
 
+单客户端失败定位可给同一 ACP shim 传编译参数 `AWIKI_ACP_FOCUS_DRIVER`（仅接受 `opencode`、`gemini`、`kimi`、`deepseek-harness`），并用 `AWIKI_ACP_FOCUS_CONFIG` 指向受限的真实运行配置。空 driver 仍运行四种；未知值直接失败。聚焦运行复用原九项实现，必须使用独立 run ID、匹配的九项 attestation、完整 invocation completion，并保持测试身份独占；不能把九项报告当作正常 runner 的 36 项通过。该入口仅用于本仓测试诊断，不是产品配置。
+若仅群聊用例失败，可同时设置 `AWIKI_ACP_FOCUS_GROUP_ONLY=true`，执行该客户端的创建／初始模型（001）与完整群聊（009），attestation 也只能声明这两项；未指定准确 driver 时拒绝运行。
+
 等待位和停止用例先等待当前任务实际产生未回答、未过期的问题，再发送后续消息；不能假定模型会执行提示词中的 sleep 时长。实际 shell 工具启动后的取消与进程退出由两个平台的真实 ACP 协议用例另行验证。
-`multi-device-app-pair-acp` 通过生产 Join 建立两个独立 APP，使用真实 OpenCode 和模型验证共享 ACP 层：同一问题并发回答、独立草稿、唯一等待位，以及 Daemon 重启后的等待暂停与第二设备手动执行。协调器仅在内存交换检查点，最终状态与消息仍由两端 Core 可靠同步和可见 UI 验证。此专项使用 `awiki.info`、受限 OTP 与 Daemon 配置，不需要 Account State operator。
+`multi-device-app-pair-acp` 通过生产 Join 建立两个独立 APP，使用真实 OpenCode 和模型验证共享 ACP 层：同一问题并发回答、独立草稿、唯一等待位，以及 Daemon 重启后的等待暂停与第二设备手动执行。协调器仅在内存交换检查点，最终状态与消息仍由两端 Core 可靠同步和可见 UI 验证。此专项使用显式配置的 `awiki.info` 或 `anpclaw.com`、受限 OTP 与 Daemon 配置，不需要 Account State operator。
 两个独立用例使用不同的问题字段及选项，避免把客户端遵守“取消后不重复追问”的行为误判为不能提问。
 输入沿用普通桌面 E2E 的策略：请求键盘、等待输入法更新后核对完整文字，最多重试三次文字输入；只有文字确实保留后才点击发送，不能重试发送来掩盖输入失败。
 
@@ -1329,3 +1332,21 @@ Fresh Recovery 主流程失败后不执行冷启动阶段，保留主流程错�
 DSH remote Join 使用 active-only Host 快照：撤销后要求精确成员消失、唯一原 current
 ready-admin 保留，并再次刷新确认；不能在该过滤快照中要求出现 revoked 条目。
 Core 原始 Registry 的设备状态及授权围栏由其对应测试保持验证。
+
+### 2026-09-17 ACP 修复专项
+
+`acp-agent` 的模型检查移到首条消息之前；停止 A／完成 B 后必须断言忙闲投影回到空闲；V2 选择答案含额外文字并检查真实回复，群聊用随机普通消息标记验证先前上下文（期望值不出现在 @ 指令中）。`acp-real-clients` 的问答、串行工具与跨进程恢复由 System 仓库验收；不能把该通过计作 APP 通过。
+
+原生输入框粘贴 smoke：
+
+```sh
+flutter test --no-pub integration_test/chat_composer_clipboard_test.dart -d macos
+```
+
+该 smoke 使用实际系统剪贴板、生产附件适配器和输入区域焦点处理；鼠标按下／抬起完成右键菜单粘贴，覆盖选区替换、撤销、PNG 和 macOS 文件 URL。测试前保存所有 macOS pasteboard item 类型，结束恢复并删除受限临时备份，不记录剪贴板内容。Linux 的该 smoke 需在独立 Xvfb 桌面运行，文件 URL 分支只验证 macOS。消息服务为 fake，本用例不证明真实消息投递。
+
+Linux 还需安装 `xclip`，以独立 X11 剪贴板所有者准备 PNG，结束后清理该进程；当前 pasteboard 0.5.0 支持 Linux 读取图片，但其 `writeImage` 不执行写入，不能用它准备 Linux 粘贴测试素材。
+
+```sh
+xvfb-run -a flutter test --no-pub integration_test/chat_composer_clipboard_test.dart -d linux
+```

@@ -60,7 +60,13 @@ class AcpSession {
   }
 }
 
-enum AcpSendBlock { offline, waitingFull, groupBusy, contextLost }
+enum AcpSendBlock {
+  offline,
+  waitingFull,
+  groupBusy,
+  contextLost,
+  modelChanging,
+}
 
 AcpSendBlock? acpSendBlock({
   required AcpSession? session,

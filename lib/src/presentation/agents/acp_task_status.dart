@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show SelectableText;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/agent/acp_control_service.dart';
 import '../../domain/entities/agent/acp_session.dart';
 import '../app_shell/providers/session_provider.dart';
 import 'acp_session_provider.dart';
+import 'acp_model_controller.dart';
+import 'acp_question_controller.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/app_dialog.dart';
@@ -13,7 +16,9 @@ import '../shared/app_dialog.dart';
 part 'acp_action_button.dart';
 part 'acp_question_form.dart';
 part 'acp_session_options.dart';
+part 'acp_model_bar.dart';
 part 'acp_question_fields.dart';
+part 'acp_question_history.dart';
 
 String acpText(BuildContext context, String zh, String en) =>
     Localizations.localeOf(context).languageCode == 'zh' ? zh : en;
@@ -53,6 +58,11 @@ String acpBlockText(
   BuildContext context,
   AcpSendBlock block,
 ) => switch (block) {
+  AcpSendBlock.modelChanging => acpText(
+    context,
+    '模型配置尚未确认，请等待完成或重试。文字和附件已保留。',
+    'Model configuration is not confirmed yet. Wait or retry; your text and attachments are kept.',
+  ),
   AcpSendBlock.offline => acpText(
     context,
     '智能体所在设备离线，文字和附件已保留。',
@@ -83,7 +93,7 @@ class AcpTaskStatus extends StatefulWidget {
     required this.viewerDid,
     required this.alignEnd,
   });
-  final AcpSession session;
+  final AcpSession? session;
   final Map<String, Object?> task;
   final String viewerDid;
   final bool alignEnd;
@@ -92,23 +102,22 @@ class AcpTaskStatus extends StatefulWidget {
 }
 
 class _AcpTaskStatusState extends State<AcpTaskStatus> {
-  bool _toolsExpanded = false;
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
     final task = widget.task;
     final state = task['state'];
-    final active = task['run_id'] == session.active['run_id'];
+    final active = task['run_id'] == session?.active['run_id'];
     final label = switch (state) {
       'running' =>
-        session.data['restoring'] == true
+        session?.data['restoring'] == true
             ? acpText(context, '正在恢复上下文…', 'Restoring context…')
             : acpText(context, '正在执行', 'Running'),
       'stopping' => acpText(context, '正在停止…', 'Stopping…'),
-      'waiting' => acpText(
+      'waiting' || 'paused' => acpText(
         context,
-        session.waitingPaused ? '等待中，需手动执行' : '等待上一任务完成',
-        'Waiting${session.waitingPaused ? ' — run manually' : ''}',
+        (session?.waitingPaused == true) ? '等待中，需手动执行' : '等待上一任务完成',
+        'Waiting${(session?.waitingPaused == true) ? ' — run manually' : ''}',
       ),
       'cancelled' => acpText(context, '已取消', 'Cancelled'),
       'interrupted' => acpText(
@@ -116,11 +125,7 @@ class _AcpTaskStatusState extends State<AcpTaskStatus> {
         '任务已中断，未重新执行',
         'Interrupted; task was not rerun',
       ),
-      'failed' => acpText(
-        context,
-        '执行失败，请检查智能体环境后重试',
-        'Task failed. Check the agent environment before retrying.',
-      ),
+      'failed' => acpTaskFailureText(context, task),
       _ => acpText(context, '已完成', 'Completed'),
     };
     return Align(
@@ -151,14 +156,19 @@ class _AcpTaskStatusState extends State<AcpTaskStatus> {
                       ),
                     ),
                   ),
-                  if (!session.group && active && !session.stopping)
+                  if (session != null &&
+                      !session.group &&
+                      active &&
+                      !session.stopping)
                     AcpActionButton(
                       session: session,
                       action: 'stop',
                       values: {'run_id': task['run_id']},
                       label: acpText(context, '停止', 'Stop'),
                     ),
-                  if (!session.group && state == 'waiting') ...[
+                  if (session != null &&
+                      !session.group &&
+                      (state == 'waiting' || state == 'paused')) ...[
                     AcpActionButton(
                       session: session,
                       action: 'execute_waiting',
@@ -175,75 +185,51 @@ class _AcpTaskStatusState extends State<AcpTaskStatus> {
                   ],
                 ],
               ),
-              if (active && session.text.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Text(
-                    session.text,
-                    key: const Key('acp-stream-text'),
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.5,
-                      color: context.awikiTheme.body,
-                    ),
-                  ),
-                ),
-              if (active && session.tools.isNotEmpty) ...[
-                CupertinoButton(
-                  alignment: Alignment.centerLeft,
-                  minimumSize: Size(
-                    44,
-                    context.awikiResponsive.isCompact ? 44 : 28,
-                  ),
-                  padding: EdgeInsets.zero,
-                  onPressed: () =>
-                      setState(() => _toolsExpanded = !_toolsExpanded),
-                  child: Row(
-                    children: [
-                      Icon(
-                        _toolsExpanded
-                            ? CupertinoIcons.chevron_down
-                            : CupertinoIcons.chevron_right,
-                        size: 12,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          acpText(
-                            context,
-                            '工具记录 (${session.tools.length})',
-                            'Tools (${session.tools.length})',
-                          ),
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (_toolsExpanded)
-                  for (final tool in session.tools)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 18, bottom: 6),
-                      child: Text(
-                        '${tool['title'] ?? tool['kind'] ?? ''} · ${tool['status'] ?? ''}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-              ],
-              if (active)
-                for (final question in session.questions)
-                  AcpQuestionForm(
-                    key: ValueKey(question['id']),
-                    session: session,
-                    question: question,
-                    canAnswer:
-                        session.active['requester_did'] == widget.viewerDid &&
-                        !session.stopping,
-                  ),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+String acpTaskFailureText(BuildContext context, Map<String, Object?> task) {
+  final details = acpMap(task['error_details']);
+  final code = details['code'] ?? task['error_code'];
+  return switch (code) {
+    'attachment_permission_denied' => acpText(
+      context,
+      '无法读取附件，请检查文件访问权限',
+      'The attachment could not be read. Check its access permissions.',
+    ),
+    'attachment_not_found' => acpText(
+      context,
+      '附件已不可用，请重新发送文件',
+      'The attachment is unavailable. Send the file again.',
+    ),
+    'attachment_integrity_failed' ||
+    'anp.attachment.digest_mismatch' => acpText(
+      context,
+      '附件校验失败，未交给智能体；请重新发送文件',
+      'Attachment verification failed before the agent ran. Send the file again.',
+    ),
+    _
+        when details['retryable'] == true &&
+            code.toString().contains('attachment') =>
+      acpText(
+        context,
+        '附件暂时下载失败，未交给智能体；请稍后重新发送',
+        'Attachment download failed before the agent ran. Try sending it again later.',
+      ),
+    _ when code.toString().startsWith('attachment_') => acpText(
+      context,
+      '附件准备失败，未交给智能体；请检查文件后重新发送',
+      'Attachment preparation failed before the agent ran. Check the file and send it again.',
+    ),
+    _ => acpText(
+      context,
+      '执行失败，请检查智能体环境后重试',
+      'Task failed. Check the agent environment before retrying.',
+    ),
+  };
 }

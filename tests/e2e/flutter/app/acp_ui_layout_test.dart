@@ -4,15 +4,20 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:awiki_me/src/domain/entities/agent/acp_session.dart';
+import 'package:awiki_me/src/domain/entities/agent/acp_task.dart';
+import 'package:awiki_me/src/presentation/agents/acp_execution_record.dart';
+import 'package:awiki_me/src/presentation/agents/acp_session_provider.dart';
 import 'package:awiki_me/src/presentation/agents/acp_task_status.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 
 import '../../../unit/acp_responsive_test.dart'
     show acpSurface, richQuestion, captureKey;
-import '../../../unit/acp_runtime_test.dart' show snapshot, RecordingControl;
+import '../../../unit/acp_runtime_test.dart'
+    show snapshot, RecordingControl, control;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -23,18 +28,35 @@ void main() {
     final session = AcpSession.parse({
       ...snapshot(),
       'text': '',
-      'questions': [richQuestion()],
+      'questions': [
+        {
+          ...richQuestion(),
+          'interaction_version': 2,
+          'source': 'awiki_mcp',
+          'definition_hash': 'native-smoke-question',
+          'can_custom_answer': true,
+          'can_additional_text': true,
+          'can_cancel_question': false,
+        },
+      ],
     })!;
     await tester.pumpWidget(
       acpSurface(
         SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: AcpTaskStatus(
+            child: AcpExecutionRecord(
               session: session,
-              task: session.taskFor({'message-a'})!,
+              task: AcpTask.parse({
+                ...session.active,
+                'schema': 'awiki.acp.task.v1',
+                'session_key': session.key,
+                'agent_did': session.agentDid,
+                'revision': session.revision,
+                'state': 'running',
+                'questions': session.questions,
+              }, localConversationId: session.conversationId)!,
               viewerDid: 'did:alice',
-              alignEnd: true,
             ),
           ),
         ),
@@ -58,6 +80,12 @@ void main() {
     await tester.ensureVisible(input);
     await tester.pumpAndSettle();
     await tester.enterText(input, '保留聊天记录，并验证手机和桌面。');
+    await tester.ensureVisible(find.text('+ Additional details (optional)'));
+    await tester.tap(find.text('+ Additional details (optional)'));
+    await tester.pumpAndSettle();
+    final supplement = find.byKey(const Key('acp-additional-text'));
+    await tester.ensureVisible(supplement);
+    await tester.enterText(supplement, '请先完成桌面端验证。');
     await tester.pumpAndSettle();
     await _capture(tester, 'text-input');
     await tester.ensureVisible(find.text('Submit answer'));
@@ -73,6 +101,11 @@ void main() {
       },
     );
     expect(tester.takeException(), isNull);
+    final response = acpMap(
+      acpMap(service.requests.single['args'])['response'],
+    );
+    expect(response['answer_format'], 'awiki.answer.v2');
+    expect(response['text'], '请先完成桌面端验证。');
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
     final idle = AcpSession.parse({
@@ -97,6 +130,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AcpSessionOptions)),
+    );
+    service.onModelConfirmed = (value) => container
+        .read(acpSessionsProvider.notifier)
+        .applyConversation(control(value), idle.conversationId);
     await tester.tap(find.byKey(const Key('acp-model-menu')));
     await tester.pumpAndSettle();
     await _capture(tester, 'model-picker');

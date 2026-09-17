@@ -34,6 +34,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../case_attestation.dart';
 import 'package:awiki_me/src/presentation/agents/acp_session_provider.dart';
+import 'package:awiki_me/src/presentation/agents/acp_model_controller.dart';
 import 'package:awiki_me/src/presentation/agents/acp_task_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/acp_session.dart';
 import 'package:flutter/cupertino.dart';
@@ -75,24 +76,28 @@ const _codingCasePhases = <String, List<String>>{
     'busy_instruction_rejected',
     'ordinary_chat_continues',
     'requester_answers_in_group',
+    'prior_group_context_returned',
   ],
   'ACP-GEMINI-E2E-009': <String>[
     'group_task_accepted',
     'busy_instruction_rejected',
     'ordinary_chat_continues',
     'requester_answers_in_group',
+    'prior_group_context_returned',
   ],
   'ACP-KIMI-E2E-009': <String>[
     'group_task_accepted',
     'busy_instruction_rejected',
     'ordinary_chat_continues',
     'requester_answers_in_group',
+    'prior_group_context_returned',
   ],
   'ACP-DEEPSEEK-HARNESS-E2E-009': <String>[
     'group_task_accepted',
     'busy_instruction_rejected',
     'ordinary_chat_continues',
     'requester_answers_in_group',
+    'prior_group_context_returned',
   ],
   'CODEXAGENT-E2E-001': <String>[
     'daemon_selected',
@@ -117,6 +122,7 @@ const _codingCasePhases = <String, List<String>>{
     'runtime_agent_created',
     'runtime_creation_row_unique_throughout',
     'runtime_chat_opened',
+    'initial_model_visible_and_selectable',
   ],
   'ACP-OPENCODE-E2E-002': <String>[
     'prompt_entered_through_ui',
@@ -137,6 +143,7 @@ const _codingCasePhases = <String, List<String>>{
     'manual_execute_finishes',
     'idle_model_selection_applied',
     'immediate_execution_stops_active',
+    'idle_after_stop_then_completion',
   ],
   'ACP-OPENCODE-E2E-006': <String>[
     'waiting_cancelled',
@@ -149,12 +156,14 @@ const _codingCasePhases = <String, List<String>>{
     'answer_draft_independent',
     'answer_final_visible',
     'normal_completion_executes_waiting_once',
+    'supplement_returned_without_changing_draft',
   ],
   'ACP-GEMINI-E2E-001': <String>[
     'daemon_selected',
     'runtime_agent_created',
     'runtime_creation_row_unique_throughout',
     'runtime_chat_opened',
+    'initial_model_visible_and_selectable',
   ],
   'ACP-GEMINI-E2E-002': <String>[
     'prompt_entered_through_ui',
@@ -175,6 +184,7 @@ const _codingCasePhases = <String, List<String>>{
     'manual_execute_finishes',
     'idle_model_selection_applied',
     'immediate_execution_stops_active',
+    'idle_after_stop_then_completion',
   ],
   'ACP-GEMINI-E2E-006': <String>[
     'waiting_cancelled',
@@ -187,12 +197,14 @@ const _codingCasePhases = <String, List<String>>{
     'answer_draft_independent',
     'answer_final_visible',
     'normal_completion_executes_waiting_once',
+    'supplement_returned_without_changing_draft',
   ],
   'ACP-KIMI-E2E-001': <String>[
     'daemon_selected',
     'runtime_agent_created',
     'runtime_creation_row_unique_throughout',
     'runtime_chat_opened',
+    'initial_model_visible_and_selectable',
   ],
   'ACP-KIMI-E2E-002': <String>[
     'prompt_entered_through_ui',
@@ -213,6 +225,7 @@ const _codingCasePhases = <String, List<String>>{
     'manual_execute_finishes',
     'idle_model_selection_applied',
     'immediate_execution_stops_active',
+    'idle_after_stop_then_completion',
   ],
   'ACP-KIMI-E2E-006': <String>[
     'waiting_cancelled',
@@ -225,12 +238,14 @@ const _codingCasePhases = <String, List<String>>{
     'answer_draft_independent',
     'answer_final_visible',
     'normal_completion_executes_waiting_once',
+    'supplement_returned_without_changing_draft',
   ],
   'ACP-DEEPSEEK-HARNESS-E2E-001': <String>[
     'daemon_selected',
     'runtime_agent_created',
     'runtime_creation_row_unique_throughout',
     'runtime_chat_opened',
+    'initial_model_visible_and_selectable',
   ],
   'ACP-DEEPSEEK-HARNESS-E2E-002': <String>[
     'prompt_entered_through_ui',
@@ -251,6 +266,7 @@ const _codingCasePhases = <String, List<String>>{
     'manual_execute_finishes',
     'idle_model_selection_applied',
     'immediate_execution_stops_active',
+    'idle_after_stop_then_completion',
   ],
   'ACP-DEEPSEEK-HARNESS-E2E-006': <String>[
     'waiting_cancelled',
@@ -263,6 +279,7 @@ const _codingCasePhases = <String, List<String>>{
     'answer_draft_independent',
     'answer_final_visible',
     'normal_completion_executes_waiting_once',
+    'supplement_returned_without_changing_draft',
   ],
   'ACP-OPENCODE-E2E-008': <String>[
     'attachment_staged_through_ui',
@@ -301,6 +318,12 @@ void main() => codingAgentAcceptance();
 
 /// Shared real App/Daemon acceptance; ACP adds its controls to the same chat flow.
 void codingAgentAcceptance({bool acp = false, bool hermes = false}) {
+  final runChatCases =
+      !acp ||
+      codingAgentAcpCaseNumbers(
+        const String.fromEnvironment('AWIKI_ACP_FOCUS_DRIVER'),
+        groupOnly: const bool.fromEnvironment('AWIKI_ACP_FOCUS_GROUP_ONLY'),
+      ).contains(2);
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   tearDownAll(
     () => E2eInvocationCompletionWriter.markFinished(
@@ -420,12 +443,9 @@ void codingAgentAcceptance({bool acp = false, bool hermes = false}) {
         }
 
         final kinds = acp
-            ? [
-                RuntimeAgentKind.opencode,
-                RuntimeAgentKind.gemini,
-                RuntimeAgentKind.kimi,
-                RuntimeAgentKind.deepseekHarness,
-              ]
+            ? codingAgentAcpKinds(
+                const String.fromEnvironment('AWIKI_ACP_FOCUS_DRIVER'),
+              )
             : [hermes ? RuntimeAgentKind.hermes : RuntimeAgentKind.codex];
         final independentFailures = <String>[];
         for (final kind in kinds) {
@@ -504,55 +524,64 @@ void codingAgentAcceptance({bool acp = false, bool hermes = false}) {
           await _tapFirstFound(tester, <Finder>[find.text('打开聊天')]);
           await _pumpFrame(tester);
           expect(find.text('${kind.displayLabel} E2E'), findsWidgets);
+          if (acp) await _verifyAcpInitialModels(tester, appContainer, runtime);
           await _markCodingCase('$prefix-001');
 
-          await _sendPromptThroughUi(tester, config.prompt);
-          await _markCodingCase('$prefix-002');
-          await _waitForDaemonCodexFinalSent(
-            daemonStateRoot: config.daemonStateRoot,
-            runtimeAgentDid: runtime.agentDid,
-            prompt: config.prompt,
-            expectedReply: config.expectedReply,
-            runtimePluginId: acp
-                ? 'acp'
-                : hermes
-                ? 'runtime.hermes'
-                : 'generic-cli',
-          );
-          await _markCodingCase('$prefix-003');
-          await _waitForAppIncomingCodexReply(
-            messaging: bootstrap.messagingService!,
-            runtimeAgentDid: runtime.agentDid,
-            expectedReply: config.expectedReply,
-          );
-          await _waitForVisibleCodexReply(
-            tester: tester,
-            expectedReply: config.expectedReply,
-          );
-          await _markCodingCase('$prefix-004');
-          if (acp) {
-            await _verifyAcpChatControls(
-              tester,
-              appContainer,
-              runtime,
-              prefix,
-              config.daemonStateRoot,
+          if (runChatCases) {
+            await _sendPromptThroughUi(tester, config.prompt);
+            await _markCodingCase('$prefix-002');
+            await _waitForDaemonCodexFinalSent(
+              daemonStateRoot: config.daemonStateRoot,
+              runtimeAgentDid: runtime.agentDid,
+              prompt: config.prompt,
+              expectedReply: config.expectedReply,
+              runtimePluginId: acp
+                  ? 'acp'
+                  : hermes
+                  ? 'runtime.hermes'
+                  : 'generic-cli',
             );
-            try {
-              await _verifyAcpAttachments(
+            await _markCodingCase('$prefix-003');
+            await _waitForAppIncomingCodexReply(
+              messaging: bootstrap.messagingService!,
+              runtimeAgentDid: runtime.agentDid,
+              expectedReply: config.expectedReply,
+            );
+            await _waitForVisibleCodexReply(
+              tester: tester,
+              expectedReply: config.expectedReply,
+            );
+            await _markCodingCase('$prefix-004');
+            if (acp) {
+              await _verifyAcpChatControls(
                 tester,
-                bootstrap.messagingService!,
+                appContainer,
                 runtime,
                 prefix,
                 config.daemonStateRoot,
               );
-            } catch (error) {
-              // Preserve this failure and its missing attestation. Independent
-              // clients/group checks still run; the invocation fails below.
-              final detail = _sanitizeDiagnostic(error.toString(), config);
-              independentFailures.add('$prefix-008: $detail');
-              debugPrint('ACP attachment case failed: $prefix-008: $detail');
+              try {
+                await _verifyAcpAttachments(
+                  tester,
+                  bootstrap.messagingService!,
+                  runtime,
+                  prefix,
+                  config.daemonStateRoot,
+                );
+              } catch (error) {
+                // Preserve this case failure. Independent clients/group checks
+                // still run; the invocation fails below.
+                final detail = _sanitizeDiagnostic(error.toString(), config);
+                independentFailures.add('$prefix-008: $detail');
+                await E2eCaseAttestationWriter.markFailed(
+                  '$prefix-008',
+                  phase: 'attachment_acceptance_failed',
+                );
+                debugPrint('ACP attachment case failed: $prefix-008: $detail');
+              }
             }
+          }
+          if (acp) {
             try {
               await _verifyAcpGroup(
                 tester,
@@ -566,6 +595,10 @@ void codingAgentAcceptance({bool acp = false, bool hermes = false}) {
             } catch (error) {
               final detail = _sanitizeDiagnostic(error.toString(), config);
               independentFailures.add('$prefix-009: $detail');
+              await E2eCaseAttestationWriter.markFailed(
+                '$prefix-009',
+                phase: 'group_acceptance_failed',
+              );
               debugPrint('ACP group case failed: $prefix-009: $detail');
             }
           }
@@ -631,6 +664,91 @@ Future<void> _tapAcpAction(
   await _pumpFrame(tester);
 }
 
+Future<void> _verifyAcpInitialModels(
+  WidgetTester tester,
+  ProviderContainer container,
+  AgentSummary agent,
+) async {
+  final initial = await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => !s.group && !s.busy && s.data['model_configuration_ready'] == true,
+  );
+  // The configuration event can precede the correlated command response.
+  // Until both have reconciled the product deliberately disables selection.
+  await _pumpUntil(
+    tester,
+    () {
+      final operation = container.read(
+        acpModelControllerProvider((
+          agentDid: agent.agentDid,
+          conversationId: initial.conversationId,
+        )),
+      );
+      if (operation.phase == AcpModelPhase.failed ||
+          operation.phase == AcpModelPhase.uncertain) {
+        fail(
+          'Initial model preparation ${operation.phase.name}: '
+          '${operation.errorCode ?? "response_not_confirmed"}',
+        );
+      }
+      return !operation.blocksSending;
+    },
+    timeout: const Duration(minutes: 2),
+    description: 'Initial model command response reconciled with Core state',
+  );
+  await _pumpFrame(tester);
+  expect(
+    initial.history,
+    isEmpty,
+    reason: 'Preparing models must not execute a task',
+  );
+  expect(initial.data['model_id'], isA<String>());
+  final current = initial.data['model_id'];
+  final model = initial.models.where((m) => m['id'] == current).firstOrNull;
+  final menu = find.byKey(const Key('acp-model-menu'));
+  expect(
+    find.descendant(
+      of: menu,
+      matching: find.text('${model?['name'] ?? current}'),
+    ),
+    findsOneWidget,
+  );
+  await tester.ensureVisible(menu);
+  await tester.tap(menu);
+  await _pumpFrame(tester);
+  // Gemini can report a configured proxy alias as current while advertising
+  // only its native selectable models. Display that exact current value, then
+  // exercise a genuinely advertised choice (the test relay maps gemini-*).
+  final choice = model ?? initial.models.firstWhere((m) => m['id'] != 'auto');
+  final selectedId = choice['id'];
+  // Providers can advertise hundreds of models; off-screen sliver rows have
+  // not been built. Use the product's search rather than assuming every row
+  // already has an Element.
+  final search = find.byKey(const Key('acp-model-search'));
+  if (search.evaluate().isNotEmpty) {
+    await tester.enterText(search, '$selectedId');
+    await _pumpFrame(tester);
+  }
+  final row = find.byKey(ValueKey('acp-model:$selectedId'));
+  await tester.ensureVisible(row);
+  expect(tester.widget<CupertinoButton>(row).onPressed, isNotNull);
+  await tester.tap(row);
+  await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => s.revision > initial.revision && s.data['model_id'] == selectedId,
+  );
+  await _pumpUntil(
+    tester,
+    () => find.byKey(const Key('acp-model-picker')).evaluate().isEmpty,
+    timeout: const Duration(seconds: 30),
+    description: 'Initial model choice committed',
+  );
+}
+
 Future<void> _verifyAcpChatControls(
   WidgetTester tester,
   ProviderContainer container,
@@ -645,41 +763,6 @@ Future<void> _verifyAcpChatControls(
   bool waitingForUser(AcpSession session) => hasAcpBlockingQuestion(
     session,
     nowMs: DateTime.now().millisecondsSinceEpoch,
-  );
-  var idle = await _waitAcp(
-    tester,
-    container,
-    agent.agentDid,
-    (s) => !s.busy && s.models.isNotEmpty,
-  );
-  final model = idle.models.first;
-  final modelPicker = find.descendant(
-    of: find.byType(AcpSessionOptions),
-    matching: find.byType(CupertinoButton),
-  );
-  await tester.ensureVisible(modelPicker);
-  await tester.tap(modelPicker);
-  await _pumpFrame(tester);
-  final modelAction = find.byWidgetPredicate(
-    (widget) =>
-        widget is AcpActionButton &&
-        widget.action == 'set_model' &&
-        widget.values['model_id'] == model['id'],
-  );
-  await tester.ensureVisible(modelAction);
-  await tester.tap(modelAction);
-  await _pumpFrame(tester);
-  await _waitAcp(
-    tester,
-    container,
-    agent.agentDid,
-    (s) => s.revision > idle.revision && s.data['model_id'] == model['id'],
-  );
-  await _pumpUntil(
-    tester,
-    () => find.byKey(const Key('acp-model-picker')).evaluate().isEmpty,
-    timeout: const Duration(seconds: 30),
-    description: 'model choice committed',
   );
   await _sendPromptThroughUi(tester, stopQuestion);
   var session = await _waitAcp(
@@ -771,6 +854,11 @@ Future<void> _verifyAcpChatControls(
     tester: tester,
     expectedReply: 'INSERTED_TASK_DONE',
   );
+  expect(
+    container.read(acpSessionsProvider).busyForAgent(agent.agentDid),
+    isFalse,
+    reason: 'Stopped A followed by completed B must return to idle',
+  );
   await _markCodingCase('$prefix-005');
 
   await _sendPromptThroughUi(tester, cancelWaitingQuestion);
@@ -801,7 +889,7 @@ Future<void> _verifyAcpChatControls(
   await _markCodingCase('$prefix-006');
 
   const questionPrompt =
-      'Use awiki_questions request_user_input to ask me a required color string with enum red and blue. Wait for my real answer. If I choose blue reply exactly USER_CHOSE_BLUE. Do not answer for me.';
+      'Use awiki_questions request_user_input to ask me a required color string with enum red and blue. Wait for my real answer. If I choose blue, reply with exactly the additional text field returned by the tool. Do not answer for me.';
   await _sendPromptThroughUi(tester, questionPrompt);
   session = await _waitAcp(
     tester,
@@ -848,6 +936,13 @@ Future<void> _verifyAcpChatControls(
     ),
     findsOneWidget,
   );
+  await _tapFirstFound(tester, [
+    find.byKey(const Key('acp-additional-toggle')),
+  ]);
+  final supplement = find.byKey(const Key('acp-additional-text'));
+  await tester.ensureVisible(supplement);
+  await tester.enterText(supplement, 'USER_CHOSE_BLUE');
+  await _pumpFrame(tester);
   await _tapFirstFound(tester, [find.text('提交回答'), find.text('Submit answer')]);
   await _waitAcp(
     tester,
@@ -919,7 +1014,8 @@ Future<void> _verifyAcpGroup(
   final groupDid = group.groupId;
   await groups.addMember(groupDid: groupDid, memberRef: agent.agentDid);
   final thread = AppThreadRef.group(groupDid);
-  await messages.sendText(thread: thread, content: 'ACP_GROUP_READY');
+  final contextProof = 'GROUP_CONTEXT_${DateTime.now().microsecondsSinceEpoch}';
+  await messages.sendText(thread: thread, content: contextProof);
   await container.read(conversationListProvider.notifier).refresh();
   container
       .read(selectedConversationProvider.notifier)
@@ -952,6 +1048,13 @@ Future<void> _verifyAcpGroup(
   final run = session.active['run_id'];
   expect(session.waiting, isEmpty);
   expect(find.byKey(ValueKey('acp-stop:$run')), findsNothing);
+  // A committed provider update can precede its next rendered frame.
+  await _pumpUntil(
+    tester,
+    () => find.byType(AcpQuestionForm).evaluate().length == 1,
+    timeout: const Duration(seconds: 30),
+    description: 'live group question rendered after committed ACP state',
+  );
   expect(find.byType(AcpQuestionForm), findsOneWidget);
 
   // A second device can race the UI's admission hint. Send via the existing
@@ -1020,6 +1123,25 @@ Future<void> _verifyAcpGroup(
     expectedReply: '@$requesterHandle $groupReply',
   );
   expect(find.text('GROUP_BUSY_MUST_NOT_RUN'), findsNothing);
+  const historyPrompt =
+      '$surface From the earlier ordinary group chat, repeat exactly the GROUP_CONTEXT_ marker. Do not use tools or guess.';
+  await messages.sendMentionText(
+    thread: thread,
+    text: historyPrompt,
+    mentions: [mention],
+  );
+  final historyReply = await _waitForDaemonCodexFinalSent(
+    daemonStateRoot: daemonStateRoot,
+    runtimeAgentDid: agent.agentDid,
+    prompt: historyPrompt,
+    expectedReply: contextProof,
+    runtimePluginId: 'acp',
+    allowProgressText: true,
+  );
+  await _waitForVisibleCodexReply(
+    tester: tester,
+    expectedReply: '@$requesterHandle $historyReply',
+  );
   await _markCodingCase('$prefix-009');
 }
 
@@ -1672,11 +1794,11 @@ Future<String> _waitForDaemonCodexFinalSent({
           LEFT JOIN runtime_run r ON r.task_id = t.task_id
           LEFT JOIN runtime_final_outbox f ON f.run_id = r.run_id
           LEFT JOIN cli_driver_run c ON c.run_id = r.run_id
-          WHERE t.agent_did = ? AND t.task_text LIKE ?
+          WHERE t.agent_did = ? AND ($codingAgentCurrentPromptSql) = ?
           ORDER BY t.created_at_ms DESC
           LIMIT 1
           ''',
-          <Object?>[runtimeAgentDid, '%$prompt%'],
+          <Object?>[runtimeAgentDid, prompt],
         );
         if (rows.isEmpty) {
           lastState = 'no runtime task for runtime=$runtimeAgentDid prompt';
@@ -2041,9 +2163,12 @@ class _CodexAgentRealBackendConfig {
     bool acp = false,
     bool hermes = false,
   }) {
+    const focusConfig = String.fromEnvironment('AWIKI_ACP_FOCUS_CONFIG');
     final file = File(
       acp
-          ? '.e2e/acp-agent/current/run_config.json'
+          ? (focusConfig.isEmpty
+                ? '.e2e/acp-agent/current/run_config.json'
+                : focusConfig)
           : hermes
           ? '.e2e/hermes-agent/current/run_config.json'
           : _codexAgentRunConfigPath,

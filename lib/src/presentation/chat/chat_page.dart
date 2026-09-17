@@ -70,8 +70,12 @@ import '../../l10n/l10n.dart';
 import '../../app/ui_feedback.dart';
 import '../agents/agent_inbox_panel.dart';
 import '../agents/acp_session_provider.dart';
+import '../agents/acp_task_history_provider.dart';
+import '../agents/acp_model_controller.dart';
 import '../agents/acp_task_status.dart';
 import '../../domain/entities/agent/acp_session.dart';
+import '../../domain/entities/agent/acp_task.dart';
+import '../agents/acp_execution_record.dart';
 import '../agents/agent_rename_dialog.dart';
 import '../agents/agent_runtime_display.dart';
 import '../agents/agent_visual_status.dart';
@@ -114,6 +118,8 @@ part 'parts/chat_header_part.dart';
 part 'parts/chat_information_part.dart';
 part 'parts/chat_peer_info_part.dart';
 part 'parts/chat_message_part.dart';
+part 'parts/chat_bubble_surface.dart';
+part 'parts/chat_acp_reply_part.dart';
 part 'parts/chat_message_action_menu_part.dart';
 part 'parts/chat_composer_part.dart';
 
@@ -343,6 +349,7 @@ enum _ChatScrollAnchorPhase {
 enum _ChatTimelineEntryKind {
   message,
   unmatchedPendingTurn,
+  acpUnanchoredReply,
   personalAgentRecovery,
   tail,
 }
@@ -972,6 +979,16 @@ class _ChatViewState extends ConsumerState<ChatView> {
     );
     _requestAgentsIfNeeded(currentConversation);
     final agentsState = ref.watch(agentsProvider);
+    final acpRecords = acpProjection.tasksForConversation(
+      currentConversation.conversationId,
+    );
+    AcpSession? sessionForTask(AcpTask task) {
+      for (final session in acpSessions) {
+        if (session.key == task.sessionKey) return session;
+      }
+      return null;
+    }
+
     final agents = agentsState.agents;
     final isDeletedAgentConversation =
         currentConversation.isDeletedAgentConversation;
@@ -1017,6 +1034,34 @@ class _ChatViewState extends ConsumerState<ChatView> {
           _handleThreadChanged(previous, next, currentConversation),
     );
     final messages = thread.messages;
+    final acpFinals = <String, ChatMessage>{
+      for (final task in acpRecords)
+        if (acpFinalReplyForTask(task, messages) case final reply?)
+          task.key: reply,
+    };
+
+    final acpSourceIds = {
+      for (final message in messages) message.localId,
+      for (final message in messages)
+        if (message.remoteId != null) message.remoteId!,
+    };
+    final unanchoredAcp = [
+      for (final task in acpRecords)
+        if (!acpSourceIds.contains(task.sourceMessageId) &&
+            !acpFinals.containsKey(task.key) &&
+            (task.text.isNotEmpty ||
+                task.tools.isNotEmpty ||
+                task.questions.isNotEmpty) &&
+            (task.running ||
+                sessionForTask(task)?.data['output_run_id'] == task.runId ||
+                sessionForTask(task) == null &&
+                    !acpRecords.any(
+                      (other) =>
+                          other.sessionKey == task.sessionKey &&
+                          other.revision > task.revision,
+                    )))
+          task,
+    ];
 
     final mentionGroupDid = _mentionGroupDidForConversation(
       currentConversation,
@@ -1040,6 +1085,30 @@ class _ChatViewState extends ConsumerState<ChatView> {
       groupMembers: mentionGroupMembers,
       agentInventory: agents,
     );
+    Widget acpReply(AcpTask task, {bool sourceUnavailable = false}) =>
+        _AcpReplyPreview(
+          task: task,
+          session: sessionForTask(task),
+          conversation: currentConversation,
+          mentionPresentation: mentionPresentation,
+          sourceUnavailable: sourceUnavailable,
+          senderLabel:
+              agents
+                  .where((a) => a.agentDid == task.agentDid)
+                  .firstOrNull
+                  ?.displayName ??
+              ref.watch(
+                publicIdentityDisplayNameProvider(
+                  PublicIdentityDisplayNameRequest(
+                    did: task.agentDid,
+                    unknownLabel: context.l10n.conversationPeerTypeAgent,
+                  ),
+                ),
+              ),
+          avatarUri: peerAvatarUri(peerDisplayProfiles, task.agentDid),
+          viewerDid: currentSessionDid ?? '',
+          macStyle: macStyle,
+        );
     final deferRealtimeTailFirstPaint =
         thread.isHydratingLocalHistory && messages.length <= 1;
     _settleOpeningBottomAnchorForCurrentThread(thread);
@@ -1077,6 +1146,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
         _ChatTimelineEntry(
           id: _personalAgentTimelineEntryId(personalAgentItems[index]),
           kind: _ChatTimelineEntryKind.personalAgentRecovery,
+          sourceIndex: index,
+        ),
+      for (var index = 0; index < unanchoredAcp.length; index++)
+        _ChatTimelineEntry(
+          id: _scopedTimelineEntryId('acp:${unanchoredAcp[index].key}'),
+          kind: _ChatTimelineEntryKind.acpUnanchoredReply,
           sourceIndex: index,
         ),
       _ChatTimelineEntry(
@@ -1126,6 +1201,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
                 : null,
             isAddGroupMemberLoading: _isOpeningGroupInvite,
           ),
+          if (acpSessions.isNotEmpty)
+            AcpTaskHistoryLoader(
+              queries: acpHistoryQueries(
+                acpSessions,
+                messages,
+                agents.where((a) => a.isRuntime).map((a) => a.agentDid).toSet(),
+              ),
+            ),
           Expanded(
             child: Listener(
               behavior: HitTestBehavior.translucent,
@@ -1164,6 +1247,16 @@ class _ChatViewState extends ConsumerState<ChatView> {
                               const SizedBox(
                                 key: Key('chat-timeline-tail'),
                                 width: double.infinity,
+                              ),
+                            );
+                          }
+                          if (entry.kind ==
+                              _ChatTimelineEntryKind.acpUnanchoredReply) {
+                            return _buildTimelineChild(
+                              entry.id,
+                              acpReply(
+                                unanchoredAcp[entry.sourceIndex],
+                                sourceUnavailable: true,
                               ),
                             );
                           }
@@ -1253,18 +1346,17 @@ class _ChatViewState extends ConsumerState<ChatView> {
                             message.localId,
                             if (message.remoteId != null) message.remoteId!,
                           };
-                          final acpTasks =
-                              <
-                                ({
-                                  AcpSession session,
-                                  Map<String, Object?> task,
-                                })
-                              >[
-                                for (final session in acpSessions)
-                                  if (session.taskFor(acpMessageIds)
-                                      case final task?)
-                                    (session: session, task: task),
-                              ];
+                          final acpTasks = [
+                            for (final task in acpRecords)
+                              if (acpMessageIds.contains(task.sourceMessageId))
+                                (session: sessionForTask(task), task: task),
+                          ];
+                          final acpFinalTasks = [
+                            for (final task in acpRecords)
+                              if (acpFinals[task.key]?.localId ==
+                                  message.localId)
+                                task,
+                          ];
                           final acpRejections = [
                             for (final id in acpMessageIds)
                               if (acpProjection
@@ -1354,6 +1446,28 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                         senderAvatarUri: senderAvatarUri,
                                         senderAvatarUserId: senderAvatarUserId,
                                         showSenderLabel: showSenderLabel,
+                                        header: acpFinalTasks.isEmpty
+                                            ? null
+                                            : Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  for (final task
+                                                      in acpFinalTasks)
+                                                    AcpExecutionRecord(
+                                                      key: ValueKey(
+                                                        'acp-record:${task.runId}',
+                                                      ),
+                                                      task: task,
+                                                      session: sessionForTask(
+                                                        task,
+                                                      ),
+                                                      viewerDid:
+                                                          currentSessionDid ??
+                                                          '',
+                                                    ),
+                                                ],
+                                              ),
                                         footer:
                                             acpTasks.isEmpty &&
                                                 acpRejections.isEmpty
@@ -1368,10 +1482,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                                   for (final item in acpTasks)
                                                     AcpTaskStatus(
                                                       key: ValueKey(
-                                                        'acp-task:${item.task['run_id']}',
+                                                        'acp-task:${item.task.runId}',
                                                       ),
                                                       session: item.session,
-                                                      task: item.task,
+                                                      task: item.task.data,
                                                       viewerDid:
                                                           currentSessionDid ??
                                                           '',
@@ -1490,6 +1604,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                               senderLabel,
                                             ),
                                       ),
+                                    for (final item in acpTasks)
+                                      if (!acpFinals.containsKey(item.task.key))
+                                        acpReply(item.task),
                                     if (pendingTurns.isNotEmpty) ...<Widget>[
                                       SizedBox(
                                         height: macStyle
@@ -1537,17 +1654,30 @@ class _ChatViewState extends ConsumerState<ChatView> {
               ),
             ),
           ),
-          if (acpSessions.isNotEmpty)
+          if (!currentConversation.isGroup &&
+              !isDeletedAgentConversation &&
+              ((runtimeAgent != null && agentUsesAcp(runtimeAgent)) ||
+                  acpSessions.isNotEmpty))
             ConstrainedBox(
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.sizeOf(context).height * 0.24,
               ),
               child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    for (final session in acpSessions)
-                      AcpSessionOptions(session: session),
-                  ],
+                child: AcpModelBar(
+                  scope: (
+                    agentDid:
+                        runtimeAgent?.agentDid ?? acpSessions.first.agentDid,
+                    conversationId: currentConversation.conversationId,
+                  ),
+                  session: acpSessions.firstOrNull,
+                  online: !agents.any(
+                    (a) =>
+                        a.isDaemon &&
+                        a.agentDid == runtimeAgent?.daemonAgentDid &&
+                        (a.daemonEffectiveStatus?.primaryStatus ??
+                                a.latest.status) ==
+                            'offline',
+                  ),
                 ),
               ),
             ),
@@ -2202,14 +2332,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     };
     final acpAgents = {
       for (final a in agents)
-        if (a.runtime == 'acp' ||
-            const {
-              'opencode',
-              'gemini',
-              'kimi',
-              'deepseek-harness',
-            }.contains(a.runtime))
-          a.agentDid,
+        if (agentUsesAcp(a)) a.agentDid,
       for (final s in sessions) s.agentDid,
     };
     for (final agentDid in acpAgents) {
@@ -2235,6 +2358,17 @@ class _ChatViewState extends ConsumerState<ChatView> {
         invokesAgent: true,
       );
       if (block != null) return block;
+      if (!conversation.isGroup &&
+          ref
+              .read(
+                acpModelControllerProvider((
+                  agentDid: agentDid,
+                  conversationId: conversation.conversationId,
+                )),
+              )
+              .blocksSending) {
+        return AcpSendBlock.modelChanging;
+      }
       // Messages sent by this device can precede their committed acceptance.
       // Reserve input capacity locally until the Daemon snapshot resolves them.
       final completed = {

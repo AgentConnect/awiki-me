@@ -21,6 +21,7 @@ import '../../application/ports/message_sync_core_port.dart';
 import '../../application/thread_id_utils.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
+import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/chat_mention.dart';
@@ -30,6 +31,7 @@ import '../../domain/entities/conversation_summary.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
 import '../agents/agents_provider.dart';
+import '../agents/acp_session_provider.dart';
 import '../agents/personal_agent_feature_visibility.dart';
 import '../app_shell/providers/app_lifecycle_provider.dart';
 import '../app_shell/providers/session_provider.dart';
@@ -740,6 +742,10 @@ class ChatThreadsController
       sessionProvider,
       _handleSessionChanged,
     );
+    _acpSubscription = ref.listen<AcpProjection>(
+      acpSessionsProvider,
+      (_, projection) => _applyAcpProjection(projection),
+    );
   }
 
   final Ref ref;
@@ -786,6 +792,7 @@ class ChatThreadsController
   final Map<String, Timer> _hiddenThreadCacheTrimTimers = <String, Timer>{};
   late final ProviderSubscription<AppLifecycleState> _appLifecycleSubscription;
   late final ProviderSubscription<SessionState> _sessionSubscription;
+  late final ProviderSubscription<AcpProjection> _acpSubscription;
   SessionEpoch? _sessionEpoch;
   final Map<String, DateTime> _lastThreadPatchStreamEndAt =
       <String, DateTime>{};
@@ -5344,6 +5351,7 @@ class ChatThreadsController
       threadId: current.copyWith(agentPendingTurns: nextTurns),
     };
     _scheduleAgentProcessingOverdue(threadId);
+    _applyAcpProjection(ref.read(acpSessionsProvider));
   }
 
   _AgentPendingTarget? _directAgentPendingTarget(
@@ -5370,6 +5378,57 @@ class ChatThreadsController
       return _handleLocalPart(peer);
     }
     return null;
+  }
+
+  bool _usesAcpStatus(String agentDid) {
+    if (ref.read(acpSessionsProvider).busyForAgent(agentDid) != null) {
+      return true;
+    }
+    return ref
+        .read(agentsProvider)
+        .agents
+        .any(
+          (agent) =>
+              agent.agentDid == agentDid &&
+              agent.isRuntime &&
+              RuntimeAgentKind.values.any(
+                (kind) =>
+                    kind.isAcp &&
+                    (kind.runtime == agent.runtime ||
+                        kind.driverId == agent.latest.runtimeCard?.driverId),
+              ),
+        );
+  }
+
+  void _applyAcpProjection(AcpProjection projection) {
+    for (final task in projection.tasks.values) {
+      final latest = projection.activity[task.sessionKey];
+      if (task.running &&
+          (task.conversationId == null ||
+              latest != null &&
+                  latest.revision >= task.revision &&
+                  latest.activeRunId != task.runId)) {
+        continue;
+      }
+      _applyAgentRunStatus(
+        {
+          'agent_did': task.agentDid,
+          'conversation_id': task.conversationId,
+          'source_message_id': task.sourceMessageId,
+          'run_id': task.runId,
+          // Accepted waiting work has its own task footer. It is not an
+          // optimistic pending send and must not keep the agent marked busy.
+          'status': task.running
+              ? 'running'
+              : task.terminal
+              ? task.state
+              : 'finished',
+        },
+        const {},
+        fromAcp: true,
+        rememberCompletion: task.terminal,
+      );
+    }
   }
 
   void applyAgentRunStatusPayload(Map<String, Object?> payload) {
@@ -5400,6 +5459,7 @@ class ChatThreadsController
           if (runtimeDid == null) {
             continue;
           }
+          if (_usesAcpStatus(runtimeDid)) continue;
           snapshotRuntimeDids.add(runtimeDid);
           snapshotAtByRuntimeDid[runtimeDid] =
               _parseRunTimestamp(runtime['last_seen_at']) ??
@@ -5419,6 +5479,7 @@ class ChatThreadsController
         if (status == null || agentDid == null || !_isActiveRunStatus(status)) {
           continue;
         }
+        if (_usesAcpStatus(agentDid)) continue;
         snapshotRuntimeDids.add(agentDid);
         activeRunsByAgent.putIfAbsent(agentDid, () => <Map<String, Object?>>[]);
         activeRunsByAgent[agentDid]!.add(run);
@@ -5438,8 +5499,10 @@ class ChatThreadsController
 
   void _applyAgentRunStatus(
     Map<String, Object?> run,
-    Map<String, Object?> payload,
-  ) {
+    Map<String, Object?> payload, {
+    bool fromAcp = false,
+    bool rememberCompletion = true,
+  }) {
     final status = run['status']?.toString().trim();
     if (status == null || status.isEmpty) {
       return;
@@ -5448,6 +5511,12 @@ class ChatThreadsController
         run['runtime_agent_did']?.toString().trim().ifNotEmpty ??
         run['agent_did']?.toString().trim().ifNotEmpty;
     if (agentDid == null || agentDid.isEmpty) {
+      return;
+    }
+    if (!fromAcp &&
+        (_usesAcpStatus(agentDid) ||
+            run['acp'] != null ||
+            run['acp_task'] != null)) {
       return;
     }
     final conversationId =
@@ -5488,7 +5557,7 @@ class ChatThreadsController
     if (!_isTerminalRunStatus(status)) {
       return;
     }
-    if (sourceMessageId != null) {
+    if (sourceMessageId != null && rememberCompletion) {
       _rememberCompletedAgentTurn(agentDid, sourceMessageId);
     }
     final nextState = Map<String, ChatThreadState>.from(state);
@@ -6072,7 +6141,13 @@ class ChatThreadsController
   }
 
   bool _isTerminalRunStatus(String status) {
-    return status == 'succeeded' || status == 'finished' || status == 'failed';
+    return const {
+      'succeeded',
+      'finished',
+      'failed',
+      'cancelled',
+      'interrupted',
+    }.contains(status);
   }
 
   DateTime? _parseRunTimestamp(Object? value) {
@@ -6576,6 +6651,7 @@ class ChatThreadsController
   void dispose() {
     _appLifecycleSubscription.close();
     _sessionSubscription.close();
+    _acpSubscription.close();
     _resetSessionBoundState();
     super.dispose();
   }

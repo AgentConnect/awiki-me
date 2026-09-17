@@ -986,7 +986,7 @@ class _PendingRuntimeCreationTile extends StatelessWidget {
   }
 }
 
-class _AgentListTile extends StatelessWidget {
+class _AgentListTile extends ConsumerWidget {
   const _AgentListTile({
     required this.agent,
     required this.pendingAgentDids,
@@ -1022,7 +1022,7 @@ class _AgentListTile extends StatelessWidget {
   final PendingRuntimeCreation? pendingRuntimeCreation;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final isChild = depth > 0;
@@ -1032,6 +1032,9 @@ class _AgentListTile extends StatelessWidget {
     final visualStatus = pendingRuntimeCreation == null
         ? AgentVisualStatus.fromAgent(
             agent,
+            authoritativeBusy: ref
+                .watch(acpSessionsProvider)
+                .busyForAgent(agent.agentDid),
             hasPendingTurn:
                 isDeleting || pendingAgentDids.contains(agent.agentDid),
             isPendingUpgrade: pendingDaemonUpgrades.containsKey(agent.agentDid),

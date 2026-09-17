@@ -356,9 +356,15 @@
   "deviceRootTransferTarget": "目标设备：{deviceId}\n签名密钥：{signingKeyId}\n端到端加密密钥：{e2eeKeyId}",
   "@deviceRootTransferTarget": {
     "placeholders": {
-      "deviceId": {"type": "String"},
-      "signingKeyId": {"type": "String"},
-      "e2eeKeyId": {"type": "String"}
+      "deviceId": {
+        "type": "String"
+      },
+      "signingKeyId": {
+        "type": "String"
+      },
+      "e2eeKeyId": {
+        "type": "String"
+      }
     }
   },
   "deviceRootTransferSent": "根密钥已发送",
@@ -376,7 +382,9 @@
   "deviceRevokeConfirmDetail": "将永久撤销 {deviceId}。该设备会失去未来访问权限，但已经取得的数据无法远程清除。此操作不可撤销。",
   "@deviceRevokeConfirmDetail": {
     "placeholders": {
-      "deviceId": {"type": "String"}
+      "deviceId": {
+        "type": "String"
+      }
     }
   },
   "deviceRevokeConfirmAction": "永久撤销",
@@ -397,7 +405,9 @@
   "deviceJoinResendOtpIn": "重新发送（{seconds}秒）",
   "@deviceJoinResendOtpIn": {
     "placeholders": {
-      "seconds": {"type": "int"}
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "deviceJoinStart": "开始关联",
@@ -416,14 +426,20 @@
   "deviceJoinFingerprint": "密钥指纹：{fingerprint}",
   "@deviceJoinFingerprint": {
     "placeholders": {
-      "fingerprint": {"type": "String"}
+      "fingerprint": {
+        "type": "String"
+      }
     }
   },
   "deviceJoinRequestWindow": "发起时间：{issuedAt}；过期时间：{expiresAt}",
   "@deviceJoinRequestWindow": {
     "placeholders": {
-      "issuedAt": {"type": "String"},
-      "expiresAt": {"type": "String"}
+      "issuedAt": {
+        "type": "String"
+      },
+      "expiresAt": {
+        "type": "String"
+      }
     }
   },
   "deviceJoinApprove": "确认并授权",
@@ -443,7 +459,9 @@
   "deviceJoinOtpRateLimited": "验证码发送过于频繁，请 {seconds} 秒后重试",
   "@deviceJoinOtpRateLimited": {
     "placeholders": {
-      "seconds": {"type": "int"}
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "deviceJoinErrorFailed": "设备操作失败，请刷新后重试",
@@ -603,7 +621,9 @@
   "groupIdentityCurrentHandle": "Handle：{handle}",
   "@groupIdentityCurrentHandle": {
     "placeholders": {
-      "handle": {"type": "String"}
+      "handle": {
+        "type": "String"
+      }
     }
   },
   "groupNoDescription": "暂无群描述",
@@ -639,13 +659,17 @@
   "groupRecoveryPending": "身份已恢复，仍有 {count} 个群等待更新",
   "@groupRecoveryPending": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "groupRecoveryBlocked": "身份已恢复，有 {count} 个群需要处理",
   "@groupRecoveryBlocked": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "groupRecoveryStatusUnavailable": "身份已恢复，群更新将在稍后重试",
@@ -675,6 +699,8 @@
   "groupInviteShowMore": "查看更多",
   "groupInviteAdding": "添加中...",
   "groupInviteAddFailed": "添加失败，请稍后重试",
+  "groupInviteAdmissionDenied": "服务器不允许此身份加入群聊",
+  "groupInviteFederatedDenied": "服务器策略不允许该外域身份加入群聊",
   "groupInviteConfirmCount": "确认添加 ({count})",
   "@groupInviteConfirmCount": {
     "placeholders": {
@@ -972,7 +998,7 @@
   "agentRemoveDaemonFromAccountMessage": "当前 Daemon 不可连接。此操作只会从当前账号移除这个 Daemon 以及它创建的智能体，不会访问或清理宿主机上的本地文件。",
   "agentRemoveRuntimeFromAccountMessage": "当前无法通过所属 Daemon 删除这个智能体。此操作只会把它从当前账号移除，不会访问或清理宿主机上的本地文件。",
   "agentInstallTitle": "到宿主机安装代理",
-  "agentInstallSupportedTypes": "支持的 Agent 类型：Hermes、Codex、Claude Code。安装宿主代理后，可在 Daemon 下创建 Runtime Agent。",
+  "agentInstallSupportedTypes": "支持 {types}。安装 Daemon 后可创建智能体；外部客户端需在同一设备上安装并完成配置。",
   "agentInstallTokenExpiresAt": "有效期至: {expiresAt}",
   "@agentInstallTokenExpiresAt": {
     "placeholders": {
@@ -1031,38 +1057,38 @@
   },
   "agentCreateHandleInvalidPattern": "仅支持小写字母、数字和连字符，且首尾必须是字母或数字",
   "agentCreateHandleNoDoubleHyphen": "Handle 不能包含连续连字符",
-  "agentCreateNeedsRouteWorkspace": "{agentType} 需要按会话目录工作模式。",
+  "agentCreateNeedsRouteWorkspace": "请升级此设备的 Daemon，以启用 {agentType}。",
   "@agentCreateNeedsRouteWorkspace": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateHermesDescription": "内置 Hermes Runtime Agent。",
-  "agentCreateNeedsGenericCliCapability": "{agentType} 需要 Daemon 提供 generic-cli capability。",
+  "agentCreateHermesDescription": "使用 Daemon 内置的 Hermes 运行环境。",
+  "agentCreateNeedsGenericCliCapability": "请先刷新设备状态，以确认是否支持 {agentType}。",
   "@agentCreateNeedsGenericCliCapability": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateUnsupportedDriver": "当前 Daemon 不支持 {agentType} driver。",
+  "agentCreateUnsupportedDriver": "当前设备的 Daemon 尚不支持 {agentType}，请升级后重试。",
   "@agentCreateUnsupportedDriver": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateNeedsRouteSession": "{agentType} 需要 route session 和 native resume 支持。",
+  "agentCreateNeedsRouteSession": "请升级此设备的 Daemon，以启用 {agentType}。",
   "@agentCreateNeedsRouteSession": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateNeedsHostAccess": "{agentType} 需要 Daemon 支持宿主机全权限模式。",
+  "agentCreateNeedsHostAccess": "请升级此设备的 Daemon，以启用 {agentType}。",
   "@agentCreateNeedsHostAccess": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateRequiresSignedInCli": "需要 Daemon 上已安装并登录的 {agentType} CLI。",
+  "agentCreateRequiresSignedInCli": "使用宿主机上的 {agentType}，需安装并完成登录或 API 配置。",
   "@agentCreateRequiresSignedInCli": {
     "placeholders": {
       "agentType": {}
@@ -1344,7 +1370,13 @@
   "updateInstallFailed": "更新失败，请打开下载页手动安装。",
   "updateRestrictedTitle": "当前租户需要更新",
   "updateRestrictedMessage": "{tenantName} 要求 AWiki Me {minimumVersion} 或更高版本，当前版本为 {currentVersion}。请更新客户端后继续使用；你也可以切换租户。",
-  "@updateRestrictedMessage": {"placeholders": {"tenantName": {}, "minimumVersion": {}, "currentVersion": {}}},
+  "@updateRestrictedMessage": {
+    "placeholders": {
+      "tenantName": {},
+      "minimumVersion": {},
+      "currentVersion": {}
+    }
+  },
   "updateRestrictedInstall": "打开官方下载页面",
   "updateRestrictedSwitchTenant": "切换租户",
   "updateRestrictedSettings": "设置和本地数据",
@@ -1404,7 +1436,9 @@
   "attachmentDownloadingProgress": "正在下载 · {progress}",
   "@attachmentDownloadingProgress": {
     "placeholders": {
-      "progress": {"type": "String"}
+      "progress": {
+        "type": "String"
+      }
     }
   },
   "attachmentDownloadPaused": "下载已暂停",
@@ -1550,5 +1584,12 @@
   "handleRecoveryChecking": "正在检查恢复进度…",
   "handleRecoveryRunning": "正在处理恢复操作，请稍候…",
   "handleRecoveryEntering": "恢复已完成，正在进入消息…",
-  "handleRecoveryContinueExisting": "继续上次恢复"
+  "handleRecoveryContinueExisting": "继续上次恢复",
+  "@agentInstallSupportedTypes": {
+    "placeholders": {
+      "types": {
+        "type": "String"
+      }
+    }
+  }
 }

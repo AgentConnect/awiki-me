@@ -319,7 +319,7 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
         !_remoteHandleChecking &&
         remoteError == null;
     return AppDialogScaffold(
-      maxWidth: 430,
+      maxWidth: 760,
       maxHeightFraction: 0.9,
       horizontalPadding: responsive.spacing(18),
       verticalPadding: responsive.spacing(22),
@@ -497,15 +497,14 @@ class _AgentTypeSelector extends StatelessWidget {
           ),
         ),
         SizedBox(height: responsive.spacing(6)),
-        for (final kind in RuntimeAgentKind.values) ...<Widget>[
-          _RuntimeKindTile(
+        AgentTypeGrid(
+          builder: (kind) => _RuntimeKindTile(
             kind: kind,
             selected: selected == kind,
             status: runtimeCapability.statusFor(context.l10n, kind),
             onTap: () => onSelected(kind),
           ),
-          SizedBox(height: responsive.spacing(8)),
-        ],
+        ),
       ],
     );
   }
@@ -551,20 +550,7 @@ class _RuntimeKindTile extends StatelessWidget {
         ),
         child: Row(
           children: <Widget>[
-            Container(
-              width: responsive.displayScaled(32),
-              height: responsive.displayScaled(32),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: CupertinoColors.white,
-                borderRadius: BorderRadius.circular(responsive.radius(8)),
-              ),
-              child: Icon(
-                _runtimeKindIcon(kind),
-                color: accent,
-                size: responsive.iconSm,
-              ),
-            ),
+            AgentTypeIcon(kind: kind, size: 36),
             SizedBox(width: responsive.spacing(10)),
             Expanded(
               child: Column(
@@ -623,13 +609,6 @@ class _RuntimeKindTile extends StatelessWidget {
   }
 }
 
-IconData _runtimeKindIcon(RuntimeAgentKind kind) => switch (kind) {
-  RuntimeAgentKind.hermes => CupertinoIcons.sparkles,
-  RuntimeAgentKind.codex => CupertinoIcons.chevron_left_slash_chevron_right,
-  RuntimeAgentKind.claudeCode => CupertinoIcons.text_bubble,
-  _ => CupertinoIcons.sparkles,
-};
-
 class _RuntimeKindStatus {
   const _RuntimeKindStatus({
     required this.enabled,
@@ -686,7 +665,7 @@ class _RuntimeCreateCapability {
     if (kind == RuntimeAgentKind.hermes) {
       return _RuntimeKindStatus(
         enabled: true,
-        description: l10n.agentCreateHermesDescription,
+        description: AgentTypeCatalog.description(l10n, kind),
       );
     }
     if (kind.isAcp) {
@@ -694,7 +673,7 @@ class _RuntimeCreateCapability {
       return _RuntimeKindStatus(
         enabled: supported,
         description: supported
-            ? kind.displayLabel
+            ? AgentTypeCatalog.description(l10n, kind)
             : l10n.agentCreateUnsupportedDriver(kind.displayLabel),
         reasonLabel: supported ? null : l10n.agentStatusNeedsUpgrade,
       );
@@ -739,7 +718,7 @@ class _RuntimeCreateCapability {
     }
     return _RuntimeKindStatus(
       enabled: true,
-      description: l10n.agentCreateRequiresSignedInCli(kind.displayLabel),
+      description: AgentTypeCatalog.description(l10n, kind),
     );
   }
 }
@@ -1966,7 +1945,9 @@ class _SupportedAgentTypeHint extends StatelessWidget {
           SizedBox(width: responsive.spacing(8)),
           Expanded(
             child: Text(
-              context.l10n.agentInstallSupportedTypes,
+              context.l10n.agentInstallSupportedTypes(
+                AgentTypeCatalog.names(context.l10n),
+              ),
               style: const TextStyle(
                 color: AwikiMePalette.mutedNeutral,
                 fontSize: 12,
