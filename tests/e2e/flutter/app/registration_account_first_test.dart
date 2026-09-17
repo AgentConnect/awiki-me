@@ -9,6 +9,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/l10n/l10n.dart';
+import 'package:awiki_me/src/data/services/method_channel_desktop_startup_presentation_service.dart';
 import 'package:awiki_me/src/application/device_management_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
@@ -146,6 +147,9 @@ Future<String> _runInvitedHandleJoin(
         AwikiMeApp(
           bootstrap: bootstrap,
           providerOverrides: [
+            desktopStartupPresentationServiceProvider.overrideWithValue(
+              buildDesktopStartupPresentationService(),
+            ),
             userPresencePortProvider.overrideWithValue(presence),
           ],
         ),
@@ -318,6 +322,9 @@ Future<void> _runExistingHandleRecovery(
       AwikiMeApp(
         bootstrap: bootstrap,
         providerOverrides: [
+          desktopStartupPresentationServiceProvider.overrideWithValue(
+            buildDesktopStartupPresentationService(),
+          ),
           userPresencePortProvider.overrideWithValue(presence),
         ],
       ),
@@ -663,7 +670,16 @@ Future<void> _runEmailRegistration(
     appStateRoot: root.path,
   );
   try {
-    await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+    await tester.pumpWidget(
+      AwikiMeApp(
+        bootstrap: bootstrap,
+        providerOverrides: [
+          desktopStartupPresentationServiceProvider.overrideWithValue(
+            buildDesktopStartupPresentationService(),
+          ),
+        ],
+      ),
+    );
     await _until(
       tester,
       () => find.byType(OnboardingPage).evaluate().isNotEmpty,
