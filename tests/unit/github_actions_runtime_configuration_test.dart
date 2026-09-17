@@ -11,6 +11,27 @@ const Map<String, int> _minimumNode24ActionMajors = <String, int>{
 };
 
 void main() {
+  test('validation-only dispatch cannot start remote account and OTP jobs', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    final inputs = workflow['on']['workflow_dispatch']['inputs'] as YamlMap;
+    expect(inputs['validation_only']['type'], 'boolean');
+    expect(inputs['validation_only']['default'], isFalse);
+    expect(inputs['cli_ref']['required'], isTrue);
+    final jobs = workflow['jobs'] as YamlMap;
+    expect(
+      jobs['remote-product']['if'],
+      "github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.validation_only)",
+    );
+    expect(jobs['validate'].containsKey('if'), isFalse);
+    // Registry source and exact input selection remain shared with native CI.
+    expect(
+      jobs['windows-pr']['env']['WINDOWS_CORE_REF'],
+      contains('github.event.inputs.cli_ref'),
+    );
+  });
+
   test('E2E report uploads include hidden reports without runtime secrets', () {
     final workflow =
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
@@ -62,6 +83,32 @@ void main() {
         'dart run tool/ensure_linux_im_core.dart --debug',
       );
     }
+  });
+
+  test('release/0910 native lanes select the same compatible Core baseline', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    final jobs = workflow['jobs'] as YamlMap;
+    const pin =
+        "(github.base_ref == 'release/0910' && '0110e4e5a26aff788f63eace9652b191e900f78b')";
+    for (final name in ['validate', 'remote-product']) {
+      final checkout = (jobs[name]['steps'] as YamlList)
+          .cast<YamlMap>()
+          .singleWhere(
+            (step) =>
+                step['with'] is YamlMap &&
+                step['with']['path'] == 'awiki-cli-rs2',
+          );
+      expect(
+        checkout['with']['ref'],
+        '\u0024{{ github.event.inputs.cli_ref || $pin || vars.AWIKI_CLI_RS2_REF }}',
+      );
+    }
+    expect(
+      jobs['windows-pr']['env']['WINDOWS_CORE_REF'],
+      '\u0024{{ github.event.inputs.cli_ref || $pin || vars.AWIKI_CLI_RS2_WINDOWS_REF || vars.AWIKI_CLI_RS2_REF }}',
+    );
   });
 
   test('PR checkout credentials are scoped to private contract sources', () {

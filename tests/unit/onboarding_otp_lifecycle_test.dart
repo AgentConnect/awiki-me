@@ -28,6 +28,42 @@ class _BlockingOtp extends FakeOnboardingSupportService {
 }
 
 void main() {
+  test(
+    'changing phone away and back discards late OTP target but keeps cooldown',
+    () async {
+      final gateway = FakeAwikiGateway();
+      final support = _BlockingOtp(gateway);
+      final container = ProviderContainer(
+        overrides: [
+          onboardingSupportServiceProvider.overrideWithValue(support),
+          appSessionServiceProvider.overrideWithValue(
+            FakeAppSessionService(gateway),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(onboardingProvider.notifier);
+      await controller.loadServerInfo();
+      final request = controller.requestOtp(
+        phone: '13800138000',
+        handle: 'alice',
+        handleDomain: 'awiki.ai',
+      );
+      await support.started.future;
+      controller.updateOtpPhone('13800138001');
+      controller.updateOtpPhone('13800138000');
+      final retryAt = DateTime.now().toUtc().add(const Duration(seconds: 60));
+      support.result.complete(
+        RegistrationOtpSendReceipt(retryAfterSeconds: 60, retryAt: retryAt),
+      );
+      await request;
+      expect(container.read(onboardingProvider).otpTargetFullHandle, isNull);
+      expect(container.read(onboardingProvider).otpTargetPhone, isNull);
+      expect(container.read(smsOtpCooldownProvider).retryAt, retryAt);
+      expect(container.read(uiFeedbackProvider), isNull);
+    },
+  );
+
   for (final blockRestore in [true, false]) {
     test(
       'controller disposal during cooldown ${blockRestore ? "restore" : "persistence"} is safe',

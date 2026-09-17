@@ -55,6 +55,110 @@ the same change:
 Code-only feature changes without corresponding tests are not acceptable unless
 the exception and follow-up are explicitly documented.
 
+## Account-first registration
+
+The mobile and desktop onboarding entry first asks for a Handle in the selected
+tenant. `registration_check` decides whether to show the invitation step or the
+contact verification step. Three-character new names require a database invitation;
+four-character names retain the existing algorithm-invitation policy. The App does
+not infer account ownership or admission from length or availability.
+
+The invitation stays in transient form state and is passed to the existing Core
+registration facade. Contact-bound invitation validation happens before OTP/email
+activation. Existing-account and pending local Recovery entrances remain usable
+when public discovery fails. Editing the Handle, tenant or contact discards stale
+results; an already accepted SMS receipt still sets the shared cooldown.
+
+Focused coverage:
+
+```bash
+flutter test tests/unit/registration_entry_test.dart \
+  tests/unit/registration_entry_widget_test.dart \
+  tests/unit/onboarding_page_test.dart \
+  tests/unit/onboarding_recovery_lookup_test.dart \
+  tests/unit/onboarding_otp_lifecycle_test.dart \
+  tests/unit/data/services/awiki_onboarding_support_service_test.dart
+```
+
+`SMOKE-E2E-001` checks the visible account-first transition in a native App with
+fake service ports. It does not prove real invitation consumption or completed
+registration. Real service and product registration acceptance must separately
+record the service source, Core artifact source, target tenant and cleanup.
+
+`registration-account-first` / `REGISTRATION-ACCOUNT-FIRST-E2E-001` uses real
+native Core and disposable loopback User/Message Services. Set
+`AWIKI_REGISTRATION_FIXTURE` to an ignored, permission-restricted JSON file with
+`userServiceUrl`, `domain`, `handle`, `inviteCode`, `fourCharHandle`,
+`fourCharInviteCode`, `phone`, `otp`, `emailHandle`, `emailInviteCode`, and `email`. An optional
+`caBundle` names a local PEM CA file for disposable HTTPS DID resolution; default
+trust remains unchanged. The test process may use a loopback HTTPS CONNECT proxy,
+which must serve the real User Service DID documents for both account and system
+notification Agent paths. The fixture must route both asynchronous and synchronous
+DID resolution to its loopback HTTPS listener: `HTTPS_PROXY` alone does not cover
+the synchronous Core HTTP client. A macOS process-local exact-host resolver can
+provide this without changing system DNS; its loading must be verified in the
+actual App process. Never disable certificate verification. Provision
+unused three- and four-character names, a one-use database invitation for the
+three-character name, a valid algorithm invitation for the four-character name,
+and local development OTP in
+the disposable service before running the case. The domain must be a valid App
+tenant hostname; the ANP service DID is its bare-domain `did:wba` DID. Never use
+production credentials or an SMS provider for this local case. Email requires a
+loopback-only SMTP receiver and the actual activation-confirmation endpoint;
+use official Turnstile test credentials only in the disposable service. Capture
+activation links without logging tokens, and clean the exact email verification
+row after the case. Do not substitute a preverified database row for delivery
+and confirmation.
+
+```bash
+dart run tests/e2e/runner.dart --case registration-account-first
+```
+
+For each name length, the case follows the visible account/invitation/phone
+steps, registers through Core, then uses a second fresh App scope to verify that
+the existing short name
+reaches authenticated Join/Recovery choices without an invitation and completes
+real notification-driven member Join. A third fresh scope for each name then
+completes Recovery through its separate operation-bound OTP, risk confirmation,
+and user-presence decision. The case checks the same durable operation completes,
+the old DID changes to the successor, the App activates that successor, and its
+registry has an active management-ready admin. A seventh fresh scope registers another three-character account using the
+required invitation and real SMTP activation. It checks the resulting local
+identity and active management-ready admin registry. The ten-phase attestation
+covers these phone and email flows; ordinary messaging is outside this case. The invoking service
+fixture owns database readback (three accounts and two database invitations, each used once)
+and remote-row cleanup; the algorithm invitation keeps its existing stateless policy;
+the App case deletes its temporary local scopes before attesting success.
+
+The registration case also completes member Join: the original admin Core receives
+the real Join notification, verifies the challenge/response and matching SAS, then
+approves through the existing user-presence boundary. The joining App must activate
+the same account and appear as one active member device. Its local Message Service
+must listen on port 19992; the provisioner must clean both User and Message Service
+rows for the exact disposable account, including Recovery transition edges before
+removing their owning account. The user-presence adapter is E2E-only.
+
+The runner conservatively records possible service resources as `residual` after
+launch; the provisioner must attach its own database cleanup readback. A successful
+case attestation alone is not evidence that the external fixture was removed.
+Existing Join/Recovery product cases use the explicit existing-account entrance
+before their unchanged authentication and continuation assertions.
+
+E2E OTP retries stop after an accepted receipt even when its cooldown is shorter
+than the retry interval. Verify this with
+`flutter test tests/unit/onboarding_page_test.dart --dart-define=AWIKI_E2E=true --plain-name 'accepted OTP with no cooldown does not trigger automatic resend'`.
+
+For a manual CI comparison against an exact compatible Core source, set the
+`cli_ref` input and `validation_only=true` on `ci.yml`. This runs deterministic
+and native build checks while excluding `remote-product`, so it does not use
+remote account/OTP scenarios. Scheduled runs and ordinary manual product runs
+retain their existing behavior. Record the explicit ref; do not treat a run
+against the repository's older default ref as evidence for the new baseline.
+PRs targeting `release/0910` pin Core source
+`dd4b29d4d368ea91001a9b5c1c45449f1bdfa7f4` in both native lanes because that App
+baseline already consumes the processing-session API. Explicit manual refs still
+take precedence; other target branches retain repository-managed defaults.
+
 ## Unit Gate
 
 Run the full local unit/widget/provider suite:
@@ -1291,3 +1395,24 @@ Fresh Recovery 主流程失败后不执行冷启动阶段，保留主流程错�
 DSH remote Join 使用 active-only Host 快照：撤销后要求精确成员消失、唯一原 current
 ready-admin 保留，并再次刷新确认；不能在该过滤快照中要求出现 revoked 条目。
 Core 原始 Registry 的设备状态及授权围栏由其对应测试保持验证。
+
+
+For local registration acceptance with Xcode 27, the simulator App can require
+an ignored `XCODE_XCCONFIG_FILE` setting `IPHONEOS_DEPLOYMENT_TARGET = 15.0`,
+`ONLY_ACTIVE_ARCH = YES`, and the actual host architecture. This is a local
+verification override; the repository's iOS minimum remains 13.0 and a successful
+build on the override does not prove iOS 13 compatibility or simulator runtime
+acceptance. Build with `flutter build ios --simulator --debug --target
+integration_test/registration_account_first_test.dart --dart-define=AWIKI_E2E=true`
+after building and verifying the iOS Core XCFramework. Provision the restricted
+fixture before launching; compilation alone does not execute the registration case.
+
+
+For the prepared macOS runner path on newer Xcode, set
+`AWIKI_E2E_MACOS_DEPLOYMENT_TARGET=12.0` explicitly when the local toolchain no
+longer accepts the project's older target. The isolated builder validates this
+numeric version, writes it beside its own bundle identity settings, and includes
+it in the compile key and artifact provenance. It does not inherit arbitrary
+external xcconfig contents, and Linux builds ignore this macOS-only setting.
+The default keeps the project target. This local override is not evidence for
+older macOS compatibility.

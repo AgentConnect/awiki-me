@@ -2982,12 +2982,12 @@
       "exactOracles": [
         "App shell and onboarding are visible exactly once.",
         "The onboarding authentication entry is visible; macOS exposes the single phone, email, and identity-credential method selector.",
-        "On macOS, the phone OTP form submits the same-step handle and its tenant-qualified full handle.",
-        "The phone flow exposes one phone, Handle, and OTP form with a direct login/register action and no intermediate next step.",
+        "On macOS, the phone OTP form submits the checked handle and its tenant-qualified full handle.",
+        "The first step exposes only Handle and Next without sending OTP; a successful account check reveals the phone verification and login/register actions.",
         "Unauthenticated realtime remains disconnected."
       ],
       "negativeChecks": [
-        "A missing shell/onboarding/authentication-entry surface, a dropped OTP handle scope, a repeated Handle step, or an unexpected realtime connection fails the case."
+        "A missing shell/onboarding/authentication-entry surface, a dropped OTP handle scope, a missing account-first step, or an unexpected realtime connection fails the case."
       ],
       "environment": "no_service",
       "cleanupPolicy": "none",
@@ -3005,7 +3005,7 @@
           "SMOKE-E2E-001:onboarding_visible",
           "SMOKE-E2E-001:onboarding_auth_entry_visible",
           "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
-          "SMOKE-E2E-001:phone_single_stage_submit_visible",
+          "SMOKE-E2E-001:account_first_then_verification_visible",
           "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
         ],
         "exactOracleAssertions": [
@@ -3014,7 +3014,7 @@
             "SMOKE-E2E-001:onboarding_visible",
             "SMOKE-E2E-001:onboarding_auth_entry_visible",
             "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
-            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:account_first_then_verification_visible",
             "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
           ],
           [
@@ -3022,7 +3022,7 @@
             "SMOKE-E2E-001:onboarding_visible",
             "SMOKE-E2E-001:onboarding_auth_entry_visible",
             "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
-            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:account_first_then_verification_visible",
             "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
           ],
           [
@@ -3030,7 +3030,7 @@
             "SMOKE-E2E-001:onboarding_visible",
             "SMOKE-E2E-001:onboarding_auth_entry_visible",
             "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
-            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:account_first_then_verification_visible",
             "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
           ],
           [
@@ -3038,7 +3038,7 @@
             "SMOKE-E2E-001:onboarding_visible",
             "SMOKE-E2E-001:onboarding_auth_entry_visible",
             "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
-            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:account_first_then_verification_visible",
             "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
           ],
           [
@@ -3046,7 +3046,7 @@
             "SMOKE-E2E-001:onboarding_visible",
             "SMOKE-E2E-001:onboarding_auth_entry_visible",
             "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
-            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:account_first_then_verification_visible",
             "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
           ]
         ],
@@ -3056,7 +3056,7 @@
             "SMOKE-E2E-001:onboarding_visible",
             "SMOKE-E2E-001:onboarding_auth_entry_visible",
             "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
-            "SMOKE-E2E-001:phone_single_stage_submit_visible",
+            "SMOKE-E2E-001:account_first_then_verification_visible",
             "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
           ]
         ]
@@ -6440,6 +6440,72 @@
             "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_after_registry_only_promotion",
             "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_grant_visible_without_done",
             "ROOT-TRANSFER-APP-PAIR-E2E-001:third_device_management_ready"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "REGISTRATION-ACCOUNT-FIRST-E2E-001",
+      "feature": "Native account-first invited registration and existing short-account reentry",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Explicit loopback User and Message Services with disposable MySQL/PostgreSQL fixtures, native Core artifact and three- and four-character invitation fixtures and seven isolated App roots, plus a third three-character Handle with invitation and a local SMTP activation recipient.",
+      "action": "Enter three- and four-character Handles, require invitation, send scoped preset OTP, register through native Core, then reopen a fresh scope and complete notification-driven member Join without invitation. Finally verify each existing account again and complete risk-confirmed Recovery from a third fresh scope. Complete a third short account registration using real email activation and native Core.",
+      "exactOracles": [
+        "Account-first UI requires invitation before contact verification; the real scoped OTP and Core registration complete.",
+        "Each three- and four-character account enters from a new isolated scope without invitation, shows Join/Recovery choices and completes notification-driven member Join into its original account.",
+        "Each short account completes operation-bound OTP Recovery, replaces the previous DID, activates the recovered account, and has an active management-ready admin device.",
+        "A three-character email account requires invitation, completes real SMTP activation and registers as one active management-ready admin identity."
+      ],
+      "negativeChecks": [
+        "No production endpoint, fake registration port, ordinary persistent invite field or shared App state is used."
+      ],
+      "environment": "loopback_service",
+      "cleanupPolicy": "isolated_scope_delete_and_disposable_service_fixture",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/registration_account_first_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "REGISTRATION-ACCOUNT-FIRST-E2E-001:isolated_native_scopes",
+          "REGISTRATION-ACCOUNT-FIRST-E2E-001:short_handle_invite_required",
+          "REGISTRATION-ACCOUNT-FIRST-E2E-001:real_scoped_otp",
+          "REGISTRATION-ACCOUNT-FIRST-E2E-001:real_native_registration",
+          "REGISTRATION-ACCOUNT-FIRST-E2E-001:existing_account_join_choice",
+          "REGISTRATION-ACCOUNT-FIRST-E2E-001:existing_account_member_join_completed",
+          "REGISTRATION-ACCOUNT-FIRST-E2E-001:four_character_registration_and_join_completed",
+          "REGISTRATION-ACCOUNT-FIRST-E2E-001:three_character_recovery_completed",
+          "REGISTRATION-ACCOUNT-FIRST-E2E-001:four_character_recovery_completed",
+          "REGISTRATION-ACCOUNT-FIRST-E2E-001:three_character_email_registration_completed"
+        ],
+        "exactOracleAssertions": [
+          [
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:isolated_native_scopes",
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:short_handle_invite_required",
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:real_scoped_otp",
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:real_native_registration"
+          ],
+          [
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:isolated_native_scopes",
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:existing_account_join_choice",
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:existing_account_member_join_completed",
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:four_character_registration_and_join_completed"
+          ],
+          [
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:three_character_recovery_completed",
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:four_character_recovery_completed"
+          ],
+          [
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:three_character_email_registration_completed"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:isolated_native_scopes",
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:real_native_registration"
           ]
         ]
       }

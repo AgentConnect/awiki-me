@@ -241,6 +241,21 @@
       "supportedPlatforms": ["macos", "linux"],
       "dartDefines": [],
       "consumerSuites": ["claude-code-agent"]
+    },
+    {
+      "name": "registration-account-first",
+      "target": "integration_test/registration_account_first_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.registration",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true"
+      ],
+      "consumerSuites": [
+        "registration-account-first"
+      ]
     }
   ]
 }

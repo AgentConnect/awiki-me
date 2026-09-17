@@ -847,6 +847,7 @@ class FakeAwikiGateway implements AwikiAccountGateway {
   String? lastFollowedDidOrHandle;
   String? lastUnfollowedDidOrHandle;
   String? lastRegisteredNickName;
+  String? lastRegisteredInviteCode;
   String? lastRegisteredProfileMarkdown;
   String? lastEmailVerificationHandle;
   String? lastRegistrationOtpPhone;
@@ -1410,6 +1411,7 @@ class FakeAwikiGateway implements AwikiAccountGateway {
     String? profileMarkdown,
   }) async {
     registerHandleCalls += 1;
+    lastRegisteredInviteCode = inviteCode;
     lastRegisteredNickName = nickName;
     lastRegisteredProfileMarkdown = profileMarkdown;
     loginResult = SessionIdentity(
@@ -1431,6 +1433,7 @@ class FakeAwikiGateway implements AwikiAccountGateway {
     String? profileMarkdown,
   }) async {
     registerHandleWithEmailCalls += 1;
+    lastRegisteredInviteCode = inviteCode;
     lastEmailRegisteredNickName = nickName;
     lastEmailRegisteredProfileMarkdown = profileMarkdown;
     loginResult = SessionIdentity(
@@ -1869,7 +1872,9 @@ class FakeAppSessionService
   }
 
   @override
-  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+  Future<bool> hasPendingLocalIdentityRecovery(
+    String identityIdOrAlias,
+  ) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
@@ -4201,6 +4206,21 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
   final FakeAwikiGateway gateway;
 
   @override
+  Future<RegistrationCheck> checkRegistration({
+    required String handle,
+    required String domain,
+    String? inviteCode,
+    String? phone,
+    String? email,
+    bool checkInvite = false,
+  }) async => RegistrationCheck(
+    fullHandle: '${handle.trim().toLowerCase()}.${domain.trim().toLowerCase()}',
+    decision: 'register',
+    inviteRequired: false,
+    inviteStatus: 'not_required',
+  );
+
+  @override
   Future<OnboardingServerInfo> loadServerInfo() {
     return gateway.loadServerInfo();
   }
@@ -4380,7 +4400,9 @@ class FakeIdentityCorePort
   }
 
   @override
-  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+  Future<bool> hasPendingLocalIdentityRecovery(
+    String identityIdOrAlias,
+  ) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async =>

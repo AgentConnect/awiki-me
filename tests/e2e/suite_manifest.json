@@ -26,6 +26,39 @@
         "NATIVE-E2E-001"
       ]
     },
+    "registration-account-first": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "requiredTools": [
+        "flutter"
+      ],
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 5,
+      "timeoutMinutes": 8,
+      "cleanupPolicy": "isolated_scope_delete_and_disposable_service_fixture",
+      "allowedHosts": [
+        "127.0.0.1",
+        "localhost",
+        "::1"
+      ],
+      "allowedDidDomains": [
+        "registration.test"
+      ],
+      "resourceCategories": [
+        "isolated_app_state",
+        "dedicated_test_identity",
+        "invitation_fixture"
+      ],
+      "caseIds": [
+        "REGISTRATION-ACCOUNT-FIRST-E2E-001"
+      ]
+    },
     "multi-device": {
       "tier": "portable_product_ui",
       "supportedPlatforms": ["macos","linux"],
@@ -1185,6 +1218,7 @@
         "PERF-E2E-011",
         "PERF-E2E-012",
         "PROCESS-RESTART-E2E-001",
+        "REGISTRATION-ACCOUNT-FIRST-E2E-001",
         "ROOT-TRANSFER-APP-PAIR-E2E-001",
         "ROOT-TRANSFER-E2E-001",
         "SMOKE-E2E-001",
@@ -1219,7 +1253,8 @@
         "display-name-fallback",
         "codex-agent",
         "claude-code-agent",
-        "production-keychain"
+        "production-keychain",
+        "registration-account-first"
       ]
     }
   }

@@ -57,6 +57,7 @@ void _registerDshDeviceJoinInteropTest() {
         timeout: const Duration(seconds: 45),
         failure: 'The joining App did not open onboarding.',
       );
+      await enterExistingAccount(tester, handle);
       await _pumpUntil(
         tester,
         () =>

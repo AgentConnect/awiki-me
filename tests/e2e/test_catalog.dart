@@ -733,6 +733,10 @@ class AppTestCatalogCase {
         ? 'configured_remote'
         : expected.allowedHosts.isEmpty
         ? 'no_service'
+        : expected.allowedHosts.every(
+            const {'127.0.0.1', 'localhost', '::1'}.contains,
+          )
+        ? 'loopback_service'
         : expected.allowedHosts.toSet().difference(const <String>{
             'rwiki.cn',
           }).isEmpty

@@ -3,11 +3,13 @@ part of '../onboarding_page.dart';
 class _CompactOnboardingCard extends StatelessWidget {
   const _CompactOnboardingCard({
     required this.onboarding,
+    this.showAuthMethods = true,
     required this.onAuthModeChanged,
     required this.child,
   });
 
   final OnboardingState onboarding;
+  final bool showAuthMethods;
   final ValueChanged<String> onAuthModeChanged;
   final Widget child;
 
@@ -38,7 +40,7 @@ class _CompactOnboardingCard extends StatelessWidget {
             ),
           ),
           SizedBox(height: responsive.spacing(14)),
-          if (onboarding.hasRegistrationMethods) ...<Widget>[
+          if (showAuthMethods && onboarding.hasRegistrationMethods) ...<Widget>[
             _AuthModeToggle(
               value: onboarding.authMode,
               methods: onboarding.registrationMethods,

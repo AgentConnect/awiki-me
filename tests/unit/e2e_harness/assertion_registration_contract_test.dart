@@ -20,6 +20,11 @@ const _registrations = <({String caseId, String variable, String suite})>[
     variable: '_rootTransferCaseId',
     suite: 'root-transfer',
   ),
+  (
+    caseId: 'REGISTRATION-ACCOUNT-FIRST-E2E-001',
+    variable: '_registrationCaseId',
+    suite: 'registration-account-first',
+  ),
 ];
 
 void main() {
@@ -87,7 +92,7 @@ void main() {
   });
 }
 
-// These three emitters deliberately declare literal ordered phases. Read the
+// These emitters deliberately declare literal ordered phases. Read the
 // declarations rather than copying catalog phases into an always-valid report.
 List<String> _emittedPhases(
   AppTestCatalog catalog,

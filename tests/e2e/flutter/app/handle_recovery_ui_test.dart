@@ -12,6 +12,8 @@
 //        while the tested onboarding or Settings Recovery is UI-driven.
 
 import 'dart:async';
+
+import '../support/enter_existing_account.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -564,6 +566,7 @@ void main() {
         container = ProviderScope.containerOf(
           tester.element(find.byType(OnboardingPage)),
         );
+        await enterExistingAccount(tester, bareHandle);
         final onboardingFields = find.byType(CupertinoTextField);
         await _pumpUntil(
           tester,
@@ -6376,6 +6379,7 @@ _startAppPeerRegistrationJoin({
     timeout: const Duration(seconds: 45),
     failure: 'Registration onboarding did not expose phone verification.',
   );
+  await enterExistingAccount(tester, handle, scope: peerRoot);
   final phoneField = find.descendant(
     of: peerRoot,
     matching: find.bySemanticsIdentifier('e2e-phone-input'),

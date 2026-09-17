@@ -302,12 +302,6 @@ import UserNotifications
           FlutterError(code: "save_failed", message: "当前无法打开导出面板。", details: nil)
         )
       }
-      if let pickResult = pendingPickResult {
-        pendingPickResult = nil
-        pickResult(
-          FlutterError(code: "pick_failed", message: "当前无法打开导入面板。", details: nil)
-        )
-      }
       if let attachmentPickResult = pendingAttachmentPickResult {
         pendingAttachmentPickResult = nil
         attachmentPickResult(

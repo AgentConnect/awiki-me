@@ -305,8 +305,9 @@ void _registerStateMachineRecoveryE2e() {
       await _pumpUntil(
         tester,
         () {
-          if (find.byType(HandleRecoveryPage).evaluate().length != 1)
+          if (find.byType(HandleRecoveryPage).evaluate().length != 1) {
             return false;
+          }
           final state = _recoveryUiContainer(
             tester,
           ).read(handleRecoveryProvider);
@@ -779,6 +780,7 @@ Future<void> _smSubmitHandle(
   String handle,
   String domain,
 ) async {
+  await enterExistingAccount(tester, handle);
   final fields = find.descendant(
     of: find.byType(OnboardingPage),
     matching: find.byType(CupertinoTextField),

@@ -29,8 +29,9 @@ void _registerHandleRecoverySessionTests() {
             completer: failure == 'presence' ? denied : null,
           ),
         );
-        if (failure == 'status')
+        if (failure == 'status') {
           core.statusError = StateError('fixture-status-failure');
+        }
         scope.controller.setRiskConfirmed(true);
         await scope.controller.activate(presenceReason: 'Test');
         expect(scope.container.read(handleRecoveryProvider).isBusy, isFalse);

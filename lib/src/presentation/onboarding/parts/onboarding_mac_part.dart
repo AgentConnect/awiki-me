@@ -7,6 +7,8 @@ part of '../onboarding_page.dart';
 class _MacOnboardingScaffold extends StatelessWidget {
   const _MacOnboardingScaffold({
     required this.onboarding,
+    required this.registrationEntry,
+    required this.registrationReady,
     required this.otpCooldown,
     required this.credentials,
     required this.phoneController,
@@ -27,6 +29,8 @@ class _MacOnboardingScaffold extends StatelessWidget {
   });
 
   final OnboardingState onboarding;
+  final Widget registrationEntry;
+  final bool registrationReady;
   final SmsOtpCooldownState otpCooldown;
   final List<SessionIdentity> credentials;
   final TextEditingController phoneController;
@@ -60,6 +64,8 @@ class _MacOnboardingScaffold extends StatelessWidget {
             framed: useCompactLayout,
             showCompactBrand: useCompactLayout,
             onboarding: onboarding,
+            registrationEntry: registrationEntry,
+            registrationReady: registrationReady,
             otpCooldown: otpCooldown,
             credentials: credentials,
             phoneController: phoneController,
@@ -380,6 +386,8 @@ class _MacAuthCard extends StatelessWidget {
     required this.framed,
     required this.showCompactBrand,
     required this.onboarding,
+    required this.registrationEntry,
+    required this.registrationReady,
     required this.otpCooldown,
     required this.credentials,
     required this.phoneController,
@@ -399,6 +407,8 @@ class _MacAuthCard extends StatelessWidget {
   final bool framed;
   final bool showCompactBrand;
   final OnboardingState onboarding;
+  final Widget registrationEntry;
+  final bool registrationReady;
   final SmsOtpCooldownState otpCooldown;
   final List<SessionIdentity> credentials;
   final TextEditingController phoneController;
@@ -462,29 +472,34 @@ class _MacAuthCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 20),
-              _MacAuthMethodSelector(
-                onboarding: onboarding,
-                onAuthModeChanged: onAuthModeChanged,
-              ),
-              const SizedBox(height: 20),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                child: _MacRegisterForm(
-                  key: ValueKey<String>('mac-register-${onboarding.authMode}'),
+              registrationEntry,
+              if (registrationReady) ...[
+                _MacAuthMethodSelector(
                   onboarding: onboarding,
-                  otpCooldown: otpCooldown,
-                  phoneController: phoneController,
-                  otpController: otpController,
-                  emailController: emailController,
-                  handleController: handleController,
-                  onRequestOtp: onRequestOtp,
-                  onRequestEmailActivation: onRequestEmailActivation,
-                  onCheckEmailActivation: onCheckEmailActivation,
-                  onSubmitRegister: onSubmitRegister,
+                  onAuthModeChanged: onAuthModeChanged,
                 ),
-              ),
+                const SizedBox(height: 20),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  child: _MacRegisterForm(
+                    key: ValueKey<String>(
+                      'mac-register-${onboarding.authMode}',
+                    ),
+                    onboarding: onboarding,
+                    otpCooldown: otpCooldown,
+                    phoneController: phoneController,
+                    otpController: otpController,
+                    emailController: emailController,
+                    handleController: handleController,
+                    onRequestOtp: onRequestOtp,
+                    onRequestEmailActivation: onRequestEmailActivation,
+                    onCheckEmailActivation: onCheckEmailActivation,
+                    onSubmitRegister: onSubmitRegister,
+                  ),
+                ),
+              ],
               if (credentials.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 22),
                 _OnboardingLocalIdentitySection(
@@ -985,10 +1000,6 @@ class _MacRegisterForm extends StatelessWidget {
             placeholder: context.l10n.onboardingHandlePlaceholder,
             icon: CupertinoIcons.at,
           ),
-          PendingHandleRecoveryEntry(
-            handleController: handleController,
-            phoneController: phoneController,
-          ),
           const SizedBox(height: 22),
           _MacPrimaryAction(
             label: context.l10n.onboardingCompleteRegister,
@@ -1017,10 +1028,6 @@ class _MacRegisterForm extends StatelessWidget {
             label: context.l10n.onboardingHandle,
             placeholder: context.l10n.onboardingHandlePlaceholder,
             icon: CupertinoIcons.at,
-          ),
-          PendingHandleRecoveryEntry(
-            handleController: handleController,
-            phoneController: phoneController,
           ),
           const SizedBox(height: 16),
           _MacOutlinedField(
@@ -1068,10 +1075,6 @@ class _MacRegisterForm extends StatelessWidget {
           label: context.l10n.onboardingHandle,
           placeholder: context.l10n.onboardingHandlePlaceholder,
           icon: CupertinoIcons.at,
-        ),
-        PendingHandleRecoveryEntry(
-          handleController: handleController,
-          phoneController: phoneController,
         ),
         const SizedBox(height: 16),
         _MacOutlinedField(
