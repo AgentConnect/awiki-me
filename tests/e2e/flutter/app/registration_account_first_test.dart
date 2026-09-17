@@ -46,193 +46,20 @@ void main() {
       );
       final fixture =
           jsonDecode(await File(path).readAsString()) as Map<String, dynamic>;
-      final url = fixture['userServiceUrl'] as String;
-      expect(
-        {'localhost', '127.0.0.1', '::1'}.contains(Uri.parse(url).host),
-        isTrue,
+      await _runInvitedHandleJoin(
+        tester,
+        fixture,
+        handle: fixture['handle'] as String,
+        invite: fixture['inviteCode'] as String,
+        expectedLength: 3,
       );
-      final handle = fixture['handle'] as String;
-      final domain = fixture['domain'] as String;
-      final phone = fixture['phone'] as String;
-      final invite = fixture['inviteCode'] as String;
-      final otp = fixture['otp'] as String;
-      expect(handle.length, 3);
-      final roots = <Directory>[];
-      AppBootstrap? bootstrap;
-      AppBootstrap? admin;
-      String? adminDid;
-      final presence = E2eUserPresencePort();
-      try {
-        for (final existing in [false, true]) {
-          final root = await Directory.systemTemp.createTemp(
-            'awiki_registration_native_',
-          );
-          roots.add(root);
-          bootstrap = await AppBootstrap.create(
-            environment: AwikiEnvironmentConfig(
-              // Core's realtime origin follows serviceBaseUrl; User Service
-              // remains separately routed through the registration fault proxy.
-              baseUrl: 'http://127.0.0.1:19992',
-              userServiceUrl: url,
-              didDomain: domain,
-              messageServiceUrl: 'http://127.0.0.1:19992',
-              mailServiceUrl: 'http://127.0.0.1:19993',
-              anpServiceUrl: 'http://127.0.0.1:19992/im/rpc',
-              anpServiceDid: 'did:wba:$domain',
-              caBundle: fixture['caBundle'] as String?,
-              agentImEnabled: false,
-            ),
-            appStateRoot: root.path,
-          );
-          await tester.binding.setSurfaceSize(const Size(1280, 900));
-          await tester.pumpWidget(
-            AwikiMeApp(
-              bootstrap: bootstrap,
-              providerOverrides: [
-                userPresencePortProvider.overrideWithValue(presence),
-              ],
-            ),
-          );
-          await _until(
-            tester,
-            () => find.byType(OnboardingPage).evaluate().isNotEmpty,
-            'Onboarding visible in isolated native scope',
-          );
-          final container = ProviderScope.containerOf(
-            tester.element(find.byType(OnboardingPage)),
-          );
-          await _until(
-            tester,
-            () => container.read(onboardingProvider).serverInfo != null,
-            'Real User Service capabilities loaded',
-          );
-          await _enter(tester, 'e2e-handle-input', handle);
-          expect(
-            find.bySemanticsIdentifier('e2e-send-otp-button'),
-            findsNothing,
-          );
-          await _tap(tester, find.bySemanticsIdentifier('e2e-account-next'));
-          if (!existing) {
-            await _until(
-              tester,
-              () => find
-                  .bySemanticsIdentifier('e2e-invite-input')
-                  .evaluate()
-                  .isNotEmpty,
-              'Three-character invitation required',
-            );
-            await _tap(tester, find.bySemanticsIdentifier('e2e-invite-next'));
-            expect(
-              find.bySemanticsIdentifier('e2e-send-otp-button'),
-              findsNothing,
-            );
-            await _enter(tester, 'e2e-invite-input', invite);
-            await _tap(tester, find.bySemanticsIdentifier('e2e-invite-next'));
-          }
-          await _until(
-            tester,
-            () => find
-                .bySemanticsIdentifier('e2e-phone-input')
-                .evaluate()
-                .isNotEmpty,
-            'Contact verification follows account admission',
-          );
-          expect(find.bySemanticsIdentifier('e2e-invite-input'), findsNothing);
-          await _enter(tester, 'e2e-phone-input', phone);
-          await _tap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));
-          await _until(
-            tester,
-            () =>
-                container.read(onboardingProvider).otpTargetFullHandle ==
-                '$handle.$domain',
-            'Real scoped OTP receipt accepted',
-          );
-          await _enter(tester, 'e2e-otp-input', otp);
-          expect(container.read(onboardingProvider).canSubmitPhoneOtp, isTrue);
-          expect(container.read(onboardingProvider).isBusy, isFalse);
-          await _tap(
-            tester,
-            find.byKey(const Key('onboarding-mac-phone-submit-action')),
-          );
-          if (existing) {
-            await _until(
-              tester,
-              () => find
-                  .byKey(const Key('existing-handle-join-action'))
-                  .evaluate()
-                  .isNotEmpty,
-              'Existing short account reaches authenticated Join choice without invitation',
-            );
-            expect(
-              find.byKey(const Key('existing-handle-recovery-action')),
-              findsOneWidget,
-            );
-            await _tap(
-              tester,
-              find.byKey(const Key('existing-handle-join-action')),
-            );
-            await _until(
-              tester,
-              () => find
-                  .byKey(const Key('device-join-page'))
-                  .evaluate()
-                  .isNotEmpty,
-              'Existing-account continuation opens real Join',
-            );
-            await _completeMemberJoin(
-              tester,
-              container,
-              admin!,
-              adminDid!,
-              presence,
-            );
-          } else {
-            await _until(
-              tester,
-              () => container.read(sessionProvider).session != null,
-              'Native Core completes real invited registration',
-              diagnostic: () {
-                final feedback = container.read(uiFeedbackProvider);
-                final visibleText = find
-                    .byType(Text)
-                    .evaluate()
-                    .map((element) => (element.widget as Text).data ?? '')
-                    .join(' | ');
-                return '${container.read(onboardingProvider).phoneRegistrationFailureCode}; ${feedback?.message.id}: ${feedback?.message.detail ?? feedback?.detail ?? ""}; $visibleText'
-                    .replaceAll(invite, '<invite>')
-                    .replaceAll(phone, '<phone>')
-                    .replaceAll(handle, '<handle>')
-                    .replaceAll(otp, '<otp>');
-              },
-            );
-            expect(
-              container
-                  .read(sessionProvider)
-                  .session!
-                  .did
-                  .startsWith('did:wba:$domain:'),
-              isTrue,
-            );
-            adminDid = container.read(sessionProvider).session!.did;
-          }
-          await tester.pumpWidget(const SizedBox.shrink());
-          await tester.pump();
-          if (existing) {
-            await bootstrap.dispose();
-          } else {
-            admin = bootstrap;
-          }
-          bootstrap = null;
-        }
-      } finally {
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pump();
-        await bootstrap?.dispose();
-        await admin?.dispose();
-        for (final root in roots) {
-          if (await root.exists()) await root.delete(recursive: true);
-        }
-      }
+      await _runInvitedHandleJoin(
+        tester,
+        fixture,
+        handle: fixture['fourCharHandle'] as String,
+        invite: fixture['fourCharInviteCode'] as String,
+        expectedLength: 4,
+      );
       await E2eCaseAttestationWriter.markPassed(
         _registrationCaseId,
         phases: const <String>[
@@ -242,10 +69,194 @@ void main() {
           'real_native_registration',
           'existing_account_join_choice',
           'existing_account_member_join_completed',
+          'four_character_registration_and_join_completed',
         ],
       );
     },
   );
+}
+
+Future<void> _runInvitedHandleJoin(
+  WidgetTester tester,
+  Map<String, dynamic> fixture, {
+  required String handle,
+  required String invite,
+  required int expectedLength,
+}) async {
+  final url = fixture['userServiceUrl'] as String;
+  expect(
+    {'localhost', '127.0.0.1', '::1'}.contains(Uri.parse(url).host),
+    isTrue,
+  );
+  final domain = fixture['domain'] as String;
+  final phone = fixture['phone'] as String;
+  final otp = fixture['otp'] as String;
+  expect(handle.length, expectedLength);
+  final roots = <Directory>[];
+  AppBootstrap? bootstrap;
+  AppBootstrap? admin;
+  String? adminDid;
+  final presence = E2eUserPresencePort();
+  try {
+    for (final existing in [false, true]) {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_registration_native_',
+      );
+      roots.add(root);
+      bootstrap = await AppBootstrap.create(
+        environment: AwikiEnvironmentConfig(
+          // Core's realtime origin follows serviceBaseUrl; User Service
+          // remains separately routed through the registration fault proxy.
+          baseUrl: 'http://127.0.0.1:19992',
+          userServiceUrl: url,
+          didDomain: domain,
+          messageServiceUrl: 'http://127.0.0.1:19992',
+          mailServiceUrl: 'http://127.0.0.1:19993',
+          anpServiceUrl: 'http://127.0.0.1:19992/im/rpc',
+          anpServiceDid: 'did:wba:$domain',
+          caBundle: fixture['caBundle'] as String?,
+          agentImEnabled: false,
+        ),
+        appStateRoot: root.path,
+      );
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: bootstrap,
+          providerOverrides: [
+            userPresencePortProvider.overrideWithValue(presence),
+          ],
+        ),
+      );
+      await _until(
+        tester,
+        () => find.byType(OnboardingPage).evaluate().isNotEmpty,
+        'Onboarding visible in isolated native scope',
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
+      );
+      await _until(
+        tester,
+        () => container.read(onboardingProvider).serverInfo != null,
+        'Real User Service capabilities loaded',
+      );
+      await _enter(tester, 'e2e-handle-input', handle);
+      expect(find.bySemanticsIdentifier('e2e-send-otp-button'), findsNothing);
+      await _tap(tester, find.bySemanticsIdentifier('e2e-account-next'));
+      if (!existing) {
+        await _until(
+          tester,
+          () => find
+              .bySemanticsIdentifier('e2e-invite-input')
+              .evaluate()
+              .isNotEmpty,
+          '$expectedLength-character invitation required',
+        );
+        await _tap(tester, find.bySemanticsIdentifier('e2e-invite-next'));
+        expect(find.bySemanticsIdentifier('e2e-send-otp-button'), findsNothing);
+        await _enter(tester, 'e2e-invite-input', invite);
+        await _tap(tester, find.bySemanticsIdentifier('e2e-invite-next'));
+      }
+      await _until(
+        tester,
+        () =>
+            find.bySemanticsIdentifier('e2e-phone-input').evaluate().isNotEmpty,
+        'Contact verification follows account admission',
+      );
+      expect(find.bySemanticsIdentifier('e2e-invite-input'), findsNothing);
+      await _enter(tester, 'e2e-phone-input', phone);
+      await _tap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));
+      await _until(
+        tester,
+        () =>
+            container.read(onboardingProvider).otpTargetFullHandle ==
+            '$handle.$domain',
+        'Real scoped OTP receipt accepted',
+      );
+      await _enter(tester, 'e2e-otp-input', otp);
+      expect(container.read(onboardingProvider).canSubmitPhoneOtp, isTrue);
+      expect(container.read(onboardingProvider).isBusy, isFalse);
+      await _tap(
+        tester,
+        find.byKey(const Key('onboarding-mac-phone-submit-action')),
+      );
+      if (existing) {
+        await _until(
+          tester,
+          () => find
+              .byKey(const Key('existing-handle-join-action'))
+              .evaluate()
+              .isNotEmpty,
+          'Existing short account reaches authenticated Join choice without invitation',
+        );
+        expect(
+          find.byKey(const Key('existing-handle-recovery-action')),
+          findsOneWidget,
+        );
+        await _tap(
+          tester,
+          find.byKey(const Key('existing-handle-join-action')),
+        );
+        await _until(
+          tester,
+          () => find.byKey(const Key('device-join-page')).evaluate().isNotEmpty,
+          'Existing-account continuation opens real Join',
+        );
+        await _completeMemberJoin(
+          tester,
+          container,
+          admin!,
+          adminDid!,
+          presence,
+        );
+      } else {
+        await _until(
+          tester,
+          () => container.read(sessionProvider).session != null,
+          'Native Core completes real invited registration',
+          diagnostic: () {
+            final feedback = container.read(uiFeedbackProvider);
+            final visibleText = find
+                .byType(Text)
+                .evaluate()
+                .map((element) => (element.widget as Text).data ?? '')
+                .join(' | ');
+            return '${container.read(onboardingProvider).phoneRegistrationFailureCode}; ${feedback?.message.id}: ${feedback?.message.detail ?? feedback?.detail ?? ""}; $visibleText'
+                .replaceAll(invite, '<invite>')
+                .replaceAll(phone, '<phone>')
+                .replaceAll(handle, '<handle>')
+                .replaceAll(otp, '<otp>');
+          },
+        );
+        expect(
+          container
+              .read(sessionProvider)
+              .session!
+              .did
+              .startsWith('did:wba:$domain:'),
+          isTrue,
+        );
+        adminDid = container.read(sessionProvider).session!.did;
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      if (existing) {
+        await bootstrap.dispose();
+      } else {
+        admin = bootstrap;
+      }
+      bootstrap = null;
+    }
+  } finally {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await bootstrap?.dispose();
+    await admin?.dispose();
+    for (final root in roots) {
+      if (await root.exists()) await root.delete(recursive: true);
+    }
+  }
 }
 
 Future<void> _completeMemberJoin(
@@ -353,8 +364,6 @@ Future<void> _completeMemberJoin(
     presenceReason: 'Approve disposable registration acceptance device',
   );
   expect(approved.phase, DeviceJoinPhase.authorized);
-  final refresh = find.bySemanticsIdentifier('multi-device-refresh-join');
-  if (refresh.evaluate().isNotEmpty) await _tap(tester, refresh);
   await _until(
     tester,
     () => joining.read(sessionProvider).session?.did == adminDid,

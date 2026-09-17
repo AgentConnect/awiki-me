@@ -88,7 +88,8 @@ record the service source, Core artifact source, target tenant and cleanup.
 `registration-account-first` / `REGISTRATION-ACCOUNT-FIRST-E2E-001` uses real
 native Core and disposable loopback User/Message Services. Set
 `AWIKI_REGISTRATION_FIXTURE` to an ignored, permission-restricted JSON file with
-`userServiceUrl`, `domain`, `handle`, `inviteCode`, `phone`, and `otp`. An optional
+`userServiceUrl`, `domain`, `handle`, `inviteCode`, `fourCharHandle`,
+`fourCharInviteCode`, `phone`, and `otp`. An optional
 `caBundle` names a local PEM CA file for disposable HTTPS DID resolution; default
 trust remains unchanged. The test process may use a loopback HTTPS CONNECT proxy,
 which must serve the real User Service DID documents for both account and system
@@ -97,7 +98,9 @@ DID resolution to its loopback HTTPS listener: `HTTPS_PROXY` alone does not cove
 the synchronous Core HTTP client. A macOS process-local exact-host resolver can
 provide this without changing system DNS; its loading must be verified in the
 actual App process. Never disable certificate verification. Provision
-an unused three-character name, one-use invitation and local development OTP in
+unused three- and four-character names, a one-use database invitation for the
+three-character name, a valid algorithm invitation for the four-character name,
+and local development OTP in
 the disposable service before running the case. The domain must be a valid App
 tenant hostname; the ANP service DID is its bare-domain `did:wba` DID. Never use
 production credentials or an SMS provider for this local case.
@@ -106,12 +109,14 @@ production credentials or an SMS provider for this local case.
 dart run tests/e2e/runner.dart --case registration-account-first
 ```
 
-The case follows the visible account/invitation/phone steps, registers through
-Core, then uses a second fresh App scope to verify that the existing short name
+For each name length, the case follows the visible account/invitation/phone
+steps, registers through Core, then uses a second fresh App scope to verify that
+the existing short name
 reaches authenticated Join/Recovery choices without an invitation and completes
 real notification-driven member Join. It does not claim completed Recovery or
 ordinary messaging. The invoking service
-fixture owns database readback (one invitation use) and remote-row cleanup;
+fixture owns database readback (two accounts and one database-invitation use)
+and remote-row cleanup; the algorithm invitation keeps its existing stateless policy;
 the App case deletes its temporary local scopes before attesting success.
 
 The registration case also completes member Join: the original admin Core receives

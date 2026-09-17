@@ -6448,11 +6448,11 @@
       "caseId": "REGISTRATION-ACCOUNT-FIRST-E2E-001",
       "feature": "Native account-first invited registration and existing short-account reentry",
       "layer": "remote_product_ui_security",
-      "preconditions": "Explicit loopback User and Message Services with disposable MySQL/PostgreSQL fixtures, native Core artifact and two isolated App roots.",
-      "action": "Enter a three-character Handle, require invitation, send scoped preset OTP, register through native Core, then reopen a fresh scope and complete notification-driven member Join without invitation.",
+      "preconditions": "Explicit loopback User and Message Services with disposable MySQL/PostgreSQL fixtures, native Core artifact and three- and four-character invitation fixtures and four isolated App roots.",
+      "action": "Enter three- and four-character Handles, require invitation, send scoped preset OTP, register through native Core, then reopen a fresh scope and complete notification-driven member Join without invitation.",
       "exactOracles": [
         "Account-first UI requires invitation before contact verification; the real scoped OTP and Core registration complete.",
-        "A second isolated native scope accepts the existing short Handle without invitation, shows Join/Recovery choices and completes real message-driven member Join into the same account."
+        "Each three- and four-character account enters from a new isolated scope without invitation, shows Join/Recovery choices and completes notification-driven member Join into its original account."
       ],
       "negativeChecks": [
         "No production endpoint, fake registration port, ordinary persistent invite field or shared App state is used."
@@ -6473,7 +6473,8 @@
           "REGISTRATION-ACCOUNT-FIRST-E2E-001:real_scoped_otp",
           "REGISTRATION-ACCOUNT-FIRST-E2E-001:real_native_registration",
           "REGISTRATION-ACCOUNT-FIRST-E2E-001:existing_account_join_choice",
-          "REGISTRATION-ACCOUNT-FIRST-E2E-001:existing_account_member_join_completed"
+          "REGISTRATION-ACCOUNT-FIRST-E2E-001:existing_account_member_join_completed",
+          "REGISTRATION-ACCOUNT-FIRST-E2E-001:four_character_registration_and_join_completed"
         ],
         "exactOracleAssertions": [
           [
@@ -6485,7 +6486,8 @@
           [
             "REGISTRATION-ACCOUNT-FIRST-E2E-001:isolated_native_scopes",
             "REGISTRATION-ACCOUNT-FIRST-E2E-001:existing_account_join_choice",
-            "REGISTRATION-ACCOUNT-FIRST-E2E-001:existing_account_member_join_completed"
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:existing_account_member_join_completed",
+            "REGISTRATION-ACCOUNT-FIRST-E2E-001:four_character_registration_and_join_completed"
           ]
         ],
         "negativeCheckAssertions": [
