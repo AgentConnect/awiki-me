@@ -720,6 +720,8 @@ class DesktopE2eRunner {
           await _runLocalSmoke();
         case DesktopE2eCase.multiDevice:
           await _runLocalMultiDeviceCapabilityGate();
+        case DesktopE2eCase.registrationAccountFirst:
+          await _runLocalRegistrationAccountFirst();
         case DesktopE2eCase.multiDeviceRemoteJoin:
           await _runRemoteMultiDeviceJoin();
         case DesktopE2eCase.multiDeviceRemoteRecovery:
@@ -1082,6 +1084,63 @@ class DesktopE2eRunner {
         );
       });
     }
+  }
+
+  Future<void> _runLocalRegistrationAccountFirst() async {
+    final fixturePath = Platform.environment['AWIKI_REGISTRATION_FIXTURE']
+        ?.trim();
+    if (!options.dryRun && !commands.dryRun && !options.prepareOnly) {
+      if (fixturePath == null || fixturePath.isEmpty) {
+        throw E2eFailure(
+          'AWIKI_REGISTRATION_FIXTURE must name a provisioned local fixture.',
+        );
+      }
+      final fixture =
+          jsonDecode(await File(fixturePath).readAsString())
+              as Map<String, dynamic>;
+      final host = Uri.parse(fixture['userServiceUrl'] as String).host;
+      if (!const {'127.0.0.1', 'localhost', '::1'}.contains(host)) {
+        throw E2eFailure(
+          'Registration acceptance requires a loopback User Service.',
+        );
+      }
+      for (final key in ['inviteCode', 'phone', 'otp', 'handle']) {
+        _addRuntimeSecret(fixture[key] as String);
+      }
+      _addRuntimeSecret(fixturePath);
+    }
+    await commands.requireExecutable('flutter');
+    if (options.prepareOnly ||
+        (!options.dryRun &&
+            !commands.dryRun &&
+            Platform.environment['AWIKI_E2E_USE_FLUTTER_TEST']?.trim() !=
+                '1')) {
+      final artifact = await _prepareIntegrationExecutable(
+        name: 'registration-account-first',
+        stateRoot: appStateRootDir,
+      );
+      if (options.prepareOnly) return;
+      await _executePreparedIntegration(
+        artifact: artifact,
+        caseIds: options.e2eCase.caseIds,
+        stateRoot: appStateRootDir,
+        environment: {'AWIKI_REGISTRATION_FIXTURE': fixturePath!},
+      );
+      return;
+    }
+    await _runFlutterArgs(
+      <String>[
+        'test',
+        '--dart-define=AWIKI_E2E=true',
+        '--dart-define=AWIKI_REGISTRATION_FIXTURE=${fixturePath ?? "local-fixture.json"}',
+        options.e2eCase.testFile,
+        '-d',
+        platform.name,
+      ],
+      platform: platform,
+      timeout: suiteDefinition.timeout,
+      runtimeCaseIds: options.e2eCase.caseIds,
+    );
   }
 
   Future<void> _runFlutterTest(

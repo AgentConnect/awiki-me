@@ -1,3 +1,5 @@
+import 'models/registration_check.dart';
+export 'models/registration_check.dart';
 import 'models/onboarding_server_info.dart';
 import '../domain/repositories/awiki_account_gateway.dart';
 
@@ -23,6 +25,15 @@ class RegistrationOtpRateLimited implements Exception {
 
 abstract interface class OnboardingSupportService {
   Future<OnboardingServerInfo> loadServerInfo();
+
+  Future<RegistrationCheck> checkRegistration({
+    required String handle,
+    required String domain,
+    String? inviteCode,
+    String? phone,
+    String? email,
+    bool checkInvite = false,
+  });
 
   Future<void> sendOtp({required String phone});
 

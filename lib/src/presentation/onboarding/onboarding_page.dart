@@ -18,7 +18,6 @@ import '../app_shell/providers/session_provider.dart';
 import '../devices/device_join_page.dart';
 import '../recovery/handle_recovery_page.dart';
 import '../recovery/handle_recovery_provider.dart';
-import '../recovery/pending_handle_recovery_entry.dart';
 import '../shared/app_language_menu.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
@@ -28,7 +27,10 @@ import '../shared/responsive_layout.dart';
 import '../shared/sms_otp_cooldown_provider.dart';
 import '../shared/tenant_management_dialog.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../recovery/pending_handle_recovery_entry.dart';
 import 'onboarding_provider.dart';
+import 'registration_entry_provider.dart';
+import 'registration_entry_form.dart';
 
 part 'parts/onboarding_mac_part.dart';
 part 'parts/onboarding_mobile_controls_part.dart';
@@ -53,6 +55,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   final otpController = TextEditingController();
   final emailController = TextEditingController();
   final handleController = TextEditingController();
+  final inviteController = TextEditingController();
   final _mobileScrollController = ScrollController();
   ProviderSubscription<AppTenantProfile>? _tenantSubscription;
   Timer? _e2eOtpRetryTimer;
@@ -64,10 +67,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   @override
   void initState() {
     super.initState();
-    emailController.addListener(_resetEmailActivationTarget);
-    handleController.addListener(_resetEmailActivationTarget);
-    handleController.addListener(_resetPhoneOtpTarget);
-    phoneController.addListener(_updatePhoneOtpState);
+    handleController.addListener(_onHandleChanged);
     for (final controller in [
       handleController,
       phoneController,
@@ -81,6 +81,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         if (previous?.id == next.id) {
           return;
         }
+        inviteController.clear();
+        otpController.clear();
         _invalidateRecoveryLookup();
         unawaited(
           ref.read(onboardingProvider.notifier).loadServerInfo(force: true),
@@ -99,10 +101,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   void dispose() {
     _stopE2eOtpRequestLoop();
     _tenantSubscription?.close();
-    emailController.removeListener(_resetEmailActivationTarget);
-    handleController.removeListener(_resetEmailActivationTarget);
-    handleController.removeListener(_resetPhoneOtpTarget);
-    phoneController.removeListener(_updatePhoneOtpState);
+    handleController.removeListener(_onHandleChanged);
     for (final controller in [
       handleController,
       phoneController,
@@ -114,6 +113,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     otpController.dispose();
     emailController.dispose();
     handleController.dispose();
+    inviteController.dispose();
     _mobileScrollController.dispose();
     super.dispose();
   }
@@ -121,6 +121,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   @override
   Widget build(BuildContext context) {
     final onboarding = ref.watch(onboardingProvider);
+    final entry = ref.watch(registrationEntryProvider);
     final otpCooldown = ref.watch(smsOtpCooldownProvider);
     final credentials = ref.watch(sessionProvider).localCredentials;
     final activeTenant = ref.watch(activeAppTenantProvider);
@@ -130,6 +131,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     if (responsive.usesDesktopLayout) {
       return _withLegacyUpgradeProjection(
         _MacOnboardingScaffold(
+          registrationEntry: _registrationEntryForm(),
+          registrationReady: entry.step == RegistrationEntryStep.verification,
           onboarding: onboarding,
           otpCooldown: otpCooldown,
           credentials: credentials,
@@ -192,6 +195,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                   child: Align(
                                     alignment: Alignment.center,
                                     child: _CompactOnboardingCard(
+                                      showAuthMethods:
+                                          entry.step ==
+                                          RegistrationEntryStep.verification,
                                       onboarding: onboarding,
                                       onAuthModeChanged: _setAuthMode,
                                       child: Column(
@@ -316,8 +322,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         ),
       ];
     }
+    if (ref.watch(registrationEntryProvider).step !=
+        RegistrationEntryStep.verification) {
+      return [_registrationEntryForm()];
+    }
     if (onboarding.usesNoVerificationRegistration) {
       return <Widget>[
+        _registrationEntryForm(),
         Text(
           context.l10n.onboardingNoVerificationHint,
           style: TextStyle(
@@ -345,10 +356,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           placeholder: context.l10n.onboardingHandlePlaceholder,
           semanticsIdentifier: 'e2e-handle-input',
         ),
-        PendingHandleRecoveryEntry(
-          handleController: handleController,
-          phoneController: phoneController,
-        ),
         SizedBox(height: responsive.spacing(20)),
         _OnboardingAlignedAction(
           key: const Key('onboarding-no-verification-complete-action'),
@@ -366,6 +373,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
 
     return <Widget>[
+      _registrationEntryForm(),
       Text(
         context.l10n.onboardingLoginRegisterHint,
         style: TextStyle(
@@ -394,10 +402,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           placeholder: context.l10n.onboardingHandlePlaceholder,
           showLabel: !responsive.isPhone,
           semanticsIdentifier: 'e2e-handle-input',
-        ),
-        PendingHandleRecoveryEntry(
-          handleController: handleController,
-          phoneController: phoneController,
         ),
         SizedBox(height: responsive.spacing(14)),
         AppTextField(
@@ -441,10 +445,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           placeholder: context.l10n.onboardingHandlePlaceholder,
           showLabel: !responsive.isPhone,
           semanticsIdentifier: 'e2e-handle-input',
-        ),
-        PendingHandleRecoveryEntry(
-          handleController: handleController,
-          phoneController: phoneController,
         ),
         SizedBox(height: responsive.spacing(14)),
         AppTextField(
@@ -506,11 +506,17 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final phone = _normalizedPhone;
     final profileMarkdown = '# $handle\n\n';
     final onboarding = ref.read(onboardingProvider);
+    if (onboarding.usesNoVerificationRegistration &&
+        !await _prepareRegistrationVerification()) {
+      return;
+    }
+    if (!mounted) return;
     IdentityRegistrationStatus? result;
     if (onboarding.usesNoVerificationRegistration) {
       result = await notifier.registerWithoutContactVerification(
         phone: _normalizedPhone,
         handle: handle,
+        inviteCode: ref.read(registrationEntryProvider).inviteCode,
         nickName: handle,
         profileMarkdown: profileMarkdown,
       );
@@ -519,6 +525,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         phone: _normalizedPhone,
         otp: otpController.text.trim(),
         handle: handle,
+        inviteCode: ref.read(registrationEntryProvider).inviteCode,
         handleDomain: ref.read(activeAppTenantProvider).didHost,
         nickName: handle,
         profileMarkdown: profileMarkdown,
@@ -527,6 +534,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       result = await notifier.registerWithEmail(
         email: emailController.text.trim(),
         handle: handle,
+        inviteCode: ref.read(registrationEntryProvider).inviteCode,
         nickName: handle,
         profileMarkdown: profileMarkdown,
       );
@@ -579,7 +587,15 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       emailController.text.trim(),
     );
     if (inputs == _lastRecoveryLookupInputs) return;
+    final previous = _lastRecoveryLookupInputs;
     _lastRecoveryLookupInputs = inputs;
+    final onboarding = ref.read(onboardingProvider.notifier);
+    if (previous.$1 != inputs.$1) onboarding.resetPhoneOtpTarget();
+    if (previous.$2 != inputs.$2) onboarding.updateOtpPhone(inputs.$2);
+    if (previous.$1 != inputs.$1 || previous.$3 != inputs.$3) {
+      onboarding.resetEmailActivation();
+    }
+    ref.read(registrationEntryProvider.notifier).invalidateVerification();
     _invalidateRecoveryLookup();
   }
 
@@ -709,7 +725,44 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
   }
 
-  void _requestOtp() {
+  Widget _registrationEntryForm() => RegistrationEntryForm(
+    handleController: handleController,
+    inviteController: inviteController,
+    phoneController: phoneController,
+    onBack: _resetRegistrationEntry,
+  );
+
+  void _onHandleChanged() {
+    if (handleController.text.trim().toLowerCase() !=
+        ref.read(registrationEntryProvider).handle) {
+      _resetRegistrationEntry();
+    }
+  }
+
+  void _resetRegistrationEntry() {
+    if (!mounted) return;
+    _stopE2eOtpRequestLoop();
+    ref.read(registrationEntryProvider.notifier).reset();
+    inviteController.clear();
+    otpController.clear();
+    ref.read(onboardingProvider.notifier).resetPhoneOtpTarget();
+    ref.read(onboardingProvider.notifier).resetEmailActivation();
+  }
+
+  Future<bool> _prepareRegistrationVerification() {
+    final onboarding = ref.read(onboardingProvider);
+    return ref
+        .read(registrationEntryProvider.notifier)
+        .prepareVerification(
+          phone: onboarding.authMode == 'email' ? null : _normalizedPhone,
+          email: onboarding.authMode == 'email'
+              ? emailController.text.trim()
+              : null,
+        );
+  }
+
+  void _requestOtp() async {
+    if (!await _prepareRegistrationVerification() || !mounted) return;
     if (!awikiE2eEnabled) {
       unawaited(
         ref
@@ -725,7 +778,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     _startE2eOtpRequestLoop();
   }
 
-  void _requestEmailActivation() {
+  void _requestEmailActivation() async {
+    if (!await _prepareRegistrationVerification() || !mounted) return;
     unawaited(
       ref
           .read(onboardingProvider.notifier)
@@ -747,31 +801,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     );
   }
 
-  void _resetEmailActivationTarget() {
-    if (!mounted) {
-      return;
-    }
-    if (ref.read(onboardingProvider).authMode != 'email') {
-      return;
-    }
-    ref.read(onboardingProvider.notifier).resetEmailActivation();
-  }
-
-  void _resetPhoneOtpTarget() {
-    if (!mounted || ref.read(onboardingProvider).authMode != 'phone') {
-      return;
-    }
-    ref.read(onboardingProvider.notifier).resetPhoneOtpTarget();
-  }
-
-  void _updatePhoneOtpState() {
-    if (!mounted || ref.read(onboardingProvider).authMode != 'phone') {
-      return;
-    }
-    ref.read(onboardingProvider.notifier).updateOtpPhone(phoneController.text);
-  }
-
   void _setAuthMode(String value) {
+    ref.read(registrationEntryProvider.notifier).invalidateVerification();
     final controller = ref.read(onboardingProvider.notifier);
     if (ref.read(onboardingProvider).authMode != value) {
       _invalidateRecoveryLookup();
@@ -907,7 +938,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             phone: _normalizedPhone,
             handle: _normalizedHandle,
             handleDomain: ref.read(activeAppTenantProvider).didHost,
-          ),
+          )
+          .then((_) {
+            if (mounted && ref.read(onboardingProvider).canSubmitPhoneOtp) {
+              _stopE2eOtpRequestLoop();
+            }
+          }),
     );
   }
 

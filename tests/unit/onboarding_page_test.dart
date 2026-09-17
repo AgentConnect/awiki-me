@@ -106,7 +106,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(find.byKey(const Key('handle-recovery-entry')), findsNothing);
     expect(find.byKey(const Key('multi-device-join-entry')), findsNothing);
@@ -138,11 +138,11 @@ void main() {
           ],
         ),
       );
-      await tester.pumpAndSettle();
+      await _settleVerificationStep(tester);
 
       await tester.ensureVisible(find.text('Alice'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Alice'));
+      await _settleVerificationStep(tester);
+      await _tapVisible(tester, find.text('Alice'));
       await tester.pump();
 
       expect(onboarding.statusSelectors, <String>['legacy-alias']);
@@ -184,8 +184,8 @@ void main() {
       expect(find.textContaining('token'), findsNothing);
       expect(gateway.loginCalls, 0);
 
-      await tester.tap(find.text('重试'));
-      await tester.pumpAndSettle();
+      await _tapVisible(tester, find.text('重试'));
+      await _settleVerificationStep(tester);
 
       expect(onboarding.upgradeSelectors, <String>[
         'legacy-alias',
@@ -217,7 +217,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(find.byKey(const Key('onboarding-expanded-layout')), findsOneWidget);
     expect(
@@ -279,7 +279,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(find.byKey(const Key('onboarding-expanded-layout')), findsOneWidget);
     expect(
@@ -327,7 +327,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(
       find.byKey(const Key('onboarding-mac-credential-mode')),
@@ -339,8 +339,8 @@ void main() {
     );
     expect(find.text('Windows Alice'), findsOneWidget);
 
-    await tester.tap(find.text('Windows Alice'));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('Windows Alice'));
+    await _settleVerificationStep(tester);
 
     expect(gateway.loginCalls, 1);
     expect(gateway.lastLoginCredentialName, 'windows-default');
@@ -360,15 +360,15 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
     );
     expect(container.read(onboardingProvider).authMode, 'phone');
 
-    await tester.tap(find.byKey(const Key('auth-mode-email')));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byKey(const Key('auth-mode-email')));
+    await _settleVerificationStep(tester);
     expect(container.read(onboardingProvider).authMode, 'email');
     expect(find.text('发送激活邮件'), findsOneWidget);
 
@@ -377,8 +377,8 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.byKey(const Key('auth-mode-phone')));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byKey(const Key('auth-mode-phone')));
+    await _settleVerificationStep(tester);
     expect(container.read(onboardingProvider).authMode, 'phone');
     expect(find.text('发送验证码'), findsOneWidget);
 
@@ -403,7 +403,7 @@ void main() {
         ],
       ),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final fields = find.byType(CupertinoTextField);
     expect(fields, findsNWidgets(3));
@@ -415,7 +415,7 @@ void main() {
     );
     await tester.enterText(fields.at(0), '13800138000');
     await tester.enterText(fields.at(1), 'alice-0714');
-    await tester.tap(find.text('发送验证码'));
+    await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
 
     expect(support.phone, '13800138000');
@@ -455,7 +455,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(
       find.byKey(const Key('onboarding-local-credential-section')),
@@ -465,7 +465,7 @@ void main() {
 
     final tileRect = tester.getRect(find.text('Alice'));
     await tester.tapAt(Offset(tileRect.left + 20, tileRect.center.dy));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(gateway.loginCalls, 1);
     expect(gateway.lastLoginCredentialName, 'default');
@@ -478,7 +478,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(find.text('发送验证码'), findsOneWidget);
     expect(find.text('导入身份凭证'), findsNothing);
@@ -494,7 +494,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(find.byKey(const Key('onboarding-entry-tabs')), findsNothing);
     expect(find.text('切换身份'), findsNothing);
@@ -518,7 +518,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(find.text('Alice'), findsOneWidget);
     expect(find.text('导入身份凭证'), findsNothing);
@@ -558,7 +558,7 @@ void main() {
       await tester.pumpWidget(
         buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
       );
-      await tester.pumpAndSettle();
+      await _settleVerificationStep(tester);
 
       expect(find.text('发送验证码'), findsOneWidget);
       expect(
@@ -568,7 +568,7 @@ void main() {
       expect(find.text('Mobile Alice'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpAndSettle();
+      await _settleVerificationStep(tester);
     }
 
     debugDefaultTargetPlatformOverride = null;
@@ -580,7 +580,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(
       find.byKey(const Key('onboarding-compact-auth-card')),
@@ -628,7 +628,7 @@ void main() {
         await tester.pumpWidget(
           buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
         );
-        await tester.pumpAndSettle();
+        await _settleVerificationStep(tester);
 
         final scrollRect = tester.getRect(
           find.byKey(const Key('onboarding-compact-scroll-view')),
@@ -653,7 +653,7 @@ void main() {
             find.byKey(const Key('onboarding-compact-scroll-view')),
             const Offset(0, -120),
           );
-          await tester.pumpAndSettle();
+          await _settleVerificationStep(tester);
           expect(
             tester
                 .getRect(find.byKey(const Key('onboarding-compact-auth-card')))
@@ -667,7 +667,7 @@ void main() {
         );
 
         await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pumpAndSettle();
+        await _settleVerificationStep(tester);
       }
     }
   });
@@ -679,10 +679,10 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     tester.view.viewInsets = const FakeViewPadding(bottom: 280);
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final scrollView = find.byKey(const Key('onboarding-compact-scroll-view'));
     final footer = find.byKey(const Key('onboarding-compact-footer'));
@@ -693,7 +693,7 @@ void main() {
     expect(tester.getRect(footer).bottom, lessThanOrEqualTo(844 - 280));
 
     await tester.drag(scrollView, const Offset(0, -180));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(tester.getRect(content).top, lessThan(contentBefore.top));
     expect(tester.getRect(footer).bottom, lessThanOrEqualTo(844 - 280));
@@ -716,7 +716,7 @@ void main() {
         session: session,
       ),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
     gateway.localCredentials = const <SessionIdentity>[session];
 
     final container = ProviderScope.containerOf(
@@ -759,7 +759,7 @@ void main() {
         session: session,
       ),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(AppShell)),
@@ -774,7 +774,7 @@ void main() {
     expect(find.byType(OnboardingPage), findsNothing);
     deleteCompleter.complete();
     await deleteFuture;
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(find.byType(OnboardingPage), findsOneWidget);
     expect(gateway.deleteLocalCredentialCalls, 1);
@@ -794,16 +794,16 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
-    await tester.tap(find.text('登录或注册'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('auth-mode-email')));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('登录或注册'));
+    await _settleVerificationStep(tester);
+    await _tapVisible(tester, find.byKey(const Key('auth-mode-email')));
+    await _settleVerificationStep(tester);
 
     await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
     await tester.enterText(find.byType(CupertinoTextField).at(1), 'a@b.com');
-    await tester.tap(find.text('发送激活邮件'));
+    await _tapVisible(tester, find.text('发送激活邮件'));
     await tester.pump();
 
     expect(gateway.sendEmailVerificationCalls, 1);
@@ -820,10 +820,10 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
-    await tester.tap(find.byKey(const Key('auth-mode-email')));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byKey(const Key('auth-mode-email')));
+    await _settleVerificationStep(tester);
 
     final actionRect = tester.getRect(
       find.byKey(const Key('onboarding-email-action')),
@@ -839,7 +839,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
-    await tester.pump();
+    await _settleVerificationStep(tester);
 
     final phoneRect = tester.getRect(find.byKey(const Key('auth-mode-phone')));
     final emailRect = tester.getRect(find.byKey(const Key('auth-mode-email')));
@@ -856,7 +856,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
-    await tester.pump();
+    await _settleVerificationStep(tester);
 
     expect(find.textContaining('还没有账号'), findsNothing);
     expect(find.textContaining('已有账号'), findsNothing);
@@ -890,17 +890,18 @@ void main() {
         localePreferenceService: localePreferenceService,
       ),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(find.byKey(const Key('auth-mode-phone')), findsOneWidget);
 
     await _scrollToOnboardingUtilityBar(tester);
-    await tester.tap(
+    await _tapVisible(
+      tester,
       find.byKey(const Key('onboarding-language-switcher-button')),
     );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('English'));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
+    await _tapVisible(tester, find.text('English'));
+    await _settleVerificationStep(tester);
 
     await _scrollToOnboardingUtilityBar(tester);
     final container = ProviderScope.containerOf(
@@ -930,7 +931,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final footer = find.byKey(const Key('onboarding-compact-footer'));
     final firstIdentity = find.text('Mobile Identity 0');
@@ -942,7 +943,7 @@ void main() {
     final tenantRect = tester.getRect(find.byTooltip('管理租户'));
 
     await tester.drag(find.byType(ListView).first, const Offset(0, -260));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final footerAfter = tester.getRect(footer);
     final firstIdentityAfter = tester.getRect(firstIdentity);
@@ -979,11 +980,14 @@ void main() {
     await tester.pump();
 
     await _scrollToOnboardingUtilityBar(tester);
-    await tester.tap(find.byTooltip('管理租户'));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byTooltip('管理租户'));
+    await _settleVerificationStep(tester);
     expect(find.byType(TenantManagementDialog), findsOneWidget);
-    await tester.tap(find.byKey(const Key('tenant-management-create-button')));
-    await tester.pumpAndSettle();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('tenant-management-create-button')),
+    );
+    await _settleVerificationStep(tester);
 
     await tester.enterText(
       find.descendant(
@@ -1006,16 +1010,19 @@ void main() {
       ),
       'dev.example.com',
     );
-    await tester.tap(find.byKey(const Key('tenant-form-submit-button')));
-    await tester.pumpAndSettle();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('tenant-form-submit-button')),
+    );
+    await _settleVerificationStep(tester);
 
     expect(tenantActions.createTenantCalls, 1);
     expect(tenantActions.useTenantCalls, 0);
     expect(tenantActions.registry.activeTenant.isPrimaryTenant, isTrue);
     expect(find.text('杭州测试'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('使用').last);
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byTooltip('使用').last);
+    await _settleVerificationStep(tester);
 
     expect(tenantActions.useTenantCalls, 1);
     expect(tenantActions.registry.activeTenant.name, '杭州测试');
@@ -1034,10 +1041,13 @@ void main() {
     await tester.pump();
 
     await _scrollToOnboardingUtilityBar(tester);
-    await tester.tap(find.byTooltip('管理租户'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('tenant-management-create-button')));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byTooltip('管理租户'));
+    await _settleVerificationStep(tester);
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('tenant-management-create-button')),
+    );
+    await _settleVerificationStep(tester);
     await tester.enterText(
       find.descendant(
         of: find.byKey(const Key('tenant-name-field')),
@@ -1060,8 +1070,11 @@ void main() {
       'anpclaw.com',
     );
 
-    await tester.tap(find.byKey(const Key('tenant-form-submit-button')));
-    await tester.pumpAndSettle();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('tenant-form-submit-button')),
+    );
+    await _settleVerificationStep(tester);
 
     expect(tenantActions.createTenantCalls, 0);
     expect(
@@ -1087,10 +1100,13 @@ void main() {
     await tester.pump();
 
     await _scrollToOnboardingUtilityBar(tester);
-    await tester.tap(find.byTooltip('管理租户'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('tenant-management-create-button')));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byTooltip('管理租户'));
+    await _settleVerificationStep(tester);
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('tenant-management-create-button')),
+    );
+    await _settleVerificationStep(tester);
 
     await tester.enterText(
       find.descendant(
@@ -1113,8 +1129,11 @@ void main() {
       ),
       'anpolis.net',
     );
-    await tester.tap(find.byKey(const Key('tenant-form-submit-button')));
-    await tester.pumpAndSettle();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('tenant-form-submit-button')),
+    );
+    await _settleVerificationStep(tester);
 
     expect(find.byType(SelectionArea), findsWidgets);
     expect(find.textContaining('租户操作失败，请稍后重试。'), findsOneWidget);
@@ -1138,7 +1157,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(find.text('导入身份凭证'), findsNothing);
     expect(find.text('重新识别本地凭证'), findsNothing);
@@ -1175,7 +1194,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(
       find.byKey(const Key('onboarding-local-credential-section')),
@@ -1185,9 +1204,9 @@ void main() {
       const Key('onboarding-local-credential:default'),
     );
     await tester.ensureVisible(identityTile);
-    await tester.pumpAndSettle();
-    await tester.tap(identityTile);
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
+    await _tapVisible(tester, identityTile);
+    await _settleVerificationStep(tester);
 
     expect(gateway.loginCalls, 1);
     expect(gateway.lastLoginCredentialName, 'default');
@@ -1212,7 +1231,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final identityTile = find.byKey(
       const Key('onboarding-local-credential:alice-local'),
@@ -1240,8 +1259,8 @@ void main() {
     expect(deleteButtonRect.left - identitySelectRect.right, 1);
 
     await tester.ensureVisible(deleteButton);
-    await tester.tap(deleteButton);
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, deleteButton);
+    await _settleVerificationStep(tester);
 
     expect(find.text('从此设备删除身份？'), findsOneWidget);
     expect(
@@ -1250,13 +1269,13 @@ void main() {
     );
     expect(gateway.deleteLocalCredentialCalls, 0);
 
-    await tester.tap(find.text('取消'));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('取消'));
+    await _settleVerificationStep(tester);
     expect(gateway.deleteLocalCredentialCalls, 0);
 
-    await tester.tap(deleteButton);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('从此设备删除'));
+    await _tapVisible(tester, deleteButton);
+    await _settleVerificationStep(tester);
+    await _tapVisible(tester, find.text('从此设备删除'));
     await tester.pump();
 
     expect(gateway.deleteLocalCredentialCalls, 1);
@@ -1273,7 +1292,7 @@ void main() {
     expect(gateway.loginCalls, 0);
 
     deleteCompleter.complete();
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(find.text('Alice'), findsNothing);
     expect(
@@ -1300,16 +1319,16 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final deleteButton = find.byKey(
       const Key('onboarding-local-credential-delete:alice-local'),
     );
     await tester.ensureVisible(deleteButton);
-    await tester.tap(deleteButton);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('从此设备删除'));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, deleteButton);
+    await _settleVerificationStep(tester);
+    await _tapVisible(tester, find.text('从此设备删除'));
+    await _settleVerificationStep(tester);
 
     expect(gateway.deleteLocalCredentialCalls, 1);
     expect(find.text('Alice'), findsOneWidget);
@@ -1355,7 +1374,7 @@ void main() {
       await tester.pumpWidget(
         buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
       );
-      await tester.pumpAndSettle();
+      await _settleVerificationStep(tester);
 
       expect(find.byTooltip(displayName), findsOneWidget);
       expect(find.byTooltip(handle), findsOneWidget);
@@ -1408,7 +1427,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(tester.takeException(), isNull);
     expect(find.byKey(const Key('onboarding-mac-hero-title')), findsNothing);
@@ -1443,7 +1462,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
-    await tester.pump();
+    await _settleVerificationStep(tester);
 
     final cardRect = tester.getRect(
       find.byKey(const Key('onboarding-compact-auth-card')),
@@ -1486,14 +1505,14 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('登录或注册'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('auth-mode-email')));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('登录或注册'));
+    await _settleVerificationStep(tester);
+    await _tapVisible(tester, find.byKey(const Key('auth-mode-email')));
+    await _settleVerificationStep(tester);
 
     await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
     await tester.enterText(find.byType(CupertinoTextField).at(1), 'a@b.com');
-    await tester.tap(find.text('发送激活邮件'));
+    await _tapVisible(tester, find.text('发送激活邮件'));
     await tester.pump();
 
     expect(gateway.sendEmailVerificationCalls, 1);
@@ -1515,15 +1534,15 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('登录或注册'));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('登录或注册'));
+    await _settleVerificationStep(tester);
 
     await tester.enterText(
       find.byType(CupertinoTextField).first,
       '13800138000',
     );
     await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
-    await tester.tap(find.text('发送验证码'));
+    await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
 
     expect(gateway.sendOtpCalls, 1);
@@ -1541,6 +1560,41 @@ void main() {
     expect(feedback?.danger, isFalse);
   });
 
+  testWidgets(
+    'accepted OTP with no cooldown does not trigger automatic resend',
+    (tester) async {
+      final gateway = FakeAwikiGateway()
+        ..registrationOtpCooldown = Duration.zero;
+      await tester.pumpWidget(
+        buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+      );
+      await tester.pump();
+      await _settleVerificationStep(tester);
+      await tester.enterText(
+        find.byType(CupertinoTextField).first,
+        '13800138000',
+      );
+      await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
+      await _tapVisible(tester, find.text('发送验证码'));
+      await tester.pump();
+      await tester.pump();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
+      );
+      expect(container.read(onboardingProvider).canSubmitPhoneOtp, isTrue);
+      expect(gateway.sendOtpCalls, 1);
+      await tester.pump(const Duration(seconds: 6));
+      expect(gateway.sendOtpCalls, 1);
+      // A deliberate resend still works once the server permits it.
+      await _tapVisible(tester, find.text('发送验证码'));
+      await tester.pump();
+      await tester.pump();
+      expect(gateway.sendOtpCalls, 2);
+      await tester.pump(const Duration(seconds: 6));
+      expect(gateway.sendOtpCalls, 2);
+    },
+  );
+
   testWidgets('手机号验证码发送失败时保持可重试且不进入倒计时', (tester) async {
     final gateway = FakeAwikiGateway()..failNextSendOtp = true;
 
@@ -1549,14 +1603,14 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('登录或注册'));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('登录或注册'));
+    await _settleVerificationStep(tester);
     await tester.enterText(
       find.byType(CupertinoTextField).first,
       '13800138000',
     );
     await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
-    await tester.tap(find.text('发送验证码'));
+    await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
     await tester.pump();
 
@@ -1586,7 +1640,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
     await tester.enterText(
       find.byType(CupertinoTextField).at(0),
       '13800138000',
@@ -1613,7 +1667,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
     final fields = find.byType(CupertinoTextField);
     await tester.enterText(fields.at(0), '13800138000');
     await tester.enterText(fields.at(1), 'alice');
@@ -1631,10 +1685,10 @@ void main() {
     expect(state.otpTargetFullHandle, isNull);
     expect(container.read(smsOtpCooldownProvider).remainingSeconds, 90);
 
-    await tester.tap(find.byKey(const Key('auth-mode-email')));
+    await _tapVisible(tester, find.byKey(const Key('auth-mode-email')));
     await tester.pump();
     expect(container.read(smsOtpCooldownProvider).remainingSeconds, 90);
-    await tester.tap(find.byKey(const Key('auth-mode-phone')));
+    await _tapVisible(tester, find.byKey(const Key('auth-mode-phone')));
     await tester.pump();
     state = container.read(onboardingProvider);
     expect(container.read(smsOtpCooldownProvider).remainingSeconds, 90);
@@ -1659,7 +1713,7 @@ void main() {
       await tester.pumpWidget(
         buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
       );
-      await tester.pumpAndSettle();
+      await _settleVerificationStep(tester);
 
       final fields = find.byType(CupertinoTextField);
       await tester.enterText(fields.at(0), '13800138000');
@@ -1687,7 +1741,7 @@ void main() {
       expect(container.read(onboardingProvider).canSubmitPhoneOtp, isFalse);
 
       await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpAndSettle();
+      await _settleVerificationStep(tester);
     }
   });
 
@@ -1699,22 +1753,22 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('登录或注册'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('auth-mode-email')));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('登录或注册'));
+    await _settleVerificationStep(tester);
+    await _tapVisible(tester, find.byKey(const Key('auth-mode-email')));
+    await _settleVerificationStep(tester);
 
     await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
     await tester.enterText(find.byType(CupertinoTextField).at(1), 'a@b.com');
-    await tester.tap(find.text('我已激活，检查状态'));
+    await _tapVisible(tester, find.text('我已激活，检查状态'));
     await tester.pump();
 
     expect(gateway.checkEmailVerifiedCalls, 1);
     expect(gateway.lastCheckedEmailVerificationHandle, 'alice');
     expect(find.text('完成注册'), findsOneWidget);
 
-    await tester.tap(find.text('完成注册'));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('完成注册'));
+    await _settleVerificationStep(tester);
 
     expect(gateway.registerHandleWithEmailCalls, 1);
   });
@@ -1726,7 +1780,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final compactFields = find.byType(CupertinoTextField);
     await tester.enterText(compactFields.at(0), '13800138000');
@@ -1734,7 +1788,7 @@ void main() {
     await tester.enterText(compactFields.at(2), '123456');
 
     _setTestViewSize(tester, const Size(1280, 800));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final desktopFields = find.byType(CupertinoTextField);
     expect(desktopFields, findsNWidgets(3));
@@ -1767,7 +1821,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     await tester.enterText(
       find.byType(CupertinoTextField).at(0),
@@ -1778,7 +1832,7 @@ void main() {
     await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
     await _tapVisible(tester, find.text('登录/注册'));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(gateway.registerHandleCalls, 1);
     expect(gateway.lastRegisteredNickName, 'alice');
@@ -1804,8 +1858,8 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('登录或注册'));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('登录或注册'));
+    await _settleVerificationStep(tester);
     await tester.enterText(
       find.byType(CupertinoTextField).at(0),
       '13800138000',
@@ -1815,7 +1869,7 @@ void main() {
     await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
     await _tapVisible(tester, find.text('登录/注册'));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(
       find.byKey(const Key('existing-handle-join-action')),
@@ -1835,8 +1889,11 @@ void main() {
     expect(gateway.onboardingPhoneRegistrationCalls, 1);
     expect(find.byKey(const Key('device-join-page')), findsNothing);
 
-    await tester.tap(find.byKey(const Key('existing-handle-join-action')));
-    await tester.pumpAndSettle();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('existing-handle-join-action')),
+    );
+    await _settleVerificationStep(tester);
 
     expect(identityPort.lastContinuationId, 'existing-handle-test');
     expect(find.byKey(const Key('device-join-page')), findsOneWidget);
@@ -1860,7 +1917,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final fields = find.byType(CupertinoTextField);
     await tester.enterText(fields.at(0), '13800138000');
@@ -1869,11 +1926,14 @@ void main() {
     await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
     await _tapVisible(tester, find.text('登录/注册'));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(gateway.onboardingPhoneRegistrationCalls, 1);
-    await tester.tap(find.byKey(const Key('existing-handle-cancel-action')));
-    await tester.pumpAndSettle();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('existing-handle-cancel-action')),
+    );
+    await _settleVerificationStep(tester);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
@@ -1899,7 +1959,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final fields = find.byType(CupertinoTextField);
     await tester.enterText(fields.at(0), '13800138000');
@@ -1908,7 +1968,7 @@ void main() {
     await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
     await _tapVisible(tester, find.text('登录/注册'));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
@@ -1956,9 +2016,9 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('登录或注册'));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
+    await _tapVisible(tester, find.text('登录或注册'));
+    await _settleVerificationStep(tester);
     final fields = find.byType(CupertinoTextField);
     await tester.enterText(fields.at(0), '13800138000');
     await tester.enterText(fields.at(1), 'alice');
@@ -1966,7 +2026,7 @@ void main() {
     await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
     await _tapVisible(tester, find.text('登录/注册'));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
     );
@@ -1996,7 +2056,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final fields = find.byType(CupertinoTextField);
     await tester.enterText(fields.at(0), '13800138000');
@@ -2005,7 +2065,7 @@ void main() {
     await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
     await _tapVisible(tester, find.text('登录/注册'));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
@@ -2045,7 +2105,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final fields = find.byType(CupertinoTextField);
     await tester.enterText(fields.at(0), '13800138000');
@@ -2054,7 +2114,7 @@ void main() {
     await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
     await _tapVisible(tester, find.text('登录/注册'));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
@@ -2095,7 +2155,7 @@ void main() {
       await tester.pumpWidget(
         buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
       );
-      await tester.pumpAndSettle();
+      await _settleVerificationStep(tester);
 
       final fields = find.byType(CupertinoTextField);
       await tester.enterText(fields.at(0), '13800138000');
@@ -2104,7 +2164,7 @@ void main() {
       await _tapVisible(tester, find.text('发送验证码'));
       await tester.pump();
       await _tapVisible(tester, find.text('登录/注册'));
-      await tester.pumpAndSettle();
+      await _settleVerificationStep(tester);
 
       final container = ProviderScope.containerOf(
         tester.element(find.byType(OnboardingPage)),
@@ -2129,7 +2189,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final fields = find.byType(CupertinoTextField);
     await tester.enterText(fields.at(0), '13800138000');
@@ -2158,7 +2218,7 @@ void main() {
     expect(gateway.onboardingPhoneRegistrationCalls, 1);
 
     pending.complete();
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
     expect(
       find.byKey(const Key('existing-handle-join-action')),
       findsOneWidget,
@@ -2192,8 +2252,8 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('登录或注册'));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('登录或注册'));
+    await _settleVerificationStep(tester);
     await tester.enterText(
       find.byType(CupertinoTextField).at(0),
       '13800138000',
@@ -2203,7 +2263,7 @@ void main() {
     await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
     await _tapVisible(tester, find.text('登录/注册'));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(gateway.onboardingPhoneRegistrationCalls, 1);
     expect(gateway.loginCalls, 0);
@@ -2221,8 +2281,11 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const Key('existing-handle-join-action')));
-    await tester.pumpAndSettle();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('existing-handle-join-action')),
+    );
+    await _settleVerificationStep(tester);
 
     expect(userPresence.reasons, <String>['确认恢复 Handle 身份']);
     expect(identityPort.lastUserPresenceConfirmed, isTrue);
@@ -2250,7 +2313,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final fields = find.byType(CupertinoTextField);
     await tester.enterText(fields.at(0), '13800138000');
@@ -2259,7 +2322,7 @@ void main() {
     await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
     await _tapVisible(tester, find.text('登录/注册'));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(
       find.byKey(const Key('existing-handle-join-action')),
@@ -2288,7 +2351,7 @@ void main() {
         ],
       ),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
     final fields = find.byType(CupertinoTextField);
     await tester.enterText(fields.at(0), '13800138000');
     await tester.enterText(fields.at(1), 'Alice');
@@ -2296,7 +2359,7 @@ void main() {
     await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
     await _tapVisible(tester, find.text('登录/注册'));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
     final page = tester.widget<HandleRecoveryPage>(
       find.byType(HandleRecoveryPage),
     );
@@ -2348,7 +2411,7 @@ void main() {
         ],
       ),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final fields = find.byType(CupertinoTextField);
     await tester.enterText(fields.at(0), '13800138000');
@@ -2357,7 +2420,7 @@ void main() {
     await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
     await _tapVisible(tester, find.text('登录/注册'));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     final recoveryAction = find.byKey(
       const Key('existing-handle-recovery-action'),
@@ -2367,8 +2430,8 @@ void main() {
       tester.widget<CupertinoDialogAction>(recoveryAction).onPressed,
       isNotNull,
     );
-    await tester.tap(recoveryAction);
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, recoveryAction);
+    await _settleVerificationStep(tester);
 
     expect(find.byType(HandleRecoveryPage), findsOneWidget);
     expect(find.text('alice.awiki.me'), findsOneWidget);
@@ -2389,7 +2452,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(find.text('发送验证码'), findsNothing);
     expect(find.byKey(const Key('auth-mode-email')), findsNothing);
@@ -2401,9 +2464,9 @@ void main() {
     );
     await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
     await tester.ensureVisible(find.text('完成'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('完成'));
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
+    await _tapVisible(tester, find.text('完成'));
+    await _settleVerificationStep(tester);
 
     expect(gateway.registerHandleWithoutContactVerificationCalls, 1);
     expect(gateway.registerHandleCalls, 0);
@@ -2416,15 +2479,15 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pumpAndSettle();
+    await _settleVerificationStep(tester);
 
     expect(find.text('无法读取当前服务器支持的登录方式。请检查租户地址后重试。'), findsOneWidget);
     expect(find.text('重试'), findsOneWidget);
     expect(find.text('发送验证码'), findsNothing);
 
     gateway.serverInfoError = null;
-    await tester.tap(find.text('重试'));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('重试'));
+    await _settleVerificationStep(tester);
 
     expect(gateway.loadServerInfoCalls, greaterThanOrEqualTo(2));
     expect(find.text('发送验证码'), findsOneWidget);
@@ -2438,16 +2501,16 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('登录或注册'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('auth-mode-email')));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('登录或注册'));
+    await _settleVerificationStep(tester);
+    await _tapVisible(tester, find.byKey(const Key('auth-mode-email')));
+    await _settleVerificationStep(tester);
     await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
     await tester.enterText(find.byType(CupertinoTextField).at(1), 'a@b.com');
-    await tester.tap(find.text('我已激活，检查状态'));
+    await _tapVisible(tester, find.text('我已激活，检查状态'));
     await tester.pump();
-    await tester.tap(find.text('完成注册'));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('完成注册'));
+    await _settleVerificationStep(tester);
 
     expect(gateway.lastCheckedEmailVerificationHandle, 'alice');
     expect(gateway.registerHandleWithEmailCalls, 1);
@@ -2632,6 +2695,7 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
 }
 
 Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  await _settleVerificationStep(tester);
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
   await tester.tap(finder);
@@ -2644,4 +2708,25 @@ Future<void> _scrollToOnboardingUtilityBar(WidgetTester tester) async {
     scrollable: find.byType(Scrollable).first,
   );
   await tester.pump();
+}
+
+// Existing cases below the account step still exercise their original OTP,
+// local-login and Recovery oracles. The account-first surface has dedicated
+// registration_entry_widget_test coverage; enter it through the real Next action.
+Future<void> _settleVerificationStep(WidgetTester tester) async {
+  await tester.pumpAndSettle();
+  if (find.byType(TenantManagementDialog).evaluate().isNotEmpty) return;
+  final next = find.text('下一步');
+  if (next.evaluate().isEmpty ||
+      find.byKey(const Key('registration-entry-form')).evaluate().isEmpty) {
+    return;
+  }
+  final field = find.byType(CupertinoTextField).first;
+  if (tester.widget<CupertinoTextField>(field).controller!.text.isEmpty) {
+    await tester.enterText(field, 'alice');
+    await tester.pump();
+  }
+  await tester.ensureVisible(next);
+  await tester.tap(next);
+  await tester.pumpAndSettle();
 }

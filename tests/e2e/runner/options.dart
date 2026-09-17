@@ -164,6 +164,7 @@ Options:
 enum DesktopE2eCase implements DesktopE2eCaseContract {
   smoke(_desktopSmokeCaseIds),
   multiDevice(_multiDeviceCapabilityGateCaseIds),
+  registrationAccountFirst(<String>['REGISTRATION-ACCOUNT-FIRST-E2E-001']),
   multiDeviceRemoteJoin(_multiDeviceRemoteJoinCaseIds),
   multiDeviceRemoteRecovery(_multiDeviceRemoteRecoveryCaseIds),
   handleRecoveryLocalData(_handleRecoveryLocalDataCaseIds),
@@ -222,6 +223,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.smoke => 'integration_test/app_smoke_test.dart',
       DesktopE2eCase.multiDevice =>
         'integration_test/multi_device_capability_gate_test.dart',
+      DesktopE2eCase.registrationAccountFirst =>
+        'integration_test/registration_account_first_test.dart',
       DesktopE2eCase.multiDeviceRemoteJoin =>
         'integration_test/multi_device_join_ui_test.dart',
       DesktopE2eCase.multiDeviceRemoteRecovery =>
@@ -290,6 +293,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.contactFirst => 'contact-first',
       DesktopE2eCase.identitySwitch => 'identity-switch',
       DesktopE2eCase.multiDevice => 'multi-device',
+      DesktopE2eCase.registrationAccountFirst => 'registration-account-first',
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         'multi-device-remote-recovery',
@@ -329,6 +333,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       this != DesktopE2eCase.full &&
       this != DesktopE2eCase.smoke &&
       this != DesktopE2eCase.multiDevice &&
+      this != DesktopE2eCase.registrationAccountFirst &&
       this != DesktopE2eCase.multiDeviceRemoteRecovery &&
       this != DesktopE2eCase.handleRecoveryLocalData &&
       this != DesktopE2eCase.handleRecoveryStateMachine &&
@@ -348,6 +353,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.full => 'full',
       DesktopE2eCase.smoke => 'smoke',
       DesktopE2eCase.multiDevice => 'multi-device',
+      DesktopE2eCase.registrationAccountFirst => 'registration-account-first',
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         'multi-device-remote-recovery',
@@ -432,6 +438,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentScenario,
       DesktopE2eCase.performance => _desktopCliPeerPerformanceScenario,
       DesktopE2eCase.multiDevice => _multiDeviceCapabilityGateScenario,
+      DesktopE2eCase.registrationAccountFirst => 'registration-account-first',
       DesktopE2eCase.multiDeviceRemoteJoin => _multiDeviceRemoteJoinScenario,
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         _multiDeviceRemoteRecoveryScenario,
@@ -501,6 +508,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   static DesktopE2eCase parse(String value) {
     return switch (value.trim().toLowerCase()) {
       '' || 'smoke' || 'app' || 'local' => DesktopE2eCase.smoke,
+      'registration-account-first' => DesktopE2eCase.registrationAccountFirst,
       'multi-device' ||
       'multi_device' ||
       'device-capability' ||

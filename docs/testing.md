@@ -55,6 +55,62 @@ the same change:
 Code-only feature changes without corresponding tests are not acceptable unless
 the exception and follow-up are explicitly documented.
 
+## Account-first registration
+
+The mobile and desktop onboarding entry first asks for a Handle in the selected
+tenant. `registration_check` decides whether to show the invitation step or the
+contact verification step. Three-character new names require a database invitation;
+four-character names retain the existing algorithm-invitation policy. The App does
+not infer account ownership or admission from length or availability.
+
+The invitation stays in transient form state and is passed to the existing Core
+registration facade. Contact-bound invitation validation happens before OTP/email
+activation. Existing-account and pending local Recovery entrances remain usable
+when public discovery fails. Editing the Handle, tenant or contact discards stale
+results; an already accepted SMS receipt still sets the shared cooldown.
+
+Focused coverage:
+
+```bash
+flutter test tests/unit/registration_entry_test.dart \
+  tests/unit/registration_entry_widget_test.dart \
+  tests/unit/onboarding_page_test.dart \
+  tests/unit/onboarding_recovery_lookup_test.dart \
+  tests/unit/onboarding_otp_lifecycle_test.dart \
+  tests/unit/data/services/awiki_onboarding_support_service_test.dart
+```
+
+`SMOKE-E2E-001` checks the visible account-first transition in a native App with
+fake service ports. It does not prove real invitation consumption or completed
+registration. Real service and product registration acceptance must separately
+record the service source, Core artifact source, target tenant and cleanup.
+
+`registration-account-first` / `REGISTRATION-ACCOUNT-FIRST-E2E-001` uses real
+native Core and a disposable loopback User Service. Set
+`AWIKI_REGISTRATION_FIXTURE` to an ignored, permission-restricted JSON file with
+`userServiceUrl`, `domain`, `handle`, `inviteCode`, `phone`, and `otp`. Provision
+an unused three-character name, one-use invitation and local development OTP in
+the disposable service before running the case. The domain must be a valid App
+tenant hostname; the ANP service DID is its bare-domain `did:wba` DID. Never use
+production credentials or an SMS provider for this local case.
+
+```bash
+dart run tests/e2e/runner.dart --case registration-account-first
+```
+
+The case follows the visible account/invitation/phone steps, registers through
+Core, then uses a second fresh App scope to verify that the existing short name
+reaches authenticated Join/Recovery choices without an invitation. It does not
+claim completed multi-device Join, Recovery, or messaging. The invoking service
+fixture owns database readback (one invitation use) and remote-row cleanup;
+the App case deletes its temporary local scopes before attesting success.
+Existing Join/Recovery product cases use the explicit existing-account entrance
+before their unchanged authentication and continuation assertions.
+
+E2E OTP retries stop after an accepted receipt even when its cooldown is shorter
+than the retry interval. Verify this with
+`flutter test tests/unit/onboarding_page_test.dart --dart-define=AWIKI_E2E=true --plain-name 'accepted OTP with no cooldown does not trigger automatic resend'`.
+
 ## Unit Gate
 
 Run the full local unit/widget/provider suite:

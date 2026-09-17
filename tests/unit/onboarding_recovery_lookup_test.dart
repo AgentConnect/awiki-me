@@ -53,6 +53,7 @@ void main() {
       final run = await _LookupRun.open(tester);
       await tester.enterText(run.handleField, 'alice');
       await tester.pump(const Duration(milliseconds: 100));
+      await tester.ensureVisible(run.handleField);
       await tester.enterText(run.handleField, 'bob');
       await run.settleLookup();
 
@@ -69,6 +70,7 @@ void main() {
       final pending = run.core.defer(_alice);
       await tester.enterText(run.handleField, 'alice');
       await run.settleLookup();
+      await tester.ensureVisible(run.handleField);
       await tester.enterText(run.handleField, 'bob');
       await run.settleLookup();
       pending.complete([_operation(_alice)]);
@@ -158,6 +160,7 @@ void main() {
           run.core.lookups.where((handle) => handle == _alice),
           hasLength(2),
         );
+        await tester.ensureVisible(run.handleField);
         await tester.enterText(run.handleField, 'bob');
         _finish(pending, outcome);
         await run.settleLookup();
@@ -178,6 +181,7 @@ void main() {
       final pending = run.core.defer(_alice);
       await run.tap(find.text('登录/注册'));
       await tester.pump();
+      await tester.ensureVisible(run.handleField);
       await tester.enterText(run.handleField, 'bob');
       await tester.enterText(run.handleField, 'alice');
       pending.complete([_operation(_alice)]);
@@ -315,7 +319,10 @@ class _LookupRun {
   final gateway = FakeAwikiGateway();
   DateTime now = DateTime.now();
   late ProviderContainer container;
-  Finder get handleField => find.byType(CupertinoTextField).at(1);
+  Finder get handleField => find.byWidgetPredicate(
+    (widget) =>
+        widget is CupertinoTextField && widget.placeholder == '用户名 handle',
+  );
 
   static Future<_LookupRun> open(WidgetTester tester) async {
     final run = _LookupRun(tester);
@@ -354,11 +361,16 @@ class _LookupRun {
   }
 
   Future<void> prepareSubmit({String handle = 'alice'}) async {
+    await tester.enterText(handleField, handle);
+    await tester.pump();
+    if (find.text('下一步').evaluate().isNotEmpty) {
+      await tap(find.text('下一步'));
+      await tester.pumpAndSettle();
+    }
     await tester.enterText(
       find.byType(CupertinoTextField).at(0),
       '13800138000',
     );
-    await tester.enterText(handleField, handle);
     await settleLookup();
     await tester.enterText(find.byType(CupertinoTextField).at(2), '123456');
     await tap(find.text('发送验证码'));

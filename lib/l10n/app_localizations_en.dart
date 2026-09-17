@@ -3790,4 +3790,44 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryContinueExisting => 'Continue previous recovery';
+
+  @override
+  String get onboardingAccountFirst => 'Enter your handle to continue';
+
+  @override
+  String get onboardingAccountNext => 'Next';
+
+  @override
+  String get onboardingInviteCode => 'Invite code';
+
+  @override
+  String get onboardingInviteRequired =>
+      'An invite code is required to register this handle.';
+
+  @override
+  String get onboardingInviteInvalid =>
+      'The invite code is invalid, expired, exhausted, or does not match this phone. Check it and retry.';
+
+  @override
+  String get onboardingAccountUnavailable =>
+      'This handle cannot be registered. Choose another handle.';
+
+  @override
+  String get onboardingAccountCheckFailed =>
+      'Unable to check the handle. Retry, or continue with an existing account.';
+
+  @override
+  String get onboardingExistingAccount =>
+      'Continue verification to sign in, join a device, or recover this account.';
+
+  @override
+  String get onboardingExistingAccountAction =>
+      'Continue with an existing account';
+
+  @override
+  String get onboardingChangeAccount => 'Change handle or invite code';
+
+  @override
+  String get onboardingRegistrationClosed =>
+      'Registration is not available for this contact.';
 }

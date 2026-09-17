@@ -210,6 +210,8 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   static const int _emailResendCooldownSeconds = 60;
   Timer? _emailResendTimer;
   int _busyGeneration = 0;
+  int _verificationRevision = 0;
+  String? _otpInputPhone;
   AppSessionTransition? _activeSessionTransition;
   OnboardingPhoneRegistrationOutcome? _lastBusyFailureOutcome;
   String? _lastBusyFailureCode;
@@ -253,6 +255,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }
 
   void setAuthMode(String value) {
+    _verificationRevision++;
     final method = _registrationMethodForAuthMode(value);
     if (state.isServerInfoReady && method == null) {
       return;
@@ -311,9 +314,11 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .showError(AppMessage.registrationMethodUnavailable());
       return;
     }
+    final revision = _verificationRevision;
     String? fullHandle;
     RegistrationOtpSendReceipt? receipt;
     final normalizedPhone = _normalizePhoneForOtpCooldown(phone);
+    _otpInputPhone = normalizedPhone;
     final cooldown = ref.read(smsOtpCooldownProvider.notifier);
     if (!await cooldown.beginSend()) return;
     var success = false;
@@ -346,7 +351,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         // The server receipt still owns the shared resend boundary when the
         // originating page/controller has gone away. Only UI state is stale.
         await cooldown.completeAcceptedAt(receipt!.retryAt);
-        if (!mounted) return;
+        if (!mounted || revision != _verificationRevision) return;
         state = state.copyWith(
           otpTargetFullHandle: fullHandle!,
           otpTargetPhone: normalizedPhone,
@@ -360,6 +365,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }
 
   void resetPhoneOtpTarget() {
+    _verificationRevision++;
     if (state.otpTargetFullHandle == null &&
         state.otpTargetPhone == null &&
         !state.isPhoneOtpConsumed) {
@@ -374,10 +380,11 @@ class OnboardingController extends StateNotifier<OnboardingState> {
 
   void updateOtpPhone(String phone) {
     final normalizedPhone = _normalizePhoneForOtpCooldown(phone);
-    if (state.otpTargetPhone == null ||
-        state.otpTargetPhone == normalizedPhone) {
+    if (_otpInputPhone == normalizedPhone) {
       return;
     }
+    _otpInputPhone = normalizedPhone;
+    _verificationRevision++;
     state = state.copyWith(
       otpTargetFullHandle: null,
       otpTargetPhone: null,
@@ -395,13 +402,14 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .showError(AppMessage.registrationMethodUnavailable());
       return;
     }
+    final revision = _verificationRevision;
     var success = false;
     await _runBusy(() async {
       final support = ref.read(onboardingSupportServiceProvider);
       await support.sendEmailVerification(email: email, handle: handle);
       success = true;
     });
-    if (success) {
+    if (success && mounted && revision == _verificationRevision) {
       _startEmailResendCountdown();
       ref
           .read(uiFeedbackProvider.notifier)
@@ -419,6 +427,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .showError(AppMessage.registrationMethodUnavailable());
       return false;
     }
+    final revision = _verificationRevision;
     var verified = false;
     await _runBusy(() async {
       verified = await ref
@@ -430,11 +439,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
             .showError(AppMessage.emailNotActivatedClickLink());
       }
     });
+    if (!mounted || revision != _verificationRevision) return false;
     state = state.copyWith(emailVerified: verified);
     return verified;
   }
 
   void resetEmailActivation() {
+    _verificationRevision++;
     if (!state.emailVerified && state.emailResendCountdown == 0) {
       return;
     }
@@ -449,6 +460,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String handleDomain,
     required String nickName,
     required String profileMarkdown,
+    String? inviteCode,
   }) async {
     if (state.isBusy) {
       return null;
@@ -491,6 +503,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
               phone: phone,
               otp: otp,
               handle: handle,
+              inviteCode: inviteCode,
               nickName: nickName,
               profileMarkdown: profileMarkdown,
               transition: transition,
@@ -595,6 +608,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String handle,
     required String nickName,
     required String profileMarkdown,
+    String? inviteCode,
   }) async {
     if (state.isBusy) {
       return null;
@@ -620,6 +634,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .registerHandleWithEmail(
             email: email,
             handle: handle,
+            inviteCode: inviteCode,
             nickName: nickName,
             profileMarkdown: profileMarkdown,
             transition: transition,
@@ -633,6 +648,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String handle,
     required String nickName,
     required String profileMarkdown,
+    String? inviteCode,
   }) async {
     if (state.isBusy) {
       return null;
@@ -650,6 +666,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .registerHandleWithoutContactVerification(
             phone: phone,
             handle: handle,
+            inviteCode: inviteCode,
             nickName: nickName,
             profileMarkdown: profileMarkdown,
             transition: transition,

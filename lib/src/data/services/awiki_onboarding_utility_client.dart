@@ -240,6 +240,26 @@ class AwikiOnboardingUtilityClient {
     );
   }
 
+  Future<Map<String, Object?>> checkRegistration({
+    required String handle,
+    required String domain,
+    String? inviteCode,
+    String? phone,
+    String? email,
+    bool checkInvite = false,
+  }) => _serviceClient.rpcCall(
+    path: handleRpcEndpoint,
+    method: 'registration_check',
+    params: <String, Object?>{
+      'handle': handle,
+      'domain': domain,
+      'check_invite': checkInvite,
+      if (inviteCode != null) 'invite_code': inviteCode,
+      if (phone != null) 'phone': phone,
+      if (email != null) 'email': email,
+    },
+  );
+
   Future<Map<String, Object?>> validateHandle({
     required String handle,
     String? domain,

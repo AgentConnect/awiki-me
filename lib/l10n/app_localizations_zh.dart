@@ -3551,4 +3551,37 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get handleRecoveryContinueExisting => '继续上次恢复';
+
+  @override
+  String get onboardingAccountFirst => '先输入账号，检查后继续';
+
+  @override
+  String get onboardingAccountNext => '下一步';
+
+  @override
+  String get onboardingInviteCode => '邀请码';
+
+  @override
+  String get onboardingInviteRequired => '此账号注册需要邀请码，请填写后继续。';
+
+  @override
+  String get onboardingInviteInvalid => '邀请码无效、已过期、已用完或与手机号不匹配，请检查后重试。';
+
+  @override
+  String get onboardingAccountUnavailable => '此账号无法注册，请修改账号后重试。';
+
+  @override
+  String get onboardingAccountCheckFailed => '暂时无法检查账号，请重试。已有账号可继续登录。';
+
+  @override
+  String get onboardingExistingAccount => '已有账号，继续验证后登录、加入设备或恢复。';
+
+  @override
+  String get onboardingExistingAccountAction => '已有账号，继续登录';
+
+  @override
+  String get onboardingChangeAccount => '返回修改账号或邀请码';
+
+  @override
+  String get onboardingRegistrationClosed => '当前不允许使用此联系方式注册。';
 }
