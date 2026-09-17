@@ -1395,3 +1395,14 @@ Fresh Recovery 主流程失败后不执行冷启动阶段，保留主流程错�
 DSH remote Join 使用 active-only Host 快照：撤销后要求精确成员消失、唯一原 current
 ready-admin 保留，并再次刷新确认；不能在该过滤快照中要求出现 revoked 条目。
 Core 原始 Registry 的设备状态及授权围栏由其对应测试保持验证。
+
+
+For local registration acceptance with Xcode 27, the simulator App can require
+an ignored `XCODE_XCCONFIG_FILE` setting `IPHONEOS_DEPLOYMENT_TARGET = 15.0`,
+`ONLY_ACTIVE_ARCH = YES`, and the actual host architecture. This is a local
+verification override; the repository's iOS minimum remains 13.0 and a successful
+build on the override does not prove iOS 13 compatibility or simulator runtime
+acceptance. Build with `flutter build ios --simulator --debug --target
+integration_test/registration_account_first_test.dart --dart-define=AWIKI_E2E=true`
+after building and verifying the iOS Core XCFramework. Provision the restricted
+fixture before launching; compilation alone does not execute the registration case.
