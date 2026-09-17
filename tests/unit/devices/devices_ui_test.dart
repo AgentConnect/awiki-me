@@ -2021,6 +2021,7 @@ void main() {
     'management_registered',
     'failed',
     'expired',
+    'invalidated',
   ]) {
     testWidgets('Join uses one presence and Core management phase $phase', (
       tester,
@@ -2049,9 +2050,13 @@ void main() {
           DeviceJoinManagementStatus(
             joinSessionId: 'join-1',
             recipientDeviceId: 'device-new',
-            phase: phase == 'expired' ? 'failed' : phase,
+            phase: ['expired', 'invalidated'].contains(phase)
+                ? 'failed'
+                : phase,
             failureCode: phase == 'expired'
                 ? 'root_transfer.delivery_expired'
+                : phase == 'invalidated'
+                ? 'root_transfer.delivery_invalidated'
                 : null,
             attempts: phase == 'failed' ? 3 : 1,
             nextAttemptAtMs: 0,
@@ -2101,7 +2106,7 @@ void main() {
           findsNothing,
         );
       }
-      if (phase == 'expired') {
+      if (phase == 'expired' || phase == 'invalidated') {
         expect(find.textContaining('撤销此设备后重新加入'), findsOneWidget);
         await container
             .read(devicesProvider.notifier)

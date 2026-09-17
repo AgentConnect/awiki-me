@@ -1555,5 +1555,5 @@
   "deviceJoinManagementWaiting": "根密钥发送已接受，等待新设备完成管理权限配置。",
   "deviceJoinManagementRegistered": "管理权限已登记，请在新设备确认管理能力已就绪。",
   "deviceJoinManagementFailed": "设备已加入，管理权限配置失败",
-  "deviceJoinManagementRejoinRequired": "根密钥投递已过期，请由管理设备撤销此设备后重新加入。"
+  "deviceJoinManagementRejoinRequired": "管理权限配置已失效，请由管理设备撤销此设备后重新加入。"
 }

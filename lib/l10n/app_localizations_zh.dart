@@ -3565,5 +3565,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceJoinManagementFailed => '设备已加入，管理权限配置失败';
 
   @override
-  String get deviceJoinManagementRejoinRequired => '根密钥投递已过期，请由管理设备撤销此设备后重新加入。';
+  String get deviceJoinManagementRejoinRequired =>
+      '管理权限配置已失效，请由管理设备撤销此设备后重新加入。';
 }

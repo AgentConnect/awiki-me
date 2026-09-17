@@ -364,6 +364,8 @@ class DeviceJoinManagementStatus {
   final int nextAttemptAtMs;
   final String? failureCode;
 
-  bool get requiresRejoin => failureCode == 'root_transfer.delivery_expired';
+  bool get requiresRejoin =>
+      failureCode == 'root_transfer.delivery_expired' ||
+      failureCode == 'root_transfer.delivery_invalidated';
   bool get canRetry => phase == 'failed' && !requiresRejoin;
 }
