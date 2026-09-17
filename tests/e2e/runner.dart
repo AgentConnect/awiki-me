@@ -1104,8 +1104,8 @@ class DesktopE2eRunner {
           'Registration acceptance requires a loopback User Service.',
         );
       }
-      for (final key in ['inviteCode', 'phone', 'otp', 'handle']) {
-        _addRuntimeSecret(fixture[key] as String);
+      for (final secret in registrationFixtureSecrets(fixture)) {
+        _addRuntimeSecret(secret);
       }
       _addRuntimeSecret(fixturePath);
     }

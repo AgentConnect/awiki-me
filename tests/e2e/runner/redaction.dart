@@ -58,3 +58,24 @@ String sanitizeAppPairDriverDiagnostic(
         '<redacted-six-digit>',
       );
 }
+
+/// Values the registration provisioner must keep out of runner diagnostics.
+Iterable<String> registrationFixtureSecrets(
+  Map<String, dynamic> fixture,
+) sync* {
+  for (final key in const [
+    'inviteCode',
+    'phone',
+    'otp',
+    'handle',
+    'fourCharHandle',
+    'fourCharInviteCode',
+    'emailHandle',
+    'emailInviteCode',
+    'email',
+  ]) {
+    yield fixture[key] as String;
+  }
+  final caBundle = fixture['caBundle'];
+  if (caBundle is String) yield caBundle;
+}
