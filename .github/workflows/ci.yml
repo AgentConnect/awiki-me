@@ -74,7 +74,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-system-test
-          ref: ad498db5135957518f66686117f907cc82fe8731
+          ref: 380b8fb5236e5d65ccc58749a870c71d01fa3f55
           token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
           path: test-awiki-system-test
           persist-credentials: false
