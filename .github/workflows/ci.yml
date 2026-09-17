@@ -44,7 +44,7 @@ jobs:
     steps:
       - name: Require exact CLI / SDK source ref and System Test read token
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && 'dd4b29d4d368ea91001a9b5c1c45449f1bdfa7f4') || vars.AWIKI_CLI_RS2_REF }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '4bae938a8d809ddec3bea9d74761e187eec8b7bc') || vars.AWIKI_CLI_RS2_REF }}
           SYSTEM_TEST_READ_TOKEN: ${{ secrets.AWIKI_CI_READ_TOKEN }}
         run: |
           [[ "$CLI_REF" =~ ^[0-9a-fA-F]{40}$ ]] || {
@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
-          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && 'dd4b29d4d368ea91001a9b5c1c45449f1bdfa7f4') || vars.AWIKI_CLI_RS2_REF }}
+          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '4bae938a8d809ddec3bea9d74761e187eec8b7bc') || vars.AWIKI_CLI_RS2_REF }}
           token: ${{ github.token }}
           path: awiki-cli-rs2
           persist-credentials: false
@@ -101,7 +101,7 @@ jobs:
 
       - name: Record exact CLI / SDK source ref
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && 'dd4b29d4d368ea91001a9b5c1c45449f1bdfa7f4') || vars.AWIKI_CLI_RS2_REF }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '4bae938a8d809ddec3bea9d74761e187eec8b7bc') || vars.AWIKI_CLI_RS2_REF }}
         run: |
           test "$(git -C awiki-cli-rs2 rev-parse HEAD)" = "$CLI_REF"
           git -C awiki-cli-rs2 rev-parse HEAD | tee /tmp/awiki-cli-ref
@@ -234,7 +234,7 @@ jobs:
     steps:
       - name: Require exact ref and remote account pool secrets
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && 'dd4b29d4d368ea91001a9b5c1c45449f1bdfa7f4') || vars.AWIKI_CLI_RS2_REF }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '4bae938a8d809ddec3bea9d74761e187eec8b7bc') || vars.AWIKI_CLI_RS2_REF }}
           E2E_PHONE: ${{ secrets.AWIKI_E2E_OTP_PHONE }}
           E2E_OTP: ${{ secrets.AWIKI_E2E_OTP_CODE }}
           APP_HANDLE: ${{ secrets.AWIKI_E2E_APP_HANDLE }}
@@ -251,7 +251,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
-          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && 'dd4b29d4d368ea91001a9b5c1c45449f1bdfa7f4') || vars.AWIKI_CLI_RS2_REF }}
+          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '4bae938a8d809ddec3bea9d74761e187eec8b7bc') || vars.AWIKI_CLI_RS2_REF }}
           token: ${{ github.token }}
           path: awiki-cli-rs2
           persist-credentials: false
@@ -299,7 +299,7 @@ jobs:
       - name: Write secret-backed awiki.info config
         working-directory: test-awiki-me
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && 'dd4b29d4d368ea91001a9b5c1c45449f1bdfa7f4') || vars.AWIKI_CLI_RS2_REF }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '4bae938a8d809ddec3bea9d74761e187eec8b7bc') || vars.AWIKI_CLI_RS2_REF }}
           E2E_PHONE: ${{ secrets.AWIKI_E2E_OTP_PHONE }}
           E2E_OTP: ${{ secrets.AWIKI_E2E_OTP_CODE }}
           APP_HANDLE: ${{ secrets.AWIKI_E2E_APP_HANDLE }}
@@ -339,7 +339,7 @@ jobs:
           AWIKI_SQLITE3_SOURCE_DIR: /tmp/awiki-sqlite3
         run: |
           test "$(git -C ../awiki-cli-rs2 rev-parse HEAD)" = \
-            "${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && 'dd4b29d4d368ea91001a9b5c1c45449f1bdfa7f4') || vars.AWIKI_CLI_RS2_REF }}"
+            "${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '4bae938a8d809ddec3bea9d74761e187eec8b7bc') || vars.AWIKI_CLI_RS2_REF }}"
           dart run tests/e2e/runner.dart \
             --case "${{ github.event.inputs.e2e_case || 'full' }}" \
             --config .e2e/ci/remote.json \
@@ -363,7 +363,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 75
     env:
-      WINDOWS_CORE_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && 'dd4b29d4d368ea91001a9b5c1c45449f1bdfa7f4') || vars.AWIKI_CLI_RS2_WINDOWS_REF || vars.AWIKI_CLI_RS2_REF }}
+      WINDOWS_CORE_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '4bae938a8d809ddec3bea9d74761e187eec8b7bc') || vars.AWIKI_CLI_RS2_WINDOWS_REF || vars.AWIKI_CLI_RS2_REF }}
     steps:
       - name: Require exact Core source ref
         shell: bash
