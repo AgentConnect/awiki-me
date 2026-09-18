@@ -59,30 +59,10 @@ the exception and follow-up are explicitly documented.
 
 桌面后台消息测试通过 `runInHiddenDesktopLifecycle` 执行真实后台操作：进入 `hidden` 后不等待绘制帧，操作结束或失败时均经过 `inactive` 恢复 `resumed`，随后再校验 UI。`hidden` 会关闭 Live test binding 的帧调度，在此状态等待 `tester.pump()` 会使测试无法推进。
 
-`acp-agent` 使用真实 APP、Daemon 和四种 ACP 客户端，每种 9 项，共 36 项；覆盖创建与聊天、首条消息前实际模型可见及可选、单等待位与草稿、停止／插队执行／取消、正常完成后的自动执行、V2 选择加说明、问答草稿独立、文件字节往返、图片和群聊竞争拒绝。工具执行前的进度说明可以保留，但完成标记／用户答案必须正确，APP 展示必须与 Daemon 的完整最终文本一致。图片使用随机八字符码，答案只存在于像素中，不进入提示或文件名，必须在规范历史和可见气泡中准确返回。纯色识别的历史失败应保留为具体客户端／模型的已知限制，不能由随机码通过推断所有图片语义均正确。
+2026-09-18：Agent 自动测试只使用模拟协议、状态和服务。已移除 ACP、Codex、Claude Code、Hermes 的真实模型 E2E，以及它们的专用准备配置／报告工具；不保留按需模型调用入口。
 
-此专项的 runner 与 Flutter 整轮上限为 75 分钟，包含四个真实客户端的多次原生恢复、问答和附件。逐步等待仍使用各自的有界期限；整轮预算不改变任务、问题或生产请求的超时语义。桌面窗口需保持可见，避免 macOS 遮挡导致测试画面停止推进。
-
-ACP 自动化期间关闭 Flutter live binding 的物理鼠标 Finder inspector，并在结束时恢复；原生窗口拖动可能由操作系统消费 mouse-up，导致该定位辅助器在下一次 hover 时断言。此设置不改变自动点击、产品输入或错误报告，也不丢弃业务异常；物理 inspector 在默认测试模式下本就不向产品分发点击。
-
-重复 ACP 验证可在受限本地配置设置 `acpAgent.preparedIdentityRunId`，显式复用本仓 `.e2e/acp-agent/<旧runId>/` 中的 APP／CLI 测试身份。必须存在匹配的 ownership ledger、原始状态目录、同域 tenant 与准确的已认证账号；缺失、符号链接重定向或账号不匹配均失败，不回退到注册。配置中的账号前缀须与旧轮次相同。runner 对该身份目录持有独占租约，新报告与 Runtime Agent 仍使用新 run ID。此模式用于 ACP 功能复验，不算新账号注册验收，也不能用于日常 APP 数据目录。
-
-单客户端失败定位可给同一 ACP shim 传编译参数 `AWIKI_ACP_FOCUS_DRIVER`（仅接受 `opencode`、`gemini`、`kimi`、`deepseek-harness`），并用 `AWIKI_ACP_FOCUS_CONFIG` 指向受限的真实运行配置。空 driver 仍运行四种；未知值直接失败。聚焦运行复用原九项实现，必须使用独立 run ID、匹配的九项 attestation、完整 invocation completion，并保持测试身份独占；不能把九项报告当作正常 runner 的 36 项通过。该入口仅用于本仓测试诊断，不是产品配置。
-若仅群聊用例失败，可同时设置 `AWIKI_ACP_FOCUS_GROUP_ONLY=true`，执行该客户端的创建／初始模型（001）与完整群聊（009），attestation 也只能声明这两项；未指定准确 driver 时拒绝运行。
-
-等待位和停止用例先等待当前任务实际产生未回答、未过期的问题，再发送后续消息；不能假定模型会执行提示词中的 sleep 时长。实际 shell 工具启动后的取消与进程退出由两个平台的真实 ACP 协议用例另行验证。
-`multi-device-app-pair-acp` 通过生产 Join 建立两个独立 APP，使用真实 OpenCode 和模型验证共享 ACP 层：同一问题并发回答、独立草稿、唯一等待位，以及 Daemon 重启后的等待暂停与第二设备手动执行。协调器仅在内存交换检查点，最终状态与消息仍由两端 Core 可靠同步和可见 UI 验证。此专项使用显式配置的 `awiki.info` 或 `anpclaw.com`、受限 OTP 与 Daemon 配置，不需要 Account State operator。
-两个独立用例使用不同的问题字段及选项，避免把客户端遵守“取消后不重复追问”的行为误判为不能提问。
-输入沿用普通桌面 E2E 的策略：请求键盘、等待输入法更新后核对完整文字，最多重试三次文字输入；只有文字确实保留后才点击发送，不能重试发送来掩盖输入失败。
-
-```sh
-dart run tests/e2e/runner.dart --case acp-agent --config <受限本地配置>
-dart run tests/e2e/runner.dart --case hermes-agent --config <受限本地配置>
-dart run tests/e2e/runner.dart --case codex-agent --config <受限本地配置>
-dart run tests/e2e/runner.dart --case claude-code-agent --config <受限本地配置>
-```
-
-`hermes-agent` 验证当前 Hermes Runtime 的创建、发送、最终 outbox 和可见回复，共 4 项。旧 `personal-agent` 已在 manifest 中标记 unsupported，不能替代当前 Hermes 回归。各专项使用隔离身份、数据和已安装客户端；配置／密钥不能进入参数或报告。Gemini → DeepSeek 的测试转换依赖、Mac／Linux 记录边界见 [真实客户端验证](../../awiki-system-test/docs/acp-real-client-verification.md)。同一 Mac 工作区的桌面 runner 串行执行，避免共享 CocoaPods 目录冲突。
+日常入口：`dart run tests/unit/runner.dart --suite acp`，覆盖 ACP 状态、问答、回复布局、模型目录与相邻聊天／群聊／创建界面回归，不需要 API Key、Agent CLI、OTP 或后端。
+Daemon 通过模拟 stdio 子进程验证协议与恢复，见 [ACP 无模型测试](../../awiki-system-test/docs/acp-testing.md)。
 
 ACP 界面专项使用以下命令。`acp_presentation_test` 验证问答校验、独立输入、滚动保留、提交锁定、原命令重试及失效；`acp_responsive_test` 覆盖 320–1440px、横屏、1–3 倍字号、长题目／选项、模型搜索与键盘。聊天页测试测量实际气泡与状态的位置，创建页测试覆盖小屏四种 ACP 类型及键盘。
 
@@ -94,7 +74,7 @@ AWIKI_ACP_UI_ARTIFACTS=<输出目录> AWIKI_ACP_REVIEW_FONT=<本机完整中文�
 flutter test --no-pub integration_test/acp_ui_layout_test.dart -d <隔离模拟器ID>
 ```
 
-原生 UI smoke 注入 ACP 快照并记录控制请求，检查真实平台上的选项、文本补充、模型搜索与选择；它不访问模型、账号或 Daemon，不能替代 `acp-agent` 的真实端到端验收。截图写入测试 APP 的临时目录，需在 runner 卸载 APP 前保存。UI 本地校验不替代 Daemon 的权威答案校验。
+原生 UI smoke 注入 ACP 快照并记录控制请求，检查真实平台上的选项、文本补充、模型搜索与选择；它不访问模型、账号或 Daemon，不证明真实模型兼容性。截图写入测试 APP 的临时目录，需在 runner 卸载 APP 前保存。UI 本地校验不替代 Daemon 的权威答案校验。
 
 ## Unit Gate
 
@@ -1335,7 +1315,7 @@ Core 原始 Registry 的设备状态及授权围栏由其对应测试保持验�
 
 ### 2026-09-17 ACP 修复专项
 
-`acp-agent` 的模型检查移到首条消息之前；停止 A／完成 B 后必须断言忙闲投影回到空闲；V2 选择答案含额外文字并检查真实回复，群聊用随机普通消息标记验证先前上下文（期望值不出现在 @ 指令中）。`acp-real-clients` 的问答、串行工具与跨进程恢复由 System 仓库验收；不能把该通过计作 APP 通过。
+首条消息前的模型可见性、停止后状态回到空闲、问答补充文字和历史消息归属由组件／状态测试覆盖；群上下文读取由 Daemon 的模拟分页测试覆盖。
 
 原生输入框粘贴 smoke：
 

@@ -102,11 +102,15 @@ class AcpSessionOptions extends ConsumerWidget {
                       color: theme.secondaryText,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      acpText(context, '会话模型 · ', 'Session model · '),
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: theme.secondaryText,
+                    Flexible(
+                      child: Text(
+                        acpText(context, '会话模型 · ', 'Session model · '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: theme.secondaryText,
+                        ),
                       ),
                     ),
                     Flexible(

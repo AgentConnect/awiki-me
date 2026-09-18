@@ -999,8 +999,16 @@ void main() {
     final outgoingBubble = find.byKey(
       const Key('chat-message-bubble:compact-outgoing'),
     );
-    final incomingBubbleWidget = tester.widget<Container>(incomingBubble);
-    final outgoingBubbleWidget = tester.widget<Container>(outgoingBubble);
+    final incomingBubbleWidget = tester.widget<Container>(
+      find
+          .descendant(of: incomingBubble, matching: find.byType(Container))
+          .first,
+    );
+    final outgoingBubbleWidget = tester.widget<Container>(
+      find
+          .descendant(of: outgoingBubble, matching: find.byType(Container))
+          .first,
+    );
     final incomingDecoration =
         incomingBubbleWidget.decoration! as ShapeDecoration;
     final outgoingDecoration =
@@ -4501,7 +4509,12 @@ void main() {
     );
 
     final bareBubble = tester.widget<Container>(
-      find.byKey(const Key('chat-message-bubble:bare-image-card')),
+      find
+          .descendant(
+            of: find.byKey(const Key('chat-message-bubble:bare-image-card')),
+            matching: find.byType(Container),
+          )
+          .first,
     );
     final bareDecoration = bareBubble.decoration! as ShapeDecoration;
     expect(bareBubble.padding, isNot(EdgeInsets.zero));

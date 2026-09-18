@@ -8,59 +8,6 @@ import '../../e2e/app_pair_protocol.dart';
 
 void main() {
   test(
-    'ACP checkpoints coordinate public task IDs without control payloads',
-    () async {
-      final server = await AppPairCoordinatorServer.start(
-        token: List.filled(48, 't').join(),
-      );
-      addTearDown(server.close);
-      final client = AppPairCoordinatorClient(
-        endpoint: server.endpoint,
-        token: server.token,
-      );
-      await client.publish(
-        'admin',
-        'acp_runtime',
-        data: {'agentDid': 'test-agent', 'handle': 'test-runtime'},
-      );
-      await client.publish('admin', 'acp_answer_go', data: {'at': 123});
-      for (final role in ['admin', 'joiner']) {
-        for (final phase in [
-          'acp_chat_ready',
-          'acp_queue_ready',
-          'acp_restart_paused',
-        ]) {
-          await client.publish(role, phase);
-        }
-        await client.publish(
-          role,
-          'acp_answer_ready',
-          data: {'questionId': 'q1', 'runId': 'r1'},
-        );
-        expect(
-          (await client.waitFor(role, 'acp_answer_ready'))['questionId'],
-          'q1',
-        );
-        await client.publish(role, 'acp_waiting', data: {'runId': 'r2'});
-        for (final phase in ['acp_answer_done', 'acp_queue_done']) {
-          await client.publish(
-            role,
-            phase,
-            data: {'reply': 'test-reply', 'remoteId': 'm1'},
-          );
-        }
-        await expectLater(
-          client.publish(
-            role,
-            'acp_answer_ready',
-            data: {'questionId': 'q1', 'runId': 'r1', 'token': 'never-allowed'},
-          ),
-          throwsA(isA<AppPairProtocolException>()),
-        );
-      }
-    },
-  );
-  test(
     'two isolated roles exchange checkpoints and compare SAS in memory',
     () async {
       final server = await AppPairCoordinatorServer.start(

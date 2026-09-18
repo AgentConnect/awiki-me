@@ -8,6 +8,21 @@ import '../../e2e/runner.dart';
 import '../../e2e/performance_contract.dart';
 
 void main() {
+  test('removed model-backed suites cannot be selected', () {
+    for (final name in [
+      'acp-agent',
+      'hermes-agent',
+      'codex-agent',
+      'claude-code-agent',
+      'multi-device-app-pair-acp',
+    ]) {
+      expect(
+        () => DesktopE2eOptions.parse(['--case', name]),
+        throwsA(isA<E2eFailure>()),
+      );
+    }
+  });
+
   group('App-pair runtime isolation', () {
     test(
       'registration Join resume uses two process phases and no App hang',
@@ -932,63 +947,6 @@ void main() {
       expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 16));
     });
 
-    test('parses codex-agent case aliases', () {
-      final hyphen = DesktopE2eOptions.parse(const <String>[
-        '--case',
-        'codex-agent',
-        '--dry-run',
-      ]);
-      final underscore = DesktopE2eOptions.parse(const <String>[
-        '--case',
-        'codex_agent',
-        '--dry-run',
-      ]);
-
-      expect(hyphen.e2eCase, DesktopE2eCase.codexAgent);
-      expect(underscore.e2eCase, DesktopE2eCase.codexAgent);
-      expect(hyphen.e2eCase.caseName, 'codex-agent');
-      expect(hyphen.e2eCase.reportScope, 'codex-agent');
-      expect(hyphen.e2eCase.runConfigPath, contains('codex-agent'));
-    });
-
-    test('parses claude-code-agent case aliases', () {
-      final hyphen = DesktopE2eOptions.parse(const <String>[
-        '--case',
-        'claude-code-agent',
-        '--dry-run',
-      ]);
-      final underscore = DesktopE2eOptions.parse(const <String>[
-        '--case',
-        'claude_code_agent',
-        '--dry-run',
-      ]);
-
-      expect(hyphen.e2eCase, DesktopE2eCase.claudeCodeAgent);
-      expect(underscore.e2eCase, DesktopE2eCase.claudeCodeAgent);
-      expect(hyphen.e2eCase.caseName, 'claude-code-agent');
-      expect(hyphen.e2eCase.reportScope, 'claude-code-agent');
-      expect(hyphen.e2eCase.runConfigPath, contains('claude-code-agent'));
-    });
-
-    test('ACP and current Hermes use distinct audited runtime scopes', () {
-      for (final (name, count, prefix) in [
-        ('acp-agent', 36, 'ACP-'),
-        ('hermes-agent', 4, 'HERMESAGENT-'),
-      ]) {
-        final selected = DesktopE2eOptions.parse([
-          '--case',
-          name,
-          '--dry-run',
-        ]).e2eCase;
-        expect(selected.caseName, name);
-        expect(selected.reportScope, name);
-        expect(selected.runConfigPath, '.e2e/$name/current/run_config.json');
-        expect(selected.caseIds.length, count);
-        expect(selected.caseIds.every((id) => id.startsWith(prefix)), isTrue);
-        expect(DesktopE2eCase.full.caseIds, containsAll(selected.caseIds));
-      }
-    });
-
     test('rejects unsupported case', () {
       expect(
         () => DesktopE2eOptions.parse(const <String>['--case', 'unknown']),
@@ -1011,7 +969,7 @@ void main() {
                 'root-transfer, full, messaging, performance, direct, '
                 'group, attachment, contacts, inbound, identity-switch, restart, '
                 'display-name-fallback, '
-                'personal-agent, codex-agent, hermes-agent, acp-agent, or claude-code-agent.',
+                'personal-agent.',
           ),
         ),
       );
@@ -1371,47 +1329,6 @@ void main() {
       expect(config.contentSync, isTrue);
       expect(config.cliBin, '/tmp/awiki-cli');
       expect(config.daemonBinary, isNull);
-    });
-    test('ACP pair uses a daemon without account-state operator mode', () {
-      const inputs = DesktopE2eFileConfig(
-        path: '/tmp/e2e.local.yaml',
-        platform: DesktopE2ePlatform.macos,
-        serviceBaseUrl: 'https://awiki.info',
-        didDomain: 'awiki.info',
-        otpPhone: 'local-test-phone',
-        otpCode: '123456',
-        cliBin: '/tmp/awiki-cli',
-        cliSourceRef: '1111111111111111111111111111111111111111',
-        daemonBinary: '/tmp/awiki-deamon',
-        daemonHandle: 'pair-daemon',
-      );
-      const environment = {'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1'};
-      final config = RemoteMultiDeviceAppPairConfig.from(
-        fileConfig: inputs,
-        environment: environment,
-        acp: true,
-      );
-      expect(config.acp, isTrue);
-      expect(config.functional, isFalse);
-      expect(config.daemonBinary, '/tmp/awiki-deamon');
-      expect(
-        () => RemoteMultiDeviceAppPairConfig.from(
-          fileConfig: inputs,
-          environment: environment,
-          acp: true,
-          functional: true,
-        ),
-        throwsA(isA<E2eFailure>()),
-      );
-      final options = DesktopE2eOptions.parse([
-        '--case',
-        'multi-device-app-pair-acp',
-      ]);
-      expect(options.e2eCase.usesRemoteAppPairScenario, isTrue);
-      expect(options.e2eCase.caseIds, [
-        'DEVICE-ACP-SYNC-E2E-001',
-        'DEVICE-ACP-SYNC-E2E-002',
-      ]);
     });
   });
 
@@ -2367,105 +2284,6 @@ cliHandle: legacy-cli
       );
 
       expect(config.personalAgentEnabled, isFalse);
-    });
-
-    test('defaults codex-agent case to enabled real backend', () {
-      final config = DesktopCliPeerConfig.from(
-        DesktopE2eOptions.parse(const <String>['--case', 'codex-agent']),
-        const DesktopE2eFileConfig(
-          path: '/tmp/e2e.local.yaml',
-          platform: DesktopE2ePlatform.linux,
-          serviceBaseUrl: 'https://service.example.test',
-          didDomain: 'example.test',
-          otpPhone: 'test-phone-secret',
-          otpCode: 'test-otp-secret',
-          appHandle: 'app-from-file',
-          cliHandle: 'cli-from-file',
-          cliBin: '/tmp/file-awiki-cli',
-        ),
-      );
-
-      expect(config.codexAgentEnabled, isTrue);
-      expect(config.codexAgentRealBackend, isTrue);
-    });
-
-    test('rejects codex-agent case when YAML disables it', () {
-      expect(
-        () => DesktopCliPeerConfig.from(
-          DesktopE2eOptions.parse(const <String>['--case', 'codex-agent']),
-          const DesktopE2eFileConfig(
-            path: '/tmp/e2e.local.yaml',
-            platform: DesktopE2ePlatform.linux,
-            serviceBaseUrl: 'https://service.example.test',
-            didDomain: 'example.test',
-            codexAgentEnabled: false,
-            otpPhone: 'test-phone-secret',
-            otpCode: 'test-otp-secret',
-            appHandle: 'app-from-file',
-            cliHandle: 'cli-from-file',
-            cliBin: '/tmp/file-awiki-cli',
-          ),
-        ),
-        throwsA(
-          isA<E2eFailure>().having(
-            (error) => error.message,
-            'message',
-            'codexAgent.enabled must be true for --case codex-agent '
-                'in /tmp/e2e.local.yaml.',
-          ),
-        ),
-      );
-    });
-
-    test('defaults claude-code-agent case to enabled real backend', () {
-      final config = DesktopCliPeerConfig.from(
-        DesktopE2eOptions.parse(const <String>['--case', 'claude-code-agent']),
-        const DesktopE2eFileConfig(
-          path: '/tmp/e2e.local.yaml',
-          platform: DesktopE2ePlatform.linux,
-          serviceBaseUrl: 'https://service.example.test',
-          didDomain: 'example.test',
-          otpPhone: 'test-phone-secret',
-          otpCode: 'test-otp-secret',
-          appHandle: 'app-from-file',
-          cliHandle: 'cli-from-file',
-          cliBin: '/tmp/file-awiki-cli',
-        ),
-      );
-
-      expect(config.claudeCodeAgentEnabled, isTrue);
-      expect(config.claudeCodeAgentRealBackend, isTrue);
-    });
-
-    test('rejects claude-code-agent case when YAML disables it', () {
-      expect(
-        () => DesktopCliPeerConfig.from(
-          DesktopE2eOptions.parse(const <String>[
-            '--case',
-            'claude-code-agent',
-          ]),
-          const DesktopE2eFileConfig(
-            path: '/tmp/e2e.local.yaml',
-            platform: DesktopE2ePlatform.linux,
-            serviceBaseUrl: 'https://service.example.test',
-            didDomain: 'example.test',
-            claudeCodeAgentEnabled: false,
-            otpPhone: 'test-phone-secret',
-            otpCode: 'test-otp-secret',
-            appHandle: 'app-from-file',
-            cliHandle: 'cli-from-file',
-            cliBin: '/tmp/file-awiki-cli',
-          ),
-        ),
-        throwsA(
-          isA<E2eFailure>().having(
-            (error) => error.message,
-            'message',
-            'claudeCodeAgent.enabled must be true for --case '
-                'claude-code-agent in /tmp/e2e.local.yaml.',
-          ),
-        ),
-      );
     });
   });
 
@@ -4133,226 +3951,6 @@ performance:
       },
     );
 
-    test(
-      'writes Codex Agent runner report and deterministic run config',
-      () async {
-        final root = await Directory.systemTemp.createTemp(
-          'awiki_codex_agent_runner_test_',
-        );
-        addTearDown(() async {
-          if (await root.exists()) {
-            await root.delete(recursive: true);
-          }
-        });
-        _writeLocalConfig(
-          root,
-          platform: 'linux',
-          appHandle: 'codex-agent-app',
-          cliHandle: 'codex-agent-cli',
-          cliBin: '/tmp/fake-awiki-cli',
-          daemonRustRepo: '../awiki-cli-rs2-codex-agent',
-          daemonBinary: '/tmp/awiki-deamon',
-          daemonStateRoot: '.e2e/codex-daemon-state',
-          daemonReadyFile: '.e2e/codex-daemon-ready.json',
-          daemonEnvFile: '.e2e/codex-agent-cli.env',
-          daemonHandle: 'codex-agent-daemon',
-          codexAgentEnabled: true,
-          codexAgentRealBackend: true,
-          codexAgentPrompt: 'Reply exactly OK-CODEX-UNIT and nothing else',
-          codexAgentExpectedReply: 'OK-CODEX-UNIT',
-        );
-        final lines = <String>[];
-        final runner = DesktopE2eRunner(
-          root: root,
-          options: DesktopE2eOptions.parse(const <String>[
-            '--case',
-            'codex-agent',
-            '--dry-run',
-            '--run-id',
-            'run-codex-agent',
-          ]),
-          commands: DesktopCommandRunner(
-            root: root,
-            dryRun: true,
-            redactor: DesktopSecretRedactor(const <String>[
-              'test-phone-secret',
-              'test-otp-secret',
-            ]),
-            logLine: lines.add,
-          ),
-        );
-
-        await runner.run();
-
-        final log = lines.join('\n');
-        expect(log, contains('case: codex-agent'));
-        expect(
-          log,
-          contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/codex_agent_full_ui_test.dart -d linux',
-          ),
-        );
-
-        final timings = File(
-          '${root.path}/.e2e/codex-agent/run-codex-agent/reports/timings.json',
-        );
-        final decoded =
-            jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
-        expect(decoded['scenario'], 'codex-agent-full-ui');
-        expect(decoded['case'], 'codex-agent');
-        expect(decoded['caseIds'], <dynamic>[
-          'CODEXAGENT-E2E-001',
-          'CODEXAGENT-E2E-002',
-          'CODEXAGENT-E2E-003',
-          'CODEXAGENT-E2E-004',
-        ]);
-        final codexAgent = decoded['codexAgent'] as Map<String, dynamic>;
-        expect(codexAgent['enabled'], isTrue);
-        expect(codexAgent['realBackend'], isTrue);
-        expect(codexAgent['expectedReply'], 'OK-CODEX-UNIT');
-        expect(codexAgent['prompt'], '<redacted-deterministic-prompt>');
-
-        final runConfig = File(
-          '${root.path}/.e2e/codex-agent/current/run_config.json',
-        );
-        expect(runConfig.existsSync(), isTrue);
-        final runConfigJson =
-            jsonDecode(await runConfig.readAsString()) as Map<String, dynamic>;
-        expect(runConfigJson['case'], 'codex-agent');
-        final daemon = runConfigJson['daemon'] as Map<String, dynamic>;
-        expect(daemon['binary'], '/tmp/awiki-deamon');
-        expect(daemon['stateRoot'], '${root.path}/.e2e/codex-daemon-state');
-        expect(
-          daemon['readyFile'],
-          '${root.path}/.e2e/codex-daemon-ready.json',
-        );
-        expect(daemon['envFile'], '${root.path}/.e2e/codex-agent-cli.env');
-        final runCodexAgent =
-            runConfigJson['codexAgent'] as Map<String, dynamic>;
-        expect(runCodexAgent['enabled'], isTrue);
-        expect(runCodexAgent['realBackend'], isTrue);
-        expect(
-          runCodexAgent['prompt'],
-          'Reply exactly OK-CODEX-UNIT and nothing else',
-        );
-        expect(runCodexAgent['expectedReply'], 'OK-CODEX-UNIT');
-      },
-    );
-
-    test(
-      'writes Claude Code Agent runner report and deterministic run config',
-      () async {
-        final root = await Directory.systemTemp.createTemp(
-          'awiki_claude_code_agent_runner_test_',
-        );
-        addTearDown(() async {
-          if (await root.exists()) {
-            await root.delete(recursive: true);
-          }
-        });
-        _writeLocalConfig(
-          root,
-          platform: 'linux',
-          appHandle: 'claude-code-agent-app',
-          cliHandle: 'claude-code-agent-cli',
-          cliBin: '/tmp/fake-awiki-cli',
-          daemonRustRepo: '../awiki-cli-rs2-claude-code-agent',
-          daemonBinary: '/tmp/awiki-deamon',
-          daemonStateRoot: '.e2e/claude-code-daemon-state',
-          daemonReadyFile: '.e2e/claude-code-daemon-ready.json',
-          daemonEnvFile: '.e2e/claude-code-agent-cli.env',
-          daemonHandle: 'claude-code-agent-daemon',
-          claudeCodeAgentEnabled: true,
-          claudeCodeAgentRealBackend: true,
-          claudeCodeAgentPrompt:
-              'Reply exactly OK-CLAUDE-CODE-UNIT and nothing else',
-          claudeCodeAgentExpectedReply: 'OK-CLAUDE-CODE-UNIT',
-        );
-        final lines = <String>[];
-        final runner = DesktopE2eRunner(
-          root: root,
-          options: DesktopE2eOptions.parse(const <String>[
-            '--case',
-            'claude-code-agent',
-            '--dry-run',
-            '--run-id',
-            'run-claude-code-agent',
-          ]),
-          commands: DesktopCommandRunner(
-            root: root,
-            dryRun: true,
-            redactor: DesktopSecretRedactor(const <String>[
-              'test-phone-secret',
-              'test-otp-secret',
-            ]),
-            logLine: lines.add,
-          ),
-        );
-
-        await runner.run();
-
-        final log = lines.join('\n');
-        expect(log, contains('case: claude-code-agent'));
-        expect(
-          log,
-          contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/claude_code_agent_full_ui_test.dart -d linux',
-          ),
-        );
-
-        final timings = File(
-          '${root.path}/.e2e/claude-code-agent/run-claude-code-agent/reports/timings.json',
-        );
-        final decoded =
-            jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
-        expect(decoded['scenario'], 'claude-code-agent-full-ui');
-        expect(decoded['case'], 'claude-code-agent');
-        expect(decoded['caseIds'], <dynamic>[
-          'CLAUDECODEAGENT-E2E-001',
-          'CLAUDECODEAGENT-E2E-002',
-          'CLAUDECODEAGENT-E2E-003',
-          'CLAUDECODEAGENT-E2E-004',
-        ]);
-        final claudeCodeAgent =
-            decoded['claudeCodeAgent'] as Map<String, dynamic>;
-        expect(claudeCodeAgent['enabled'], isTrue);
-        expect(claudeCodeAgent['realBackend'], isTrue);
-        expect(claudeCodeAgent['expectedReply'], 'OK-CLAUDE-CODE-UNIT');
-        expect(claudeCodeAgent['prompt'], '<redacted-deterministic-prompt>');
-
-        final runConfig = File(
-          '${root.path}/.e2e/claude-code-agent/current/run_config.json',
-        );
-        expect(runConfig.existsSync(), isTrue);
-        final runConfigJson =
-            jsonDecode(await runConfig.readAsString()) as Map<String, dynamic>;
-        expect(runConfigJson['case'], 'claude-code-agent');
-        final daemon = runConfigJson['daemon'] as Map<String, dynamic>;
-        expect(daemon['binary'], '/tmp/awiki-deamon');
-        expect(
-          daemon['stateRoot'],
-          '${root.path}/.e2e/claude-code-daemon-state',
-        );
-        expect(
-          daemon['readyFile'],
-          '${root.path}/.e2e/claude-code-daemon-ready.json',
-        );
-        expect(
-          daemon['envFile'],
-          '${root.path}/.e2e/claude-code-agent-cli.env',
-        );
-        final runClaudeCodeAgent =
-            runConfigJson['claudeCodeAgent'] as Map<String, dynamic>;
-        expect(runClaudeCodeAgent['enabled'], isTrue);
-        expect(runClaudeCodeAgent['realBackend'], isTrue);
-        expect(
-          runClaudeCodeAgent['prompt'],
-          'Reply exactly OK-CLAUDE-CODE-UNIT and nothing else',
-        );
-        expect(runClaudeCodeAgent['expectedReply'], 'OK-CLAUDE-CODE-UNIT');
-      },
-    );
-
     test('generates macOS Flutter command without Xvfb', () async {
       final root = await Directory.systemTemp.createTemp(
         'awiki_desktop_cli_peer_runner_macos_test_',
@@ -5034,16 +4632,6 @@ void _writeLocalConfig(
   bool personalAgentEnabled = false,
   bool personalAgentRealBackend = false,
   bool includePersonalAgent = true,
-  bool codexAgentEnabled = false,
-  bool codexAgentRealBackend = false,
-  String? codexAgentPrompt,
-  String? codexAgentExpectedReply,
-  bool includeCodexAgent = true,
-  bool claudeCodeAgentEnabled = false,
-  bool claudeCodeAgentRealBackend = false,
-  String? claudeCodeAgentPrompt,
-  String? claudeCodeAgentExpectedReply,
-  bool includeClaudeCodeAgent = true,
   String performanceBlock = '',
 }) {
   final messageService = messageServiceUrl == null
@@ -5074,34 +4662,6 @@ personalAgent:
   realBackend: $personalAgentRealBackend
 '''
       : '';
-  final codexPromptLine = codexAgentPrompt == null
-      ? ''
-      : '  prompt: "$codexAgentPrompt"\n';
-  final codexExpectedReplyLine = codexAgentExpectedReply == null
-      ? ''
-      : '  expectedReply: "$codexAgentExpectedReply"\n';
-  final codexAgent = includeCodexAgent
-      ? '''
-codexAgent:
-  enabled: $codexAgentEnabled
-  realBackend: $codexAgentRealBackend
-$codexPromptLine$codexExpectedReplyLine
-'''
-      : '';
-  final claudeCodePromptLine = claudeCodeAgentPrompt == null
-      ? ''
-      : '  prompt: "$claudeCodeAgentPrompt"\n';
-  final claudeCodeExpectedReplyLine = claudeCodeAgentExpectedReply == null
-      ? ''
-      : '  expectedReply: "$claudeCodeAgentExpectedReply"\n';
-  final claudeCodeAgent = includeClaudeCodeAgent
-      ? '''
-claudeCodeAgent:
-  enabled: $claudeCodeAgentEnabled
-  realBackend: $claudeCodeAgentRealBackend
-$claudeCodePromptLine$claudeCodeExpectedReplyLine
-'''
-      : '';
   File('${root.path}/tests/e2e/configs/e2e.local.yaml')
     ..createSync(recursive: true)
     ..writeAsStringSync('''
@@ -5111,7 +4671,7 @@ service:
   didDomain: $didDomain
 $messageService
 $messageServiceWs
-$daemon$personalAgent$codexAgent$claudeCodeAgent$performanceBlock
+$daemon$personalAgent$performanceBlock
 otp:
   phone: test-phone-secret
   code: $otpCode

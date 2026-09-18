@@ -8,15 +8,8 @@
 //        copied state, fake Core, static OTP, or secret-bearing evidence.
 
 import 'dart:async';
-import 'package:awiki_me/src/domain/entities/agent/acp_session.dart';
-import 'package:awiki_me/src/presentation/agents/acp_session_provider.dart';
-import 'package:awiki_me/src/presentation/agents/acp_model_controller.dart';
-import 'package:awiki_me/src/presentation/agents/acp_task_status.dart';
-import '../support/coding_agent_oracles.dart';
-import '../support/coding_agent_diagnostics.dart';
 import 'dart:convert';
 import 'dart:io';
-import '../support/app_pair_target.dart';
 
 import '../../root_transfer_fixture_state.dart';
 import '../../root_transfer_registry_observer.dart';
@@ -94,7 +87,6 @@ import '../support/join_admin_response_gate.dart';
 
 part 'multi_device_app_pair_ui_test.part.dart';
 part 'multi_device_app_pair_content_sync_test.part.dart';
-part 'multi_device_app_pair_acp_test.part.dart';
 part 'multi_device_app_pair_paging_recovery_test.part.dart';
 part 'dsh_device_join_interop_test.part.dart';
 
@@ -1718,7 +1710,6 @@ class _AppPairRunConfig implements _CliEndpointConfig {
     required this.coordinator,
     required this.functional,
     required this.contentSync,
-    required this.acp,
     required this.automatedUserPresence,
     required this.cliBin,
     required this.cliSourceRef,
@@ -1756,7 +1747,6 @@ class _AppPairRunConfig implements _CliEndpointConfig {
   final AppPairCoordinatorClient coordinator;
   final bool functional;
   final bool contentSync;
-  final bool acp;
   final bool automatedUserPresence;
   @override
   bool get multiDeviceDirectE2eeEnabled => false;
@@ -1806,21 +1796,16 @@ class _AppPairRunConfig implements _CliEndpointConfig {
     final contentSync = root['contentSync'] is Map
         ? _stringMap(root['contentSync'] as Map)
         : const <String, Object?>{};
-    final acp = root['acp'] is Map
-        ? _stringMap(root['acp'] as Map)
-        : const <String, Object?>{};
-    if ([functional, contentSync, acp].where((mode) => mode.isNotEmpty).length >
-        1) {
+    if (functional.isNotEmpty && contentSync.isNotEmpty) {
       throw StateError('The App-pair modes are mutually exclusive.');
     }
-    final agentMode = functional.isNotEmpty ? functional : acp;
-    final cliContainer = agentMode.isNotEmpty ? agentMode : contentSync;
+    final cliContainer = functional.isNotEmpty ? functional : contentSync;
     final cliPeer = cliContainer.isEmpty
         ? const <String, Object?>{}
         : _map(cliContainer, 'cliPeer');
-    final daemon = agentMode.isEmpty
+    final daemon = functional.isEmpty
         ? const <String, Object?>{}
-        : _map(agentMode, 'daemon');
+        : _map(functional, 'daemon');
     final accountState = functional.isEmpty
         ? const <String, Object?>{}
         : _map(functional, 'accountState');
@@ -1850,7 +1835,6 @@ class _AppPairRunConfig implements _CliEndpointConfig {
       ),
       functional: functional.isNotEmpty,
       contentSync: contentSync.isNotEmpty,
-      acp: acp.isNotEmpty,
       automatedUserPresence: _requiredBool(
         testControl,
         'automatedUserPresence',
@@ -1859,16 +1843,17 @@ class _AppPairRunConfig implements _CliEndpointConfig {
       cliSourceRef: cliContainer.isEmpty ? '' : _required(cliPeer, 'sourceRef'),
       cliWorkspace: cliContainer.isEmpty ? '' : _required(cliPeer, 'workspace'),
       cliHome: cliContainer.isEmpty ? '' : _required(cliPeer, 'home'),
-      daemonBinary: agentMode.isEmpty ? '' : _required(daemon, 'binary'),
-      daemonStateRoot: agentMode.isEmpty ? '' : _required(daemon, 'stateRoot'),
-      daemonReadyFile: agentMode.isEmpty ? '' : _required(daemon, 'readyFile'),
-      daemonHandle: agentMode.isEmpty ? '' : _required(daemon, 'handle'),
-      daemonEnvFile: agentMode.isEmpty ? null : daemon['envFile']?.toString(),
+      daemonBinary: functional.isEmpty ? '' : _required(daemon, 'binary'),
+      daemonStateRoot: functional.isEmpty ? '' : _required(daemon, 'stateRoot'),
+      daemonReadyFile: functional.isEmpty ? '' : _required(daemon, 'readyFile'),
+      daemonHandle: functional.isEmpty ? '' : _required(daemon, 'handle'),
+      daemonEnvFile: functional.isEmpty ? null : daemon['envFile']?.toString(),
       accountStateOperatorCommand: functional.isEmpty
           ? const <String>[]
           : _requiredStringList(accountState, 'operatorCommand'),
     );
-    if (config.adminStateRoot == config.joinerStateRoot) {
+    if (config.didDomain != 'awiki.info' ||
+        config.adminStateRoot == config.joinerStateRoot) {
       throw StateError('The App-pair target or state isolation is invalid.');
     }
     if (!config.automatedUserPresence) {
@@ -1877,18 +1862,19 @@ class _AppPairRunConfig implements _CliEndpointConfig {
         'user-presence port.',
       );
     }
-    validateAppPairRemoteTarget(
-      acp: config.acp,
-      didDomain: config.didDomain,
-      serviceUrls: <String>[
-        config.baseUrl,
-        config.userServiceUrl,
-        config.messageServiceUrl,
-        config.mailServiceUrl,
-        config.anpServiceUrl,
-      ],
-    );
-    if (config.functional || config.acp) {
+    for (final value in <String>[
+      config.baseUrl,
+      config.userServiceUrl,
+      config.messageServiceUrl,
+      config.mailServiceUrl,
+      config.anpServiceUrl,
+    ]) {
+      final uri = Uri.tryParse(value);
+      if (uri == null || uri.scheme != 'https' || uri.host != 'awiki.info') {
+        throw StateError('Remote multi-device service target is not audited.');
+      }
+    }
+    if (config.functional) {
       if (!config.automatedUserPresence ||
           config.cliBin.isEmpty ||
           config.cliSourceRef.isEmpty ||
@@ -1898,14 +1884,12 @@ class _AppPairRunConfig implements _CliEndpointConfig {
           config.daemonStateRoot.isEmpty ||
           config.daemonReadyFile.isEmpty ||
           config.daemonHandle.isEmpty ||
-          (config.functional && config.accountStateOperatorCommand.isEmpty)) {
+          config.accountStateOperatorCommand.isEmpty) {
         throw StateError('The App-pair functional config is incomplete.');
       }
-      if (config.functional) {
-        _requireAccountStateOperatorEnvironment(
-          config.accountStateOperatorCommand,
-        );
-      }
+      _requireAccountStateOperatorEnvironment(
+        config.accountStateOperatorCommand,
+      );
       final isolatedPaths = <String>[
         config.adminStateRoot,
         config.joinerStateRoot,
