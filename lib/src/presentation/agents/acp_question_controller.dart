@@ -240,6 +240,14 @@ class AcpQuestionController extends StateNotifier<AcpQuestionDraft> {
     } on Object catch (error) {
       if (!_live) return;
       final uncertain = sent && error is! StateError;
+      final invalidAnswer =
+          error is StateError &&
+          const {
+            'answer_pattern_mismatch',
+            'answer_format_mismatch',
+            'answer_size_limit',
+            'answer_text_too_long',
+          }.contains(error.message);
       if (!uncertain) {
         _command = null;
         _args = null;
@@ -248,7 +256,11 @@ class AcpQuestionController extends StateNotifier<AcpQuestionDraft> {
         data: state.data,
         phase: uncertain ? AcpAnswerPhase.uncertain : AcpAnswerPhase.editing,
         action: uncertain ? state.action : null,
-        error: sent ? 'answer_not_accepted' : 'draft_save_failed',
+        error: !sent
+            ? 'draft_save_failed'
+            : invalidAnswer
+            ? 'answer_validation_failed'
+            : 'answer_not_accepted',
       );
     }
     try {

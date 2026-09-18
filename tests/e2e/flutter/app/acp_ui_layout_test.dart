@@ -1,5 +1,6 @@
 // Native rendering/interaction smoke with injected ACP states and a recording
 // transport. This does not attest a real daemon or model call.
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -18,12 +19,65 @@ import '../../../unit/acp_responsive_test.dart'
     show acpSurface, richQuestion, captureKey;
 import '../../../unit/acp_runtime_test.dart'
     show snapshot, RecordingControl, control;
+import '../../../unit/acp_question_v2_test.dart' show question, surface;
 
 import '../../../unit/agents/runtime_client_inspection_test.dart'
     show installationSurface, FakeClientInspection;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets('native question format rejection retains editable input', (
+    tester,
+  ) async {
+    final service = RecordingControl()..completion = Completer();
+    final q = question(shared: false);
+    q['request'] = {
+      'message': 'Use lowercase letters',
+      'requestedSchema': {
+        'type': 'object',
+        'required': ['value'],
+        'properties': {
+          'value': {'type': 'string', 'pattern': r'^(a+)+$'},
+        },
+      },
+    };
+    await tester.pumpWidget(
+      RepaintBoundary(key: captureKey, child: surface(service, q)),
+    );
+    await tester.pumpAndSettle();
+    final original = '${'a' * 18}!';
+    await tester.enterText(find.byType(CupertinoTextField), original);
+    await tester.ensureVisible(find.text('Submit answer'));
+    await tester.tap(find.text('Submit answer'));
+    await tester.pump();
+    expect(service.requests, hasLength(1));
+    service.completion!.completeError(StateError('answer_pattern_mismatch'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('The answer does not meet the requirements.'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+          .controller!
+          .text,
+      original,
+    );
+    await _capture(tester, 'question-validation');
+    service.completion = null;
+    await tester.enterText(find.byType(CupertinoTextField), 'aaa');
+    await tester.ensureVisible(find.text('Submit answer'));
+    await tester.tap(find.text('Submit answer'));
+    await tester.pumpAndSettle();
+    expect(service.requests, hasLength(2));
+    expect(
+      find.text('Answer received. Waiting for the agent.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets('native installation detection preserves host and draft', (
     tester,
   ) async {

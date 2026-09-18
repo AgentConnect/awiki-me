@@ -66,6 +66,86 @@ Future<void> tap(WidgetTester tester, Finder finder) async {
 
 void main() {
   testWidgets(
+    'agent regex patterns are submitted without running on the UI isolate',
+    (tester) async {
+      final service = RecordingControl();
+      final q = question(shared: false);
+      q['request'] = {
+        'message': 'Enter a value',
+        'requestedSchema': {
+          'type': 'object',
+          'required': ['value'],
+          'properties': {
+            'value': {'type': 'string', 'pattern': r'^(a+)+$'},
+          },
+        },
+      };
+      await tester.pumpWidget(surface(service, q));
+      // Kept short so this regression fails safely if local matching returns.
+      final input = '${'a' * 18}!';
+      await tester.enterText(find.byType(CupertinoTextField), input);
+      await tap(tester, find.text('Submit answer'));
+      expect(service.requests, hasLength(1));
+      final response = acpMap(
+        acpMap(service.requests.single['args'])['response'],
+      );
+      expect(response['content'], {'value': input});
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'daemon format rejection keeps text editable and allows a corrected answer',
+    (tester) async {
+      final service = RecordingControl()..completion = Completer();
+      final q = question(shared: false);
+      q['request'] = {
+        'message': 'Use uppercase letters',
+        'requestedSchema': {
+          'type': 'object',
+          'required': ['code'],
+          'properties': {
+            'code': {'type': 'string', 'pattern': r'^[A-Z]+$'},
+          },
+        },
+      };
+      await tester.pumpWidget(surface(service, q));
+      await tester.enterText(find.byType(CupertinoTextField), 'abc');
+      await tap(tester, find.text('Submit answer'));
+      expect(service.requests, hasLength(1));
+      service.completion!.completeError(StateError('answer_pattern_mismatch'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('The answer does not meet the requirements.'),
+        findsOneWidget,
+      );
+      final field = tester.widget<CupertinoTextField>(
+        find.byType(CupertinoTextField),
+      );
+      expect(field.controller!.text, 'abc');
+      expect(field.enabled, isNot(false));
+      service.completion = null;
+      await tester.enterText(find.byType(CupertinoTextField), 'ABC');
+      await tap(tester, find.text('Submit answer'));
+      expect(service.requests, hasLength(2));
+      expect(
+        service.requests[0]['command'],
+        isNot(service.requests[1]['command']),
+      );
+      expect(
+        acpMap(acpMap(service.requests.last['args'])['response'])['content'],
+        {'code': 'ABC'},
+      );
+      expect(
+        find.text('Answer received. Waiting for the agent.'),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
     'accepted answer history expands with actual labels and supplement after interruption',
     (tester) async {
       await tester.pumpWidget(

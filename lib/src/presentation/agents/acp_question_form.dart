@@ -279,6 +279,12 @@ class _AcpQuestionFormState extends ConsumerState<AcpQuestionForm>
             '回答尚未确认。内容已保留，可重试同一操作。',
             'Response not confirmed. Your answer is kept; retry the same action.',
           )
+        : _draft.error == 'answer_validation_failed'
+        ? acpText(
+            context,
+            '回答不符合要求，内容已保留。请根据问题说明修改后重新提交。',
+            'The answer does not meet the requirements. Your input is kept; check the question instructions, edit and submit again.',
+          )
         : _draft.error != null
         ? acpText(
             context,

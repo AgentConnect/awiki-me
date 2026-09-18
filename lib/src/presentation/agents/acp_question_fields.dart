@@ -91,15 +91,9 @@ String? _validateQuestionField(
     if (max is int && value.runes.length > max) {
       return text('请不要超过 $max 个字符。', 'Use no more than $max characters.');
     }
-    if (p['pattern'] is String) {
-      try {
-        if (!RegExp(p['pattern']! as String).hasMatch(value)) {
-          return text('输入不符合要求，请检查格式。', 'Check the required format.');
-        }
-      } on FormatException {
-        /* The daemon validates patterns outside Dart's regex syntax. */
-      }
-    }
+    // Agent-supplied patterns belong to the daemon's bounded Rust validator.
+    // Dart backtracking on the UI isolate can freeze the form, and its regex
+    // dialect can disagree with the authoritative validator.
     final format = p['format'];
     final valid = switch (format) {
       'email' => RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value),

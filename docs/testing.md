@@ -74,7 +74,7 @@ AWIKI_ACP_UI_ARTIFACTS=<输出目录> AWIKI_ACP_REVIEW_FONT=<本机完整中文�
 flutter test --no-pub integration_test/acp_ui_layout_test.dart -d <隔离模拟器ID>
 ```
 
-原生 UI smoke 注入 ACP 快照并记录控制请求，检查真实平台上的选项、文本补充、模型搜索与选择；它不访问模型、账号或 Daemon，不证明真实模型兼容性。截图写入测试 APP 的临时目录，需在 runner 卸载 APP 前保存。UI 本地校验不替代 Daemon 的权威答案校验。
+原生 UI smoke 注入 ACP 快照并记录控制请求，检查真实平台上的选项、文本补充、模型搜索与选择，以及格式被 Daemon 拒绝后保留输入、继续编辑并重交；它不访问模型、账号或 Daemon，不证明真实模型兼容性。截图写入测试 APP 的临时目录，需在 runner 卸载 APP 前保存。UI 本地校验不替代 Daemon 的权威答案校验，尤其不执行智能体提供的正则。macOS 可用 `-d macos --plain-name 'native question format rejection retains editable input'` 定向运行该问答用例。
 
 ## Unit Gate
 
