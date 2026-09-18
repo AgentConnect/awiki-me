@@ -6,6 +6,21 @@ import '../../e2e/app_pair_cleanup_contract.dart';
 import '../../e2e/app_pair_protocol.dart';
 
 void main() {
+  test('cleanup requires the approved App-pair handle namespace', () {
+    expect(() => validateAppPairCleanupHandlePrefix('appmd'), returnsNormally);
+    for (final prefix in <String>[
+      'app0123456789ab',
+      'appmd0123',
+      'systestmd',
+      'custom',
+    ]) {
+      expect(
+        () => validateAppPairCleanupHandlePrefix(prefix),
+        throwsFormatException,
+      );
+    }
+  });
+
   test('cleanup readiness requires the exact read-only operator receipt', () {
     final receipt = {
       'schemaVersion': 1,

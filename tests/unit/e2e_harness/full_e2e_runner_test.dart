@@ -206,6 +206,57 @@ void main() {
     expect(report('prepare')['passedCaseIds'], isEmpty);
   });
 
+  Future<_LeafCommands> runFixtureEnvironment(String id) async {
+    final commands = _LeafCommands(root);
+    final native = File('${root.path}/native.json')..writeAsStringSync('{}');
+    await runDesktopFull(
+      root: root,
+      options: options(id),
+      commands: commands,
+      environment: {productionKeychainManifestEnv: native.path},
+    );
+    return commands;
+  }
+
+  test('full fixture prefix stays within the Recovery handle limit', () async {
+    final commands = await runFixtureEnvironment('recovery-prefix');
+    for (final suite in <String>[
+      'multi-device-remote-recovery',
+      'multi-device-app-pair-recovery-registration-rejoin-management-transfer',
+      'multi-device-app-pair-recovery-retirement-ordinary-rejoin',
+    ]) {
+      final environment = commands.environments[commands.suites.indexOf(suite)];
+      final prefix = environment['AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX']!;
+      final externalHandle = '${prefix}external0123456789';
+      expect(
+        RegExp(r'^[a-z0-9-]{2,32}$').hasMatch(externalHandle),
+        isTrue,
+        reason:
+            '$suite must leave room for the external fixture suffix and nonce',
+      );
+    }
+  });
+
+  test(
+    'full fixture namespace remains authorized for App-pair cleanup',
+    () async {
+      final commands = await runFixtureEnvironment('cleanup-prefix');
+      for (final suite in <String>[
+        'multi-device-app-pair-functional',
+        'multi-device-app-pair-paging-recovery',
+      ]) {
+        final environment =
+            commands.environments[commands.suites.indexOf(suite)];
+        final prefix = environment['AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX']!;
+        expect(
+          RegExp(r'^appmd[a-z0-9]{10}$').hasMatch('${prefix}0123456789'),
+          isTrue,
+          reason: '$suite must satisfy the existing User Service cleanup fence',
+        );
+      }
+    },
+  );
+
   test(
     'missing native prerequisite is blocked, not a fabricated pass',
     () async {

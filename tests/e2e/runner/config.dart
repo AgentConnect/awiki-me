@@ -79,7 +79,8 @@ class _RemoteMultiDeviceBaseConfig {
       );
     }
     final handlePrefix =
-        (environment[_multiDeviceRemoteHandlePrefixEnv] ?? 'appmd')
+        (environment[_multiDeviceRemoteHandlePrefixEnv] ??
+                appPairCleanupHandlePrefix)
             .trim()
             .toLowerCase();
     if (handlePrefix.length > 20 ||
