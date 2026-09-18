@@ -21,14 +21,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../test_support.dart';
 
-Map<String, Object?> installationJson({String ready = 'opencode'}) => {
+Map<String, Object?> installationJson({
+  String ready = 'opencode',
+  String? version = '1.2.3',
+}) => {
   'schema_version': 1,
   'clients': [
     for (final kind in RuntimeAgentKind.values)
       {
         'kind': kind.runtime,
         'status': kind.runtime == ready ? 'ready' : 'missing',
-        'version': kind.runtime == ready ? '1.2.3' : null,
+        'version': kind.runtime == ready ? version : null,
         'reason_code': kind.runtime == ready ? null : 'not_found',
       },
   ],
@@ -226,6 +229,36 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+
+  for (final version in <String?>['0.15.1rc2+local', null]) {
+    testWidgets('Hermes remains selectable with optional version $version', (
+      tester,
+    ) async {
+      final service = FakeClientInspection()
+        ..report = RuntimeClientInstallationReport.parse(
+          installationJson(ready: 'hermes', version: version),
+        );
+      await openInstallationDialog(tester, service);
+      expect(
+        find.text(version == null ? '已检测到' : '已检测到 · $version'),
+        findsOneWidget,
+      );
+      await tester.enterText(
+        find.byKey(const Key('agent-create-handle-field')),
+        'hermes-version-test',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<AppPrimaryButton>(
+              find.widgetWithText(AppPrimaryButton, '创建'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
 
   for (final scale in [1.0, 2.5]) {
     testWidgets('installation dialog fits narrow window at scale $scale', (
