@@ -18,6 +18,7 @@ import '../shared/app_dialog.dart';
 part 'acp_action_button.dart';
 part 'acp_question_form.dart';
 part 'acp_session_options.dart';
+part 'acp_context_recovery.dart';
 part 'acp_model_bar.dart';
 part 'acp_question_fields.dart';
 part 'acp_question_history.dart';

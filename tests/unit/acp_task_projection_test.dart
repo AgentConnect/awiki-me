@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
+import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/acp_session_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agent_visual_status.dart';
@@ -26,7 +28,12 @@ const _inventory = [
     activeState: 'active',
     latest: AgentLatestStatus(status: 'ready'),
     recentRuns: [
-      AgentRunStatus(runId: 'a', messageId: 'message-a', runtimeAgentDid: _agent, status: 'running'),
+      AgentRunStatus(
+        runId: 'a',
+        messageId: 'message-a',
+        runtimeAgentDid: _agent,
+        status: 'running',
+      ),
     ],
   ),
 ];
@@ -128,14 +135,19 @@ class _ProjectionHarness extends AcpSessionController {
 
 class _ChatHarness extends ChatThreadsController {
   _ChatHarness(super.ref);
-  void pending(List<String> runs) {
+  void pending(
+    List<String> runs, {
+    String route = _route,
+    String agent = _agent,
+  }) {
     state = {
-      _route: ChatThreadState(
-        threadId: _route,
+      ...state,
+      route: ChatThreadState(
+        threadId: route,
         agentPendingTurns: [
           for (final run in runs)
             AgentPendingTurn(
-              agentDid: _agent,
+              agentDid: agent,
               localMessageId: 'local-$run',
               remoteMessageId: 'message-$run',
               startedAt: DateTime.utc(2026),
@@ -147,6 +159,119 @@ class _ChatHarness extends ChatThreadsController {
 }
 
 void main() {
+  test(
+    'rejection arriving before send acknowledgement leaves no reservation',
+    () async {
+      final gateway = FakeAwikiGateway()
+        ..nextSentMessageId = 'message-early'
+        ..sendTextMessageCompleter = Completer<void>();
+      final container = ProviderContainer(
+        overrides: [
+          ...fakeApplicationServiceOverrides(gateway),
+          notificationFacadeProvider.overrideWithValue(
+            FakeNotificationFacade(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me',
+              displayName: 'Me',
+            ),
+          );
+      final chat = container.read(chatThreadsProvider.notifier);
+      final conversation = ConversationSummary(
+        conversationId: _route,
+        threadId: _route,
+        targetDid: _agent,
+        displayName: 'Agent',
+        lastMessagePreview: '',
+        lastMessageAt: DateTime.utc(2026),
+        unreadCount: 0,
+        isGroup: false,
+      );
+      final sending = chat.sendMessage(
+        conversation: conversation,
+        content: 'hello',
+        expectedAgentReplyDid: _agent,
+      );
+      container
+          .read(acpSessionsProvider.notifier)
+          .applyConversation(
+            _message({
+              'schema': 'awiki.acp.status.v1',
+              'acp_rejection': {
+                'schema': 'awiki.acp.rejection.v1',
+                'agent_did': _agent,
+                'source_message_id': 'message-early',
+                'reason': 'waiting_slot_full',
+              },
+            }),
+            _route,
+          );
+      gateway.sendTextMessageCompleter!.complete();
+      await sending;
+      expect(gateway.sendTextMessageCalls, 1);
+      expect(
+        chat.thread(_route).messages.any((m) => m.remoteId == 'message-early'),
+        isTrue,
+      );
+      expect(chat.thread(_route).agentPendingTurns, isEmpty);
+      expect(container.read(acpSessionsProvider).rejections, hasLength(1));
+    },
+  );
+  for (final reason in ['group_busy', 'waiting_slot_full']) {
+    test('$reason settles only the rejected route, agent and message', () {
+      final gateway = FakeAwikiGateway();
+      final container = ProviderContainer(
+        overrides: [
+          ...fakeApplicationServiceOverrides(gateway),
+          notificationFacadeProvider.overrideWithValue(
+            FakeNotificationFacade(),
+          ),
+          chatThreadsProvider.overrideWith((ref) => _ChatHarness(ref)),
+        ],
+      );
+      addTearDown(container.dispose);
+      final chat = container.read(chatThreadsProvider.notifier) as _ChatHarness;
+      chat.pending(['a', 'b']);
+      chat.pending(['a'], route: 'other-route');
+      final projection = container.read(acpSessionsProvider.notifier);
+      void reject(String agent) => projection.applyConversation(
+        _message({
+          'schema': 'awiki.acp.status.v1',
+          'acp_rejection': {
+            'schema': 'awiki.acp.rejection.v1',
+            'agent_did': agent,
+            'conversation_id': 'remote-alias',
+            'source_message_id': 'message-a',
+            'reason': reason,
+          },
+        }, sender: agent),
+        _route,
+      );
+      reject('did:other-agent');
+      expect(chat.thread(_route).agentPendingTurns, hasLength(2));
+      reject(_agent);
+      expect(
+        chat.thread(_route).agentPendingTurns.single.remoteMessageId,
+        'message-b',
+      );
+      expect(chat.thread('other-route').agentPendingTurns, hasLength(1));
+      expect(
+        container.read(acpSessionsProvider).rejections,
+        hasLength(2),
+        reason: 'Multiple mentioned agents must retain separate rejections',
+      );
+      reject(_agent);
+      expect(chat.thread(_route).agentPendingTurns, hasLength(1));
+    });
+  }
+
   test(
     'background records converge without inventing another conversation route',
     () {

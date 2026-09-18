@@ -29,40 +29,7 @@ class AcpSessionOptions extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (session.contextLost)
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.subtleSurface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: theme.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    acpBlockText(context, AcpSendBlock.contextLost),
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.5,
-                      color: theme.body,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  AcpActionButton(
-                    session: session,
-                    action: 'reset_context',
-                    values: const {'confirmed': true},
-                    enabled: !session.busy,
-                    label: acpText(context, '重新开始', 'Start again'),
-                    confirmation: acpText(
-                      context,
-                      '确认建立新的上下文？现有聊天记录将保留。',
-                      'Start a new context? Existing chat history will be retained.',
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            AcpContextRecovery(session: session, online: online),
           if (!session.group)
             _AcpModelOperationStatus(
               scope: (

@@ -11,6 +11,12 @@ import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/chat_message.dart';
 import '../app_shell/providers/session_provider.dart';
 
+typedef AcpRejectionKey = ({
+  String agentDid,
+  String conversationId,
+  String sourceMessageId,
+});
+
 class AcpProjection {
   const AcpProjection({
     this.sessions = const {},
@@ -19,7 +25,17 @@ class AcpProjection {
     this.activity = const {},
   });
   final Map<String, AcpSession> sessions;
-  final Map<String, Map<String, Object?>> rejections;
+  final Map<AcpRejectionKey, Map<String, Object?>> rejections;
+  Iterable<Map<String, Object?>> rejectionsForMessage(
+    String conversationId,
+    Set<String> ids,
+  ) => rejections.entries
+      .where(
+        (e) =>
+            e.key.conversationId == conversationId &&
+            ids.contains(e.key.sourceMessageId),
+      )
+      .map((e) => e.value);
   final Map<String, AcpTask> tasks;
   final Map<String, AcpActivity> activity;
   List<AcpSession> forConversation(String id) => sessions.values
@@ -326,14 +342,23 @@ class AcpSessionController extends StateNotifier<AcpProjection> {
       return;
     }
     final source = rejection['source_message_id'];
-    if (source is! String || source.isEmpty) return;
+    final route = rejection['conversation_id'];
+    final agent = rejection['agent_did'];
+    if (source is! String ||
+        source.isEmpty ||
+        route is! String ||
+        route.isEmpty ||
+        agent is! String) {
+      return;
+    }
     state = AcpProjection(
       sessions: state.sessions,
       tasks: state.tasks,
       activity: state.activity,
       rejections: {
         ...state.rejections,
-        '${rejection['conversation_id']}:$source': rejection,
+        (agentDid: agent, conversationId: route, sourceMessageId: source):
+            rejection,
       },
     );
   }

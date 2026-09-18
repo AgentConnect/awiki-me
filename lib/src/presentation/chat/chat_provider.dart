@@ -5429,6 +5429,39 @@ class ChatThreadsController
         rememberCompletion: task.terminal,
       );
     }
+    // Admission rejection resolves only this device's optimistic send. It is
+    // not a completion of the agent's active task or of another mention.
+    final next = Map<String, ChatThreadState>.from(state);
+    final changed = <String>[];
+    for (final entry in state.entries) {
+      final route = _canonicalKeyForThreadId(entry.key);
+      final turns = entry.value.agentPendingTurns
+          .where((turn) {
+            return ![turn.localMessageId, turn.remoteMessageId].any(
+              (source) =>
+                  source != null &&
+                  projection.rejections.containsKey((
+                    agentDid: turn.agentDid,
+                    conversationId: route,
+                    sourceMessageId: source,
+                  )),
+            );
+          })
+          .toList(growable: false);
+      if (turns.length == entry.value.agentPendingTurns.length) continue;
+      next[entry.key] = entry.value.copyWith(agentPendingTurns: turns);
+      changed.add(entry.key);
+    }
+    if (changed.isNotEmpty) {
+      state = next;
+      for (final route in changed) {
+        if (next[route]!.agentPendingTurns.isEmpty) {
+          _cancelAgentProcessingTimer(route);
+        } else {
+          _scheduleAgentProcessingOverdue(route);
+        }
+      }
+    }
   }
 
   void applyAgentRunStatusPayload(Map<String, Object?> payload) {

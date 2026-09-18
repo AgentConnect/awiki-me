@@ -21,6 +21,52 @@ import '../../../unit/acp_runtime_test.dart'
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets('native group context recovery preserves draft and scope', (
+    tester,
+  ) async {
+    final service = RecordingControl();
+    final session = AcpSession.parse({
+      ...snapshot(group: true),
+      'session_key': 'native-group-session',
+      'active': {},
+      'waiting': {},
+      'context_lost': true,
+    })!;
+    await tester.pumpWidget(
+      acpSurface(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AcpContextRecovery(session: session, agentName: 'Coder'),
+            const CupertinoTextField(placeholder: 'Draft'),
+          ],
+        ),
+        service: service,
+        useSystemFont: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(CupertinoTextField), 'Keep this draft');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('acp-model-menu')), findsNothing);
+    await _capture(tester, 'group-recovery');
+    await tester.tap(
+      find.byKey(const Key('acp-reset_context:native-group-session')),
+    );
+    await tester.pumpAndSettle();
+    expect(service.requests, isEmpty);
+    await tester.tap(find.text('Confirm'));
+    await tester.pumpAndSettle();
+    expect(service.requests.single['args'], {
+      'session_key': 'native-group-session',
+      'revision': 1,
+      'action': 'reset_context',
+      'confirmed': true,
+    });
+    expect(find.text('Keep this draft'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets('native ACP question and model picker retain complete input', (
     tester,
   ) async {

@@ -69,6 +69,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+import 'acp_runtime_test.dart' show RecordingControl;
 
 Uint8List _tinyPngBytes() => base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
@@ -832,6 +833,118 @@ void main() {
       );
     }
   }
+
+  testWidgets('ACP lost group context exposes its own recovery action', (
+    tester,
+  ) async {
+    final gateway = FakeAwikiGateway();
+    final control = RecordingControl();
+    const groupDid = 'did:test:recovery-group';
+    final conversation = ConversationSummary(
+      conversationId: 'group:$groupDid',
+      threadId: 'group:$groupDid',
+      groupId: groupDid,
+      displayName: 'Group',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime.utc(2026),
+      unreadCount: 0,
+      isGroup: true,
+    );
+    final container = await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: [],
+      additionalProviderOverrides: [
+        acpControlServiceProvider.overrideWithValue(control),
+        agentsProvider.overrideWith((ref) {
+          final controller = AgentsController(ref);
+          controller.state = const AgentsState(
+            agents: [
+              AgentSummary(
+                agentDid: 'did:test:alice',
+                kind: AgentKind.runtime,
+                runtime: 'opencode',
+                displayName: 'OpenCode',
+                activeState: 'active',
+                latest: AgentLatestStatus(status: 'ready'),
+              ),
+            ],
+          );
+          return controller;
+        }),
+      ],
+    );
+    container
+        .read(acpSessionsProvider.notifier)
+        .applyConversation(
+          ChatMessage(
+            localId: 'lost',
+            threadId: conversation.threadId,
+            conversationId: conversation.conversationId,
+            groupId: groupDid,
+            senderDid: 'did:test:alice',
+            content: '',
+            createdAt: DateTime.utc(2026),
+            isMine: false,
+            sendState: MessageSendState.sent,
+            payloadJson: jsonEncode({
+              'schema': 'awiki.acp.status.v1',
+              'acp': {
+                'schema': 'awiki.acp.session.v1',
+                'session_key': 'group-session',
+                'agent_did': 'did:test:alice',
+                'conversation_id': 'remote-group',
+                'revision': 3,
+                'group': true,
+                'context_lost': true,
+              },
+            }),
+          ),
+          conversation.conversationId,
+        );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('acp-reset_context:group-session')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('acp-model-menu')), findsNothing);
+    await tester.enterText(find.byType(CupertinoTextField), '保留草稿');
+    await tester.tap(
+      find.byKey(const ValueKey('acp-reset_context:group-session')),
+    );
+    await tester.pumpAndSettle();
+    expect(control.requests, isEmpty);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(control.requests, isEmpty);
+    await tester.tap(
+      find.byKey(const ValueKey('acp-reset_context:group-session')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确认'));
+    await tester.pumpAndSettle();
+    expect(control.requests.single['agent'], 'did:test:alice');
+    expect(control.requests.single['args'], {
+      'action': 'reset_context',
+      'session_key': 'group-session',
+      'revision': 3,
+      'confirmed': true,
+    });
+    // A successful send alone cannot clear committed context_lost state.
+    expect(
+      find.byKey(const ValueKey('acp-reset_context:group-session')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+          .controller!
+          .text,
+      '保留草稿',
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   for (final blocker in ['offline', 'waiting_full', 'context_lost']) {
     testWidgets('ACP $blocker keeps text and attachment without sending', (

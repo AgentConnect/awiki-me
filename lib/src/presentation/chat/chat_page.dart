@@ -1085,6 +1085,16 @@ class _ChatViewState extends ConsumerState<ChatView> {
       groupMembers: mentionGroupMembers,
       agentInventory: agents,
     );
+    String acpAgentName(String did) =>
+        agents.where((a) => a.agentDid == did).firstOrNull?.displayName ??
+        ref.watch(
+          publicIdentityDisplayNameProvider(
+            PublicIdentityDisplayNameRequest(
+              did: did,
+              unknownLabel: context.l10n.conversationPeerTypeAgent,
+            ),
+          ),
+        );
     Widget acpReply(AcpTask task, {bool sourceUnavailable = false}) =>
         _AcpReplyPreview(
           task: task,
@@ -1357,13 +1367,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                   message.localId)
                                 task,
                           ];
-                          final acpRejections = [
-                            for (final id in acpMessageIds)
-                              if (acpProjection
-                                      .rejections['${currentConversation.conversationId}:$id']
-                                  case final rejection?)
-                                rejection,
-                          ];
+                          final acpRejections = acpProjection
+                              .rejectionsForMessage(
+                                currentConversation.conversationId,
+                                acpMessageIds,
+                              )
+                              .toList(growable: false);
                           final pendingTurns =
                               acpTasks.isNotEmpty || acpRejections.isNotEmpty
                               ? <AgentPendingTurn>[]
@@ -1505,10 +1514,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                                               top: 8,
                                                             ),
                                                         child: Text(
-                                                          acpRejectionText(
-                                                            context,
-                                                            rejection['reason'],
-                                                          ),
+                                                          (currentConversation
+                                                                      .isGroup
+                                                                  ? '${acpAgentName(rejection['agent_did'].toString())}：'
+                                                                  : '') +
+                                                              acpRejectionText(
+                                                                context,
+                                                                rejection['reason'],
+                                                              ),
                                                           style: TextStyle(
                                                             fontSize: 12,
                                                             height: 1.4,
@@ -1654,6 +1667,56 @@ class _ChatViewState extends ConsumerState<ChatView> {
               ),
             ),
           ),
+          if (currentConversation.isGroup &&
+              acpSessions.any((s) => s.contextLost))
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final session in acpSessions.where(
+                      (s) => s.contextLost,
+                    ))
+                      Padding(
+                        key: ValueKey('acp-recovery:${session.key}'),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
+                        child: AcpContextRecovery(
+                          session: session,
+                          agentName: acpAgentName(session.agentDid),
+                          canControl:
+                              groupSendDisabledReason == null &&
+                              agents.any(
+                                (a) =>
+                                    a.agentDid == session.agentDid &&
+                                    a.isRuntime &&
+                                    a.activeState == 'active',
+                              ),
+                          online: !agents.any(
+                            (daemon) =>
+                                daemon.isDaemon &&
+                                daemon.agentDid ==
+                                    agents
+                                        .where(
+                                          (a) => a.agentDid == session.agentDid,
+                                        )
+                                        .firstOrNull
+                                        ?.daemonAgentDid &&
+                                (daemon.daemonEffectiveStatus?.primaryStatus ??
+                                        daemon.latest.status) ==
+                                    'offline',
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
           if (!currentConversation.isGroup &&
               !isDeletedAgentConversation &&
               ((runtimeAgent != null && agentUsesAcp(runtimeAgent)) ||
