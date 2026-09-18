@@ -1314,11 +1314,11 @@ Future<void> _verifyActiveJoinWaitsForRecipientPrekey(
           .toList();
       return matches.length == 1 &&
           matches.single.phase == 'failed' &&
-          matches.single.attempts == 3;
+          matches.single.attempts == 4;
     },
     timeout: const Duration(minutes: 3),
     failure:
-        'Unavailable recipient PreKeys did not exhaust exactly three automatic attempts.',
+        'Unavailable recipient PreKeys did not exhaust exactly four automatic attempts.',
   );
   if (presence.calls != callsBefore ||
       find

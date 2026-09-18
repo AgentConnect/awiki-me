@@ -3726,10 +3726,10 @@
       "caseId": "ROOT-TRANSFER-E2E-001",
       "feature": "AWiki Me Join-bound automatic management configuration",
       "layer": "remote_product_ui_security",
-      "preconditions": "Root completion V2 is supported by User Service and both native Core builds; an accepted Join contract has established a management-ready AWiki Me admin and an independent CLI active member with management_ready false; both use fresh native Core roots and exact protocol device IDs, and the unattended suite uses the test-scoped user-presence port while production LocalAuthentication remains unchanged.",
-      "action": "Approve the exact Join once; preserve terminal-notice and stale-response race checks. Withhold CLI activation until Core exhausts three PreKey attempts, activate the CLI, use the visible exact-Join retry without a second approval, verify accepted delivery while the receiver remains rootless, then receive/import/register/activate on the CLI and verify no Root projection and fresh sender identity binding.",
+      "preconditions": "Root completion V1 is supported by User Service and both native Core builds; an accepted Join contract has established a management-ready AWiki Me admin and an independent CLI active member with management_ready false; both use fresh native Core roots and exact protocol device IDs, and the unattended suite uses the test-scoped user-presence port while production LocalAuthentication remains unchanged.",
+      "action": "Approve the exact Join once; preserve terminal-notice and stale-response race checks. Withhold CLI activation until Core exhausts four PreKey attempts, activate the CLI, use the visible exact-Join retry without a second approval, verify accepted delivery while the receiver remains rootless, then receive/import/register/activate on the CLI and verify no Root projection and fresh sender identity binding.",
       "exactOracles": [
-        "Pending approval cannot exit early and late verification cannot overwrite authorization; unavailable PreKeys consume exactly three attempts.",
+        "Pending approval cannot exit early and late verification cannot overwrite authorization; unavailable PreKeys consume exactly four attempts.",
         "The explicit retry uses the existing Join authority without a second presence decision; the recipient remains member before import.",
         "Sender accepted delivery is a waiting state, not recipient readiness, and completion does not increase send attempts.",
         "CLI receiver completes its existing root import chain and becomes admin-ready with local root active; Root controls never enter normal conversations.",
