@@ -41,6 +41,18 @@ class AcpSession {
   Map<String, Object?> get waiting => acpMap(data['waiting']);
   bool get busy => active.isNotEmpty;
   bool get canSelectModel => !busy && waiting.isEmpty && !contextLost;
+  bool get modelRefreshSupported =>
+      !group && data['model_refresh_supported'] == true;
+  int? get modelCatalogUpdatedAtMs => data['model_catalog_updated_at_ms'] is int
+      ? data['model_catalog_updated_at_ms']! as int
+      : null;
+  bool modelCatalogIsFresh(DateTime now) {
+    final updated = modelCatalogUpdatedAtMs;
+    if (updated == null) return false;
+    final age = now.millisecondsSinceEpoch - updated;
+    return age >= 0 && age < const Duration(minutes: 5).inMilliseconds;
+  }
+
   String get text => data['text']?.toString() ?? '';
   List<Map<String, Object?>> get tools => acpMaps(data['tools']);
   List<Map<String, Object?>> get questions => acpMaps(data['questions']);

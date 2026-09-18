@@ -6454,7 +6454,7 @@
         "The committed daemon create status converges the Agent page without a manual inventory refresh.",
         "From the optimistic pending intent through authoritative Inventory and canonical Direct route reconciliation, the exact runtime Handle has exactly one E2E-identified Agent row, including any pending-plus-Runtime overlap.",
         "One canonical runtime Agent is selected and its chat is visible.",
-        "Before the first prompt, the actual model is visible, selectable and confirmed without a task or model generation."
+        "Before the first prompt, the client-reported session model is visible. Refresh reads the latest catalog without changing that model or generating a task; the current choice is checked and disabled, and an unlisted current value stays read-only."
       ],
       "negativeChecks": [
         "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, more or fewer than one target row at any observed creation phase, duplicate authoritative Runtime, or backend/UI divergence fails."
@@ -6474,7 +6474,7 @@
           "ACP-OPENCODE-E2E-001:runtime_agent_created",
           "ACP-OPENCODE-E2E-001:runtime_creation_row_unique_throughout",
           "ACP-OPENCODE-E2E-001:runtime_chat_opened",
-          "ACP-OPENCODE-E2E-001:initial_model_visible_and_selectable"
+          "ACP-OPENCODE-E2E-001:initial_model_visible_and_refreshable"
         ],
         "exactOracleAssertions": [
           [
@@ -6496,7 +6496,7 @@
             "ACP-OPENCODE-E2E-001:runtime_chat_opened"
           ],
           [
-            "ACP-OPENCODE-E2E-001:initial_model_visible_and_selectable"
+            "ACP-OPENCODE-E2E-001:initial_model_visible_and_refreshable"
           ]
         ],
         "negativeCheckAssertions": [
@@ -6793,7 +6793,7 @@
         "The committed daemon create status converges the Agent page without a manual inventory refresh.",
         "From the optimistic pending intent through authoritative Inventory and canonical Direct route reconciliation, the exact runtime Handle has exactly one E2E-identified Agent row, including any pending-plus-Runtime overlap.",
         "One canonical runtime Agent is selected and its chat is visible.",
-        "Before the first prompt, the actual model is visible, selectable and confirmed without a task or model generation."
+        "Before the first prompt, the client-reported session model is visible. Refresh reads the latest catalog without changing that model or generating a task; the current choice is checked and disabled, and an unlisted current value stays read-only."
       ],
       "negativeChecks": [
         "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, more or fewer than one target row at any observed creation phase, duplicate authoritative Runtime, or backend/UI divergence fails."
@@ -6813,7 +6813,7 @@
           "ACP-GEMINI-E2E-001:runtime_agent_created",
           "ACP-GEMINI-E2E-001:runtime_creation_row_unique_throughout",
           "ACP-GEMINI-E2E-001:runtime_chat_opened",
-          "ACP-GEMINI-E2E-001:initial_model_visible_and_selectable"
+          "ACP-GEMINI-E2E-001:initial_model_visible_and_refreshable"
         ],
         "exactOracleAssertions": [
           [
@@ -6835,7 +6835,7 @@
             "ACP-GEMINI-E2E-001:runtime_chat_opened"
           ],
           [
-            "ACP-GEMINI-E2E-001:initial_model_visible_and_selectable"
+            "ACP-GEMINI-E2E-001:initial_model_visible_and_refreshable"
           ]
         ],
         "negativeCheckAssertions": [
@@ -7132,7 +7132,7 @@
         "The committed daemon create status converges the Agent page without a manual inventory refresh.",
         "From the optimistic pending intent through authoritative Inventory and canonical Direct route reconciliation, the exact runtime Handle has exactly one E2E-identified Agent row, including any pending-plus-Runtime overlap.",
         "One canonical runtime Agent is selected and its chat is visible.",
-        "Before the first prompt, the actual model is visible, selectable and confirmed without a task or model generation."
+        "Before the first prompt, the client-reported session model is visible. Refresh reads the latest catalog without changing that model or generating a task; the current choice is checked and disabled, and an unlisted current value stays read-only."
       ],
       "negativeChecks": [
         "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, more or fewer than one target row at any observed creation phase, duplicate authoritative Runtime, or backend/UI divergence fails."
@@ -7152,7 +7152,7 @@
           "ACP-KIMI-E2E-001:runtime_agent_created",
           "ACP-KIMI-E2E-001:runtime_creation_row_unique_throughout",
           "ACP-KIMI-E2E-001:runtime_chat_opened",
-          "ACP-KIMI-E2E-001:initial_model_visible_and_selectable"
+          "ACP-KIMI-E2E-001:initial_model_visible_and_refreshable"
         ],
         "exactOracleAssertions": [
           [
@@ -7174,7 +7174,7 @@
             "ACP-KIMI-E2E-001:runtime_chat_opened"
           ],
           [
-            "ACP-KIMI-E2E-001:initial_model_visible_and_selectable"
+            "ACP-KIMI-E2E-001:initial_model_visible_and_refreshable"
           ]
         ],
         "negativeCheckAssertions": [
@@ -7471,7 +7471,7 @@
         "The committed daemon create status converges the Agent page without a manual inventory refresh.",
         "From the optimistic pending intent through authoritative Inventory and canonical Direct route reconciliation, the exact runtime Handle has exactly one E2E-identified Agent row, including any pending-plus-Runtime overlap.",
         "One canonical runtime Agent is selected and its chat is visible.",
-        "Before the first prompt, the actual model is visible, selectable and confirmed without a task or model generation."
+        "Before the first prompt, the client-reported session model is visible. Refresh reads the latest catalog without changing that model or generating a task; the current choice is checked and disabled, and an unlisted current value stays read-only."
       ],
       "negativeChecks": [
         "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, more or fewer than one target row at any observed creation phase, duplicate authoritative Runtime, or backend/UI divergence fails."
@@ -7491,7 +7491,7 @@
           "ACP-DEEPSEEK-HARNESS-E2E-001:runtime_agent_created",
           "ACP-DEEPSEEK-HARNESS-E2E-001:runtime_creation_row_unique_throughout",
           "ACP-DEEPSEEK-HARNESS-E2E-001:runtime_chat_opened",
-          "ACP-DEEPSEEK-HARNESS-E2E-001:initial_model_visible_and_selectable"
+          "ACP-DEEPSEEK-HARNESS-E2E-001:initial_model_visible_and_refreshable"
         ],
         "exactOracleAssertions": [
           [
@@ -7513,7 +7513,7 @@
             "ACP-DEEPSEEK-HARNESS-E2E-001:runtime_chat_opened"
           ],
           [
-            "ACP-DEEPSEEK-HARNESS-E2E-001:initial_model_visible_and_selectable"
+            "ACP-DEEPSEEK-HARNESS-E2E-001:initial_model_visible_and_refreshable"
           ]
         ],
         "negativeCheckAssertions": [

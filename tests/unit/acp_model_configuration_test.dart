@@ -162,7 +162,7 @@ void main() {
       await tester.pump();
       await tester.tap(find.byKey(const Key('acp-model-menu')));
       await tester.pump(const Duration(seconds: 1));
-      final choice = find.byKey(const ValueKey('acp-model:flash'));
+      final choice = find.byKey(const ValueKey('acp-model:pro'));
       expect(tester.widget<CupertinoButton>(choice).onPressed, isNull);
       // A snapshot alone does not confirm the in-flight prepare command.
       expect(service.requests, hasLength(1));

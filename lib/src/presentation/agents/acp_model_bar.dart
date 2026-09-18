@@ -34,7 +34,9 @@ class AcpModelBar extends ConsumerWidget {
         }
       });
     }
-    if (session != null) return AcpSessionOptions(session: session!);
+    if (session != null) {
+      return AcpSessionOptions(session: session!, online: online);
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: _AcpModelOperationStatus(

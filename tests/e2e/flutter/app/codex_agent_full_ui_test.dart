@@ -122,7 +122,7 @@ const _codingCasePhases = <String, List<String>>{
     'runtime_agent_created',
     'runtime_creation_row_unique_throughout',
     'runtime_chat_opened',
-    'initial_model_visible_and_selectable',
+    'initial_model_visible_and_refreshable',
   ],
   'ACP-OPENCODE-E2E-002': <String>[
     'prompt_entered_through_ui',
@@ -163,7 +163,7 @@ const _codingCasePhases = <String, List<String>>{
     'runtime_agent_created',
     'runtime_creation_row_unique_throughout',
     'runtime_chat_opened',
-    'initial_model_visible_and_selectable',
+    'initial_model_visible_and_refreshable',
   ],
   'ACP-GEMINI-E2E-002': <String>[
     'prompt_entered_through_ui',
@@ -204,7 +204,7 @@ const _codingCasePhases = <String, List<String>>{
     'runtime_agent_created',
     'runtime_creation_row_unique_throughout',
     'runtime_chat_opened',
-    'initial_model_visible_and_selectable',
+    'initial_model_visible_and_refreshable',
   ],
   'ACP-KIMI-E2E-002': <String>[
     'prompt_entered_through_ui',
@@ -245,7 +245,7 @@ const _codingCasePhases = <String, List<String>>{
     'runtime_agent_created',
     'runtime_creation_row_unique_throughout',
     'runtime_chat_opened',
-    'initial_model_visible_and_selectable',
+    'initial_model_visible_and_refreshable',
   ],
   'ACP-DEEPSEEK-HARNESS-E2E-002': <String>[
     'prompt_entered_through_ui',
@@ -323,6 +323,7 @@ void codingAgentAcceptance({bool acp = false, bool hermes = false}) {
       codingAgentAcpCaseNumbers(
         const String.fromEnvironment('AWIKI_ACP_FOCUS_DRIVER'),
         groupOnly: const bool.fromEnvironment('AWIKI_ACP_FOCUS_GROUP_ONLY'),
+        modelsOnly: const bool.fromEnvironment('AWIKI_ACP_FOCUS_MODELS_ONLY'),
       ).contains(2);
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   tearDownAll(
@@ -527,6 +528,17 @@ void codingAgentAcceptance({bool acp = false, bool hermes = false}) {
           if (acp) await _verifyAcpInitialModels(tester, appContainer, runtime);
           await _markCodingCase('$prefix-001');
 
+          if (acp &&
+              const bool.fromEnvironment('AWIKI_ACP_FOCUS_MODELS_ONLY')) {
+            await _tapFirstFound(tester, <Finder>[
+              find.bySemanticsIdentifier('e2e-agents-tab'),
+              find.text('智能体'),
+              find.text('Agents'),
+            ]);
+            agents.select(install.daemonDid);
+            await _pumpFrame(tester);
+            continue;
+          }
           if (runChatCases) {
             await _sendPromptThroughUi(tester, config.prompt);
             await _markCodingCase('$prefix-002');
@@ -716,13 +728,38 @@ Future<void> _verifyAcpInitialModels(
     findsOneWidget,
   );
   await tester.ensureVisible(menu);
+  await _pumpFrame(tester);
   await tester.tap(menu);
   await _pumpFrame(tester);
-  // Gemini can report a configured proxy alias as current while advertising
-  // only its native selectable models. Display that exact current value, then
-  // exercise a genuinely advertised choice (the test relay maps gemini-*).
-  final choice = model ?? initial.models.firstWhere((m) => m['id'] != 'auto');
-  final selectedId = choice['id'];
+  expect(find.byKey(const Key('acp-current-model')), findsOneWidget);
+  if (model == null) {
+    expect(
+      find.byKey(ValueKey('acp-model:$current')),
+      findsNothing,
+      reason: 'An unlisted current model must never become a fabricated choice',
+    );
+  }
+  expect(initial.modelRefreshSupported, isTrue);
+  final refresh = find.byKey(const Key('acp-model-refresh'));
+  await tester.ensureVisible(refresh);
+  // ensureVisible may invalidate the dialog's translated layout. Complete
+  // that layout before asking Flutter to hit-test the refresh button.
+  await _pumpFrame(tester);
+  await tester.tap(refresh);
+  final refreshed = await _waitAcp(
+    tester,
+    container,
+    agent.agentDid,
+    (s) => s.revision > initial.revision && s.modelCatalogUpdatedAtMs != null,
+  );
+  expect(refreshed.data['model_id'], current);
+  expect(
+    refreshed.data['selected_model_id'],
+    initial.data['selected_model_id'],
+  );
+  expect(refreshed.history, isEmpty);
+  await _pumpFrame(tester);
+  final selectedId = current;
   // Providers can advertise hundreds of models; off-screen sliver rows have
   // not been built. Use the product's search rather than assuming every row
   // already has an Element.
@@ -731,16 +768,17 @@ Future<void> _verifyAcpInitialModels(
     await tester.enterText(search, '$selectedId');
     await _pumpFrame(tester);
   }
-  final row = find.byKey(ValueKey('acp-model:$selectedId'));
-  await tester.ensureVisible(row);
-  expect(tester.widget<CupertinoButton>(row).onPressed, isNotNull);
-  await tester.tap(row);
-  await _waitAcp(
-    tester,
-    container,
-    agent.agentDid,
-    (s) => s.revision > initial.revision && s.data['model_id'] == selectedId,
-  );
+  if (model != null) {
+    final row = find.byKey(ValueKey('acp-model:$selectedId'));
+    await tester.ensureVisible(row);
+    expect(
+      tester.widget<CupertinoButton>(row).onPressed,
+      isNull,
+      reason:
+          'The current model is checked; tapping it must not fake a model switch',
+    );
+  }
+  Navigator.of(tester.element(find.byKey(const Key('acp-model-picker')))).pop();
   await _pumpUntil(
     tester,
     () => find.byKey(const Key('acp-model-picker')).evaluate().isEmpty,

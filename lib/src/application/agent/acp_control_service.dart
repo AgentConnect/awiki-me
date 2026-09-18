@@ -65,7 +65,9 @@ class AcpControlService {
         );
     // Install the error/timeout handler before transport can synchronously emit.
     final configuration =
-        args['action'] == 'prepare_session' || args['action'] == 'set_model';
+        args['action'] == 'prepare_session' ||
+        args['action'] == 'set_model' ||
+        args['action'] == 'refresh_models';
     final response = completer.future.timeout(
       configuration ? const Duration(minutes: 2) : const Duration(seconds: 25),
     );

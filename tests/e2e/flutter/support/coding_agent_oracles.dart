@@ -119,8 +119,16 @@ List<RuntimeAgentKind> codingAgentAcpKinds(String driver) {
 
 /// A group rerun still proves runtime creation and pre-prompt configuration.
 /// Requiring an exact driver prevents silently shrinking a normal suite.
-List<int> codingAgentAcpCaseNumbers(String driver, {bool groupOnly = false}) {
+List<int> codingAgentAcpCaseNumbers(
+  String driver, {
+  bool groupOnly = false,
+  bool modelsOnly = false,
+}) {
   codingAgentAcpKinds(driver);
+  if (modelsOnly) {
+    if (groupOnly) throw StateError('conflicting_acp_focus');
+    return const [1];
+  }
   if (groupOnly && driver.isEmpty) {
     throw StateError('group_focus_requires_one_acp_driver');
   }

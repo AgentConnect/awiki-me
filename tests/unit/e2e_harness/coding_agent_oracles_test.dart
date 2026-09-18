@@ -29,9 +29,12 @@ void main() {
     'group focus preserves creation and requires an explicit valid driver',
     () {
       expect(codingAgentAcpCaseNumbers(''), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      expect(codingAgentAcpCaseNumbers('', modelsOnly: true), [1]);
+      expect(() => codingAgentAcpCaseNumbers('gemini', modelsOnly: true, groupOnly: true), throwsStateError);
       for (final driver in ['opencode', 'gemini', 'kimi', 'deepseek-harness']) {
         expect(codingAgentAcpCaseNumbers(driver), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
         expect(codingAgentAcpCaseNumbers(driver, groupOnly: true), [1, 9]);
+        expect(codingAgentAcpCaseNumbers(driver, modelsOnly: true), [1]);
       }
       for (final driver in ['', 'unknown', 'codex']) {
         expect(

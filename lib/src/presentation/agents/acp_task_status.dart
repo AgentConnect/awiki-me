@@ -8,6 +8,8 @@ import '../../domain/entities/agent/acp_session.dart';
 import '../app_shell/providers/session_provider.dart';
 import 'acp_session_provider.dart';
 import 'acp_model_controller.dart';
+import 'acp_model_refresh_controller.dart';
+import 'agents_provider.dart';
 import 'acp_question_controller.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/responsive_layout.dart';
@@ -197,6 +199,11 @@ String acpTaskFailureText(BuildContext context, Map<String, Object?> task) {
   final details = acpMap(task['error_details']);
   final code = details['code'] ?? task['error_code'];
   return switch (code) {
+    'model_configuration_failed' => acpText(
+      context,
+      '客户端未能恢复所选模型，本条指令未执行。请检查模型配置或选择其他模型。',
+      'The client could not restore the selected model. This instruction did not run. Check its configuration or choose another model.',
+    ),
     'attachment_permission_denied' => acpText(
       context,
       '无法读取附件，请检查文件访问权限',
