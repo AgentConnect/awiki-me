@@ -3256,7 +3256,7 @@ class _SeparatedMessageSyncService extends FakeMessageSyncService
       _TestProcessingSession(this);
 
   void completeProcessing({bool blocked = false, bool discarded = false}) {
-    if (!processing.isCompleted)
+    if (!processing.isCompleted) {
       processing.complete(
         MessageProcessingOutcome(
           complete: !blocked && !discarded,
@@ -3270,6 +3270,7 @@ class _SeparatedMessageSyncService extends FakeMessageSyncService
               : null,
         ),
       );
+    }
   }
 }
 
@@ -3283,15 +3284,17 @@ class _TestProcessingSession implements MessageProcessingSession {
   bool _closed = false;
   @override
   Stream<MessageProcessingUpdate> get updates {
-    if (owner.syncReasons.isNotEmpty && !owner.processingStarted.isCompleted)
+    if (owner.syncReasons.isNotEmpty && !owner.processingStarted.isCompleted) {
       owner.processingStarted.complete();
+    }
     return _updates.stream;
   }
 
   @override
   Future<MessageProcessingOutcome> waitUntilSettled() {
-    if (!owner.processingStarted.isCompleted)
+    if (!owner.processingStarted.isCompleted) {
       owner.processingStarted.complete();
+    }
     return owner.processing.future;
   }
 
