@@ -19,8 +19,37 @@ import '../../../unit/acp_responsive_test.dart'
 import '../../../unit/acp_runtime_test.dart'
     show snapshot, RecordingControl, control;
 
+import '../../../unit/agents/runtime_client_inspection_test.dart'
+    show installationSurface, FakeClientInspection;
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets('native installation detection preserves host and draft', (
+    tester,
+  ) async {
+    final service = FakeClientInspection();
+    await tester.pumpWidget(
+      RepaintBoundary(key: captureKey, child: installationSurface(service)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('创建 Agent'));
+    await tester.pumpAndSettle();
+    expect(find.text('检测 Mac Studio 所在宿主机的客户端。'), findsOneWidget);
+    expect(find.text('未检测到'), findsNWidgets(6));
+    await _capture(tester, 'client-installation');
+    await tester.enterText(
+      find.byKey(const Key('agent-create-name-field')),
+      'My host agent',
+    );
+    await tester.ensureVisible(find.byKey(const Key('agent-clients-refresh')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('agent-clients-refresh')));
+    await tester.pumpAndSettle();
+    expect(find.text('My host agent'), findsOneWidget);
+    expect(service.calls, 2);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets('native group context recovery preserves draft and scope', (
     tester,
   ) async {

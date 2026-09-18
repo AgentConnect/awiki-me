@@ -30,6 +30,7 @@ import 'dart:io';
     'tests/unit/chat_composer_paste_test.dart',
     'tests/unit/chat_page_test.dart',
     'tests/unit/group_flow_test.dart',
+    'tests/unit/agents/runtime_client_inspection_test.dart',
     'tests/unit/agents/agent_type_catalog_test.dart',
     'tests/unit/agents/agent_control_service_test.dart',
     'tests/unit/agents/agents_provider_test.dart',

@@ -2532,8 +2532,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get agentCreateHermesDescription =>
-      'Uses the Hermes runtime included with Daemon.';
+  String get agentCreateHermesDescription => 'Uses Hermes Gateway on the host.';
 
   @override
   String agentCreateNeedsGenericCliCapability(Object agentType) {
@@ -2557,7 +2556,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String agentCreateRequiresSignedInCli(Object agentType) {
-    return 'Uses $agentType on the host. Install it and sign in or configure API access first.';
+    return 'Uses the $agentType client on the host.';
   }
 
   @override
@@ -3800,4 +3799,89 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryContinueExisting => 'Continue previous recovery';
+
+  @override
+  String get agentClientReady => 'Detected';
+
+  @override
+  String get agentClientMissing => 'Not found';
+
+  @override
+  String get agentClientUnavailable => 'Cannot start';
+
+  @override
+  String get agentClientUnknown => 'Not confirmed';
+
+  @override
+  String get agentClientChecking => 'Checking…';
+
+  @override
+  String get agentClientRefresh => 'Check again';
+
+  @override
+  String get agentClientOffline => 'Host offline';
+
+  @override
+  String get agentClientOfflineHint =>
+      'Reconnect the Daemon, then check again.';
+
+  @override
+  String get agentClientRetryHint =>
+      'Could not confirm installation. Check again.';
+
+  @override
+  String get agentClientInstallHint =>
+      'Install the client on this Daemon’s host, then check again.';
+
+  @override
+  String get agentClientPermissionHint =>
+      'The client cannot be executed. Fix its permissions on the host.';
+
+  @override
+  String get agentClientGatewayHint =>
+      'Hermes Gateway module not found. Check the host installation.';
+
+  @override
+  String get agentClientCustomHint =>
+      'This custom launcher cannot be checked safely. Check its entry point.';
+
+  @override
+  String get agentClientTimeoutHint =>
+      'The check timed out. Try again shortly.';
+
+  @override
+  String get agentClientLaunchHint =>
+      'The client could not start. Check its installation and dependencies.';
+
+  @override
+  String agentClientHost(String host) {
+    return 'Checking clients on $host’s host.';
+  }
+
+  @override
+  String get agentClientLegacy =>
+      'This Daemon does not support installation checks yet. Creation uses the existing validation.';
+
+  @override
+  String get agentClientScope =>
+      'Checks installation and startup only. Sign in or configure a model on the host before use.';
+
+  @override
+  String get agentClientCreating => 'Creating…';
+
+  @override
+  String get agentClientCreateFailed =>
+      'Creation failed. Check the client environment and try again. Your input has been kept.';
+
+  @override
+  String get agentClientCreatePending =>
+      'Creation was submitted and is still pending. You can close this window and check the Agent list.';
+
+  @override
+  String get agentClientProtocolHint =>
+      'Client protocol connection failed. Check sign-in, configuration or client errors on the host.';
+
+  @override
+  String get agentClientCompatibilityHint =>
+      'This client version is not compatible with the integration. Update the client and try again.';
 }

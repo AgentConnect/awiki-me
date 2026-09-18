@@ -4539,7 +4539,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentCreateHermesDescription.
   ///
   /// In zh, this message translates to:
-  /// **'使用 Daemon 内置的 Hermes 运行环境。'**
+  /// **'使用宿主机上的 Hermes Gateway。'**
   String get agentCreateHermesDescription;
 
   /// No description provided for @agentCreateNeedsGenericCliCapability.
@@ -4569,7 +4569,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentCreateRequiresSignedInCli.
   ///
   /// In zh, this message translates to:
-  /// **'使用宿主机上的 {agentType}，需安装并完成登录或 API 配置。'**
+  /// **'使用宿主机上的 {agentType} 客户端。'**
   String agentCreateRequiresSignedInCli(Object agentType);
 
   /// No description provided for @agentCreateHostAccessTitle.
@@ -6669,6 +6669,144 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'继续上次恢复'**
   String get handleRecoveryContinueExisting;
+
+  /// No description provided for @agentClientReady.
+  ///
+  /// In zh, this message translates to:
+  /// **'已检测到'**
+  String get agentClientReady;
+
+  /// No description provided for @agentClientMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'未检测到'**
+  String get agentClientMissing;
+
+  /// No description provided for @agentClientUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'启动异常'**
+  String get agentClientUnavailable;
+
+  /// No description provided for @agentClientUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未确认'**
+  String get agentClientUnknown;
+
+  /// No description provided for @agentClientChecking.
+  ///
+  /// In zh, this message translates to:
+  /// **'检测中…'**
+  String get agentClientChecking;
+
+  /// No description provided for @agentClientRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新检测'**
+  String get agentClientRefresh;
+
+  /// No description provided for @agentClientOffline.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备离线'**
+  String get agentClientOffline;
+
+  /// No description provided for @agentClientOfflineHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接 Daemon 后重新检测。'**
+  String get agentClientOfflineHint;
+
+  /// No description provided for @agentClientRetryHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法确认，请重新检测。'**
+  String get agentClientRetryHint;
+
+  /// No description provided for @agentClientInstallHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'请在此 Daemon 的宿主机安装客户端，再重新检测。'**
+  String get agentClientInstallHint;
+
+  /// No description provided for @agentClientPermissionHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'客户端没有执行权限，请在宿主机修复后重新检测。'**
+  String get agentClientPermissionHint;
+
+  /// No description provided for @agentClientGatewayHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'未找到 Hermes Gateway 模块，请检查宿主机安装。'**
+  String get agentClientGatewayHint;
+
+  /// No description provided for @agentClientCustomHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法轻量检测自定义启动命令，请检查启动入口。'**
+  String get agentClientCustomHint;
+
+  /// No description provided for @agentClientTimeoutHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'检测超时，请稍后重新检测。'**
+  String get agentClientTimeoutHint;
+
+  /// No description provided for @agentClientLaunchHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'客户端启动失败，请检查宿主机的安装与依赖。'**
+  String get agentClientLaunchHint;
+
+  /// No description provided for @agentClientHost.
+  ///
+  /// In zh, this message translates to:
+  /// **'检测 {host} 所在宿主机的客户端。'**
+  String agentClientHost(String host);
+
+  /// No description provided for @agentClientLegacy.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前 Daemon 暂不支持安装检测，创建时将按原流程校验。'**
+  String get agentClientLegacy;
+
+  /// No description provided for @agentClientScope.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅检测客户端安装与启动情况。使用前，请在宿主机完成登录或模型配置。'**
+  String get agentClientScope;
+
+  /// No description provided for @agentClientCreating.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建中…'**
+  String get agentClientCreating;
+
+  /// No description provided for @agentClientCreateFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建失败，请检查客户端环境后重试。已保留填写内容。'**
+  String get agentClientCreateFailed;
+
+  /// No description provided for @agentClientCreatePending.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建已提交，仍在等待结果。可关闭此窗口，在智能体列表查看进度。'**
+  String get agentClientCreatePending;
+
+  /// No description provided for @agentClientProtocolHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'客户端协议连接失败，请检查宿主机上的登录、配置或客户端错误后重试。'**
+  String get agentClientProtocolHint;
+
+  /// No description provided for @agentClientCompatibilityHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'客户端版本与当前接入能力不兼容，请更新客户端后重试。'**
+  String get agentClientCompatibilityHint;
 }
 
 class _AppLocalizationsDelegate

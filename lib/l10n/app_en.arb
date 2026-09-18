@@ -1063,7 +1063,7 @@
       "agentType": {}
     }
   },
-  "agentCreateHermesDescription": "Uses the Hermes runtime included with Daemon.",
+  "agentCreateHermesDescription": "Uses Hermes Gateway on the host.",
   "agentCreateNeedsGenericCliCapability": "Refresh the device status to check support for {agentType}.",
   "@agentCreateNeedsGenericCliCapability": {
     "placeholders": {
@@ -1088,7 +1088,7 @@
       "agentType": {}
     }
   },
-  "agentCreateRequiresSignedInCli": "Uses {agentType} on the host. Install it and sign in or configure API access first.",
+  "agentCreateRequiresSignedInCli": "Uses the {agentType} client on the host.",
   "@agentCreateRequiresSignedInCli": {
     "placeholders": {
       "agentType": {}
@@ -1591,5 +1591,35 @@
         "type": "String"
       }
     }
-  }
+  },
+  "agentClientReady": "Detected",
+  "agentClientMissing": "Not found",
+  "agentClientUnavailable": "Cannot start",
+  "agentClientUnknown": "Not confirmed",
+  "agentClientChecking": "Checking…",
+  "agentClientRefresh": "Check again",
+  "agentClientOffline": "Host offline",
+  "agentClientOfflineHint": "Reconnect the Daemon, then check again.",
+  "agentClientRetryHint": "Could not confirm installation. Check again.",
+  "agentClientInstallHint": "Install the client on this Daemon’s host, then check again.",
+  "agentClientPermissionHint": "The client cannot be executed. Fix its permissions on the host.",
+  "agentClientGatewayHint": "Hermes Gateway module not found. Check the host installation.",
+  "agentClientCustomHint": "This custom launcher cannot be checked safely. Check its entry point.",
+  "agentClientTimeoutHint": "The check timed out. Try again shortly.",
+  "agentClientLaunchHint": "The client could not start. Check its installation and dependencies.",
+  "agentClientHost": "Checking clients on {host}’s host.",
+  "agentClientLegacy": "This Daemon does not support installation checks yet. Creation uses the existing validation.",
+  "agentClientScope": "Checks installation and startup only. Sign in or configure a model on the host before use.",
+  "@agentClientHost": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "agentClientCreating": "Creating…",
+  "agentClientCreateFailed": "Creation failed. Check the client environment and try again. Your input has been kept.",
+  "agentClientCreatePending": "Creation was submitted and is still pending. You can close this window and check the Agent list.",
+  "agentClientProtocolHint": "Client protocol connection failed. Check sign-in, configuration or client errors on the host.",
+  "agentClientCompatibilityHint": "This client version is not compatible with the integration. Update the client and try again."
 }

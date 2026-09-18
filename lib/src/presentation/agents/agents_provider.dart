@@ -517,6 +517,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   final Map<String, String> _statusQueryCommandIds = <String, String>{};
   final Map<String, DateTime> _statusQueryStartedAtByDaemon =
       <String, DateTime>{};
+  final Map<String, Completer<String?>> _creationConfirmations = {};
   final Map<String, Timer> _runtimeCreationTimeouts = <String, Timer>{};
   final Map<String, Timer> _runtimeCreationReconcileTimers = <String, Timer>{};
   final Map<String, Timer> _daemonUpgradeAckTimeouts = <String, Timer>{};
@@ -1233,6 +1234,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   Future<void> createRuntimeAgent(
     String daemonDid, {
     required RuntimeAgentCreateOptions options,
+    String? clientRequestId,
   }) async {
     if (!_agentsAvailable) {
       _setTenantUnsupported();
@@ -1256,7 +1258,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     await _runAction(AgentActionKeys.createRuntime(daemonDid), (
       operation,
     ) async {
-      final requestId = agentCommandId('app_req');
+      final requestId = clientRequestId ?? agentCommandId('app_req');
       final pending = PendingRuntimeCreation(
         requestId: requestId,
         daemonAgentDid: daemonDid,
@@ -1311,6 +1313,34 @@ class AgentsController extends StateNotifier<AgentsState> {
       );
       unawaited(_reconcilePendingRuntimeCreation(requestId));
     }, expectedOperation: ownerOperation);
+  }
+
+  /// The modern creation dialog stays open on a definite failure. A timeout
+  /// remains pending and must not submit a second registration automatically.
+  Future<String?> createRuntimeAgentConfirmed(
+    String daemonDid, {
+    required RuntimeAgentCreateOptions options,
+  }) async {
+    final requestId = agentCommandId('app_req');
+    final completion = Completer<String?>();
+    _creationConfirmations[requestId] = completion;
+    final response = completion.future.timeout(const Duration(seconds: 90));
+    unawaited(
+      response.then<void>((_) {}, onError: (Object _, StackTrace __) {}),
+    );
+    try {
+      await createRuntimeAgent(
+        daemonDid,
+        options: options,
+        clientRequestId: requestId,
+      );
+      if (!completion.isCompleted && state.error != null) {
+        completion.complete('creation_failed');
+      }
+      return await response;
+    } finally {
+      _creationConfirmations.remove(requestId);
+    }
   }
 
   Future<void> _reconcilePendingRuntimeCreation(String requestId) async {
@@ -2494,6 +2524,35 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (payload['schema'] != AgentControlPayloads.statusSchema) {
       return;
     }
+    if (_readMap(payload['result'])['command'] == 'runtime.clients.inspect') {
+      return;
+    }
+    final creation = _readMap(payload['result']);
+    if (creation['command'] == 'runtime.agent.create') {
+      final requestId = _string(creation['client_request_id']);
+      final waiter = _creationConfirmations[requestId];
+      final pending = state.pendingRuntimeCreations.where(
+        (p) => p.requestId == requestId,
+      );
+      if (waiter != null &&
+          !waiter.isCompleted &&
+          pending.isNotEmpty &&
+          pending.first.daemonAgentDid == payload['daemon_agent_did']) {
+        if (payload['state'] == 'failed') {
+          waiter.complete(
+            creation['phase'] == 'client_readiness'
+                ? (_string(creation['error_code']) ?? 'creation_failed')
+                : 'creation_pending',
+          );
+        } else if (payload['state'] == 'ready' &&
+            _controlPayloadMatchesPendingRuntimeCreation(
+              payload,
+              pending.first,
+            )) {
+          waiter.complete(null);
+        }
+      }
+    }
     final eventId = controlEventId ?? _string(payload['event_id']);
     if (eventId != null && state.seenControlEventIds.contains(eventId)) {
       return;
@@ -3413,6 +3472,11 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   void _cancelStatusTimers() {
+    for (final waiter in _creationConfirmations.values) {
+      if (!waiter.isCompleted) waiter.complete('session_changed');
+    }
+    _creationConfirmations.clear();
+
     for (final timer in _statusQueryTimeouts.values) {
       timer.cancel();
     }
@@ -3849,11 +3913,27 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   List<PendingRuntimeCreation> _pendingCreationsAfterControlPayloadAndAgents(
     List<PendingRuntimeCreation> current,
-    Map<String, Object?> _,
+    Map<String, Object?> payload,
     List<AgentSummary> _,
   ) {
-    // Control events accelerate display, but only authoritative Inventory plus
-    // a projected Core route may complete the creation transaction.
+    final result = _readMap(payload['result']);
+    // This explicit phase failed before registration. Other failures may have
+    // committed an identity and must still reconcile with Inventory.
+    if (payload['state'] == 'failed' &&
+        result['command'] == 'runtime.agent.create' &&
+        result['phase'] == 'client_readiness') {
+      return current.where((pending) {
+        final rejected =
+            pending.requestId == result['client_request_id'] &&
+            pending.daemonAgentDid == payload['daemon_agent_did'];
+        if (rejected) {
+          _runtimeCreationTimeouts.remove(pending.requestId)?.cancel();
+          _runtimeCreationReconcileTimers.remove(pending.requestId)?.cancel();
+        }
+        return !rejected;
+      }).toList();
+    }
+    // Successful creation still converges through Inventory and a Core route.
     return current;
   }
 
