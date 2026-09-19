@@ -1465,7 +1465,13 @@ String _groupInviteFailureText(
         : l10n.groupInviteAgentKindUnavailable;
   }
   if (error is GroupMemberAdmissionException) {
-    return l10n.groupInviteAgentKindUnavailable;
+    return switch (error.reason) {
+      GroupMemberAdmissionDenialReason.federatedGroupDenied =>
+        l10n.groupInviteFederatedDenied,
+      GroupMemberAdmissionDenialReason.identityUnavailable =>
+        l10n.groupInviteIdentityUnavailable,
+      _ => l10n.groupInviteAdmissionDenied,
+    };
   }
   return l10n.groupInviteAddFailed;
 }

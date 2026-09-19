@@ -13,6 +13,7 @@ import '../../../core/performance_logger.dart';
 import '../../../domain/entities/agent/agent_control_payloads.dart';
 import '../../../domain/entities/agent/agent_terminal_notification.dart';
 import '../../agents/agent_inbox_provider.dart';
+import '../../agents/acp_session_provider.dart';
 import '../../agents/agents_provider.dart';
 import '../../agents/personal_agent_feature_visibility.dart';
 import '../../chat/chat_provider.dart';
@@ -205,6 +206,13 @@ class AgentControlProjectionCoordinator
   }
 
   void _applyCommittedEvent(AgentControlEvent event) {
+    ref
+        .read(acpSessionsProvider.notifier)
+        .applyDaemon(
+          event.payload,
+          event.daemonAgentDid,
+          ref.read(agentsProvider).agents,
+        );
     ref.read(agentsProvider.notifier).applyCommittedControlEvent(event);
     _projectPresentation(
       event.payload,

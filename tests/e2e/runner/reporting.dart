@@ -365,24 +365,6 @@ extension DesktopE2eReporting on DesktopE2eRunner {
                   _caseStatus('PERSONALAGENT-E2E-004') == 'passed',
             },
           },
-        if (config != null)
-          'codexAgent': <String, Object?>{
-            'enabled': config!.codexAgentEnabled,
-            'realBackend': config!.codexAgentRealBackend,
-            'prompt': '<redacted-deterministic-prompt>',
-            'expectedReply':
-                config!.codexAgentExpectedReply ??
-                _defaultCodexExpectedReply(runId),
-          },
-        if (config != null)
-          'claudeCodeAgent': <String, Object?>{
-            'enabled': config!.claudeCodeAgentEnabled,
-            'realBackend': config!.claudeCodeAgentRealBackend,
-            'prompt': '<redacted-deterministic-prompt>',
-            'expectedReply':
-                config!.claudeCodeAgentExpectedReply ??
-                _defaultClaudeCodeExpectedReply(runId),
-          },
         'cliWorkspace': '<redacted-workspace>',
         'cliHome': '<redacted-home>',
         'appStateRoot': '<redacted-app-state>',

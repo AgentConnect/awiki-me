@@ -449,6 +449,12 @@ Timeline merge 必须把“同一条本机发送消息的 durable server row”�
 
 身份查找结果使用“当前昵称 > 短 Handle > DID”作为主名称，并在 Handle 可用且未完整出现在主名称时显示 `@完整Handle` 作为第二身份行。群系统事件、通知等无法同时承载第二身份行的单行公共身份场景使用“当前昵称 > 完整 Handle > DID”。DID 只是最后 fallback，UI 可使用紧凑格式显示；不得在 nickname 或 Handle 已知时优先显示 DID。这些 UI 仍必须消费同一 Persona Profile 投影，Widget 不得自行拼接 fallback。删除成员等破坏性操作的确认文案必须同时保留完整 Handle，Handle 不可用时保留完整 DID，避免短名碰撞导致误操作。
 
+添加群成员的服务端拒绝由 Core adapter 按 `group.admission_not_allowed` 和结构化
+`admission_reason` 映射。只有明确的 `agent_not_group_invitable` 使用 Agent 能力文案；
+`federated_group_denied` 显示外域策略限制，生命周期拒绝显示身份不可用，缺失、未知或
+损坏的 reason 使用中性入群拒绝文案。禁止根据异常原文或候选展示徽标猜测拒绝原因。
+失败后保留弹窗与选择，不写入假成员。
+
 实时消息路径：
 
 1. realtime notification / `sync` hint 与 Android remote Push 都只用于
@@ -678,3 +684,53 @@ Core cutover 后继续显示 overlay 收尾阶段，完成前不创建业务 Sto
 - `tests/unit/identity_flow_test.dart`：固定 Direct 解析失败时不创建会话、不改变 selected state，并保留当前资料页。
 - `tests/e2e/flutter/app/app_smoke_test.dart`
 - `tests/e2e/flutter/app/ui_visual_verification_test.dart`
+# ACP 智能体会话投影
+
+OpenCode、Gemini CLI、Kimi、DeepSeek Harness 使用 Daemon 的 ACP v1 状态机。APP 仅投影 Core 已提交的 `awiki.acp.status.v1` 和已验证 Daemon 控制通道中的 `acp` 会话快照；实时提示不能接受任务、推进等待位或确认问答。原三种智能体与普通聊天继续沿用已有合同。
+
+快照以智能体、Core 已提交消息的本地规范 conversation ID、session key 和单调 revision 关联。Direct 两端的本地 conversation ID 不同，Daemon 快照中的传输别名不能用来推导 APP 路由；快照原值仅作为远端状态保留。群内快照必须由对应智能体发出并经过 Core 的实际群通道提交。Daemon 控制通道只更新已由 Runtime 通道建立映射的会话，并校验库存中的 runtime–daemon 绑定。身份 epoch 变化清空投影和待确认操作。APP 不另建消息、身份或任务事实存储。
+
+ACP 控制消息的订阅与修复也必须使用该规范 conversation ID；界面用于兼容展示的旧 thread alias 不能作为订阅读键。设备 Join 后，即使旧 alias 可用于单次历史读取，也不能据此替代规范会话的持续消息投影。
+
+私聊只允许一个等待项；等待位已满或 Daemon 明确离线时保留输入文字及附件。群聊只提前提示被提及的忙碌智能体，最终并发校验由 Daemon 负责。停止、等待执行/取消、模型选择及上下文重建使用精确任务 ID；回答绑定任务、问题与发起人，不占用输入框草稿。命令重试复用原 command ID，失效问题不可再次提交。
+
+任务拒绝按 Agent、本地规范 conversation ID、来源消息 ID 独立投影，群内同一条消息被多个 Agent 拒绝时不得互相覆盖。已提交拒绝仅释放匹配的本机发送占位，保留原消息和拒绝原因，不结束该 Agent 的其他任务，也不释放其他群或其他 Agent 的容量。拒绝先于发送回执到达时，回执登记占位后须重新对账；重复投影不能重新占位或自动重发。
+
+上下文重建独立于模型选择。群聊为当前群的每个丢失会话显示带 Agent 名称的恢复提示；当前库存确认的活动 Runtime Agent 控制者可以确认重建，其他成员显示联系控制者的说明。设备明确离线、任务忙碌或群不可发送时不能提交。命令绑定该 Agent 和该群的 session/revision，沿用 Daemon 权限和幂等校验；响应成功不代替已提交状态投影。保留聊天记录与草稿，不自动重跑旧指令，不开放群聊模型选择。多条提示使用有高度上限的滚动区域。
+
+`@all`／`@agents` 的 ACP 预检查只扩展到当前群 roster 中 active 的成员，不能用个人智能体清单代替群成员范围，也不能被已离群智能体的旧状态拦截。roster 尚未可用时不猜测广播目标；Daemon 仍负责收到指令后的最终任务接受和并发校验。
+
+ACP 创建保留两分钟的自动权威库存与 Core 路由核对窗口，容纳版本/协议探测和消息就绪门禁；原三种 Runtime 保持 45 秒。超时只转为等待状态，不伪造成功或重复创建。
+
+### ACP 界面与响应式行为
+
+模型栏表达客户端确认的“会话模型”，不声称已识别代理后的实际上游。模型窗口固定展示当前配置；当前 ID 未列入客户端候选项时使用独立只读当前项，不伪造候选项，也不因缺项阻止仍被客户端接受的当前模型。候选项仅来自 Core 已提交的 Daemon 投影，APP 不维护供应商模型名单。
+
+支持 `model_refresh_supported` 的 Daemon 提供 `refresh_models` 目录查询。打开窗口先显示缓存，`model_catalog_updated_at_ms` 超过 5 分钟时空闲自动查询一次，并提供手动刷新；无定时后台轮询。离线/忙碌可查看缓存，窗口仍打开时可续接延期查询。查询失败保留旧列表与当前模型，刷新状态独立于模型切换状态，不阻塞消息草稿或发送。只在客户端确认切换且可靠投影收敛后更新会话模型。旧 Daemon 不显示新刷新入口。安全加载延期仅在窗口仍有效时使用一次性定时器，不轮询客户端或上游目录。
+
+输入框的焦点范围由 Flutter `TextFieldTapRegion` 管理；全局只覆盖
+`EditableTextTapOutsideIntent` 实现空白处收起键盘，不扫描编辑框矩形。
+输入选择菜单属于输入区域。聊天粘贴通过同一入口处理菜单、快捷键和编辑动作：
+先暂存剪贴板文件／图片，再处理选区文本；异步读取必须校验 session epoch、
+规范会话和原 controller，文本更新走 `EditableTextState.userUpdateTextEditingValue`
+保留原生编辑／撤销行为。此处理不改变消息气泡的选择与菜单实现。
+
+- 用户指令下只保留状态及停止／等待操作。流式正文、执行记录、问答统一归入左侧 Agent 回复区域，与该 Agent 头像内侧对齐；正文共用正式消息的 Markdown 和选择交互。停止、失败及重启中断后保留已收到的有效文字并标注未完成。
+- ACP 按 `run_id` 投影持久任务记录（`awiki.acp.task.v1`），独立处理任务终态和最终回复投递状态。只有匹配 run／Agent 的正式回复在本机 Core 提交后才交接预览，不以 `active=null` 或发送成功回执替代正式消息。终态任务拒绝迟到运行事件；正常同步中的旧任务不能覆盖新任务。
+- Daemon 可信控制事件可在后台更新 Agent 活动状态；其远端 conversation ID 不能建立本机显示路由。会话中的详情与流式显示路由仍来自 Core 提交的 runtime／group 控制消息。新发送、尚未被接受的指令保持现有短期 pending，不因其他任务完成而消失。
+- 模型选择使用 APP 自定义滚动面板：桌面居中、紧凑屏幕底部展示；显示名称、说明和当前选择，模型超过六项时支持搜索。面板持续消费已提交的会话投影；任务开始、等待项出现或身份变化后不能继续切换。切换只影响当前会话。
+- 问答采用完整换行的纵向单选／多选行，永久字段标签、说明、必填标记和就地校验；文字、数字、布尔值及选择值按原 schema 提交，不把展示名称当作答案。布尔问题需明确选择，不能默认替用户回答。未知问题形式显示原因并保留拒绝／取消出口。
+- APP 就地检查必填、类型、长度及已知格式，不使用 Dart 正则执行智能体传来的 `pattern`；复杂规则统一由 Daemon 的有界校验器执行，避免 UI 卡顿和两端规则解释不一致。Daemon 明确拒绝回答格式时，表单保留原文、恢复编辑并提示按问题说明修改，以新命令提交；传输未确认仍保留原命令幂等重试。
+- 问答输入属于 APP 本机状态，以 owner DID、Core conversation、Agent、session、run、question、定义摘要分隔，复用 ProductLocalStore 的 local_ui_preferences 中 acp-question-draft:v1 命名空间；不建立消息或任务事实表。结构化输入、自定义文本和未确认命令先持久化再发送，重开 APP 后可恢复，身份 epoch 限制所有异步提交；清理遵循既有 owner 数据删除。滚出消息列表后仍保留；不占用聊天草稿或等待位。每个问题独立锁定提交，提交期间禁止编辑或发出另一种回答；传输结果未确认时冻结原内容并复用相同命令重试，已确认或过期后不可重复提交。Daemon 继续拥有最终权限、schema、revision、幂等和过期校验。
+- 长表单、长模型列表和多条上下文重建提示可以滚动。输入区上方的会话选项有高度上限，避免窄屏或键盘弹出时挤走聊天输入框。创建入口和类型选项允许换行并随文字高度增长。
+
+- 历史详情由 `task_history_available` 能力门禁控制，只对已知 Core 路由和当前消息窗口的来源消息 ID 查询，每页有界、游标必须前进，离开窗口或身份变化停止后续分页。私聊控制响应可携带群记录，但只能应用到先前由 Core 群消息建立的路由；不能将群任务挂到私聊控制通道。历史查询通过已提交响应回调投影事实，Future 返回值仅控制分页。
+- 正式回复与预览交接同时校验 Agent、群／私聊类型、Core conversation、来源消息和 run；存在但格式错误的 run 注解不能降级当作旧消息。原指令不在当前消息页时，最新任务仍显示在左侧，并明确提示原指令不在当前记录中。
+- 工具摘要只保留安全类别、文件 basename 和状态，不持久化原始命令／参数到 UI 记录；任务已结束但工具仍标记进行中时显示“未完成”。问答表单离开页面后先完成已排队的本地写入再释放 controller，恢复的未确认命令须再次匹配本问题作用域。
+
+## 客户端安装检测弹窗
+
+创建 Agent 的检测结果由目标 Daemon 的 `runtime.clients.inspect` 返回，通过 Core committed
+控制消息验证准确发送者与 command_id。短期 provider 按当前 session epoch 和 Daemon 隔离，
+不写入 Agent inventory 或修改在线状态。新 Daemon 检测通过才可选择；旧版无能力声明时保持
+原创建行为并说明无法检测。刷新保留表单；安装检测不验证登录、API Key 或模型。

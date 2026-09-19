@@ -10,39 +10,68 @@ const runtimeSandboxReadOnly = 'read-only';
 const runtimeSandboxWorkspaceWrite = 'workspace-write';
 const runtimeSandboxDangerFullAccess = 'danger-full-access';
 
-enum RuntimeAgentKind { hermes, codex, claudeCode }
+enum RuntimeAgentKind {
+  hermes,
+  codex,
+  claudeCode,
+  opencode,
+  gemini,
+  kimi,
+  deepseekHarness,
+}
 
 extension RuntimeAgentKindInfo on RuntimeAgentKind {
   String get runtime => switch (this) {
     RuntimeAgentKind.hermes => 'hermes',
     RuntimeAgentKind.codex => 'codex',
     RuntimeAgentKind.claudeCode => 'claude-code',
+    RuntimeAgentKind.opencode => 'opencode',
+    RuntimeAgentKind.gemini => 'gemini',
+    RuntimeAgentKind.kimi => 'kimi',
+    RuntimeAgentKind.deepseekHarness => 'deepseek-harness',
   };
 
   String? get driverId => switch (this) {
     RuntimeAgentKind.hermes => null,
     RuntimeAgentKind.codex => 'codex',
     RuntimeAgentKind.claudeCode => 'claude-code',
+    RuntimeAgentKind.opencode => 'opencode',
+    RuntimeAgentKind.gemini => 'gemini',
+    RuntimeAgentKind.kimi => 'kimi',
+    RuntimeAgentKind.deepseekHarness => 'deepseek-harness',
   };
 
   String get displayLabel => switch (this) {
     RuntimeAgentKind.hermes => 'Hermes',
     RuntimeAgentKind.codex => 'Codex',
     RuntimeAgentKind.claudeCode => 'Claude Code',
+    RuntimeAgentKind.opencode => 'OpenCode',
+    RuntimeAgentKind.gemini => 'Gemini CLI',
+    RuntimeAgentKind.kimi => 'Kimi Code CLI',
+    RuntimeAgentKind.deepseekHarness => 'DeepSeek Harness',
   };
 
   String get handlePlaceholder => switch (this) {
     RuntimeAgentKind.hermes => 'my-hermes',
     RuntimeAgentKind.codex => 'my-codex',
     RuntimeAgentKind.claudeCode => 'my-claude',
+    RuntimeAgentKind.opencode => 'my-opencode',
+    RuntimeAgentKind.gemini => 'my-gemini',
+    RuntimeAgentKind.kimi => 'my-kimi',
+    RuntimeAgentKind.deepseekHarness => 'my-deepseek',
   };
 
   bool get isGenericCli => driverId != null;
+  bool get isAcp => const {
+    RuntimeAgentKind.opencode,
+    RuntimeAgentKind.gemini,
+    RuntimeAgentKind.kimi,
+    RuntimeAgentKind.deepseekHarness,
+  }.contains(this);
 
   Map<String, Object?> get defaultDriverConfig => switch (this) {
     RuntimeAgentKind.codex => const <String, Object?>{'ephemeral': false},
-    RuntimeAgentKind.hermes ||
-    RuntimeAgentKind.claudeCode => const <String, Object?>{},
+    _ => const <String, Object?>{},
   };
 }
 

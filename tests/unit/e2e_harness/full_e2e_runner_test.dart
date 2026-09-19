@@ -63,8 +63,6 @@ void main() {
         'multi-device-remote-recovery',
         'root-transfer',
         'production-keychain',
-        'codex-agent',
-        'claude-code-agent',
         'performance',
         'restart',
       ]),
@@ -106,7 +104,7 @@ void main() {
       expect(commands.suites, isEmpty);
       expect(result['status'], 'dry_run');
       expect(result['passedCaseIds'], isEmpty);
-      expect(result['caseResults'], hasLength(114));
+      expect(result['caseResults'], hasLength(106));
       expect(result['catalogNotExecutable'], hasLength(17));
       AppTestCatalog.load(source).validateReport(result);
       await expectLater(
@@ -142,11 +140,7 @@ void main() {
       expect(result['status'], 'failed');
       expect(
         commands.suites,
-        containsAll([
-          'multi-device-app-pair',
-          'root-transfer',
-          'claude-code-agent',
-        ]),
+        containsAll(['multi-device-app-pair', 'root-transfer']),
       );
       final children = result['children'] as List;
       expect(
@@ -183,7 +177,7 @@ void main() {
       );
       final result = report('success');
       expect(result['status'], 'passed');
-      expect(result['passedCaseIds'], hasLength(Platform.isMacOS ? 114 : 113));
+      expect(result['passedCaseIds'], hasLength(Platform.isMacOS ? 106 : 105));
       AppTestCatalog.load(source).validateReport(result);
       expect(
         (result['children'] as List).singleWhere(
@@ -298,7 +292,7 @@ void main() {
         throwsA(isA<E2eFailure>()),
       );
       expect(report('missing')['status'], 'failed');
-      expect(commands.suites, contains('claude-code-agent'));
+      expect(commands.suites, contains('performance'));
     },
   );
 }

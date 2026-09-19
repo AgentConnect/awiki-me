@@ -22,6 +22,7 @@ import '../agents/agents_provider.dart';
 import '../agents/personal_agent_feature_visibility.dart';
 import '../agents/agent_status_indicator.dart';
 import '../agents/agent_visual_status.dart';
+import '../agents/acp_session_provider.dart';
 import '../group/group_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../shared/awiki_me_design.dart';
@@ -1523,6 +1524,9 @@ AgentVisualStatus? _conversationAgentStatus(
       pendingInThread.contains(runtimeAgent.agentDid);
   return AgentVisualStatus.fromAgent(
     runtimeAgent,
+    authoritativeBusy: ref
+        .watch(acpSessionsProvider)
+        .busyForAgent(runtimeAgent.agentDid),
     hasPendingTurn: hasPendingTurn,
   );
 }

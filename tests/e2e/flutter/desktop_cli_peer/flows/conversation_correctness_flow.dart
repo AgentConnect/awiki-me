@@ -318,11 +318,11 @@ Future<void> _verifyCrossConversationCorrectness({
   robot.failureCaseId = 'MSG-SEQUENCE-E2E-001';
   await robot.openConversationRow(group.conversationId);
   await robot.navigateToContacts();
-  await robot.enterHiddenLifecycle();
-  for (final text in burstTexts) {
-    burstIds.add(await _cliSendDirectText(config: config, text: text));
-  }
-  await robot.resumeFromHiddenLifecycle();
+  await robot.inHiddenLifecycle(() async {
+    for (final text in burstTexts) {
+      burstIds.add(await _cliSendDirectText(config: config, text: text));
+    }
+  });
   await _waitForUiUnreadClosedLoop(
     robot: robot,
     conversationId: direct.conversationId,

@@ -57,7 +57,12 @@ class _DelayedCreateGroupService extends FakeGroupApplicationService {
 }
 
 class _AdmissionDeniedGroupService extends FakeGroupApplicationService {
-  _AdmissionDeniedGroupService(super.gateway);
+  _AdmissionDeniedGroupService(
+    super.gateway, {
+    this.reason = GroupMemberAdmissionDenialReason.agentNotGroupInvitable,
+  });
+
+  final GroupMemberAdmissionDenialReason reason;
 
   @override
   Future<GroupSummary> addMember({
@@ -65,9 +70,7 @@ class _AdmissionDeniedGroupService extends FakeGroupApplicationService {
     required String memberRef,
     String role = 'member',
   }) {
-    throw const GroupMemberAdmissionException(
-      GroupMemberAdmissionDenialReason.agentNotGroupInvitable,
-    );
+    throw GroupMemberAdmissionException(reason);
   }
 }
 
@@ -1470,6 +1473,71 @@ void main() {
     expect(find.text('Racing Skill: Skill Agent 暂不支持加入群聊'), findsOneWidget);
     expect(find.textContaining('service_error'), findsNothing);
   });
+
+  for (final entry in <GroupMemberAdmissionDenialReason, String>{
+    GroupMemberAdmissionDenialReason.unspecified: '服务器不允许此身份加入群聊',
+    GroupMemberAdmissionDenialReason.federatedGroupDenied: '服务器策略不允许该外域身份加入群聊',
+  }.entries) {
+    testWidgets('普通外域用户被拒绝时不显示智能体错误 ${entry.key}', (tester) async {
+      const groupDid = 'did:wba:anpclaw.com:group:invite:e1_group';
+      const handle = 'alice.awiki.ai';
+      final gateway = FakeAwikiGateway()
+        ..loginResult = session
+        ..publicProfilesByQuery = const <String, UserProfile>{
+          handle: UserProfile(
+            did: 'did:wba:awiki.ai:user:alice:e1_user',
+            displayName: 'External Alice',
+            bio: '',
+            tags: <String>[],
+            profileMarkdown: '',
+            fullHandle: handle,
+            subjectType: 'person',
+          ),
+        }
+        ..groups = <GroupSummary>[
+          GroupSummary(
+            groupId: groupDid,
+            conversationId: 'group:$groupDid',
+            name: 'Federated group',
+            description: '',
+            memberCount: 1,
+            lastMessageAt: DateTime(2026, 9, 17),
+            myRole: 'owner',
+          ),
+        ];
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: GroupDetailPage(initialGroup: gateway.groups.first),
+          gateway: gateway,
+          session: session,
+          providerOverrides: <Override>[
+            groupApplicationServiceProvider.overrideWithValue(
+              _AdmissionDeniedGroupService(gateway, reason: entry.key),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('group-detail-add-member-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('identity-lookup-input')),
+        handle,
+      );
+      await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('External Alice'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('identity-add-group-member-button')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('External Alice: ${entry.value}'), findsOneWidget);
+      expect(find.textContaining('该类型的智能体'), findsNothing);
+      expect(find.textContaining('service_error'), findsNothing);
+      expect(find.text('确认添加 (1)'), findsOneWidget);
+    });
+  }
 
   testWidgets('添加群成员候选复用会话的 Persona 昵称和头像投影', (tester) async {
     const groupDid = 'did:wba:awiki.info:group:profile-consistency:e1_group';

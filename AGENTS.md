@@ -153,3 +153,7 @@ migrations or old RPC gateway paths.
 Do not commit real credentials, generated local state, signing keys, or custom
 runtime configuration. Account identities remain e1 DID-only. Credential and key
 storage follow the existing Core vault and platform secret-provider contracts.
+
+## 模型无关测试（2026-09-18 用户决定）
+
+自动测试不调用真实大模型 API，不依赖个人 API Key 或已安装 Agent CLI。真实模型验收及其按需入口已移除；优先使用模拟 ACP 子进程、临时配置和 fake 服务。新增用例与统一 profile、catalog 同步；不能把模拟协议／组件通过描述为真实模型兼容性验收。普通服务端、身份、消息和附件测试继续遵循原有环境边界。
