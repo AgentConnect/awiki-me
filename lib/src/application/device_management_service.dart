@@ -28,6 +28,28 @@ class DeviceManagementService {
   final Set<String> _approvalSessionsInFlight = <String>{};
   final Set<String> _revokeDeviceIdsInFlight = <String>{};
 
+  Future<bool> localManagementReady(
+    String selector,
+    String? protocolDeviceId,
+  ) async {
+    if (protocolDeviceId == null) return false;
+    return _core.localManagementReady(
+      selector: _required(selector, 'selector'),
+      protocolDeviceId: _required(protocolDeviceId, 'protocolDeviceId'),
+    );
+  }
+
+  Future<List<DeviceJoinManagementStatus>> managementStatus(String selector) =>
+      _core.deviceJoinManagementStatus(_required(selector, 'selector'));
+
+  Future<void> retryManagement({
+    required String selector,
+    required String joinSessionId,
+  }) => _core.retryDeviceJoinManagement(
+    selector: _required(selector, 'selector'),
+    joinSessionId: _required(joinSessionId, 'joinSessionId'),
+  );
+
   Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
     required String handle,
     required String phone,

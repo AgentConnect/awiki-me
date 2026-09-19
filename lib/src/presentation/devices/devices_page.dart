@@ -29,15 +29,30 @@ class DevicesPage extends ConsumerStatefulWidget {
 class _DevicesPageState extends ConsumerState<DevicesPage> {
   bool _isRefreshing = false;
   String? _grantingDeviceId;
+  Timer? _managementTimer;
 
   @override
   void initState() {
     super.initState();
+    _managementTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (mounted &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        unawaited(
+          ref.read(devicesProvider.notifier).refreshManagementProgress(),
+        );
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(_refresh());
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _managementTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -129,6 +144,11 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                         ) ...<Widget>[
                           _DeviceTile(
                             device: registry.devices[index],
+                            requiresRejoin:
+                                state
+                                    .managementFor(registry.devices[index])
+                                    ?.requiresRejoin ==
+                                true,
                             readiness: state.readinessFor(
                               registry.devices[index],
                             ),
@@ -257,6 +277,16 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
   }
 
   Future<void> _grantManagement(DeviceSummary device) async {
+    final automatic = ref.read(devicesProvider).managementFor(device);
+    if (automatic != null) {
+      if (automatic.canRetry) {
+        await ref
+            .read(devicesProvider.notifier)
+            .retryJoinManagement(automatic.joinSessionId);
+      }
+      return;
+    }
+
     if (_grantingDeviceId != null) return;
     setState(() => _grantingDeviceId = device.protocolDeviceId);
     try {
@@ -404,6 +434,7 @@ class _SectionLabel extends StatelessWidget {
 class _DeviceTile extends StatelessWidget {
   const _DeviceTile({
     required this.device,
+    required this.requiresRejoin,
     required this.readiness,
     required this.revokeEnabled,
     required this.canRevoke,
@@ -417,6 +448,7 @@ class _DeviceTile extends StatelessWidget {
   });
 
   final DeviceSummary device;
+  final bool requiresRejoin;
   final DeviceManagementReadiness? readiness;
   final bool revokeEnabled;
   final bool canRevoke;
@@ -443,6 +475,7 @@ class _DeviceTile extends StatelessWidget {
         role,
         status,
         if (readinessLabel != null) readinessLabel,
+        if (requiresRejoin) context.l10n.deviceJoinManagementRejoinRequired,
       ].join(' · '),
       trailing: canGrantManagement || (revokeEnabled && canRevoke)
           ? Row(

@@ -1,5 +1,18 @@
 # AWiki Me 多设备加入、设备页与永久撤销
 
+## 一次 Join 授权自动配置管理权限（2026-09-15）
+
+App/CLI 的正常加入确认含义为“允许该设备加入并成为管理设备”。保留身份/SAS 核对及一次 user presence；取消此路径后续独立 root 授权。Core 的既有普通 Join 接口仍供 Node/DSH 使用，独立 root-key send 仍要求单独明确授权，不能将 user_presence_confirmed 硬编码为 true 接入自动流程。
+
+Core 在发送批准请求前，将自动任务随该 Join 的既有持久化批准记录保存，绑定 owner、DID、Join、目标设备和签名/E2EE 公钥、源管理设备及已批准文档。服务端批准响应丢失时，只能由已验证批准结果/通知恢复任务。自动尝试状态归 Core，发送原消息/密文仍复用既有 sender ledger 与 P5 pending outbound，不复制密码学实现。
+
+首次立即尝试，包括 PreKey 未就绪在内最多三次；每次可重试失败结束后持久化五秒后的下次时间。尝试先记账后发网，崩溃不返还预算；恢复中的未完成尝试先对账，并保守等待五秒。跨进程文件锁覆盖整个推进轮次，防止实时线程、同步与恢复重叠。网络操作有独立超时，不把五秒作为整个操作超时。
+
+发送接受后停止发送重试，等待原接收端 pending root、完成证明、Registry 登记、本地 root 激活和认证更新链路。发送端只能报告服务端管理登记，不能据此声明接收端本地 root 已激活。三次耗尽显示“设备已加入，管理权限配置失败”；显式重试先对账接受/登记状态，才允许新一轮预算。撤销、设备/密钥变化、身份/签名验证失败终止任务。进程退出保留状态，不承诺退出后仍发网；长期离线保持等待，无任意失败期限。
+
+无秘密投影只包含 Join/设备 ID、阶段、尝试次数、下次尝试时间、稳定错误码；不暴露 root、密文、proof 或自动授权 handle。真实四方向及第三台设备批准证据属于后续真实环境验收，不由本地测试代替。
+
+
 状态：消息驱动的 member Join 默认存在；根导入、永久撤销和 E2EE 不属于本步骤
 
 整体身份和密码学方案以 Core 仓库中的
@@ -125,11 +138,7 @@ AWiki Me 只维护一个当前 access token 会话，不引入 refresh token 或
 次续期，第二次 401 直接向上返回。若 V1 部署期保持 User Service JWT signing key 不轮换，
 这只是上线部署约束，不能据此宣称 Message Service 已完整实现基于 `kid` 的多 key 验签。
 
-Join V1 不提供 `admin` 选择，也不因批准 Join 触发根密钥传输；结果固定为
-`active + member + management_ready=false`。管理员升级和普通 P5 RootKeyEnvelope 属于
-独立的 Root Transfer：用户可以在 Join 完成页立即执行，也可以以后从设备列表对 eligible
-member 执行。两条入口都重新调用 Core fresh prepare，不改变 Join 授权结果，也不复用 Join
-Session、旧 handle 或旧 root-control 实现。
+Join wire 仍先登记 `active + member + management_ready=false`，但 App/CLI 的一次批准已包含该精确设备的管理授权，Core 随后自动推进 P5 Root 配置。没有第二次授予/发送确认。既有普通设备从设备列表手动授予时仍使用独立 Root Transfer；已有自动任务失败则通过原 Join 的显式 retry 对账恢复，不建立新任意目标授权。
 
 ## 4. 永久撤销
 
