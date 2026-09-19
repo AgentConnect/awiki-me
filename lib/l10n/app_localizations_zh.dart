@@ -1634,6 +1634,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get groupInviteAddFailed => '添加失败，请稍后重试';
 
   @override
+  String get groupInviteAdmissionDenied => '服务器不允许此身份加入群聊';
+
+  @override
+  String get groupInviteFederatedDenied => '服务器策略不允许该外域身份加入群聊';
+
+  @override
   String groupInviteConfirmCount(int count) {
     return '确认添加 ($count)';
   }
@@ -2231,8 +2237,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentInstallTitle => '到宿主机安装代理';
 
   @override
-  String get agentInstallSupportedTypes =>
-      '支持的 Agent 类型：Hermes、Codex、Claude Code。安装宿主代理后，可在 Daemon 下创建 Runtime Agent。';
+  String agentInstallSupportedTypes(String types) {
+    return '支持 $types。安装 Daemon 后可创建智能体；外部客户端需在同一设备上安装并完成配置。';
+  }
 
   @override
   String agentInstallTokenExpiresAt(Object expiresAt) {
@@ -2375,35 +2382,35 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String agentCreateNeedsRouteWorkspace(Object agentType) {
-    return '$agentType 需要按会话目录工作模式。';
+    return '请升级此设备的 Daemon，以启用 $agentType。';
   }
 
   @override
-  String get agentCreateHermesDescription => '内置 Hermes Runtime Agent。';
+  String get agentCreateHermesDescription => '使用宿主机上的 Hermes Gateway。';
 
   @override
   String agentCreateNeedsGenericCliCapability(Object agentType) {
-    return '$agentType 需要 Daemon 提供 generic-cli capability。';
+    return '请先刷新设备状态，以确认是否支持 $agentType。';
   }
 
   @override
   String agentCreateUnsupportedDriver(Object agentType) {
-    return '当前 Daemon 不支持 $agentType driver。';
+    return '当前设备的 Daemon 尚不支持 $agentType，请升级后重试。';
   }
 
   @override
   String agentCreateNeedsRouteSession(Object agentType) {
-    return '$agentType 需要 route session 和 native resume 支持。';
+    return '请升级此设备的 Daemon，以启用 $agentType。';
   }
 
   @override
   String agentCreateNeedsHostAccess(Object agentType) {
-    return '$agentType 需要 Daemon 支持宿主机全权限模式。';
+    return '请升级此设备的 Daemon，以启用 $agentType。';
   }
 
   @override
   String agentCreateRequiresSignedInCli(Object agentType) {
-    return '需要 Daemon 上已安装并登录的 $agentType CLI。';
+    return '使用宿主机上的 $agentType 客户端。';
   }
 
   @override
@@ -3553,18 +3560,89 @@ class AppLocalizationsZh extends AppLocalizations {
   String get handleRecoveryContinueExisting => '继续上次恢复';
 
   @override
-  String get deviceJoinManagementConfiguring => '设备已加入，正在配置管理权限。可安全离开此页面。';
+  String get agentClientReady => '已检测到';
 
   @override
-  String get deviceJoinManagementWaiting => '根密钥发送已接受，等待新设备完成管理权限配置。';
+  String get agentClientMissing => '未检测到';
+
+  @override
+  String get agentClientUnavailable => '启动异常';
+
+  @override
+  String get agentClientUnknown => '尚未确认';
+
+  @override
+  String get agentClientChecking => '检测中…';
+
+  @override
+  String get agentClientRefresh => '重新检测';
+
+  @override
+  String get agentClientOffline => '设备离线';
+
+  @override
+  String get agentClientOfflineHint => '连接 Daemon 后重新检测。';
+
+  @override
+  String get agentClientRetryHint => '暂时无法确认，请重新检测。';
+
+  @override
+  String get agentClientInstallHint => '请在此 Daemon 的宿主机安装客户端，再重新检测。';
+
+  @override
+  String get agentClientPermissionHint => '客户端没有执行权限，请在宿主机修复后重新检测。';
+
+  @override
+  String get agentClientGatewayHint => '未找到 Hermes Gateway 模块，请检查宿主机安装。';
+
+  @override
+  String get agentClientCustomHint => '无法轻量检测自定义启动命令，请检查启动入口。';
+
+  @override
+  String get agentClientTimeoutHint => '检测超时，请稍后重新检测。';
+
+  @override
+  String get agentClientLaunchHint => '客户端启动失败，请检查宿主机的安装与依赖。';
+
+  @override
+  String agentClientHost(String host) {
+    return '检测 $host 所在宿主机的客户端。';
+  }
+
+  @override
+  String get agentClientLegacy => '当前 Daemon 暂不支持安装检测，创建时将按原流程校验。';
+
+  @override
+  String get agentClientScope => '仅检测客户端安装与启动情况。使用前，请在宿主机完成登录或模型配置。';
+
+  @override
+  String get agentClientCreating => '创建中…';
+
+  @override
+  String get agentClientCreateFailed => '创建失败，请检查客户端环境后重试。已保留填写内容。';
+
+  @override
+  String get agentClientCreatePending => '创建已提交，仍在等待结果。可关闭此窗口，在智能体列表查看进度。';
+
+  @override
+  String get agentClientProtocolHint => '客户端协议连接失败，请检查宿主机上的登录、配置或客户端错误后重试。';
+
+  @override
+  String get agentClientCompatibilityHint => '客户端版本与当前接入能力不兼容，请更新客户端后重试。';
 
   @override
   String get deviceJoinManagementRegistered => '管理权限已登记，请在新设备确认管理能力已就绪。';
 
   @override
-  String get deviceJoinManagementFailed => '设备已加入，管理权限配置失败';
+  String get deviceJoinManagementWaiting => '根密钥发送已接受，等待新设备完成管理权限配置。';
+
+  @override
+  String get deviceJoinManagementConfiguring => '设备已加入，正在配置管理权限。可安全离开此页面。';
 
   @override
   String get deviceJoinManagementRejoinRequired =>
       '管理权限配置已失效，请由管理设备撤销此设备，再在此设备上退出本地身份（保留数据）后重新加入。';
+
+  @override
+  String get deviceJoinManagementFailed => '设备已加入，管理权限配置失败';
 }

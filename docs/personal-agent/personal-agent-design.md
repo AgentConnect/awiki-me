@@ -59,6 +59,10 @@ Agent 页面 = User Service Inventory 基线
 - 与本地 pending 精确匹配的 create overlay，以及已存在 Agent 的 delete overlay，
   一直保留到 Inventory 确认对应 DID 已出现/消失，避免旧响应覆盖新拓扑。
   Inventory 确认后移除 overlay，不建立第二套 durable Agent registry。
+- ACP Runtime 创建命令的发送等待超时只表示结果尚未确认：Core 的发送 Future 仍可能
+  完成。App 保留同一个 pending intent 和 request ID，通过原有 committed ACK／Inventory
+  收敛，在确认期限内显示等待状态，不重新发送或宣告创建成功。明确发送失败仍正常报错；
+  原三种 Runtime 的行为保持不变。
 
 因此 Codex、Claude Code、Hermes runtime 创建后必须在 Agent 页面自动收敛；实现不得
 依赖创建后盲目 `load()`、固定 sleep、更短轮询、会话列表推断或 raw SQLite 查询。

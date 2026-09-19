@@ -356,9 +356,15 @@
   "deviceRootTransferTarget": "Target device: {deviceId}\nSigning key: {signingKeyId}\nEnd-to-end encryption key: {e2eeKeyId}",
   "@deviceRootTransferTarget": {
     "placeholders": {
-      "deviceId": {"type": "String"},
-      "signingKeyId": {"type": "String"},
-      "e2eeKeyId": {"type": "String"}
+      "deviceId": {
+        "type": "String"
+      },
+      "signingKeyId": {
+        "type": "String"
+      },
+      "e2eeKeyId": {
+        "type": "String"
+      }
     }
   },
   "deviceRootTransferSent": "Root key sent",
@@ -376,7 +382,9 @@
   "deviceRevokeConfirmDetail": "Revoke {deviceId} permanently. It will lose future access, but data already obtained cannot be erased. This action cannot be undone.",
   "@deviceRevokeConfirmDetail": {
     "placeholders": {
-      "deviceId": {"type": "String"}
+      "deviceId": {
+        "type": "String"
+      }
     }
   },
   "deviceRevokeConfirmAction": "Revoke permanently",
@@ -397,7 +405,9 @@
   "deviceJoinResendOtpIn": "Resend ({seconds}s)",
   "@deviceJoinResendOtpIn": {
     "placeholders": {
-      "seconds": {"type": "int"}
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "deviceJoinStart": "Start pairing",
@@ -416,14 +426,20 @@
   "deviceJoinFingerprint": "Key fingerprint: {fingerprint}",
   "@deviceJoinFingerprint": {
     "placeholders": {
-      "fingerprint": {"type": "String"}
+      "fingerprint": {
+        "type": "String"
+      }
     }
   },
   "deviceJoinRequestWindow": "Requested {issuedAt}; expires {expiresAt}",
   "@deviceJoinRequestWindow": {
     "placeholders": {
-      "issuedAt": {"type": "String"},
-      "expiresAt": {"type": "String"}
+      "issuedAt": {
+        "type": "String"
+      },
+      "expiresAt": {
+        "type": "String"
+      }
     }
   },
   "deviceJoinApprove": "Allow join and management access",
@@ -443,7 +459,9 @@
   "deviceJoinOtpRateLimited": "Verification codes are being sent too frequently. Try again in {seconds} seconds.",
   "@deviceJoinOtpRateLimited": {
     "placeholders": {
-      "seconds": {"type": "int"}
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "deviceJoinErrorFailed": "Device operation failed. Refresh and try again.",
@@ -603,7 +621,9 @@
   "groupIdentityCurrentHandle": "Handle: {handle}",
   "@groupIdentityCurrentHandle": {
     "placeholders": {
-      "handle": {"type": "String"}
+      "handle": {
+        "type": "String"
+      }
     }
   },
   "groupNoDescription": "No group description yet",
@@ -639,13 +659,17 @@
   "groupRecoveryPending": "Identity restored; {count} group updates are pending",
   "@groupRecoveryPending": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "groupRecoveryBlocked": "Identity restored; {count} group updates need attention",
   "@groupRecoveryBlocked": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "groupRecoveryStatusUnavailable": "Identity restored; group updates will retry later",
@@ -675,6 +699,8 @@
   "groupInviteShowMore": "Show more",
   "groupInviteAdding": "Adding...",
   "groupInviteAddFailed": "Could not add this identity. Try again later.",
+  "groupInviteAdmissionDenied": "The server does not allow this identity to join the group.",
+  "groupInviteFederatedDenied": "Server policy does not allow this external identity to join the group.",
   "groupInviteConfirmCount": "Add ({count})",
   "@groupInviteConfirmCount": {
     "placeholders": {
@@ -972,7 +998,7 @@
   "agentRemoveDaemonFromAccountMessage": "This daemon is not reachable. This will remove the daemon and its agents from this account only. It will not access or clean up files on the host.",
   "agentRemoveRuntimeFromAccountMessage": "This agent cannot be deleted through its daemon right now. This will remove it from this account only. It will not access or clean up files on the host.",
   "agentInstallTitle": "Install daemon on host",
-  "agentInstallSupportedTypes": "Supported Agent types: Hermes, Codex, Claude Code. After installing the host daemon, you can create Runtime Agents under it.",
+  "agentInstallSupportedTypes": "Supports {types}. After installing Daemon, create an agent here. External clients must be installed and configured on the same device.",
   "agentInstallTokenExpiresAt": "Expires at: {expiresAt}",
   "@agentInstallTokenExpiresAt": {
     "placeholders": {
@@ -1031,38 +1057,38 @@
   },
   "agentCreateHandleInvalidPattern": "Use only lowercase letters, numbers, and hyphens. It must start and end with a letter or number.",
   "agentCreateHandleNoDoubleHyphen": "Handle cannot contain consecutive hyphens",
-  "agentCreateNeedsRouteWorkspace": "{agentType} requires per-conversation working directories.",
+  "agentCreateNeedsRouteWorkspace": "Upgrade Daemon on this device to enable {agentType}.",
   "@agentCreateNeedsRouteWorkspace": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateHermesDescription": "Built-in Hermes Runtime Agent.",
-  "agentCreateNeedsGenericCliCapability": "{agentType} requires generic-cli capability from the daemon.",
+  "agentCreateHermesDescription": "Uses Hermes Gateway on the host.",
+  "agentCreateNeedsGenericCliCapability": "Refresh the device status to check support for {agentType}.",
   "@agentCreateNeedsGenericCliCapability": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateUnsupportedDriver": "The current daemon does not support the {agentType} driver.",
+  "agentCreateUnsupportedDriver": "This device’s Daemon does not yet support {agentType}. Upgrade it and try again.",
   "@agentCreateUnsupportedDriver": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateNeedsRouteSession": "{agentType} requires route session and native resume support.",
+  "agentCreateNeedsRouteSession": "Upgrade Daemon on this device to enable {agentType}.",
   "@agentCreateNeedsRouteSession": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateNeedsHostAccess": "{agentType} requires daemon support for full host access.",
+  "agentCreateNeedsHostAccess": "Upgrade Daemon on this device to enable {agentType}.",
   "@agentCreateNeedsHostAccess": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateRequiresSignedInCli": "Requires an installed and signed-in {agentType} CLI on the daemon host.",
+  "agentCreateRequiresSignedInCli": "Uses the {agentType} client on the host.",
   "@agentCreateRequiresSignedInCli": {
     "placeholders": {
       "agentType": {}
@@ -1344,7 +1370,13 @@
   "updateInstallFailed": "Update failed. Please install it from the download page.",
   "updateRestrictedTitle": "Update required for this tenant",
   "updateRestrictedMessage": "{tenantName} requires AWiki Me {minimumVersion} or later. You are using {currentVersion}. Update the app to continue, or switch tenants.",
-  "@updateRestrictedMessage": {"placeholders": {"tenantName": {}, "minimumVersion": {}, "currentVersion": {}}},
+  "@updateRestrictedMessage": {
+    "placeholders": {
+      "tenantName": {},
+      "minimumVersion": {},
+      "currentVersion": {}
+    }
+  },
   "updateRestrictedInstall": "Open official download page",
   "updateRestrictedSwitchTenant": "Switch tenant",
   "updateRestrictedSettings": "Settings and local data",
@@ -1404,7 +1436,9 @@
   "attachmentDownloadingProgress": "Downloading · {progress}",
   "@attachmentDownloadingProgress": {
     "placeholders": {
-      "progress": {"type": "String"}
+      "progress": {
+        "type": "String"
+      }
     }
   },
   "attachmentDownloadPaused": "Download paused",
@@ -1551,9 +1585,46 @@
   "handleRecoveryRunning": "Processing recovery. Please wait…",
   "handleRecoveryEntering": "Recovery is complete. Opening messages…",
   "handleRecoveryContinueExisting": "Continue previous recovery",
-  "deviceJoinManagementConfiguring": "Device joined. Configuring management access. You can safely leave this page.",
-  "deviceJoinManagementWaiting": "Root key delivery accepted. Waiting for the new device to finish setup.",
+  "@agentInstallSupportedTypes": {
+    "placeholders": {
+      "types": {
+        "type": "String"
+      }
+    }
+  },
+  "agentClientReady": "Detected",
+  "agentClientMissing": "Not found",
+  "agentClientUnavailable": "Cannot start",
+  "agentClientUnknown": "Not confirmed",
+  "agentClientChecking": "Checking…",
+  "agentClientRefresh": "Check again",
+  "agentClientOffline": "Host offline",
+  "agentClientOfflineHint": "Reconnect the Daemon, then check again.",
+  "agentClientRetryHint": "Could not confirm installation. Check again.",
+  "agentClientInstallHint": "Install the client on this Daemon’s host, then check again.",
+  "agentClientPermissionHint": "The client cannot be executed. Fix its permissions on the host.",
+  "agentClientGatewayHint": "Hermes Gateway module not found. Check the host installation.",
+  "agentClientCustomHint": "This custom launcher cannot be checked safely. Check its entry point.",
+  "agentClientTimeoutHint": "The check timed out. Try again shortly.",
+  "agentClientLaunchHint": "The client could not start. Check its installation and dependencies.",
+  "agentClientHost": "Checking clients on {host}’s host.",
+  "agentClientLegacy": "This Daemon does not support installation checks yet. Creation uses the existing validation.",
+  "agentClientScope": "Checks installation and startup only. Sign in or configure a model on the host before use.",
+  "@agentClientHost": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "agentClientCreating": "Creating…",
+  "agentClientCreateFailed": "Creation failed. Check the client environment and try again. Your input has been kept.",
+  "agentClientCreatePending": "Creation was submitted and is still pending. You can close this window and check the Agent list.",
+  "agentClientProtocolHint": "Client protocol connection failed. Check sign-in, configuration or client errors on the host.",
+  "agentClientCompatibilityHint": "This client version is not compatible with the integration. Update the client and try again.",
   "deviceJoinManagementRegistered": "Management access registered. Confirm readiness on the new device.",
-  "deviceJoinManagementFailed": "Device joined; management configuration failed",
-  "deviceJoinManagementRejoinRequired": "Management setup is no longer valid. Have an administrator revoke this device, then sign out locally on this device while keeping its data and join again."
+  "deviceJoinManagementWaiting": "Root key delivery accepted. Waiting for the new device to finish setup.",
+  "deviceJoinManagementConfiguring": "Device joined. Configuring management access. You can safely leave this page.",
+  "deviceJoinManagementRejoinRequired": "Management setup is no longer valid. Have an administrator revoke this device, then sign out locally on this device while keeping its data and join again.",
+  "deviceJoinManagementFailed": "Device joined; management configuration failed"
 }

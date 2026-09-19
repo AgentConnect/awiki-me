@@ -94,13 +94,11 @@ Usage:
   dart run tests/e2e/runner.dart --case identity-switch
   dart run tests/e2e/runner.dart --case performance
   dart run tests/e2e/runner.dart --case personal-agent
-  dart run tests/e2e/runner.dart --case codex-agent
-  dart run tests/e2e/runner.dart --case claude-code-agent
 
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|handle-recovery-state-machine|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair-recovery-registration-resume|multi-device-app-pair-recovery-retirement-ordinary-rejoin|identity-deletion-recovery-guard|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|multi-device-app-pair-paging-recovery|step4-revoke-mls|multi-device-app-pair-later-admin-grant|root-transfer|full|messaging|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
+  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|handle-recovery-state-machine|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair-recovery-registration-resume|multi-device-app-pair-recovery-retirement-ordinary-rejoin|identity-deletion-recovery-guard|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|multi-device-app-pair-paging-recovery|step4-revoke-mls|multi-device-app-pair-later-admin-grant|root-transfer|full|messaging|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
                                unattended real App/CLI message-driven
@@ -151,10 +149,9 @@ Options:
                                restart case launches two Flutter processes
                                against one isolated App state root. The
                                personal-agent case is the full UI acceptance
-                               gate for Personal Agent; codex-agent and
-                               claude-code-agent are user-visible runtime
-                               Agent reply gates. Probes are only lower level
-                               helpers.
+                               gate for Personal Agent with a deterministic
+                               fake runtime. Model-backed Agent suites are not
+                               part of the test runner.
   --prepare-only               Prepare selected leaf prerequisites; never attest a pass.
   --dry-run                    Print planned commands without side effects.
 ''');
@@ -195,9 +192,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   identitySwitch(_desktopIdentitySwitchCaseIds),
   restart(_desktopCliPeerRestartCaseIds),
   displayNameFallback(_desktopCliPeerDisplayNameFallbackCaseIds),
-  personalAgent(_personalAgentCaseIds),
-  codexAgent(_codexAgentCaseIds),
-  claudeCodeAgent(_claudeCodeAgentCaseIds);
+  personalAgent(_personalAgentCaseIds);
 
   const DesktopE2eCase(this._caseIds);
 
@@ -273,10 +268,6 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         'integration_test/desktop_cli_peer_display_name_fallback_test.dart',
       DesktopE2eCase.personalAgent =>
         'integration_test/personal_agent_full_ui_test.dart',
-      DesktopE2eCase.codexAgent =>
-        'integration_test/codex_agent_full_ui_test.dart',
-      DesktopE2eCase.claudeCodeAgent =>
-        'integration_test/claude_code_agent_full_ui_test.dart',
     };
   }
 
@@ -284,8 +275,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   String get caseName {
     return switch (this) {
       DesktopE2eCase.personalAgent => 'personal-agent',
-      DesktopE2eCase.codexAgent => 'codex-agent',
-      DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
+
       DesktopE2eCase.displayNameFallback => 'display-name-fallback',
       DesktopE2eCase.contactFirst => 'contact-first',
       DesktopE2eCase.identitySwitch => 'identity-switch',
@@ -374,16 +364,13 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.step4RevokeMls => 'step4-revoke-mls',
       DesktopE2eCase.rootTransfer => 'root-transfer',
       DesktopE2eCase.personalAgent => 'personal-agent',
-      DesktopE2eCase.codexAgent => 'codex-agent',
-      DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
+
       _ => 'desktop-cli-peer',
     };
   }
 
   Duration get flutterTimeout {
     return switch (this) {
-      DesktopE2eCase.claudeCodeAgent => const Duration(minutes: 15),
-      DesktopE2eCase.codexAgent => const Duration(minutes: 8),
       DesktopE2eCase.personalAgent => const Duration(minutes: 16),
       DesktopE2eCase.performance => const Duration(minutes: 12),
       DesktopE2eCase.restart => const Duration(minutes: 10),
@@ -428,8 +415,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
     return switch (this) {
       DesktopE2eCase.full => 'awiki-me-full',
       DesktopE2eCase.personalAgent => _personalAgentScenario,
-      DesktopE2eCase.codexAgent => _codexAgentScenario,
-      DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentScenario,
+
       DesktopE2eCase.performance => _desktopCliPeerPerformanceScenario,
       DesktopE2eCase.multiDevice => _multiDeviceCapabilityGateScenario,
       DesktopE2eCase.multiDeviceRemoteJoin => _multiDeviceRemoteJoinScenario,
@@ -465,8 +451,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   String get runConfigPath {
     return switch (this) {
       DesktopE2eCase.personalAgent => _personalAgentRunConfigPath,
-      DesktopE2eCase.codexAgent => _codexAgentRunConfigPath,
-      DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentRunConfigPath,
+
       DesktopE2eCase.multiDeviceRemoteJoin =>
         _multiDeviceRemoteJoinRunConfigPath,
       DesktopE2eCase.multiDeviceRemoteRecovery =>
@@ -603,18 +588,6 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       'msgagent' ||
       'im-agent' ||
       'im_agent' => DesktopE2eCase.personalAgent,
-      'codex-agent' ||
-      'codex_agent' ||
-      'codexagent' ||
-      'agent-codex' ||
-      'agent_codex' => DesktopE2eCase.codexAgent,
-      'claude-code-agent' ||
-      'claude_code_agent' ||
-      'claudecodeagent' ||
-      'agent-claude-code' ||
-      'agent_claude_code' ||
-      'claude-agent' ||
-      'claude_agent' => DesktopE2eCase.claudeCodeAgent,
       _ => throw E2eFailure(
         'Unsupported E2E case "$value". '
         'Use smoke, multi-device, multi-device-remote-join, '
@@ -630,7 +603,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         'step4-revoke-mls, root-transfer, full, messaging, performance, direct, '
         'group, attachment, contacts, inbound, identity-switch, restart, '
         'display-name-fallback, '
-        'personal-agent, codex-agent, or claude-code-agent.',
+        'personal-agent.',
       ),
     };
   }
