@@ -389,6 +389,8 @@ DID、Handle、Inventory 或 presentation thread 猜测/持久化 binding。若�
 
 Conversation patch stream 必须串行应用；`reset` / `upsert` 在发布新会话行前先完成同一 owner/runtime scope 的本地 Persona Profile 读取，使会话列表和聊天页头的首个内容帧直接使用已缓存昵称。缓存读取失败时保留已有 Profile 并按统一 resolver 回退 Handle/DID，但不能为等待远端 Profile 阻塞 patch，也不能先发布 Handle 再用本地昵称覆盖。聊天页头即使暂时缺少 current DID，也必须能以 `peerPersonaId` 读取同一份 Profile 投影。
 
+会话 patch 的 App adapter 与 service 必须在空闲期间也立即向上游传递取消；权限代次变化或身份切换时，不能等待下一条 patch 才完成旧订阅释放。映射和异步 overlay 处理保持顺序，新代次仍需等待 Core reset 后才启动可靠同步。
+
 ## 10. Timeline 和 Local-First 打开路径
 
 Chat presentation 是单向的：

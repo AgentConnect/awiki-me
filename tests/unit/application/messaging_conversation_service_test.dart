@@ -23,6 +23,42 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('ImCoreConversationService', () {
+    test(
+      'idle patch subscription cancels and a new generation receives reset',
+      () async {
+        final core = _FakeConversations();
+        addTearDown(core._patches.close);
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: InMemoryAwikiProductLocalStore(),
+        );
+        for (var generation = 1; generation <= 2; generation++) {
+          final received = Completer<ConversationListPatch>();
+          final subscription = service
+              .watchConversationPatches(ownerDid: 'did:alice')
+              .listen(received.complete);
+          await Future<void>.delayed(Duration.zero);
+          core.emitPatch(
+            CoreConversationPatch(
+              kind: CoreConversationPatchKind.reset,
+              ownerDid: 'did:alice',
+              version: generation,
+              unreadTotal: 0,
+            ),
+          );
+          final patch = await received.future.timeout(
+            const Duration(seconds: 1),
+          );
+          expect(patch.kind, ConversationListPatchKind.reset);
+          expect(patch.version, generation);
+          // Let the wrapper return to waiting on an idle upstream stream.
+          await Future<void>.delayed(Duration.zero);
+          await subscription.cancel().timeout(const Duration(seconds: 1));
+          expect(core._patches.hasListener, isFalse);
+        }
+      },
+    );
+
     test('applies product overlays without making them primary data', () async {
       final core = _FakeConversations(
         items: <ConversationSummary>[
