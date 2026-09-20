@@ -231,3 +231,19 @@ Back exit. For lock-screen acceptance, verify the keyguard is already showing
 before sending; a notification arriving while the phone is transitioning to sleep
 is not sufficient. Record provider connectivity and Android process-freeze events
 separately from service outbox completion.
+
+### OEM lock-screen networking
+
+On the M153 (Nubia P0110, Android 16), AWiki Me's per-app battery settings can
+independently select `后台联网设置 → 锁屏断网`. Notification permission, an allowed
+background AppOp, an active standby bucket, or a live process does not override
+this setting. Inspect the visible setting before attributing lock-screen failures
+to the server or SDK. With the user's authorization, select `永不断网` for AWiki Me
+and read the value back; do not change global battery policy or unrelated apps.
+
+The 2026-09-20 device investigation reproduced EMAS going offline under the
+original setting. After this single setting changed, a new message sent after
+confirmed keyguard activation produced a system notification and visible
+lock-screen text. This is bounded device evidence, not a guarantee after process
+termination or prolonged idle. Preserve the original setting and timing in the
+acceptance record, and verify notification-tap routing separately.
