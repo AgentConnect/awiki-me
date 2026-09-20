@@ -122,6 +122,17 @@ void main() {
       );
       expect(nativeGuard, greaterThan(dependencies), reason: name);
       expect(nativeGuard, lessThan(desktop), reason: name);
+      if (name == 'validate') {
+        final contractSource = steps.indexWhere(
+          (step) => step['name'] == 'Checkout pinned Web contract source',
+        );
+        final analysis = steps.indexWhere(
+          (step) => step['name'] == 'Dart analyze',
+        );
+        expect(contractSource, greaterThan(nativeGuard));
+        expect(contractSource, lessThan(analysis));
+        expect(steps[contractSource].containsKey('continue-on-error'), isFalse);
+      }
       expect(steps[nativeGuard]['working-directory'], 'test-awiki-me');
       expect(
         steps[nativeGuard]['run'],

@@ -77,6 +77,66 @@ jobs:
           path: awiki-cli-rs2
           persist-credentials: false
 
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
+            libsecret-1-dev libsqlite3-dev xvfb dbus-x11
+
+      - name: Enable Flutter Linux desktop
+        run: flutter config --enable-linux-desktop
+
+      - name: Prepare SQLite source for Linux desktop build
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            curl --fail --location --continue-at - \
+              --connect-timeout 20 --max-time 120 \
+              --output /tmp/sqlite-autoconf-3520000.tar.gz \
+              https://sqlite.org/2026/sqlite-autoconf-3520000.tar.gz && break
+            if [ "$attempt" = "6" ]; then exit 1; fi
+            sleep 5
+          done
+          mkdir -p /tmp/awiki-sqlite3
+          tar -xzf /tmp/sqlite-autoconf-3520000.tar.gz \
+            --strip-components=1 -C /tmp/awiki-sqlite3
+
+      - name: Build debug native IM Core and CLI
+        working-directory: awiki-cli-rs2
+        run: |
+          if [[ "$AWIKI_SOURCE_INTEGRATION" == "1" ]]; then
+            python3 scripts/dependencies/build.py --deps source --source-manifest dependencies.source.json --cargo-command build -p im-core-dart -p awiki-cli --locked
+            native_root=.artifacts/dependencies/source/target
+          else
+            python3 scripts/release/registry-build.py -- cargo build -p im-core-dart -p awiki-cli --locked
+            native_root=target
+          fi
+          mkdir -p packages/awiki_im_core/linux/lib
+          cp "$native_root/debug/libawiki_im_core.so" \
+            packages/awiki_im_core/linux/lib/libawiki_im_core.so
+
+      - name: Install Flutter dependencies
+        working-directory: test-awiki-me
+        run: flutter pub get
+
+      - name: Verify Linux native Core provenance
+        working-directory: test-awiki-me
+        run: dart run tool/ensure_linux_im_core.dart --debug
+
       - name: Checkout unified System Test coordinator
         uses: actions/checkout@v6
         with:
@@ -150,66 +210,6 @@ jobs:
           test "$(git -C awiki-cli-rs2 rev-parse HEAD)" = "$CLI_REF"
           git -C awiki-cli-rs2 rev-parse HEAD | tee /tmp/awiki-cli-ref
           git -C test-awiki-system-test rev-parse HEAD
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2.23.0
-        with:
-          flutter-version: 3.44.0
-          channel: stable
-          cache: true
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@1.88.0
-
-      - uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-
-      - name: Install Linux desktop dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y \
-            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
-            libsecret-1-dev libsqlite3-dev xvfb dbus-x11
-
-      - name: Enable Flutter Linux desktop
-        run: flutter config --enable-linux-desktop
-
-      - name: Prepare SQLite source for Linux desktop build
-        run: |
-          for attempt in 1 2 3 4 5 6; do
-            curl --fail --location --continue-at - \
-              --connect-timeout 20 --max-time 120 \
-              --output /tmp/sqlite-autoconf-3520000.tar.gz \
-              https://sqlite.org/2026/sqlite-autoconf-3520000.tar.gz && break
-            if [ "$attempt" = "6" ]; then exit 1; fi
-            sleep 5
-          done
-          mkdir -p /tmp/awiki-sqlite3
-          tar -xzf /tmp/sqlite-autoconf-3520000.tar.gz \
-            --strip-components=1 -C /tmp/awiki-sqlite3
-
-      - name: Build debug native IM Core and CLI
-        working-directory: awiki-cli-rs2
-        run: |
-          if [[ "$AWIKI_SOURCE_INTEGRATION" == "1" ]]; then
-            python3 scripts/dependencies/build.py --deps source --source-manifest dependencies.source.json --cargo-command build -p im-core-dart -p awiki-cli --locked
-            native_root=.artifacts/dependencies/source/target
-          else
-            python3 scripts/release/registry-build.py -- cargo build -p im-core-dart -p awiki-cli --locked
-            native_root=target
-          fi
-          mkdir -p packages/awiki_im_core/linux/lib
-          cp "$native_root/debug/libawiki_im_core.so" \
-            packages/awiki_im_core/linux/lib/libawiki_im_core.so
-
-      - name: Install Flutter dependencies
-        working-directory: test-awiki-me
-        run: flutter pub get
-
-      - name: Verify Linux native Core provenance
-        working-directory: test-awiki-me
-        run: dart run tool/ensure_linux_im_core.dart --debug
 
       - name: Dart analyze
         working-directory: test-awiki-me
