@@ -13,6 +13,7 @@ import 'package:awiki_me/src/data/services/method_channel_desktop_startup_presen
 import 'package:awiki_me/src/application/device_management_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/tenant/builtin_tenant_config.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
@@ -33,6 +34,7 @@ const String _registrationCaseId = 'REGISTRATION-ACCOUNT-FIRST-E2E-001';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(initializeBuiltinTenantCatalog);
   tearDownAll(
     () => E2eInvocationCompletionWriter.markFinished(
       failedTestCount: binding.failureMethodsDetails.length,
