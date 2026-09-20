@@ -42,7 +42,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Require exact CLI / SDK source ref and System Test read token
+      - name: Require exact CLI / SDK source ref and private repository read token
         env:
           CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '527146e3d74437bb3b74f064b50def8d22f4b7e0') || vars.AWIKI_CLI_RS2_REF }}
           SYSTEM_TEST_READ_TOKEN: ${{ secrets.AWIKI_CI_READ_TOKEN }}
@@ -52,7 +52,7 @@ jobs:
             exit 1
           }
           test -n "$SYSTEM_TEST_READ_TOKEN" || {
-            echo "AWIKI_CI_READ_TOKEN must allow read-only System Test and User Service checkouts" >&2
+            echo "AWIKI_CI_READ_TOKEN is missing; provide Contents: read access to awiki-system-test, user-service, and awiki-web" >&2
             exit 1
           }
 

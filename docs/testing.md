@@ -1455,3 +1455,20 @@ Linux 还需安装 `xclip`，以独立 X11 剪贴板所有者准备 PNG，结束
 ```sh
 xvfb-run -a flutter test --no-pub integration_test/chat_composer_clipboard_test.dart -d linux
 ```
+
+
+### CI private contract source access
+
+The validation job uses `AWIKI_CI_READ_TOKEN` for the exact pinned checkouts of
+`awiki-system-test`, `user-service`, and `awiki-web`. A missing secret fails
+before checkout. A 403 during checkout requires checking the credential's selected
+repositories, Contents: read access, expiry, organization approval/SSO where
+applicable, and availability for the triggering event. Secret metadata only proves
+that a named secret exists; it does not prove the underlying token is valid or
+authorized. Do not print tokens or authentication headers for diagnosis.
+
+After the administrator repairs access, rerun the failed job for the same source
+commit (or run the updated commit if code changed) and verify the actual checkout
+SHA and downstream checks. Do not skip a private contract source, substitute a
+personal session credential, or use `pull_request_target` to work around access.
+All dependent checkouts keep `persist-credentials: false`.
