@@ -244,6 +244,8 @@ and read the value back; do not change global battery policy or unrelated apps.
 The 2026-09-20 device investigation reproduced EMAS going offline under the
 original setting. After this single setting changed, a new message sent after
 confirmed keyguard activation produced a system notification and visible
-lock-screen text. This is bounded device evidence, not a guarantee after process
-termination or prolonged idle. Preserve the original setting and timing in the
+lock-screen text. A subsequent longer locked interval triggered OEM process
+freezing again and the provider went offline; the network setting alone did not
+resolve the failure. Check per-app background execution policy separately. This
+is bounded device evidence, not a guarantee after process termination or prolonged idle. Preserve the original setting and timing in the
 acceptance record, and verify notification-tap routing separately.
