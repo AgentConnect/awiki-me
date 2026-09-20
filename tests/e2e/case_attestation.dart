@@ -737,7 +737,7 @@ class E2eCaseAttestationWriter {
       cases: byCaseId.values.toList(growable: false),
     );
     await file.parent.create(recursive: true);
-    final temporary = File('$path.tmp')
+    final temporary = File('${file.path}.tmp')
       ..writeAsStringSync(
         const JsonEncoder.withIndent('  ').convert(updated.toJson()),
         flush: true,
