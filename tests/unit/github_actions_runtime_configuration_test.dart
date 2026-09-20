@@ -71,6 +71,38 @@ void main() {
     );
   });
 
+  test('automatic source mode is scoped to the registration PR only', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    const selection =
+        "github.event.inputs.sdk_dependencies == 'source' || (github.event_name == 'pull_request' && github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first')";
+    expect(
+      workflow['env']['AWIKI_SOURCE_INTEGRATION'],
+      '\u0024{{ ($selection) && \'1\' || \'0\' }}',
+    );
+    expect(
+      workflow['env']['AWIKI_RELEASE_REGISTRY'],
+      '\u0024{{ ($selection) && \'0\' || \'1\' }}',
+    );
+    final source = File('.github/workflows/ci.yml').readAsStringSync();
+    // Every fixed consumer pin (including shell/report refs) must have the head fence.
+    final pins = source
+        .split('\n')
+        .where(
+          (line) => line.contains('3df2281b60ead902c377c0d301679dffc2372c48'),
+        );
+    expect(pins, isNotEmpty);
+    for (final line in pins) {
+      expect(
+        line,
+        contains(
+          "github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && '3df2281b",
+        ),
+      );
+    }
+  });
+
   test('validation-only dispatch cannot start remote account and OTP jobs', () {
     final workflow =
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
@@ -149,14 +181,18 @@ void main() {
     }
   });
 
-  test('release/0910 native lanes select the same compatible Core baseline', () {
+  test('registration feature alone selects the compatible Core baseline', () {
     final workflow =
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
             as YamlMap;
     final jobs = workflow['jobs'] as YamlMap;
     const pin =
-        "(github.base_ref == 'release/0910' && '3df2281b60ead902c377c0d301679dffc2372c48')";
-    for (final name in ['validate', 'remote-product']) {
+        "(github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && '3df2281b60ead902c377c0d301679dffc2372c48')";
+    for (final name in [
+      'validate',
+      'cross-repository-contracts',
+      'remote-product',
+    ]) {
       final checkout = (jobs[name]['steps'] as YamlList)
           .cast<YamlMap>()
           .singleWhere(
