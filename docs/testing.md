@@ -1472,3 +1472,14 @@ commit (or run the updated commit if code changed) and verify the actual checkou
 SHA and downstream checks. Do not skip a private contract source, substitute a
 personal session credential, or use `pull_request_target` to work around access.
 All dependent checkouts keep `persist-credentials: false`.
+
+
+For isolated iOS registration acceptance, compile only a relative fixture path
+(`AWIKI_REGISTRATION_FIXTURE=registration-acceptance/fixture.json`) and relative
+`AWIKI_E2E_ATTESTATION_PATH=registration-acceptance/case_attestation.json`, plus the
+non-secret scenario/run/case identifiers. Copy the protected fixture and optional
+local CA into the installed App container's temporary directory before launch.
+Mobile E2E file resolution uses the current App temporary directory, so reinstalling
+the App does not bind the build to an obsolete container UUID. Relative traversal
+outside that directory is rejected; desktop absolute paths retain their meaning.
+Do not compile phone numbers, OTPs, invitation codes or fixture JSON into the App.

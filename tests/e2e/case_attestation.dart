@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
 const int e2eCaseAttestationSchemaVersion = 2;
 const String e2eCaseAttestationPathDefine = 'AWIKI_E2E_ATTESTATION_PATH';
 const String e2eCaseScenarioDefine = 'AWIKI_E2E_SCENARIO';
@@ -18,6 +20,23 @@ File e2eFailureObservationFileForAttestation(File attestationFile) =>
 
 File e2eInvocationCompletionFileForAttestation(File attestationFile) =>
     File('${attestationFile.parent.path}/$e2eInvocationCompletionFileName');
+
+/// Mobile installation changes the data-container UUID. Keep runner paths
+/// relative to the current App's temporary directory; absolute desktop paths
+/// retain their existing meaning.
+File e2eRuntimeFile(String path, {Directory? mobileTemporaryDirectory}) {
+  final temporary =
+      mobileTemporaryDirectory ??
+      (Platform.isIOS || Platform.isAndroid ? Directory.systemTemp : null);
+  if (temporary == null || p.isAbsolute(path)) return File(path);
+  final resolved = p.normalize(p.join(temporary.path, path));
+  if (!p.isWithin(temporary.path, resolved)) {
+    throw ArgumentError(
+      'Relative E2E path must stay inside App temporary data.',
+    );
+  }
+  return File(resolved);
+}
 
 String e2eInvocationValue(
   String key, {
@@ -161,7 +180,7 @@ class E2eInvocationCompletionWriter {
       'finishedAt': DateTime.now().toUtc().toIso8601String(),
     });
     final file = e2eInvocationCompletionFileForAttestation(
-      File(attestationPath),
+      e2eRuntimeFile(attestationPath),
     );
     await file.parent.create(recursive: true);
     final temporary = File('${file.path}.tmp');
@@ -296,7 +315,9 @@ class E2eFailureObservationWriter {
       'observedAt': DateTime.now().toUtc().toIso8601String(),
       if (caseId?.trim().isNotEmpty == true) 'caseId': caseId!.trim(),
     });
-    final file = e2eFailureObservationFileForAttestation(File(attestationPath));
+    final file = e2eFailureObservationFileForAttestation(
+      e2eRuntimeFile(attestationPath),
+    );
     if (file.existsSync()) {
       return;
     }
@@ -671,7 +692,7 @@ class E2eCaseAttestationWriter {
       throw StateError('Case $caseId must attest at least one phase.');
     }
 
-    final file = File(path);
+    final file = e2eRuntimeFile(path);
     E2eCaseAttestation existing;
     if (file.existsSync()) {
       existing = E2eCaseAttestation.read(file);
@@ -755,7 +776,9 @@ class E2eScenarioProgressWriter {
         normalized.isEmpty) {
       return;
     }
-    final file = e2eScenarioProgressFileForAttestation(File(attestationPath));
+    final file = e2eScenarioProgressFileForAttestation(
+      e2eRuntimeFile(attestationPath),
+    );
     final phases = <Map<String, Object?>>[];
     if (file.existsSync()) {
       final decoded = jsonDecode(await file.readAsString());

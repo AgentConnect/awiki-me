@@ -50,7 +50,8 @@ void main() {
         reason: 'Explicit disposable fixture required',
       );
       final fixture =
-          jsonDecode(await File(path).readAsString()) as Map<String, dynamic>;
+          jsonDecode(await e2eRuntimeFile(path).readAsString())
+              as Map<String, dynamic>;
       final threeDid = await _runInvitedHandleJoin(
         tester,
         fixture,
