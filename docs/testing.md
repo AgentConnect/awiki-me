@@ -155,7 +155,7 @@ remote account/OTP scenarios. Scheduled runs and ordinary manual product runs
 retain their existing behavior. Record the explicit ref; do not treat a run
 against the repository's older default ref as evidence for the new baseline.
 PRs targeting `release/0910` pin Core source
-`0110e4e5a26aff788f63eace9652b191e900f78b` in both native lanes, including
+`527146e3d74437bb3b74f064b50def8d22f4b7e0` in both native lanes, including
 the optional CA configuration bridge and iOS keyring build support. Explicit manual refs still
 take precedence; other target branches retain repository-managed defaults.
 
