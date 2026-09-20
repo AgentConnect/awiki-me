@@ -626,8 +626,12 @@ Future<void> _enter(WidgetTester tester, String id, String text) async {
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
-  await tester.pump(const Duration(milliseconds: 200));
-  await tester.tap(finder);
+  await _until(
+    tester,
+    () => finder.hitTestable().evaluate().isNotEmpty,
+    'Registration control becomes hit-testable',
+  );
+  await tester.tap(finder.hitTestable());
   await tester.pump();
 }
 
