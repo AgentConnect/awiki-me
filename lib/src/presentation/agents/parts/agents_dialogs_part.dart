@@ -193,7 +193,11 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
       description = switch (item?.reasonCode) {
         'not_found' => context.l10n.agentClientInstallHint,
         'not_executable' => context.l10n.agentClientPermissionHint,
-        'gateway_module_missing' => context.l10n.agentClientGatewayHint,
+        'adapter_platform_unsupported' => context.l10n.agentClientPlatformHint,
+        'adapter_missing' ||
+        'adapter_invalid' ||
+        'adapter_runtime_unavailable' => context.l10n.agentClientAdapterHint,
+        'acp_dependencies_missing' => context.l10n.agentClientHermesAcpHint,
         'custom_launcher' => context.l10n.agentClientCustomHint,
         'timeout' => context.l10n.agentClientTimeoutHint,
         'launch_failed' ||
@@ -553,7 +557,7 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
                         : null,
                   ),
                   SizedBox(height: responsive.spacing(12)),
-                  if (_kind.isGenericCli &&
+                  if (_kind.isAcp &&
                       _shouldShowRuntimeAdvancedOptions()) ...<Widget>[
                     _RuntimeOptionSelector(
                       title: context.l10n.agentCreateWorkspacePolicy,
@@ -903,21 +907,14 @@ class _RuntimeKindStatus {
 class _RuntimeCreateCapability {
   const _RuntimeCreateCapability({
     this.inspectionVersion,
-    required this.hasGenericCliSchema,
     required this.acpDrivers,
-    required this.supportedDrivers,
-    required this.supportedWorkspaceModes,
-    required this.supportedSandboxModes,
-    required this.routeSessionSupported,
-    required this.nativeResumeSupported,
   });
 
   factory _RuntimeCreateCapability.fromDaemon(AgentSummary daemon) {
-    final diagnostics = daemon.latest.diagnosticsSummary;
-    final config = _objectMap(diagnostics['config_summary']);
-    final genericCli = _objectMap(config['generic_cli']);
+    final config = _objectMap(
+      daemon.latest.diagnosticsSummary['config_summary'],
+    );
     final acp = _objectMap(config['acp']);
-    final schemaVersion = _intValue(genericCli['capability_schema_version']);
     return _RuntimeCreateCapability(
       inspectionVersion: config.containsKey('runtime_client_detection')
           ? (_intValue(
@@ -927,87 +924,23 @@ class _RuntimeCreateCapability {
                 ) ??
                 -1)
           : null,
-      hasGenericCliSchema: schemaVersion == 1,
       acpDrivers: acp['capability_schema_version'] == 1
           ? _stringSet(acp['supported_drivers'])
           : <String>{},
-      supportedDrivers: _stringSet(genericCli['supported_drivers']),
-      supportedWorkspaceModes: _stringSet(
-        genericCli['supported_workspace_modes'],
-      ),
-      supportedSandboxModes: _stringSet(genericCli['supported_sandbox_modes']),
-      routeSessionSupported: genericCli['route_session_supported'] == true,
-      nativeResumeSupported: genericCli['native_resume_supported'] == true,
     );
   }
 
   final int? inspectionVersion;
-  final bool hasGenericCliSchema;
   final Set<String> acpDrivers;
-  final Set<String> supportedDrivers;
-  final Set<String> supportedWorkspaceModes;
-  final Set<String> supportedSandboxModes;
-  final bool routeSessionSupported;
-  final bool nativeResumeSupported;
 
   _RuntimeKindStatus statusFor(AppLocalizations l10n, RuntimeAgentKind kind) {
-    if (kind == RuntimeAgentKind.hermes) {
-      return _RuntimeKindStatus(
-        enabled: true,
-        description: AgentTypeCatalog.description(l10n, kind),
-      );
-    }
-    if (kind.isAcp) {
-      final supported = acpDrivers.contains(kind.driverId);
-      return _RuntimeKindStatus(
-        enabled: supported,
-        description: supported
-            ? AgentTypeCatalog.description(l10n, kind)
-            : l10n.agentCreateUnsupportedDriver(kind.displayLabel),
-        reasonLabel: supported ? null : l10n.agentStatusNeedsUpgrade,
-      );
-    }
-    final driverId = kind.driverId;
-    if (!hasGenericCliSchema) {
-      return _RuntimeKindStatus(
-        enabled: false,
-        description: l10n.agentCreateNeedsGenericCliCapability(
-          kind.displayLabel,
-        ),
-        reasonLabel: l10n.agentStatusRefreshNeeded,
-      );
-    }
-    if (driverId == null || !supportedDrivers.contains(driverId)) {
-      return _RuntimeKindStatus(
-        enabled: false,
-        description: l10n.agentCreateUnsupportedDriver(kind.displayLabel),
-        reasonLabel: l10n.agentStatusUnsupported,
-      );
-    }
-    if (!routeSessionSupported || !nativeResumeSupported) {
-      return _RuntimeKindStatus(
-        enabled: false,
-        description: l10n.agentCreateNeedsRouteSession(kind.displayLabel),
-        reasonLabel: l10n.agentStatusNeedsUpgrade,
-      );
-    }
-    if (!supportedWorkspaceModes.contains(runtimeWorkspaceModeRouteRoot)) {
-      return _RuntimeKindStatus(
-        enabled: false,
-        description: l10n.agentCreateNeedsRouteWorkspace(kind.displayLabel),
-        reasonLabel: l10n.agentStatusNeedsUpgrade,
-      );
-    }
-    if (!supportedSandboxModes.contains(runtimeSandboxDangerFullAccess)) {
-      return _RuntimeKindStatus(
-        enabled: false,
-        description: l10n.agentCreateNeedsHostAccess(kind.displayLabel),
-        reasonLabel: l10n.agentStatusNeedsUpgrade,
-      );
-    }
+    final supported = acpDrivers.contains(kind.driverId);
     return _RuntimeKindStatus(
-      enabled: true,
-      description: AgentTypeCatalog.description(l10n, kind),
+      enabled: supported,
+      description: supported
+          ? AgentTypeCatalog.description(l10n, kind)
+          : l10n.agentCreateUnsupportedDriver(kind.displayLabel),
+      reasonLabel: supported ? null : l10n.agentStatusNeedsUpgrade,
     );
   }
 }

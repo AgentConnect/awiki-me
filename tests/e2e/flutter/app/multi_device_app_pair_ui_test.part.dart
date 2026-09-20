@@ -1970,12 +1970,10 @@ Future<void> _runAppPairJoinerFunctional({
   if (!daemon.isDaemon ||
       !codex.isRuntime ||
       codex.daemonAgentDid != daemon.agentDid ||
-      (codex.runtime != RuntimeAgentKind.codex.runtime &&
-          codex.runtime != 'generic-cli') ||
+      !codex.usesAcp ||
       !claude.isRuntime ||
       claude.daemonAgentDid != daemon.agentDid ||
-      (claude.runtime != RuntimeAgentKind.claudeCode.runtime &&
-          claude.runtime != 'generic-cli')) {
+      !claude.usesAcp) {
     fail('The joining App did not converge the exact remote Agent topology.');
   }
   await _pumpUntil(
@@ -3533,7 +3531,7 @@ Future<_AppPairDaemonInstall> _installAppPairDaemon({
       config.daemonStateRoot,
     ],
     environment: _appPairDaemonEnvironment(config),
-    includeParentEnvironment: true,
+    includeParentEnvironment: false,
     runInShell: false,
   ).timeout(const Duration(minutes: 2));
   if (result.exitCode != 0) {
@@ -3557,7 +3555,7 @@ Future<_AppPairDaemonInstall> _installAppPairDaemon({
     config.daemonBinary,
     <String>['agent-list', '--state-root', config.daemonStateRoot],
     environment: _appPairDaemonEnvironment(config),
-    includeParentEnvironment: true,
+    includeParentEnvironment: false,
     runInShell: false,
   ).timeout(const Duration(seconds: 30));
   if (agentList.exitCode != 0) {
@@ -3640,7 +3638,7 @@ Future<_AppPairDaemonProcess> _startAppPairDaemon(
       '100',
     ],
     environment: _appPairDaemonEnvironment(config),
-    includeParentEnvironment: true,
+    includeParentEnvironment: false,
     runInShell: false,
   );
   final running = _AppPairDaemonProcess(process);
@@ -3649,7 +3647,16 @@ Future<_AppPairDaemonProcess> _startAppPairDaemon(
 }
 
 Map<String, String> _appPairDaemonEnvironment(_AppPairRunConfig config) {
-  final environment = <String, String>{};
+  final environment = <String, String>{
+    for (final key in [
+      'PATH',
+      'TMPDIR',
+      'LANG',
+      'NO_PROXY',
+      'AWIKI_IM_CORE_VAULT_ROOT_KEY_B64',
+    ])
+      if (Platform.environment[key] != null) key: Platform.environment[key]!,
+  };
   final envPath = config.daemonEnvFile?.trim();
   if (envPath != null && envPath.isNotEmpty) {
     for (final line in File(envPath).readAsLinesSync()) {
@@ -3671,6 +3678,10 @@ Map<String, String> _appPairDaemonEnvironment(_AppPairRunConfig config) {
       }
       environment[key] = value;
     }
+  }
+  if (environment['AWIKI_ACP_TEST_COMPONENTS_DIR'] == null ||
+      environment['HOME'] == null) {
+    fail('The App-pair test requires the runner-prepared offline ACP fixture.');
   }
   environment.addAll(<String, String>{
     'AWIKI_DAEMON_SERVICE_BASE_URL': config.baseUrl,
@@ -3883,14 +3894,12 @@ Future<void> _waitForAppPairDaemonDrivers({
         .toList(growable: false);
     final daemon = daemonMatches.isEmpty ? null : daemonMatches.single;
     final configSummary = daemon?.latest.diagnosticsSummary['config_summary'];
-    final genericCli = configSummary is Map
-        ? configSummary['generic_cli']
-        : null;
+    final acp = configSummary is Map ? configSummary['acp'] : null;
     if (daemon != null &&
         container.read(agentsProvider).canCreateRuntimeAgent(daemon) &&
-        genericCli is Map &&
-        genericCli['capability_schema_version']?.toString() == '1') {
-      final drivers = genericCli['supported_drivers'];
+        acp is Map &&
+        acp['capability_schema_version']?.toString() == '1') {
+      final drivers = acp['supported_drivers'];
       if (drivers is List &&
           drivers.map((value) => value.toString()).contains('codex') &&
           drivers.map((value) => value.toString()).contains('claude-code')) {
@@ -4750,7 +4759,9 @@ Future<AgentSummary> _waitForAppPairRuntime({
               agent.isRuntime &&
               agent.daemonAgentDid == daemonDid &&
               agent.handle == handle &&
-              (agent.runtime == runtime || agent.runtime == 'generic-cli'),
+              agent.usesAcp &&
+              (agent.runtime == runtime ||
+                  agent.runtimeConfiguration['driver_id'] == runtime),
         )
         .toList(growable: false);
     if (matches.length > 1) {

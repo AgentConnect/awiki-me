@@ -74,7 +74,10 @@ void main() {
         handle: 'pending-dsh',
         displayName: 'Pending DSH',
         activeState: 'active',
-        latest: AgentLatestStatus(status: 'ready'),
+        latest: AgentLatestStatus(
+          status: 'ready',
+          diagnosticsSummary: acpCapabilityDiagnostics,
+        ),
       );
       control.agents = [...control.agents, runtime];
       controller.applyCommittedControlEvent(
@@ -153,7 +156,10 @@ void main() {
             handle: 'runtime-codex',
             displayName: 'Codex',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final directory = _BlockingDirectoryApplicationService();
@@ -195,6 +201,7 @@ void main() {
             latest: AgentLatestStatus(
               status: 'ready',
               diagnosticsSummary: <String, Object?>{
+                ...acpCapabilityDiagnostics,
                 'bootstrap_key_id': 'did:agent:daemon#key-3',
                 'bootstrap_public_key_b64u':
                     'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
@@ -209,7 +216,10 @@ void main() {
             runtime: 'hermes',
             displayName: 'Hermes',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control);
@@ -236,7 +246,10 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control);
@@ -295,7 +308,7 @@ void main() {
               activeState: 'active',
               payloadJson:
                   '{"agent_kind":"daemon","display_name":"Daemon",'
-                  '"status":{"status":"ready"}}',
+                  '"status":{"status":"ready","diagnostics_summary":{"config_summary":{"protocol":"acp","acp":{"capability_schema_version":1,"supported_drivers":["hermes","codex","claude-code","opencode","gemini","kimi","deepseek-harness"]}}}}}',
             ),
           ],
         ),
@@ -440,7 +453,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: 'Daemon B',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
       await controller.load();
@@ -475,7 +491,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: 'Daemon 1',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ],
     ]);
@@ -504,7 +523,10 @@ void main() {
         kind: AgentKind.daemon,
         displayName: 'Daemon 1',
         activeState: 'active',
-        latest: AgentLatestStatus(status: 'ready'),
+        latest: AgentLatestStatus(
+          status: 'ready',
+          diagnosticsSummary: acpCapabilityDiagnostics,
+        ),
       );
       const runtime = AgentSummary(
         agentDid: 'did:agent:runtime',
@@ -513,7 +535,10 @@ void main() {
         runtime: 'claude-code',
         displayName: 'Claude',
         activeState: 'active',
-        latest: AgentLatestStatus(status: 'ready'),
+        latest: AgentLatestStatus(
+          status: 'ready',
+          diagnosticsSummary: acpCapabilityDiagnostics,
+        ),
       );
       final control = _ControlledInventoryAgentControlService();
       final container = _container(
@@ -584,7 +609,10 @@ void main() {
           runtime: 'hermes',
           displayName: 'Beta Runtime',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
         AgentSummary(
           agentDid: 'did:agent:daemon-b',
@@ -600,7 +628,10 @@ void main() {
           runtime: 'hermes',
           displayName: 'Beta Runtime',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
         AgentSummary(
           agentDid: 'did:agent:runtime-a-1',
@@ -609,7 +640,10 @@ void main() {
           runtime: 'hermes',
           displayName: 'Alpha Runtime',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
         AgentSummary(
           agentDid: 'did:agent:daemon-a',
@@ -793,7 +827,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: 'Daemon B',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
       await controller.load();
@@ -853,7 +890,10 @@ void main() {
             kind: AgentKind.daemon,
             displayName: 'Epoch 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final localStore = _BlockingFirstAgentCacheWriteStore();
@@ -880,7 +920,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: 'Epoch 2',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
       final epoch2Load = controller.load();
@@ -924,7 +967,10 @@ void main() {
             kind: AgentKind.daemon,
             displayName: 'Epoch 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final localStore = _BlockingFirstAgentCacheWriteStore();
@@ -975,7 +1021,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: 'Epoch 2',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
       final epoch2Load = controller.load();
@@ -1014,7 +1063,10 @@ void main() {
                 kind: AgentKind.daemon,
                 displayName: '代理 1',
                 activeState: 'active',
-                latest: AgentLatestStatus(status: 'ready'),
+                latest: AgentLatestStatus(
+                  status: 'ready',
+                  diagnosticsSummary: acpCapabilityDiagnostics,
+                ),
               ),
             ];
       final container = _container(control);
@@ -1043,6 +1095,7 @@ void main() {
             latest: AgentLatestStatus(
               status: 'ready',
               diagnosticsSummary: <String, Object?>{
+                ...acpCapabilityDiagnostics,
                 'bootstrap_key_id': 'did:agent:daemon#key-3',
                 'bootstrap_public_key_b64u':
                     'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
@@ -1113,7 +1166,10 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control);
@@ -1170,7 +1226,10 @@ void main() {
               kind: AgentKind.daemon,
               displayName: '代理 1',
               activeState: 'active',
-              latest: AgentLatestStatus(status: 'ready'),
+              latest: AgentLatestStatus(
+                status: 'ready',
+                diagnosticsSummary: acpCapabilityDiagnostics,
+              ),
             ),
           ];
     final container = _container(control);
@@ -1199,7 +1258,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: '代理 1',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
     final container = _container(control);
@@ -1243,7 +1305,10 @@ void main() {
             handle: 'awiki-daemon-test',
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control);
@@ -1308,7 +1373,10 @@ void main() {
         handle: 'awiki-daemon-test',
         displayName: '代理 1',
         activeState: 'active',
-        latest: AgentLatestStatus(status: 'ready'),
+        latest: AgentLatestStatus(
+          status: 'ready',
+          diagnosticsSummary: acpCapabilityDiagnostics,
+        ),
       );
       const runtime = AgentSummary(
         agentDid: 'did:agent:runtime-new',
@@ -1318,7 +1386,10 @@ void main() {
         handle: 'alice-hermes',
         displayName: 'Alice Hermes',
         activeState: 'active',
-        latest: AgentLatestStatus(status: 'ready'),
+        latest: AgentLatestStatus(
+          status: 'ready',
+          diagnosticsSummary: acpCapabilityDiagnostics,
+        ),
       );
       final control = _ControlledInventoryAgentControlService();
       final directory = _EventuallyAvailableDirectoryApplicationService(
@@ -1412,7 +1483,10 @@ void main() {
         handle: 'awiki-daemon-test',
         displayName: '代理 1',
         activeState: 'active',
-        latest: AgentLatestStatus(status: 'ready'),
+        latest: AgentLatestStatus(
+          status: 'ready',
+          diagnosticsSummary: acpCapabilityDiagnostics,
+        ),
       );
       const runtime = AgentSummary(
         agentDid: 'did:agent:runtime-new',
@@ -1422,7 +1496,10 @@ void main() {
         handle: 'alice-codex',
         displayName: 'Alice Codex',
         activeState: 'active',
-        latest: AgentLatestStatus(status: 'ready'),
+        latest: AgentLatestStatus(
+          status: 'ready',
+          diagnosticsSummary: acpCapabilityDiagnostics,
+        ),
       );
       final control = _ControlledInventoryAgentControlService();
       final directory = _EventuallyAvailableDirectoryApplicationService();
@@ -1488,7 +1565,10 @@ void main() {
             handle: 'awiki-daemon-test',
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control);
@@ -1550,7 +1630,10 @@ void main() {
         handle: 'awiki-daemon-test',
         displayName: '代理 1',
         activeState: 'active',
-        latest: AgentLatestStatus(status: 'ready'),
+        latest: AgentLatestStatus(
+          status: 'ready',
+          diagnosticsSummary: acpCapabilityDiagnostics,
+        ),
       );
       const runtime = AgentSummary(
         agentDid: 'did:agent:runtime-remote',
@@ -1560,7 +1643,10 @@ void main() {
         handle: 'remote-claude',
         displayName: 'Remote Claude',
         activeState: 'active',
-        latest: AgentLatestStatus(status: 'ready'),
+        latest: AgentLatestStatus(
+          status: 'ready',
+          diagnosticsSummary: acpCapabilityDiagnostics,
+        ),
       );
       final control = _ControlledInventoryAgentControlService();
       final container = _container(control);
@@ -1623,7 +1709,10 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       const statusStore = _StaticAgentControlStatusStore(
@@ -1674,7 +1763,10 @@ void main() {
             runtime: 'hermes',
             displayName: 'Hermes',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ]
         ..invocationPolicies['did:agent:runtime'] = const AgentInvocationPolicy(
@@ -1728,7 +1820,10 @@ void main() {
             runtime: 'hermes',
             displayName: 'Runtime A',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control);
@@ -1756,7 +1851,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: 'Daemon B',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
       await controller.load();
@@ -1786,7 +1884,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: 'Daemon A',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
     final statusStore = _BlockingDaemonStatusLookupStore();
@@ -1815,7 +1916,10 @@ void main() {
         kind: AgentKind.daemon,
         displayName: 'Daemon B',
         activeState: 'active',
-        latest: AgentLatestStatus(status: 'ready'),
+        latest: AgentLatestStatus(
+          status: 'ready',
+          diagnosticsSummary: acpCapabilityDiagnostics,
+        ),
       ),
     ];
     await controller.load();
@@ -1848,7 +1952,10 @@ void main() {
             kind: AgentKind.runtime,
             displayName: 'Runtime',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control);
@@ -1905,7 +2012,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: '代理 1',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
     final container = _container(control);
@@ -1972,7 +2082,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: '代理 1',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
           daemonEffectiveStatus: DaemonEffectiveStatus(
             controlState: 'stale',
             primaryStatus: 'offline',
@@ -2849,7 +2962,10 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(
@@ -2957,7 +3073,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: '代理 1',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
     final container = _container(control);
@@ -2985,7 +3104,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: '代理 1',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
         AgentSummary(
           agentDid: 'did:agent:runtime',
@@ -2994,7 +3116,10 @@ void main() {
           runtime: 'hermes',
           displayName: 'Hermes',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
     final container = _container(control);
@@ -3022,7 +3147,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: '代理 1',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
         AgentSummary(
           agentDid: 'did:agent:runtime',
@@ -3031,7 +3159,10 @@ void main() {
           runtime: 'hermes',
           displayName: 'Hermes',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
     final container = _container(control);
@@ -3120,7 +3251,10 @@ void main() {
             runtime: 'hermes',
             displayName: 'Hermes',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control);
@@ -3164,7 +3298,10 @@ void main() {
           runtime: 'hermes',
           displayName: 'Hermes',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
     final container = _container(control);
@@ -3213,7 +3350,10 @@ void main() {
           runtime: 'hermes',
           displayName: 'Hermes',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
     final container = _container(control);
@@ -3339,7 +3479,10 @@ void main() {
                 runtime: 'hermes',
                 displayName: 'Hermes',
                 activeState: 'active',
-                latest: AgentLatestStatus(status: 'ready'),
+                latest: AgentLatestStatus(
+                  status: 'ready',
+                  diagnosticsSummary: acpCapabilityDiagnostics,
+                ),
               ),
             ];
       final container = _container(control);
@@ -3382,7 +3525,10 @@ void main() {
             runtime: 'hermes',
             displayName: 'Hermes',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control);
@@ -3411,7 +3557,10 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
           AgentSummary(
             agentDid: 'did:agent:message',
@@ -3421,7 +3570,10 @@ void main() {
             handle: 'hermes-msg-app-1',
             displayName: 'Hermes Personal Agent',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control, agentImEnabled: true);
@@ -3459,7 +3611,10 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
           AgentSummary(
             agentDid: 'did:agent:codex-message',
@@ -3469,7 +3624,10 @@ void main() {
             handle: 'codex-msg-app-1',
             displayName: 'Codex Personal Agent',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control, agentImEnabled: true);
@@ -3498,7 +3656,10 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
           AgentSummary(
             agentDid: 'did:agent:runtime',
@@ -3507,7 +3668,10 @@ void main() {
             runtime: 'hermes',
             displayName: 'Hermes',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control);
@@ -3556,7 +3720,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: '代理 1',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
     final container = _container(control);
@@ -3600,7 +3767,10 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '书房代理',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
           AgentSummary(
             agentDid: 'did:agent:runtime',
@@ -3609,7 +3779,10 @@ void main() {
             runtime: 'hermes',
             displayName: '写作助手',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control);
@@ -3667,6 +3840,19 @@ void main() {
                     'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
                 'bootstrap_key_algorithm': 'x25519',
                 'config_summary': <String, Object?>{
+                  'acp': {
+                    'capability_schema_version': 1,
+                    'supported_drivers': [
+                      'hermes',
+                      'codex',
+                      'claude-code',
+                      'opencode',
+                      'gemini',
+                      'kimi',
+                      'deepseek-harness',
+                    ],
+                  },
+                  'protocol': 'acp',
                   'delegated_subkey_proposal': _daemonSubkeyProposal,
                 },
               },
@@ -3731,6 +3917,19 @@ void main() {
                     'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
                 'bootstrap_key_algorithm': 'x25519',
                 'config_summary': <String, Object?>{
+                  'acp': {
+                    'capability_schema_version': 1,
+                    'supported_drivers': [
+                      'hermes',
+                      'codex',
+                      'claude-code',
+                      'opencode',
+                      'gemini',
+                      'kimi',
+                      'deepseek-harness',
+                    ],
+                  },
+                  'protocol': 'acp',
                   'delegated_subkey_proposal': _daemonSubkeyProposal,
                 },
               },
@@ -3744,7 +3943,10 @@ void main() {
             handle: 'hermes-msg-app-1',
             displayName: 'Hermes Personal Agent',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final identities = FakeIdentityCorePort(
@@ -3804,6 +4006,19 @@ void main() {
                         'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
                     'bootstrap_key_algorithm': 'x25519',
                     'config_summary': <String, Object?>{
+                      'acp': {
+                        'capability_schema_version': 1,
+                        'supported_drivers': [
+                          'hermes',
+                          'codex',
+                          'claude-code',
+                          'opencode',
+                          'gemini',
+                          'kimi',
+                          'deepseek-harness',
+                        ],
+                      },
+                      'protocol': 'acp',
                       'delegated_subkey_proposal': _daemonSubkeyProposal,
                     },
                   },
@@ -3840,6 +4055,7 @@ void main() {
             latest: AgentLatestStatus(
               status: 'ready',
               diagnosticsSummary: <String, Object?>{
+                ...acpCapabilityDiagnostics,
                 'bootstrap_key_id': 'did:agent:daemon#key-3',
                 'bootstrap_public_key_b64u':
                     'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
@@ -3892,6 +4108,19 @@ void main() {
               status: 'ready',
               diagnosticsSummary: <String, Object?>{
                 'config_summary': <String, Object?>{
+                  'acp': {
+                    'capability_schema_version': 1,
+                    'supported_drivers': [
+                      'hermes',
+                      'codex',
+                      'claude-code',
+                      'opencode',
+                      'gemini',
+                      'kimi',
+                      'deepseek-harness',
+                    ],
+                  },
+                  'protocol': 'acp',
                   'bootstrap_key_status': 'ready',
                   'delegated_subkey_proposal': _daemonSubkeyProposal,
                   'bootstrap_key': <String, Object?>{
@@ -3949,6 +4178,19 @@ void main() {
               status: 'ready',
               diagnosticsSummary: <String, Object?>{
                 'config_summary': <String, Object?>{
+                  'acp': {
+                    'capability_schema_version': 1,
+                    'supported_drivers': [
+                      'hermes',
+                      'codex',
+                      'claude-code',
+                      'opencode',
+                      'gemini',
+                      'kimi',
+                      'deepseek-harness',
+                    ],
+                  },
+                  'protocol': 'acp',
                   'bootstrap_key_status': 'ready',
                   'delegated_subkey_proposal': _daemonSubkeyProposal,
                   'bootstrap_key_id': 'did:agent:daemon#key-3',
@@ -4000,7 +4242,10 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final identities = FakeIdentityCorePort(
@@ -4043,7 +4288,10 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control);
@@ -4427,7 +4675,10 @@ void main() {
           kind: AgentKind.daemon,
           displayName: '代理 1',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: acpCapabilityDiagnostics,
+          ),
         ),
       ];
     final firstContainer = _container(
@@ -4476,6 +4727,7 @@ void main() {
             activeState: 'active',
             latest: AgentLatestStatus(
               status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
               lastSeenAt: DateTime.parse('2026-06-03T09:10:00Z'),
             ),
           ),
@@ -4489,6 +4741,7 @@ void main() {
             activeState: 'active',
             latest: AgentLatestStatus(
               status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
               lastSeenAt: DateTime.parse('2026-06-03T09:10:01Z'),
             ),
           ),
@@ -4586,7 +4839,10 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
           AgentSummary(
             agentDid: 'did:agent:runtime',
@@ -4595,7 +4851,10 @@ void main() {
             runtime: 'hermes',
             displayName: 'Hermes',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control);
@@ -4725,7 +4984,10 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
           AgentSummary(
             agentDid: 'did:agent:runtime',
@@ -4734,7 +4996,10 @@ void main() {
             runtime: 'hermes',
             displayName: 'Hermes',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
           ),
         ];
       final container = _container(control);
@@ -4879,7 +5144,7 @@ ProductAgentInventorySnapshot _accountAgentInventorySnapshot({
         activeState: 'active',
         payloadJson:
             '{"agent_kind":"daemon","handle":"current-daemon",'
-            '"display_name":"Daemon","status":{"status":"ready"}}',
+            '"display_name":"Daemon","status":{"status":"ready","diagnostics_summary":{"config_summary":{"acp":{"capability_schema_version":1,"supported_drivers":["codex","hermes"]}}}}}',
       ),
       if (includeRuntime)
         const ProductAgentInventoryItem(
@@ -4890,7 +5155,7 @@ ProductAgentInventorySnapshot _accountAgentInventorySnapshot({
               '"daemon_agent_did":"did:agent:daemon",'
               '"runtime":"codex","handle":"current-codex",'
               '"display_name":"Current Codex",'
-              '"status":{"status":"ready"}}',
+              '"status":{"status":"ready","diagnostics_summary":{"config_summary":{"protocol":"acp","acp":{"capability_schema_version":1,"supported_drivers":["hermes","codex","claude-code","opencode","gemini","kimi","deepseek-harness"]}}}}}',
         ),
     ],
   );

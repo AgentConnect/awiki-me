@@ -283,9 +283,9 @@ class DefaultAgentControlService
       displayName: options.displayName,
       preferredLanguage: preferredLanguage,
       driverId: kind.driverId,
-      workspaceMode: kind.isGenericCli ? options.workspaceMode : null,
-      defaultSandbox: kind.isGenericCli ? options.sandbox : null,
-      defaultModel: kind.isGenericCli ? options.model : null,
+      workspaceMode: options.workspaceMode,
+      defaultSandbox: options.sandbox,
+      defaultModel: options.model,
       driverConfig: driverConfig,
     );
     final requestId = clientRequestId ?? agentCommandId('app_req');
@@ -300,9 +300,9 @@ class DefaultAgentControlService
           handle: options.handle,
           displayName: options.displayName,
           driverId: kind.driverId,
-          workspaceMode: kind.isGenericCli ? options.workspaceMode : null,
-          defaultSandbox: kind.isGenericCli ? options.sandbox : null,
-          defaultModel: kind.isGenericCli ? options.model : null,
+          workspaceMode: options.workspaceMode,
+          defaultSandbox: options.sandbox,
+          defaultModel: options.model,
           preferredLanguage: preferredLanguage,
           driverConfig: driverConfig,
         ),
@@ -875,7 +875,7 @@ String _personalAgentRuntimeHandle({
   required String appInstanceId,
 }) {
   const prefix = personalAgentProviderHermesHandlePrefix;
-  final seed = '${userDid.trim()}|${appInstanceId.trim()}';
+  final seed = 'acp-v1|${userDid.trim()}|${appInstanceId.trim()}';
   final hash = crypto.sha256
       .convert(utf8.encode(seed))
       .toString()

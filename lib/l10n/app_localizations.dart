@@ -4539,7 +4539,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentCreateHermesDescription.
   ///
   /// In zh, this message translates to:
-  /// **'使用宿主机上的 Hermes Gateway。'**
+  /// **'使用宿主机上的 Hermes CLI。'**
   String get agentCreateHermesDescription;
 
   /// No description provided for @agentCreateNeedsGenericCliCapability.
@@ -6739,7 +6739,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentClientGatewayHint.
   ///
   /// In zh, this message translates to:
-  /// **'未找到 Hermes Gateway 模块，请检查宿主机安装。'**
+  /// **'未找到 Hermes CLI 模块，请检查宿主机安装。'**
   String get agentClientGatewayHint;
 
   /// No description provided for @agentClientCustomHint.
@@ -6807,6 +6807,36 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'客户端版本与当前接入能力不兼容，请更新客户端后重试。'**
   String get agentClientCompatibilityHint;
+
+  /// No description provided for @chatRetiredAgentDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'旧版接入已停用，请重新创建智能体。聊天记录与草稿已保留。'**
+  String get chatRetiredAgentDisabled;
+
+  /// No description provided for @agentAcpUpgradeRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请升级 Daemon 以使用此智能体的 ACP 接入。'**
+  String get agentAcpUpgradeRequired;
+
+  /// No description provided for @agentClientAdapterHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon 的接入组件缺失或损坏，请重新安装 Daemon。'**
+  String get agentClientAdapterHint;
+
+  /// No description provided for @agentClientPlatformHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前平台不支持此智能体的接入组件。'**
+  String get agentClientPlatformHint;
+
+  /// No description provided for @agentClientHermesAcpHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Hermes 缺少可用的 ACP 支持，请在宿主机升级 Hermes CLI。'**
+  String get agentClientHermesAcpHint;
 }
 
 class _AppLocalizationsDelegate

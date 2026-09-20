@@ -73,6 +73,7 @@ class AcpSession {
 }
 
 enum AcpSendBlock {
+  retired,
   offline,
   waitingFull,
   groupBusy,

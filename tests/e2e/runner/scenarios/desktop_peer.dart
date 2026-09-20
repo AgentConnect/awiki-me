@@ -725,7 +725,7 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
         'readyFile': peerConfig.daemonReadyFile,
         'handle': peerConfig.daemonHandle,
         'envFile': peerConfig.daemonEnvFile,
-        'fakeHermesGatewayCommand': peerConfig.daemonFakeHermesGatewayCommand,
+        'fakeHermesHome': peerConfig.daemonFakeHermesHome,
       },
       'personalAgent': <String, Object?>{
         'enabled': peerConfig.personalAgentEnabled,

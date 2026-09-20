@@ -1063,7 +1063,7 @@
       "agentType": {}
     }
   },
-  "agentCreateHermesDescription": "使用宿主机上的 Hermes Gateway。",
+  "agentCreateHermesDescription": "使用宿主机上的 Hermes CLI。",
   "agentCreateNeedsGenericCliCapability": "请先刷新设备状态，以确认是否支持 {agentType}。",
   "@agentCreateNeedsGenericCliCapability": {
     "placeholders": {
@@ -1603,7 +1603,7 @@
   "agentClientRetryHint": "暂时无法确认，请重新检测。",
   "agentClientInstallHint": "请在此 Daemon 的宿主机安装客户端，再重新检测。",
   "agentClientPermissionHint": "客户端没有执行权限，请在宿主机修复后重新检测。",
-  "agentClientGatewayHint": "未找到 Hermes Gateway 模块，请检查宿主机安装。",
+  "agentClientGatewayHint": "未找到 Hermes CLI 模块，请检查宿主机安装。",
   "agentClientCustomHint": "无法轻量检测自定义启动命令，请检查启动入口。",
   "agentClientTimeoutHint": "检测超时，请稍后重新检测。",
   "agentClientLaunchHint": "客户端启动失败，请检查宿主机的安装与依赖。",
@@ -1621,5 +1621,10 @@
   "agentClientCreateFailed": "创建失败，请检查客户端环境后重试。已保留填写内容。",
   "agentClientCreatePending": "创建已提交，仍在等待结果。可关闭此窗口，在智能体列表查看进度。",
   "agentClientProtocolHint": "客户端协议连接失败，请检查宿主机上的登录、配置或客户端错误后重试。",
-  "agentClientCompatibilityHint": "客户端版本与当前接入能力不兼容，请更新客户端后重试。"
+  "agentClientCompatibilityHint": "客户端版本与当前接入能力不兼容，请更新客户端后重试。",
+  "chatRetiredAgentDisabled": "旧版接入已停用，请重新创建智能体。聊天记录与草稿已保留。",
+  "agentAcpUpgradeRequired": "请升级 Daemon 以使用此智能体的 ACP 接入。",
+  "agentClientAdapterHint": "Daemon 的接入组件缺失或损坏，请重新安装 Daemon。",
+  "agentClientPlatformHint": "当前平台不支持此智能体的接入组件。",
+  "agentClientHermesAcpHint": "Hermes 缺少可用的 ACP 支持，请在宿主机升级 Hermes CLI。"
 }

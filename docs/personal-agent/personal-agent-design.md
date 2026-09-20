@@ -1,5 +1,15 @@
 # Personal Agent MVP 优化方案
 
+## ACP 迁移约束（2026-09-20）
+
+个人助理仅使用 Hermes ACP，与普通 Agent 共享执行、上下文隔离和最终投递。
+后台任务不等待用户提问，不向原消息发送者回复；仅向 owner APP 产生摘要、草稿、
+AppAction，请求写操作仍保留确认。旧 Gateway 身份、绑定和未完成任务永久退役，
+不自动恢复。用户在设置中重新启用才创建 ACP 代次的新身份；同一次启用的重试
+复用稳定的 bootstrap / ensure-once / handle，旧代次重放不得复活旧身份。
+新 APP 在 Daemon 未声明 Hermes ACP 支持时禁止启用。历史消息保留只读。
+
+
 ## 背景
 
 Personal Agent 是用户授权后，帮助 Human App DID 处理 IM 消息的独立 Agent。它运行在用户选择的 daemon 中，但不等同于 daemon，也不直接使用 daemon DID 作为消息处理身份。
@@ -62,7 +72,7 @@ Agent 页面 = User Service Inventory 基线
 - ACP Runtime 创建命令的发送等待超时只表示结果尚未确认：Core 的发送 Future 仍可能
   完成。App 保留同一个 pending intent 和 request ID，通过原有 committed ACK／Inventory
   收敛，在确认期限内显示等待状态，不重新发送或宣告创建成功。明确发送失败仍正常报错；
-  原三种 Runtime 的行为保持不变。
+  七种 Runtime 统一采用这一确认边界。
 
 因此 Codex、Claude Code、Hermes runtime 创建后必须在 Agent 页面自动收敛；实现不得
 依赖创建后盲目 `load()`、固定 sleep、更短轮询、会话列表推断或 raw SQLite 查询。

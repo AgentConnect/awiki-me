@@ -2386,7 +2386,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get agentCreateHermesDescription => '使用宿主机上的 Hermes Gateway。';
+  String get agentCreateHermesDescription => '使用宿主机上的 Hermes CLI。';
 
   @override
   String agentCreateNeedsGenericCliCapability(Object agentType) {
@@ -3593,7 +3593,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentClientPermissionHint => '客户端没有执行权限，请在宿主机修复后重新检测。';
 
   @override
-  String get agentClientGatewayHint => '未找到 Hermes Gateway 模块，请检查宿主机安装。';
+  String get agentClientGatewayHint => '未找到 Hermes CLI 模块，请检查宿主机安装。';
 
   @override
   String get agentClientCustomHint => '无法轻量检测自定义启动命令，请检查启动入口。';
@@ -3629,4 +3629,20 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentClientCompatibilityHint => '客户端版本与当前接入能力不兼容，请更新客户端后重试。';
+
+  @override
+  String get chatRetiredAgentDisabled => '旧版接入已停用，请重新创建智能体。聊天记录与草稿已保留。';
+
+  @override
+  String get agentAcpUpgradeRequired => '请升级 Daemon 以使用此智能体的 ACP 接入。';
+
+  @override
+  String get agentClientAdapterHint => 'Daemon 的接入组件缺失或损坏，请重新安装 Daemon。';
+
+  @override
+  String get agentClientPlatformHint => '当前平台不支持此智能体的接入组件。';
+
+  @override
+  String get agentClientHermesAcpHint =>
+      'Hermes 缺少可用的 ACP 支持，请在宿主机升级 Hermes CLI。';
 }

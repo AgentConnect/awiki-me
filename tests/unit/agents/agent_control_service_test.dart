@@ -150,9 +150,7 @@ void main() {
     expect(inventory.runtimeTokenDriverId, 'codex');
     expect(inventory.runtimeTokenWorkspaceMode, 'route-root');
     expect(inventory.runtimeTokenDefaultSandbox, 'danger-full-access');
-    expect(inventory.runtimeTokenDriverConfig, <String, Object?>{
-      'ephemeral': false,
-    });
+    expect(inventory.runtimeTokenDriverConfig, isEmpty);
     expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
     expect(messages.lastSecure, isFalse);
     final args = messages.lastPayload?['args'] as Map<String, Object?>;
@@ -160,10 +158,10 @@ void main() {
     expect(args['driver_id'], 'codex');
     expect(args['workspace_mode'], 'route-root');
     expect(args['default_sandbox'], 'danger-full-access');
-    expect(args['driver_config'], <String, Object?>{'ephemeral': false});
+    expect(args.containsKey('driver_config'), isFalse);
     expect(args.containsKey('binary_path'), isFalse);
     expect(
-      (args['driver_config'] as Map<String, Object?>).containsKey(
+      ((args['driver_config'] as Map<String, Object?>?) ?? {}).containsKey(
         'binary_path',
       ),
       isFalse,
@@ -465,14 +463,14 @@ void main() {
       expect(inventory.runtimeTokenDaemonDid, 'did:agent:daemon');
       expect(
         inventory.runtimeTokenHandle,
-        'hermes-personal-app-1-334c10a06052',
+        'hermes-personal-app-1-12e59855bf38',
       );
       expect(inventory.runtimeTokenPreferredLanguage, 'en');
       expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
       expect(messages.lastSecure, isFalse);
       expect(
         messages.lastIdempotencyKey,
-        'personal-agent-bootstrap:did:human:me:app_1',
+        'personal-agent-bootstrap:acp-v1:did:human:me:app_1',
       );
       expect(messages.lastPayload?['schema'], daemonBootstrapSecureSchema);
       expect(messages.lastPayload?['recipient_daemon_did'], 'did:agent:daemon');
@@ -483,7 +481,7 @@ void main() {
       expect(messages.lastPayload?['sender_human_did'], 'did:human:me');
       expect(
         messages.lastPayload?['operation_id'],
-        'personal-agent-bootstrap:did:human:me:app_1',
+        'personal-agent-bootstrap:acp-v1:did:human:me:app_1',
       );
       expect(
         messages.lastPayload?['sender_ephemeral_public_key'],
@@ -496,7 +494,7 @@ void main() {
         matches(RegExp(r'^[0-9a-f]{64}$')),
       );
       final aad = messages.lastPayload?['aad'] as Map<String, Object?>;
-      expect(aad['binding_id'], 'app-personal-agent:did:human:me:app_1');
+      expect(aad['binding_id'], 'app-personal-agent:acp-v1:did:human:me:app_1');
       expect(aad['runtime_provider'], appMessageHandlerRuntimeProvider);
       expect(bindings.lastEnsuredUserDid, 'did:human:me');
       expect(bindings.lastEnsuredDaemonDid, 'did:agent:daemon');
@@ -524,7 +522,7 @@ void main() {
   test('desired personal agent serializes preferred language contract', () {
     final desired = const DesiredPersonalAgent(
       preferredLanguage: 'en',
-      ensureOnceKey: 'app-personal-agent:did:human:me:app_1',
+      ensureOnceKey: 'app-personal-agent:acp-v1:did:human:me:app_1',
       runtimeRegistrationToken: 'runtime-token',
     ).toJson();
 
@@ -537,7 +535,7 @@ void main() {
   test('bootstrap emits only canonical Personal Agent fields and new keys', () {
     final payload = const DaemonBootstrapEnvelope(
       bootstrapId: 'boot_1',
-      idempotencyKey: 'personal-agent-bootstrap:did:human:me:app_1',
+      idempotencyKey: 'personal-agent-bootstrap:acp-v1:did:human:me:app_1',
       appInstanceId: 'app_1',
       controllerDid: 'did:human:me',
       userSubkeyPackage: UserSubkeyPackage(
@@ -547,7 +545,7 @@ void main() {
       ),
       desiredPersonalAgent: DesiredPersonalAgent(
         preferredLanguage: 'en',
-        ensureOnceKey: 'app-personal-agent:did:human:me:app_1',
+        ensureOnceKey: 'app-personal-agent:acp-v1:did:human:me:app_1',
       ),
     ).toJson();
 
@@ -555,20 +553,23 @@ void main() {
     expect(payload.containsKey('desired_message_agent'), isFalse);
     final desired = payload['desired_personal_agent'] as Map<String, Object?>;
     expect(desired['runtime_profile'], 'personal_agent');
-    expect(desired['ensure_once_key'], 'app-personal-agent:did:human:me:app_1');
+    expect(
+      desired['ensure_once_key'],
+      'app-personal-agent:acp-v1:did:human:me:app_1',
+    );
     expect(
       personalAgentBootstrapIdempotencyKey(
         userDid: 'did:human:me',
         appInstanceId: 'app_1',
       ),
-      'personal-agent-bootstrap:did:human:me:app_1',
+      'personal-agent-bootstrap:acp-v1:did:human:me:app_1',
     );
     expect(
       personalAgentEnsureOnceKey(
         userDid: 'did:human:me',
         appInstanceId: 'app_1',
       ),
-      'app-personal-agent:did:human:me:app_1',
+      'app-personal-agent:acp-v1:did:human:me:app_1',
     );
   });
 
@@ -605,7 +606,7 @@ void main() {
         recipientDaemonDid: 'did:agent:daemon',
         recipientKeyId: 'did:agent:daemon#bootstrap-key-1',
         senderHumanDid: 'did:human:me',
-        operationId: 'personal-agent-bootstrap:did:human:me:app_1',
+        operationId: 'personal-agent-bootstrap:acp-v1:did:human:me:app_1',
         issuedAt: issuedAt,
         expiresAt: issuedAt.add(const Duration(minutes: 5)),
         nonce: 'nonce_1',
@@ -615,7 +616,7 @@ void main() {
         aad: const <String, Object?>{
           'human_did': 'did:human:me',
           'daemon_agent_did': 'did:agent:daemon',
-          'binding_id': 'app-personal-agent:did:human:me:app_1',
+          'binding_id': 'app-personal-agent:acp-v1:did:human:me:app_1',
         },
       ).toJson();
 
@@ -636,7 +637,7 @@ void main() {
         recipientDaemonDid: 'did:agent:daemon',
         recipientKeyId: 'did:agent:daemon#bootstrap-key-1',
         senderHumanDid: 'did:human:me',
-        operationId: 'personal-agent-bootstrap:did:human:me:app_1',
+        operationId: 'personal-agent-bootstrap:acp-v1:did:human:me:app_1',
         issuedAt: issuedAt,
         expiresAt: issuedAt.add(const Duration(minutes: 5)),
         nonce: 'nonce_1',
@@ -655,7 +656,7 @@ void main() {
         recipientDaemonDid: 'did:agent:daemon',
         recipientKeyId: 'did:agent:daemon#bootstrap-key-1',
         senderHumanDid: 'did:human:me',
-        operationId: 'personal-agent-bootstrap:did:human:me:app_1',
+        operationId: 'personal-agent-bootstrap:acp-v1:did:human:me:app_1',
         issuedAt: issuedAt,
         expiresAt: issuedAt.add(const Duration(minutes: 5)),
         nonce: 'nonce_1',
@@ -663,7 +664,7 @@ void main() {
         ciphertext: 'base64:ciphertext',
         payloadSha256: 'not-a-valid-hash',
         aad: const <String, Object?>{
-          'binding_id': 'app-personal-agent:did:human:me:app_1',
+          'binding_id': 'app-personal-agent:acp-v1:did:human:me:app_1',
         },
       ).toJson(),
       throwsArgumentError,
@@ -765,11 +766,11 @@ void main() {
       final aad = first['aad'] as Map<String, Object?>;
       expect(
         aad['binding_id'],
-        'app-personal-agent:did:human:me:macos-e2e-app',
+        'app-personal-agent:acp-v1:did:human:me:macos-e2e-app',
       );
       expect(
         inventory.runtimeTokenHandle,
-        'hermes-personal-macos-e2e-app-7fe1fc2b5661',
+        'hermes-personal-macos-e2e-app-2858a336d51e',
       );
     },
   );
@@ -857,8 +858,8 @@ void main() {
       appInstanceId: 'app_${'x' * 160}',
     );
 
-    expect(first, matches(RegExp(r'^boot_[0-9a-f]{24}$')));
-    expect(second, matches(RegExp(r'^boot_[0-9a-f]{24}$')));
+    expect(first, matches(RegExp(r'^boot_acp_v1_[0-9a-f]{24}$')));
+    expect(second, matches(RegExp(r'^boot_acp_v1_[0-9a-f]{24}$')));
     expect(first, isNot(second));
     expect(
       first,

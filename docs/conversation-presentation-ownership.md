@@ -6,6 +6,17 @@
 
 ## 1. 当前结论
 
+### ACP 统一接入与旧会话（2026-09-20）
+
+七种 Runtime 共用 ACP。品牌标识不再代表执行协议；APP 依据 Daemon 已提交的
+`config_summary.protocol` / `runtime` 判断协议，创建入口依据 ACP supported_drivers
+与安装检测共同判断。旧 Daemon 仅声明四种 ACP 时，不允许创建另三种旧接入。
+旧接入的明确退役状态由 Daemon 发布并随 Agent 快照缓存；APP 保留历史与草稿，
+以“旧版接入已停用，请重新创建”禁用私聊发送、附件和控制，区别于删除。
+群内普通聊天继续可用，针对退役 Agent 的指令在发送前阻止；Daemon 仍是最终门禁。
+原四种 ACP 的品牌型历史标识继续可读，不能因为旧三种的品牌现在支持 ACP，
+就把旧记录推断成新的 ACP 实例。此变化不改变 Core 的身份、会话或消息事实源。
+
 `im-core` / Flutter SDK 是 message、conversation identity、canonical `conversationId` read model、read-state、send/outbox、sync/realtime/backfill committed projection 的事实源。AWiki Me 只拥有 product overlay、User Service 权威账号域的本地展示快照、read presentation waterline、renderability、draft/scroll/loading、短生命周期 UI window 和 widget composition。账号域快照是可丢弃 cache，不是消息、会话、群或 Agent 控制事件的第二事实源。
 
 核心边界：

@@ -127,12 +127,20 @@ void main() {
       expect(messages.requested, ['canonical-conversation']);
     },
   );
-  test('four ACP brands extend existing kinds without changing legacy IDs', () {
+  test('all seven brands use ACP while product IDs stay stable', () {
     expect(
       RuntimeAgentKind.values.where((k) => k.isAcp).map((k) => k.runtime),
-      ['opencode', 'gemini', 'kimi', 'deepseek-harness'],
+      [
+        'hermes',
+        'codex',
+        'claude-code',
+        'opencode',
+        'gemini',
+        'kimi',
+        'deepseek-harness',
+      ],
     );
-    expect(RuntimeAgentKind.hermes.driverId, isNull);
+    expect(RuntimeAgentKind.hermes.driverId, 'hermes');
     expect(RuntimeAgentKind.codex.runtime, 'codex');
     expect(RuntimeAgentKind.claudeCode.runtime, 'claude-code');
   });

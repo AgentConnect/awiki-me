@@ -21,7 +21,6 @@ import '../../application/ports/message_sync_core_port.dart';
 import '../../application/thread_id_utils.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
-import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/chat_mention.dart';
@@ -3187,6 +3186,23 @@ class ChatThreadsController
     }
   }
 
+  bool _retiredDirectAgent(ConversationSummary conversation) =>
+      !conversation.isGroup &&
+      ref
+          .read(agentsProvider)
+          .agents
+          .any(
+            (agent) =>
+                agent.isRetiredRuntime &&
+                agent.agentDid == conversation.targetDid,
+          );
+
+  bool _blockRetiredDirectAgent(ConversationSummary conversation) {
+    if (!_retiredDirectAgent(conversation)) return false;
+    ref.read(uiFeedbackProvider.notifier).showError(AppMessage.retiredAgent());
+    return true;
+  }
+
   Future<void> sendMessage({
     required ConversationSummary conversation,
     required String content,
@@ -3194,6 +3210,7 @@ class ChatThreadsController
     String? expectedAgentReplyDid,
     String? displayThreadId,
   }) async {
+    if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
     final session = ref.read(sessionProvider).session;
     if (sessionEpoch == null || session == null || content.trim().isEmpty) {
@@ -3289,6 +3306,7 @@ class ChatThreadsController
     String? expectedAgentReplyDid,
     String? displayThreadId,
   }) async {
+    if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
     final session = ref.read(sessionProvider).session;
     if (sessionEpoch == null || session == null) {
@@ -3455,6 +3473,7 @@ class ChatThreadsController
     String? expectedAgentReplyDid,
     String? displayThreadId,
   }) async {
+    if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
     if (sessionEpoch == null) {
       return;
@@ -3621,6 +3640,7 @@ class ChatThreadsController
     String? expectedAgentReplyDid,
     String? displayThreadId,
   }) async {
+    if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
     if (sessionEpoch == null) {
       return;
@@ -5380,25 +5400,12 @@ class ChatThreadsController
     return null;
   }
 
-  bool _usesAcpStatus(String agentDid) {
-    if (ref.read(acpSessionsProvider).busyForAgent(agentDid) != null) {
-      return true;
-    }
-    return ref
-        .read(agentsProvider)
-        .agents
-        .any(
-          (agent) =>
-              agent.agentDid == agentDid &&
-              agent.isRuntime &&
-              RuntimeAgentKind.values.any(
-                (kind) =>
-                    kind.isAcp &&
-                    (kind.runtime == agent.runtime ||
-                        kind.driverId == agent.latest.runtimeCard?.driverId),
-              ),
-        );
-  }
+  bool _usesAcpStatus(String agentDid) =>
+      ref.read(acpSessionsProvider).busyForAgent(agentDid) != null ||
+      ref
+          .read(agentsProvider)
+          .agents
+          .any((a) => a.agentDid == agentDid && a.usesAcp);
 
   void _applyAcpProjection(AcpProjection projection) {
     for (final task in projection.tasks.values) {

@@ -2532,7 +2532,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get agentCreateHermesDescription => 'Uses Hermes Gateway on the host.';
+  String get agentCreateHermesDescription => 'Uses Hermes CLI on the host.';
 
   @override
   String agentCreateNeedsGenericCliCapability(Object agentType) {
@@ -3839,7 +3839,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentClientGatewayHint =>
-      'Hermes Gateway module not found. Check the host installation.';
+      'Hermes CLI module not found. Check the host installation.';
 
   @override
   String get agentClientCustomHint =>
@@ -3884,4 +3884,24 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get agentClientCompatibilityHint =>
       'This client version is not compatible with the integration. Update the client and try again.';
+
+  @override
+  String get chatRetiredAgentDisabled =>
+      'This legacy agent is retired. Create a new agent; your history and draft are kept.';
+
+  @override
+  String get agentAcpUpgradeRequired =>
+      'Upgrade the Daemon to use ACP with this agent.';
+
+  @override
+  String get agentClientAdapterHint =>
+      'The Daemon adapter is missing or damaged. Reinstall the Daemon.';
+
+  @override
+  String get agentClientPlatformHint =>
+      'The agent adapter does not support this platform.';
+
+  @override
+  String get agentClientHermesAcpHint =>
+      'Hermes ACP support is unavailable. Upgrade Hermes CLI on the host.';
 }

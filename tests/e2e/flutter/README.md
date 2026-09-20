@@ -232,7 +232,7 @@ matrix or the content Group/attachment matrix.
 product behavior. It is a fail-fast real-backend gate: local YAML must provide
 `personalAgent.realBackend: true`, `service.messageServiceUrl`,
 `service.messageServiceWsUrl`, `daemon.rustRepo`, `daemon.binary`,
-`daemon.stateRoot`, `daemon.readyFile`, and `daemon.fakeHermesGatewayCommand`.
+`daemon.stateRoot`, `daemon.readyFile`, and `daemon.fakeHermesHome`.
 The selected gate must exercise the App UI path for selecting a daemon,
 enabling the Personal Agent, recovering `message.sync` / `runtime_final`
 payloads, and revoking daemon message authorization without silently returning

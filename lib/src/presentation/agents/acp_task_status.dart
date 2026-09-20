@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../l10n/l10n.dart';
 import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectableText;
@@ -61,6 +62,7 @@ String acpBlockText(
   BuildContext context,
   AcpSendBlock block,
 ) => switch (block) {
+  AcpSendBlock.retired => context.l10n.chatRetiredAgentDisabled,
   AcpSendBlock.modelChanging => acpText(
     context,
     '模型配置尚未确认，请等待完成或重试。文字和附件已保留。',

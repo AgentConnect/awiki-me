@@ -68,17 +68,12 @@ const installationDaemon = AgentSummary(
     diagnosticsSummary: {
       'config_summary': {
         'runtime_client_detection': {'schema_version': 1},
-        'generic_cli': {
-          'capability_schema_version': 1,
-          'supported_drivers': ['codex', 'claude-code'],
-          'supported_workspace_modes': ['route-root'],
-          'supported_sandbox_modes': ['danger-full-access'],
-          'route_session_supported': true,
-          'native_resume_supported': true,
-        },
         'acp': {
           'capability_schema_version': 1,
           'supported_drivers': [
+            'hermes',
+            'codex',
+            'claude-code',
             'opencode',
             'gemini',
             'kimi',

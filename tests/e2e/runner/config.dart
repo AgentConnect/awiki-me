@@ -353,7 +353,7 @@ class DesktopCliPeerConfig implements DesktopRemoteTargetContract {
     this.daemonReadyFile,
     this.daemonHandle,
     this.daemonEnvFile,
-    this.daemonFakeHermesGatewayCommand,
+    this.daemonFakeHermesHome,
     this.personalAgentEnabled = false,
     this.personalAgentRuntimeProvider = 'hermes',
     this.personalAgentProcessingScope = 'all_conversations',
@@ -389,7 +389,7 @@ class DesktopCliPeerConfig implements DesktopRemoteTargetContract {
   final String? daemonReadyFile;
   final String? daemonHandle;
   final String? daemonEnvFile;
-  final String? daemonFakeHermesGatewayCommand;
+  final String? daemonFakeHermesHome;
   final bool personalAgentEnabled;
   final String personalAgentRuntimeProvider;
   final String personalAgentProcessingScope;
@@ -493,7 +493,7 @@ class DesktopCliPeerConfig implements DesktopRemoteTargetContract {
       daemonReadyFile: fileConfig.daemonReadyFile,
       daemonHandle: fileConfig.daemonHandle,
       daemonEnvFile: fileConfig.daemonEnvFile,
-      daemonFakeHermesGatewayCommand: fileConfig.daemonFakeHermesGatewayCommand,
+      daemonFakeHermesHome: fileConfig.daemonFakeHermesHome,
       personalAgentEnabled: _effectivePersonalAgentEnabled(
         options,
         fileConfig,
@@ -587,7 +587,7 @@ class DesktopE2eFileConfig {
     this.daemonReadyFile,
     this.daemonHandle,
     this.daemonEnvFile,
-    this.daemonFakeHermesGatewayCommand,
+    this.daemonFakeHermesHome,
     this.personalAgentEnabled,
     this.personalAgentRuntimeProvider,
     this.personalAgentProcessingScope,
@@ -619,7 +619,7 @@ class DesktopE2eFileConfig {
       daemonReadyFile = null,
       daemonHandle = null,
       daemonEnvFile = null,
-      daemonFakeHermesGatewayCommand = null,
+      daemonFakeHermesHome = null,
       personalAgentEnabled = null,
       personalAgentRuntimeProvider = null,
       personalAgentProcessingScope = null,
@@ -649,7 +649,7 @@ class DesktopE2eFileConfig {
   final String? daemonReadyFile;
   final String? daemonHandle;
   final String? daemonEnvFile;
-  final String? daemonFakeHermesGatewayCommand;
+  final String? daemonFakeHermesHome;
   final bool? personalAgentEnabled;
   final String? personalAgentRuntimeProvider;
   final String? personalAgentProcessingScope;
@@ -766,10 +766,7 @@ class DesktopE2eFileConfig {
       ),
       daemonHandle: _stringAt(daemon, 'handle'),
       daemonEnvFile: _resolveOptionalPath(root, _stringAt(daemon, 'envFile')),
-      daemonFakeHermesGatewayCommand: _stringAt(
-        daemon,
-        'fakeHermesGatewayCommand',
-      ),
+      daemonFakeHermesHome: _stringAt(daemon, 'fakeHermesHome'),
       personalAgentEnabled: _boolAt(personalAgent, 'enabled'),
       personalAgentRuntimeProvider: _stringAt(personalAgent, 'runtimeProvider'),
       personalAgentProcessingScope: _stringAt(personalAgent, 'processingScope'),

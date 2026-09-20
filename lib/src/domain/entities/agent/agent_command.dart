@@ -31,15 +31,7 @@ extension RuntimeAgentKindInfo on RuntimeAgentKind {
     RuntimeAgentKind.deepseekHarness => 'deepseek-harness',
   };
 
-  String? get driverId => switch (this) {
-    RuntimeAgentKind.hermes => null,
-    RuntimeAgentKind.codex => 'codex',
-    RuntimeAgentKind.claudeCode => 'claude-code',
-    RuntimeAgentKind.opencode => 'opencode',
-    RuntimeAgentKind.gemini => 'gemini',
-    RuntimeAgentKind.kimi => 'kimi',
-    RuntimeAgentKind.deepseekHarness => 'deepseek-harness',
-  };
+  String get driverId => runtime;
 
   String get displayLabel => switch (this) {
     RuntimeAgentKind.hermes => 'Hermes',
@@ -61,18 +53,9 @@ extension RuntimeAgentKindInfo on RuntimeAgentKind {
     RuntimeAgentKind.deepseekHarness => 'my-deepseek',
   };
 
-  bool get isGenericCli => driverId != null;
-  bool get isAcp => const {
-    RuntimeAgentKind.opencode,
-    RuntimeAgentKind.gemini,
-    RuntimeAgentKind.kimi,
-    RuntimeAgentKind.deepseekHarness,
-  }.contains(this);
+  bool get isAcp => true;
 
-  Map<String, Object?> get defaultDriverConfig => switch (this) {
-    RuntimeAgentKind.codex => const <String, Object?>{'ephemeral': false},
-    _ => const <String, Object?>{},
-  };
+  Map<String, Object?> get defaultDriverConfig => const <String, Object?>{};
 }
 
 class RuntimeAgentCreateOptions {

@@ -339,9 +339,10 @@ class AgentsState {
 
   AgentSummary? personalAgentRuntimeFor(String daemonDid) {
     for (final runtime in runtimesFor(daemonDid)) {
-      if (PersonalAgentRuntimeProviders.enabled.any(
-        (provider) => provider.matchesHandle(runtime.handle),
-      )) {
+      if (runtime.usesAcp &&
+          PersonalAgentRuntimeProviders.enabled.any(
+            (provider) => provider.matchesHandle(runtime.handle),
+          )) {
         return runtime;
       }
     }
@@ -1258,6 +1259,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     await _runAction(AgentActionKeys.createRuntime(daemonDid), (
       operation,
     ) async {
+      if (!daemon.supportedAcpDrivers.contains(options.kind.driverId)) {
+        state = state.copyWith(error: AgentUiMessageCodes.acpUpgradeRequired);
+        return;
+      }
       final requestId = clientRequestId ?? agentCommandId('app_req');
       final pending = PendingRuntimeCreation(
         requestId: requestId,
@@ -1417,6 +1422,10 @@ class AgentsController extends StateNotifier<AgentsState> {
         state.statusQueryErrors.containsKey(daemonDid) ||
         !_daemonAcceptsControlCommands(daemon)) {
       state = state.copyWith(error: AgentUiMessageCodes.selectDaemon);
+      return;
+    }
+    if (!daemon.supportedAcpDrivers.contains('hermes')) {
+      state = state.copyWith(error: AgentUiMessageCodes.acpUpgradeRequired);
       return;
     }
     final daemonBootstrapPublicKey = _daemonBootstrapPublicKey(daemon);

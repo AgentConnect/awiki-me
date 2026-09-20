@@ -996,6 +996,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       currentConversation,
       agents,
     );
+    final isRetiredAgentConversation = runtimeAgent?.isRetiredRuntime == true;
     final headerNickname = _headerNickname(
       currentConversation,
       runtimeAgent: runtimeAgent,
@@ -1004,7 +1005,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
       currentConversation,
     );
     final canAcceptExternalAttachment =
-        !isDeletedAgentConversation && groupSendDisabledReason == null;
+        !isDeletedAgentConversation &&
+        !isRetiredAgentConversation &&
+        groupSendDisabledReason == null;
     final inviteTarget = _groupInviteTarget(
       currentConversation,
       ref.watch(groupProvider).groups,
@@ -1719,6 +1722,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             ),
           if (!currentConversation.isGroup &&
               !isDeletedAgentConversation &&
+              !isRetiredAgentConversation &&
               ((runtimeAgent != null && agentUsesAcp(runtimeAgent)) ||
                   acpSessions.isNotEmpty))
             ConstrainedBox(
@@ -1752,9 +1756,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
             pendingAttachment: _pendingAttachment,
             focusRequestId: _composerFocusRequestId,
             enabled:
-                !isDeletedAgentConversation && groupSendDisabledReason == null,
+                !isDeletedAgentConversation &&
+                !isRetiredAgentConversation &&
+                groupSendDisabledReason == null,
             disabledReason: isDeletedAgentConversation
                 ? context.l10n.chatDeletedAgentDisabled
+                : isRetiredAgentConversation
+                ? context.l10n.chatRetiredAgentDisabled
                 : groupSendDisabledReason,
             onSend: () => _submitComposer(
               currentConversation,
@@ -2240,6 +2248,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   bool _canAcceptExternalAttachment(ConversationSummary conversation) {
     return !conversation.isDeletedAgentConversation &&
+        _runtimeAgentForConversation(
+              conversation,
+              ref.read(agentsProvider).agents,
+            )?.isRetiredRuntime !=
+            true &&
         _groupSendDisabledReason(conversation) == null;
   }
 
@@ -2291,6 +2304,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
     required ConversationPeerClassification classification,
   }) async {
     if (conversation.isDeletedAgentConversation ||
+        _runtimeAgentForConversation(
+              conversation,
+              ref.read(agentsProvider).agents,
+            )?.isRetiredRuntime ==
+            true ||
         _groupSendDisabledReason(conversation) != null) {
       return;
     }
@@ -2393,6 +2411,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
           if (member.membershipStatus == GroupMemberMembershipStatus.active)
             member.did,
     };
+    if (agents.any(
+      (a) =>
+          a.isRetiredRuntime &&
+          (targeted.contains(a.agentDid) ||
+              (broadcast && broadcastMembers.contains(a.agentDid))),
+    )) {
+      return AcpSendBlock.retired;
+    }
     final acpAgents = {
       for (final a in agents)
         if (agentUsesAcp(a)) a.agentDid,
