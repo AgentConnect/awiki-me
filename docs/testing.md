@@ -1264,13 +1264,13 @@ do not require the packaging environment's `AWIKI_CI_READ_TOKEN`.
 
 The private System Test coordinator is pinned to a reviewed exact commit in
 `ci.yml`. Its checkout requires repository secret `AWIKI_CI_READ_TOKEN` with
-Contents read-only access to `AgentConnect/awiki-system-test` and
-`AgentConnect/user-service`. The portable parallel-tenant contract also reads
-the pinned User Service source. Use a separate
+Contents read-only access to `AgentConnect/awiki-system-test`. The independent
+System contract job additionally needs `AgentConnect/user-service` and
+`AgentConnect/awiki-web`; the App validation job does not read those repositories. Use a separate
 credential from the packaging environment; ordinary PR jobs must not receive
 release credentials or repository-write permissions. Checkout removes the
 credential before test code executes (`persist-credentials: false`). Missing
-private-source access fails before builds; fork PRs do not receive this secret.
+private-source access fails its owning job; fork PRs do not receive this secret.
 The current System Test repository disables deploy keys, so an SSH deploy key
 cannot supply this checkout credential.
 
@@ -1459,7 +1459,7 @@ xvfb-run -a flutter test --no-pub integration_test/chat_composer_clipboard_test.
 
 ### CI private contract source access
 
-The validation job uses `AWIKI_CI_READ_TOKEN` for the exact pinned checkouts of
+The independent `cross-repository-contracts` job uses `AWIKI_CI_READ_TOKEN` for the exact pinned checkouts of
 `awiki-system-test`, `user-service`, and `awiki-web`. A missing secret fails
 before checkout. A 403 during checkout requires checking the credential's selected
 repositories, Contents: read access, expiry, organization approval/SSO where
@@ -1489,3 +1489,10 @@ Do not compile phone numbers, OTPs, invitation codes or fixture JSON into the Ap
 release/0910 的 PR CI 显式选择 AWIKI_SOURCE_INTEGRATION=1，固定 Core consumer 3df2281b60ead902c377c0d301679dffc2372c48；其 source manifest 固定 SDK 527146e3d74437bb3b74f064b50def8d22f4b7e0，使用配套提交锁。手动验证可选 sdk_dependencies=source/registry，默认 source；validation_only=true 保持禁止远端账号/OTP job。正式 package workflow 不变，开发不提前发布 SDK。
 
 Linux Core/CLI、原生 guard rebuild 和 Windows Rust host test/native build 复用隔离 source builder；读取 .artifacts/dependencies/source/target，不混入 registry 的 target。Linux 来源摘要覆盖模式、source manifest/lock 和构建脚本，切换输入使旧 provenance 失效。Windows 保留 PE x64/FRB 实际 DLL 校验。私有合同源读取仍使用现有最小权限 token，403 不以跳过测试代替。
+
+
+### App 与跨仓契约 CI 隔离
+
+`validate` 保留 App analyze、unit/widget/provider、catalog、Linux native provenance、desktop smoke 与编排检查，统一入口使用 `--profile pr --component app`。它只需 Core 与 System Test coordinator 源码，不检出 Web、User Service、DSH 或 Desktop 合同源。
+
+独立的 `cross-repository-contracts` job 使用同一 coordinator 的 `--profile pr --component system`，保留原 PR profile 的全部 System contract/acp-contract 用例以及精确源码 pin。两个 job 没有 `needs` 依赖，也不使用 `continue-on-error`；Web 403 仅使跨仓 job 失败，App 验证继续并单独报告。完整 CI 通过仍要求两边通过，不能用 App 通过替代跨仓契约通过。源码集成模式与正式发布边界不变。

@@ -59,7 +59,7 @@ jobs:
             exit 1
           }
           test -n "$SYSTEM_TEST_READ_TOKEN" || {
-            echo "AWIKI_CI_READ_TOKEN is missing; provide Contents: read access to awiki-system-test, user-service, and awiki-web" >&2
+            echo "AWIKI_CI_READ_TOKEN is missing; provide Contents: read access to awiki-system-test" >&2
             exit 1
           }
 
@@ -146,6 +146,127 @@ jobs:
           path: test-awiki-system-test
           persist-credentials: false
 
+      - name: Record exact CLI / SDK source ref
+        env:
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '3df2281b60ead902c377c0d301679dffc2372c48') || vars.AWIKI_CLI_RS2_REF }}
+        run: |
+          test "$(git -C awiki-cli-rs2 rev-parse HEAD)" = "$CLI_REF"
+          git -C awiki-cli-rs2 rev-parse HEAD | tee /tmp/awiki-cli-ref
+          git -C test-awiki-system-test rev-parse HEAD
+
+      - name: Dart analyze
+        working-directory: test-awiki-me
+        run: dart analyze
+
+      - name: Flutter unit/widget/provider gate
+        working-directory: test-awiki-me
+        run: |
+          dart run tests/unit/runner.dart --branch-coverage
+          dart run tool/test_coverage_gate.dart
+
+      - name: Validate case catalog and generated documentation
+        working-directory: test-awiki-me
+        run: dart run tool/validate_test_catalog.dart
+
+      - name: Real desktop smoke (no service dependency)
+        working-directory: test-awiki-me
+        env:
+          AWIKI_SQLITE3_SOURCE_DIR: /tmp/awiki-sqlite3
+        run: dart run tests/e2e/runner.dart --case smoke --run-id gha-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Product manifest orchestration lint only
+        working-directory: test-awiki-me
+        run: |
+          cp tests/e2e/configs/e2e.example.yaml /tmp/awiki-e2e-dry-run.yaml
+          sed -i 's/platform: macos/platform: linux/' /tmp/awiki-e2e-dry-run.yaml
+          sed -i "s/0000000000000000000000000000000000000000/$(cat /tmp/awiki-cli-ref)/" /tmp/awiki-e2e-dry-run.yaml
+          dart run tests/e2e/runner.dart --case full --dry-run \
+            --config /tmp/awiki-e2e-dry-run.yaml \
+            --run-id gha-dry-run-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Run App PR profile alongside legacy gates
+        working-directory: test-awiki-system-test
+        env:
+          AWIKI_SQLITE3_SOURCE_DIR: /tmp/awiki-sqlite3
+          AWIKI_CLI_RUST_CARGO_TOOLCHAIN: '1.88.0'
+        run: |
+          uv sync --locked
+          export AWIKI_CLI_SOURCE_REF="$(cat /tmp/awiki-cli-ref)"
+          uv run --no-sync awiki-test \
+            --profile pr --component app \
+            --app-root ../test-awiki-me \
+            --cli-root ../awiki-cli-rs2 \
+            --run-id gha-pr-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload deterministic reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: awiki-me-deterministic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-awiki-me/.e2e/*/*/reports/**
+            test-awiki-me/.e2e/native-core/*-provenance.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload unified profile report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: awiki-unified-pr-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-awiki-system-test/.artifacts/awiki-test/
+          if-no-files-found: error
+          retention-days: 14
+
+  cross-repository-contracts:
+    name: Cross-repository System contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require exact CLI / SDK source ref and private repository read token
+        env:
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '3df2281b60ead902c377c0d301679dffc2372c48') || vars.AWIKI_CLI_RS2_REF }}
+          SYSTEM_TEST_READ_TOKEN: ${{ secrets.AWIKI_CI_READ_TOKEN }}
+        run: |
+          [[ "$CLI_REF" =~ ^[0-9a-fA-F]{40}$ ]] || {
+            echo "AWIKI_CLI_RS2_REF (or workflow input) must be an exact commit SHA" >&2
+            exit 1
+          }
+          test -n "$SYSTEM_TEST_READ_TOKEN" || {
+            echo "AWIKI_CI_READ_TOKEN is missing; provide Contents: read access to awiki-system-test, user-service, and awiki-web" >&2
+            exit 1
+          }
+
+      - name: Checkout AWiki Me
+        uses: actions/checkout@v6
+        with:
+          path: test-awiki-me
+
+      - name: Checkout AWiki CLI / IM Core
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/awiki-cli-rs2
+          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '3df2281b60ead902c377c0d301679dffc2372c48') || vars.AWIKI_CLI_RS2_REF }}
+          token: ${{ github.token }}
+          path: awiki-cli-rs2
+          persist-credentials: false
+
+      - name: Checkout unified System Test coordinator
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/awiki-system-test
+          ref: a3c0a550a82ec27263db367759e812ab6b160723
+          token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
+          path: test-awiki-system-test
+          persist-credentials: false
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
       - name: Checkout pinned DSH contract source
         uses: actions/checkout@v6
         with:
@@ -203,82 +324,31 @@ jobs:
       - name: Prepare canonical App source path for contracts
         run: ln -s test-awiki-me awiki-me
 
-      - name: Record exact CLI / SDK source ref
-        env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '3df2281b60ead902c377c0d301679dffc2372c48') || vars.AWIKI_CLI_RS2_REF }}
-        run: |
-          test "$(git -C awiki-cli-rs2 rev-parse HEAD)" = "$CLI_REF"
-          git -C awiki-cli-rs2 rev-parse HEAD | tee /tmp/awiki-cli-ref
-          git -C test-awiki-system-test rev-parse HEAD
-
-      - name: Dart analyze
-        working-directory: test-awiki-me
-        run: dart analyze
-
-      - name: Flutter unit/widget/provider gate
-        working-directory: test-awiki-me
-        run: |
-          dart run tests/unit/runner.dart --branch-coverage
-          dart run tool/test_coverage_gate.dart
-
-      - name: Validate case catalog and generated documentation
-        working-directory: test-awiki-me
-        run: dart run tool/validate_test_catalog.dart
-
-      - name: Real desktop smoke (no service dependency)
-        working-directory: test-awiki-me
-        env:
-          AWIKI_SQLITE3_SOURCE_DIR: /tmp/awiki-sqlite3
-        run: dart run tests/e2e/runner.dart --case smoke --run-id gha-smoke-${{ github.run_id }}-${{ github.run_attempt }}
-
-      - name: Product manifest orchestration lint only
-        working-directory: test-awiki-me
-        run: |
-          cp tests/e2e/configs/e2e.example.yaml /tmp/awiki-e2e-dry-run.yaml
-          sed -i 's/platform: macos/platform: linux/' /tmp/awiki-e2e-dry-run.yaml
-          sed -i "s/0000000000000000000000000000000000000000/$(cat /tmp/awiki-cli-ref)/" /tmp/awiki-e2e-dry-run.yaml
-          dart run tests/e2e/runner.dart --case full --dry-run \
-            --config /tmp/awiki-e2e-dry-run.yaml \
-            --run-id gha-dry-run-${{ github.run_id }}-${{ github.run_attempt }}
-
-      - name: Run unified PR profile alongside legacy gates
+      - name: Run cross-repository System PR contracts
         working-directory: test-awiki-system-test
         env:
-          AWIKI_SQLITE3_SOURCE_DIR: /tmp/awiki-sqlite3
           AWIKI_CLI_RUST_CARGO_TOOLCHAIN: '1.88.0'
         run: |
           uv sync --locked
-          export AWIKI_CLI_SOURCE_REF="$(cat /tmp/awiki-cli-ref)"
+          export AWIKI_CLI_SOURCE_REF="$(git -C ../awiki-cli-rs2 rev-parse HEAD)"
           uv run --no-sync awiki-test \
-            --profile pr \
+            --profile pr --component system \
             --app-root ../test-awiki-me \
             --cli-root ../awiki-cli-rs2 \
-            --run-id gha-pr-${{ github.run_id }}-${{ github.run_attempt }}
-
-      - name: Upload deterministic reports
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: awiki-me-deterministic-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            test-awiki-me/.e2e/*/*/reports/**
-            test-awiki-me/.e2e/native-core/*-provenance.json
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
+            --run-id gha-contracts-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Upload unified profile report
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: awiki-unified-pr-${{ github.run_id }}-${{ github.run_attempt }}
+          name: awiki-system-pr-${{ github.run_id }}-${{ github.run_attempt }}
           path: test-awiki-system-test/.artifacts/awiki-test/
           if-no-files-found: error
           retention-days: 14
 
   remote-product:
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.validation_only)
-    needs: validate
+    needs: [validate, cross-repository-contracts]
     runs-on: ubuntu-latest
     timeout-minutes: 65
     steps:

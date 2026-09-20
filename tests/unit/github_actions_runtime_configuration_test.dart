@@ -85,6 +85,10 @@ void main() {
       "github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.validation_only)",
     );
     expect(jobs['validate'].containsKey('if'), isFalse);
+    expect(jobs['remote-product']['needs'], [
+      'validate',
+      'cross-repository-contracts',
+    ]);
     // Registry source and exact input selection remain shared with native CI.
     expect(
       jobs['windows-pr']['env']['WINDOWS_CORE_REF'],
@@ -137,17 +141,6 @@ void main() {
       );
       expect(nativeGuard, greaterThan(dependencies), reason: name);
       expect(nativeGuard, lessThan(desktop), reason: name);
-      if (name == 'validate') {
-        final contractSource = steps.indexWhere(
-          (step) => step['name'] == 'Checkout pinned Web contract source',
-        );
-        final analysis = steps.indexWhere(
-          (step) => step['name'] == 'Dart analyze',
-        );
-        expect(contractSource, greaterThan(nativeGuard));
-        expect(contractSource, lessThan(analysis));
-        expect(steps[contractSource].containsKey('continue-on-error'), isFalse);
-      }
       expect(steps[nativeGuard]['working-directory'], 'test-awiki-me');
       expect(
         steps[nativeGuard]['run'],
@@ -187,7 +180,8 @@ void main() {
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
             as YamlMap;
     final jobs = workflow['jobs'] as YamlMap;
-    final validateSteps = (jobs['validate'] as YamlMap)['steps'] as YamlList;
+    final validateSteps =
+        (jobs['cross-repository-contracts'] as YamlMap)['steps'] as YamlList;
     final coordinator =
         validateSteps.cast<YamlMap>().singleWhere(
               (step) =>
@@ -232,6 +226,61 @@ void main() {
         }
         expect(options['token'], r'${{ github.token }}');
         expect(options['persist-credentials'], isFalse);
+      }
+    }
+  });
+
+  test('private contract failure cannot block App validation', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    final jobs = workflow['jobs'] as YamlMap;
+    for (final entry in {
+      'validate': 'app',
+      'cross-repository-contracts': 'system',
+    }.entries) {
+      final job = jobs[entry.key] as YamlMap;
+      expect(job.containsKey('needs'), isFalse);
+      expect(job.containsKey('if'), isFalse);
+      expect(job.containsKey('continue-on-error'), isFalse);
+      final steps = (job['steps'] as YamlList).cast<YamlMap>().toList();
+      expect(
+        steps.any((step) => step.containsKey('continue-on-error')),
+        isFalse,
+      );
+      final profile = steps.singleWhere(
+        (step) => (step['run']?.toString() ?? '').contains('--profile pr'),
+      );
+      expect(
+        profile['run'],
+        contains('--profile pr --component ${entry.value}'),
+      );
+      final repositories = steps
+          .where((step) => step['with'] is YamlMap)
+          .map((step) => step['with']['repository']?.toString() ?? '')
+          .join('\n');
+      for (final repository in [
+        'awiki-web',
+        'user-service',
+        'dsh-awiki',
+        'deepseek-harness-desktop',
+      ]) {
+        expect(repositories.contains('/$repository'), entry.value == 'system');
+      }
+      if (entry.value == 'app') {
+        expect(
+          job.toString(),
+          isNot(contains('access to awiki-system-test, user-service')),
+        );
+        expect(
+          steps.map((step) => step['name']),
+          containsAll([
+            'Dart analyze',
+            'Flutter unit/widget/provider gate',
+            'Validate case catalog and generated documentation',
+            'Real desktop smoke (no service dependency)',
+          ]),
+        );
       }
     }
   });
