@@ -217,6 +217,34 @@ named equivalent) physical-device run remain release-environment obligations.
 
 ## Delivery diagnostics
 
+### Local physical-device build
+
+Use a local Android Debug build for development diagnostics, not the release
+packaging workflow. `tool/run_android_notify_diagnostic.dart` runs the real App
+bootstrap with a separate `notify-diagnostic` directory inside the development
+App's support directory. It retains the normal platform secret store and real
+EMAS, authentication, sync, and navigation adapters. It refuses non-Android,
+non-Debug, or `AWIKI_E2E` builds; it does not import an identity or fake events.
+Existing development state and the production application's data remain separate.
+
+```sh
+flutter build apk --debug --target-platform android-arm64 \
+  --target tool/run_android_notify_diagnostic.dart
+```
+
+Provision ignored `android/emas.properties` with the existing **debug** EMAS
+application configuration, and prepare the matching Android Core library using
+the repository's development dependency setup. Compare the APK's package and
+signing certificate with an installed development App before an authorized
+in-place installation. A signing mismatch is a blocker, not permission to
+uninstall or reset app data. The isolated directory requires normal user login
+or device join before account-backed push can be tested. Keep that authorization
+separate from building/installing the diagnostic APK.
+
+This manual diagnostic entry point is not a product E2E test or release artifact.
+
+### Bounded event tracing
+
 The native bridge and App coordinator emit bounded `[remote-push]` stages for
 incoming/opened events, Flutter attachment, sync disposition, reference recovery
 counts, and whether the opened message matched a committed conversation. These
@@ -249,3 +277,11 @@ freezing again and the provider went offline; the network setting alone did not
 resolve the failure. Check per-app background execution policy separately. This
 is bounded device evidence, not a guarantee after process termination or prolonged idle. Preserve the original setting and timing in the
 acceptance record, and verify notification-tap routing separately.
+
+
+A subsequent M153 check enabled AWiki Me's `允许后台高耗电运行` while retaining
+`永不断网` (autostart and associated-start switches remained off). The App stayed
+connected for 320 seconds of confirmed screen-off/keyguard state; a newly sent
+message then appeared in Android's active notifications and the lock-screen UI.
+This per-app setting may increase battery use. Record its state and the actual
+idle interval; overnight idle and killed-process delivery remain unverified.
