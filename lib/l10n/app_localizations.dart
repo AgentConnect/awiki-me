@@ -2145,7 +2145,7 @@ abstract class AppLocalizations {
   /// No description provided for @deviceJoinApprove.
   ///
   /// In zh, this message translates to:
-  /// **'确认并授权'**
+  /// **'允许加入并成为管理设备'**
   String get deviceJoinApprove;
 
   /// No description provided for @deviceJoinCancel.
@@ -2193,7 +2193,7 @@ abstract class AppLocalizations {
   /// No description provided for @deviceJoinUserPresenceReason.
   ///
   /// In zh, this message translates to:
-  /// **'确认授权新设备'**
+  /// **'允许该设备加入并成为管理设备'**
   String get deviceJoinUserPresenceReason;
 
   /// No description provided for @deviceJoinErrorUnavailable.
@@ -6807,6 +6807,36 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'客户端版本与当前接入能力不兼容，请更新客户端后重试。'**
   String get agentClientCompatibilityHint;
+
+  /// No description provided for @deviceJoinManagementRegistered.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理权限已登记，请在新设备确认管理能力已就绪。'**
+  String get deviceJoinManagementRegistered;
+
+  /// No description provided for @deviceJoinManagementWaiting.
+  ///
+  /// In zh, this message translates to:
+  /// **'根密钥发送已接受，等待新设备完成管理权限配置。'**
+  String get deviceJoinManagementWaiting;
+
+  /// No description provided for @deviceJoinManagementConfiguring.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备已加入，正在配置管理权限。可安全离开此页面。'**
+  String get deviceJoinManagementConfiguring;
+
+  /// No description provided for @deviceJoinManagementRejoinRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理权限配置已失效，请由管理设备撤销此设备，再在此设备上退出本地身份（保留数据）后重新加入。'**
+  String get deviceJoinManagementRejoinRequired;
+
+  /// No description provided for @deviceJoinManagementFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备已加入，管理权限配置失败'**
+  String get deviceJoinManagementFailed;
 }
 
 class _AppLocalizationsDelegate

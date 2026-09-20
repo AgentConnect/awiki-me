@@ -346,3 +346,26 @@ class DeviceJoinApprovalPrompt {
   final String sas;
   final DateTime expiresAt;
 }
+
+/// Core-owned progress; registration is not evidence of recipient-local activation.
+class DeviceJoinManagementStatus {
+  const DeviceJoinManagementStatus({
+    required this.joinSessionId,
+    required this.recipientDeviceId,
+    required this.phase,
+    required this.attempts,
+    required this.nextAttemptAtMs,
+    this.failureCode,
+  });
+  final String joinSessionId;
+  final String recipientDeviceId;
+  final String phase;
+  final int attempts;
+  final int nextAttemptAtMs;
+  final String? failureCode;
+
+  bool get requiresRejoin =>
+      failureCode == 'root_transfer.delivery_expired' ||
+      failureCode == 'root_transfer.delivery_invalidated';
+  bool get canRetry => phase == 'failed' && !requiresRejoin;
+}

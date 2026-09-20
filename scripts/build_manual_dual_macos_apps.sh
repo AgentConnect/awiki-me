@@ -12,6 +12,9 @@ Usage:
   scripts/build_manual_dual_macos_apps.sh
 
 Environment:
+  AWIKI_MANUAL_ADMIN_BUNDLE_ID        Optional isolated admin bundle ID
+  AWIKI_MANUAL_JOINER_BUNDLE_ID       Optional isolated joiner bundle ID
+  AWIKI_MANUAL_DEPLOYMENT_TARGET     Optional local Xcode deployment target
   FLUTTER_BIN                         Flutter executable (default: flutter)
   AWIKI_IM_CORE_REPO_DIR              awiki-cli-rs2 checkout
                                       (default: ../awiki-cli-rs2)
@@ -24,10 +27,31 @@ fi
   echo "error: unknown argument: $1" >&2
   exit 2
 }
-[[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "x86_64" ]] || {
-  echo "error: manual dual-App builds require Intel macOS" >&2
+[[ "$(uname -s)" == "Darwin" ]] || {
+  echo "error: manual dual-App builds require macOS" >&2
   exit 2
 }
+host_arch="$(uname -m)"
+case "$host_arch" in
+  arm64|x86_64) ;;
+  *) echo "error: unsupported macOS architecture: $host_arch" >&2; exit 2 ;;
+esac
+if [[ "$(sysctl -in sysctl.proc_translated 2>/dev/null || true)" == "1" ]]; then
+  echo "error: run the builder natively, not through Rosetta" >&2
+  exit 2
+fi
+admin_bundle_id="${AWIKI_MANUAL_ADMIN_BUNDLE_ID:-ai.awiki.awikime.dev}"
+joiner_bundle_id="${AWIKI_MANUAL_JOINER_BUNDLE_ID:-ai.awiki.awikime.dev.manual.joiner}"
+[[ "$admin_bundle_id" != "$joiner_bundle_id" ]] || {
+  echo "error: manual App bundle IDs must differ" >&2
+  exit 2
+}
+for bundle_id in "$admin_bundle_id" "$joiner_bundle_id"; do
+  [[ "$bundle_id" =~ ^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+$ ]] || {
+    echo "error: invalid manual App bundle ID" >&2
+    exit 2
+  }
+done
 
 flutter_bin="${FLUTTER_BIN:-flutter}"
 command -v "$flutter_bin" >/dev/null 2>&1 || {
@@ -43,7 +67,7 @@ im_core_repo_dir="$(cd "$im_core_repo_dir" 2>/dev/null && pwd)" || {
 }
 im_core_build_script="$im_core_repo_dir/scripts/flutter/build-sdk-native.sh"
 im_core_verify_script="$ROOT_DIR/scripts/verify_im_core_native_artifact.sh"
-im_core_library="$im_core_repo_dir/packages/awiki_im_core/macos/Frameworks/AwikiImCore.xcframework/macos-x86_64/libawiki_im_core.a"
+im_core_library="$im_core_repo_dir/packages/awiki_im_core/macos/Frameworks/AwikiImCore.xcframework/macos-${host_arch}/libawiki_im_core.a"
 
 prepare_native_dependency() {
   [[ -x "$im_core_build_script" ]] || {
@@ -60,12 +84,12 @@ prepare_native_dependency() {
   if AWIKI_IM_CORE_REPO_DIR="$im_core_repo_dir" \
       "$im_core_verify_script" >/dev/null 2>&1 && \
       [[ -f "$im_core_library" ]] && \
-      [[ "$(/usr/bin/lipo -archs "$im_core_library")" == "x86_64" ]]; then
-    echo "Using verified x86_64 awiki_im_core from source revision $source_revision"
+      [[ "$(/usr/bin/lipo -archs "$im_core_library")" == "$host_arch" ]]; then
+    echo "Using verified $host_arch awiki_im_core from source revision $source_revision"
   else
     echo "Rebuilding stale awiki_im_core from source revision $source_revision"
     PATH="$(dirname "$flutter_bin"):$PATH" \
-      "$im_core_build_script" --macos-only --macos-arch x86_64
+      "$im_core_build_script" --macos-only --macos-arch "$host_arch"
   fi
 
   AWIKI_IM_CORE_REPO_DIR="$im_core_repo_dir" \
@@ -77,8 +101,8 @@ prepare_native_dependency() {
     echo "error: native Core library is missing: $im_core_library" >&2
     return 1
   }
-  [[ "$(/usr/bin/lipo -archs "$im_core_library")" == "x86_64" ]] || {
-    echo "error: native Core library must be x86_64-only" >&2
+  [[ "$(/usr/bin/lipo -archs "$im_core_library")" == "$host_arch" ]] || {
+    echo "error: native Core library must be $host_arch-only" >&2
     return 1
   }
 }
@@ -117,12 +141,14 @@ printf '{"build-dir":"%s","enable-macos-desktop":true}\n' "$joiner_build_rel" \
   > "$joiner_cache/flutter-config/settings"
 
 cat > "$admin_cache/ManualAdmin.xcconfig" <<EOF
-AWIKI_MACOS_DEV_BUNDLE_ID = ai.awiki.awikime.dev
+AWIKI_MACOS_DEV_BUNDLE_ID = $admin_bundle_id
 AWIKI_APP_DISPLAY_NAME = AWikiMe (Development)
+${AWIKI_MANUAL_DEPLOYMENT_TARGET:+MACOSX_DEPLOYMENT_TARGET = $AWIKI_MANUAL_DEPLOYMENT_TARGET}
 EOF
 cat > "$joiner_cache/ManualJoiner.xcconfig" <<EOF
-AWIKI_MACOS_DEV_BUNDLE_ID = ai.awiki.awikime.dev.manual.joiner
+AWIKI_MACOS_DEV_BUNDLE_ID = $joiner_bundle_id
 AWIKI_APP_DISPLAY_NAME = AWikiMe Joiner
+${AWIKI_MANUAL_DEPLOYMENT_TARGET:+MACOSX_DEPLOYMENT_TARGET = $AWIKI_MANUAL_DEPLOYMENT_TARGET}
 EOF
 
 lock_snapshot="$(mktemp)"
@@ -213,15 +239,15 @@ verify_app() {
     echo "error: unexpected bundle ID: $app" >&2
     exit 1
   }
-  [[ "$(/usr/bin/lipo -archs "$app/Contents/MacOS/AWikiMe")" == "x86_64" ]] || {
-    echo "error: App must be x86_64-only: $app" >&2
+  [[ "$(/usr/bin/lipo -archs "$app/Contents/MacOS/AWikiMe")" == "$host_arch" ]] || {
+    echo "error: App must be $host_arch-only: $app" >&2
     exit 1
   }
   /usr/bin/codesign --verify --deep --strict "$app"
 }
 
-verify_app "$admin_app" 'ai.awiki.awikime.dev'
-verify_app "$joiner_app" 'ai.awiki.awikime.dev.manual.joiner'
+verify_app "$admin_app" "$admin_bundle_id"
+verify_app "$joiner_app" "$joiner_bundle_id"
 
 cat <<EOF
 Built two standalone Debug Apps with tenant config $tenant_config_sha256:

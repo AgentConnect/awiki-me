@@ -442,7 +442,7 @@
       }
     }
   },
-  "deviceJoinApprove": "确认并授权",
+  "deviceJoinApprove": "允许加入并成为管理设备",
   "deviceJoinCancel": "取消关联",
   "deviceJoinAuthorized": "设备已加入",
   "deviceJoinFinalizing": "正在完成设备操作...",
@@ -450,7 +450,7 @@
   "deviceJoinExpired": "设备关联已过期，请重新发起",
   "deviceJoinActivating": "正在激活此设备…",
   "deviceJoinActivationRetry": "重试设备激活",
-  "deviceJoinUserPresenceReason": "确认授权新设备",
+  "deviceJoinUserPresenceReason": "允许该设备加入并成为管理设备",
   "deviceJoinErrorUnavailable": "多设备功能当前未开放",
   "deviceJoinErrorConflict": "状态已发生变化，请刷新后重试",
   "deviceJoinErrorSas": "验证码状态不一致，已停止授权",
@@ -1621,5 +1621,10 @@
   "agentClientCreateFailed": "创建失败，请检查客户端环境后重试。已保留填写内容。",
   "agentClientCreatePending": "创建已提交，仍在等待结果。可关闭此窗口，在智能体列表查看进度。",
   "agentClientProtocolHint": "客户端协议连接失败，请检查宿主机上的登录、配置或客户端错误后重试。",
-  "agentClientCompatibilityHint": "客户端版本与当前接入能力不兼容，请更新客户端后重试。"
+  "agentClientCompatibilityHint": "客户端版本与当前接入能力不兼容，请更新客户端后重试。",
+  "deviceJoinManagementRegistered": "管理权限已登记，请在新设备确认管理能力已就绪。",
+  "deviceJoinManagementWaiting": "根密钥发送已接受，等待新设备完成管理权限配置。",
+  "deviceJoinManagementConfiguring": "设备已加入，正在配置管理权限。可安全离开此页面。",
+  "deviceJoinManagementRejoinRequired": "管理权限配置已失效，请由管理设备撤销此设备，再在此设备上退出本地身份（保留数据）后重新加入。",
+  "deviceJoinManagementFailed": "设备已加入，管理权限配置失败"
 }
