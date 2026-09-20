@@ -740,16 +740,9 @@ Future<void> _runEmailRegistration(
       () => container.read(onboardingProvider).emailVerified,
       'Real activation status is bound to this email and Handle',
     );
-    await _tap(
-      tester,
-      find.byKey(
-        Key(
-          Platform.isMacOS
-              ? 'onboarding-mac-email-action'
-              : 'onboarding-email-action',
-        ),
-      ),
-    );
+    // The mobile action wrapper spans the row while the verified button is
+    // right-aligned. Target the visible action instead of the wrapper's center.
+    await _tap(tester, find.text(labels.onboardingCompleteEmailRegister));
     await _until(
       tester,
       () => container.read(sessionProvider).session != null,
