@@ -1013,7 +1013,6 @@ void main() {
 
         final sentBubble = find.byWidgetPredicate(
           (widget) =>
-              widget is Container &&
               widget.key is ValueKey<String> &&
               (widget.key! as ValueKey<String>).value.startsWith(
                 'chat-message-bubble:',
@@ -1025,14 +1024,24 @@ void main() {
           matching: find.text('😀'),
         );
         expect(sentEmoji, findsOneWidget);
+        final bubbleSurface = find
+            .descendant(
+              of: sentBubble,
+              matching: find.byWidgetPredicate(
+                (widget) =>
+                    widget is Container &&
+                    widget.constraints?.maxWidth.isFinite == true,
+              ),
+            )
+            .first;
         final wideMaxWidth = tester
-            .widget<Container>(sentBubble)
+            .widget<Container>(bubbleSurface)
             .constraints!
             .maxWidth;
         await tester.binding.setSurfaceSize(const Size(900, 820));
         await _pumpSmokeFrame(tester);
         final narrowMaxWidth = tester
-            .widget<Container>(sentBubble)
+            .widget<Container>(bubbleSurface)
             .constraints!
             .maxWidth;
         expect(narrowMaxWidth, lessThan(wideMaxWidth));

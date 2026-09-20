@@ -491,6 +491,31 @@ class _FakeUserPresence implements UserPresencePort {
 }
 
 class _FakeDeviceCore implements DeviceManagementCorePort {
+  bool? localManagementReadyOverride;
+  @override
+  Future<bool> localManagementReady({
+    required String selector,
+    required String protocolDeviceId,
+  }) async =>
+      localManagementReadyOverride ??
+      (registry.currentDevice?.protocolDeviceId == protocolDeviceId &&
+          registry.currentDevice?.canManageDevices == true);
+
+  List<DeviceJoinManagementStatus> managementStatuses =
+      <DeviceJoinManagementStatus>[];
+  final List<String> managementRetries = <String>[];
+  @override
+  Future<List<DeviceJoinManagementStatus>> deviceJoinManagementStatus(
+    String selector,
+  ) async => managementStatuses;
+  @override
+  Future<void> retryDeviceJoinManagement({
+    required String selector,
+    required String joinSessionId,
+  }) async {
+    managementRetries.add(joinSessionId);
+  }
+
   @override
   Future<String> resolveJoinDid(String handle) async =>
       'did:wba:awiki.info:user:alice:e1_test';

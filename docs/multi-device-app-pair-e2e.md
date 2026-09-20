@@ -17,9 +17,10 @@ recovery suites:
 - `multi-device-app-pair-paging-recovery`: one Join plus one exact-device
   `messages_501` Schema 3 recovery case.
 
-The management-grant case observes the grant entry immediately after approval,
-previews it without sending, navigates through the UI to Devices, and completes
-one explicit root-transfer confirmation there. The receiving endpoint is a
+The management-grant case authorizes the exact joining device once through SAS
+and local user presence. Core then delivers the root automatically, without a
+second transfer confirmation. It observes accepted delivery, Registry management
+registration and receiving-device local root readiness separately. The receiving endpoint is a
 second App, never a CLI. Both fresh Registry reads must eventually show exactly
 two active, management-ready admins without either App losing its session.
 The read-only completion observer tolerates only the exact missing-Bearer error
@@ -31,8 +32,8 @@ Other errors and final readiness failures remain failures.
 
 The same case then deletes only the joining App's local credential and completes
 another real Join from its fresh form. The server still has two ready admins;
-the original admin must approve the distinct third device, expose management
-grant instead of Done, and successfully grant Root again. Both App views must
+the original admin must approve the distinct third device, automatically provision
+Root again without a second confirmation. Both App views must
 converge to three ready-admin Registry rows. The coordinator clears the first
 SAS round before new submissions; opening the fresh form alone cannot pass this
 checkpoint regression.
@@ -384,3 +385,9 @@ User accounts, Handles and User-owned inventory remain explicit residuals; this
 is not a User-account deletion API. Historical ledgers without exact account
 selectors cannot authorize deletion, and scope is never inferred from shared
 phone numbers or name-prefix scans.
+
+## 自动管理的 V1 兼容验证边界
+
+新自动 Join 默认使用纯 V1，不发送 completion_contract，原字段、含义和 600 秒信封期限不变。User Service V2 增强不是本功能发送前置。ROOT-TRANSFER-APP-PAIR-E2E-001、ROOT-TRANSFER-E2E-001 和 CLI→App 场景必须核对一次 presence、最多四次发送、接受后不重发、Registry 登记与接收端本机 Root 激活。
+
+历史 V2 与 extensions.v1 仅保留接收/恢复验证；扩展发送在 exact-device/服务端能力协商闭合前保持关闭。延迟导入与证明刷新由 Core/User Service 的独立用例验证，不得把它们写成默认 V1 自动 Join 的依赖或将局部测试等同真机长期离线验收。

@@ -90,14 +90,14 @@ void main() {
     final pins = source
         .split('\n')
         .where(
-          (line) => line.contains('d51ca16ff697751d04810c417bef5048d6a08e53'),
+          (line) => line.contains('b6c369bee2b0d3b486ed1dd72ed7c2d62d0c5810'),
         );
     expect(pins, isNotEmpty);
     for (final line in pins) {
       expect(
         line,
         contains(
-          "github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'd51ca16f",
+          "github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'b6c369be",
         ),
       );
     }
@@ -187,7 +187,7 @@ void main() {
             as YamlMap;
     final jobs = workflow['jobs'] as YamlMap;
     const pin =
-        "(github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'd51ca16ff697751d04810c417bef5048d6a08e53')";
+        "(github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'b6c369bee2b0d3b486ed1dd72ed7c2d62d0c5810')";
     for (final name in [
       'validate',
       'cross-repository-contracts',
@@ -202,12 +202,12 @@ void main() {
           );
       expect(
         checkout['with']['ref'],
-        '\u0024{{ github.event.inputs.cli_ref || $pin || vars.AWIKI_CLI_RS2_REF }}',
+        '\u0024{{ github.event.inputs.cli_ref || $pin || \'d3289db6732f6028fa7e54909b768bd48838f7fb\' }}',
       );
     }
     expect(
       jobs['windows-pr']['env']['WINDOWS_CORE_REF'],
-      '\u0024{{ github.event.inputs.cli_ref || $pin || vars.AWIKI_CLI_RS2_WINDOWS_REF || vars.AWIKI_CLI_RS2_REF }}',
+      '\u0024{{ github.event.inputs.cli_ref || $pin || \'d3289db6732f6028fa7e54909b768bd48838f7fb\' }}',
     );
   });
 

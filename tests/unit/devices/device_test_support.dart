@@ -29,6 +29,39 @@ DeviceJoinProgress testJoinProgress({
 }
 
 class FakeDeviceManagementCore implements DeviceManagementCorePort {
+  bool? localManagementReadyOverride;
+  Object? localManagementReadyError;
+  @override
+  Future<bool> localManagementReady({
+    required String selector,
+    required String protocolDeviceId,
+  }) async {
+    if (localManagementReadyError != null) throw localManagementReadyError!;
+    return localManagementReadyOverride ??
+        (registry.currentDevice?.protocolDeviceId == protocolDeviceId &&
+            registry.currentDevice?.canManageDevices == true);
+  }
+
+  List<DeviceJoinManagementStatus> managementStatuses =
+      <DeviceJoinManagementStatus>[];
+  Future<List<DeviceJoinManagementStatus>> Function()? managementStatusLoader;
+  Object? managementRetryError;
+  final List<String> managementRetries = <String>[];
+  @override
+  Future<List<DeviceJoinManagementStatus>> deviceJoinManagementStatus(
+    String selector,
+  ) async => managementStatusLoader == null
+      ? managementStatuses
+      : await managementStatusLoader!();
+  @override
+  Future<void> retryDeviceJoinManagement({
+    required String selector,
+    required String joinSessionId,
+  }) async {
+    managementRetries.add(joinSessionId);
+    if (managementRetryError != null) throw managementRetryError!;
+  }
+
   String resolvedJoinDid = testDid;
   DeviceRegistrySnapshot registry = const DeviceRegistrySnapshot(did: testDid);
   List<DeviceJoinRequestNotice> joinRequests =
@@ -389,7 +422,10 @@ class FakeJoinDirectory implements DirectoryApplicationService {
   }
 
   @override
-  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(Iterable<String> dids, {bool force = false}) async => const <PeerDisplayProfile>[];
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  }) async => const <PeerDisplayProfile>[];
 
   @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(

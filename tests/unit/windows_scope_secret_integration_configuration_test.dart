@@ -16,8 +16,8 @@ void main() {
       workflow,
       contains(
         r'WINDOWS_CORE_REF: ${{ github.event.inputs.cli_ref || '
-        "(github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'd51ca16ff697751d04810c417bef5048d6a08e53') || "
-        'vars.AWIKI_CLI_RS2_WINDOWS_REF || vars.AWIKI_CLI_RS2_REF }}',
+        "(github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'b6c369bee2b0d3b486ed1dd72ed7c2d62d0c5810') || "
+        "'d3289db6732f6028fa7e54909b768bd48838f7fb' }}",
       ),
     );
     expect(

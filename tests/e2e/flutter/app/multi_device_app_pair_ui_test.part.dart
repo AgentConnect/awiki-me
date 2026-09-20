@@ -358,28 +358,16 @@ void appPairAdminMain() {
           () {
             final state = container.read(devicesProvider);
             _failOnDeviceError(state, 'The admin App approval failed');
-            final sheet = find.byType(DeviceJoinApprovalSheet);
-            final done = find.descendant(
-              of: sheet,
-              matching: find.text(tester.element(sheet).l10n.commonDone),
-            );
-            if (done.hitTestable().evaluate().isNotEmpty) {
-              fail(
-                'Two-App approval offered Done instead of management grant '
-                '(pending=${state.isActionPending}, phase=${state.activeJoin?.phase.name}, '
-                'target=${state.activeJoin?.authorizedDevice != null}, '
-                'senderReady=${state.registry?.currentDevice?.canManageDevices}).',
-              );
-            }
-            return find
-                    .byKey(const Key('root-transfer-grant-management'))
-                    .hitTestable()
-                    .evaluate()
-                    .length ==
-                1;
+            return !state.isActionPending &&
+                find
+                        .byKey(const Key('device-join-management-phase'))
+                        .evaluate()
+                        .length ==
+                    1;
           },
           timeout: const Duration(seconds: 45),
-          failure: 'The two-App approval did not expose management grant.',
+          failure:
+              'The two-App approval did not show automatic management state.',
         );
       }
 
@@ -415,7 +403,7 @@ void appPairAdminMain() {
           'management_ready',
           timeout: const Duration(minutes: 3),
         );
-        await _waitForTwoAppAdmins(
+        await _waitForLocalAndRegistryAdmins(
           tester,
           bootstrap.deviceManagementCorePort!,
           adminSession.did,
@@ -435,13 +423,13 @@ void appPairAdminMain() {
         await E2eCaseAttestationWriter.markPassed(
           _appPairRootGrantCaseId,
           phases: const [
-            'active_join_grant_visible',
-            'device_list_grant_confirmed',
-            'single_root_presence',
+            'automatic_management_state_visible',
+            'automatic_delivery_accepted',
+            'no_second_presence',
             'receiver_app_management_ready',
             'both_apps_ready_admins',
             'next_join_after_registry_only_promotion',
-            'next_join_grant_visible_without_done',
+            'next_join_automatic_management',
             'third_device_management_ready',
           ],
         );
@@ -663,8 +651,7 @@ void appPairJoinerMain() {
               progress?.remoteState == DeviceJoinRemoteState.consumed &&
               progress?.sas == null &&
               device?.protocolDeviceId == pending.protocolDeviceId &&
-              device?.role == DeviceRole.member &&
-              device?.managementReady == false &&
+              _validJoinedDeviceRole(device) &&
               device?.isCurrent == true;
         },
         timeout: const Duration(minutes: 2),
@@ -703,7 +690,7 @@ void appPairJoinerMain() {
           'root_grant_sent',
           timeout: const Duration(minutes: 2),
         );
-        await _waitForTwoAppAdmins(
+        await _waitForLocalAndRegistryAdmins(
           tester,
           bootstrap.deviceManagementCorePort!,
           did,
@@ -869,31 +856,18 @@ Future<void> _appPairAdminRejoin(
     () {
       final state = container.read(devicesProvider);
       _failOnDeviceError(state, 'Post-promotion approval failed');
-      final sheet = find.byType(DeviceJoinApprovalSheet);
-      if (find
-          .descendant(
-            of: sheet,
-            matching: find.text(tester.element(sheet).l10n.commonDone),
-          )
-          .hitTestable()
-          .evaluate()
-          .isNotEmpty) {
-        fail(
-          'The post-promotion Join offered Done instead of management grant.',
-        );
-      }
       return !state.isActionPending &&
           state.activeJoin?.phase == DeviceJoinPhase.authorized &&
           state.activeJoin?.authorizedDevice?.protocolDeviceId == deviceId &&
           find
-                  .byKey(const Key('root-transfer-grant-management'))
-                  .hitTestable()
+                  .byKey(const Key('device-join-management-phase'))
                   .evaluate()
                   .length ==
               1;
     },
     timeout: const Duration(seconds: 90),
-    failure: 'Post-promotion Join did not expose the management grant step.',
+    failure:
+        'Post-promotion Join did not show automatic management configuration.',
   );
   if (presence.calls != beforePresence + 1) {
     fail('Second Join approval did not use exactly one confirmation.');
@@ -924,7 +898,7 @@ Future<void> _appPairAdminRejoin(
     'rejoin_management_ready',
     timeout: const Duration(minutes: 3),
   );
-  await _waitForTwoAppAdmins(
+  await _waitForLocalAndRegistryAdmins(
     tester,
     bootstrap.deviceManagementCorePort!,
     did,
@@ -1033,7 +1007,7 @@ Future<void> _appPairJoinerRejoin(
     'rejoin_root_grant_sent',
     timeout: const Duration(minutes: 3),
   );
-  await _waitForTwoAppAdmins(
+  await _waitForLocalAndRegistryAdmins(
     tester,
     bootstrap.deviceManagementCorePort!,
     did,
@@ -5097,103 +5071,43 @@ Future<void> _appPairGrantManagement(
   String deviceId,
 ) async {
   final before = presence.calls;
-  await _tapOne(
-    tester,
-    find.byKey(const Key('root-transfer-grant-management')),
-    failure: 'The admin App Join grant action was unavailable.',
-  );
-  await _pumpUntil(
-    tester,
-    () {
-      final transfer = container.read(devicesProvider).rootTransfer;
-      if (transfer.phase == RootKeyTransferPhase.failed) {
-        fail(
-          'Two-App active grant prepare failed (${_appPairSafeToken(transfer.errorCode ?? 'unknown')}).',
-        );
-      }
-      return transfer.phase == RootKeyTransferPhase.awaitingConfirmation;
-    },
-    timeout: const Duration(seconds: 45),
-    failure: 'Two-App grant did not reach confirmation.',
-  );
-  if (presence.calls != before ||
-      container.read(devicesProvider).rootTransfer.receipt != null) {
-    fail('Active Join preparation crossed user confirmation.');
+  var retried = false;
+  final deadline = DateTime.now().add(const Duration(minutes: 3));
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.pump(const Duration(milliseconds: 200));
+    final tasks = container
+        .read(devicesProvider)
+        .managementStatuses
+        .where((task) => task.recipientDeviceId == deviceId)
+        .toList();
+    if (tasks.length != 1) continue;
+    final task = tasks.single;
+    if (task.phase == 'failed') {
+      if (retried) fail('The exact Join management retry failed.');
+      await _tapOne(
+        tester,
+        find.byKey(const Key('device-join-management-retry')),
+        failure: 'Failed Join management did not expose retry.',
+      );
+      retried = true;
+    }
+    if (presence.calls != before ||
+        find
+            .byKey(const Key('root-transfer-confirm-send'))
+            .evaluate()
+            .isNotEmpty) {
+      fail('Automatic App-pair management asked for a second root approval.');
+    }
+    if (task.phase == 'waiting_for_recipient' ||
+        task.phase == 'management_registered') {
+      await _leaveCompletedAppPairApproval(tester);
+      return;
+    }
   }
-  if (find.byKey(const Key('root-transfer-confirm-send')).evaluate().length !=
-      1) {
-    fail('Active Join did not show the explicit root confirmation step.');
-  }
-  await _leaveCompletedAppPairApproval(tester);
-  if (find.byType(DevicesPage).evaluate().isEmpty) {
-    await _openDevicesPage(tester);
-  }
-  final action = find.byKey(Key('device-grant-management-$deviceId'));
-  await _pumpUntil(
-    tester,
-    () => action.hitTestable().evaluate().length == 1,
-    failure: 'The new App member did not expose the Devices grant action.',
-  );
-  await _tapOne(tester, action, failure: 'Devices grant was unavailable.');
-  await _pumpUntil(
-    tester,
-    () {
-      if (find
-          .byKey(const Key('device-root-transfer-failed-dialog'))
-          .evaluate()
-          .isNotEmpty) {
-        fail('Two-App Devices grant preparation failed.');
-      }
-      return find
-              .byKey(const Key('device-root-transfer-confirm-dialog'))
-              .evaluate()
-              .length ==
-          1;
-    },
-    timeout: const Duration(seconds: 45),
-    failure: 'Devices grant click produced no confirmation.',
-  );
-  if (presence.calls != before) {
-    fail('Devices preparation prompted for user presence.');
-  }
-  await _tapOne(
-    tester,
-    find.byKey(const Key('device-root-transfer-confirm-action')),
-    failure: 'Devices root confirmation was unavailable.',
-  );
-  await _pumpUntil(
-    tester,
-    () {
-      if (find
-          .byKey(const Key('device-root-transfer-failed-dialog'))
-          .evaluate()
-          .isNotEmpty) {
-        fail('Two-App root send failed.');
-      }
-      return find
-              .byKey(const Key('device-root-transfer-sent-dialog'))
-              .evaluate()
-              .length ==
-          1;
-    },
-    timeout: const Duration(seconds: 45),
-    failure: 'The admin App did not report root send acceptance.',
-  );
-  if (presence.calls != before + 1) {
-    fail('Root transfer did not use exactly one user-presence decision.');
-  }
-  final dialog = find.byKey(const Key('device-root-transfer-sent-dialog'));
-  await _tapOne(
-    tester,
-    find.descendant(
-      of: dialog,
-      matching: find.text(tester.element(dialog).l10n.commonDone),
-    ),
-    failure: 'The successful root transfer dialog did not close.',
-  );
+  fail('Automatic App-pair management configuration did not accept delivery.');
 }
 
-Future<void> _waitForTwoAppAdmins(
+Future<void> _waitForLocalAndRegistryAdmins(
   WidgetTester tester,
   DeviceManagementCorePort port,
   String did,
@@ -5226,6 +5140,10 @@ Future<void> _waitForTwoAppAdmins(
     if (registry.did == did &&
         registry.devices.length == expectedDeviceCount &&
         registry.currentDevice?.canManageDevices == true &&
+        await port.localManagementReady(
+          selector: did,
+          protocolDeviceId: registry.currentDevice!.protocolDeviceId,
+        ) &&
         registry.devices.every(
           (device) =>
               device.status == DeviceStatus.active &&
@@ -5239,7 +5157,7 @@ Future<void> _waitForTwoAppAdmins(
     }
   }
   fail(
-    'The two real App devices did not converge to ready administrators '
+    'The local device and Registry did not converge to ready administrators '
     '(transient_identity_reads=$transientIdentityReads).',
   );
 }

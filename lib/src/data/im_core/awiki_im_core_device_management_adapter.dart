@@ -152,6 +152,57 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
   final AwikiImCoreIdentityDeviceRegistry _identityDeviceRegistry;
 
   @override
+  Future<bool> localManagementReady({
+    required String selector,
+    required String protocolDeviceId,
+  }) async {
+    final instance = await _coreInstance();
+    final summary = await instance.identityDeviceSummary(
+      _identitySelector(selector),
+    );
+    if (summary.identity.did != selector ||
+        summary.protocolDeviceId != protocolDeviceId) {
+      throw StateError('device_registry_binding_mismatch');
+    }
+    return summary.role == core.IdentityDeviceRole.admin &&
+        summary.readiness == core.IdentityDeviceReadiness.adminReady;
+  }
+
+  @override
+  Future<List<DeviceJoinManagementStatus>> deviceJoinManagementStatus(
+    String selector,
+  ) async {
+    final instance = await _coreInstance();
+    final statuses = await instance.deviceJoinManagementStatus(
+      core.IdentitySelector.did(selector),
+    );
+    return statuses
+        .map(
+          (value) => DeviceJoinManagementStatus(
+            joinSessionId: value.joinSessionId,
+            recipientDeviceId: value.recipientDeviceId,
+            phase: value.phase,
+            attempts: value.attempts,
+            nextAttemptAtMs: value.nextAttemptAtMs,
+            failureCode: value.failureCode,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> retryDeviceJoinManagement({
+    required String selector,
+    required String joinSessionId,
+  }) async {
+    final instance = await _coreInstance();
+    await instance.retryDeviceJoinManagement(
+      selector: core.IdentitySelector.did(selector),
+      joinSessionId: joinSessionId,
+    );
+  }
+
+  @override
   Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
     required String handle,
     required String phone,
@@ -397,7 +448,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     required bool userPresenceConfirmed,
   }) async {
     final instance = await _coreInstance();
-    final result = await instance.confirmDeviceJoinApproval(
+    final result = await instance.confirmDeviceJoinWithManagement(
       approvalHandle: approvalHandle,
       userPresenceConfirmed: userPresenceConfirmed,
     );

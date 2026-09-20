@@ -23,7 +23,7 @@ void main() {
     expect(script, contains('AWIKI_IM_CORE_REPO_DIR'));
     expect(script, contains('build-sdk-native.sh'));
     expect(script, contains('verify_im_core_native_artifact.sh'));
-    expect(script, contains('--macos-only --macos-arch x86_64'));
+    expect(script, contains(r'--macos-only --macos-arch "$host_arch"'));
     expect(script, contains('Rebuilding stale awiki_im_core'));
     expect(script, contains('XCFrameworkIntermediates/awiki_im_core'));
     expect(
