@@ -30,6 +30,101 @@ import 'package:flutter_test/flutter_test.dart';
 import '../test_support.dart';
 
 void main() {
+  for (final scale in [1.0, 2.0]) {
+    testWidgets('ACP create choices fit a small phone at text scale $scale', (
+      tester,
+    ) async {
+      final control = _PendingRefreshAgentControlService()
+        ..agents = const [
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'daemon',
+            displayName: '测试设备',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: {
+                'config_summary': {
+                  'acp': {
+                    'capability_schema_version': 1,
+                    'supported_drivers': [
+                      'opencode',
+                      'gemini',
+                      'kimi',
+                      'deepseek-harness',
+                    ],
+                  },
+                },
+              },
+            ),
+            daemonEffectiveStatus: DaemonEffectiveStatus(
+              controlState: 'online',
+              primaryStatus: 'ready',
+              lastReportedStatus: 'ready',
+              actionable: true,
+            ),
+          ),
+        ];
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: [
+            agentControlServiceProvider.overrideWithValue(control),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('agent-list-tile-did:agent:daemon')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('创建 Agent'));
+      await tester.pumpAndSettle();
+      for (final name in [
+        'OpenCode',
+        'Gemini CLI',
+        'Kimi Code CLI',
+        'DeepSeek Harness',
+      ]) {
+        final option = find.text(name).first;
+        await tester.ensureVisible(option);
+        await tester.pumpAndSettle();
+        await tester.tap(option);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        final field = tester.widget<CupertinoTextField>(
+          find.byKey(const Key('agent-create-name-field')),
+        );
+        expect(field.controller!.text, startsWith(name));
+      }
+      await tester.ensureVisible(
+        find.byKey(const Key('agent-create-handle-field')),
+      );
+      await tester.pumpAndSettle();
+      tester.view.viewInsets = const FakeViewPadding(bottom: 250);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const Key('agent-create-handle-field')),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
   for (final scenario
       in <
         ({String label, Size size, Key layoutKey, double dotSize, bool compact})
@@ -1903,14 +1998,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('需刷新'), findsNWidgets(2));
-      expect(
-        find.text('Codex 需要 Daemon 提供 generic-cli capability。'),
-        findsOneWidget,
-      );
-      expect(
-        find.text('Claude Code 需要 Daemon 提供 generic-cli capability。'),
-        findsOneWidget,
-      );
+      expect(find.text('请先刷新设备状态，以确认是否支持 Codex。'), findsOneWidget);
+      expect(find.text('请先刷新设备状态，以确认是否支持 Claude Code。'), findsOneWidget);
 
       await tester.tap(find.text('Codex'));
       await tester.pumpAndSettle();
@@ -1931,10 +2020,7 @@ void main() {
       );
 
       expect(find.text('需刷新'), findsWidgets);
-      expect(
-        find.text('Codex 需要 Daemon 提供 generic-cli capability。'),
-        findsOneWidget,
-      );
+      expect(find.text('请先刷新设备状态，以确认是否支持 Codex。'), findsOneWidget);
 
       await tester.tap(find.text('Codex'));
       await tester.pumpAndSettle();
@@ -1957,7 +2043,7 @@ void main() {
       );
 
       expect(find.text('需要升级'), findsWidgets);
-      expect(find.text('Codex 需要按会话目录工作模式。'), findsOneWidget);
+      expect(find.text('请升级此设备的 Daemon，以启用 Codex。'), findsOneWidget);
 
       await tester.tap(find.text('Codex'));
       await tester.pumpAndSettle();
@@ -2925,7 +3011,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('到宿主机安装代理'), findsWidgets);
-    expect(find.textContaining('支持的 Agent 类型：Hermes'), findsWidgets);
+    expect(
+      find.textContaining(
+        '支持 Hermes、Codex、Claude Code、OpenCode、Gemini CLI、Kimi Code CLI、DeepSeek Harness。',
+      ),
+      findsWidgets,
+    );
     expect(find.byIcon(CupertinoIcons.xmark), findsOneWidget);
     expect(find.byKey(const Key('agent-install-copy-button')), findsOneWidget);
     expect(find.text('重新生成命令'), findsNothing);

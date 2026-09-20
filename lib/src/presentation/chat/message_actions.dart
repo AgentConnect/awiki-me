@@ -24,14 +24,15 @@ enum MessageActionMenuDismissPolicy {
 @immutable
 final class MessageActionContext {
   const MessageActionContext({
-    required this.message,
+    this.message,
     required this.conversation,
     required this.fullText,
     required this.selectedText,
     required this.platform,
   });
 
-  final ChatMessage message;
+  /// Null for an execution preview, which is not a committed chat message.
+  final ChatMessage? message;
   final ConversationSummary conversation;
   final String fullText;
   final String? selectedText;

@@ -40,6 +40,107 @@ const _daemonSubkeyProposal = <String, Object?>{
 
 void main() {
   test(
+    'ACP uncertain create delivery retains the exact intent until authoritative confirmation',
+    () async {
+      final control = _CreateDeliveryPendingService();
+      final container = _container(
+        control,
+        directory: _EventuallyAvailableDirectoryApplicationService(
+          failuresBeforeSuccess: 0,
+        ),
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+      await controller.load();
+      await controller.createRuntimeAgent(
+        'did:agent:daemon',
+        options: const RuntimeAgentCreateOptions(
+          kind: RuntimeAgentKind.deepseekHarness,
+          handle: 'pending-dsh',
+          displayName: 'Pending DSH',
+        ),
+      );
+      var state = container.read(agentsProvider);
+      expect(state.error, isNull);
+      final pending = state.pendingRuntimeCreations.single;
+      expect(pending.requestId, control.lastRuntimeCreateClientRequestId);
+      expect(pending.isWaitingForStatus, isTrue);
+      expect(control.createCalls, 1);
+      const runtime = AgentSummary(
+        agentDid: 'did:agent:confirmed',
+        daemonAgentDid: 'did:agent:daemon',
+        kind: AgentKind.runtime,
+        runtime: 'deepseek-harness',
+        handle: 'pending-dsh',
+        displayName: 'Pending DSH',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      control.agents = [...control.agents, runtime];
+      controller.applyCommittedControlEvent(
+        AgentControlEvent(
+          messageId: 'committed-create',
+          daemonAgentDid: 'did:agent:daemon',
+          isReplay: false,
+          payload: {
+            'schema': AgentControlPayloads.statusSchema,
+            'status_scope': 'runtime',
+            'daemon_agent_did': 'did:agent:daemon',
+            'state': 'ready',
+            'result': {
+              'command': 'runtime.agent.create',
+              'client_request_id': pending.requestId,
+              'runtime_agent_did': runtime.agentDid,
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': runtime.runtime,
+              'handle': runtime.handle,
+              'display_name': runtime.displayName,
+            },
+          },
+        ),
+      );
+      await pumpEventQueue();
+      state = container.read(agentsProvider);
+      expect(state.error, isNull);
+      expect(state.pendingRuntimeCreations, isEmpty);
+      expect(
+        state.agents.where((a) => a.agentDid == runtime.agentDid),
+        hasLength(1),
+      );
+      expect(control.createCalls, 1);
+    },
+  );
+  test(
+    'ACP creation keeps reconciling slow readiness and expires without changing legacy deadlines',
+    () {
+      final created = DateTime.utc(2026, 9, 15);
+      PendingRuntimeCreation pending(String runtime) => PendingRuntimeCreation(
+        requestId: 'request',
+        daemonAgentDid: 'did:daemon',
+        handle: 'coder',
+        displayName: 'Coder',
+        runtime: runtime,
+        createdAt: created,
+      );
+      for (final kind in RuntimeAgentKind.values) {
+        final request = pending(kind.runtime);
+        expect(
+          request.canReconcileAt(created.add(const Duration(seconds: 49))),
+          kind.isAcp,
+        );
+        expect(
+          request.canReconcileAt(created.add(const Duration(seconds: 119))),
+          kind.isAcp,
+        );
+        expect(
+          request.canReconcileAt(created.add(const Duration(minutes: 2))),
+          isFalse,
+        );
+      }
+    },
+  );
+
+  test(
     'load projects runtime Agent route before publishing inventory',
     () async {
       final control = FakeAgentControlService()
@@ -4826,7 +4927,10 @@ class _BlockingDirectoryApplicationService
   }
 
   @override
-  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(Iterable<String> dids, {bool force = false}) async => const <PeerDisplayProfile>[];
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  }) async => const <PeerDisplayProfile>[];
 
   @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
@@ -4858,7 +4962,10 @@ class _EventuallyAvailableDirectoryApplicationService
   int resolveAttempts = 0;
 
   @override
-  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(Iterable<String> dids, {bool force = false}) async => const <PeerDisplayProfile>[];
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  }) async => const <PeerDisplayProfile>[];
 
   @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
@@ -5111,6 +5218,26 @@ class _BlockingRuntimeCreationAgentControlService
     if (!_runtimeCreateResult.isCompleted) {
       _runtimeCreateResult.complete();
     }
+  }
+}
+
+class _CreateDeliveryPendingService extends FakeAgentControlService {
+  int createCalls = 0;
+  @override
+  Future<void> createRuntimeAgent({
+    required String daemonAgentDid,
+    required String controllerDid,
+    required RuntimeAgentCreateOptions options,
+    String? clientRequestId,
+  }) async {
+    createCalls++;
+    await super.createRuntimeAgent(
+      daemonAgentDid: daemonAgentDid,
+      controllerDid: controllerDid,
+      options: options,
+      clientRequestId: clientRequestId,
+    );
+    throw const RuntimeAgentCreateDeliveryPending();
   }
 }
 

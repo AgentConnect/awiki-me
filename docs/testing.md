@@ -155,9 +155,30 @@ remote account/OTP scenarios. Scheduled runs and ordinary manual product runs
 retain their existing behavior. Record the explicit ref; do not treat a run
 against the repository's older default ref as evidence for the new baseline.
 PRs targeting `release/0910` pin Core source
-`dd4b29d4d368ea91001a9b5c1c45449f1bdfa7f4` in both native lanes because that App
-baseline already consumes the processing-session API. Explicit manual refs still
+`0110e4e5a26aff788f63eace9652b191e900f78b` in both native lanes, including
+the optional CA configuration bridge and iOS keyring build support. Explicit manual refs still
 take precedence; other target branches retain repository-managed defaults.
+
+## 智能体运行时专项
+
+桌面后台消息测试通过 `runInHiddenDesktopLifecycle` 执行真实后台操作：进入 `hidden` 后不等待绘制帧，操作结束或失败时均经过 `inactive` 恢复 `resumed`，随后再校验 UI。`hidden` 会关闭 Live test binding 的帧调度，在此状态等待 `tester.pump()` 会使测试无法推进。
+
+2026-09-18：Agent 自动测试只使用模拟协议、状态和服务。已移除 ACP、Codex、Claude Code、Hermes 的真实模型 E2E，以及它们的专用准备配置／报告工具；不保留按需模型调用入口。
+
+日常入口：`dart run tests/unit/runner.dart --suite acp`，覆盖 ACP 状态、问答、回复布局、模型目录与相邻聊天／群聊／创建界面回归，不需要 API Key、Agent CLI、OTP 或后端。
+Daemon 通过模拟 stdio 子进程验证协议与恢复，见 [ACP 无模型测试](../../awiki-system-test/docs/acp-testing.md)。
+
+ACP 界面专项使用以下命令。`acp_presentation_test` 验证问答校验、独立输入、滚动保留、提交锁定、原命令重试及失效；`acp_responsive_test` 覆盖 320–1440px、横屏、1–3 倍字号、长题目／选项、模型搜索与键盘。聊天页测试测量实际气泡与状态的位置，创建页测试覆盖小屏四种 ACP 类型及键盘。
+
+```sh
+flutter test --no-pub tests/unit/acp_runtime_test.dart tests/unit/acp_presentation_test.dart tests/unit/acp_responsive_test.dart tests/unit/chat_page_test.dart tests/unit/agents/agents_page_layout_test.dart
+# 可选：导出当前渲染供人工检查；完整中文字体仅供本机验证，不加入产品资源。
+AWIKI_ACP_UI_ARTIFACTS=<输出目录> AWIKI_ACP_REVIEW_FONT=<本机完整中文字体> flutter test --no-pub tests/unit/acp_responsive_test.dart
+# 在隔离 iOS / Android 模拟器执行原生渲染与交互 smoke。
+flutter test --no-pub integration_test/acp_ui_layout_test.dart -d <隔离模拟器ID>
+```
+
+原生 UI smoke 注入 ACP 快照并记录控制请求，检查真实平台上的选项、文本补充、模型搜索与选择，以及格式被 Daemon 拒绝后保留输入、继续编辑并重交；它不访问模型、账号或 Daemon，不证明真实模型兼容性。截图写入测试 APP 的临时目录，需在 runner 卸载 APP 前保存。UI 本地校验不替代 Daemon 的权威答案校验，尤其不执行智能体提供的正则。macOS 可用 `-d macos --plain-name 'native question format rejection retains editable input'` 定向运行该问答用例。
 
 ## Unit Gate
 
@@ -1416,3 +1437,21 @@ it in the compile key and artifact provenance. It does not inherit arbitrary
 external xcconfig contents, and Linux builds ignore this macOS-only setting.
 The default keeps the project target. This local override is not evidence for
 older macOS compatibility.
+
+### 2026-09-17 ACP 修复专项
+
+首条消息前的模型可见性、停止后状态回到空闲、问答补充文字和历史消息归属由组件／状态测试覆盖；群上下文读取由 Daemon 的模拟分页测试覆盖。
+
+原生输入框粘贴 smoke：
+
+```sh
+flutter test --no-pub integration_test/chat_composer_clipboard_test.dart -d macos
+```
+
+该 smoke 使用实际系统剪贴板、生产附件适配器和输入区域焦点处理；鼠标按下／抬起完成右键菜单粘贴，覆盖选区替换、撤销、PNG 和 macOS 文件 URL。测试前保存所有 macOS pasteboard item 类型，结束恢复并删除受限临时备份，不记录剪贴板内容。Linux 的该 smoke 需在独立 Xvfb 桌面运行，文件 URL 分支只验证 macOS。消息服务为 fake，本用例不证明真实消息投递。
+
+Linux 还需安装 `xclip`，以独立 X11 剪贴板所有者准备 PNG，结束后清理该进程；当前 pasteboard 0.5.0 支持 Linux 读取图片，但其 `writeImage` 不执行写入，不能用它准备 Linux 粘贴测试素材。
+
+```sh
+xvfb-run -a flutter test --no-pub integration_test/chat_composer_clipboard_test.dart -d linux
+```

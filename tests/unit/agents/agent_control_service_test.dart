@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/application/agent/agent_control_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
@@ -22,6 +24,55 @@ import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final kind in [
+    RuntimeAgentKind.deepseekHarness,
+    RuntimeAgentKind.codex,
+  ]) {
+    testWidgets(
+      '${kind.name} create send timeout preserves its outcome boundary',
+      (tester) async {
+        final gate = Completer<void>();
+        final messages = _MessagesStub()..sendGate = gate;
+        final service = DefaultAgentControlService(
+          inventory: _InventoryStub(),
+          messages: messages,
+          agentImEnabled: true,
+        );
+        Object? error;
+        final sending = service
+            .createRuntimeAgent(
+              daemonAgentDid: 'did:agent:daemon',
+              controllerDid: 'did:human:me',
+              options: RuntimeAgentCreateOptions(
+                kind: kind,
+                handle: 'coder',
+                displayName: 'Coder',
+              ),
+              clientRequestId: 'same-create-request',
+            )
+            .catchError((Object e) {
+              error = e;
+            });
+        await tester.pump();
+        expect(messages.payloads, hasLength(1));
+        await tester.pump(const Duration(seconds: 13));
+        await sending;
+        expect(
+          error,
+          kind.isAcp
+              ? isA<RuntimeAgentCreateDeliveryPending>()
+              : isA<TimeoutException>(),
+        );
+        gate.complete();
+        await tester.pump();
+        expect(messages.payloads, hasLength(1));
+        expect(
+          messages.lastIdempotencyKey,
+          'runtime-create:did:agent:daemon:same-create-request',
+        );
+      },
+    );
+  }
   test(
     'createHermesRuntime sends runtime.agent.create control payload',
     () async {
@@ -1076,6 +1127,7 @@ class _InventoryStub implements AgentInventoryPort {
 }
 
 class _MessagesStub implements MessagingService {
+  Completer<void>? sendGate;
   AppThreadRef? lastThread;
   Map<String, Object?>? lastPayload;
   final List<Map<String, Object?>> payloads = <Map<String, Object?>>[];
@@ -1094,6 +1146,7 @@ class _MessagesStub implements MessagingService {
     payloads.add(payload);
     lastIdempotencyKey = idempotencyKey;
     lastSecure = secure;
+    if (sendGate != null) await sendGate!.future;
     return ChatMessage(
       localId: 'msg',
       threadId: thread.stableId,
@@ -1357,7 +1410,9 @@ class _IdentityCoreStub implements IdentityCorePort {
   }
 
   @override
-  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+  Future<bool> hasPendingLocalIdentityRecovery(
+    String identityIdOrAlias,
+  ) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {

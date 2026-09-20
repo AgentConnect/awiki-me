@@ -367,11 +367,14 @@ class _AgentInstallDaemonRow extends StatelessWidget {
       semanticLabel: context.l10n.agentInstallDaemonAction,
       enabled: !disabled,
       borderRadius: BorderRadius.zero,
-      child: SizedBox(
-        height: 56,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 56),
         child: Container(
           width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: responsive.spacing(24)),
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.spacing(24),
+            vertical: 12,
+          ),
           decoration: BoxDecoration(
             color: theme.surface,
             border: Border(top: BorderSide(color: theme.border)),
@@ -384,12 +387,14 @@ class _AgentInstallDaemonRow extends StatelessWidget {
                 size: responsive.iconSm,
               ),
               SizedBox(width: responsive.spacing(12)),
-              Text(
-                context.l10n.agentInstallDaemonAction,
-                style: TextStyle(
-                  color: theme.primary,
-                  fontSize: responsive.bodySm,
-                  fontWeight: FontWeight.w400,
+              Expanded(
+                child: Text(
+                  context.l10n.agentInstallDaemonAction,
+                  style: TextStyle(
+                    color: theme.primary,
+                    fontSize: responsive.bodySm,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
               ),
             ],
@@ -981,7 +986,7 @@ class _PendingRuntimeCreationTile extends StatelessWidget {
   }
 }
 
-class _AgentListTile extends StatelessWidget {
+class _AgentListTile extends ConsumerWidget {
   const _AgentListTile({
     required this.agent,
     required this.pendingAgentDids,
@@ -1017,7 +1022,7 @@ class _AgentListTile extends StatelessWidget {
   final PendingRuntimeCreation? pendingRuntimeCreation;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final isChild = depth > 0;
@@ -1027,6 +1032,9 @@ class _AgentListTile extends StatelessWidget {
     final visualStatus = pendingRuntimeCreation == null
         ? AgentVisualStatus.fromAgent(
             agent,
+            authoritativeBusy: ref
+                .watch(acpSessionsProvider)
+                .busyForAgent(agent.agentDid),
             hasPendingTurn:
                 isDeleting || pendingAgentDids.contains(agent.agentDid),
             isPendingUpgrade: pendingDaemonUpgrades.containsKey(agent.agentDid),
@@ -1064,8 +1072,10 @@ class _AgentListTile extends StatelessWidget {
         border: responsive.isCompact
             ? Border(bottom: BorderSide(color: theme.border))
             : null,
-        child: SizedBox(
-          height: responsive.isCompact ? (isChild ? 74.5 : 64) : null,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: responsive.isCompact ? (isChild ? 74.5 : 64) : 0,
+          ),
           child: Stack(
             alignment: Alignment.centerLeft,
             children: <Widget>[

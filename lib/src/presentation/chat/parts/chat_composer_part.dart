@@ -370,14 +370,23 @@ class _ComposerState extends ConsumerState<_Composer> {
     _inputFocusNode.requestFocus();
   }
 
-  Future<void> _pasteFromClipboard() async {
+  Future<void> _pasteFromClipboard(SelectionChangedCause cause) async {
     if (!widget.enabled || _isPastingFromClipboard) {
       return;
     }
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    final conversation = widget.conversation;
+    final controller = widget.controller;
+    bool stillCurrent() =>
+        mounted &&
+        widget.enabled &&
+        ref.read(sessionProvider).activeEpoch == epoch &&
+        identical(controller, widget.controller) &&
+        _sameCanonicalConversation(conversation, widget.conversation);
     _isPastingFromClipboard = true;
     try {
       final stagedAttachment = await widget.onPasteAttachment();
-      if (!mounted || !widget.enabled) {
+      if (!stillCurrent()) {
         return;
       }
       if (stagedAttachment) {
@@ -386,10 +395,26 @@ class _ComposerState extends ConsumerState<_Composer> {
       }
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       final text = data?.text;
-      if (text == null || text.isEmpty || !mounted || !widget.enabled) {
+      if (text == null || text.isEmpty || !stillCurrent()) {
         return;
       }
-      _insertTextAtSelection(text);
+      final editor = _inputFocusNode.context
+          ?.findAncestorStateOfType<EditableTextState>();
+      if (editor == null) return;
+      final value = controller.value;
+      final selection = value.selection;
+      final start = selection.isValid ? selection.start : value.text.length;
+      final end = selection.isValid ? selection.end : value.text.length;
+      editor.userUpdateTextEditingValue(
+        value.copyWith(
+          text: value.text.replaceRange(start, end, text),
+          selection: TextSelection.collapsed(offset: start + text.length),
+          composing: TextRange.empty,
+        ),
+        cause,
+      );
+      editor.hideToolbar();
+      editor.bringIntoView(controller.selection.extent);
       _inputFocusNode.requestFocus();
     } finally {
       _isPastingFromClipboard = false;
@@ -408,7 +433,7 @@ class _ComposerState extends ConsumerState<_Composer> {
         key == LogicalKeyboardKey.keyV &&
         (HardwareKeyboard.instance.isMetaPressed ||
             HardwareKeyboard.instance.isControlPressed)) {
-      unawaited(_pasteFromClipboard());
+      unawaited(_pasteFromClipboard(SelectionChangedCause.keyboard));
       return KeyEventResult.handled;
     }
     if (_hasMentionPanel) {
@@ -583,6 +608,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                           minHeight: responsive.displayScaled(38),
                         ),
                         child: _ComposerTextField(
+                          onPaste: _pasteFromClipboard,
                           controller: widget.controller,
                           focusNode: _inputFocusNode,
                           onKeyEvent: _handleInputKeyEvent,
@@ -807,6 +833,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                           ),
                         ),
                         child: _ComposerTextField(
+                          onPaste: _pasteFromClipboard,
                           controller: widget.controller,
                           focusNode: _inputFocusNode,
                           onKeyEvent: _handleInputKeyEvent,
@@ -1001,6 +1028,7 @@ class _EmojiPickerPanel extends StatelessWidget {
 
 class _ComposerTextField extends StatelessWidget {
   const _ComposerTextField({
+    required this.onPaste,
     required this.controller,
     required this.focusNode,
     required this.onKeyEvent,
@@ -1013,6 +1041,7 @@ class _ComposerTextField extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final Future<void> Function(SelectionChangedCause cause) onPaste;
   final FocusNode focusNode;
   final FocusOnKeyEventCallback onKeyEvent;
   final String placeholder;
@@ -1024,26 +1053,60 @@ class _ComposerTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      onKeyEvent: onKeyEvent,
-      child: e2eSemantics(
-        identifier: 'e2e-chat-input',
-        label: placeholder,
-        textField: true,
-        child: CupertinoTextField(
-          key: const Key('chat-composer-input'),
-          controller: controller,
-          focusNode: focusNode,
-          placeholder: placeholder,
-          keyboardType: TextInputType.multiline,
-          textInputAction: TextInputAction.send,
-          minLines: 1,
-          maxLines: maxLines,
-          onSubmitted: onSubmitted,
-          decoration: null,
-          padding: padding,
-          style: textStyle,
-          placeholderStyle: placeholderStyle,
+    return Actions(
+      actions: <Type, Action<Intent>>{
+        PasteTextIntent: CallbackAction<PasteTextIntent>(
+          onInvoke: (intent) {
+            unawaited(onPaste(intent.cause));
+            return null;
+          },
+        ),
+      },
+      child: Focus(
+        onKeyEvent: onKeyEvent,
+        child: e2eSemantics(
+          identifier: 'e2e-chat-input',
+          label: placeholder,
+          textField: true,
+          child: CupertinoTextField(
+            key: const Key('chat-composer-input'),
+            controller: controller,
+            focusNode: focusNode,
+            placeholder: placeholder,
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.send,
+            minLines: 1,
+            maxLines: maxLines,
+            onSubmitted: onSubmitted,
+            decoration: null,
+            padding: padding,
+            style: textStyle,
+            placeholderStyle: placeholderStyle,
+            contextMenuBuilder: (context, editor) {
+              final items = editor.contextMenuButtonItems;
+              final paste = ContextMenuButtonItem(
+                type: ContextMenuButtonType.paste,
+                onPressed: () {
+                  editor.hideToolbar();
+                  unawaited(onPaste(SelectionChangedCause.toolbar));
+                },
+              );
+              return CupertinoAdaptiveTextSelectionToolbar.buttonItems(
+                anchors: editor.contextMenuAnchors,
+                buttonItems: <ContextMenuButtonItem>[
+                  for (final item in items)
+                    if (item.type == ContextMenuButtonType.paste)
+                      paste
+                    else
+                      item,
+                  if (!items.any(
+                    (item) => item.type == ContextMenuButtonType.paste,
+                  ))
+                    paste,
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
