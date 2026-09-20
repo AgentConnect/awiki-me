@@ -194,6 +194,7 @@ object RemotePushEventBridge {
         val applicationContext = context.applicationContext
         persist(applicationContext, event)
         val activeChannel = channel
+        Log.i("AWikiRemotePush", "event=$kind flutter_attached=${activeChannel != null}")
         if (activeChannel == null) {
             return
         }
@@ -204,9 +205,13 @@ object RemotePushEventBridge {
                 object : MethodChannel.Result {
                     override fun success(result: Any?) = Unit
 
-                    override fun error(code: String, message: String?, details: Any?) = Unit
+                    override fun error(code: String, message: String?, details: Any?) {
+                        Log.w("AWikiRemotePush", "event_delivery_failed kind=$kind")
+                    }
 
-                    override fun notImplemented() = Unit
+                    override fun notImplemented() {
+                        Log.w("AWikiRemotePush", "event_handler_unavailable kind=$kind")
+                    }
                 },
             )
         }

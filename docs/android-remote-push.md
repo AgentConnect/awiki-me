@@ -214,3 +214,20 @@ application, source control, logs, screenshots, or E2E evidence. AppKey and
 AppSecret provisioning, EMAS package/application alignment, outbox deployment,
 OEM background policy, permission recovery, and the Nubia P0110 (or explicitly
 named equivalent) physical-device run remain release-environment obligations.
+
+## Delivery diagnostics
+
+The native bridge and App coordinator emit bounded `[remote-push]` stages for
+incoming/opened events, Flutter attachment, sync disposition, reference recovery
+counts, and whether the opened message matched a committed conversation. These
+records never include titles, message bodies, DIDs, tokens, provider device IDs,
+or raw exceptions. A delivered Android broadcast alone does not prove that sync
+or navigation completed; correlate these stages with an actual notification tap.
+
+For device acceptance, start outside the destination conversation (for example,
+on the Me page), background the App, send a new message, and tap its actual system
+notification. Confirm the exact conversation and message, including after a normal
+Back exit. For lock-screen acceptance, verify the keyguard is already showing
+before sending; a notification arriving while the phone is transitioning to sleep
+is not sufficient. Record provider connectivity and Android process-freeze events
+separately from service outbox completion.
