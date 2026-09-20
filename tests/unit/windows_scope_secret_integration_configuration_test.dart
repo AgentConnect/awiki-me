@@ -16,7 +16,7 @@ void main() {
       workflow,
       contains(
         r'WINDOWS_CORE_REF: ${{ github.event.inputs.cli_ref || '
-        "(github.base_ref == 'release/0910' && '527059feb16f57ee1e0a37c81eb02415879c62a2') || "
+        "(github.base_ref == 'release/0910' && '1a7379111826976991cefe185414fe90fc449fe2') || "
         'vars.AWIKI_CLI_RS2_WINDOWS_REF || vars.AWIKI_CLI_RS2_REF }}',
       ),
     );

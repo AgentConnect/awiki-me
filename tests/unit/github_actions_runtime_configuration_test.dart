@@ -136,7 +136,7 @@ void main() {
             as YamlMap;
     final jobs = workflow['jobs'] as YamlMap;
     const pin =
-        "(github.base_ref == 'release/0910' && '527059feb16f57ee1e0a37c81eb02415879c62a2')";
+        "(github.base_ref == 'release/0910' && '1a7379111826976991cefe185414fe90fc449fe2')";
     for (final name in ['validate', 'remote-product']) {
       final checkout = (jobs[name]['steps'] as YamlList)
           .cast<YamlMap>()
