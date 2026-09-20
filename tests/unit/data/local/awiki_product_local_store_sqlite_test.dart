@@ -37,6 +37,57 @@ void main() {
     }
   });
 
+  test('Web Registry epoch is persisted unchanged after reopen', () async {
+    const binding = ProductAccountBinding(
+      ownerIdentityId: 'web-owner',
+      accountId: 'web-account',
+    );
+    const epoch = ProductDeviceRegistryEpoch(
+      currentDid: 'did:web:identity.example:awiki:web:alice',
+      bindingGeneration: '9',
+    );
+    var store = _store(databaseDir);
+    await store.replaceDeviceRegistrySnapshot(
+      ProductDeviceRegistrySnapshot(
+        binding: binding,
+        epoch: epoch,
+        domainVersion: '42',
+        refreshedAt: DateTime.utc(2026, 9, 14),
+        devices: const [
+          ProductDeviceRegistryItem(
+            protocolDeviceId: 'member',
+            authGeneration: '2',
+            payloadJson: '{"role":"member","management_ready":false}',
+          ),
+        ],
+      ),
+    );
+    await store.close();
+    store = _store(databaseDir);
+    final snapshot = await store.loadDeviceRegistrySnapshot(binding: binding);
+    expect(snapshot?.epoch.currentDid, epoch.currentDid);
+    expect(snapshot?.epoch.bindingGeneration, '9');
+    expect(snapshot?.domainVersion, '42');
+    expect(snapshot?.devices.single.protocolDeviceId, 'member');
+    await store.close();
+    for (final invalid in [
+      'did:',
+      'did:web:identity.example#key',
+      'did:web:identity.example?query',
+      ' did:web:identity.example',
+    ]) {
+      expect(
+        () => validateProductDeviceRegistryEpoch(
+          ProductDeviceRegistryEpoch(
+            currentDid: invalid,
+            bindingGeneration: '1',
+          ),
+        ),
+        throwsArgumentError,
+      );
+    }
+  });
+
   test('persists overlays drafts and preferences by owner', () async {
     final store = _store(databaseDir);
     final now = DateTime.utc(2026, 6, 15, 1, 2, 3);

@@ -278,7 +278,8 @@ class _DeviceJoinApprovalSheetState
               context.l10n.deviceJoinManagementRegistered,
             _ => context.l10n.deviceJoinManagementConfiguring,
           };
-    if (progress?.phase != DeviceJoinPhase.authorized) {
+    if (state.registry?.methodCapabilities?.rootTransfer != true ||
+        progress?.phase != DeviceJoinPhase.authorized) {
       return AppPrimaryButton(
         label: context.l10n.commonDone,
         onPressed: () => Navigator.of(context).maybePop(),

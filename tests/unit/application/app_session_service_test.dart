@@ -19,6 +19,54 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('ImCoreAppSessionService', () {
     test(
+      'same tenant Web identity can activate and remain selectable',
+      () async {
+        final identity = _session('web-local').copyWith(
+          did: 'did:web:awiki.ai:awiki:web:0123456789ab4def8123456789abcdef',
+        );
+        final runtime = _FakeRuntime();
+        final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+          runtime: runtime,
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: _FakeAuth(),
+          expectedDidDomain: 'awiki.ai',
+        );
+        final session = await service.loginWithIdentity(identity.identityId);
+        expect(session.did, identity.did);
+        expect(session.authenticated, isTrue);
+        expect(runtime.switchedIdentities, [identity.identityId]);
+        expect((await service.listLocalIdentities()).single.did, identity.did);
+      },
+    );
+
+    for (final did in [
+      'did:web:other.example:awiki:web:0123456789ab4def8123456789abcdef',
+      'did:unknown:awiki.ai:alice',
+    ]) {
+      test(
+        'unsupported or foreign identity is rejected before activation $did',
+        () async {
+          final identity = _session('invalid-local').copyWith(did: did);
+          final runtime = _FakeRuntime();
+          final auth = _FakeAuth();
+          final service = ImCoreAppSessionService(
+            bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+            runtime: runtime,
+            identities: _FakeIdentities(defaultIdentity: identity),
+            auth: auth,
+            expectedDidDomain: 'awiki.ai',
+          );
+          await expectLater(
+            service.loginWithIdentity(identity.identityId),
+            throwsStateError,
+          );
+          expect(runtime.switchedIdentities, isEmpty);
+          expect(auth.ensureCount, 0);
+        },
+      );
+    }
+    test(
       'epoch barrier completes after Core binding and before auth/session commit',
       () async {
         final identity = _session('id-barrier');
@@ -1805,6 +1853,26 @@ class _FakeRuntime implements ImCoreRuntimePort {
 }
 
 class _FakeIdentities implements IdentityCorePort {
+  @override
+  Future<IdentityMethodCapabilities> identityMethodCapabilities(
+    String did,
+  ) async => const IdentityMethodCapabilities(
+    method: IdentityDidMethod.wba,
+    handleRecovery: true,
+    rootImport: true,
+    rootTransfer: true,
+    servicesUpdate: false,
+  );
+
+  @override
+  Future<List<IdentityDidMethod>> identityCreationMethods() async => const [
+    IdentityDidMethod.wba,
+  ];
+
+  @override
+  Future<List<PendingIdentityRegistration>>
+  pendingIdentityRegistrations() async => const [];
+
   Object? deletionError;
   _FakeIdentities({
     AppSession? defaultIdentity,
@@ -1880,6 +1948,7 @@ class _FakeIdentities implements IdentityCorePort {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithEmail({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String email,
     required String handle,
     String? inviteCode,
@@ -1891,6 +1960,7 @@ class _FakeIdentities implements IdentityCorePort {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithPhone({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String otp,
     required String handle,
@@ -1903,6 +1973,7 @@ class _FakeIdentities implements IdentityCorePort {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String handle,
     String? inviteCode,
     String? displayName,

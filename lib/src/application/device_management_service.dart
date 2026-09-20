@@ -64,7 +64,8 @@ class DeviceManagementService {
     final did = await _core.resolveJoinDid(
       _required(handle, 'handle').toLowerCase(),
     );
-    if (!did.startsWith('did:wba:') || did.trim() != did) {
+    // Method validation belongs to the Core adapter that resolves the Handle.
+    if (did.isEmpty || did.trim() != did) {
       throw const DeviceManagementException('invalid_join_target_did');
     }
     return did;

@@ -14,6 +14,7 @@ abstract interface class OnboardingService {
   );
 
   Future<IdentityRegistrationResult> registerHandleWithPhone({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String otp,
     required String handle,
@@ -24,6 +25,7 @@ abstract interface class OnboardingService {
   });
 
   Future<IdentityRegistrationResult> registerHandleWithEmail({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String email,
     required String handle,
     String? inviteCode,
@@ -33,6 +35,7 @@ abstract interface class OnboardingService {
   });
 
   Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String handle,
     String? inviteCode,
@@ -74,6 +77,7 @@ class ImCoreOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithPhone({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String otp,
     required String handle,
@@ -87,6 +91,7 @@ class ImCoreOnboardingService implements OnboardingService {
     final normalizedHandle = _normalizeHandle(handle);
     return _runSessionTransition(transition, (requestedTransition) async {
       final result = await _identities.registerHandleWithPhone(
+        didMethod: didMethod,
         phone: normalizedPhone,
         otp: normalizedOtp,
         handle: normalizedHandle,
@@ -104,6 +109,7 @@ class ImCoreOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithEmail({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String email,
     required String handle,
     String? inviteCode,
@@ -115,6 +121,7 @@ class ImCoreOnboardingService implements OnboardingService {
     final normalizedHandle = _normalizeHandle(handle);
     return _runSessionTransition(transition, (requestedTransition) async {
       final result = await _identities.registerHandleWithEmail(
+        didMethod: didMethod,
         email: normalizedEmail,
         handle: normalizedHandle,
         inviteCode: _nonEmpty(inviteCode),
@@ -131,6 +138,7 @@ class ImCoreOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String handle,
     String? inviteCode,
@@ -142,6 +150,7 @@ class ImCoreOnboardingService implements OnboardingService {
     final normalizedHandle = _normalizeHandle(handle);
     return _runSessionTransition(transition, (requestedTransition) async {
       final result = await _identities.registerHandleWithoutContactVerification(
+        didMethod: didMethod,
         handle: normalizedHandle,
         inviteCode: _nonEmpty(inviteCode),
         displayName: _nonEmpty(nickName),

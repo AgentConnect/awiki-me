@@ -93,6 +93,23 @@ final identityCorePortProvider = Provider<IdentityCorePort>(
       throw UnimplementedError('identityCorePortProvider must be overridden'),
 );
 
+final identityMethodCapabilitiesProvider = FutureProvider.autoDispose
+    .family<IdentityMethodCapabilities, String>((ref, did) {
+      return ref
+          .watch(identityCorePortProvider)
+          .identityMethodCapabilities(did);
+    });
+
+final identityDocumentCorePortProvider = Provider<IdentityDocumentCorePort>((
+  ref,
+) {
+  final identities = ref.watch(identityCorePortProvider);
+  if (identities is IdentityDocumentCorePort) {
+    return identities as IdentityDocumentCorePort;
+  }
+  throw StateError('identity_document_core_unavailable');
+});
+
 final deviceManagementCorePortProvider = Provider<DeviceManagementCorePort>(
   (ref) => throw UnimplementedError(
     'deviceManagementCorePortProvider must be overridden',

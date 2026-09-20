@@ -151,7 +151,7 @@ migrations or old RPC gateway paths.
 
 ## Security & Configuration Tips
 Do not commit real credentials, generated local state, signing keys, or custom
-runtime configuration. Account identities remain e1 DID-only. Credential and key
+runtime configuration. Account identities use Core-supported WBA/Web methods; creation and operation support come from Core. Credential and key
 storage follow the existing Core vault and platform secret-provider contracts.
 
 ## 模型无关测试（2026-09-18 用户决定）

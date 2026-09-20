@@ -467,6 +467,7 @@ class _MacAuthCard extends StatelessWidget {
                 onAuthModeChanged: onAuthModeChanged,
               ),
               const SizedBox(height: 20),
+              IdentityMethodPicker(handleController: handleController),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
                 switchInCurve: Curves.easeOutCubic,

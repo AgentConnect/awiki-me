@@ -98,6 +98,90 @@ abstract class AppLocalizations {
     Locale('zh'),
   ];
 
+  /// No description provided for @identityMethodLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份方法'**
+  String get identityMethodLabel;
+
+  /// No description provided for @identityWebAdminLimitation.
+  ///
+  /// In zh, this message translates to:
+  /// **'Web 身份不支持账号恢复、根密钥导入或管理权转移。请保管好首个管理员设备；失去该设备后无法恢复管理权限。'**
+  String get identityWebAdminLimitation;
+
+  /// No description provided for @identityRegistrationPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续未完成的注册'**
+  String get identityRegistrationPending;
+
+  /// No description provided for @identityRegistrationResumeHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'将继续原来的身份注册。请使用原联系方式；如需验证码，请重新获取。'**
+  String get identityRegistrationResumeHint;
+
+  /// No description provided for @identityServicesTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份服务'**
+  String get identityServicesTitle;
+
+  /// No description provided for @identityServicesHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理此身份公开的其他服务。Handle、消息服务和个人资料仍由各自的设置管理。'**
+  String get identityServicesHint;
+
+  /// No description provided for @identityServicesFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'未能完成操作。请刷新查看进度；若仍待确认，请继续原操作。'**
+  String get identityServicesFailed;
+
+  /// No description provided for @identityServicesPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务更新仍待确认。继续原操作后才能提交其他更改。'**
+  String get identityServicesPending;
+
+  /// No description provided for @identityServicesResume.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续服务更新'**
+  String get identityServicesResume;
+
+  /// No description provided for @identityServiceAdd.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加服务'**
+  String get identityServiceAdd;
+
+  /// No description provided for @identityServiceId.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务标识'**
+  String get identityServiceId;
+
+  /// No description provided for @identityServiceType.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务类型'**
+  String get identityServiceType;
+
+  /// No description provided for @identityServiceEndpoint.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务地址'**
+  String get identityServiceEndpoint;
+
+  /// No description provided for @identityServiceEdit.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑'**
+  String get identityServiceEdit;
+
   /// No description provided for @appTitle.
   ///
   /// In zh, this message translates to:

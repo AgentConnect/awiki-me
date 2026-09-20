@@ -21,6 +21,7 @@ void appPairAdminMain() {
       );
       final coordinator = config.coordinator;
       final rootGrant = !config.functional && !config.contentSync;
+      final didWeb = _invocationExplicitlyExpects(_didWebAppCaseId);
       final pagingRecovery = _invocationExplicitlyExpects(
         _appPairPagingRecoveryCaseId,
       );
@@ -40,12 +41,16 @@ void appPairAdminMain() {
       ]);
       addTearDown(() async {
         await functionalResources.dispose();
-        await contentResources.dispose();
+        if (didWeb) {
+          await contentResources.peer?.retainLocalState();
+        } else {
+          await contentResources.dispose();
+        }
         httpClient.close();
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
         await bootstrap?.dispose();
-        await _deleteDirectory(config.adminStateRoot);
+        if (!didWeb) await _deleteDirectory(config.adminStateRoot);
         await tester.binding.setSurfaceSize(null);
       });
 
@@ -56,25 +61,38 @@ void appPairAdminMain() {
           enableAppPairFunctional: config.functional,
           enableRootTransfer: rootGrant,
           enableMessageSyncCore: config.contentSync || rootGrant,
+          enableDeviceRevoke: didWeb,
         ),
         appStateRoot: config.adminStateRoot,
       );
       final handle = _uniqueHandle(config.handlePrefix);
-      final genesisOtp = await _requestAppRegistrationOtp(
-        bootstrap: bootstrap,
-        config: config,
-        account: account,
-        handle: handle,
-      );
+      if (didWeb) {
+        await coordinator.publish(
+          'admin', 'web_registration_intent', data: {'handle': handle},
+        );
+      }
+      final genesisOtp = didWeb
+          ? null
+          : await _requestAppRegistrationOtp(
+              bootstrap: bootstrap,
+              config: config,
+              account: account,
+              handle: handle,
+            );
       final IdentityRegistrationResult registration;
       try {
-        registration = await bootstrap.onboardingService!
-            .registerHandleWithPhone(
-              phone: account.phone,
-              otp: genesisOtp,
-              handle: handle,
-              nickName: 'AWiki App Pair Admin',
-            );
+        registration = didWeb
+            ? await _registerWebThroughUi(
+                tester, bootstrap, account, handle, presence,
+                diagnosticPath: '${config.adminStateRoot}/web-registration-diagnostic.json',
+              )
+            : await bootstrap.onboardingService!
+                .registerHandleWithPhone(
+                  phone: account.phone,
+                  otp: genesisOtp!,
+                  handle: handle,
+                  nickName: 'AWiki App Pair Admin',
+                );
       } on Object catch (error) {
         fail(
           'The App-pair admin registration failed safely '
@@ -134,7 +152,7 @@ void appPairAdminMain() {
         );
       }
       if (config.contentSync) {
-        if (pagingRecovery) {
+        if (pagingRecovery || didWeb) {
           await _prepareAppPairPagingPeer(
             config: config,
             account: account,
@@ -448,7 +466,19 @@ void appPairAdminMain() {
           resources: functionalResources,
         );
       } else if (config.contentSync) {
-        if (pagingRecovery) {
+        if (didWeb) {
+          await _runWebAdmin(
+            tester: tester,
+            config: config,
+            bootstrap: bootstrap,
+            container: container,
+            did: adminSession.did,
+            joinedDeviceId: joinedDeviceId,
+            resources: contentResources,
+            presence: presence,
+            onReopened: (value) => bootstrap = value,
+          );
+        } else if (pagingRecovery) {
           await _runAppPairAdminPagingRecovery(
             tester: tester,
             config: config,
@@ -498,6 +528,7 @@ void appPairJoinerMain() {
       );
       final coordinator = config.coordinator;
       final rootGrant = !config.functional && !config.contentSync;
+      final didWeb = _invocationExplicitlyExpects(_didWebAppCaseId);
       final pagingRecovery = _invocationExplicitlyExpects(
         _appPairPagingRecoveryCaseId,
       );
@@ -509,7 +540,7 @@ void appPairJoinerMain() {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
         await bootstrap?.dispose();
-        await _deleteDirectory(config.joinerStateRoot);
+        if (!didWeb) await _deleteDirectory(config.joinerStateRoot);
         await tester.binding.setSurfaceSize(null);
       });
 
@@ -530,6 +561,7 @@ void appPairJoinerMain() {
           enableAppPairFunctional: config.functional,
           enableRootTransfer: rootGrant,
           enableMessageSyncCore: config.contentSync || rootGrant,
+          enableDeviceRevoke: didWeb,
         ),
         appStateRoot: config.joinerStateRoot,
       );
@@ -578,6 +610,10 @@ void appPairJoinerMain() {
         timeout: const Duration(seconds: 45),
         failure: 'The joining App did not expose the existing Handle choice.',
       );
+      if (didWeb && find.byKey(
+          const Key('existing-handle-recovery-action')).evaluate().isNotEmpty) {
+        fail('Existing Web Handle offered Recovery from WBA creation selection.');
+      }
       await _tapOne(
         tester,
         find.byKey(const Key('existing-handle-join-action')),
@@ -589,7 +625,7 @@ void appPairJoinerMain() {
         timeout: const Duration(seconds: 45),
         failure: 'The joining App continuation did not open Device Join.',
       );
-      final container = ProviderScope.containerOf(
+      var container = ProviderScope.containerOf(
         tester.element(find.byType(DeviceJoinPage)),
       );
       await _pumpUntil(
@@ -608,6 +644,30 @@ void appPairJoinerMain() {
         failure: 'OTP did not leave the joining App pending without a SAS.',
       );
       final pending = container.read(devicesProvider).activeJoin!;
+      if (didWeb) {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await bootstrap.dispose();
+        bootstrap = await AppBootstrap.create(
+          environment: _joinOnlyEnvironment(
+            config, enableMessageSyncCore: true, enableDeviceRevoke: true,
+          ),
+          appStateRoot: config.joinerStateRoot,
+        );
+        await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+        await _openRestoredNewDeviceJoin(tester);
+        container = ProviderScope.containerOf(
+          tester.element(find.byType(DeviceJoinPage)),
+        );
+        await _pumpUntil(tester, () {
+          final restored = container.read(devicesProvider).activeJoin;
+          return restored?.joinSessionId == pending.joinSessionId &&
+              restored?.protocolDeviceId == pending.protocolDeviceId &&
+              restored?.did == did &&
+              restored?.sas == null &&
+              restored?.phase == DeviceJoinPhase.pending;
+        }, failure: 'Web pending Join did not reopen from the same root without OTP.');
+      }
       await coordinator.publish(
         'joiner',
         'pending',
@@ -712,7 +772,15 @@ void appPairJoinerMain() {
           joinedDeviceId: pending.protocolDeviceId,
         );
       } else if (config.contentSync) {
-        if (pagingRecovery) {
+        if (didWeb) {
+          await _runWebJoiner(
+            tester: tester,
+            config: config,
+            bootstrap: bootstrap,
+            container: container,
+            did: did,
+          );
+        } else if (pagingRecovery) {
           await _runAppPairJoinerPagingRecovery(
             tester: tester,
             config: config,
@@ -1280,6 +1348,7 @@ void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
       _invocationExpects(_appPairRegistrySyncCaseId) ||
       _invocationExpects(_appPairDomainIsolationCaseId);
   final expectsContentSync =
+      _invocationExpects(_didWebAppCaseId) ||
       _invocationExpects(_appPairContentTailOnlyCaseId) ||
       _invocationExpects(_appPairGroupSyncCaseId) ||
       _invocationExpects(_appPairAttachmentSyncCaseId) ||
@@ -4843,13 +4912,18 @@ String _appPairErrorDiagnostic(Object? error) {
 }
 
 String _appPairClosedRegistrationError(Object error) {
+  if (error is TestFailure) {
+    final stage = didWebRegistrationFailureStage(error.message);
+    if (stage != null) return 'type=TestFailure,stage=$stage';
+  }
   final appCode = structuredAppErrorCode(error);
   if (appCode != null) {
     return 'type=AppStructuredError,code=${_appPairSafeToken(appCode)}';
   }
   if (error is core.AwikiImCoreException) {
     return 'type=AwikiImCoreException,code=${_appPairSafeToken(error.code)},'
-        'service=${_appPairSafeToken(error.serviceCode ?? 'none')}';
+        'service=${_appPairSafeToken(error.serviceCode ?? 'none')},'
+        'status=${error.statusCode ?? 0}';
   }
   return 'type=${_appPairSafeToken(error.runtimeType.toString())}';
 }

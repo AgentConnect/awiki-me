@@ -72,6 +72,26 @@ Tenant Profile（App 业务连接配置）
   账号或设备做产品灰度；raw cursor、recovery 和 mutation outbox 仍只属于该 scope 的 Core
   SQLite。测试 operator allowlist 不得写入 scope registry 或业务 cache。
 
+### DID 方法与产品入口
+
+App 消费 Core 的 `identityCreationMethods`、`identityMethodCapabilities` 和当前
+Device Registry，不从 DID 前缀或 Host 域推断管理权限。新建默认 WBA；服务允许时
+可以选择 Web。Web 首管理员失去设备后不可恢复，普通 member 可以登录/同步/收发消息，
+不显示普通服务更新、恢复、Root Import 或 Root Transfer 管理入口。
+
+首次 Join 的公开 Handle 解析也由 Core 完成，可在没有本地身份时调用
+`resolveHandleForDeviceJoin`；Core 校验 Handle 当前绑定及 Web 的真实 Provider
+服务声明，App 再复用原 SMS exchange 和 Join 流程，不直接解析 public profile 决定 DID。
+
+注册页面重开只读 Core 的 `pendingIdentityRegistrations` 公共摘要；不持久化第二份
+候选或操作状态。继续使用原注册入口、原 Handle/方法和业务内容，重新输入验证信息。
+普通服务更新页使用 Core 的文档和 pending API；未知提交结果后重新读取 pending，
+未完成时只允许继续原操作。受保护的 Handle、消息服务和 AgentDescription 仍使用原入口。
+
+产品 Device Registry epoch 保留 Core 给出的 exact DID 与 binding generation，
+允许 WBA/Web，同步缓存只检查 DID 字符串完整性，不承担方法有效性或账号授权校验。
+现有 stable owner、epoch reset/CAS、scope 与 Vault 路径隔离保持不变。
+
 ## 2. 不可变 ID
 
 | ID | Owner | 生成 | 可变性 | 用途 |
@@ -516,3 +536,6 @@ Production不读取或迁移：
 ### 单身份删除与 Scope 生命周期
 
 删除当前身份数据由 Core 按 stable owner 完成 durable purge，App 停止该身份 realtime 并释放 selected client，但保留同 Scope runtime，供其他身份和统一登录/Recovery 继续使用。它不是租户/Scope dispose；真正的 dispose 永久禁止迟到 adapter 重开旧 runtime。两者不能混用，否则删除后同进程的新 Recovery 会错误地使用已销毁 runtime。
+
+会话激活与本地身份列表按 Core 已验证身份的 WBA/Web 域检查当前租户；未知方法或
+跨租户身份在切换 Core owner、启动认证之前被拒绝。识别 Web 域不授予设备管理权限。
