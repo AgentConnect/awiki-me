@@ -43,6 +43,21 @@ void main() {
       );
       expect(command, contains('scripts/release/registry-build.py'));
     }
+    final windowsSteps = (jobs['windows-pr']['steps'] as YamlList)
+        .cast<YamlMap>()
+        .toList();
+    final entryCheck = windowsSteps.indexWhere(
+      (step) => step['name'] == 'Check Windows native build entrypoint',
+    );
+    final hostTests = windowsSteps.indexWhere(
+      (step) => step['name'] == 'Run IM Core Rust host tests',
+    );
+    expect(entryCheck, greaterThanOrEqualTo(0));
+    expect(entryCheck, lessThan(hostTests));
+    expect(
+      windowsSteps[entryCheck]['run'],
+      './scripts/flutter/test-build-windows.ps1',
+    );
     final windows = (jobs['windows-pr']['steps'] as YamlList)
         .cast<YamlMap>()
         .singleWhere(
@@ -147,7 +162,7 @@ void main() {
             as YamlMap;
     final jobs = workflow['jobs'] as YamlMap;
     const pin =
-        "(github.base_ref == 'release/0910' && 'ad55d32e6cc61b8c5a7ee36cc83acb5b2f89ea9b')";
+        "(github.base_ref == 'release/0910' && '3df2281b60ead902c377c0d301679dffc2372c48')";
     for (final name in ['validate', 'remote-product']) {
       final checkout = (jobs[name]['steps'] as YamlList)
           .cast<YamlMap>()
