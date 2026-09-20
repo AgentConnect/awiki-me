@@ -1626,5 +1626,11 @@
   "agentAcpUpgradeRequired": "Upgrade the Daemon to use ACP with this agent.",
   "agentClientAdapterHint": "The Daemon adapter is missing or damaged. Reinstall the Daemon.",
   "agentClientPlatformHint": "The agent adapter does not support this platform.",
-  "agentClientHermesAcpHint": "Hermes ACP support is unavailable. Upgrade Hermes CLI on the host."
+  "agentClientHermesAcpHint": "Hermes ACP support is unavailable. Upgrade Hermes CLI on the host.",
+  "agentClientNodeMissing": "Node.js is not installed on this host.",
+  "agentClientNodeIncompatible": "This Node.js version is incompatible. Use Node.js 22 or later.",
+  "agentClientNodeUnavailable": "Node.js could not start. Check the host installation and detect again.",
+  "agentClientNodeSetup": "Codex and Claude Code require Node.js 22 or later on this Daemon host. Node.js 24 LTS is recommended. After installing, detect again.",
+  "agentClientNodeDownload": "Node.js installation guide ↗",
+  "agentClientWaitingConfirmation": "Awaiting confirmation"
 }

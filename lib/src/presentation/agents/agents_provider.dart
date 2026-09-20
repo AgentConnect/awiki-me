@@ -122,7 +122,9 @@ class PendingRuntimeCreation {
       state == PendingRuntimeCreationState.waitingForStatus;
 
   bool matchesRuntimeAgent(AgentSummary agent) {
-    if (!agent.isRuntime || agent.daemonAgentDid != daemonAgentDid) {
+    if (!agent.isRuntime ||
+        agent.daemonAgentDid != daemonAgentDid ||
+        agent.runtime != runtime) {
       return false;
     }
     final agentHandle = _normalizedAgentHandle(agent.handle);
@@ -1329,7 +1331,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     final requestId = agentCommandId('app_req');
     final completion = Completer<String?>();
     _creationConfirmations[requestId] = completion;
-    final response = completion.future.timeout(const Duration(seconds: 90));
+    final response = completion.future;
     unawaited(
       response.then<void>((_) {}, onError: (Object _, StackTrace __) {}),
     );
@@ -2547,12 +2549,9 @@ class AgentsController extends StateNotifier<AgentsState> {
           !waiter.isCompleted &&
           pending.isNotEmpty &&
           pending.first.daemonAgentDid == payload['daemon_agent_did']) {
-        if (payload['state'] == 'failed') {
-          waiter.complete(
-            creation['phase'] == 'client_readiness'
-                ? (_string(creation['error_code']) ?? 'creation_failed')
-                : 'creation_pending',
-          );
+        if (payload['state'] == 'failed' &&
+            creation['phase'] == 'client_readiness') {
+          waiter.complete(_string(creation['error_code']) ?? 'creation_failed');
         } else if (payload['state'] == 'ready' &&
             _controlPayloadMatchesPendingRuntimeCreation(
               payload,
@@ -3911,6 +3910,12 @@ class AgentsController extends StateNotifier<AgentsState> {
     final retained = <PendingRuntimeCreation>[];
     for (final pending in state.pendingRuntimeCreations) {
       if (_hasMatchingRuntimeAgentWithConfirmedRoute(agents, pending)) {
+        // Inventory and command receipts are independently ordered. Resolve the
+        // same device-local operation before removing its correlation record.
+        final confirmation = _creationConfirmations[pending.requestId];
+        if (confirmation != null && !confirmation.isCompleted) {
+          confirmation.complete(null);
+        }
         _runtimeCreationTimeouts.remove(pending.requestId)?.cancel();
         _runtimeCreationReconcileTimers.remove(pending.requestId)?.cancel();
         continue;

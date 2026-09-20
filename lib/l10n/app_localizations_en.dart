@@ -3904,4 +3904,25 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get agentClientHermesAcpHint =>
       'Hermes ACP support is unavailable. Upgrade Hermes CLI on the host.';
+
+  @override
+  String get agentClientNodeMissing => 'Node.js is not installed on this host.';
+
+  @override
+  String get agentClientNodeIncompatible =>
+      'This Node.js version is incompatible. Use Node.js 22 or later.';
+
+  @override
+  String get agentClientNodeUnavailable =>
+      'Node.js could not start. Check the host installation and detect again.';
+
+  @override
+  String get agentClientNodeSetup =>
+      'Codex and Claude Code require Node.js 22 or later on this Daemon host. Node.js 24 LTS is recommended. After installing, detect again.';
+
+  @override
+  String get agentClientNodeDownload => 'Node.js installation guide ↗';
+
+  @override
+  String get agentClientWaitingConfirmation => 'Awaiting confirmation';
 }

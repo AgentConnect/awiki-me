@@ -6837,6 +6837,42 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'Hermes 缺少可用的 ACP 支持，请在宿主机升级 Hermes CLI。'**
   String get agentClientHermesAcpHint;
+
+  /// No description provided for @agentClientNodeMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'宿主机未检测到 Node.js。'**
+  String get agentClientNodeMissing;
+
+  /// No description provided for @agentClientNodeIncompatible.
+  ///
+  /// In zh, this message translates to:
+  /// **'Node.js 版本不兼容，需要 22 或更高版本。'**
+  String get agentClientNodeIncompatible;
+
+  /// No description provided for @agentClientNodeUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'Node.js 无法启动，请检查宿主机安装后重新检测。'**
+  String get agentClientNodeUnavailable;
+
+  /// No description provided for @agentClientNodeSetup.
+  ///
+  /// In zh, this message translates to:
+  /// **'Codex 和 Claude Code 需要在此 Daemon 宿主机安装 Node.js 22 或更高版本，推荐 24 LTS。安装后请重新检测。'**
+  String get agentClientNodeSetup;
+
+  /// No description provided for @agentClientNodeDownload.
+  ///
+  /// In zh, this message translates to:
+  /// **'Node.js 安装指南 ↗'**
+  String get agentClientNodeDownload;
+
+  /// No description provided for @agentClientWaitingConfirmation.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待确认'**
+  String get agentClientWaitingConfirmation;
 }
 
 class _AppLocalizationsDelegate

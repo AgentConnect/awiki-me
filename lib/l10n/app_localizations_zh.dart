@@ -3645,4 +3645,23 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get agentClientHermesAcpHint =>
       'Hermes 缺少可用的 ACP 支持，请在宿主机升级 Hermes CLI。';
+
+  @override
+  String get agentClientNodeMissing => '宿主机未检测到 Node.js。';
+
+  @override
+  String get agentClientNodeIncompatible => 'Node.js 版本不兼容，需要 22 或更高版本。';
+
+  @override
+  String get agentClientNodeUnavailable => 'Node.js 无法启动，请检查宿主机安装后重新检测。';
+
+  @override
+  String get agentClientNodeSetup =>
+      'Codex 和 Claude Code 需要在此 Daemon 宿主机安装 Node.js 22 或更高版本，推荐 24 LTS。安装后请重新检测。';
+
+  @override
+  String get agentClientNodeDownload => 'Node.js 安装指南 ↗';
+
+  @override
+  String get agentClientWaitingConfirmation => '等待确认';
 }

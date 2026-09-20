@@ -1626,5 +1626,11 @@
   "agentAcpUpgradeRequired": "请升级 Daemon 以使用此智能体的 ACP 接入。",
   "agentClientAdapterHint": "Daemon 的接入组件缺失或损坏，请重新安装 Daemon。",
   "agentClientPlatformHint": "当前平台不支持此智能体的接入组件。",
-  "agentClientHermesAcpHint": "Hermes 缺少可用的 ACP 支持，请在宿主机升级 Hermes CLI。"
+  "agentClientHermesAcpHint": "Hermes 缺少可用的 ACP 支持，请在宿主机升级 Hermes CLI。",
+  "agentClientNodeMissing": "宿主机未检测到 Node.js。",
+  "agentClientNodeIncompatible": "Node.js 版本不兼容，需要 22 或更高版本。",
+  "agentClientNodeUnavailable": "Node.js 无法启动，请检查宿主机安装后重新检测。",
+  "agentClientNodeSetup": "Codex 和 Claude Code 需要在此 Daemon 宿主机安装 Node.js 22 或更高版本，推荐 24 LTS。安装后请重新检测。",
+  "agentClientNodeDownload": "Node.js 安装指南 ↗",
+  "agentClientWaitingConfirmation": "等待确认"
 }

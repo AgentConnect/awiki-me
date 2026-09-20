@@ -140,6 +140,8 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
   bool _normalizingHandle = false;
   bool _hasSelection = true;
   bool _submitting = false;
+  bool _waitingForConfirmation = false;
+  Timer? _creationWaitTimer;
   String? _createError;
   bool _initialSelectionApplied = false;
   late String _automaticName;
@@ -197,6 +199,10 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
         'adapter_missing' ||
         'adapter_invalid' ||
         'adapter_runtime_unavailable' => context.l10n.agentClientAdapterHint,
+        'node_missing' => context.l10n.agentClientNodeMissing,
+        'node_incompatible' => context.l10n.agentClientNodeIncompatible,
+        'node_unavailable' ||
+        'node_timeout' => context.l10n.agentClientNodeUnavailable,
         'acp_dependencies_missing' => context.l10n.agentClientHermesAcpHint,
         'custom_launcher' => context.l10n.agentClientCustomHint,
         'timeout' => context.l10n.agentClientTimeoutHint,
@@ -253,6 +259,7 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
 
   @override
   void dispose() {
+    _creationWaitTimer?.cancel();
     _nameController
       ..removeListener(_onFieldChanged)
       ..dispose();
@@ -389,7 +396,17 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
     if (_supportsInspection) {
       setState(() {
         _submitting = true;
+        _waitingForConfirmation = false;
         _createError = null;
+      });
+      _creationWaitTimer?.cancel();
+      _creationWaitTimer = Timer(const Duration(seconds: 15), () {
+        if (mounted && _submitting) {
+          setState(() {
+            _waitingForConfirmation = true;
+            _createError = context.l10n.agentClientCreatePending;
+          });
+        }
       });
       try {
         final error = await ref
@@ -404,6 +421,7 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
                 sandbox: _sandbox,
               ),
             );
+        _creationWaitTimer?.cancel();
         if (!mounted) return;
         if (error == null) {
           Navigator.of(context).pop();
@@ -411,13 +429,19 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
         }
         if (error == 'creation_pending') {
           setState(() {
+            _waitingForConfirmation = true;
             _createError = context.l10n.agentClientCreatePending;
           });
           return;
         }
         setState(() {
           _submitting = false;
+          _waitingForConfirmation = false;
           _createError = switch (error) {
+            'runtime_client_node_missing' ||
+            'runtime_client_node_incompatible' ||
+            'runtime_client_node_unavailable' ||
+            'runtime_client_node_timeout' => context.l10n.agentClientNodeSetup,
             'runtime_client_not_found' => context.l10n.agentClientInstallHint,
             'runtime_client_not_executable' =>
               context.l10n.agentClientPermissionHint,
@@ -436,15 +460,19 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
         });
         _detect(refresh: true);
       } on TimeoutException {
+        _creationWaitTimer?.cancel();
         if (mounted) {
           setState(() {
+            _waitingForConfirmation = true;
             _createError = context.l10n.agentClientCreatePending;
           });
         }
       } on Object {
+        _creationWaitTimer?.cancel();
         if (mounted) {
           setState(() {
             _submitting = false;
+            _waitingForConfirmation = false;
             _createError = context.l10n.agentClientCreateFailed;
           });
         }
@@ -556,6 +584,64 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
                         ? context.l10n.agentClientScope
                         : null,
                   ),
+                  if (_supportsInspection &&
+                      _inspection.report?.clients.values.any(
+                            (item) =>
+                                item.reasonCode?.startsWith('node_') == true,
+                          ) ==
+                          true) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      key: const Key('agent-node-setup'),
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AwikiMePalette.mist,
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(color: AwikiMePalette.hairline),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.l10n.agentClientNodeSetup,
+                            style: TextStyle(
+                              fontSize: responsive.metaSm,
+                              color: AwikiMePalette.mutedNeutral,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          CupertinoButton(
+                            key: const Key('agent-node-download'),
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(44, 44),
+                            onPressed: () async {
+                              final uri = Uri.parse(
+                                'https://nodejs.org/en/download',
+                              );
+                              try {
+                                if (await launchUrl(
+                                  uri,
+                                  mode: LaunchMode.externalApplication,
+                                )) {
+                                  return;
+                                }
+                              } on Object {
+                                /* Keep an actionable URL when no browser is available. */
+                              }
+                              if (mounted) {
+                                setState(
+                                  () => _createError =
+                                      'https://nodejs.org/en/download',
+                                );
+                              }
+                            },
+                            child: Text(context.l10n.agentClientNodeDownload),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   SizedBox(height: responsive.spacing(12)),
                   if (_kind.isAcp &&
                       _shouldShowRuntimeAdvancedOptions()) ...<Widget>[
@@ -596,6 +682,7 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
                   ],
                   _AgentDialogField(
                     fieldKey: const Key('agent-create-name-field'),
+                    readOnly: _submitting,
                     label: context.l10n.agentNameField,
                     controller: _nameController,
                     placeholder: _kind.displayLabel,
@@ -605,6 +692,7 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
                   SizedBox(height: responsive.spacing(12)),
                   _AgentDialogField(
                     fieldKey: const Key('agent-create-handle-field'),
+                    readOnly: _submitting,
                     label: 'Handle',
                     controller: _handleController,
                     placeholder: _kind.handlePlaceholder,
@@ -643,14 +731,18 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
             children: <Widget>[
               Expanded(
                 child: _DialogSecondaryButton(
-                  label: context.l10n.commonCancel,
+                  label: _submitting
+                      ? context.l10n.commonClose
+                      : context.l10n.commonCancel,
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ),
               SizedBox(width: responsive.spacing(10)),
               Expanded(
                 child: AppPrimaryButton(
-                  label: _submitting
+                  label: _waitingForConfirmation
+                      ? context.l10n.agentClientWaitingConfirmation
+                      : _submitting
                       ? context.l10n.agentClientCreating
                       : context.l10n.groupCreateAction,
                   onPressed: canSubmit ? _submit : null,
@@ -1181,6 +1273,7 @@ class _AgentDialogField extends StatelessWidget {
     required this.controller,
     required this.placeholder,
     this.errorText,
+    this.readOnly = false,
     this.focusNode,
     this.prefix,
     this.textInputAction,
@@ -1192,6 +1285,7 @@ class _AgentDialogField extends StatelessWidget {
   final TextEditingController controller;
   final String placeholder;
   final String? errorText;
+  final bool readOnly;
   final FocusNode? focusNode;
   final Widget? prefix;
   final TextInputAction? textInputAction;
@@ -1215,6 +1309,7 @@ class _AgentDialogField extends StatelessWidget {
         SizedBox(height: responsive.spacing(6)),
         CupertinoTextField(
           key: fieldKey,
+          readOnly: readOnly,
           controller: controller,
           focusNode: focusNode,
           placeholder: placeholder,

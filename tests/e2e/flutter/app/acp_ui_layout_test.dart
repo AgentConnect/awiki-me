@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:awiki_me/src/domain/entities/agent/acp_session.dart';
 import 'package:awiki_me/src/domain/entities/agent/acp_task.dart';
+import 'package:awiki_me/src/domain/entities/agent/runtime_client_installation.dart';
 import 'package:awiki_me/src/presentation/agents/acp_execution_record.dart';
 import 'package:awiki_me/src/presentation/agents/acp_session_provider.dart';
 import 'package:awiki_me/src/presentation/agents/acp_task_status.dart';
@@ -22,7 +23,7 @@ import '../../../unit/acp_runtime_test.dart'
 import '../../../unit/acp_question_v2_test.dart' show question, surface;
 
 import '../../../unit/agents/runtime_client_inspection_test.dart'
-    show installationSurface, FakeClientInspection;
+    show installationSurface, installationJson, FakeClientInspection;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -104,6 +105,33 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
+  testWidgets(
+    'native host Node guidance is shared and keeps other types usable',
+    (tester) async {
+      final json = installationJson(ready: 'hermes');
+      for (final row
+          in (json['clients'] as List).cast<Map<String, Object?>>()) {
+        if (['codex', 'claude-code'].contains(row['kind'])) {
+          row['status'] = 'unavailable';
+          row['reason_code'] = 'node_missing';
+        }
+      }
+      final service = FakeClientInspection()
+        ..report = RuntimeClientInstallationReport.parse(json);
+      await tester.pumpWidget(
+        RepaintBoundary(key: captureKey, child: installationSurface(service)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('创建 Agent'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('agent-node-download')));
+      expect(find.byKey(const Key('agent-node-setup')), findsOneWidget);
+      expect(find.text('宿主机未检测到 Node.js。'), findsNWidgets(2));
+      expect(tester.takeException(), isNull);
+      await _capture(tester, 'host-node-guidance');
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets('native group context recovery preserves draft and scope', (
     tester,
   ) async {

@@ -39,6 +39,145 @@ const _daemonSubkeyProposal = <String, Object?>{
 };
 
 void main() {
+  for (final inventoryFirst in [true, false]) {
+    for (final kind in RuntimeAgentKind.values) {
+      test(
+        'creation resolves ${kind.runtime}, inventory first: $inventoryFirst',
+        () async {
+          final control = _CreateDeliveryPendingService();
+          final container = _container(
+            control,
+            directory: _EventuallyAvailableDirectoryApplicationService(
+              failuresBeforeSuccess: 0,
+            ),
+          );
+          final controller = container.read(agentsProvider.notifier);
+          await controller.load();
+          var settled = false;
+          final confirmation = controller.createRuntimeAgentConfirmed(
+            'did:agent:daemon',
+            options: RuntimeAgentCreateOptions(
+              kind: kind,
+              handle: 'diagnostic-agent',
+              displayName: 'Diagnostic Agent',
+            ),
+          );
+          final observed = confirmation.then(
+            (_) {
+              settled = true;
+            },
+            onError: (Object _) {
+              settled = true;
+            },
+          );
+          await pumpEventQueue();
+          final pending = container
+              .read(agentsProvider)
+              .pendingRuntimeCreations
+              .single;
+          final runtime = AgentSummary(
+            agentDid: 'did:agent:diagnostic',
+            daemonAgentDid: 'did:agent:daemon',
+            kind: AgentKind.runtime,
+            runtime: kind.runtime,
+            handle: 'diagnostic-agent',
+            displayName: 'Diagnostic Agent',
+            activeState: 'active',
+            latest: const AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: acpCapabilityDiagnostics,
+            ),
+          );
+          if (inventoryFirst) {
+            control.agents = [...control.agents, runtime];
+            await controller.load();
+            await pumpEventQueue();
+            expect(
+              container.read(agentsProvider).pendingRuntimeCreations,
+              isEmpty,
+            );
+            expect(
+              container
+                  .read(agentsProvider)
+                  .agents
+                  .any((a) => a.agentDid == runtime.agentDid),
+              isTrue,
+            );
+            expect(
+              settled,
+              isTrue,
+              reason:
+                  'Authoritative inventory must resolve the same creation operation',
+            );
+          }
+          controller.applyCommittedControlEvent(
+            AgentControlEvent(
+              messageId: 'diagnostic-receipt',
+              daemonAgentDid: 'did:agent:daemon',
+              isReplay: false,
+              payload: {
+                'schema': AgentControlPayloads.statusSchema,
+                'status_scope': 'runtime',
+                'daemon_agent_did': 'did:agent:daemon',
+                'state': 'ready',
+                'result': {
+                  'command': 'runtime.agent.create',
+                  'client_request_id': pending.requestId,
+                  'runtime_agent_did': runtime.agentDid,
+                  'daemon_agent_did': 'did:agent:daemon',
+                  'runtime': kind.runtime,
+                  'handle': runtime.handle,
+                  'display_name': runtime.displayName,
+                },
+              },
+            ),
+          );
+          await pumpEventQueue();
+          expect(
+            settled,
+            isTrue,
+            reason:
+                'Either authoritative confirmation order must complete the dialog',
+          );
+          expect(control.createCalls, 1);
+          expect(await confirmation, isNull);
+          controller.applyCommittedControlEvent(
+            const AgentControlEvent(
+              messageId: 'diagnostic-receipt',
+              daemonAgentDid: 'did:agent:daemon',
+              isReplay: true,
+              payload: {'schema': AgentControlPayloads.statusSchema},
+            ),
+          );
+          container.dispose();
+          await observed;
+        },
+      );
+    }
+  }
+  test('disposing the owner releases an unconfirmed creation waiter', () async {
+    final control = _CreateDeliveryPendingService();
+    final container = _container(control);
+    final controller = container.read(agentsProvider.notifier);
+    await controller.load();
+    final confirmation = controller.createRuntimeAgentConfirmed(
+      'did:agent:daemon',
+      options: const RuntimeAgentCreateOptions(
+        kind: RuntimeAgentKind.hermes,
+        handle: 'pending-owner',
+        displayName: 'Pending',
+      ),
+    );
+    await pumpEventQueue();
+    expect(
+      container.read(agentsProvider).pendingRuntimeCreations,
+      hasLength(1),
+    );
+    container.dispose();
+    expect(await confirmation, 'session_changed');
+    expect(control.createCalls, 1);
+  });
+
   test(
     'ACP uncertain create delivery retains the exact intent until authoritative confirmation',
     () async {
