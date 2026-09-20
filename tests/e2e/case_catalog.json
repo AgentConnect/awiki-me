@@ -3108,17 +3108,17 @@
     },
     {
       "caseId": "DEVICE-JOIN-E2E-002",
-      "feature": "AWiki Me admin-side approval defaults to member",
+      "feature": "AWiki Me admin-side Join authorization intermediate state",
       "layer": "remote_product_ui_security",
       "preconditions": "The dedicated phone allowlist is enabled on awiki.info; the protected ignored YAML contains the fixed test phone/code; the runner explicitly enables the E2E-only unattended UserPresencePort; AWiki Me and an exact-revision CLI use independent native Core roots; the authenticated App runtime is connected before the CLI starts Join.",
-      "action": "Bootstrap AWiki Me as the ready admin, start an independent CLI Join request while the App is on its normal authenticated shell, wait for system_notification_changed to refresh the Core Join inbox and expose the global review entry, open that entry to start verification exactly once, compare the independently derived six-digit SAS, approve the fixed member role through exactly one test-scoped user-presence decision, and poll the new-device result. The active Join receipt is intermediate: automatic management may still be pending or already registered; full Root readiness is separately attested by the Root suites.",
+      "action": "Bootstrap AWiki Me as the ready admin, start an independent CLI Join request while the App is on its normal authenticated shell, wait for system_notification_changed to refresh the Core Join inbox and expose the global review entry, open that entry to start verification exactly once, compare the independently derived six-digit SAS, authorize Join and automatic management through exactly one test-scoped user-presence decision, and poll the new-device result. The active Join receipt is intermediate: automatic management may still be pending or already registered; full Root readiness is separately attested by the Root suites.",
       "exactOracles": [
         "The independently bootstrapped App admin and CLI requester use distinct fresh native Core roots; the OTP-authenticated request remains pending until the App receives its system notification, refreshes the typed Core Join inbox independently of general message sync, exposes the global review entry, and the user explicitly starts verification.",
         "The App-visible and CLI-derived six-digit SAS match without recording either value, and exactly one E2E-only user-presence confirmation succeeds without changing the production LocalAuthentication implementation.",
         "Both Registries contain exactly two devices: the joining protocol_device_id is the CLI current active joined device with a consistent member/not-ready or admin/registered state, while the original App device remains the unique current active management-ready admin."
       ],
       "negativeChecks": [
-        "A production user-presence override, copied or non-fresh local state, missing or reported protected OTP, Registry discovery, direct requestSync/refreshJoinInbox calls, pre-opening Devices to bypass the global entry, split claim or admin polling, repeated verification start, secret-bearing evidence, mismatched SAS, an enabled approval action before SAS confirmation, any admin-role control, a denied or repeated user-presence result, mismatched protocol_device_id, or an active-admin joining result prevents pass attestation."
+        "A production user-presence override, copied or non-fresh local state, missing or reported protected OTP, Registry discovery, direct requestSync/refreshJoinInbox calls, pre-opening Devices to bypass the global entry, split claim or admin polling, repeated verification start, secret-bearing evidence, mismatched SAS, an enabled approval action before SAS confirmation, any admin-role control, a denied or repeated user-presence result, mismatched protocol_device_id, or an inconsistent role/management-ready pair prevents this intermediate Join attestation. A valid admin/ready Registry state may already be visible; this case does not attest recipient Root activation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
@@ -3137,7 +3137,7 @@
           "DEVICE-JOIN-E2E-002:app_global_join_review_entry_received",
           "DEVICE-JOIN-E2E-002:sas_matched_without_secret_evidence",
           "DEVICE-JOIN-E2E-002:single_e2e_user_presence_confirmed",
-          "DEVICE-JOIN-E2E-002:joined_device_active_with_consistent_management_state"
+          "DEVICE-JOIN-E2E-002:join_authorization_observed_management_completion_not_attested"
         ],
         "exactOracleAssertions": [
           [
@@ -3150,7 +3150,7 @@
             "DEVICE-JOIN-E2E-002:single_e2e_user_presence_confirmed"
           ],
           [
-            "DEVICE-JOIN-E2E-002:joined_device_active_with_consistent_management_state"
+            "DEVICE-JOIN-E2E-002:join_authorization_observed_management_completion_not_attested"
           ]
         ],
         "negativeCheckAssertions": [
@@ -3160,7 +3160,7 @@
             "DEVICE-JOIN-E2E-002:app_global_join_review_entry_received",
             "DEVICE-JOIN-E2E-002:sas_matched_without_secret_evidence",
             "DEVICE-JOIN-E2E-002:single_e2e_user_presence_confirmed",
-            "DEVICE-JOIN-E2E-002:joined_device_active_with_consistent_management_state"
+            "DEVICE-JOIN-E2E-002:join_authorization_observed_management_completion_not_attested"
           ]
         ]
       }

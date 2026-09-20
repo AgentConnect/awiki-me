@@ -62,7 +62,8 @@ Handle Recovery 是默认开启的产品基线，最终可用性
   -> ResponseVerified 后 Core 才向本机投影 6 位 SAS
   -> 用户确认两端一致
   -> 一次系统 user-presence
-  -> Core 固定按 member 完成授权
+  -> Core 完成 member Join，并持久化本次批准授权的自动管理任务
+  -> 自动发送原 V1 根信封；接收端导入、Registry 登记与本机激活后成为管理设备
 ```
 
 新设备重启后只恢复仍在有效期内、拥有精确本地 DID/device binding，且实时 Registry 仍确认
@@ -187,3 +188,7 @@ checkpoint，并在内存中比较两端 SAS，不得替代产品同步或记录
 [One-host App↔App E2E mode](multi-device-app-pair-e2e.md)。
 
 历史已签名任务未携带 `max_attempts` 时仍保持原三次预算，升级不重置或扩充该预算。
+
+### Join 审批与管理完成的验收边界
+
+`DEVICE-JOIN-E2E-002` 只证明 SAS、一次 user-presence 与 Join 授权的中间态。Registry 可已从 member 前进到 admin，因此不能强制采样时仍是 member，也不能把该用例通过视为管理完成。自动管理验收必须同时包含 `DEVICE-JOIN-E2E-001` 的 `joined_app_management_ready` 和 `ROOT-TRANSFER-E2E-001` 的完整接收端完成断言；单独运行 Join 审批用例不满足 JOIN-001 发布验收。

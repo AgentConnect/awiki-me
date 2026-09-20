@@ -954,7 +954,7 @@ void main() {
             'app_global_join_review_entry_received',
             'sas_matched_without_secret_evidence',
             'single_e2e_user_presence_confirmed',
-            'joined_device_active_with_consistent_management_state',
+            'join_authorization_observed_management_completion_not_attested',
           ],
         );
       }
