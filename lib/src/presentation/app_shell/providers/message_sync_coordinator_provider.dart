@@ -337,6 +337,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
           .read(appSessionServiceProvider)
           .refreshSession();
       if (refreshed == null || !_isCurrentEpoch(epoch)) {
+        debugPrint('[awiki_me][remote-push][session-refresh-stale]');
         return const RemotePushSyncReceipt(
           disposition: RemotePushSyncDisposition.staleSession,
         );
@@ -349,7 +350,11 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
           disposition: RemotePushSyncDisposition.staleSession,
         );
       }
-    } on Object {
+    } on Object catch (error) {
+      debugPrint(
+        '[awiki_me][remote-push][session-refresh-failed] '
+        'type=${error.runtimeType}',
+      );
       return const RemotePushSyncReceipt(
         disposition: RemotePushSyncDisposition.staleSession,
       );

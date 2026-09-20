@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:flutter/foundation.dart';
+
 import '../domain/entities/remote_push_event.dart';
 import '../domain/services/remote_push_client.dart';
 import 'models/remote_push_sync_receipt.dart';
@@ -105,6 +107,10 @@ class RemotePushMessageSyncCoordinator {
 
   void _onEvent(RemotePushEvent event) {
     if (_disposed) return;
+    debugPrint(
+      '[awiki_me][remote-push][event] kind=${event.kind.wireName} '
+      'active_session=${_activeSession != null}',
+    );
     switch (event.kind) {
       case RemotePushEventKind.messageReceived:
       case RemotePushEventKind.notificationReceived:
@@ -166,6 +172,7 @@ class RemotePushMessageSyncCoordinator {
       ),
     );
     if (batch.isEmpty) return;
+    debugPrint('[awiki_me][remote-push][drain] events=${batch.length}');
     final deliveryIds = batch
         .map((event) => event.deliveryId)
         .toList(growable: false);
@@ -176,9 +183,17 @@ class RemotePushMessageSyncCoordinator {
         presentation: _presentationDisposition(batch),
         messageReferences: _ordinaryMessageReferences(batch),
       );
-    } on Object {
+    } on Object catch (error) {
+      debugPrint(
+        '[awiki_me][remote-push][sync-failed] type=${error.runtimeType}',
+      );
       return;
     }
+    debugPrint(
+      '[awiki_me][remote-push][receipt] disposition=${receipt.disposition.name} '
+      'committed=${receipt.committedIncomingMessages.length} '
+      'recovered=${receipt.recoveredIncomingMessages.length}',
+    );
     if (!_isCurrent(context) || !receipt.canAcknowledge) return;
     final references = _ordinaryMessageReferences(batch);
     if (!references.every(
@@ -190,12 +205,16 @@ class RemotePushMessageSyncCoordinator {
             (message) => message.opaqueMessageReferences.contains(reference),
           ),
     )) {
+      debugPrint('[awiki_me][remote-push][references-pending]');
       return;
     }
 
     final openedEvent = _lastOpenedEvent(batch);
     if (openedEvent != null) {
       final conversationId = _resolveConversationId(openedEvent, receipt);
+      debugPrint(
+        '[awiki_me][remote-push][open] matched=${conversationId != null}',
+      );
       try {
         await _navigation.showConversationList(context);
       } on Object {
