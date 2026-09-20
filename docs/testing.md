@@ -1483,3 +1483,9 @@ Mobile E2E file resolution uses the current App temporary directory, so reinstal
 the App does not bind the build to an obsolete container UUID. Relative traversal
 outside that directory is rejected; desktop absolute paths retain their meaning.
 Do not compile phone numbers, OTPs, invitation codes or fixture JSON into the App.
+
+### 注册开发分支的 source CI
+
+release/0910 的 PR CI 显式选择 AWIKI_SOURCE_INTEGRATION=1，固定 Core consumer 527059feb16f57ee1e0a37c81eb02415879c62a2；其 source manifest 固定 SDK 527146e3d74437bb3b74f064b50def8d22f4b7e0，使用配套提交锁。手动验证可选 sdk_dependencies=source/registry，默认 source；validation_only=true 保持禁止远端账号/OTP job。正式 package workflow 不变，开发不提前发布 SDK。
+
+Linux Core/CLI、原生 guard rebuild 和 Windows Rust host test/native build 复用隔离 source builder；读取 .artifacts/dependencies/source/target，不混入 registry 的 target。Linux 来源摘要覆盖模式、source manifest/lock 和构建脚本，切换输入使旧 provenance 失效。Windows 保留 PE x64/FRB 实际 DLL 校验。私有合同源读取仍使用现有最小权限 token，403 不以跳过测试代替。

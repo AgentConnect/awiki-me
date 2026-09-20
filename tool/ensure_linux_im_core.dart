@@ -188,6 +188,10 @@ class LinuxImCoreArtifactGuard {
       'crates/im-core',
       'crates/im-core-dart',
       'scripts/flutter',
+      'scripts/dependencies',
+      'scripts/release',
+      'dependencies.source.json',
+      'dependencies.source.Cargo.lock',
       'packages/awiki_im_core',
     ]);
     final paths =
@@ -205,6 +209,12 @@ class LinuxImCoreArtifactGuard {
     Digest? digest;
     final digestSink = _DigestSink((value) => digest = value);
     final inputSink = sha256.startChunkedConversion(digestSink);
+    inputSink.add(
+      utf8.encode(
+        'source=${Platform.environment['AWIKI_SOURCE_INTEGRATION'] == '1'};'
+        'registry=${Platform.environment['AWIKI_RELEASE_REGISTRY'] == '1'};',
+      ),
+    );
     for (final path in paths) {
       inputSink.add(utf8.encode('$path\u0000'));
       final file = File('${layout.sourceRepository.path}/$path');
@@ -231,6 +241,37 @@ class LinuxImCoreArtifactGuard {
   required bool debugBuild,
   required Map<String, String> environment,
 }) {
+  final sourceIntegration = environment['AWIKI_SOURCE_INTEGRATION'] == '1';
+  if (sourceIntegration && environment['AWIKI_RELEASE_REGISTRY'] == '1') {
+    throw const LinuxImCoreArtifactException(
+      'Source integration and registry release mode are mutually exclusive.',
+    );
+  }
+  if (sourceIntegration) {
+    return (
+      command: <String>[
+        'python3',
+        '${layout.sourceRepository.path}/scripts/dependencies/build.py',
+        '--deps',
+        'source',
+        '--source-manifest',
+        'dependencies.source.json',
+        '--cargo-command',
+        'build',
+        '-p',
+        'im-core-dart',
+        '--locked',
+        if (!debugBuild) '--release',
+        '--no-default-features',
+        '--features',
+        'blocking,sqlite,http,linux,group-e2ee,secure-direct,identity-native-anp',
+      ],
+      artifactToCopy: File(
+        '${layout.sourceRepository.path}/.artifacts/dependencies/source/target/'
+        '${debugBuild ? 'debug' : 'release'}/libawiki_im_core.so',
+      ),
+    );
+  }
   if (!debugBuild) {
     return (
       command: <String>[layout.buildScript.path, '--linux-only'],
