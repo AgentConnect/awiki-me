@@ -1372,6 +1372,26 @@ class _PersonalAgentBindingsStub implements PersonalAgentBindingPort {
 }
 
 class _IdentityCoreStub implements IdentityCorePort {
+  @override
+  Future<IdentityMethodCapabilities> identityMethodCapabilities(
+    String did,
+  ) async => const IdentityMethodCapabilities(
+    method: IdentityDidMethod.wba,
+    handleRecovery: true,
+    rootImport: true,
+    rootTransfer: true,
+    servicesUpdate: false,
+  );
+
+  @override
+  Future<List<IdentityDidMethod>> identityCreationMethods() async => const [
+    IdentityDidMethod.wba,
+  ];
+
+  @override
+  Future<List<PendingIdentityRegistration>>
+  pendingIdentityRegistrations() async => const [];
+
   final List<String> calls = <String>[];
   Object? revokeError;
   String verificationMethod = 'did:human:me#daemon-key-1';
@@ -1427,6 +1447,7 @@ class _IdentityCoreStub implements IdentityCorePort {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithEmail({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String email,
     required String handle,
     String? inviteCode,
@@ -1437,6 +1458,7 @@ class _IdentityCoreStub implements IdentityCorePort {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithPhone({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String otp,
     required String handle,
@@ -1448,6 +1470,7 @@ class _IdentityCoreStub implements IdentityCorePort {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String handle,
     String? inviteCode,
     String? displayName,

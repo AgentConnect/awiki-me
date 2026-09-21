@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'identity_method_test_support.dart';
+export 'identity_method_test_support.dart';
+
 import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
@@ -4034,6 +4037,7 @@ class FakeOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithEmail({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String email,
     required String handle,
     String? inviteCode,
@@ -4050,6 +4054,7 @@ class FakeOnboardingService implements OnboardingService {
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
       return const IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
+        existingHandleMethodCapabilities: wbaMethodCapabilities,
         existingHandleContinuationId: 'existing-handle-test',
         existingHandleJoinMode: ExistingHandleJoinMode.ordinary,
       );
@@ -4074,6 +4079,7 @@ class FakeOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithPhone({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String otp,
     required String handle,
@@ -4102,6 +4108,7 @@ class FakeOnboardingService implements OnboardingService {
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
       return IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
+        existingHandleMethodCapabilities: wbaMethodCapabilities,
         existingHandleContinuationId: 'existing-handle-test',
         existingHandleJoinMode: gateway.existingHandleJoinMode,
         existingHandleJoinRequiresUserPresence:
@@ -4129,6 +4136,7 @@ class FakeOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String handle,
     String? inviteCode,
@@ -4145,6 +4153,7 @@ class FakeOnboardingService implements OnboardingService {
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
       return const IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
+        existingHandleMethodCapabilities: wbaMethodCapabilities,
         existingHandleContinuationId: 'existing-handle-test',
         existingHandleJoinMode: ExistingHandleJoinMode.ordinary,
       );
@@ -4245,7 +4254,27 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
 
 class FakeIdentityCorePort
     implements IdentityCorePort, DaemonSubkeyAuthorizationCorePort {
+  @override
+  Future<IdentityMethodCapabilities> identityMethodCapabilities(
+    String did,
+  ) async => methodCapabilities;
+
+  @override
+  Future<List<IdentityDidMethod>> identityCreationMethods() async =>
+      creationMethods;
+
+  @override
+  Future<List<PendingIdentityRegistration>>
+  pendingIdentityRegistrations() async => pendingRegistrations;
+
+  final IdentityMethodCapabilities methodCapabilities;
+  final List<IdentityDidMethod> creationMethods;
+  final List<PendingIdentityRegistration> pendingRegistrations;
+
   FakeIdentityCorePort({
+    this.methodCapabilities = wbaMethodCapabilities,
+    this.creationMethods = const [IdentityDidMethod.wba],
+    this.pendingRegistrations = const [],
     UserSubkeyPackage? daemonSubkeyPackage,
     AppSession? defaultSession,
   }) : daemonSubkeyPackage =
@@ -4316,6 +4345,7 @@ class FakeIdentityCorePort
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithEmail({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String email,
     required String handle,
     String? inviteCode,
@@ -4327,6 +4357,7 @@ class FakeIdentityCorePort
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithPhone({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String otp,
     required String handle,
@@ -4339,6 +4370,7 @@ class FakeIdentityCorePort
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String handle,
     String? inviteCode,
     String? displayName,

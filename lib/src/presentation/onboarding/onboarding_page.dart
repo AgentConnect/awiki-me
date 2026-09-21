@@ -29,6 +29,7 @@ import '../shared/sms_otp_cooldown_provider.dart';
 import '../shared/tenant_management_dialog.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'onboarding_provider.dart';
+import 'identity_method_picker.dart';
 
 part 'parts/onboarding_mac_part.dart';
 part 'parts/onboarding_mobile_controls_part.dart';
@@ -198,6 +199,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.stretch,
                                         children: <Widget>[
+                                          IdentityMethodPicker(
+                                            handleController: handleController,
+                                          ),
                                           ..._buildMobileRegisterWidgets(
                                             context: context,
                                             onboarding: onboarding,
@@ -584,6 +588,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   }
 
   Future<bool> _openPendingRecovery(String handle) async {
+    if (ref.read(onboardingProvider).didMethod != IdentityDidMethod.wba) {
+      return false;
+    }
     if (ref.read(onboardingProvider).serverInfo?.supportsPhoneHandleRecovery !=
         true) {
       return false;
@@ -643,6 +650,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final recoveryAvailable =
         !rebindContinuation &&
         phone.isNotEmpty &&
+        ref
+                .read(onboardingProvider)
+                .existingHandleMethodCapabilities
+                ?.handleRecovery ==
+            true &&
         (ref.read(onboardingProvider).serverInfo?.supportsPhoneHandleRecovery ??
             false);
     final action = await showCupertinoDialog<_ExistingHandleAction>(

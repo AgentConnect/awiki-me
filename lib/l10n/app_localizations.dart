@@ -128,6 +128,90 @@ abstract class AppLocalizations {
   /// **'{name}已不可用'**
   String agentLifecycleMessageNotice(String name);
 
+  /// No description provided for @identityMethodLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份方法'**
+  String get identityMethodLabel;
+
+  /// No description provided for @identityWebAdminLimitation.
+  ///
+  /// In zh, this message translates to:
+  /// **'Web 身份不支持账号恢复、根密钥导入或管理权转移。请保管好首个管理员设备；失去该设备后无法恢复管理权限。'**
+  String get identityWebAdminLimitation;
+
+  /// No description provided for @identityRegistrationPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续未完成的注册'**
+  String get identityRegistrationPending;
+
+  /// No description provided for @identityRegistrationResumeHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'将继续原来的身份注册。请使用原联系方式；如需验证码，请重新获取。'**
+  String get identityRegistrationResumeHint;
+
+  /// No description provided for @identityServicesTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份服务'**
+  String get identityServicesTitle;
+
+  /// No description provided for @identityServicesHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理此身份公开的其他服务。Handle、消息服务和个人资料仍由各自的设置管理。'**
+  String get identityServicesHint;
+
+  /// No description provided for @identityServicesFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'未能完成操作。请刷新查看进度；若仍待确认，请继续原操作。'**
+  String get identityServicesFailed;
+
+  /// No description provided for @identityServicesPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务更新仍待确认。继续原操作后才能提交其他更改。'**
+  String get identityServicesPending;
+
+  /// No description provided for @identityServicesResume.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续服务更新'**
+  String get identityServicesResume;
+
+  /// No description provided for @identityServiceAdd.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加服务'**
+  String get identityServiceAdd;
+
+  /// No description provided for @identityServiceId.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务标识'**
+  String get identityServiceId;
+
+  /// No description provided for @identityServiceType.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务类型'**
+  String get identityServiceType;
+
+  /// No description provided for @identityServiceEndpoint.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务地址'**
+  String get identityServiceEndpoint;
+
+  /// No description provided for @identityServiceEdit.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑'**
+  String get identityServiceEdit;
+
   /// No description provided for @appTitle.
   ///
   /// In zh, this message translates to:
@@ -2175,7 +2259,7 @@ abstract class AppLocalizations {
   /// No description provided for @deviceJoinApprove.
   ///
   /// In zh, this message translates to:
-  /// **'确认并授权'**
+  /// **'允许加入并成为管理设备'**
   String get deviceJoinApprove;
 
   /// No description provided for @deviceJoinCancel.
@@ -2223,7 +2307,7 @@ abstract class AppLocalizations {
   /// No description provided for @deviceJoinUserPresenceReason.
   ///
   /// In zh, this message translates to:
-  /// **'确认授权新设备'**
+  /// **'允许该设备加入并成为管理设备'**
   String get deviceJoinUserPresenceReason;
 
   /// No description provided for @deviceJoinErrorUnavailable.
@@ -6903,6 +6987,36 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'等待确认'**
   String get agentClientWaitingConfirmation;
+
+  /// No description provided for @deviceJoinManagementRegistered.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理权限已登记，请在新设备确认管理能力已就绪。'**
+  String get deviceJoinManagementRegistered;
+
+  /// No description provided for @deviceJoinManagementWaiting.
+  ///
+  /// In zh, this message translates to:
+  /// **'根密钥发送已接受，等待新设备完成管理权限配置。'**
+  String get deviceJoinManagementWaiting;
+
+  /// No description provided for @deviceJoinManagementConfiguring.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备已加入，正在配置管理权限。可安全离开此页面。'**
+  String get deviceJoinManagementConfiguring;
+
+  /// No description provided for @deviceJoinManagementRejoinRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理权限配置已失效，请由管理设备撤销此设备，再在此设备上退出本地身份（保留数据）后重新加入。'**
+  String get deviceJoinManagementRejoinRequired;
+
+  /// No description provided for @deviceJoinManagementFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备已加入，管理权限配置失败'**
+  String get deviceJoinManagementFailed;
 }
 
 class _AppLocalizationsDelegate

@@ -26,6 +26,50 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get identityMethodLabel => '身份方法';
+
+  @override
+  String get identityWebAdminLimitation =>
+      'Web 身份不支持账号恢复、根密钥导入或管理权转移。请保管好首个管理员设备；失去该设备后无法恢复管理权限。';
+
+  @override
+  String get identityRegistrationPending => '继续未完成的注册';
+
+  @override
+  String get identityRegistrationResumeHint =>
+      '将继续原来的身份注册。请使用原联系方式；如需验证码，请重新获取。';
+
+  @override
+  String get identityServicesTitle => '身份服务';
+
+  @override
+  String get identityServicesHint => '管理此身份公开的其他服务。Handle、消息服务和个人资料仍由各自的设置管理。';
+
+  @override
+  String get identityServicesFailed => '未能完成操作。请刷新查看进度；若仍待确认，请继续原操作。';
+
+  @override
+  String get identityServicesPending => '服务更新仍待确认。继续原操作后才能提交其他更改。';
+
+  @override
+  String get identityServicesResume => '继续服务更新';
+
+  @override
+  String get identityServiceAdd => '添加服务';
+
+  @override
+  String get identityServiceId => '服务标识';
+
+  @override
+  String get identityServiceType => '服务类型';
+
+  @override
+  String get identityServiceEndpoint => '服务地址';
+
+  @override
+  String get identityServiceEdit => '编辑';
+
+  @override
   String get appTitle => 'AWikiMe';
 
   @override
@@ -1104,7 +1148,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get deviceJoinApprove => '确认并授权';
+  String get deviceJoinApprove => '允许加入并成为管理设备';
 
   @override
   String get deviceJoinCancel => '取消关联';
@@ -1128,7 +1172,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceJoinActivationRetry => '重试设备激活';
 
   @override
-  String get deviceJoinUserPresenceReason => '确认授权新设备';
+  String get deviceJoinUserPresenceReason => '允许该设备加入并成为管理设备';
 
   @override
   String get deviceJoinErrorUnavailable => '多设备功能当前未开放';
@@ -3681,4 +3725,20 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentClientWaitingConfirmation => '等待确认';
+
+  @override
+  String get deviceJoinManagementRegistered => '管理权限已登记，请在新设备确认管理能力已就绪。';
+
+  @override
+  String get deviceJoinManagementWaiting => '根密钥发送已接受，等待新设备完成管理权限配置。';
+
+  @override
+  String get deviceJoinManagementConfiguring => '设备已加入，正在配置管理权限。可安全离开此页面。';
+
+  @override
+  String get deviceJoinManagementRejoinRequired =>
+      '管理权限配置已失效，请由管理设备撤销此设备，再在此设备上退出本地身份（保留数据）后重新加入。';
+
+  @override
+  String get deviceJoinManagementFailed => '设备已加入，管理权限配置失败';
 }

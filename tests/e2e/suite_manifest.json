@@ -564,6 +564,39 @@
         "DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001"
       ]
     },
+    "did-method-web": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "requiredTools": [
+        "flutter",
+        "dart",
+        "awiki-cli"
+      ],
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 15,
+      "timeoutMinutes": 22,
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "remoteTargetPolicy": "configured_same_origin",
+      "allowedHosts": [],
+      "allowedDidDomains": [],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "device_join_session",
+        "isolated_app_state",
+        "isolated_cli_state",
+        "direct_message",
+        "did_document_service"
+      ],
+      "caseIds": [
+        "DID-WEB-APP-E2E-001"
+      ]
+    },
     "step4-revoke-mls": {
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
@@ -1257,6 +1290,7 @@
         "DEVICE-PROFILE-SYNC-E2E-001",
         "DEVICE-REGISTRY-SYNC-E2E-001",
         "DEVICE-REVOKE-E2E-001",
+        "DID-WEB-APP-E2E-001",
         "DISPLAY-NAME-E2E-001",
         "DISPLAY-NAME-E2E-002",
         "DISPLAY-NAME-E2E-004",
@@ -1318,6 +1352,7 @@
         "UNREAD-MULTI-E2E-001"
       ],
       "includes": [
+        "did-method-web",
         "smoke",
         "multi-device",
         "multi-device-remote-join",

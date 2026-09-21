@@ -1,3 +1,4 @@
+import '../identity_method_test_support.dart';
 import 'dart:async';
 
 import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
@@ -29,8 +30,44 @@ DeviceJoinProgress testJoinProgress({
 }
 
 class FakeDeviceManagementCore implements DeviceManagementCorePort {
+  bool? localManagementReadyOverride;
+  Object? localManagementReadyError;
+  @override
+  Future<bool> localManagementReady({
+    required String selector,
+    required String protocolDeviceId,
+  }) async {
+    if (localManagementReadyError != null) throw localManagementReadyError!;
+    return localManagementReadyOverride ??
+        (registry.currentDevice?.protocolDeviceId == protocolDeviceId &&
+            registry.currentDevice?.canManageDevices == true);
+  }
+
+  List<DeviceJoinManagementStatus> managementStatuses =
+      <DeviceJoinManagementStatus>[];
+  Future<List<DeviceJoinManagementStatus>> Function()? managementStatusLoader;
+  Object? managementRetryError;
+  final List<String> managementRetries = <String>[];
+  @override
+  Future<List<DeviceJoinManagementStatus>> deviceJoinManagementStatus(
+    String selector,
+  ) async => managementStatusLoader == null
+      ? managementStatuses
+      : await managementStatusLoader!();
+  @override
+  Future<void> retryDeviceJoinManagement({
+    required String selector,
+    required String joinSessionId,
+  }) async {
+    managementRetries.add(joinSessionId);
+    if (managementRetryError != null) throw managementRetryError!;
+  }
+
   String resolvedJoinDid = testDid;
-  DeviceRegistrySnapshot registry = const DeviceRegistrySnapshot(did: testDid);
+  DeviceRegistrySnapshot registry = const DeviceRegistrySnapshot(
+    methodCapabilities: wbaMethodCapabilities,
+    did: testDid,
+  );
   List<DeviceJoinRequestNotice> joinRequests =
       const <DeviceJoinRequestNotice>[];
   List<DeviceJoinProgress> localSessions = const <DeviceJoinProgress>[];
@@ -226,6 +263,7 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
     }
     if (revokeError != null) throw revokeError!;
     registry = DeviceRegistrySnapshot(
+      methodCapabilities: wbaMethodCapabilities,
       did: registry.did,
       devices: <DeviceSummary>[
         for (final device in registry.devices)
@@ -389,7 +427,10 @@ class FakeJoinDirectory implements DirectoryApplicationService {
   }
 
   @override
-  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(Iterable<String> dids, {bool force = false}) async => const <PeerDisplayProfile>[];
+  Future<List<PeerDisplayProfile>> refreshDisplayProfiles(
+    Iterable<String> dids, {
+    bool force = false,
+  }) async => const <PeerDisplayProfile>[];
 
   @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(

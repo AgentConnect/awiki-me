@@ -153,3 +153,12 @@ Before submitting, confirm that:
 - platform behavior has Smoke E2E coverage;
 - cross-App/CLI/service behavior has a reproducible E2E record; and
 - the README, screenshots, and compatibility documentation match the behavior.
+
+
+### 自动管理权限进度
+
+设备页在前台每 3 秒刷新 Registry 与本机管理就绪状态，恢复前台也重新读取。显式重试会作废此前的状态读，避免旧 failed 覆盖新进度。`root_transfer.delivery_expired` 和 `root_transfer.delivery_invalidated` 显示配置失效、撤销后重新加入提示，不再提供自动任务重试或独立发送入口；所有根密钥状态和预算仍由 Core 拥有。读取本机身份状态失败仍按现有边界拒绝管理操作，不能将身份绑定错误当作普通未就绪吞掉。
+
+管理状态轮询独立应用已成功读取的任务 phase；随后本机 identity summary 读取失败会关闭本机管理门闩并显示分类错误，不回退到旧 phase。DID/设备绑定不匹配是错误，只有匹配身份的未激活状态才返回未就绪。错误期间即使任务仍为 failed，也不能再次发起手动重试。
+
+双原生 macOS App 手工验收构建按宿主架构选择 arm64/x86_64，并拒绝 Rosetta。可用 AWIKI_MANUAL_ADMIN_BUNDLE_ID 与 AWIKI_MANUAL_JOINER_BUNDLE_ID 指定不同的隔离 Bundle ID；AWIKI_MANUAL_DEPLOYMENT_TARGET 仅覆盖本机验收配置。仍验证 Core 来源、实际链接库一致、应用架构与签名。

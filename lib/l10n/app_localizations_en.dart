@@ -28,6 +28,53 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get identityMethodLabel => 'Identity method';
+
+  @override
+  String get identityWebAdminLimitation =>
+      'Web identities do not support account recovery, root key import, or management transfer. Keep the first administrator device safe; management access cannot be recovered if it is lost.';
+
+  @override
+  String get identityRegistrationPending => 'Continue pending registration';
+
+  @override
+  String get identityRegistrationResumeHint =>
+      'Continue the same identity registration using the original contact details. Request a fresh verification code if needed.';
+
+  @override
+  String get identityServicesTitle => 'Identity services';
+
+  @override
+  String get identityServicesHint =>
+      'Manage other public services for this identity. Handle, messaging, and profile entries use their existing settings.';
+
+  @override
+  String get identityServicesFailed =>
+      'The operation could not be completed. Refresh its progress and resume the pending operation if shown.';
+
+  @override
+  String get identityServicesPending =>
+      'A service update is awaiting confirmation. Resume it before submitting further changes.';
+
+  @override
+  String get identityServicesResume => 'Resume service update';
+
+  @override
+  String get identityServiceAdd => 'Add service';
+
+  @override
+  String get identityServiceId => 'Service ID';
+
+  @override
+  String get identityServiceType => 'Service type';
+
+  @override
+  String get identityServiceEndpoint => 'Service address';
+
+  @override
+  String get identityServiceEdit => 'Edit';
+
+  @override
   String get appTitle => 'AWikiMe';
 
   @override
@@ -1160,7 +1207,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get deviceJoinApprove => 'Confirm and authorize';
+  String get deviceJoinApprove => 'Allow join and management access';
 
   @override
   String get deviceJoinCancel => 'Cancel pairing';
@@ -1185,7 +1232,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceJoinUserPresenceReason =>
-      'Confirm authorization of a new device';
+      'Allow this device to join and become a management device';
 
   @override
   String get deviceJoinErrorUnavailable =>
@@ -3944,4 +3991,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentClientWaitingConfirmation => 'Awaiting confirmation';
+
+  @override
+  String get deviceJoinManagementRegistered =>
+      'Management access registered. Confirm readiness on the new device.';
+
+  @override
+  String get deviceJoinManagementWaiting =>
+      'Root key delivery accepted. Waiting for the new device to finish setup.';
+
+  @override
+  String get deviceJoinManagementConfiguring =>
+      'Device joined. Configuring management access. You can safely leave this page.';
+
+  @override
+  String get deviceJoinManagementRejoinRequired =>
+      'Management setup is no longer valid. Have an administrator revoke this device, then sign out locally on this device while keeping its data and join again.';
+
+  @override
+  String get deviceJoinManagementFailed =>
+      'Device joined; management configuration failed';
 }

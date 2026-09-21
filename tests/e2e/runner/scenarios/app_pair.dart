@@ -19,6 +19,7 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional,
       contentSync:
           options.e2eCase == DesktopE2eCase.multiDeviceAppPairContentSync ||
+          options.e2eCase == DesktopE2eCase.didMethodWeb ||
           pagingRecovery,
     );
     if (pairConfig.functional || pagingRecovery) {
@@ -231,14 +232,48 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           if (pairConfig.functional || pagingRecovery) {
             await _cleanupAppPairMessages(coordinator.cleanupAccountIds);
           }
-          await coordinator.close();
-          if (appPairRunConfigFile.existsSync()) {
-            appPairRunConfigFile.deleteSync();
+          try {
+            if (options.e2eCase == DesktopE2eCase.didMethodWeb) {
+              final ledger = File(
+                '${reportDir.parent.path}/web_resources.private.json',
+              );
+              await ledger.create();
+              final permission = await Process.run('chmod', [
+                '600',
+                ledger.path,
+              ]);
+              if (permission.exitCode != 0) {
+                throw E2eFailure('Web cleanup ledger permissions failed.');
+              }
+              await ledger.writeAsString(
+                jsonEncode({
+                  'schemaVersion': 1,
+                  'runId': runId,
+                  'didDomain': pairConfig.didDomain,
+                  'status': 'remote_resources_pending_exact_cleanup',
+                  'localRootsRetained': !appPairCompleted,
+                  ...coordinator.webCleanupLedger,
+                }),
+                flush: true,
+              );
+            }
+          } finally {
+            await coordinator.close();
+            if (appPairRunConfigFile.existsSync()) {
+              appPairRunConfigFile.deleteSync();
+            }
           }
-          await _deleteDirectoryBestEffort(appPairAdminStateRootDir);
-          await _deleteDirectoryBestEffort(appPairJoinerStateRootDir);
+          // A failed Web publication may still own a pending candidate key.
+          // Preserve both roots for explicit result inspection and cleanup.
+          if (options.e2eCase != DesktopE2eCase.didMethodWeb ||
+              appPairCompleted) {
+            await _deleteDirectoryBestEffort(appPairAdminStateRootDir);
+            await _deleteDirectoryBestEffort(appPairJoinerStateRootDir);
+          }
           await _deleteDirectoryBestEffort(appPairDaemonStateRootDir);
-          if (pairConfig.functional || pairConfig.contentSync) {
+          if ((pairConfig.functional || pairConfig.contentSync) &&
+              (options.e2eCase != DesktopE2eCase.didMethodWeb ||
+                  appPairCompleted)) {
             await _deleteDirectoryBestEffort(cliWorkspaceDir);
             await _deleteDirectoryBestEffort(cliHomeDir);
           }
