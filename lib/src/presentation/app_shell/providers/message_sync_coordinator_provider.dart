@@ -1807,8 +1807,9 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     }
     // Text Notify has one native presenter for both foreground and background.
     if (defaultTargetPlatform == TargetPlatform.android &&
-        message.notifyLevel != null)
+        message.notifyLevel != null) {
       return;
+    }
     final conversationId = message.conversationId?.trim() ?? '';
     if (conversationId.isNotEmpty) {
       try {

@@ -424,3 +424,17 @@ One short foreground service owns the call-like heads-up/full-screen UI and soun
 Message Service only carries the marker through existing storage/projection and provider transport. Its existing retries may redeliver; no new delivery ledger or User Service authorization endpoint is required. New App support is required for Notify MESSAGE presentation; older clients can read the text but are not guaranteed a Notify system alert. Ordinary unmarked chat NOTICE behavior remains unchanged.
 
 No offline provider queue is enabled for Notify. The server expiry stays 120 seconds. Native acceptance allows at most 30 additional seconds in the future to tolerate a lagging device clock; an expiry at or before device now is always rejected, and duplicate receipts still last 24 hours. This is bounded clock tolerance, not a renewal of the service expiry or the 60-second cue deadline. Full task-to-phone E2E and real-device upgrade/multi-message acceptance remain separate gates. The Debug probe is not the product path. Development changes do not authorize release or deployment.
+
+
+### Notify development source CI
+
+`Notify source validation` reads the committed `dependencies.source.json`, checks
+its closed repository/PR identity and exact SHA, and checks out that candidate's
+Dart wrapper. It runs App analysis, focused Notify/routing/settings tests and
+native Android tests without provider credentials or a phone. The Flutter lock
+is enforced. This gives the development PR a reproducible source lane without
+changing shared repository variables or the existing registry/native release
+checks. It does not build/publish a distributable SDK and does not attest phone
+sound, vibration or real transport. Rust source compilation remains the exact
+source integration gate in CLI PR #43; the existing App registry CI is reported
+separately until its formal wrapper/SDK inputs are coordinated.

@@ -111,8 +111,9 @@ class _ChatInformationPageState extends ConsumerState<_ChatInformationPage> {
       } else {
         await saveCanonical();
       }
-      if (!epoch.matches(ref.read(sessionProvider)))
+      if (!epoch.matches(ref.read(sessionProvider))) {
         throw sessionEpochChangedError();
+      }
       await ref.read(conversationListProvider.notifier).refreshFastLocal();
     } catch (error) {
       if (!mounted || !epoch.matches(ref.read(sessionProvider))) {
