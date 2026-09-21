@@ -6916,6 +6916,12 @@ abstract class AppLocalizations {
   /// **'此账号注册需要邀请码，请填写后继续。'**
   String get onboardingInviteRequired;
 
+  /// No description provided for @onboardingInviteInvalidBeforeContact.
+  ///
+  /// In zh, this message translates to:
+  /// **'邀请码无效、已过期或已用完，请检查后重试。'**
+  String get onboardingInviteInvalidBeforeContact;
+
   /// No description provided for @onboardingInviteInvalid.
   ///
   /// In zh, this message translates to:

@@ -1640,6 +1640,7 @@
   "onboardingAccountNext": "Next",
   "onboardingInviteCode": "Invite code",
   "onboardingInviteRequired": "An invite code is required to register this handle.",
+  "onboardingInviteInvalidBeforeContact": "This invitation code is invalid, expired, or exhausted. Please check and try again.",
   "onboardingInviteInvalid": "The invite code is invalid, expired, exhausted, or does not match this phone. Check it and retry.",
   "onboardingAccountUnavailable": "This handle cannot be registered. Choose another handle.",
   "onboardingAccountCheckFailed": "Unable to check the handle. Retry, or continue with an existing account.",

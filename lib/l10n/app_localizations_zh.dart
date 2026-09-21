@@ -3687,6 +3687,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingInviteRequired => '此账号注册需要邀请码，请填写后继续。';
 
   @override
+  String get onboardingInviteInvalidBeforeContact => '邀请码无效、已过期或已用完，请检查后重试。';
+
+  @override
   String get onboardingInviteInvalid => '邀请码无效、已过期、已用完或与手机号不匹配，请检查后重试。';
 
   @override

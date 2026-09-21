@@ -31,7 +31,10 @@ class RegistrationEntryForm extends ConsumerWidget {
     final error = switch (state.error) {
       null => null,
       'invite_required' => l10n.onboardingInviteRequired,
-      'invite_invalid' => l10n.onboardingInviteInvalid,
+      'invite_invalid' =>
+        state.step == RegistrationEntryStep.invite
+            ? l10n.onboardingInviteInvalidBeforeContact
+            : l10n.onboardingInviteInvalid,
       'registration_closed' => l10n.onboardingRegistrationClosed,
       'check_failed' => l10n.onboardingAccountCheckFailed,
       _ => l10n.onboardingAccountUnavailable,

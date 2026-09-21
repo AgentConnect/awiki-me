@@ -3946,6 +3946,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'An invite code is required to register this handle.';
 
   @override
+  String get onboardingInviteInvalidBeforeContact =>
+      'This invitation code is invalid, expired, or exhausted. Please check and try again.';
+
+  @override
   String get onboardingInviteInvalid =>
       'The invite code is invalid, expired, exhausted, or does not match this phone. Check it and retry.';
 

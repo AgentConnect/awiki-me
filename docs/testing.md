@@ -154,8 +154,9 @@ and native build checks while excluding `remote-product`, so it does not use
 remote account/OTP scenarios. Scheduled runs and ordinary manual product runs
 retain their existing behavior. Record the explicit ref; do not treat a run
 against the repository's older default ref as evidence for the new baseline.
-PRs targeting `release/0910` pin Core source
-`527146e3d74437bb3b74f064b50def8d22f4b7e0` in both native lanes, including
+The registration feature PR targeting `release/0910` pins Core consumer
+`b2d2f719dcf0e283f3e69aa3f6659a320343ef0f`, whose source manifest pins SDK
+`4023161ea76a39f80da67512345eafafb12b0e6a` in both native lanes, including
 the optional CA configuration bridge and iOS keyring build support. Explicit manual refs still
 take precedence; other target branches retain repository-managed defaults.
 
@@ -1488,7 +1489,7 @@ Do not compile phone numbers, OTPs, invitation codes or fixture JSON into the Ap
 
 ### 注册开发分支的 source CI
 
-仅 Feature/registration-account-first → release/0910 的 PR CI 自动选择 AWIKI_SOURCE_INTEGRATION=1，固定 Core consumer d51ca16ff697751d04810c417bef5048d6a08e53；其 source manifest 固定 SDK 527146e3d74437bb3b74f064b50def8d22f4b7e0，使用配套提交锁。手动验证可选 sdk_dependencies=source/registry，默认 source；validation_only=true 保持禁止远端账号/OTP job。正式 package workflow 不变，开发不提前发布 SDK。
+仅 Feature/registration-account-first → release/0910 的 PR CI 自动选择 AWIKI_SOURCE_INTEGRATION=1，固定 Core consumer b2d2f719dcf0e283f3e69aa3f6659a320343ef0f；其 source manifest 固定 SDK 4023161ea76a39f80da67512345eafafb12b0e6a，使用配套提交锁。手动验证可选 sdk_dependencies=source/registry，默认 source；validation_only=true 保持禁止远端账号/OTP job。正式 package workflow 不变，开发不提前发布 SDK。
 
 Linux Core/CLI、原生 guard rebuild 和 Windows Rust host test/native build 复用隔离 source builder；读取 .artifacts/dependencies/source/target，不混入 registry 的 target。Linux 来源摘要覆盖模式、source manifest/lock 和构建脚本，切换输入使旧 provenance 失效。Windows 保留 PE x64/FRB 实际 DLL 校验。私有合同源读取仍使用现有最小权限 token，403 不以跳过测试代替。
 
@@ -1500,3 +1501,9 @@ Linux Core/CLI、原生 guard rebuild 和 Windows Rust host test/native build �
 独立的 `cross-repository-contracts` job 使用同一 coordinator 的 `--profile pr --component system`，保留原 PR profile 的全部 System contract/acp-contract 用例以及精确源码 pin。两个 job 没有 `needs` 依赖，也不使用 `continue-on-error`；Web 403 仅使跨仓 job 失败，App 验证继续并单独报告。完整 CI 通过仍要求两边通过，不能用 App 通过替代跨仓契约通过。源码集成模式与正式发布边界不变。
 
 源码模式的自动选择和临时 Core pin 同时限定 base/head，其他功能 PR 使用仓库变量与 registry 默认。workflow_dispatch 仍可显式选 source，需提供精确 cli_ref。push 触发器目前仅 main；schedule 使用 registry 默认。合入 release/0910 不会将临时 source pin 扩展到该发布线的其他 PR。
+
+Invitation follow-up coverage: `registration_entry_widget_test.dart` checks mobile
+and desktop invitation rejection before contact entry, then bound-invitation rejection
+for a different phone and for email without invoking either delivery API. Matching
+phone and unbound email success remain covered. Pre-contact errors do not mention
+a phone mismatch; the contact step retains binding-specific errors.

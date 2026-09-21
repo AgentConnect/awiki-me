@@ -1640,6 +1640,7 @@
   "onboardingAccountNext": "下一步",
   "onboardingInviteCode": "邀请码",
   "onboardingInviteRequired": "此账号注册需要邀请码，请填写后继续。",
+  "onboardingInviteInvalidBeforeContact": "邀请码无效、已过期或已用完，请检查后重试。",
   "onboardingInviteInvalid": "邀请码无效、已过期、已用完或与手机号不匹配，请检查后重试。",
   "onboardingAccountUnavailable": "此账号无法注册，请修改账号后重试。",
   "onboardingAccountCheckFailed": "暂时无法检查账号，请重试。已有账号可继续登录。",

@@ -15,6 +15,7 @@ class InviteSupport extends FakeOnboardingSupportService {
   String? lastEmail;
   String decision = 'register';
   bool fail = false;
+  String? boundPhone;
 
   @override
   Future<RegistrationCheck> checkRegistration({
@@ -30,6 +31,11 @@ class InviteSupport extends FakeOnboardingSupportService {
     lastInvite = inviteCode;
     lastEmail = email;
     final required = decision == 'register';
+    final valid =
+        inviteCode == 'fixture-valid' &&
+        (boundPhone == null ||
+            (phone == null && email == null) ||
+            phone == boundPhone);
     return RegistrationCheck(
       fullHandle: '$handle.$domain',
       decision: decision,
@@ -38,12 +44,10 @@ class InviteSupport extends FakeOnboardingSupportService {
           ? 'not_required'
           : !checkInvite
           ? 'required'
-          : inviteCode == 'fixture-valid'
+          : valid
           ? 'valid'
           : 'invalid',
-      reason: checkInvite && required && inviteCode != 'fixture-valid'
-          ? 'invite_invalid'
-          : null,
+      reason: checkInvite && required && !valid ? 'invite_invalid' : null,
     );
   }
 }
@@ -107,9 +111,10 @@ void main() {
           await tester.enterText(field('e2e-invite-input'), 'wrong');
           await tapVisible(tester, find.text('下一步'));
           expect(field('e2e-invite-input'), findsOneWidget);
-          expect(find.textContaining('邀请码无效'), findsOneWidget);
+          expect(find.text('邀请码无效、已过期或已用完，请检查后重试。'), findsOneWidget);
           expect(gateway.sendOtpCalls, 0);
           expect(gateway.sendEmailVerificationCalls, 0);
+          support.boundPhone = '13800138000';
           await tester.enterText(field('e2e-invite-input'), 'fixture-valid');
           await tapVisible(tester, find.text('下一步'));
           // Desktop retains its existing outlined fields; semantics select the
@@ -125,6 +130,21 @@ void main() {
             email ? 'fixture@example.com' : '13800138000',
           );
           final sendLabel = email ? '发送激活邮件' : '发送验证码';
+          // Bound invitations pass the contact-free step but must reject a
+          // different phone or email before either delivery API is invoked.
+          if (!email) {
+            await tester.enterText(fields.at(0), '13900139000');
+          }
+          await tapVisible(tester, find.text(sendLabel));
+          expect(gateway.sendOtpCalls, 0);
+          expect(gateway.sendEmailVerificationCalls, 0);
+          expect(find.textContaining('邀请码无效'), findsOneWidget);
+          if (email) {
+            // The existing unbound email success path remains covered below.
+            support.boundPhone = null;
+          } else {
+            await tester.enterText(fields.at(0), '13800138000');
+          }
           await tapVisible(tester, find.text(sendLabel));
           expect(support.lastInvite, 'fixture-valid');
           if (email) {
