@@ -103,7 +103,7 @@ class _ChatInformationPageState extends ConsumerState<_ChatInformationPage> {
           !widget.conversation.isGroup &&
           defaultTargetPlatform == TargetPlatform.android) {
         try {
-          await syncNotifyConversationMute(ref, widget.target.targetDid, muted);
+          await saveLocalNotifyConversationMute(ref, widget.target.targetDid, muted);
         } catch (error) {
           if (mounted && epoch.matches(ref.read(sessionProvider))) {
             ref

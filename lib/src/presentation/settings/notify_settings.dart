@@ -1,32 +1,24 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../app/app_services.dart';
-import '../../application/auth/auth_session_coordinator.dart';
-import '../../application/models/app_session.dart';
-import '../../application/ports/notify_preference_port.dart';
 import '../../application/remote_push_message_reference.dart';
-import '../../data/push/user_service_notify_preference_adapter.dart';
-import '../../data/services/authenticated_user_service_rpc_client.dart';
-import '../../data/services/awiki_onboarding_utility_client.dart';
 import '../app_shell/providers/session_provider.dart';
 
-final notifyPreferencePortProvider = Provider<NotifyPreferencePort>((ref) {
-  final environment = ref.watch(awikiEnvironmentConfigProvider);
-  return UserServiceNotifyPreferenceAdapter(
-    AuthenticatedUserServiceRpcClient(
-      client: AwikiOnboardingUtilityHttpClient(
-        baseUrl: environment.userServiceUrl,
-      ),
-      sessions: AuthSessionCoordinator(
-        sessions: ref.watch(appSessionServiceProvider),
-        onSessionUpdated: (session) => ref
-            .read(sessionProvider.notifier)
-            .setSession(session.toLegacySessionIdentity()),
-      ),
-    ),
-  );
-});
+// Device-local, account-scoped settings. No User Service RPC or installation schema changes.
+class NotifyPreference {
+  const NotifyPreference({required this.enabled, required this.urgentEnabled});
+  final bool enabled;
+  final bool urgentEnabled;
+  factory NotifyPreference.fromJson(Map<String, Object?> value) {
+    if (value['enabled'] is! bool || value['urgent_enabled'] is! bool) {
+      throw const FormatException('Invalid local Notify preference');
+    }
+    return NotifyPreference(
+      enabled: value['enabled'] as bool,
+      urgentEnabled: value['urgent_enabled'] as bool,
+    );
+  }
+}
 
 class NotifySettingsPage extends StatelessWidget {
   const NotifySettingsPage({super.key});
@@ -55,125 +47,79 @@ class _NotifySettingsState extends ConsumerState<NotifySettings> {
     Future.microtask(load);
   }
 
-  Future<NotifyPreference> syncNative(
-    NotifyPreference v,
-    String owner, {
-    bool localDisable = false,
-    bool explicitSave = false,
-  }) async {
-    try {
-      final applied = await channel.invokeMethod<bool>('configureTextNotify', {
-        ...v.json,
-        'local_disable': localDisable,
-        'explicit_save': explicitSave,
-        'target': remotePushOpaqueTargetReference(owner),
-        'muted_identities': v.mutedPeerDids
-            .map(remotePushOpaqueIdentityReference)
-            .toList(),
-      });
-      if (applied != true) {
-        throw StateError('notify_native_preference_not_applied');
-      }
-      final effective = await channel.invokeMapMethod<String, Object?>(
-        'getTextNotifyPreferenceState',
-        remotePushOpaqueTargetReference(owner),
-      );
-      if (effective == null) {
-        throw StateError('notify_native_preference_unavailable');
-      }
-      return NotifyPreference.fromJson({
-        ...effective,
-        'muted_peer_dids': v.mutedPeerDids,
-      });
-    } on MissingPluginException {
-      return v; // non-Android test host
-    }
-  }
-
   Future<void> load() async {
     final epoch = ref.read(sessionProvider).activeEpoch;
     final id = ++request;
-    if (epoch == null) return;
+    if (epoch == null) {
+      if (mounted) {
+        setState(() {
+          busy = false;
+          value = null;
+        });
+      }
+      return;
+    }
     setState(() {
       busy = true;
       error = null;
     });
     try {
-      final next = await ref.read(notifyPreferencePortProvider).load();
+      final values = await channel
+          .invokeMapMethod<String, Object?>(
+            'getTextNotifyPreferenceState',
+            remotePushOpaqueTargetReference(epoch.ownerDid),
+          )
+          .timeout(const Duration(seconds: 3));
       if (!mounted ||
           id != request ||
           ref.read(sessionProvider).activeEpoch != epoch) {
         return;
       }
-      final effective = await syncNative(next, epoch.ownerDid);
-      if (mounted && id == request) {
-        setState(() {
-          value = effective;
-          busy = false;
-        });
-      }
+      if (values == null) throw StateError('notify_local_scope_unavailable');
+      final next = NotifyPreference.fromJson(values);
+      setState(() {
+        value = next;
+        busy = false;
+      });
     } on Object {
       if (mounted && id == request) {
         setState(() {
           busy = false;
-          error = '暂时无法读取通知设置，请重试。';
+          error = '无法读取本机通知设置，请重试。';
         });
       }
     }
   }
 
   Future<void> save({required bool enabled, required bool urgent}) async {
-    final previous = value;
     final epoch = ref.read(sessionProvider).activeEpoch;
-    if (previous == null || epoch == null || busy) return;
+    if (value == null || epoch == null || busy) return;
     final id = ++request;
     setState(() {
       busy = true;
       error = null;
     });
-    var locallyDisabled = false;
     try {
-      // Disable sound locally immediately; a server outage must not keep this phone ringing.
-      if (!enabled || !urgent) {
-        final local = await syncNative(
-          NotifyPreference(
-            enabled: enabled,
-            urgentEnabled: urgent,
-            version: previous.version,
-            mutedPeerDids: previous.mutedPeerDids,
-          ),
-          epoch.ownerDid,
-          localDisable: true,
-        );
-        locallyDisabled = true;
-        if (mounted && id == request) {
-          setState(() {
-            value = local;
-          });
-        }
-      }
-      final next = await ref
-          .read(notifyPreferencePortProvider)
-          .save(previous, enabled: enabled, urgentEnabled: urgent);
+      final applied = await channel.invokeMethod<bool>('configureTextNotify', {
+        'target': remotePushOpaqueTargetReference(epoch.ownerDid),
+        'enabled': enabled,
+        'urgent_enabled': urgent,
+      });
       if (!mounted ||
           id != request ||
           ref.read(sessionProvider).activeEpoch != epoch) {
         return;
       }
-      await syncNative(next, epoch.ownerDid, explicitSave: true);
-      if (mounted && id == request) {
-        setState(() {
-          value = next;
-          busy = false;
-        });
-      }
+      if (applied != true) throw StateError('notify_local_write_failed');
+      setState(() {
+        value = NotifyPreference(enabled: enabled, urgentEnabled: urgent);
+        busy = false;
+      });
     } on Object {
       if (mounted && id == request) {
         setState(() {
           busy = false;
-          error = locallyDisabled
-              ? '设置未同步，本机已停止提醒。请重新加载后重试。'
-              : '设置未同步，请重新加载后重试。';
+          error = '本机通知设置未保存，请重试。';
         });
       }
     }
@@ -193,7 +139,7 @@ class _NotifySettingsState extends ConsumerState<NotifySettings> {
       children: [
         CupertinoListTile(
           title: const Text('允许任务通知'),
-          subtitle: const Text('接收我的 Skill Agent 发来的任务结果'),
+          subtitle: const Text('仅控制当前账号在这台手机上的任务提醒'),
           trailing: CupertinoSwitch(
             value: value?.enabled ?? false,
             onChanged: busy || value == null
@@ -203,7 +149,7 @@ class _NotifySettingsState extends ConsumerState<NotifySettings> {
         ),
         CupertinoListTile(
           title: const Text('紧急提醒'),
-          subtitle: const Text('自动弹出，持续响铃和振动，最长 60 秒'),
+          subtitle: const Text('允许收到的紧急任务消息持续提醒，最长 60 秒'),
           trailing: CupertinoSwitch(
             value: value?.urgentEnabled ?? false,
             onChanged: busy || value?.enabled != true
@@ -220,7 +166,7 @@ class _NotifySettingsState extends ConsumerState<NotifySettings> {
         ),
         if (busy)
           const CupertinoListTile(
-            title: Text('正在同步通知设置…'),
+            title: Text('正在读取本机设置…'),
             trailing: CupertinoActivityIndicator(),
           ),
         if (error != null)
@@ -233,7 +179,7 @@ class _NotifySettingsState extends ConsumerState<NotifySettings> {
   }
 }
 
-Future<void> syncNotifyConversationMute(
+Future<void> saveLocalNotifyConversationMute(
   WidgetRef ref,
   String peer,
   bool muted,
@@ -246,32 +192,9 @@ Future<void> syncNotifyConversationMute(
     'identity': remotePushOpaqueIdentityReference(peer),
     'muted': muted,
   };
-  // Local mute is immediate. Unmute waits for server confirmation.
-  if (muted) {
-    await channel.invokeMethod<bool>('muteTextNotifyConversation', args);
-  }
-  final port = ref.read(notifyPreferencePortProvider);
-  final previous = await port.load();
-  if (ref.read(sessionProvider).activeEpoch != epoch) return;
-  final peers = previous.mutedPeerDids.toSet();
-  if (muted) {
-    peers.add(peer);
-  } else {
-    peers.remove(peer);
-  }
-  final next = await port.save(
-    previous,
-    enabled: previous.enabled,
-    urgentEnabled: previous.urgentEnabled,
-    mutedPeerDids: peers.toList(),
+  final applied = await channel.invokeMethod<bool>(
+    'muteTextNotifyConversation',
+    args,
   );
-  if (ref.read(sessionProvider).activeEpoch != epoch) return;
-  await channel.invokeMethod<bool>('configureTextNotify', {
-    ...next.json,
-    'target': args['target'],
-    'muted_identities': next.mutedPeerDids
-        .map(remotePushOpaqueIdentityReference)
-        .toList(),
-  });
-  await channel.invokeMethod<bool>('muteTextNotifyConversation', args);
+  if (applied != true) throw StateError('notify_local_mute_not_saved');
 }

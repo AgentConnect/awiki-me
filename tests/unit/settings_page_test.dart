@@ -20,6 +20,7 @@ import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,6 +29,21 @@ import 'app_update_provider_test.dart' show buildManifest;
 import 'test_support.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const notifyChannel = MethodChannel('ai.awiki.awikime/remote_push_events');
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(notifyChannel, (call) async {
+          if (call.method == 'getTextNotifyPreferenceState') {
+            return {'enabled': true, 'urgent_enabled': false};
+          }
+          return null;
+        });
+  });
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(notifyChannel, null);
+  });
   testWidgets(
     'desktop display settings remain usable at the minimum compact width',
     (tester) async {

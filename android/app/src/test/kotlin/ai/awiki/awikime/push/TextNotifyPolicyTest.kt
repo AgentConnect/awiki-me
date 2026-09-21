@@ -6,9 +6,8 @@ class TextNotifyPolicyTest {
     private val target = "target_abcdefghijklmnopqrstuvwx"
     private val message = "message_abcdefghijklmnopqrstuvwx"
     private fun accepts(now: Long = 1000, expiry: Long = 1120, mid: String = message,
-        to: String = target, active: String? = target, level: String = "urgent", enabled: Boolean = true,
-        urgent: Boolean = true, version: Long = 7, local: Long = 7) =
-        TextNotifyPolicy.accepts(now,expiry,mid,to,active,level,enabled,urgent,version,local)
+        to: String = target, active: String? = target, level: String = "urgent", enabled: Boolean = true) =
+        TextNotifyPolicy.accepts(now,expiry,mid,to,active,level,enabled)
     @Test fun retainedMessageNavigationChecksIdentityAndExpiryIndependentlyOfConsent() {
         assertTrue(TextNotifyPolicy.canOpen(1000, 2000, target, target))
         assertFalse(TextNotifyPolicy.canOpen(1000, 1000, target, target))
@@ -20,10 +19,14 @@ class TextNotifyPolicyTest {
     @Test fun logoutAccountChangeAndMalformedIdentityCannotStart() {
         assertFalse(accepts(active=null)); assertFalse(accepts(active="target_zyxwvutsrqponmlkjihgfedc")); assertFalse(accepts(mid="bad"))
     }
-    @Test fun masterOffUrgentOffAndUnknownVersionFailClosed() {
-        assertFalse(accepts(enabled=false)); assertFalse(accepts(urgent=false)); assertFalse(accepts(local=-1)); assertFalse(accepts(version=6)); assertFalse(accepts(version=8))
+    @Test fun masterOffRejectsEveryNotifyLevel() {
+        assertFalse(accepts(enabled=false)); assertFalse(accepts(level="normal", enabled=false))
     }
-    @Test fun normalIsAllowedWithoutUrgentConsentAndUnknownLevelsAreRejected() {
-        assertTrue(accepts(level="normal", urgent=false)); assertFalse(accepts(level="call"))
+    @Test fun urgentOffFallsBackToNormalPresentationAndUnknownLevelsAreRejected() {
+        assertTrue(accepts(level="urgent"))
+        assertFalse(TextNotifyPolicy.continuous("urgent", false))
+        assertTrue(TextNotifyPolicy.continuous("urgent", true))
+        assertFalse(TextNotifyPolicy.continuous("normal", true))
+        assertFalse(accepts(level="call"))
     }
 }

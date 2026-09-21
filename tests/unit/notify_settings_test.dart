@@ -1,4 +1,3 @@
-import 'package:awiki_me/src/application/ports/notify_preference_port.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/settings/notify_settings.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
@@ -8,36 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
-class _Preferences implements NotifyPreferencePort {
-  NotifyPreference value = const NotifyPreference(
-    enabled: true,
-    urgentEnabled: false,
-    version: 0,
-  );
-  bool fail = false;
-  @override
-  Future<NotifyPreference> load() async => value;
-  @override
-  Future<NotifyPreference> save(
-    NotifyPreference previous, {
-    required bool enabled,
-    required bool urgentEnabled,
-    List<String>? mutedPeerDids,
-  }) async {
-    if (fail) throw StateError('offline');
-    expect(previous.version, value.version);
-    return value = NotifyPreference(
-      enabled: enabled,
-      urgentEnabled: urgentEnabled,
-      version: value.version + 1,
-      mutedPeerDids: mutedPeerDids ?? previous.mutedPeerDids,
-    );
-  }
-}
-
 void main() {
   testWidgets(
-    'compact Android settings opens Notify and disables locally before a failed save',
+    'Android Notify settings save and reopen locally without a server, and report write failure',
     (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       addTearDown(() => debugDefaultTargetPlatformOverride = null);
@@ -46,18 +18,29 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       const channel = MethodChannel('ai.awiki.awikime/remote_push_events');
-      final nativeCalls = <Map<Object?, Object?>>[];
+      final local = <String, Object?>{'enabled': true, 'urgent_enabled': false};
+      final writes = <Map<Object?, Object?>>[];
+      bool fail = false;
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
         call,
       ) async {
-        if (call.method == 'configureTextNotify')
-          nativeCalls.add(call.arguments as Map);
-        if (call.method == 'getTextNotifyPreferenceState')
-          return {
-            for (final k in ['enabled', 'urgent_enabled', 'version'])
-              k: nativeCalls.last[k],
-          };
-        return true;
+        switch (call.method) {
+          case 'getTextNotifyPreferenceState':
+            expect(call.arguments, startsWith('target_'));
+            return local;
+          case 'configureTextNotify':
+            final args = call.arguments as Map;
+            expect(args.keys.toSet(), {'target', 'enabled', 'urgent_enabled'});
+            writes.add(args);
+            if (fail) return false;
+            local['enabled'] = args['enabled'];
+            local['urgent_enabled'] = args['urgent_enabled'];
+            return true;
+          default:
+            throw StateError(
+              'Unexpected external or native call: ${call.method}',
+            );
+        }
       });
       addTearDown(
         () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -65,7 +48,6 @@ void main() {
           null,
         ),
       );
-      final preferences = _Preferences();
       await tester.pumpWidget(
         buildLocalizedTestApp(
           home: const SettingsPage(),
@@ -74,9 +56,6 @@ void main() {
             credentialName: 'notify-settings',
             displayName: 'Notify',
           ),
-          providerOverrides: [
-            notifyPreferencePortProvider.overrideWithValue(preferences),
-          ],
         ),
       );
       await tester.pumpAndSettle();
@@ -90,18 +69,32 @@ void main() {
       );
       await tester.tap(find.byType(CupertinoSwitch).last);
       await tester.pumpAndSettle();
-      expect(preferences.value.urgentEnabled, true);
-      expect(nativeCalls.last['explicit_save'], true);
-      preferences.fail = true;
+      expect(local['urgent_enabled'], true);
       await tester.tap(find.byType(CupertinoSwitch).first);
       await tester.pumpAndSettle();
-      expect(nativeCalls.last['enabled'], false);
-      expect(nativeCalls.last['local_disable'], true);
-      expect(find.text('设置未同步，本机已停止提醒。请重新加载后重试。'), findsOneWidget);
+      expect(local['enabled'], false);
       expect(
-        preferences.value.enabled,
-        true,
-      ); // failed server write is never reported as saved
+        tester
+            .widget<CupertinoSwitch>(find.byType(CupertinoSwitch).last)
+            .onChanged,
+        null,
+      );
+      Navigator.of(tester.element(find.byType(NotifySettings))).pop();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('settings-notify-row')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<CupertinoSwitch>(find.byType(CupertinoSwitch).first)
+            .value,
+        false,
+      );
+      fail = true;
+      await tester.tap(find.byType(CupertinoSwitch).first);
+      await tester.pumpAndSettle();
+      expect(find.text('本机通知设置未保存，请重试。'), findsOneWidget);
+      expect(local['enabled'], false);
+      expect(writes.length, 3);
       expect(tester.takeException(), isNull);
       debugDefaultTargetPlatformOverride = null;
     },

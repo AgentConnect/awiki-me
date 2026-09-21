@@ -9,67 +9,48 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import org.json.JSONObject
 
-/** The only presenter for User Service-authorized text Notify provider envelopes. */
+/** Single presenter for typed Notify intent; consent is device-local and account-scoped. */
 internal object TextNotifyPresentation {
     const val ID = 924042
     var activeToken: String? = null
     var deadlineMillis: Long = 0
     var activePayload: String? = null
-    private const val PREFS = "text_notify_v1"
+    private const val BINDING = "text_notify_local_binding_v1"
     private val main = Handler(Looper.getMainLooper())
-    private fun prefs(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun binding(c: Context) = c.getSharedPreferences(BINDING, Context.MODE_PRIVATE)
+    private fun target(c: Context) = binding(c).getString("target", null)
+    private fun prefs(c: Context) = c.getSharedPreferences("text_notify_local_v1_" + (target(c) ?: "signed_out"), Context.MODE_PRIVATE)
 
     @Synchronized fun setTarget(c: Context, target: String?) {
-        val p = prefs(c)
-        if (p.getString("target", null) == target) return
-        p.edit().putString("target", target).putBoolean("enabled", false)
-            .putBoolean("urgent", false).putLong("version", -1).remove("local_mutes").remove("server_mutes").remove("block_all").remove("block_urgent").commit()
+        if (target(c) == target) return
         stop(c)
+        binding(c).edit().putString("target", target).commit()
         NotificationManagerCompat.from(c).cancel(ID)
     }
 
     @Synchronized fun configure(c: Context, values: Map<*, *>): Boolean {
-        val p = prefs(c)
-        if (values["target"] != p.getString("target", null)) return false
+        if (target(c) == null || values["target"] != target(c)) return false
         val enabled = values["enabled"] as? Boolean ?: return false
         val urgent = values["urgent_enabled"] as? Boolean ?: return false
-        val version = (values["version"] as? Number)?.toLong() ?: return false
-        if (version < 0 || version < p.getLong("version", -1)) return false
-        val muted = (values["muted_identities"] as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet()
-        val editor = p.edit()
-        if (values["local_disable"] == true) {
-            if (!enabled) editor.putBoolean("block_all", true)
-            if (!urgent) editor.putBoolean("block_urgent", true)
-        }
-        if (values["explicit_save"] == true) {
-            editor.putBoolean("block_all", !enabled).putBoolean("block_urgent", !urgent)
-        }
-        val saved = editor.putStringSet("server_mutes", muted).putBoolean("enabled", enabled).putBoolean("urgent", urgent)
-            .putLong("version", version).commit()
-        if (!enabled || !urgent || activePayload?.let { !allows(c, it, true) } == true) stop(c)
+        val saved = prefs(c).edit().putBoolean("enabled", enabled).putBoolean("urgent", urgent).commit()
+        if (!enabled || !urgent) stop(c)
         if (!enabled) NotificationManagerCompat.from(c).cancel(ID)
         return saved
     }
 
-    fun effectiveSettings(c: Context, target: String?): Map<String, Any>? {
+    fun effectiveSettings(c: Context, requestedTarget: String?): Map<String, Any>? {
+        if (requestedTarget == null || requestedTarget != target(c)) return null
         val p = prefs(c)
-        if (target == null || target != p.getString("target", null)) return null
-        return mapOf("enabled" to (p.getBoolean("enabled", false) && !p.getBoolean("block_all", false)),
-            "urgent_enabled" to (p.getBoolean("urgent", false) && !p.getBoolean("block_urgent", false)),
-            "version" to p.getLong("version", -1))
+        return mapOf("enabled" to p.getBoolean("enabled", true), "urgent_enabled" to p.getBoolean("urgent", false))
     }
 
     fun allows(c: Context, raw: String, urgent: Boolean): Boolean {
         val envelope = runCatching { JSONObject(raw).getJSONObject("extraMap") }.getOrNull() ?: return false
-        val notify = envelope.optJSONObject("notify") ?: return false
         val p = prefs(c)
         val identity = envelope.optString("ir")
-        if (identity in (p.getStringSet("local_mutes", emptySet()) ?: emptySet()) ||
-            identity in (p.getStringSet("server_mutes", emptySet()) ?: emptySet())) return false
-        return envelope.optString("ts") == p.getString("target", null) &&
-            p.getBoolean("enabled", false) && !p.getBoolean("block_all", false) &&
-            (!urgent || (p.getBoolean("urgent", false) && !p.getBoolean("block_urgent", false))) &&
-            notify.optLong("preference_version", -2) == p.getLong("version", -1)
+        if (identity in (p.getStringSet("local_mutes", emptySet()) ?: emptySet())) return false
+        return target(c) != null && envelope.optString("ts") == target(c) &&
+            p.getBoolean("enabled", true) && (!urgent || p.getBoolean("urgent", false))
     }
 
     /** Only called by the non-exported EMAS receiver; arbitrary intents have no entrypoint. */
@@ -86,10 +67,8 @@ internal object TextNotifyPresentation {
         if (extra.optInt("v") != 1 || extra.optString("ty") != "direct_message" ||
             notify.optInt("v") != 1 || level !in setOf("normal", "urgent") ||
             !TextNotifyPolicy.accepts(now, expiry, extra.optString("mid"), extra.optString("ts"),
-                policyPrefs.getString("target", null), level, policyPrefs.getBoolean("enabled", false),
-                policyPrefs.getBoolean("urgent", false), notify.optLong("preference_version", -2),
-                policyPrefs.getLong("version", -1)) ||
-            !allows(c, body, level == "urgent")) return true
+                target(c), level, policyPrefs.getBoolean("enabled", true)) ||
+            !allows(c, body, urgent = false)) return true
         val token = extra.optString("ts") + ":" + extra.optString("mid")
         val p = prefs(c)
         val receipts = runCatching { JSONObject(p.getString("receipts", "{}")!!) }.getOrDefault(JSONObject())
@@ -102,15 +81,15 @@ internal object TextNotifyPresentation {
             RemotePushEventBridge.emit(c, "notification_received", mapOf(
                 "title" to payload.optString("title"), "summary" to payload.optString("summary"),
                 "extraMap" to extra.toString()))
-            if (!allows(c, body, level == "urgent")) return@post
-            if (level == "normal") {
+            if (!allows(c, body, urgent = false)) return@post
+            if (!TextNotifyPolicy.continuous(level, prefs(c).getBoolean("urgent", false))) {
                 if (activeToken == null && !RemotePushPresentationState.isActivityResumed()) showPassive(c, body, silent = false)
             } else if (android.os.Build.VERSION.SDK_INT < 26) {
                 showPassive(c, body)
             } else if (activeToken == null) {
-                val last = p.getLong("last_urgent_at", 0)
+                val last = binding(c).getLong("last_urgent_at", 0)
                 if (now - last < 60) { showPassive(c, body); return@post }
-                if (!p.edit().putLong("last_urgent_at", now).commit()) return@post
+                if (!binding(c).edit().putLong("last_urgent_at", now).commit()) return@post
                 try { c.startForegroundService(Intent(c, TextNotifyAlertService::class.java)
                     .putExtra("token", token).putExtra("payload", body)) }
                 catch (_: RuntimeException) { showPassive(c, body) }
@@ -121,7 +100,7 @@ internal object TextNotifyPresentation {
 
     @Synchronized fun mute(c: Context, values: Map<*, *>): Boolean {
         val p = prefs(c)
-        if (values["target"] != p.getString("target", null)) return false
+        if (target(c) == null || values["target"] != target(c)) return false
         val peer = values["identity"] as? String ?: return false
         if (!Regex("^identity_[A-Za-z0-9_-]{24}$").matches(peer)) return false
         val muted = values["muted"] as? Boolean ?: return false
@@ -156,7 +135,7 @@ internal object TextNotifyPresentation {
         val payload = runCatching { JSONObject(raw) }.getOrNull() ?: return
         val extra = payload.optJSONObject("extraMap") ?: return
         if (!TextNotifyPolicy.canOpen(System.currentTimeMillis() / 1000,
-            extra.optLong("exp"), extra.optString("ts"), prefs(c).getString("target", null))) return
+            extra.optLong("exp"), extra.optString("ts"), target(c))) return
         val token = extra.optString("ts") + ":" + extra.optString("mid")
         if (activeToken == token) stop(c)
         RemotePushEventBridge.emit(c, "notification_opened", mapOf(
