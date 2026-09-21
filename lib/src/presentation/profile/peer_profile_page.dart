@@ -11,6 +11,8 @@ import '../../app/ui_feedback.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
+import '../agents/agent_availability_provider.dart';
+import '../agents/agent_availability_text.dart';
 import '../chat/chat_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../conversation_list/conversation_provider.dart';
@@ -75,6 +77,9 @@ class _PeerProfilePageState extends ConsumerState<PeerProfilePage> {
         return;
       }
       unawaited(
+        ref.read(agentAvailabilityProvider.notifier).ensure([widget.did]),
+      );
+      unawaited(
         ref
             .read(peerProfileProvider(widget.did).notifier)
             .load(peerPersonaId: widget.peerPersonaId, forceRefresh: true),
@@ -85,6 +90,7 @@ class _PeerProfilePageState extends ConsumerState<PeerProfilePage> {
   @override
   Widget build(BuildContext context) {
     final did = widget.did;
+    final availability = ref.watch(effectiveAgentAvailabilityProvider)[did];
     final state = ref.watch(peerProfileProvider(did));
     final theme = context.awikiTheme;
     final profile = state.profile ?? _fallbackProfile;
@@ -228,14 +234,41 @@ class _PeerProfilePageState extends ConsumerState<PeerProfilePage> {
                 ? const Center(child: CupertinoActivityIndicator())
                 : profile == null
                 ? Center(
-                    child: AwikiMeErrorText(
-                      message: context.l10n.peerProfileLoadFailed,
-                      textAlign: TextAlign.center,
+                    child: Padding(
+                      padding: EdgeInsets.all(responsive.spacing(16)),
+                      child: availability?.unavailable == true
+                          ? Text(
+                              '${context.l10n.agentLifecycleUnavailable} · ${agentAvailabilityReasonText(context, availability!)}',
+                              key: const Key('peer-profile-agent-unavailable'),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: theme.secondaryText,
+                                height: 1.4,
+                              ),
+                            )
+                          : AwikiMeErrorText(
+                              message: context.l10n.peerProfileLoadFailed,
+                              textAlign: TextAlign.center,
+                            ),
                     ),
                   )
                 : CustomScrollView(
                     key: const Key('peer-profile-scroll'),
                     slivers: <Widget>[
+                      if (availability?.unavailable == true)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.all(responsive.spacing(16)),
+                            child: Text(
+                              '${context.l10n.agentLifecycleUnavailable} · ${agentAvailabilityReasonText(context, availability!)}',
+                              key: const Key('peer-profile-agent-unavailable'),
+                              style: TextStyle(
+                                color: theme.secondaryText,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ),
                       SliverPadding(
                         padding: EdgeInsets.only(top: responsive.spacing(14)),
                         sliver: SliverToBoxAdapter(

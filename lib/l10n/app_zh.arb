@@ -1,4 +1,10 @@
 {
+  "agentLifecycleUnavailable": "不可用",
+  "agentLifecycleDeletedReason": "该智能体已被删除。",
+  "agentLifecycleRetiredReason": "该智能体的旧版接入已停用，需要由控制者重新创建。",
+  "agentLifecycleInactiveReason": "该智能体已停用，暂时无法接收新指令。",
+  "agentLifecycleMessageNotice": "{name}已不可用",
+  "@agentLifecycleMessageNotice": {"placeholders": {"name": {"type": "String"}}},
   "@@locale": "zh",
   "appTitle": "AWikiMe",
   "commonCancel": "取消",

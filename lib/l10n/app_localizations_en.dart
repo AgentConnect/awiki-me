@@ -9,6 +9,25 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String get agentLifecycleUnavailable => 'Unavailable';
+
+  @override
+  String get agentLifecycleDeletedReason => 'This agent has been deleted.';
+
+  @override
+  String get agentLifecycleRetiredReason =>
+      'This agent\'s legacy integration has been retired. Its controller needs to create a new agent.';
+
+  @override
+  String get agentLifecycleInactiveReason =>
+      'This agent has been disabled and cannot receive new instructions.';
+
+  @override
+  String agentLifecycleMessageNotice(String name) {
+    return '$name is unavailable';
+  }
+
+  @override
   String get appTitle => 'AWikiMe';
 
   @override

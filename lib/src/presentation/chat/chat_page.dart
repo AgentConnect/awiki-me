@@ -48,6 +48,7 @@ import '../../app/app_router.dart';
 import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
 import '../../application/attachment_preview_service.dart';
+import '../../application/agent/group_agent_availability.dart';
 import '../../application/screenshot_failure.dart';
 import 'screenshot_permission_dialog.dart';
 import '../../application/attachment_image_dimensions.dart';
@@ -57,6 +58,7 @@ import '../../application/models/product_local_models.dart';
 import '../../core/group_display_name.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_summary.dart';
+import '../agents/agent_availability_provider.dart';
 import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
@@ -974,6 +976,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       )),
     );
     final acpProjection = ref.watch(acpSessionsProvider);
+    final agentAvailability = ref.watch(effectiveAgentAvailabilityProvider);
     final acpSessions = acpProjection.forConversation(
       currentConversation.conversationId,
     );
@@ -1380,6 +1383,19 @@ class _ChatViewState extends ConsumerState<ChatView> {
                               acpTasks.isNotEmpty || acpRejections.isNotEmpty
                               ? <AgentPendingTurn>[]
                               : thread.pendingAgentTurnsForMessage(message);
+                          final availabilityNotices =
+                              unavailableGroupAgentNotices(
+                                message: message,
+                                conversationId:
+                                    currentConversation.conversationId,
+                                availability: agentAvailability,
+                                tasks: acpRecords,
+                                rejectedAgentDids: {
+                                  for (final rejection in acpRejections)
+                                    if (rejection['agent_did'] is String)
+                                      rejection['agent_did'] as String,
+                                },
+                              );
                           final previous = messageIndex == 0
                               ? null
                               : messages[messageIndex - 1];
@@ -1482,7 +1498,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                               ),
                                         footer:
                                             acpTasks.isEmpty &&
-                                                acpRejections.isEmpty
+                                                acpRejections.isEmpty &&
+                                                availabilityNotices.isEmpty
                                             ? null
                                             : Column(
                                                 mainAxisSize: MainAxisSize.min,
@@ -1491,6 +1508,30 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                                     ? CrossAxisAlignment.end
                                                     : CrossAxisAlignment.start,
                                                 children: [
+                                                  for (final notice
+                                                      in availabilityNotices
+                                                          .entries)
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            top: 8,
+                                                          ),
+                                                      child: Text(
+                                                        context.l10n
+                                                            .agentLifecycleMessageNotice(
+                                                              notice.value,
+                                                            ),
+                                                        key: ValueKey(
+                                                          'agent-unavailable:${message.localId}:${notice.key}',
+                                                        ),
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          height: 1.4,
+                                                          color: theme
+                                                              .secondaryText,
+                                                        ),
+                                                      ),
+                                                    ),
                                                   for (final item in acpTasks)
                                                     AcpTaskStatus(
                                                       key: ValueKey(
@@ -2411,12 +2452,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
           if (member.membershipStatus == GroupMemberMembershipStatus.active)
             member.did,
     };
-    if (agents.any(
-      (a) =>
-          a.isRetiredRuntime &&
-          (targeted.contains(a.agentDid) ||
-              (broadcast && broadcastMembers.contains(a.agentDid))),
-    )) {
+    if (!conversation.isGroup &&
+        agents.any(
+          (a) =>
+              a.isRetiredRuntime &&
+              (targeted.contains(a.agentDid) ||
+                  (broadcast && broadcastMembers.contains(a.agentDid))),
+        )) {
       return AcpSendBlock.retired;
     }
     final acpAgents = {
@@ -2425,6 +2467,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
       for (final s in sessions) s.agentDid,
     };
     for (final agentDid in acpAgents) {
+      if (conversation.isGroup &&
+          ref.read(effectiveAgentAvailabilityProvider)[agentDid]?.unavailable ==
+              true) {
+        continue;
+      }
       // A personal runtime inventory includes agents outside this group.
       // Only the current roster can expand a group broadcast into targets.
       if (!targeted.contains(agentDid) &&

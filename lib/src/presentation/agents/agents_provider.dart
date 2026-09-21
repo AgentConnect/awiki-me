@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../domain/entities/agent/agent_availability.dart';
+import 'agent_availability_provider.dart';
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart' show AppLifecycleState;
@@ -728,6 +730,21 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (!isSessionCurrent()) {
       return;
     }
+    unawaited(
+      ref.read(agentAvailabilityProvider.notifier).applyFacts([
+        for (final item in inventory.agents)
+          AgentAvailability.fromLifecycle(
+            agentDid: item.agentDid,
+            activeState: item.activeState,
+            version:
+                _accountStateJsonMap(item.payloadJson)['inventory_version']
+                    is String
+                ? _accountStateJsonMap(item.payloadJson)['inventory_version']!
+                      as String
+                : inventory.domainVersion,
+          ),
+      ]),
+    );
     _pruneConfirmedTopologyControlOverlays(topology);
     final coreMerged = await _mergeLatestDaemonStatusPayloads(
       topology,
@@ -738,7 +755,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     final fullyMerged = _applyTopologyControlOverlays(coreMerged);
     final visible = fullyMerged
-        .where((agent) => agent.activeState == 'active')
+        .where(
+          (agent) =>
+              agent.activeState == 'active' || agent.activeState == 'retired',
+        )
         .toList(growable: false);
     final authoritativeVisible = topology
         .where((agent) => agent.activeState == 'active')

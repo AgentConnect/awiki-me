@@ -98,6 +98,36 @@ abstract class AppLocalizations {
     Locale('zh'),
   ];
 
+  /// No description provided for @agentLifecycleUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'不可用'**
+  String get agentLifecycleUnavailable;
+
+  /// No description provided for @agentLifecycleDeletedReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'该智能体已被删除。'**
+  String get agentLifecycleDeletedReason;
+
+  /// No description provided for @agentLifecycleRetiredReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'该智能体的旧版接入已停用，需要由控制者重新创建。'**
+  String get agentLifecycleRetiredReason;
+
+  /// No description provided for @agentLifecycleInactiveReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'该智能体已停用，暂时无法接收新指令。'**
+  String get agentLifecycleInactiveReason;
+
+  /// No description provided for @agentLifecycleMessageNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'{name}已不可用'**
+  String agentLifecycleMessageNotice(String name);
+
   /// No description provided for @appTitle.
   ///
   /// In zh, this message translates to:

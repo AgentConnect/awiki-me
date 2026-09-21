@@ -47,6 +47,7 @@ import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart'
 import 'package:awiki_me/src/l10n/l10n.dart';
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/agent_availability_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/account_state_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';

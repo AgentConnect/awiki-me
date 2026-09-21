@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../application/ports/agent_availability_port.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -140,6 +141,13 @@ class AwikiMeApp extends StatelessWidget {
           messageSyncServiceProvider.overrideWithValue(
             bootstrap.messageSyncService!,
           ),
+        if (bootstrap.agentInventoryPort != null)
+          agentAvailabilityPortProvider.overrideWith((ref) {
+            final inventory = ref.watch(agentInventoryPortProvider);
+            return inventory is AgentAvailabilityPort
+                ? inventory as AgentAvailabilityPort
+                : null;
+          }),
         if (bootstrap.agentInventoryPort != null)
           agentInventoryPortProvider.overrideWith((ref) {
             final inventory = bootstrap.agentInventoryPort!;

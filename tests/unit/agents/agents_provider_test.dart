@@ -39,6 +39,40 @@ const _daemonSubkeyProposal = <String, Object?>{
 };
 
 void main() {
+  test(
+    'account-state keeps retired runtime manageable while preserving its lifecycle',
+    () async {
+      final container = _container(FakeAgentControlService());
+      addTearDown(container.dispose);
+      final base = _accountAgentInventorySnapshot(includeRuntime: false);
+      await container
+          .read(agentsProvider.notifier)
+          .applyAccountStateSnapshots(
+            inventory: ProductAgentInventorySnapshot(
+              binding: base.binding,
+              domainVersion: '9',
+              refreshedAt: base.refreshedAt,
+              agents: [
+                ...base.agents,
+                const ProductAgentInventoryItem(
+                  agentDid: 'did:agent:retired',
+                  activeState: 'retired',
+                  payloadJson:
+                      '{"agent_kind":"runtime","daemon_agent_did":"did:agent:daemon","display_name":"Retired Agent","runtime":"hermes"}',
+                ),
+              ],
+            ),
+            isSessionCurrent: () => true,
+          );
+      final runtime = container
+          .read(agentsProvider)
+          .agents
+          .singleWhere((agent) => agent.agentDid == 'did:agent:retired');
+      expect(runtime.isRetiredRuntime, isTrue);
+      expect(runtime.usesAcp, isFalse);
+      expect(container.read(agentsProvider).pendingRuntimeCreations, isEmpty);
+    },
+  );
   for (final inventoryFirst in [true, false]) {
     for (final kind in RuntimeAgentKind.values) {
       test(

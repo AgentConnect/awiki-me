@@ -9,6 +9,23 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
+  String get agentLifecycleUnavailable => '不可用';
+
+  @override
+  String get agentLifecycleDeletedReason => '该智能体已被删除。';
+
+  @override
+  String get agentLifecycleRetiredReason => '该智能体的旧版接入已停用，需要由控制者重新创建。';
+
+  @override
+  String get agentLifecycleInactiveReason => '该智能体已停用，暂时无法接收新指令。';
+
+  @override
+  String agentLifecycleMessageNotice(String name) {
+    return '$name已不可用';
+  }
+
+  @override
   String get appTitle => 'AWikiMe';
 
   @override

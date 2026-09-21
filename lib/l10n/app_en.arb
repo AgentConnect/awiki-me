@@ -1,4 +1,10 @@
 {
+  "agentLifecycleUnavailable": "Unavailable",
+  "agentLifecycleDeletedReason": "This agent has been deleted.",
+  "agentLifecycleRetiredReason": "This agent's legacy integration has been retired. Its controller needs to create a new agent.",
+  "agentLifecycleInactiveReason": "This agent has been disabled and cannot receive new instructions.",
+  "agentLifecycleMessageNotice": "{name} is unavailable",
+  "@agentLifecycleMessageNotice": {"placeholders": {"name": {"type": "String"}}},
   "@@locale": "en",
   "appTitle": "AWikiMe",
   "commonCancel": "Cancel",

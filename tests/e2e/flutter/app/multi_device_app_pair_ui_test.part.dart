@@ -2148,6 +2148,7 @@ Future<void> _runAppPairAdminAccountStateDomains({
     agentDid: codex.agentDid,
     timeout: const Duration(minutes: 2),
   );
+  await _assertDeletedAgentAvailability(container, codex.agentDid);
   await config.coordinator.publish(
     'admin',
     'account_state_agent_deleted',
@@ -2164,6 +2165,7 @@ Future<void> _runAppPairAdminAccountStateDomains({
       'admin_app_submitted_real_runtime_delete',
       'admin_app_removed_deleted_runtime_after_authoritative_reconcile',
       'joining_app_confirmed_terminal_inventory_convergence',
+      'both_apps_confirmed_public_deleted_availability',
     ],
   );
 
@@ -2640,6 +2642,7 @@ Future<void> _runAppPairJoinerAccountStateDomains({
     agentDid: deletedDid,
     activeState: 'archived',
   );
+  await _assertDeletedAgentAvailability(container, deletedDid);
   versions = deleteAfter.domainVersions;
   await config.coordinator.publish(
     'joiner',
@@ -5251,4 +5254,24 @@ Future<void> _waitForTwoAppAdmins(
     'The two real App devices did not converge to ready administrators '
     '(transient_identity_reads=$transientIdentityReads).',
   );
+}
+
+/// Checks the deployed public endpoint and the shared product projection. A
+/// previously cached tombstone alone cannot attest this API integration.
+Future<void> _assertDeletedAgentAvailability(
+  ProviderContainer container,
+  String agentDid,
+) async {
+  final port = container.read(agentAvailabilityPortProvider);
+  if (port == null) fail('Production Agent availability adapter is missing.');
+  final facts = await port.getAgentAvailability([agentDid]);
+  expect(facts, hasLength(1));
+  expect(facts.single.agentDid, agentDid);
+  expect(facts.single.unavailable, isTrue);
+  expect(facts.single.reason, 'agent_deleted');
+  await container.read(agentAvailabilityProvider.notifier).applyFacts(facts);
+  final projected = container.read(
+    effectiveAgentAvailabilityProvider,
+  )[agentDid];
+  expect(projected?.reason, 'agent_deleted');
 }

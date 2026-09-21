@@ -2,6 +2,8 @@ import 'dart:io' show Platform;
 
 import '../../application/config/awiki_environment_config.dart';
 import '../../application/ports/agent_inventory_port.dart';
+import '../../application/ports/agent_availability_port.dart';
+import '../../domain/entities/agent/agent_availability.dart';
 import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/install_command.dart';
@@ -9,7 +11,10 @@ import '../services/authenticated_user_service_rpc_client.dart';
 import '../services/awiki_onboarding_utility_client.dart';
 
 class UserServiceAgentInventoryAdapter
-    implements AgentInventoryPort, VersionedAgentInventoryMutationPort {
+    implements
+        AgentInventoryPort,
+        VersionedAgentInventoryMutationPort,
+        AgentAvailabilityPort {
   UserServiceAgentInventoryAdapter({
     required String userServiceUrl,
     AwikiOnboardingUtilityHttpClient? client,
@@ -83,6 +88,44 @@ class UserServiceAgentInventoryAdapter
   final AwikiEnvironmentConfig _environment;
   final String? Function()? _bearerTokenProvider;
   final AuthenticatedUserServiceRpcClient? _authenticatedClient;
+
+  @override
+  Future<List<AgentAvailability>> getAgentAvailability(
+    List<String> agentDids,
+  ) async {
+    final requested = agentDids.toSet();
+    if (requested.isEmpty ||
+        requested.length > 64 ||
+        requested.any((did) => !did.startsWith('did:') || did.length > 256)) {
+      throw ArgumentError('agent_availability_batch_invalid');
+    }
+    final result = await _rpcCall(
+      path: inventoryEndpoint,
+      method: 'get_agent_availability',
+      params: {'agent_dids': requested.toList(growable: false)},
+    );
+    final rows = result['agents'];
+    if (rows is! List) {
+      throw const FormatException('agent_availability_response_invalid');
+    }
+    final parsed = <String, AgentAvailability>{};
+    for (final row in rows) {
+      if (row is! Map) {
+        throw const FormatException('agent_availability_row_invalid');
+      }
+      final value = AgentAvailability.parse(Map<String, Object?>.from(row));
+      if (value == null ||
+          !requested.contains(value.agentDid) ||
+          parsed.containsKey(value.agentDid)) {
+        throw const FormatException('agent_availability_binding_invalid');
+      }
+      parsed[value.agentDid] = value;
+    }
+    if (parsed.length != requested.length) {
+      throw const FormatException('agent_availability_response_incomplete');
+    }
+    return parsed.values.toList(growable: false);
+  }
 
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
