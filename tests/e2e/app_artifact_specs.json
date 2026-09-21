@@ -203,7 +203,8 @@
         "multi-device-app-pair",
         "multi-device-app-pair-functional",
         "multi-device-app-pair-content-sync",
-        "multi-device-app-pair-paging-recovery"
+        "multi-device-app-pair-paging-recovery",
+        "did-method-web"
       ]
     },
     {
@@ -221,7 +222,8 @@
         "multi-device-app-pair",
         "multi-device-app-pair-functional",
         "multi-device-app-pair-content-sync",
-        "multi-device-app-pair-paging-recovery"
+        "multi-device-app-pair-paging-recovery",
+        "did-method-web"
       ]
     },
     {

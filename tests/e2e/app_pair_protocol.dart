@@ -166,6 +166,13 @@ const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
   'joiner\u0000account_state_revoked_device_auth_fenced': <String>{},
 };
 
+String safeMessageSyncFailureDiagnostic(String code) {
+  final safe = _isSafeDiagnosticCode(code, requireNamespace: false)
+      ? code
+      : 'redacted';
+  return 'MessageSyncCoordinatorFailure:$safe';
+}
+
 String safeCliFailureDiagnostic({
   required int exitCode,
   required Object? stdout,

@@ -19,6 +19,8 @@ record 密码格式。
 Core 重建本地投影，但必须保留 tenant registry、scope manifest、Identity Registry、
 默认身份、Identity Vault、platform secret、Product DB 和附件目录。
 
+Core 对可验证旧跨域 Persona 做原子修复后，重开时导出的 alias 集包含旧 canonical ID 到新 canonical ID 的映射。App 仅迁移对应 owner 的标题、置顶/隐藏等 overlay 与草稿，并保留已有备份。若迁移 journal 的某个旧 alias 已指向旧 canonical ID，本轮 Core export 必须同时包含该旧目标到新目标的明确映射，才能推进 journal；缺失映射、跨 owner 映射或同一导出内冲突继续拒绝。App 不从 Handle 名称、DID 文本或显示资料推断这种映射。
+
 ## 1. Ownership 与边界
 
 ```text
