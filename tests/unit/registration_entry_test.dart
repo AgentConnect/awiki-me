@@ -32,7 +32,13 @@ class CheckSupport extends FakeOnboardingSupportService {
       'checkInvite': checkInvite,
     });
     return responder?.call(handle, checkInvite) ??
-        Future.value(result(handle, required: handle.length == 3));
+        Future.value(
+          result(
+            handle,
+            required: handle.length == 3,
+            status: checkInvite && handle.length == 3 ? "valid" : null,
+          ),
+        );
   }
 }
 
@@ -61,16 +67,66 @@ void main() {
   test('three-character name requires invite before verification', () async {
     await controller.checkAccount(' ABC ', 'EXAMPLE.COM');
     expect(controller.state.step, RegistrationEntryStep.invite);
-    controller.continueWithInvite(' ');
+    await controller.continueWithInvite(' ');
     expect(controller.state.error, 'invite_required');
     expect(
       await controller.prepareVerification(phone: '+12025550123'),
       isFalse,
     );
     expect(support.calls, hasLength(1));
-    controller.continueWithInvite(' fixture ');
+    await controller.continueWithInvite(' fixture ');
     expect(controller.state.step, RegistrationEntryStep.verification);
     expect(controller.state.inviteCode, 'fixture');
+  });
+
+  test(
+    'invite next rejects invalid code before contact entry and allows retry',
+    () async {
+      await controller.checkAccount('abc', 'example.com');
+      support.responder = (handle, _) async =>
+          result(handle, required: true, status: 'invalid');
+      await controller.continueWithInvite('wrong');
+      expect(controller.state.step, RegistrationEntryStep.invite);
+      expect(controller.state.error, 'invite_invalid');
+      expect(support.calls.last, containsPair('checkInvite', true));
+      expect(support.calls.last['phone'], isNull);
+      expect(
+        await controller.prepareVerification(phone: '+12025550123'),
+        isFalse,
+      );
+      support.responder = (handle, _) async =>
+          result(handle, required: true, status: 'valid');
+      await controller.continueWithInvite('valid');
+      expect(controller.state.step, RegistrationEntryStep.verification);
+      expect(controller.state.error, isNull);
+    },
+  );
+
+  test(
+    'invite request is single flight and reset discards late success',
+    () async {
+      await controller.checkAccount('abc', 'example.com');
+      final pending = Completer<RegistrationCheck>();
+      support.responder = (_, _) => pending.future;
+      final check = controller.continueWithInvite('valid');
+      await controller.continueWithInvite('other');
+      expect(support.calls, hasLength(2));
+      expect(controller.state.busy, isTrue);
+      controller.reset();
+      pending.complete(result('abc', required: true, status: 'valid'));
+      await check;
+      expect(controller.state.step, RegistrationEntryStep.account);
+      expect(controller.state.inviteCode, isEmpty);
+    },
+  );
+
+  test('invite request failure remains on invite page and can retry', () async {
+    await controller.checkAccount('abc', 'example.com');
+    support.responder = (_, _) => Future.error(StateError('offline'));
+    await controller.continueWithInvite('valid');
+    expect(controller.state.step, RegistrationEntryStep.invite);
+    expect(controller.state.error, 'check_failed');
+    expect(controller.state.busy, isFalse);
   });
 
   test('server policy overrides local handle length', () async {
@@ -83,7 +139,7 @@ void main() {
     'invite is checked with contact before permission to send verification',
     () async {
       await controller.checkAccount('abc', 'example.com');
-      controller.continueWithInvite('fixture');
+      await controller.continueWithInvite('fixture');
       support.responder = (handle, _) async =>
           result(handle, required: true, status: 'valid');
       expect(
@@ -98,7 +154,7 @@ void main() {
 
   test('invalid invitation does not permit OTP or email activation', () async {
     await controller.checkAccount('abc', 'example.com');
-    controller.continueWithInvite('wrong');
+    await controller.continueWithInvite('wrong');
     support.responder = (handle, _) async =>
         result(handle, required: true, status: 'invalid');
     expect(
@@ -165,7 +221,7 @@ void main() {
     'contact or mode change cancels pending invitation permission',
     () async {
       await controller.checkAccount('abc', 'example.com');
-      controller.continueWithInvite('fixture');
+      await controller.continueWithInvite('fixture');
       final pending = Completer<RegistrationCheck>();
       support.responder = (_, _) => pending.future;
       final verify = controller.prepareVerification(phone: '+12025550123');
@@ -200,7 +256,7 @@ void main() {
       expect(support.calls, hasLength(1));
       pending.complete(result('abc', required: true));
       await first;
-      controller.continueWithInvite('fixture');
+      await controller.continueWithInvite('fixture');
       controller.reset();
       expect(controller.state.inviteCode, isEmpty);
     },

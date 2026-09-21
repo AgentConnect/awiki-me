@@ -91,6 +91,7 @@ void main() {
             ),
           );
           await tester.pumpAndSettle();
+          expect(find.text('先输入账号，检查后继续'), findsNothing);
           expect(field('e2e-handle-input'), findsOneWidget);
           expect(find.text('发送验证码'), findsNothing);
           await tester.enterText(field('e2e-handle-input'), 'abc');
@@ -105,6 +106,12 @@ void main() {
           expect(gateway.sendOtpCalls, 0);
           await tester.enterText(field('e2e-invite-input'), 'wrong');
           await tapVisible(tester, find.text('下一步'));
+          expect(field('e2e-invite-input'), findsOneWidget);
+          expect(find.textContaining('邀请码无效'), findsOneWidget);
+          expect(gateway.sendOtpCalls, 0);
+          expect(gateway.sendEmailVerificationCalls, 0);
+          await tester.enterText(field('e2e-invite-input'), 'fixture-valid');
+          await tapVisible(tester, find.text('下一步'));
           // Desktop retains its existing outlined fields; semantics select the
           // nested Cupertino field independently of the shared/mobile component.
           if (email) {
@@ -118,14 +125,6 @@ void main() {
             email ? 'fixture@example.com' : '13800138000',
           );
           final sendLabel = email ? '发送激活邮件' : '发送验证码';
-          await tapVisible(tester, find.text(sendLabel));
-          expect(gateway.sendOtpCalls, 0);
-          expect(gateway.sendEmailVerificationCalls, 0);
-          expect(find.textContaining('邀请码无效'), findsOneWidget);
-          await tapVisible(tester, find.text('返回修改账号或邀请码'));
-          await tapVisible(tester, find.text('下一步'));
-          await tester.enterText(field('e2e-invite-input'), 'fixture-valid');
-          await tapVisible(tester, find.text('下一步'));
           await tapVisible(tester, find.text(sendLabel));
           expect(support.lastInvite, 'fixture-valid');
           if (email) {

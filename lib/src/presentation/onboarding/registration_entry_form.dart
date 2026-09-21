@@ -41,8 +41,6 @@ class RegistrationEntryForm extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (state.step == RegistrationEntryStep.account) ...[
-          Text(l10n.onboardingAccountFirst),
-          const SizedBox(height: 12),
           AppTextField(
             controller: handleController,
             label: l10n.onboardingHandle,
@@ -82,8 +80,9 @@ class RegistrationEntryForm extends ConsumerWidget {
           AppPrimaryButton(
             label: l10n.onboardingAccountNext,
             semanticsIdentifier: 'e2e-invite-next',
-            onPressed: () =>
-                controller.continueWithInvite(inviteController.text),
+            onPressed: state.busy
+                ? null
+                : () => controller.continueWithInvite(inviteController.text),
           ),
         ] else if (state.check?.isExisting == true ||
             state.existingAccountPath) ...[

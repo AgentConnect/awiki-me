@@ -94,16 +94,36 @@ class RegistrationEntryController
     }
   }
 
-  void continueWithInvite(String code) {
-    if (state.step != RegistrationEntryStep.invite) return;
+  Future<void> continueWithInvite(String code) async {
+    if (state.busy || state.step != RegistrationEntryStep.invite) return;
     if (code.trim().isEmpty) {
       state = _state(error: 'invite_required');
       return;
     }
-    state = _state(
-      step: RegistrationEntryStep.verification,
-      inviteCode: code.trim(),
-    );
+    final revision = ++_revision;
+    state = _state(inviteCode: code.trim(), busy: true);
+    try {
+      final result = await support
+          .checkRegistration(
+            handle: state.handle,
+            domain: state.domain,
+            inviteCode: state.inviteCode,
+            checkInvite: true,
+          )
+          .timeout(const Duration(seconds: 20));
+      if (!mounted || revision != _revision) return;
+      state = _state(
+        check: result,
+        step: result.canVerify
+            ? RegistrationEntryStep.verification
+            : RegistrationEntryStep.invite,
+        error: result.canVerify ? null : result.reason ?? 'handle_unavailable',
+      );
+    } catch (_) {
+      if (mounted && revision == _revision) {
+        state = _state(error: 'check_failed');
+      }
+    }
   }
 
   /// An explicit existing-account entrance survives discovery outages. It grants

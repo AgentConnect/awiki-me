@@ -1,3 +1,4 @@
+import 'package:awiki_me/src/presentation/onboarding/registration_entry_provider.dart';
 // Real native Core and loopback User Service; fixture provisioning/DB cleanup
 // belong to the invoking local acceptance environment, never to production UI.
 import 'dart:convert';
@@ -184,6 +185,16 @@ Future<String> _runInvitedHandleJoin(
         );
         await _tap(tester, find.bySemanticsIdentifier('e2e-invite-next'));
         expect(find.bySemanticsIdentifier('e2e-send-otp-button'), findsNothing);
+        await _enter(tester, 'e2e-invite-input', 'invalid-invite-precheck');
+        await _tap(tester, find.bySemanticsIdentifier('e2e-invite-next'));
+        await _until(
+          tester,
+          () =>
+              container.read(registrationEntryProvider).error ==
+              'invite_invalid',
+          'Invalid invite is rejected before contact verification',
+        );
+        expect(find.bySemanticsIdentifier('e2e-phone-input'), findsNothing);
         await _enter(tester, 'e2e-invite-input', invite);
         await _tap(tester, find.bySemanticsIdentifier('e2e-invite-next'));
       }
