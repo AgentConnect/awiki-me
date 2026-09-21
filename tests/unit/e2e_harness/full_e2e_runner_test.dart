@@ -104,7 +104,14 @@ void main() {
       expect(commands.suites, isEmpty);
       expect(result['status'], 'dry_run');
       expect(result['passedCaseIds'], isEmpty);
-      expect(result['caseResults'], hasLength(107));
+      expect(
+        (result['caseResults'] as List).map((c) => c['caseId']),
+        unorderedEquals(
+          AppTestCatalog.load(source).cases
+              .where((c) => c.catalogStatus == 'active')
+              .map((c) => c.caseId),
+        ),
+      );
       expect(result['catalogNotExecutable'], hasLength(17));
       AppTestCatalog.load(source).validateReport(result);
       await expectLater(
@@ -177,7 +184,21 @@ void main() {
       );
       final result = report('success');
       expect(result['status'], 'passed');
-      expect(result['passedCaseIds'], hasLength(Platform.isMacOS ? 107 : 106));
+      expect(
+        result['passedCaseIds'],
+        unorderedEquals(
+          AppTestCatalog.load(source).cases
+              .where(
+                (c) =>
+                    c.catalogStatus == 'active' &&
+                    (Platform.isMacOS ||
+                        !AppTestCatalog.load(source)
+                            .suiteCaseIds['production-keychain']!
+                            .contains(c.caseId)),
+              )
+              .map((c) => c.caseId),
+        ),
+      );
       AppTestCatalog.load(source).validateReport(result);
       expect(
         (result['children'] as List).singleWhere(

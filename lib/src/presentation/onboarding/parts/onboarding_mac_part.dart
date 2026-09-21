@@ -473,8 +473,8 @@ class _MacAuthCard extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               registrationEntry,
+              IdentityMethodPicker(handleController: handleController),
               if (registrationReady) ...[
-                IdentityMethodPicker(handleController: handleController),
                 _MacAuthMethodSelector(
                   onboarding: onboarding,
                   onAuthModeChanged: onAuthModeChanged,

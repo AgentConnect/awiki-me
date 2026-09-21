@@ -155,7 +155,7 @@ remote account/OTP scenarios. Scheduled runs and ordinary manual product runs
 retain their existing behavior. Record the explicit ref; do not treat a run
 against the repository's older default ref as evidence for the new baseline.
 The registration feature PR targeting `release/0910` pins Core consumer
-`b2d2f719dcf0e283f3e69aa3f6659a320343ef0f`, whose source manifest pins SDK
+`eccadfa05a03410f405fc7760ce45ed8cd9ff533`, whose source manifest pins SDK
 `4023161ea76a39f80da67512345eafafb12b0e6a` in both native lanes, including
 the optional CA configuration bridge and iOS keyring build support. Explicit manual refs still
 take precedence; other target branches retain repository-managed defaults.
@@ -1489,7 +1489,7 @@ Do not compile phone numbers, OTPs, invitation codes or fixture JSON into the Ap
 
 ### 注册开发分支的 source CI
 
-仅 Feature/registration-account-first → release/0910 的 PR CI 自动选择 AWIKI_SOURCE_INTEGRATION=1，固定 Core consumer b2d2f719dcf0e283f3e69aa3f6659a320343ef0f；其 source manifest 固定 SDK 4023161ea76a39f80da67512345eafafb12b0e6a，使用配套提交锁。手动验证可选 sdk_dependencies=source/registry，默认 source；validation_only=true 保持禁止远端账号/OTP job。正式 package workflow 不变，开发不提前发布 SDK。
+仅 Feature/registration-account-first → release/0910 的 PR CI 自动选择 AWIKI_SOURCE_INTEGRATION=1，固定 Core consumer eccadfa05a03410f405fc7760ce45ed8cd9ff533；其 source manifest 固定 SDK 4023161ea76a39f80da67512345eafafb12b0e6a，使用配套提交锁。手动验证可选 sdk_dependencies=source/registry，默认 source；validation_only=true 保持禁止远端账号/OTP job。正式 package workflow 不变，开发不提前发布 SDK。
 
 Linux Core/CLI、原生 guard rebuild 和 Windows Rust host test/native build 复用隔离 source builder；读取 .artifacts/dependencies/source/target，不混入 registry 的 target。Linux 来源摘要覆盖模式、source manifest/lock 和构建脚本，切换输入使旧 provenance 失效。Windows 保留 PE x64/FRB 实际 DLL 校验。私有合同源读取仍使用现有最小权限 token，403 不以跳过测试代替。
 
@@ -1507,3 +1507,7 @@ and desktop invitation rejection before contact entry, then bound-invitation rej
 for a different phone and for email without invoking either delivery API. Matching
 phone and unbound email success remain covered. Pre-contact errors do not mention
 a phone mismatch; the contact step retains binding-specific errors.
+
+CI regression repair: macOS keeps DID method selection and pending registration
+continuation visible before the contact step, matching the compact layout. Full
+runner contract tests compare exact active catalog IDs rather than stale totals.
