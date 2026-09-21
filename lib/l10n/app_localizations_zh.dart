@@ -9,6 +9,50 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
+  String get identityMethodLabel => '身份方法';
+
+  @override
+  String get identityWebAdminLimitation =>
+      'Web 身份不支持账号恢复、根密钥导入或管理权转移。请保管好首个管理员设备；失去该设备后无法恢复管理权限。';
+
+  @override
+  String get identityRegistrationPending => '继续未完成的注册';
+
+  @override
+  String get identityRegistrationResumeHint =>
+      '将继续原来的身份注册。请使用原联系方式；如需验证码，请重新获取。';
+
+  @override
+  String get identityServicesTitle => '身份服务';
+
+  @override
+  String get identityServicesHint => '管理此身份公开的其他服务。Handle、消息服务和个人资料仍由各自的设置管理。';
+
+  @override
+  String get identityServicesFailed => '未能完成操作。请刷新查看进度；若仍待确认，请继续原操作。';
+
+  @override
+  String get identityServicesPending => '服务更新仍待确认。继续原操作后才能提交其他更改。';
+
+  @override
+  String get identityServicesResume => '继续服务更新';
+
+  @override
+  String get identityServiceAdd => '添加服务';
+
+  @override
+  String get identityServiceId => '服务标识';
+
+  @override
+  String get identityServiceType => '服务类型';
+
+  @override
+  String get identityServiceEndpoint => '服务地址';
+
+  @override
+  String get identityServiceEdit => '编辑';
+
+  @override
   String get appTitle => 'AWikiMe';
 
   @override

@@ -16,7 +16,7 @@ void main() {
       workflow,
       contains(
         r'WINDOWS_CORE_REF: ${{ github.event.inputs.cli_ref || '
-        "(github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'b6c369bee2b0d3b486ed1dd72ed7c2d62d0c5810') || "
+        "(github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'b2d2f719dcf0e283f3e69aa3f6659a320343ef0f') || "
         "'d3289db6732f6028fa7e54909b768bd48838f7fb' }}",
       ),
     );

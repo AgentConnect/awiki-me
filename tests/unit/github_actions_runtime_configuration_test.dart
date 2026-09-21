@@ -90,14 +90,14 @@ void main() {
     final pins = source
         .split('\n')
         .where(
-          (line) => line.contains('b6c369bee2b0d3b486ed1dd72ed7c2d62d0c5810'),
+          (line) => line.contains('b2d2f719dcf0e283f3e69aa3f6659a320343ef0f'),
         );
     expect(pins, isNotEmpty);
     for (final line in pins) {
       expect(
         line,
         contains(
-          "github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'b6c369be",
+          "github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'b2d2f719",
         ),
       );
     }
@@ -187,7 +187,7 @@ void main() {
             as YamlMap;
     final jobs = workflow['jobs'] as YamlMap;
     const pin =
-        "(github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'b6c369bee2b0d3b486ed1dd72ed7c2d62d0c5810')";
+        "(github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'b2d2f719dcf0e283f3e69aa3f6659a320343ef0f')";
     for (final name in [
       'validate',
       'cross-repository-contracts',

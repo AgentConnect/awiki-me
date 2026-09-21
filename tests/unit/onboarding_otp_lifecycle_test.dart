@@ -35,6 +35,7 @@ void main() {
       final support = _BlockingOtp(gateway);
       final container = ProviderContainer(
         overrides: [
+          identityCorePortProvider.overrideWithValue(FakeIdentityCorePort()),
           onboardingSupportServiceProvider.overrideWithValue(support),
           appSessionServiceProvider.overrideWithValue(
             FakeAppSessionService(gateway),
@@ -73,6 +74,7 @@ void main() {
         final storage = _BlockingCooldown(blockRestore: blockRestore);
         final container = ProviderContainer(
           overrides: [
+            identityCorePortProvider.overrideWithValue(FakeIdentityCorePort()),
             onboardingSupportServiceProvider.overrideWithValue(support),
             smsOtpCooldownServiceProvider.overrideWithValue(storage),
             appSessionServiceProvider.overrideWithValue(
@@ -122,6 +124,9 @@ void main() {
           final support = _BlockingOtp(gateway);
           final container = ProviderContainer(
             overrides: [
+              identityCorePortProvider.overrideWithValue(
+                FakeIdentityCorePort(),
+              ),
               onboardingSupportServiceProvider.overrideWithValue(support),
               appSessionServiceProvider.overrideWithValue(
                 FakeAppSessionService(gateway),

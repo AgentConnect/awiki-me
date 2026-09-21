@@ -84,6 +84,7 @@ Usage:
   dart run tests/e2e/runner.dart --case multi-device-app-pair-functional
   dart run tests/e2e/runner.dart --case multi-device-app-pair-content-sync
   dart run tests/e2e/runner.dart --case multi-device-app-pair-paging-recovery
+  dart run tests/e2e/runner.dart --case did-method-web
   dart run tests/e2e/runner.dart --case step4-revoke-mls
   dart run tests/e2e/runner.dart --case multi-device-app-pair-later-admin-grant
   dart run tests/e2e/runner.dart --case root-transfer
@@ -179,6 +180,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   multiDeviceAppPairFunctional(_multiDeviceAppPairFunctionalCaseIds),
   multiDeviceAppPairContentSync(_multiDeviceAppPairContentSyncCaseIds),
   multiDeviceAppPairPagingRecovery(_multiDeviceAppPairPagingRecoveryCaseIds),
+  didMethodWeb(<String>['DID-WEB-APP-E2E-001']),
   step4RevokeMls(_step4RevokeMlsCaseIds),
   rootTransfer(_rootTransferCaseIds),
   full(<String>[]),
@@ -239,6 +241,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.identityDeletionRecoveryGuard =>
         'integration_test/handle_recovery_ui_test.dart',
       DesktopE2eCase.multiDeviceAppPair => _multiDeviceAppPairTarget,
+      DesktopE2eCase.didMethodWeb => _multiDeviceAppPairTarget,
       DesktopE2eCase.multiDeviceAppPairFunctional => _multiDeviceAppPairTarget,
       DesktopE2eCase.multiDeviceAppPairContentSync => _multiDeviceAppPairTarget,
       DesktopE2eCase.multiDeviceAppPairPagingRecovery =>
@@ -301,6 +304,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.identityDeletionRecoveryGuard =>
         'identity-deletion-recovery-guard',
       DesktopE2eCase.multiDeviceAppPair => 'multi-device-app-pair',
+      DesktopE2eCase.didMethodWeb => 'did-method-web',
       DesktopE2eCase.multiDeviceAppPairFunctional =>
         'multi-device-app-pair-functional',
       DesktopE2eCase.multiDeviceAppPairContentSync =>
@@ -314,6 +318,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   }
 
   bool get usesRemoteAppPairScenario =>
+      this == DesktopE2eCase.didMethodWeb ||
       this == DesktopE2eCase.multiDeviceAppPair ||
       this == DesktopE2eCase.multiDeviceAppPairFunctional ||
       this == DesktopE2eCase.multiDeviceAppPairContentSync ||
@@ -340,6 +345,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
 
   String get reportScope {
     return switch (this) {
+      DesktopE2eCase.didMethodWeb => 'did-method-web',
       DesktopE2eCase.full => 'full',
       DesktopE2eCase.smoke => 'smoke',
       DesktopE2eCase.multiDevice => 'multi-device',
@@ -377,6 +383,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
 
   Duration get flutterTimeout {
     return switch (this) {
+      DesktopE2eCase.didMethodWeb => const Duration(minutes: 20),
       DesktopE2eCase.personalAgent => const Duration(minutes: 16),
       DesktopE2eCase.performance => const Duration(minutes: 12),
       DesktopE2eCase.restart => const Duration(minutes: 10),
@@ -419,6 +426,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
 
   String get scenario {
     return switch (this) {
+      DesktopE2eCase.didMethodWeb => 'did-method-web',
       DesktopE2eCase.full => 'awiki-me-full',
       DesktopE2eCase.personalAgent => _personalAgentScenario,
 
@@ -457,6 +465,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
 
   String get runConfigPath {
     return switch (this) {
+      DesktopE2eCase.didMethodWeb => _multiDeviceAppPairRunConfigPath,
       DesktopE2eCase.personalAgent => _personalAgentRunConfigPath,
 
       DesktopE2eCase.multiDeviceRemoteJoin =>
@@ -492,6 +501,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
 
   static DesktopE2eCase parse(String value) {
     return switch (value.trim().toLowerCase()) {
+      'did-method-web' || 'did_method_web' => DesktopE2eCase.didMethodWeb,
       '' || 'smoke' || 'app' || 'local' => DesktopE2eCase.smoke,
       'registration-account-first' => DesktopE2eCase.registrationAccountFirst,
       'multi-device' ||

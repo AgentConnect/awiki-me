@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/tenant/app_tenant.dart';
 import '../../domain/entities/handle_recovery.dart';
 import '../../l10n/l10n.dart';
+import '../../domain/entities/identity_method.dart';
 import '../onboarding/onboarding_provider.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'handle_recovery_page.dart';
@@ -54,7 +55,9 @@ class PendingHandleRecoveryEntry extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final supported = ref.watch(
       onboardingProvider.select(
-        (state) => state.serverInfo?.supportsPhoneHandleRecovery == true,
+        (state) =>
+            state.didMethod == IdentityDidMethod.wba &&
+            state.serverInfo?.supportsPhoneHandleRecovery == true,
       ),
     );
     if (!supported || ref.watch(onboardingProvider).authMode != 'phone') {

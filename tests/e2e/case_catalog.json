@@ -2622,12 +2622,12 @@
       "exactOracles": [
         "App shell and onboarding are visible exactly once.",
         "The onboarding authentication entry is visible; macOS exposes the single phone, email, and identity-credential method selector.",
-        "On macOS, the phone OTP form submits the checked handle and its tenant-qualified full handle.",
-        "The first step exposes only Handle and Next without sending OTP; a successful account check reveals the phone verification and login/register actions.",
+        "On macOS, the phone OTP form submits the same-step handle and its tenant-qualified full handle.",
+        "The phone flow exposes one phone, Handle, and OTP form with a direct login/register action and no intermediate next step.",
         "Unauthenticated realtime remains disconnected."
       ],
       "negativeChecks": [
-        "A missing shell/onboarding/authentication-entry surface, a dropped OTP handle scope, a missing account-first step, or an unexpected realtime connection fails the case."
+        "A missing shell/onboarding/authentication-entry surface, a dropped OTP handle scope, a repeated Handle step, or an unexpected realtime connection fails the case."
       ],
       "environment": "no_service",
       "cleanupPolicy": "none",
@@ -2645,7 +2645,7 @@
           "SMOKE-E2E-001:onboarding_visible",
           "SMOKE-E2E-001:onboarding_auth_entry_visible",
           "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
-          "SMOKE-E2E-001:account_first_then_verification_visible",
+          "SMOKE-E2E-001:phone_single_stage_submit_visible",
           "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
         ],
         "exactOracleAssertions": [
@@ -2654,7 +2654,7 @@
             "SMOKE-E2E-001:onboarding_visible",
             "SMOKE-E2E-001:onboarding_auth_entry_visible",
             "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
-            "SMOKE-E2E-001:account_first_then_verification_visible",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
             "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
           ],
           [
@@ -2662,7 +2662,7 @@
             "SMOKE-E2E-001:onboarding_visible",
             "SMOKE-E2E-001:onboarding_auth_entry_visible",
             "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
-            "SMOKE-E2E-001:account_first_then_verification_visible",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
             "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
           ],
           [
@@ -2670,7 +2670,7 @@
             "SMOKE-E2E-001:onboarding_visible",
             "SMOKE-E2E-001:onboarding_auth_entry_visible",
             "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
-            "SMOKE-E2E-001:account_first_then_verification_visible",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
             "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
           ],
           [
@@ -2678,7 +2678,7 @@
             "SMOKE-E2E-001:onboarding_visible",
             "SMOKE-E2E-001:onboarding_auth_entry_visible",
             "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
-            "SMOKE-E2E-001:account_first_then_verification_visible",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
             "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
           ],
           [
@@ -2686,7 +2686,7 @@
             "SMOKE-E2E-001:onboarding_visible",
             "SMOKE-E2E-001:onboarding_auth_entry_visible",
             "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
-            "SMOKE-E2E-001:account_first_then_verification_visible",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
             "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
           ]
         ],
@@ -2696,7 +2696,7 @@
             "SMOKE-E2E-001:onboarding_visible",
             "SMOKE-E2E-001:onboarding_auth_entry_visible",
             "SMOKE-E2E-001:mac_phone_otp_handle_scope_preserved",
-            "SMOKE-E2E-001:account_first_then_verification_visible",
+            "SMOKE-E2E-001:phone_single_stage_submit_visible",
             "SMOKE-E2E-001:unauthenticated_realtime_disconnected"
           ]
         ]
@@ -6071,6 +6071,76 @@
             "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_after_registry_only_promotion",
             "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_automatic_management",
             "ROOT-TRANSFER-APP-PAIR-E2E-001:third_device_management_ready"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DID-WEB-APP-E2E-001",
+      "feature": "Web identity product lifecycle with two Apps and a WBA CLI peer",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Protected same-origin remote configuration advertises Web creation; current local/source Core native artifacts and CLI; two isolated Linux/Xvfb or macOS Apps.",
+      "action": "Create Web via onboarding, reopen pending member Join from disk, compare SAS, edit ordinary services, exchange Direct messages with WBA CLI, revoke the member and reopen the surviving admin root.",
+      "exactOracles": [
+        "The visible creation picker defaults to WBA, selects Web explicitly, explains first-admin loss, and activates an authenticated Web DID.",
+        "Two isolated Apps complete exact member Join with matching in-memory SAS; the joining App reopens the original pending Core session without another OTP and offers no Web Recovery or Root Transfer.",
+        "The Web admin edits an ordinary service through Devices; protected service fields stay identical, while the member has no write action.",
+        "An independent source-verified WBA CLI sends to both Web Apps and receives the joined Web member reply with canonical message identity.",
+        "Visible exact-device revoke requires confirmation and fresh user presence; the member receives an authentication fence.",
+        "Closing and reopening the admin App/Core root retains the same DID and published service and can send to the WBA CLI."
+      ],
+      "negativeChecks": [
+        "A changed DID or pending Join, exposed Web recovery/transfer or member write, modified protected service, arbitrary network error used as revocation proof, or missing CLI delivery prevents pass."
+      ],
+      "environment": "configured_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/did_method_web_test.part.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DID-WEB-APP-E2E-001:visible_web_creation_default_wba",
+          "DID-WEB-APP-E2E-001:same_pending_join_reopened_without_otp",
+          "DID-WEB-APP-E2E-001:sas_member_join_and_method_gates",
+          "DID-WEB-APP-E2E-001:protected_services_preserved",
+          "DID-WEB-APP-E2E-001:wba_cli_web_apps_bidirectional",
+          "DID-WEB-APP-E2E-001:exact_revoke_and_auth_fence",
+          "DID-WEB-APP-E2E-001:admin_root_reopened_and_sent"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DID-WEB-APP-E2E-001:visible_web_creation_default_wba"
+          ],
+          [
+            "DID-WEB-APP-E2E-001:same_pending_join_reopened_without_otp",
+            "DID-WEB-APP-E2E-001:sas_member_join_and_method_gates"
+          ],
+          [
+            "DID-WEB-APP-E2E-001:protected_services_preserved"
+          ],
+          [
+            "DID-WEB-APP-E2E-001:wba_cli_web_apps_bidirectional"
+          ],
+          [
+            "DID-WEB-APP-E2E-001:exact_revoke_and_auth_fence"
+          ],
+          [
+            "DID-WEB-APP-E2E-001:admin_root_reopened_and_sent"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DID-WEB-APP-E2E-001:visible_web_creation_default_wba",
+            "DID-WEB-APP-E2E-001:same_pending_join_reopened_without_otp",
+            "DID-WEB-APP-E2E-001:sas_member_join_and_method_gates",
+            "DID-WEB-APP-E2E-001:protected_services_preserved",
+            "DID-WEB-APP-E2E-001:wba_cli_web_apps_bidirectional",
+            "DID-WEB-APP-E2E-001:exact_revoke_and_auth_fence",
+            "DID-WEB-APP-E2E-001:admin_root_reopened_and_sent"
           ]
         ]
       }

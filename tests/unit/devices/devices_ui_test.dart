@@ -90,6 +90,7 @@ void main() {
         );
         final core = FakeDeviceManagementCore()
           ..registry = DeviceRegistrySnapshot(
+            methodCapabilities: wbaMethodCapabilities,
             did: testDid,
             devices: [
               _device(
@@ -186,6 +187,7 @@ void main() {
     final recipient = _device(id: 'device-new', role: DeviceRole.member);
     final core = _DelayedApprovalCore()
       ..registry = DeviceRegistrySnapshot(
+        methodCapabilities: wbaMethodCapabilities,
         did: testDid,
         devices: [
           _device(
@@ -269,6 +271,7 @@ void main() {
     final recipient = _device(id: 'device-new', role: DeviceRole.member);
     final core = _DelayedVerificationCore()
       ..registry = DeviceRegistrySnapshot(
+        methodCapabilities: wbaMethodCapabilities,
         did: testDid,
         devices: [
           _device(
@@ -354,6 +357,7 @@ void main() {
     final recipient = _device(id: 'member-later', role: DeviceRole.member);
     final core = FakeDeviceManagementCore()
       ..registry = DeviceRegistrySnapshot(
+        methodCapabilities: wbaMethodCapabilities,
         did: testDid,
         registryVersion: '4',
         devices: [admin],
@@ -375,6 +379,7 @@ void main() {
         .read(devicesProvider.notifier)
         .applyCachedRegistry(
           DeviceRegistrySnapshot(
+            methodCapabilities: wbaMethodCapabilities,
             did: testDid,
             registryVersion: '5',
             devices: [admin, recipient],
@@ -438,6 +443,7 @@ void main() {
         );
       } else {
         core.registry = DeviceRegistrySnapshot(
+          methodCapabilities: wbaMethodCapabilities,
           did: testDid,
           devices: [
             original.devices.first,
@@ -651,6 +657,7 @@ void main() {
     (tester) async {
       final core = FakeDeviceManagementCore()
         ..registry = const DeviceRegistrySnapshot(
+          methodCapabilities: wbaMethodCapabilities,
           did: testDid,
           devices: <DeviceSummary>[
             DeviceSummary(
@@ -809,6 +816,7 @@ void main() {
     (tester) async {
       final core = FakeDeviceManagementCore()
         ..registry = const DeviceRegistrySnapshot(
+          methodCapabilities: wbaMethodCapabilities,
           did: testDid,
           devices: <DeviceSummary>[
             DeviceSummary(
@@ -914,6 +922,7 @@ void main() {
     (tester) async {
       final core = FakeDeviceManagementCore()
         ..registry = DeviceRegistrySnapshot(
+          methodCapabilities: wbaMethodCapabilities,
           did: testDid,
           devices: <DeviceSummary>[
             _device(
@@ -973,6 +982,7 @@ void main() {
   ) async {
     final core = FakeDeviceManagementCore()
       ..registry = DeviceRegistrySnapshot(
+        methodCapabilities: wbaMethodCapabilities,
         did: testDid,
         devices: <DeviceSummary>[
           _device(
@@ -2371,6 +2381,7 @@ void main() {
     (tester) async {
       final core = FakeDeviceManagementCore()
         ..registry = DeviceRegistrySnapshot(
+          methodCapabilities: wbaMethodCapabilities,
           did: testDid,
           devices: <DeviceSummary>[
             _device(
@@ -2859,6 +2870,7 @@ DeviceJoinProgress _authorizedNewDeviceProgress({
 
 DeviceRegistrySnapshot _currentMemberRegistry(String protocolDeviceId) =>
     DeviceRegistrySnapshot(
+      methodCapabilities: wbaMethodCapabilities,
       did: testDid,
       devices: <DeviceSummary>[
         _device(id: protocolDeviceId, role: DeviceRole.member, isCurrent: true),
@@ -3044,6 +3056,7 @@ DeviceRegistrySnapshot _rootTransferRegistry({
   String registryVersion = '0',
 }) {
   return DeviceRegistrySnapshot(
+    methodCapabilities: wbaMethodCapabilities,
     did: testDid,
     registryVersion: registryVersion,
     devices: <DeviceSummary>[
@@ -3063,6 +3076,7 @@ DeviceRegistrySnapshot _rootTransferRegistry({
 }
 
 DeviceRegistrySnapshot _laterGrantRegistry() => DeviceRegistrySnapshot(
+  methodCapabilities: wbaMethodCapabilities,
   did: testDid,
   devices: <DeviceSummary>[
     _device(
@@ -3094,6 +3108,7 @@ DeviceSummary _device({
 }
 
 DeviceRegistrySnapshot _revokeRegistry() => DeviceRegistrySnapshot(
+  methodCapabilities: wbaMethodCapabilities,
   did: testDid,
   devices: <DeviceSummary>[
     _device(
@@ -3107,6 +3122,7 @@ DeviceRegistrySnapshot _revokeRegistry() => DeviceRegistrySnapshot(
 );
 
 DeviceRegistrySnapshot _revokedRegistry() => DeviceRegistrySnapshot(
+  methodCapabilities: wbaMethodCapabilities,
   did: testDid,
   devices: <DeviceSummary>[
     _device(

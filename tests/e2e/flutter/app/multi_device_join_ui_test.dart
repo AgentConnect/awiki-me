@@ -46,6 +46,8 @@ import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
+import 'package:awiki_me/src/data/im_core/awiki_im_core_device_management_adapter.dart'
+    show DeviceManagementTransportException;
 import 'package:awiki_me/src/l10n/l10n.dart';
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
@@ -60,6 +62,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/devices/device_join_approval_sheet.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_page.dart';
+import 'package:awiki_me/src/presentation/devices/identity_services_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
@@ -79,10 +82,13 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../account_state_operator_contract.dart';
 import '../../app_pair_protocol.dart';
+import '../../did_method_web_failure.dart';
+import '../../did_method_web_oracles.dart';
 import '../../case_attestation.dart';
 import '../../desktop_process_host.dart';
 import '../../e2e_user_presence_port.dart';
 import '../../remote_multi_device_join_contract.dart';
+import '../../remote_target.dart';
 import '../../sync_recovery_operator_contract.dart';
 import '../support/protected_otp_config.dart';
 import '../support/join_admin_response_gate.dart';
@@ -90,6 +96,7 @@ import '../support/join_admin_response_gate.dart';
 part 'multi_device_app_pair_ui_test.part.dart';
 part 'multi_device_app_pair_content_sync_test.part.dart';
 part 'multi_device_app_pair_paging_recovery_test.part.dart';
+part 'did_method_web_test.part.dart';
 part 'dsh_device_join_interop_test.part.dart';
 
 const String _newDeviceCaseId = 'DEVICE-JOIN-E2E-001';
@@ -1666,7 +1673,8 @@ class _AppPairRunConfig implements _CliEndpointConfig {
           ? const <String>[]
           : _requiredStringList(accountState, 'operatorCommand'),
     );
-    if (config.didDomain != 'awiki.info' ||
+    final didWeb = _invocationExplicitlyExpects(_didWebAppCaseId);
+    if ((!didWeb && config.didDomain != 'awiki.info') ||
         config.adminStateRoot == config.joinerStateRoot) {
       throw StateError('The App-pair target or state isolation is invalid.');
     }
@@ -1676,15 +1684,22 @@ class _AppPairRunConfig implements _CliEndpointConfig {
         'user-presence port.',
       );
     }
-    for (final value in <String>[
+    final serviceUrls = <String>[
       config.baseUrl,
       config.userServiceUrl,
       config.messageServiceUrl,
       config.mailServiceUrl,
       config.anpServiceUrl,
-    ]) {
+    ];
+    if (didWeb) {
+      validateConfiguredRemoteTarget(
+        didDomain: config.didDomain, serviceUrls: serviceUrls,
+      );
+    }
+    for (final value in serviceUrls) {
       final uri = Uri.tryParse(value);
-      if (uri == null || uri.scheme != 'https' || uri.host != 'awiki.info') {
+      if (uri == null || uri.scheme != 'https' ||
+          (!didWeb && uri.host != 'awiki.info')) {
         throw StateError('Remote multi-device service target is not audited.');
       }
     }
@@ -1997,6 +2012,13 @@ class _JoinCli {
     required String phone,
     required String otp,
   }) async {
+    final webPair = config;
+    if (webPair is _AppPairRunConfig &&
+        _invocationExplicitlyExpects(_didWebAppCaseId)) {
+      await webPair.coordinator.publish(
+        'admin', 'web_peer_registration_intent', data: {'handle': handle},
+      );
+    }
     final payload = await _run(
       <String>[
         '--format',
@@ -2075,6 +2097,8 @@ class _JoinCli {
   Future<void> waitForDirectNotification({
     required String messageId,
     required String content,
+    String? senderDid,
+    String? recipientDid,
   }) async {
     final path = _hostNotificationPath;
     if (path == null || _joinRequestListener == null) {
@@ -2094,6 +2118,8 @@ class _JoinCli {
           return data is Map &&
               data['channel'] == 'direct' &&
               data['message_id'] == messageId &&
+              (senderDid == null || data['sender_did'] == senderDid) &&
+              (recipientDid == null || data['recipient_did'] == recipientDid) &&
               data['text'] == content;
         }).length;
         if (matches == 1) return;
@@ -3200,6 +3226,7 @@ AwikiEnvironmentConfig _joinOnlyEnvironment(
   bool enableStep4 = false,
   bool enableAppPairFunctional = false,
   bool enableMessageSyncCore = false,
+  bool enableDeviceRevoke = false,
 }) => AwikiEnvironmentConfig(
   baseUrl: config.baseUrl,
   userServiceUrl: config.userServiceUrl,
@@ -3210,7 +3237,8 @@ AwikiEnvironmentConfig _joinOnlyEnvironment(
   anpServiceDid: config.anpServiceDid,
   agentImEnabled: enableAppPairFunctional,
   messageSyncV2ReadEnabled: enableAppPairFunctional || enableMessageSyncCore,
-  multiDeviceDeviceRevokeEnabled: enableStep4 || enableAppPairFunctional,
+  multiDeviceDeviceRevokeEnabled:
+      enableStep4 || enableAppPairFunctional || enableDeviceRevoke,
   multiDeviceDirectE2eeEnabled: enableRootTransfer,
   multiDeviceGroupE2eeEnabled: enableStep4,
 );
@@ -3278,7 +3306,9 @@ Future<ProviderContainer> _waitForAuthenticatedApp(
   return container;
 }
 
-Future<void> _openDevicesPage(WidgetTester tester) async {
+Future<void> _openDevicesPage(
+  WidgetTester tester, {bool expectNoRecovery = false}
+) async {
   await _tapOne(
     tester,
     find.bySemanticsIdentifier('e2e-settings-tab'),
@@ -3289,6 +3319,10 @@ Future<void> _openDevicesPage(WidgetTester tester) async {
     () => find.byType(SettingsPage).evaluate().length == 1,
     failure: 'The App settings surface did not open.',
   );
+  if (expectNoRecovery && find.byKey(
+      const Key('settings-recover-handle-did-row')).evaluate().isNotEmpty) {
+    fail('Web Settings exposed Handle Recovery.');
+  }
   await _tapOne(
     tester,
     find.text(tester.element(find.byType(SettingsPage)).l10n.settingsDevices),

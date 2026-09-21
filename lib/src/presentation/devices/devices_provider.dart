@@ -147,6 +147,7 @@ class DevicesState {
   }
 
   bool canGrantManagement(DeviceSummary device) =>
+      displayRegistry?.methodCapabilities?.rootTransfer == true &&
       currentDeviceCanManage &&
       !device.isCurrent &&
       device.status == DeviceStatus.active &&

@@ -2549,6 +2549,7 @@ class _LegacyUpgradeOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithEmail({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String email,
     required String handle,
     String? inviteCode,
@@ -2561,6 +2562,7 @@ class _LegacyUpgradeOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithPhone({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String otp,
     required String handle,
@@ -2574,6 +2576,7 @@ class _LegacyUpgradeOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String handle,
     String? inviteCode,

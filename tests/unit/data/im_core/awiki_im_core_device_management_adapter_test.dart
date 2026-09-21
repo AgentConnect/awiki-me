@@ -1,3 +1,4 @@
+import '../../identity_method_test_support.dart';
 import 'dart:convert';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
@@ -9,6 +10,24 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test(
+    'Web Join remains ordinary member approval without Root management',
+    () async {
+      final sdk = _WebApprovalCore();
+      final adapter = _adapterWithCore(sdk);
+      final prompt = await adapter.prepareDeviceJoinApproval(
+        selector: sdk.resolvedDid,
+        joinSessionId: 'web-join',
+        sasConfirmed: true,
+      );
+      await adapter.confirmDeviceJoinApproval(
+        approvalHandle: prompt.approvalHandle,
+        userPresenceConfirmed: true,
+      );
+      expect(sdk.ordinaryCalls, 1);
+    },
+  );
+
   test(
     'App approval selects the explicit SDK management authorization',
     () async {
@@ -59,6 +78,22 @@ void main() {
           throwsA(isA<StateError>()),
         );
       }
+    },
+  );
+
+  test(
+    'Core Web Handle resolution may use a different identity domain',
+    () async {
+      final native = _PublicMethodCore()
+        ..resolvedDid = 'did:web:identity.example:awiki:web:alice'
+        ..capabilities = coreWebMethodCapabilities;
+      final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
+        coreInstance: () async => native,
+        userServiceUrl: 'https://provider.example',
+        targetHandleDomain: 'provider.example',
+      );
+      expect(await adapter.resolveJoinDid('alice'), native.resolvedDid);
+      expect(native.resolvedHandle, 'alice.provider.example');
     },
   );
 
@@ -158,25 +193,13 @@ void main() {
     () async {
       const token = 'join-account-token-must-not-escape';
       late Map<String, Object?> requestBody;
-      late Map<String, Object?> profileRequestBody;
+      final native = _PublicMethodCore();
       var beginCalls = 0;
       final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
-        coreInstance: _unusedCore,
+        coreInstance: () async => native,
         userServiceUrl: 'https://awiki.info',
         targetHandleDomain: 'awiki.info',
         httpClient: MockClient((request) async {
-          if (request.url.path == '/user-service/v1/did/profile/rpc') {
-            profileRequestBody = (jsonDecode(request.body) as Map)
-                .cast<String, Object?>();
-            return http.Response(
-              jsonEncode(<String, Object?>{
-                'jsonrpc': '2.0',
-                'id': 'req-1',
-                'result': <String, Object?>{'did': _did},
-              }),
-              200,
-            );
-          }
           expect(
             request.url.path,
             '/user-service/v1/auth/account-verification/exchange',
@@ -224,10 +247,7 @@ void main() {
       );
 
       expect(beginCalls, 1);
-      expect(profileRequestBody['method'], 'get_public_profile');
-      expect(profileRequestBody['params'], <String, Object?>{
-        'handle': 'alice.awiki.info',
-      });
+      expect(native.resolvedHandle, 'alice.awiki.info');
       expect(requestBody, <String, Object?>{
         'provider': 'sms',
         'purpose': 'awiki.device.join.v1',
@@ -243,112 +263,102 @@ void main() {
     },
   );
 
-  test(
-    'rejects a public profile from another DID domain before OTP exchange',
-    () async {
-      var requestCalls = 0;
-      var beginCalls = 0;
-      final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
-        coreInstance: _unusedCore,
-        userServiceUrl: 'https://awiki.info',
-        targetHandleDomain: 'awiki.info',
-        httpClient: MockClient((request) async {
-          requestCalls += 1;
-          expect(request.url.path, '/user-service/v1/did/profile/rpc');
-          return http.Response(
-            jsonEncode(<String, Object?>{
-              'jsonrpc': '2.0',
-              'id': 'req-1',
-              'result': <String, Object?>{
-                'did': 'did:wba:other.example:user:alice:e1_test',
-              },
-            }),
-            200,
-          );
-        }),
-        beginDeviceJoin:
-            ({
-              required did,
-              required operationId,
-              required ttlSeconds,
-              required accountVerificationGrant,
-            }) async {
-              beginCalls += 1;
-              return _coreProgress();
-            },
-      );
-
-      await expectLater(
-        adapter.beginDeviceJoinWithSms(
-          handle: 'alice',
-          phone: '+8613800138000',
-          otp: '123456',
-          operationId: 'join-op-invalid-domain',
-          ttlSeconds: 600,
+  test('Core rejects a Handle binding before OTP exchange', () async {
+    var requestCalls = 0;
+    var beginCalls = 0;
+    final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
+      coreInstance: () async => _PublicMethodCore()
+        ..resolutionError = const core.AwikiImCoreException(
+          code: 'permission_denied',
+          message: 'invalid binding',
         ),
-        throwsA(
-          isA<DeviceManagementTransportException>().having(
-            (error) => error.code,
-            'code',
-            'join_target_resolution_invalid',
-          ),
+      userServiceUrl: 'https://awiki.info',
+      targetHandleDomain: 'awiki.info',
+      httpClient: MockClient((request) async {
+        requestCalls += 1;
+        throw StateError('OTP exchange must not run');
+      }),
+      beginDeviceJoin:
+          ({
+            required did,
+            required operationId,
+            required ttlSeconds,
+            required accountVerificationGrant,
+          }) async {
+            beginCalls += 1;
+            return _coreProgress();
+          },
+    );
+
+    await expectLater(
+      adapter.beginDeviceJoinWithSms(
+        handle: 'alice',
+        phone: '+8613800138000',
+        otp: '123456',
+        operationId: 'join-op-invalid-domain',
+        ttlSeconds: 600,
+      ),
+      throwsA(
+        isA<DeviceManagementTransportException>().having(
+          (error) => error.code,
+          'code',
+          'join_target_resolution_invalid',
         ),
+      ),
+    );
+    expect(requestCalls, 0);
+    expect(beginCalls, 0);
+  });
+
+  test('redacts Core discovery failures before OTP exchange', () async {
+    const sensitive = 'profile-response-must-not-escape';
+    var beginCalls = 0;
+    final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
+      coreInstance: () async =>
+          _PublicMethodCore()..resolutionError = StateError(sensitive),
+      userServiceUrl: 'https://awiki.info',
+      targetHandleDomain: 'awiki.info',
+      httpClient: MockClient(
+        (_) async => http.Response('{"detail":"$sensitive"}', 503),
+      ),
+      beginDeviceJoin:
+          ({
+            required did,
+            required operationId,
+            required ttlSeconds,
+            required accountVerificationGrant,
+          }) async {
+            beginCalls += 1;
+            return _coreProgress();
+          },
+    );
+
+    Object? error;
+    try {
+      await adapter.beginDeviceJoinWithSms(
+        handle: 'alice',
+        phone: '+8613800138000',
+        otp: '123456',
+        operationId: 'join-op-profile-error',
+        ttlSeconds: 600,
       );
-      expect(requestCalls, 1);
-      expect(beginCalls, 0);
-    },
-  );
+    } catch (caught) {
+      error = caught;
+    }
 
-  test(
-    'redacts public profile response failures before OTP exchange',
-    () async {
-      const sensitive = 'profile-response-must-not-escape';
-      var beginCalls = 0;
-      final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
-        coreInstance: _unusedCore,
-        userServiceUrl: 'https://awiki.info',
-        targetHandleDomain: 'awiki.info',
-        httpClient: MockClient(
-          (_) async => http.Response('{"detail":"$sensitive"}', 503),
-        ),
-        beginDeviceJoin:
-            ({
-              required did,
-              required operationId,
-              required ttlSeconds,
-              required accountVerificationGrant,
-            }) async {
-              beginCalls += 1;
-              return _coreProgress();
-            },
-      );
-
-      Object? error;
-      try {
-        await adapter.beginDeviceJoinWithSms(
-          handle: 'alice',
-          phone: '+8613800138000',
-          otp: '123456',
-          operationId: 'join-op-profile-error',
-          ttlSeconds: 600,
-        );
-      } catch (caught) {
-        error = caught;
-      }
-
-      expect(error, isA<DeviceManagementTransportException>());
-      expect(error.toString(), contains('join_target_resolution_failed'));
-      expect(error.toString(), isNot(contains(sensitive)));
-      expect(beginCalls, 0);
-    },
-  );
+    expect(error, isA<DeviceManagementTransportException>());
+    expect(error.toString(), contains('join_target_resolution_failed'));
+    expect(error.toString(), isNot(contains(sensitive)));
+    expect(beginCalls, 0);
+  });
 
   test('uses the qualified Handle domain for the internal exchange', () async {
     late Map<String, Object?> requestBody;
     String? resolvedHandle;
     String? resolvedDomain;
     final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
-      coreInstance: _unusedCore,
+      coreInstance: () async =>
+          _PublicMethodCore()..resolvedDid = 'did:wba:example.org:user:e1_test',
       userServiceUrl: 'https://awiki.info',
       targetHandleDomain: 'awiki.info',
       httpClient: MockClient((request) async {
@@ -649,8 +659,36 @@ void main() {
 
 const _did = 'did:wba:awiki.info:user:e1_test';
 
-Future<core.AwikiImCore> _unusedCore() {
-  throw StateError('Core access was not expected by this test.');
+Future<core.AwikiImCore> _unusedCore() async => _PublicMethodCore();
+
+class _PublicMethodCore implements core.AwikiImCore {
+  Object? resolutionError;
+  String? resolvedHandle;
+  String resolvedDid = _did;
+  core.IdentityMethodCapabilities capabilities = coreWbaMethodCapabilities;
+
+  @override
+  Future<String> resolveHandleForDeviceJoin(String handle) async {
+    resolvedHandle = handle;
+    if (resolutionError != null) throw resolutionError!;
+    return resolvedDid;
+  }
+
+  @override
+  Future<core.IdentityMethodCapabilities> identityMethodCapabilities(
+    String did,
+  ) async {
+    if (did != resolvedDid) {
+      throw const core.AwikiImCoreException(
+        code: 'invalid_input',
+        message: 'Unsupported DID',
+      );
+    }
+    return capabilities;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 AwikiImCoreDeviceManagementAdapter _adapterWithCore(core.AwikiImCore sdk) {
@@ -742,4 +780,37 @@ class _ManagementApprovalCore implements core.AwikiImCore {
       throw StateError('App must explicitly select management authorization');
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _WebApprovalCore extends _PublicMethodCore {
+  _WebApprovalCore() {
+    resolvedDid = 'did:web:awiki.info:awiki:web:alice';
+    capabilities = coreWebMethodCapabilities;
+  }
+  int ordinaryCalls = 0;
+  @override
+  Future<core.DeviceJoinApprovalPrompt> prepareDeviceJoinApproval({
+    required core.IdentitySelector selector,
+    required String joinSessionId,
+    required bool sasConfirmed,
+  }) async => const core.DeviceJoinApprovalPrompt(
+    approvalHandle: 'web-approval',
+    joinSessionId: 'web-join',
+    sas: '123456',
+    expiresAt: '2030-01-01T00:00:00Z',
+  );
+  @override
+  Future<core.DeviceJoinProgress> confirmDeviceJoinApproval({
+    required String approvalHandle,
+    required bool userPresenceConfirmed,
+  }) async {
+    ordinaryCalls++;
+    return _coreProgress();
+  }
+
+  @override
+  Future<core.DeviceJoinProgress> confirmDeviceJoinWithManagement({
+    required String approvalHandle,
+    required bool userPresenceConfirmed,
+  }) async => throw StateError('Web has no Root management');
 }
