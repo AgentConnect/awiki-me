@@ -34,13 +34,13 @@ class UrgentCuePolicyTest {
             UrgentCuePolicy.evaluate(enabled.copy(notificationVolume = 0)))
     }
 
-    @Test fun `repeated starts cannot move the thirty second deadline`() {
+    @Test fun `repeated starts cannot move the sixty second deadline`() {
         val window = UrgentCueWindow()
         assertTrue(window.begin(10_000, 90_000))
         assertFalse(window.begin(35_000, 90_000))
-        assertEquals(40_000L, window.deadlineMillis)
-        assertFalse(window.expired(39_999))
-        assertTrue(window.expired(40_000))
+        assertEquals(70_000L, window.deadlineMillis)
+        assertFalse(window.expired(69_999))
+        assertTrue(window.expired(70_000))
     }
 
     @Test fun `stop releases active window and invalid short durations are bounded`() {

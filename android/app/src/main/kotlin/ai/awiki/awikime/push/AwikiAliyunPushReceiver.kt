@@ -10,7 +10,7 @@ import com.alibaba.sdk.android.push.notification.CPushMessage
 import com.alibaba.sdk.android.push.notification.NotificationConfigure
 import com.alibaba.sdk.android.push.notification.PushData
 
-class AwikiAliyunPushReceiver : MessageReceiver() {
+open class AwikiAliyunPushReceiver : MessageReceiver() {
     // EMAS 3.10.1 invokes this on its own NOTICE construction path. Keep one
     // presenter; do not post a second local notification from a receiver callback.
     override fun hookNotificationBuild(): NotificationConfigure = object : NotificationConfigure {

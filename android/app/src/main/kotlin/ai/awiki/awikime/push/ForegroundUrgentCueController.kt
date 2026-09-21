@@ -57,7 +57,7 @@ internal class ForegroundUrgentCueController(
         )
     }
 
-    fun start(requestedDurationMillis: Long = 30_000): Boolean {
+    fun start(requestedDurationMillis: Long = 60_000): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         val decision = UrgentCuePolicy.evaluate(readState())
         if (!decision.allowed || !window.begin(SystemClock.elapsedRealtime(), requestedDurationMillis)) return false

@@ -46,14 +46,22 @@ class UrgentNotificationProbeActivity : Activity() {
                 setOnClickListener { block() }
             })
         }
-        action("开始前台提醒（最多30秒）") { refresh("start=${cue.start()}") }
+        action("开始前台提醒（最多60秒）") { refresh("start=${cue.start()}") }
         action("再次触发（不得延长）") { refresh("repeat_start=${cue.start()}") }
         action("停止提醒") { cue.stop(); refresh("stopped") }
         action("发送本机系统通知") { postLocalNotification(); refresh("local_notification_submitted") }
         action("重复同一系统通知") { postLocalNotification(); refresh("same_local_id_submitted") }
+        action("开始持续系统提醒（最多60秒）") {
+            refresh(ContinuousUrgentNotificationProbe.post(this, java.util.UUID.randomUUID().toString()))
+        }
+        action("停止持续系统提醒") { ContinuousUrgentNotificationProbe.stop(this); refresh("continuous_stopped") }
         action("清除本机测试通知") {
             getSystemService(NotificationManager::class.java).cancel(PROBE_ID)
             refresh("local_notification_cleared")
+        }
+        action("系统自动全屏提醒权限") {
+            if (Build.VERSION.SDK_INT >= 34) startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+                .setData(android.net.Uri.parse("package:$packageName")))
         }
         action("系统紧急通道设置") {
             startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
@@ -74,6 +82,35 @@ class UrgentNotificationProbeActivity : Activity() {
         }
         scroll.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         setContentView(scroll)
+        handleProbeIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleProbeIntent(intent)
+    }
+
+    private fun handleProbeIntent(intent: Intent) {
+        intent.getStringExtra("continuous_service_arm_token")?.let {
+            refresh("service_probe_armed=${ContinuousUrgentServiceProbe.arm(this, it)}")
+            if (intent.getBooleanExtra("return_home", false)) {
+                startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))
+            }
+        }
+        intent.getStringExtra("continuous_service_stop_token")?.let {
+            startService(Intent(this, ContinuousUrgentProbeService::class.java)
+                .setAction("stop").putExtra("token", it))
+        }
+        intent.getStringExtra("continuous_stop_token")?.let {
+            ContinuousUrgentNotificationProbe.stop(this, it)
+        }
+        intent.getStringExtra("continuous_probe_token")?.let {
+            refresh(ContinuousUrgentNotificationProbe.post(this, it))
+            if (intent.getBooleanExtra("return_home", false)) {
+                startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))
+            }
+        }
     }
 
     override fun onResume() {
@@ -88,7 +125,8 @@ class UrgentNotificationProbeActivity : Activity() {
     private fun refresh(result: String) {
         val state = cue.readState()
         val decision = UrgentCuePolicy.evaluate(state)
-        status.text = "$result\n通知权限=${state.notificationsEnabled} 通道等级=${state.channelImportance}\n" +
+        val fullScreen = if (Build.VERSION.SDK_INT >= 34) getSystemService(NotificationManager::class.java).canUseFullScreenIntent() else true
+        status.text = "全屏权限=$fullScreen\n$result\n通知权限=${state.notificationsEnabled} 通道等级=${state.channelImportance}\n" +
             "系统铃声模式=${state.ringerMode} 通知音量=${state.notificationVolume} 勿扰放行=${state.interruptionFilterAllowsAll}\n" +
             "允许前台层=${decision.allowed} 请求声音=${decision.sound} 请求振动=${decision.vibration}\n" +
             "实际听到/感到仍需现场确认。"

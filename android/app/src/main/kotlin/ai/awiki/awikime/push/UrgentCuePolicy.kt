@@ -36,7 +36,7 @@ internal class UrgentCueWindow {
 
     fun begin(nowMillis: Long, requestedDurationMillis: Long): Boolean {
         if (deadlineMillis != null) return false
-        deadlineMillis = nowMillis + requestedDurationMillis.coerceIn(1_000L, 30_000L)
+        deadlineMillis = nowMillis + requestedDurationMillis.coerceIn(1_000L, 60_000L)
         return true
     }
 

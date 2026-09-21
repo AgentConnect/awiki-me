@@ -260,7 +260,7 @@ cue. DND (including priority mode) conservatively suppresses sound and vibration
 Silent mode suppresses both; vibrate mode suppresses sound. An active cue rechecks
 system choices every 250 ms and never restarts sound when a restriction is lifted.
 The caller stops it on pause, close, navigation, logout and account/preference
-changes. A monotonic 30-second ceiling and single active window prevent a second
+changes. A monotonic 60-second ceiling and single active window prevent a second
 start from extending a current cue. This window is not the durable message
 presentation ledger; that integration remains required.
 
@@ -350,3 +350,61 @@ connected for 320 seconds of confirmed screen-off/keyguard state; a newly sent
 message then appeared in Android's active notifications and the lock-screen UI.
 This per-app setting may increase battery use. Record its state and the actual
 idle interval; overnight idle and killed-process delivery remain unverified.
+
+
+### Debug C0: continuous cue and automatic presentation
+
+The approved urgent experience is now up to 60 seconds of looping sound and
+repeated vibration, with view/dismiss stopping immediately. A remote alert should
+show a heads-up notification while unlocked and a full-screen presentation while
+locked, when the user/system permits it. These requirements are **not yet wired
+to authoritative IM metadata, account preferences, or conversation routing**.
+
+The Debug source set contains two explicit experiments:
+
+- `ContinuousUrgentNotificationProbe`: a local system-owned `FLAG_INSISTENT`
+  notification with `setTimeoutAfter(60000)` and a dismiss PendingIntent. It does
+  not combine repeated notification updates with `ONLY_ALERT_ONCE`, which can
+  stop ongoing alerting. M153 looped audio but rendered only one short OEM
+  vibration; this path does not satisfy repeated-vibration requirements.
+- `ContinuousUrgentProbeService` and `ContinuousUrgentProbeActivity`: an
+  explicitly armed, five-minute diagnostic window accepts one matching EMAS
+  MESSAGE test token, consumes it before attempting a non-sticky `shortService`,
+  and ignores duplicates. The service uses one foreground cue owner, a 60-second
+  monotonic deadline, bounded CPU wake lock, visible stop action, and cleanup on
+  stop/destroy/system timeout. Full-screen intent opens the Debug visual surface;
+  an Activity launch alone does not restart or stop the cue. View/close/back stop
+  the service; timeout closes the visual surface. The prototype's view action
+  opens the App, not an asserted real conversation.
+
+Only the Debug manifest replaces the ordinary receiver with its subclass,
+declares the short service and full-screen intent permission, and exposes the
+manual arming page. Profile/Release retain the ordinary receiver and contain no
+probe service, full-screen Activity, or test-message handler. A locally armed
+token is a test control, **not** production sender authority or a durable
+message-scoped presentation receipt.
+
+M153 background start succeeded with `SYSTEM_ALLOW_LISTED` under the existing
+per-app battery whitelist. Do not generalize this result to devices without a
+valid background-start exemption or to vendor offline channels. Check EMAS
+registration/online status after an APK replacement: opening only the native
+probe page initializes the SDK but does not execute the existing Flutter-driven
+registration flow. An earlier attempt without a registration/online precheck was accepted by the
+provider but produced no receiver/service evidence; registration became ready
+afterward. It was not treated as device delivery.
+
+Automatic unlocked heads-up and locked full-screen presentation were observed
+through actual remote MESSAGE delivery. The locked test began after confirmed
+screen-off/keyguard, and full-screen permission was read back as allowed. The
+user had returned the device to silent mode for this stage; that validates silent
+suppression, not audible/tactile continuity. Record actual 60-second completion,
+manual stopping, duplicate rejection and physical sound/vibration separately.
+Do not bypass FSI restrictions or battery policy with ADB grants in acceptance.
+
+
+The locked silent-mode experiment kept one active notification/service and the
+full-screen UI at 3/30/50 seconds. A duplicate remote delivery after about 34.7
+seconds was rejected without reposting. The service stopped itself after
+60,005 ms; at 65 seconds the notification/service/UI were gone and keyguard
+remained enabled. Manual stopping was separately observed on the preceding
+unlocked run. These are Debug platform results, not a completed IM feature.
