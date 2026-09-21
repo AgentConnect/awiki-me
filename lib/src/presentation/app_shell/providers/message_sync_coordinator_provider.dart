@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 
 import '../../../app/app_services.dart';
 import '../../../app/app_locale.dart';
@@ -1804,6 +1805,10 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     if (isForeground) {
       return;
     }
+    // Text Notify has one native presenter for both foreground and background.
+    if (defaultTargetPlatform == TargetPlatform.android &&
+        message.notifyLevel != null)
+      return;
     final conversationId = message.conversationId?.trim() ?? '';
     if (conversationId.isNotEmpty) {
       try {

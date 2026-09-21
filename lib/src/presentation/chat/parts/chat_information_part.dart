@@ -99,6 +99,19 @@ class _ChatInformationPageState extends ConsumerState<_ChatInformationPage> {
         throw sessionEpochChangedError();
       }
       await ref.read(conversationListProvider.notifier).refreshFastLocal();
+      if (muted != null &&
+          !widget.conversation.isGroup &&
+          defaultTargetPlatform == TargetPlatform.android) {
+        try {
+          await syncNotifyConversationMute(ref, widget.target.targetDid, muted);
+        } catch (error) {
+          if (mounted && epoch.matches(ref.read(sessionProvider))) {
+            ref
+                .read(uiFeedbackProvider.notifier)
+                .showError(AppMessage.fromError(error));
+          }
+        }
+      }
     } catch (error) {
       if (!mounted || !epoch.matches(ref.read(sessionProvider))) {
         return;

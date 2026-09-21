@@ -15,7 +15,7 @@ import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 
-/** Single foreground cue. No service, wake lock, alarm, call audio, or full-screen intent. */
+/** Bounded sound/vibration owned by a foreground UI or alert service; honors system policy. */
 internal class ForegroundUrgentCueController(
     context: Context,
     private val isForeground: () -> Boolean,

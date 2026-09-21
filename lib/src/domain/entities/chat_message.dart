@@ -27,6 +27,7 @@ class ChatMessage {
     this.originalType = 'text',
     this.attachment,
     this.payloadJson,
+    this.notifyLevel,
     this.mentions = const <ChatMessageMention>[],
   });
 
@@ -49,6 +50,7 @@ class ChatMessage {
   final MessageSendState sendState;
   final ChatAttachment? attachment;
   final String? payloadJson;
+  final String? notifyLevel;
   final List<ChatMessageMention> mentions;
 
   bool get hasValidMentions =>
@@ -149,6 +151,7 @@ class ChatMessage {
       originalType: originalType ?? this.originalType,
       attachment: attachment ?? this.attachment,
       payloadJson: payloadJson ?? this.payloadJson,
+      notifyLevel: notifyLevel,
       mentions: mentions ?? this.mentions,
     );
   }

@@ -72,6 +72,7 @@ open class AwikiAliyunPushReceiver : MessageReceiver() {
     }
 
     override fun onMessage(context: Context, message: CPushMessage) {
+        if (TextNotifyPresentation.receive(context, message.content)) return
         emit(
             context,
             "message_received",

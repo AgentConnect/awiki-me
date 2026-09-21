@@ -408,3 +408,17 @@ seconds was rejected without reposting. The service stopped itself after
 60,005 ms; at 65 seconds the notification/service/UI were gone and keyguard
 remained enabled. Manual stopping was separately observed on the preceding
 unlocked run. These are Debug platform results, not a completed IM feature.
+
+## Text Notify v1 product presenter (development candidate)
+
+The new main-source `TextNotifyPresentation` consumes only the versioned User Service-authorized EMAS MESSAGE envelope. Core projects the same plaintext message's `notify_level`; Dart suppresses a second ordinary Android notification for these messages. The native envelope is an alert/open hint, never a message truth or routing substitute.
+
+Settings provides task notifications, opt-in urgent reminders, and the system full-screen permission entry. Authenticated User Service preferences carry a version and Direct mute set. Native current-target binding, exact preference version, local deny overrides and mutes fence presentation. Switching accounts clears consent and stops the service. Turning off alerts stops locally before the server round-trip; failure is shown and does not re-enable sound on automatic refresh.
+
+Urgent delivery uses a short foreground service, high-importance heads-up/full-screen intent, the existing bounded cue controller and a call-like View/Close screen. The maximum is 60 seconds; actions stop the matching session; timeout leaves a silent openable message notification. Sound, vibration, DND, notification/channel permission and OS full-screen/background restrictions remain authoritative. No microphone, call identity or desktop daemon is introduced.
+
+Before presentation, a private target+message receipt is committed for 24 hours (1024 unexpired maximum, fail closed at capacity). A single active presenter and a 60-second device interval prevent overlap/restart. Replays do not extend the deadline. Opening a retained message checks account and expiry independently of alert consent; actual navigation still depends on Core resolving the message.
+
+EMAS MESSAGE has no offline storage; a 120-second freshness gate prevents old messages from ringing. Offline messages remain available through Core sync. Devices without a live push connection or OS background eligibility are not guaranteed to wake. The legacy Debug probe remains diagnostic-only and cannot validate this product path.
+
+Local unit/build evidence is recorded in awiki-plan. Service deployment, receiver-owned Skill Agent and full M153 product E2E remain separate gates. No release or deployment is implied by this implementation.

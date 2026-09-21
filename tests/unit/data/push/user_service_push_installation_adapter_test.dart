@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:awiki_me/src/data/push/user_service_notify_preference_adapter.dart';
+import 'package:awiki_me/src/application/ports/notify_preference_port.dart';
 
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/auth/auth_session_coordinator.dart';
@@ -11,6 +13,84 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
 void main() {
+  test(
+    'Notify preferences use authenticated versioned writes and preserve conversation mutes',
+    () async {
+      final httpClient = _RpcHttpClient(
+        result: {
+          'enabled': true,
+          'urgent_enabled': true,
+          'version': 8,
+          'muted_peer_dids': ['did:wba:example.test:muted'],
+        },
+      );
+      final client = AuthenticatedUserServiceRpcClient(
+        client: AwikiOnboardingUtilityHttpClient(
+          baseUrl: 'https://example.test',
+          httpClient: httpClient,
+        ),
+        sessions: AuthSessionCoordinator(sessions: _Sessions()),
+      );
+      final adapter = UserServiceNotifyPreferenceAdapter(client);
+      final next = await adapter.save(
+        const NotifyPreference(
+          enabled: true,
+          urgentEnabled: false,
+          version: 7,
+          mutedPeerDids: ['did:wba:example.test:muted'],
+        ),
+        enabled: true,
+        urgentEnabled: true,
+      );
+      expect(next.version, 8);
+      expect(next.urgentEnabled, true);
+      expect(httpClient.lastAuthorization, 'Bearer device-access-token');
+      expect(httpClient.lastBody!['method'], 'set_notify_preference');
+      expect(httpClient.lastBody!['params'], {
+        'enabled': true,
+        'urgent_enabled': true,
+        'expected_version': 7,
+        'muted_peer_dids': ['did:wba:example.test:muted'],
+      });
+      expect(
+        (httpClient.lastBody!['params'] as Map).containsKey('owner_did'),
+        false,
+      );
+    },
+  );
+
+  test(
+    'old or malformed preference response never grants local consent',
+    () async {
+      for (final result in <Map<String, Object?>>[
+        {},
+        {
+          'enabled': true,
+          'urgent_enabled': true,
+          'version': -1,
+          'muted_peer_dids': [],
+        },
+        {
+          'enabled': true,
+          'urgent_enabled': 'true',
+          'version': 1,
+          'muted_peer_dids': [],
+        },
+      ]) {
+        final adapter = UserServiceNotifyPreferenceAdapter(
+          AuthenticatedUserServiceRpcClient(
+            client: AwikiOnboardingUtilityHttpClient(
+              baseUrl: 'https://example.test',
+              httpClient: _RpcHttpClient(result: result),
+            ),
+            sessions: AuthSessionCoordinator(sessions: _Sessions()),
+          ),
+        );
+        await expectLater(adapter.load(), throwsFormatException);
+      }
+    },
+  );
+
   const registration = RemotePushRegistration(
     provider: 'aliyun_emas',
     providerDeviceId: 'android-device-123',
@@ -28,19 +108,20 @@ void main() {
 
       final installation = await harness.adapter.upsert(registration);
 
-      expect(harness.httpClient.requestCount, 1);
+      expect(harness.httpClient.requestCount, 2);
       expect(harness.httpClient.lastPath, '/user-service/v1/push/rpc');
       expect(
         harness.httpClient.lastAuthorization,
         'Bearer device-access-token',
       );
-      expect(harness.httpClient.lastBody, <String, Object?>{
+      expect(harness.httpClient.registrationBody, <String, Object?>{
         'jsonrpc': '2.0',
         'method': 'upsert_installation',
         'params': <String, Object?>{
           'provider': 'aliyun_emas',
           'provider_device_id': 'android-device-123',
           'platform': 'android',
+          'notify_version': 'awiki.notify.v1',
           'logical_device_id': 'logical-device-1',
           'app_id': 'emas-app-key',
         },
@@ -54,7 +135,7 @@ void main() {
       expect(installation.appId, 'emas-app-key');
       expect(installation.status, 'active');
 
-      final params = harness.httpClient.lastBody!['params']! as Map;
+      final params = harness.httpClient.registrationBody!['params']! as Map;
       expect(params, isNot(contains('app_secret')));
       expect(params, isNot(contains('appSecret')));
       expect(params, isNot(contains('bearer_token')));
@@ -80,10 +161,11 @@ void main() {
       ),
     );
 
-    expect(harness.httpClient.lastBody!['params'], <String, Object?>{
+    expect(harness.httpClient.registrationBody!['params'], <String, Object?>{
       'provider': 'aliyun_emas',
       'provider_device_id': 'android-device-123',
       'platform': 'android',
+      'notify_version': 'awiki.notify.v1',
     });
   });
 
@@ -260,6 +342,7 @@ final class _RpcHttpClient extends http.BaseClient {
   String? lastAuthorization;
   String? lastPath;
   Map<String, Object?>? lastBody;
+  Map<String, Object?>? registrationBody;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -274,6 +357,8 @@ final class _RpcHttpClient extends http.BaseClient {
         );
       }
     }
+    if (lastBody?['method'] == 'upsert_installation')
+      registrationBody = lastBody;
     final bytes = utf8.encode(
       jsonEncode(<String, Object?>{
         'jsonrpc': '2.0',
@@ -329,7 +414,9 @@ final class _Sessions
       sessionLeaseFor(session);
 
   @override
-  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+  Future<bool> hasPendingLocalIdentityRecovery(
+    String identityIdOrAlias,
+  ) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) =>

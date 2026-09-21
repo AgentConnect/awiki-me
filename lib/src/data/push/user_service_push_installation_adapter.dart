@@ -2,6 +2,8 @@ import '../../application/models/push_installation.dart';
 import '../../application/ports/push_installation_port.dart';
 import '../../domain/services/remote_push_client.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import '../../application/remote_push_message_reference.dart';
 
 import '../services/authenticated_user_service_rpc_client.dart';
 import '../services/awiki_onboarding_utility_client.dart';
@@ -38,6 +40,8 @@ final class UserServicePushInstallationAdapter implements PushInstallationPort {
         'provider': registration.provider,
         'provider_device_id': registration.providerDeviceId,
         'platform': registration.platform,
+        if (registration.platform == 'android')
+          'notify_version': 'awiki.notify.v1',
         if (registration.logicalDeviceId != null)
           'logical_device_id': registration.logicalDeviceId,
         if (registration.appId != null) 'app_id': registration.appId,
@@ -58,6 +62,29 @@ final class UserServicePushInstallationAdapter implements PushInstallationPort {
     );
     _expectBoundValue(installation.appId, registration.appId, 'app_id');
     _expectBoundValue(installation.status, 'active', 'status');
+    if (registration.platform == 'android') {
+      // Preference failure cannot undo successful installation registration.
+      // The native presenter stays disabled until authenticated settings arrive.
+      try {
+        final owner = (result['installation'] as Map)['owner_did'] as String;
+        final preference = await _rpcCall(
+          method: 'get_notify_preference',
+          params: {},
+        );
+        await const MethodChannel(
+          'ai.awiki.awikime/remote_push_events',
+        ).invokeMethod<bool>('configureTextNotify', {
+          ...preference,
+          'target': remotePushOpaqueTargetReference(owner),
+          'muted_identities': (preference['muted_peer_dids'] as List)
+              .cast<String>()
+              .map(remotePushOpaqueIdentityReference)
+              .toList(),
+        });
+      } on Object {
+        /* fail closed locally; ordinary messages remain available */
+      }
+    }
     return installation;
   }
 

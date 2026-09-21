@@ -47,6 +47,9 @@ object RemotePushPresentationState {
     private val policy = RemotePushPresentationPolicy()
 
     @Synchronized
+    fun isActivityResumed(): Boolean = policy.activityResumed
+
+    @Synchronized
     fun setActivityResumed(value: Boolean) {
         policy.activityResumed = value
     }

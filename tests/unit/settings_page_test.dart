@@ -289,8 +289,8 @@ void main() {
     expect(profileRect, const Rect.fromLTWH(0, 64, 390, 104));
     expect(avatarRect, const Rect.fromLTWH(20, 87, 58, 58));
     expect(accountRect, const Rect.fromLTWH(0, 208, 390, 61));
-    expect(appRect, const Rect.fromLTWH(0, 309, 390, 183));
-    expect(securityRect, const Rect.fromLTWH(0, 532, 390, 244));
+    expect(appRect, const Rect.fromLTWH(0, 309, 390, 244));
+    expect(securityRect, const Rect.fromLTWH(0, 593, 390, 244));
 
     for (final titleKey in <String>[
       'settings-account-section-title',
@@ -468,6 +468,7 @@ void main() {
     expect(find.text('删除当前本地数据：default'), findsNothing);
 
     await tester.ensureVisible(find.text('退出并删除当前数据'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('退出并删除当前数据'));
     await tester.pumpAndSettle();
 
@@ -553,6 +554,7 @@ void main() {
     expect(find.byType(SettingsPage), findsOneWidget);
 
     await tester.ensureVisible(find.text('退出并删除当前数据'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('退出并删除当前数据'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('退出并删除数据'));

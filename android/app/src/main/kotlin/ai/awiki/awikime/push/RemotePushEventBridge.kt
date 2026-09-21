@@ -78,7 +78,24 @@ object RemotePushEventBridge {
                         NotificationScreenWakeController.wakeIfNeeded(applicationContext)
                         result.success(null)
                     }
+                    "openNotifyFullScreenSettings" -> {
+                        if (android.os.Build.VERSION.SDK_INT >= 34) {
+                            applicationContext.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                                android.net.Uri.parse("package:" + applicationContext.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }
+                        result.success(null)
+                    }
+                    "muteTextNotifyConversation" -> {
+                        result.success(TextNotifyPresentation.mute(applicationContext, call.arguments as? Map<*, *> ?: emptyMap<String, Any>()))
+                    }
+                    "getTextNotifyPreferenceState" -> {
+                        result.success(TextNotifyPresentation.effectiveSettings(applicationContext, call.arguments as? String))
+                    }
+                    "configureTextNotify" -> {
+                        result.success(TextNotifyPresentation.configure(applicationContext, call.arguments as? Map<*, *> ?: emptyMap<String, Any>()))
+                    }
                     "setActiveNotificationTargetReference" -> {
+                        TextNotifyPresentation.setTarget(applicationContext, call.arguments as? String)
                         RemotePushPresentationState.setActiveTargetReference(
                             call.arguments as? String,
                         )
@@ -102,6 +119,22 @@ object RemotePushEventBridge {
     private fun initializePush(context: Context, result: MethodChannel.Result) {
         if (!ai.awiki.awikime.BuildConfig.AWIKI_EMAS_ENABLED) {
             result.success(mapOf("code" to "configuration_disabled"))
+            return
+        }
+        // Create and read back presentation channels before advertising Notify capability.
+        try {
+            UrgentNotificationChannel.ensureCreated(context)
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                val manager = context.getSystemService(android.app.NotificationManager::class.java)
+                if (manager.getNotificationChannel("awiki_me_messages") == null) {
+                    manager.createNotificationChannel(android.app.NotificationChannel(
+                        "awiki_me_messages", "Messages", android.app.NotificationManager.IMPORTANCE_HIGH))
+                }
+                check(manager.getNotificationChannel(UrgentNotificationChannel.ID) != null)
+                check(manager.getNotificationChannel("awiki_me_messages") != null)
+            }
+        } catch (_: RuntimeException) {
+            result.success(mapOf("code" to "notification_channel_unavailable"))
             return
         }
         coordinator(context).initialize { initializationResult ->
