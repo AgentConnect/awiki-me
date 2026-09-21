@@ -503,6 +503,11 @@ void main() {
         final recoveryRow = find.byKey(
           const Key('settings-recover-handle-did-row'),
         );
+        await _pumpUntil(
+          tester,
+          () => recoveryRow.evaluate().length == 1,
+          failure: 'Settings did not load Handle DID Recovery capability.',
+        );
         await tester.ensureVisible(recoveryRow);
         await _tapOne(
           tester,
@@ -3885,6 +3890,11 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
     failure: 'Crash-cut setup did not open Settings.',
   );
   final recoveryRow = find.byKey(const Key('settings-recover-handle-did-row'));
+  await _pumpUntil(
+    tester,
+    () => recoveryRow.evaluate().length == 1,
+    failure: 'Settings did not load Handle DID Recovery capability.',
+  );
   await tester.ensureVisible(recoveryRow);
   await _tapOne(
     tester,

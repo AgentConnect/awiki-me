@@ -209,12 +209,14 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
             artifact: artifacts.admin,
             environment: productEnvironment,
             platform: pairConfig.platform,
+            redactor: redactor,
           );
           joinerApp = await _RunningIsolatedApp.start(
             role: 'joiner',
             artifact: artifacts.joiner,
             environment: productEnvironment,
             platform: pairConfig.platform,
+            redactor: redactor,
           );
           await _driveAppPair(
             adminApp: adminApp,
@@ -597,10 +599,12 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
 
       final first = await Future.any(exits).timeout(remaining());
       if (first.value != 0) {
-        final failedDriver = first.key == 'admin' ? adminDriver : joinerDriver;
         throw E2eFailure(
           'The isolated ${first.key} App integration driver failed.\n'
-          '${failedDriver.diagnosticTail}',
+          'admin driver:\n${adminDriver.diagnosticTail}\n'
+          'joiner driver:\n${joinerDriver.diagnosticTail}\n'
+          'admin App:\n${adminApp.diagnosticTail}\n'
+          'joiner App:\n${joinerApp.diagnosticTail}',
         );
       }
       final results = await Future.wait(exits).timeout(remaining());
@@ -612,10 +616,12 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
         }
       }
       if (failed != null) {
-        final failedDriver = failed.key == 'admin' ? adminDriver : joinerDriver;
         throw E2eFailure(
           'The isolated ${failed.key} App integration driver failed.\n'
-          '${failedDriver.diagnosticTail}',
+          'admin driver:\n${adminDriver.diagnosticTail}\n'
+          'joiner driver:\n${joinerDriver.diagnosticTail}\n'
+          'admin App:\n${adminApp.diagnosticTail}\n'
+          'joiner App:\n${joinerApp.diagnosticTail}',
         );
       }
     } on TimeoutException {

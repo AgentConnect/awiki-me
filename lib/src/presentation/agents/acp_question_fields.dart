@@ -189,7 +189,7 @@ class _AcpQuestionField extends StatelessWidget {
               style: TextStyle(
                 fontSize: 14,
                 height: 1.4,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
                 color: theme.title,
               ),
             ),
