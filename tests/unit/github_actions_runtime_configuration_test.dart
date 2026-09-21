@@ -97,7 +97,7 @@ void main() {
       expect(
         line,
         contains(
-          "github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'b2d2f719",
+          "github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05",
         ),
       );
     }
