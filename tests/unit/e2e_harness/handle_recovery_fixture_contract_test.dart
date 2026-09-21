@@ -6,26 +6,37 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/handle_recovery_fixture_contract.dart';
 
 void main() {
-  test('Recovery fake Hermes supports canonical local installation discovery', () {
-    final source = File(
-      'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
-    ).readAsStringSync();
-    expect(source, contains('/fake-hermes/tui_gateway/entry.py'));
-    expect(source, contains("/__init__.py').writeAsString('')"));
-    expect(source, contains("'AWIKI_HERMES_GATEWAY_CMD': 'python3 -m tui_gateway.entry'"));
-    expect(source, contains("'PYTHONPATH': gatewayScript.parent.parent.path"));
-    expect(source, isNot(contains("'AWIKI_HERMES_GATEWAY_CMD': '/usr/bin/env")));
-  });
+  test(
+    'Recovery fake Hermes supports canonical local installation discovery',
+    () {
+      final source = File(
+        'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+      ).readAsStringSync();
+      expect(source, contains('/acp-home/.local/bin/hermes'));
+      expect(
+        source,
+        contains("'HOME': gatewayScript.parent.parent.parent.path"),
+      );
+      expect(source, contains("method == 'initialize'"));
+      expect(source, contains("method == 'session/load'"));
+      expect(source, contains("method == 'session/prompt'"));
+      expect(source, isNot(contains('AWIKI_HERMES_GATEWAY_CMD')));
+      expect(source, isNot(contains('tui_gateway.entry')));
+    },
+  );
 
-  test('Recovery waits for asynchronous Settings capability before scrolling', () {
-    final source = File(
-      'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
-    ).readAsStringSync();
-    final readyWait = RegExp(
-      r"await _pumpUntil\(\s*tester,\s*\(\) => recoveryRow.evaluate\(\).length == 1,[\s\S]*?\);\s*await tester.ensureVisible\(recoveryRow\);",
-    );
-    expect(readyWait.allMatches(source), hasLength(2));
-  });
+  test(
+    'Recovery waits for asynchronous Settings capability before scrolling',
+    () {
+      final source = File(
+        'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+      ).readAsStringSync();
+      final readyWait = RegExp(
+        r"await _pumpUntil\(\s*tester,\s*\(\) => recoveryRow.evaluate\(\).length == 1,[\s\S]*?\);\s*await tester.ensureVisible\(recoveryRow\);",
+      );
+      expect(readyWait.allMatches(source), hasLength(2));
+    },
+  );
 
   group('Handle Recovery fixture checkpoint', () {
     test('persists only opaque references, counts, and stage state', () async {
@@ -268,7 +279,12 @@ void main() {
           "'local_state_unavailable',\n        'transport_unavailable',",
         ),
       );
-      expect(source, contains("syncNow(reason: 'handle-recovery-rejoin-e2e'"));
+      expect(
+        RegExp(
+          r"syncNow\(\s*reason: 'handle-recovery-rejoin-e2e'",
+        ).hasMatch(source),
+        isTrue,
+      );
     },
   );
 

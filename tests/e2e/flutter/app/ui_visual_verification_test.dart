@@ -853,7 +853,7 @@ DID: $_sessionDid
       handle: 'local-daemon',
       displayName: 'Local Daemon',
       activeState: 'active',
-      latest: test_support.readyDaemonStatusWithGenericCliCapability,
+      latest: test_support.readyDaemonStatusWithAcpCapability,
     ),
     const AgentSummary(
       agentDid: _runtimeDid,

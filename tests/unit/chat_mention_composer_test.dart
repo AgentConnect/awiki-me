@@ -1,3 +1,5 @@
+import 'package:awiki_me/src/domain/entities/agent/agent_availability.dart';
+import 'package:awiki_me/src/presentation/agents/agent_availability_provider.dart';
 import 'dart:async';
 
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
@@ -19,6 +21,83 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
+  testWidgets(
+    'unavailable Agent disappears from open mention list and search without editing draft',
+    (tester) async {
+      const oldDid = 'did:test:old';
+      final gateway = FakeAwikiGateway()
+        ..groupMembersByGroupId = const {
+          'lifecycle-group': [
+            GroupMemberSummary(
+              userId: oldDid,
+              did: oldDid,
+              handle: 'old',
+              role: 'member',
+              displayName: 'Old Agent',
+              subjectType: GroupMemberSubjectType.agent,
+            ),
+          ],
+        };
+      final conversation = ConversationSummary(
+        threadId: 'group:lifecycle-group',
+        conversationId: 'group:lifecycle-group',
+        displayName: 'Lifecycle',
+        lastMessagePreview: '',
+        lastMessageAt: DateTime(2026),
+        unreadCount: 0,
+        isGroup: true,
+        groupId: 'lifecycle-group',
+      );
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          gateway: gateway,
+          session: const SessionIdentity(
+            did: 'did:test:me',
+            credentialName: 'me',
+            displayName: 'Me',
+          ),
+          home: CupertinoPageScaffold(
+            child: ChatView(
+              conversation: conversation,
+              embedded: true,
+              macStyle: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(CupertinoTextField), '@Old');
+      await tester.pumpAndSettle();
+      expect(find.text('@Old Agent'), findsOneWidget);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ChatView)),
+      );
+      await container
+          .read(agentAvailabilityProvider.notifier)
+          .applyFacts(const [
+            AgentAvailability(
+              agentDid: oldDid,
+              state: AgentAvailabilityState.unavailable,
+              reason: 'agent_deleted',
+              version: '2',
+            ),
+          ]);
+      await tester.pumpAndSettle();
+      expect(find.text('@Old Agent'), findsNothing);
+      expect(
+        tester
+            .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+            .controller!
+            .text,
+        '@Old',
+      );
+      await tester.enterText(find.byType(CupertinoTextField), '@');
+      await tester.pumpAndSettle();
+      expect(find.text('@Old Agent'), findsNothing);
+      expect(gateway.listGroupMembersCalls, 1);
+    },
+  );
+
   testWidgets(
     'chat mention preloads one roster and filters consecutive queries locally',
     (tester) async {

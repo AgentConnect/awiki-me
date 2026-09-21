@@ -4683,10 +4683,11 @@
       "feature": "A real runtime delete completes on the writing App and converges to its sibling",
       "layer": "remote_product_ui",
       "preconditions": "Both Apps project the same active Codex runtime and the real Daemon reports an actionable control channel.",
-      "action": "Submit runtime deletion through the admin App controller and wait for the service-backed terminal reconcile before accepting sibling completion.",
+      "action": "Submit runtime deletion through the admin App controller and wait for the service-backed terminal reconcile before accepting sibling completion. Both Apps also query the authenticated by-DID availability API and require agent_deleted in the shared product projection; cached state alone cannot attest this check.",
       "exactOracles": [
         "The admin App submits the real runtime delete and removes the target only after authoritative reconcile.",
-        "The joining App confirms terminal convergence for the exact Agent DID."
+        "The joining App confirms terminal convergence for the exact Agent DID.",
+        "Both authenticated Apps query the deployed by-DID availability endpoint and project agent_deleted; local cached state cannot substitute for the endpoint check."
       ],
       "negativeChecks": [
         "Local optimistic removal alone, a Daemon command failure, a retained visible runtime, or treating a UI disappearance without sibling confirmation as delete success prevents pass."
@@ -4705,7 +4706,8 @@
         "assertionIds": [
           "DEVICE-AGENT-DELETE-SYNC-E2E-001:admin_app_submitted_real_runtime_delete",
           "DEVICE-AGENT-DELETE-SYNC-E2E-001:admin_app_removed_deleted_runtime_after_authoritative_reconcile",
-          "DEVICE-AGENT-DELETE-SYNC-E2E-001:joining_app_confirmed_terminal_inventory_convergence"
+          "DEVICE-AGENT-DELETE-SYNC-E2E-001:joining_app_confirmed_terminal_inventory_convergence",
+          "DEVICE-AGENT-DELETE-SYNC-E2E-001:both_apps_confirmed_public_deleted_availability"
         ],
         "exactOracleAssertions": [
           [
@@ -4714,6 +4716,9 @@
           ],
           [
             "DEVICE-AGENT-DELETE-SYNC-E2E-001:joining_app_confirmed_terminal_inventory_convergence"
+          ],
+          [
+            "DEVICE-AGENT-DELETE-SYNC-E2E-001:both_apps_confirmed_public_deleted_availability"
           ]
         ],
         "negativeCheckAssertions": [

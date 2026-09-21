@@ -28,6 +28,39 @@ class AgentSummary {
   bool get isDaemon => kind == AgentKind.daemon;
   bool get isRuntime => kind == AgentKind.runtime;
 
+  Map<String, Object?> get runtimeConfiguration =>
+      _readMap(latest.diagnosticsSummary['config_summary']);
+
+  /// Brand identifies the product; only execution metadata identifies the protocol.
+  bool get usesAcp {
+    if (!isRuntime || isRetiredRuntime) return false;
+    final protocol = runtimeConfiguration['protocol'];
+    if (protocol != null) return protocol == 'acp';
+    if (runtime == 'acp') return true;
+    // These four brands have only ever used ACP. The migrated brands have not.
+    return const {
+      'opencode',
+      'gemini',
+      'kimi',
+      'deepseek-harness',
+    }.contains(runtime);
+  }
+
+  bool get isRetiredRuntime =>
+      isRuntime &&
+      (activeState == 'retired' ||
+          latest.lastErrorCode == 'legacy_runtime_disabled_recreate_required' ||
+          latest.diagnosticsSummary['profile_status'] == 'retired' ||
+          runtimeConfiguration['protocol'] == 'legacy' ||
+          runtimeConfiguration['retired_reason'] ==
+              'legacy_runtime_disabled_recreate_required');
+
+  Set<String> get supportedAcpDrivers {
+    final acp = _readMap(runtimeConfiguration['acp']);
+    if (!isDaemon || acp['capability_schema_version'] != 1) return const {};
+    return _readList(acp['supported_drivers']).whereType<String>().toSet();
+  }
+
   factory AgentSummary.fromJson(Map<String, Object?> json) {
     final kind = _parseKind(json['agent_kind']?.toString());
     return AgentSummary(

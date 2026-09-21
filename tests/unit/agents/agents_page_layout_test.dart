@@ -1226,7 +1226,7 @@ void main() {
               status: 'needs_upgrade',
               platform: 'linux-amd64',
               needsUpgrade: true,
-              diagnosticsSummary: genericCliCapabilityDiagnostics,
+              diagnosticsSummary: acpCapabilityDiagnostics,
             ),
           ),
         ];
@@ -1296,7 +1296,7 @@ void main() {
             latest: AgentLatestStatus(
               status: 'ready',
               platform: 'linux-amd64',
-              diagnosticsSummary: genericCliCapabilityDiagnostics,
+              diagnosticsSummary: acpCapabilityDiagnostics,
             ),
           ),
         ];
@@ -1365,7 +1365,7 @@ void main() {
               status: 'needs_upgrade',
               platform: 'linux-amd64',
               needsUpgrade: true,
-              diagnosticsSummary: genericCliCapabilityDiagnostics,
+              diagnosticsSummary: acpCapabilityDiagnostics,
             ),
           ),
         ];
@@ -1429,7 +1429,7 @@ void main() {
           kind: AgentKind.daemon,
           displayName: 'Daemon',
           activeState: 'active',
-          latest: readyDaemonStatusWithGenericCliCapability,
+          latest: readyDaemonStatusWithAcpCapability,
         ),
         AgentSummary(
           agentDid: runtimeDid,
@@ -1511,7 +1511,7 @@ void main() {
               status: 'needs_upgrade',
               platform: 'linux-amd64',
               needsUpgrade: true,
-              diagnosticsSummary: genericCliCapabilityDiagnostics,
+              diagnosticsSummary: acpCapabilityDiagnostics,
             ),
           ),
         ];
@@ -1571,7 +1571,7 @@ void main() {
             handle: 'awiki-daemon-test',
             displayName: '代理 1',
             activeState: 'active',
-            latest: readyDaemonStatusWithGenericCliCapability,
+            latest: readyDaemonStatusWithAcpCapability,
             daemonEffectiveStatus: DaemonEffectiveStatus(
               controlState: 'online',
               primaryStatus: 'ready',
@@ -1748,7 +1748,7 @@ void main() {
             handle: 'awiki-daemon-test',
             displayName: '代理 1',
             activeState: 'active',
-            latest: readyDaemonStatusWithGenericCliCapability,
+            latest: readyDaemonStatusWithAcpCapability,
             daemonEffectiveStatus: DaemonEffectiveStatus(
               controlState: 'online',
               primaryStatus: 'ready',
@@ -1854,7 +1854,7 @@ void main() {
             handle: 'awiki-daemon-test',
             displayName: '代理 1',
             activeState: 'active',
-            latest: readyDaemonStatusWithGenericCliCapability,
+            latest: readyDaemonStatusWithAcpCapability,
           ),
         ];
 
@@ -1902,7 +1902,7 @@ void main() {
     },
   );
 
-  testWidgets('create Agent dialog submits generic CLI full-access directly', (
+  testWidgets('create Agent dialog submits ACP host access directly', (
     tester,
   ) async {
     final control = _PendingRefreshAgentControlService()
@@ -1913,7 +1913,7 @@ void main() {
           handle: 'awiki-daemon-test',
           displayName: '代理 1',
           activeState: 'active',
-          latest: readyDaemonStatusWithGenericCliCapability,
+          latest: readyDaemonStatusWithAcpCapability,
         ),
       ];
 
@@ -1961,7 +1961,7 @@ void main() {
   });
 
   testWidgets(
-    'create Agent dialog disables generic CLI when daemon lacks capability',
+    'create Agent dialog disables all ACP clients when daemon lacks capability',
     (tester) async {
       final control = _PendingRefreshAgentControlService()
         ..agents = const <AgentSummary>[
@@ -1997,31 +1997,13 @@ void main() {
       await tester.tap(find.text('创建 Agent'));
       await tester.pumpAndSettle();
 
-      expect(find.text('需刷新'), findsNWidgets(2));
-      expect(find.text('请先刷新设备状态，以确认是否支持 Codex。'), findsOneWidget);
-      expect(find.text('请先刷新设备状态，以确认是否支持 Claude Code。'), findsOneWidget);
-
-      await tester.tap(find.text('Codex'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('工作目录策略'), findsNothing);
-      expect(control.lastRuntimeCreateDaemonDid, isNull);
-    },
-  );
-
-  testWidgets(
-    'create Agent dialog fails closed for incompatible generic CLI schema',
-    (tester) async {
-      final control = await _pumpCreateAgentDialog(
-        tester,
-        daemon: _daemonWithGenericCliCapability(
-          _genericCliCapability(schemaVersion: 99),
-        ),
+      expect(find.text('需要升级'), findsNWidgets(7));
+      expect(find.text('当前设备的 Daemon 尚不支持 Codex，请升级后重试。'), findsOneWidget);
+      expect(
+        find.text('当前设备的 Daemon 尚不支持 Claude Code，请升级后重试。'),
+        findsOneWidget,
       );
 
-      expect(find.text('需刷新'), findsWidgets);
-      expect(find.text('请先刷新设备状态，以确认是否支持 Codex。'), findsOneWidget);
-
       await tester.tap(find.text('Codex'));
       await tester.pumpAndSettle();
 
@@ -2030,20 +2012,36 @@ void main() {
     },
   );
 
+  testWidgets('create Agent dialog fails closed for incompatible ACP schema', (
+    tester,
+  ) async {
+    final control = await _pumpCreateAgentDialog(
+      tester,
+      daemon: _daemonWithAcpCapability(_acpCapability(schemaVersion: 99)),
+    );
+
+    expect(find.text('需要升级'), findsWidgets);
+    expect(find.text('当前设备的 Daemon 尚不支持 Codex，请升级后重试。'), findsOneWidget);
+
+    await tester.tap(find.text('Codex'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('工作目录策略'), findsNothing);
+    expect(control.lastRuntimeCreateDaemonDid, isNull);
+  });
+
   testWidgets(
-    'create Agent dialog fails closed when route-root is unsupported',
+    'create Agent dialog fails closed when driver is not advertised',
     (tester) async {
       final control = await _pumpCreateAgentDialog(
         tester,
-        daemon: _daemonWithGenericCliCapability(
-          _genericCliCapability(
-            supportedWorkspaceModes: const <String>['shared-root'],
-          ),
+        daemon: _daemonWithAcpCapability(
+          _acpCapability(supportedDrivers: const <String>['hermes']),
         ),
       );
 
       expect(find.text('需要升级'), findsWidgets);
-      expect(find.text('请升级此设备的 Daemon，以启用 Codex。'), findsOneWidget);
+      expect(find.text('当前设备的 Daemon 尚不支持 Codex，请升级后重试。'), findsOneWidget);
 
       await tester.tap(find.text('Codex'));
       await tester.pumpAndSettle();
@@ -3432,41 +3430,15 @@ class _SkillOnboardingPortStub implements SkillOnboardingPort {
   }
 }
 
-Map<String, Object?> _genericCliCapability({
+Map<String, Object?> _acpCapability({
   int schemaVersion = 1,
-  List<String> supportedDrivers = const <String>[
-    'codex',
-    'claude-code',
-    'command',
-  ],
-  List<String> supportedWorkspaceModes = const <String>[
-    'route-root',
-    'shared-root',
-    'worktree-per-task',
-  ],
-  List<String> supportedSandboxModes = const <String>[
-    'read-only',
-    'workspace-write',
-    'danger-full-access',
-  ],
-  bool routeSessionSupported = true,
-  bool nativeResumeSupported = true,
-}) {
-  final configSummary =
-      genericCliCapabilityDiagnostics['config_summary'] as Map<String, Object?>;
-  final base = configSummary['generic_cli'] as Map<String, Object?>;
-  return <String, Object?>{
-    ...base,
-    'capability_schema_version': schemaVersion,
-    'supported_drivers': supportedDrivers,
-    'supported_workspace_modes': supportedWorkspaceModes,
-    'supported_sandbox_modes': supportedSandboxModes,
-    'route_session_supported': routeSessionSupported,
-    'native_resume_supported': nativeResumeSupported,
-  };
-}
+  List<String> supportedDrivers = const ['hermes', 'codex', 'claude-code'],
+}) => {
+  'capability_schema_version': schemaVersion,
+  'supported_drivers': supportedDrivers,
+};
 
-AgentSummary _daemonWithGenericCliCapability(Map<String, Object?> genericCli) {
+AgentSummary _daemonWithAcpCapability(Map<String, Object?> genericCli) {
   return AgentSummary(
     agentDid: 'did:agent:daemon',
     kind: AgentKind.daemon,
@@ -3477,7 +3449,7 @@ AgentSummary _daemonWithGenericCliCapability(Map<String, Object?> genericCli) {
       status: 'ready',
       platform: 'linux-amd64',
       diagnosticsSummary: <String, Object?>{
-        'config_summary': <String, Object?>{'generic_cli': genericCli},
+        'config_summary': <String, Object?>{'acp': genericCli},
       },
     ),
   );

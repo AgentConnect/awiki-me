@@ -9,6 +9,23 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
+  String get agentLifecycleUnavailable => '不可用';
+
+  @override
+  String get agentLifecycleDeletedReason => '该智能体已被删除。';
+
+  @override
+  String get agentLifecycleRetiredReason => '该智能体的旧版接入已停用，需要由控制者重新创建。';
+
+  @override
+  String get agentLifecycleInactiveReason => '该智能体已停用，暂时无法接收新指令。';
+
+  @override
+  String agentLifecycleMessageNotice(String name) {
+    return '$name已不可用';
+  }
+
+  @override
   String get identityMethodLabel => '身份方法';
 
   @override
@@ -2430,7 +2447,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get agentCreateHermesDescription => '使用宿主机上的 Hermes Gateway。';
+  String get agentCreateHermesDescription => '使用宿主机上的 Hermes CLI。';
 
   @override
   String agentCreateNeedsGenericCliCapability(Object agentType) {
@@ -3637,7 +3654,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentClientPermissionHint => '客户端没有执行权限，请在宿主机修复后重新检测。';
 
   @override
-  String get agentClientGatewayHint => '未找到 Hermes Gateway 模块，请检查宿主机安装。';
+  String get agentClientGatewayHint => '未找到 Hermes CLI 模块，请检查宿主机安装。';
 
   @override
   String get agentClientCustomHint => '无法轻量检测自定义启动命令，请检查启动入口。';
@@ -3673,6 +3690,41 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentClientCompatibilityHint => '客户端版本与当前接入能力不兼容，请更新客户端后重试。';
+
+  @override
+  String get chatRetiredAgentDisabled => '旧版接入已停用，请重新创建智能体。聊天记录与草稿已保留。';
+
+  @override
+  String get agentAcpUpgradeRequired => '请升级 Daemon 以使用此智能体的 ACP 接入。';
+
+  @override
+  String get agentClientAdapterHint => 'Daemon 的接入组件缺失或损坏，请重新安装 Daemon。';
+
+  @override
+  String get agentClientPlatformHint => '当前平台不支持此智能体的接入组件。';
+
+  @override
+  String get agentClientHermesAcpHint =>
+      'Hermes 缺少可用的 ACP 支持，请在宿主机升级 Hermes CLI。';
+
+  @override
+  String get agentClientNodeMissing => '宿主机未检测到 Node.js。';
+
+  @override
+  String get agentClientNodeIncompatible => 'Node.js 版本不兼容，需要 22 或更高版本。';
+
+  @override
+  String get agentClientNodeUnavailable => 'Node.js 无法启动，请检查宿主机安装后重新检测。';
+
+  @override
+  String get agentClientNodeSetup =>
+      'Codex 和 Claude Code 需要在此 Daemon 宿主机安装 Node.js 22 或更高版本，推荐 24 LTS。安装后请重新检测。';
+
+  @override
+  String get agentClientNodeDownload => 'Node.js 安装指南 ↗';
+
+  @override
+  String get agentClientWaitingConfirmation => '等待确认';
 
   @override
   String get deviceJoinManagementRegistered => '管理权限已登记，请在新设备确认管理能力已就绪。';

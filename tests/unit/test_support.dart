@@ -93,37 +93,20 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-const Map<String, Object?> genericCliCapabilityDiagnostics = <String, Object?>{
-  'config_summary': <String, Object?>{
-    'generic_cli': <String, Object?>{
+const Map<String, Object?> acpCapabilityDiagnostics = {
+  'config_summary': {
+    'protocol': 'acp',
+    'acp': {
       'capability_schema_version': 1,
-      'supported_drivers': <String>['codex', 'claude-code', 'command'],
-      'supported_workspace_modes': <String>[
-        'route-root',
-        'shared-root',
-        'worktree-per-task',
+      'supported_drivers': [
+        'hermes',
+        'codex',
+        'claude-code',
+        'opencode',
+        'gemini',
+        'kimi',
+        'deepseek-harness',
       ],
-      'supported_sandbox_modes': <String>[
-        'read-only',
-        'workspace-write',
-        'danger-full-access',
-      ],
-      'supported_runtime_create_args': <String>[
-        'runtime',
-        'driver_id',
-        'workspace_mode',
-        'workspace_strategy',
-        'default_sandbox',
-        'default_model',
-        'driver_config',
-        'recipient_policy',
-        'client_request_id',
-      ],
-      'route_session_supported': true,
-      'native_resume_supported': true,
-      'profile_concurrency_cap_supported': false,
-      'max_parallel_runs_per_profile': 1,
-      'runtime_target_required': true,
     },
   },
 };
@@ -171,12 +154,11 @@ ConversationSummary? selectedConversationSummary(ProviderContainer container) {
   return null;
 }
 
-const AgentLatestStatus readyDaemonStatusWithGenericCliCapability =
-    AgentLatestStatus(
-      status: 'ready',
-      platform: 'darwin-arm64',
-      diagnosticsSummary: genericCliCapabilityDiagnostics,
-    );
+const AgentLatestStatus readyDaemonStatusWithAcpCapability = AgentLatestStatus(
+  status: 'ready',
+  platform: 'darwin-arm64',
+  diagnosticsSummary: acpCapabilityDiagnostics,
+);
 
 Map<String, Object?> genericCliRuntimeCardDiagnostics({
   String lifecycleState = 'needs_setup',
@@ -1872,7 +1854,9 @@ class FakeAppSessionService
   }
 
   @override
-  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+  Future<bool> hasPendingLocalIdentityRecovery(
+    String identityIdOrAlias,
+  ) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
@@ -2912,7 +2896,7 @@ class FakeAgentControlService implements AgentControlService {
       handle: 'awiki-daemon-test',
       displayName: '代理 1',
       activeState: 'active',
-      latest: readyDaemonStatusWithGenericCliCapability,
+      latest: readyDaemonStatusWithAcpCapability,
     ),
   ];
   InstallCommand? lastInstallCommand;
@@ -4412,7 +4396,9 @@ class FakeIdentityCorePort
   }
 
   @override
-  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+  Future<bool> hasPendingLocalIdentityRecovery(
+    String identityIdOrAlias,
+  ) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async =>

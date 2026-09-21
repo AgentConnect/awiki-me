@@ -195,7 +195,15 @@ class _ComposerState extends ConsumerState<_Composer> {
         groupMembers: members,
       );
       final candidates = ChatMentionCandidate.forGroupMembers(
-        members.map(presentation.projectGroupMember),
+        members
+            .where(
+              (member) =>
+                  ref
+                      .read(effectiveAgentAvailabilityProvider)[member.did]
+                      ?.unavailable !=
+                  true,
+            )
+            .map(presentation.projectGroupMember),
         query: trigger.query,
         currentUserDid: ref.read(sessionProvider).session?.did,
         currentUserHandle: ref.read(sessionProvider).session?.handle,
@@ -524,6 +532,12 @@ class _ComposerState extends ConsumerState<_Composer> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(effectiveAgentAvailabilityProvider, (previous, next) {
+      final trigger = _activeMentionTrigger;
+      if (trigger != null) {
+        unawaited(_loadMentionCandidates(trigger));
+      }
+    });
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     final canSubmit = _canSubmit;

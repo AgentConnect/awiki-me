@@ -9,6 +9,25 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String get agentLifecycleUnavailable => 'Unavailable';
+
+  @override
+  String get agentLifecycleDeletedReason => 'This agent has been deleted.';
+
+  @override
+  String get agentLifecycleRetiredReason =>
+      'This agent\'s legacy integration has been retired. Its controller needs to create a new agent.';
+
+  @override
+  String get agentLifecycleInactiveReason =>
+      'This agent has been disabled and cannot receive new instructions.';
+
+  @override
+  String agentLifecycleMessageNotice(String name) {
+    return '$name is unavailable';
+  }
+
+  @override
   String get identityMethodLabel => 'Identity method';
 
   @override
@@ -2579,7 +2598,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get agentCreateHermesDescription => 'Uses Hermes Gateway on the host.';
+  String get agentCreateHermesDescription => 'Uses Hermes CLI on the host.';
 
   @override
   String agentCreateNeedsGenericCliCapability(Object agentType) {
@@ -3886,7 +3905,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentClientGatewayHint =>
-      'Hermes Gateway module not found. Check the host installation.';
+      'Hermes CLI module not found. Check the host installation.';
 
   @override
   String get agentClientCustomHint =>
@@ -3931,6 +3950,47 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get agentClientCompatibilityHint =>
       'This client version is not compatible with the integration. Update the client and try again.';
+
+  @override
+  String get chatRetiredAgentDisabled =>
+      'This legacy agent is retired. Create a new agent; your history and draft are kept.';
+
+  @override
+  String get agentAcpUpgradeRequired =>
+      'Upgrade the Daemon to use ACP with this agent.';
+
+  @override
+  String get agentClientAdapterHint =>
+      'The Daemon adapter is missing or damaged. Reinstall the Daemon.';
+
+  @override
+  String get agentClientPlatformHint =>
+      'The agent adapter does not support this platform.';
+
+  @override
+  String get agentClientHermesAcpHint =>
+      'Hermes ACP support is unavailable. Upgrade Hermes CLI on the host.';
+
+  @override
+  String get agentClientNodeMissing => 'Node.js is not installed on this host.';
+
+  @override
+  String get agentClientNodeIncompatible =>
+      'This Node.js version is incompatible. Use Node.js 22 or later.';
+
+  @override
+  String get agentClientNodeUnavailable =>
+      'Node.js could not start. Check the host installation and detect again.';
+
+  @override
+  String get agentClientNodeSetup =>
+      'Codex and Claude Code require Node.js 22 or later on this Daemon host. Node.js 24 LTS is recommended. After installing, detect again.';
+
+  @override
+  String get agentClientNodeDownload => 'Node.js installation guide ↗';
+
+  @override
+  String get agentClientWaitingConfirmation => 'Awaiting confirmation';
 
   @override
   String get deviceJoinManagementRegistered =>

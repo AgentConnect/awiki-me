@@ -26,6 +26,7 @@ import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../agents/agents_provider.dart';
+import '../agents/agent_availability_provider.dart';
 import '../conversation_list/conversation_peer_classifier.dart';
 import '../profile/peer_display_profile_provider.dart';
 import 'create_group_dialog.dart';
@@ -770,6 +771,9 @@ class GroupMemberRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final title = _memberDisplayName(ref, item, watch: true);
+    final unavailable =
+        ref.watch(effectiveAgentAvailabilityProvider)[item.did]?.unavailable ==
+        true;
     final identityLabel = _memberIdentityLabel(item);
     final avatarUri =
         peerAvatarUri(
@@ -788,14 +792,32 @@ class GroupMemberRow extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(
-                title,
-                key: Key(
-                  'group-member-title:${groupMemberPresentationKey(item)}',
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AwikiMeTextStyles.cardTitle,
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      title,
+                      key: Key(
+                        'group-member-title:${groupMemberPresentationKey(item)}',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AwikiMeTextStyles.cardTitle,
+                    ),
+                  ),
+                  if (unavailable) ...[
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: SemanticPill(
+                        key: Key(
+                          'group-member-unavailable:${groupMemberPresentationKey(item)}',
+                        ),
+                        label: context.l10n.agentLifecycleUnavailable,
+                        tone: SemanticPillTone.muted,
+                      ),
+                    ),
+                  ],
+                ],
               ),
               if (identityLabel != null) ...<Widget>[
                 const SizedBox(height: 2),

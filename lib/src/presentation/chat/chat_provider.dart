@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../application/agent/group_agent_availability.dart';
 import '../../application/message_sync_service.dart';
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_conversation_read_ref.dart';
@@ -21,7 +22,6 @@ import '../../application/ports/message_sync_core_port.dart';
 import '../../application/thread_id_utils.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
-import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/chat_mention.dart';
@@ -30,6 +30,7 @@ import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
+import '../agents/agent_availability_provider.dart';
 import '../agents/agents_provider.dart';
 import '../agents/acp_session_provider.dart';
 import '../agents/personal_agent_feature_visibility.dart';
@@ -768,6 +769,8 @@ class ChatThreadsController
 
   final Map<String, Timer> _agentProcessingTimers = <String, Timer>{};
   final LinkedHashSet<String> _completedAgentTurnKeys = LinkedHashSet<String>();
+  final LinkedHashSet<String> _availabilityCheckedMessages =
+      LinkedHashSet<String>();
   final Map<String, _PendingHistorySync> _pendingHistorySyncs =
       <String, _PendingHistorySync>{};
   final Map<String, _PendingVisibleThreadStaleGuard>
@@ -3187,6 +3190,23 @@ class ChatThreadsController
     }
   }
 
+  bool _retiredDirectAgent(ConversationSummary conversation) =>
+      !conversation.isGroup &&
+      ref
+          .read(agentsProvider)
+          .agents
+          .any(
+            (agent) =>
+                agent.isRetiredRuntime &&
+                agent.agentDid == conversation.targetDid,
+          );
+
+  bool _blockRetiredDirectAgent(ConversationSummary conversation) {
+    if (!_retiredDirectAgent(conversation)) return false;
+    ref.read(uiFeedbackProvider.notifier).showError(AppMessage.retiredAgent());
+    return true;
+  }
+
   Future<void> sendMessage({
     required ConversationSummary conversation,
     required String content,
@@ -3194,6 +3214,7 @@ class ChatThreadsController
     String? expectedAgentReplyDid,
     String? displayThreadId,
   }) async {
+    if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
     final session = ref.read(sessionProvider).session;
     if (sessionEpoch == null || session == null || content.trim().isEmpty) {
@@ -3289,6 +3310,7 @@ class ChatThreadsController
     String? expectedAgentReplyDid,
     String? displayThreadId,
   }) async {
+    if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
     final session = ref.read(sessionProvider).session;
     if (sessionEpoch == null || session == null) {
@@ -3455,6 +3477,7 @@ class ChatThreadsController
     String? expectedAgentReplyDid,
     String? displayThreadId,
   }) async {
+    if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
     if (sessionEpoch == null) {
       return;
@@ -3621,6 +3644,7 @@ class ChatThreadsController
     String? expectedAgentReplyDid,
     String? displayThreadId,
   }) async {
+    if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
     if (sessionEpoch == null) {
       return;
@@ -3940,6 +3964,7 @@ class ChatThreadsController
     _activeLocalHistoryLoads.clear();
     _activeRemoteHistorySyncs.clear();
     _completedAgentTurnKeys.clear();
+    _availabilityCheckedMessages.clear();
     _clearMemoryCacheMetadata();
     state = const <String, ChatThreadState>{};
   }
@@ -5326,25 +5351,33 @@ class ChatThreadsController
             turn.remoteMessageId != remoteMessageId,
       ),
       for (final target in pendingTargets)
-        AgentPendingTurn(
-          agentDid: target.agentDid,
-          localMessageId: localMessageId,
-          remoteMessageId: remoteMessageId,
-          mentionId:
-              target.mentionId ??
-              existingByAgentDid[target.agentDid]?.mentionId,
-          agentHandle:
-              target.agentHandle ??
-              existingByAgentDid[target.agentDid]?.agentHandle,
-          progress: existingByAgentDid[target.agentDid]?.progress,
-          hasAuthoritativeRunStatus:
-              existingByAgentDid[target.agentDid]?.hasAuthoritativeRunStatus ??
-              false,
-          startedAt:
-              existingByAgentDid[target.agentDid]?.startedAt ??
-              deliveredMessage.createdAt,
-          isOverdue: existingByAgentDid[target.agentDid]?.isOverdue ?? false,
-        ),
+        if (existingByAgentDid[target.agentDid]?.hasAuthoritativeRunStatus ==
+                true ||
+            !conversation.isGroup ||
+            ref
+                    .read(effectiveAgentAvailabilityProvider)[target.agentDid]
+                    ?.unavailable !=
+                true)
+          AgentPendingTurn(
+            agentDid: target.agentDid,
+            localMessageId: localMessageId,
+            remoteMessageId: remoteMessageId,
+            mentionId:
+                target.mentionId ??
+                existingByAgentDid[target.agentDid]?.mentionId,
+            agentHandle:
+                target.agentHandle ??
+                existingByAgentDid[target.agentDid]?.agentHandle,
+            progress: existingByAgentDid[target.agentDid]?.progress,
+            hasAuthoritativeRunStatus:
+                existingByAgentDid[target.agentDid]
+                    ?.hasAuthoritativeRunStatus ??
+                false,
+            startedAt:
+                existingByAgentDid[target.agentDid]?.startedAt ??
+                deliveredMessage.createdAt,
+            isOverdue: existingByAgentDid[target.agentDid]?.isOverdue ?? false,
+          ),
     ];
     state = <String, ChatThreadState>{
       ...state,
@@ -5352,6 +5385,64 @@ class ChatThreadsController
     };
     _scheduleAgentProcessingOverdue(threadId);
     _applyAcpProjection(ref.read(acpSessionsProvider));
+    _observeGroupAgentAvailability(deliveredMessage);
+  }
+
+  void _observeGroupAgentAvailability(ChatMessage message) {
+    final targets = explicitGroupAgentTargets(message);
+    final route = message.conversationId;
+    if (targets.isEmpty || route == null || route.isEmpty) return;
+    final key = '$route:${message.remoteId ?? message.localId}';
+    if (!_availabilityCheckedMessages.add(key)) return;
+    while (_availabilityCheckedMessages.length > 1024) {
+      _availabilityCheckedMessages.remove(_availabilityCheckedMessages.first);
+    }
+    final epoch = _sessionEpoch;
+    unawaited(
+      ref
+          .read(agentAvailabilityProvider.notifier)
+          .ensure(targets.keys, force: true)
+          .then((_) {
+            if (!mounted ||
+                epoch != _sessionEpoch ||
+                epoch != ref.read(sessionProvider).activeEpoch) {
+              return;
+            }
+            final availability = ref.read(effectiveAgentAvailabilityProvider);
+            final sourceIds = {
+              message.localId,
+              if (message.remoteId != null) message.remoteId!,
+            };
+            final next = Map<String, ChatThreadState>.from(state);
+            var changed = false;
+            for (final entry in state.entries) {
+              if (_canonicalKeyForThreadId(entry.key) != route) continue;
+              final turns = entry.value.agentPendingTurns
+                  .where(
+                    (turn) =>
+                        turn.hasAuthoritativeRunStatus ||
+                        !targets.containsKey(turn.agentDid) ||
+                        availability[turn.agentDid]?.unavailable != true ||
+                        (!sourceIds.contains(turn.localMessageId) &&
+                            !sourceIds.contains(turn.remoteMessageId)),
+                  )
+                  .toList();
+              if (turns.length == entry.value.agentPendingTurns.length) {
+                continue;
+              }
+              next[entry.key] = entry.value.copyWith(agentPendingTurns: turns);
+              changed = true;
+            }
+            if (changed) {
+              state = next;
+              for (final entry in next.entries) {
+                if (_canonicalKeyForThreadId(entry.key) == route) {
+                  _scheduleAgentProcessingOverdue(entry.key);
+                }
+              }
+            }
+          }),
+    );
   }
 
   _AgentPendingTarget? _directAgentPendingTarget(
@@ -5380,25 +5471,12 @@ class ChatThreadsController
     return null;
   }
 
-  bool _usesAcpStatus(String agentDid) {
-    if (ref.read(acpSessionsProvider).busyForAgent(agentDid) != null) {
-      return true;
-    }
-    return ref
-        .read(agentsProvider)
-        .agents
-        .any(
-          (agent) =>
-              agent.agentDid == agentDid &&
-              agent.isRuntime &&
-              RuntimeAgentKind.values.any(
-                (kind) =>
-                    kind.isAcp &&
-                    (kind.runtime == agent.runtime ||
-                        kind.driverId == agent.latest.runtimeCard?.driverId),
-              ),
-        );
-  }
+  bool _usesAcpStatus(String agentDid) =>
+      ref.read(acpSessionsProvider).busyForAgent(agentDid) != null ||
+      ref
+          .read(agentsProvider)
+          .agents
+          .any((a) => a.agentDid == agentDid && a.usesAcp);
 
   void _applyAcpProjection(AcpProjection projection) {
     for (final task in projection.tasks.values) {
@@ -6385,6 +6463,7 @@ class ChatThreadsController
     required bool trustIncomingAgentReply,
   }) {
     for (final message in incoming) {
+      _observeGroupAgentAvailability(message);
       final sourceMessageId = message.replyToMessageId;
       final senderDid = message.senderDid.trim();
       if (!message.isMine &&

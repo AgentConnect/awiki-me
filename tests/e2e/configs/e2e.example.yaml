@@ -95,7 +95,7 @@ daemon:
   # binary: ../awiki-cli-rs2/target/debug/awiki-deamon
   # stateRoot: .e2e/personal-agent-daemon-state
   # readyFile: .e2e/personal-agent-daemon-ready.json
-  # fakeHermesGatewayCommand: python3 path/to/fake_full_ui_hermes_gateway.py
+  # fakeHermesHome: /tmp/fake-hermes-home
   # `--case multi-device-app-pair-functional` requires `binary` and `handle`;
   # its state/ready paths are always generated under the run-owned pair root.
 

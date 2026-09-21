@@ -1,4 +1,10 @@
 {
+  "agentLifecycleUnavailable": "Unavailable",
+  "agentLifecycleDeletedReason": "This agent has been deleted.",
+  "agentLifecycleRetiredReason": "This agent's legacy integration has been retired. Its controller needs to create a new agent.",
+  "agentLifecycleInactiveReason": "This agent has been disabled and cannot receive new instructions.",
+  "agentLifecycleMessageNotice": "{name} is unavailable",
+  "@agentLifecycleMessageNotice": {"placeholders": {"name": {"type": "String"}}},
   "@@locale": "en",
   "identityMethodLabel": "Identity method",
   "identityWebAdminLimitation": "Web identities do not support account recovery, root key import, or management transfer. Keep the first administrator device safe; management access cannot be recovered if it is lost.",
@@ -1077,7 +1083,7 @@
       "agentType": {}
     }
   },
-  "agentCreateHermesDescription": "Uses Hermes Gateway on the host.",
+  "agentCreateHermesDescription": "Uses Hermes CLI on the host.",
   "agentCreateNeedsGenericCliCapability": "Refresh the device status to check support for {agentType}.",
   "@agentCreateNeedsGenericCliCapability": {
     "placeholders": {
@@ -1617,7 +1623,7 @@
   "agentClientRetryHint": "Could not confirm installation. Check again.",
   "agentClientInstallHint": "Install the client on this Daemon’s host, then check again.",
   "agentClientPermissionHint": "The client cannot be executed. Fix its permissions on the host.",
-  "agentClientGatewayHint": "Hermes Gateway module not found. Check the host installation.",
+  "agentClientGatewayHint": "Hermes CLI module not found. Check the host installation.",
   "agentClientCustomHint": "This custom launcher cannot be checked safely. Check its entry point.",
   "agentClientTimeoutHint": "The check timed out. Try again shortly.",
   "agentClientLaunchHint": "The client could not start. Check its installation and dependencies.",
@@ -1636,6 +1642,17 @@
   "agentClientCreatePending": "Creation was submitted and is still pending. You can close this window and check the Agent list.",
   "agentClientProtocolHint": "Client protocol connection failed. Check sign-in, configuration or client errors on the host.",
   "agentClientCompatibilityHint": "This client version is not compatible with the integration. Update the client and try again.",
+  "chatRetiredAgentDisabled": "This legacy agent is retired. Create a new agent; your history and draft are kept.",
+  "agentAcpUpgradeRequired": "Upgrade the Daemon to use ACP with this agent.",
+  "agentClientAdapterHint": "The Daemon adapter is missing or damaged. Reinstall the Daemon.",
+  "agentClientPlatformHint": "The agent adapter does not support this platform.",
+  "agentClientHermesAcpHint": "Hermes ACP support is unavailable. Upgrade Hermes CLI on the host.",
+  "agentClientNodeMissing": "Node.js is not installed on this host.",
+  "agentClientNodeIncompatible": "This Node.js version is incompatible. Use Node.js 22 or later.",
+  "agentClientNodeUnavailable": "Node.js could not start. Check the host installation and detect again.",
+  "agentClientNodeSetup": "Codex and Claude Code require Node.js 22 or later on this Daemon host. Node.js 24 LTS is recommended. After installing, detect again.",
+  "agentClientNodeDownload": "Node.js installation guide ↗",
+  "agentClientWaitingConfirmation": "Awaiting confirmation",
   "deviceJoinManagementRegistered": "Management access registered. Confirm readiness on the new device.",
   "deviceJoinManagementWaiting": "Root key delivery accepted. Waiting for the new device to finish setup.",
   "deviceJoinManagementConfiguring": "Device joined. Configuring management access. You can safely leave this page.",

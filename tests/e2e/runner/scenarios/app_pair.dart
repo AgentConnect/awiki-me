@@ -406,6 +406,31 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
     AppPairCoordinatorServer coordinator,
     String token,
   ) async {
+    String? fixtureEnvFile;
+    if (pairConfig.functional) {
+      final repo = Directory(
+        fileConfig.daemonRustRepo ?? '${root.parent.path}/awiki-cli-rs2',
+      );
+      final fixtureRoot = '${appPairArtifactRootDir.path}/acp-clients';
+      final result = await commands.captureResult('python3', <String>[
+        '${repo.path}/scripts/testing/prepare_acp_fixture.py',
+        '--root',
+        fixtureRoot,
+      ]);
+      final fixture = Map<String, Object?>.from(
+        jsonDecode(result.output) as Map,
+      );
+      final file = File('${appPairArtifactRootDir.path}/acp-fixture.env');
+      // Append the offline fixture last: a user's test env may specify service
+      // settings, but cannot redirect these tests to installed Agent clients.
+      final existing = pairConfig.daemonEnvFile == null
+          ? ''
+          : await File(pairConfig.daemonEnvFile!).readAsString();
+      await file.writeAsString(
+        '$existing\n${fixture.entries.map((e) => '${e.key}=${e.value}').join('\n')}\n',
+      );
+      fixtureEnvFile = file.path;
+    }
     final payload = <String, Object?>{
       'schemaVersion': 2,
       'enabled': true,
@@ -452,7 +477,7 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
             'stateRoot': appPairDaemonStateRootDir.path,
             'readyFile': appPairDaemonReadyFile.path,
             'handle': pairConfig.daemonHandle,
-            'envFile': pairConfig.daemonEnvFile,
+            'envFile': fixtureEnvFile,
           },
           'accountState': <String, Object?>{
             'operatorCommand': _accountStateOperatorCommand(

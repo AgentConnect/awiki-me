@@ -7,10 +7,14 @@ class RuntimeClientInstallation {
     required this.status,
     this.version,
     this.reasonCode,
+    this.executionProtocol,
+    this.adapterVersion,
   });
   final RuntimeClientInstallationStatus status;
   final String? version;
   final String? reasonCode;
+  final String? executionProtocol;
+  final String? adapterVersion;
   bool get ready => status == RuntimeClientInstallationStatus.ready;
 }
 
@@ -40,6 +44,12 @@ class RuntimeClientInstallationReport {
           'unavailable' => RuntimeClientInstallationStatus.unavailable,
           _ => RuntimeClientInstallationStatus.unknown,
         },
+        executionProtocol: value['execution_protocol'] is String
+            ? value['execution_protocol'] as String
+            : null,
+        adapterVersion: value['adapter_version'] is String
+            ? value['adapter_version'] as String
+            : null,
         version: value['version'] is String ? value['version'] as String : null,
         reasonCode: value['reason_code'] is String
             ? value['reason_code'] as String

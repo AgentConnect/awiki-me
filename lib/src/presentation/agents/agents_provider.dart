@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../domain/entities/agent/agent_availability.dart';
+import 'agent_availability_provider.dart';
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart' show AppLifecycleState;
@@ -122,7 +124,9 @@ class PendingRuntimeCreation {
       state == PendingRuntimeCreationState.waitingForStatus;
 
   bool matchesRuntimeAgent(AgentSummary agent) {
-    if (!agent.isRuntime || agent.daemonAgentDid != daemonAgentDid) {
+    if (!agent.isRuntime ||
+        agent.daemonAgentDid != daemonAgentDid ||
+        agent.runtime != runtime) {
       return false;
     }
     final agentHandle = _normalizedAgentHandle(agent.handle);
@@ -339,9 +343,10 @@ class AgentsState {
 
   AgentSummary? personalAgentRuntimeFor(String daemonDid) {
     for (final runtime in runtimesFor(daemonDid)) {
-      if (PersonalAgentRuntimeProviders.enabled.any(
-        (provider) => provider.matchesHandle(runtime.handle),
-      )) {
+      if (runtime.usesAcp &&
+          PersonalAgentRuntimeProviders.enabled.any(
+            (provider) => provider.matchesHandle(runtime.handle),
+          )) {
         return runtime;
       }
     }
@@ -725,6 +730,21 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (!isSessionCurrent()) {
       return;
     }
+    unawaited(
+      ref.read(agentAvailabilityProvider.notifier).applyFacts([
+        for (final item in inventory.agents)
+          AgentAvailability.fromLifecycle(
+            agentDid: item.agentDid,
+            activeState: item.activeState,
+            version:
+                _accountStateJsonMap(item.payloadJson)['inventory_version']
+                    is String
+                ? _accountStateJsonMap(item.payloadJson)['inventory_version']!
+                      as String
+                : inventory.domainVersion,
+          ),
+      ]),
+    );
     _pruneConfirmedTopologyControlOverlays(topology);
     final coreMerged = await _mergeLatestDaemonStatusPayloads(
       topology,
@@ -735,7 +755,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     final fullyMerged = _applyTopologyControlOverlays(coreMerged);
     final visible = fullyMerged
-        .where((agent) => agent.activeState == 'active')
+        .where(
+          (agent) =>
+              agent.activeState == 'active' || agent.activeState == 'retired',
+        )
         .toList(growable: false);
     final authoritativeVisible = topology
         .where((agent) => agent.activeState == 'active')
@@ -1258,6 +1281,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     await _runAction(AgentActionKeys.createRuntime(daemonDid), (
       operation,
     ) async {
+      if (!daemon.supportedAcpDrivers.contains(options.kind.driverId)) {
+        state = state.copyWith(error: AgentUiMessageCodes.acpUpgradeRequired);
+        return;
+      }
       final requestId = clientRequestId ?? agentCommandId('app_req');
       final pending = PendingRuntimeCreation(
         requestId: requestId,
@@ -1324,7 +1351,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     final requestId = agentCommandId('app_req');
     final completion = Completer<String?>();
     _creationConfirmations[requestId] = completion;
-    final response = completion.future.timeout(const Duration(seconds: 90));
+    final response = completion.future;
     unawaited(
       response.then<void>((_) {}, onError: (Object _, StackTrace __) {}),
     );
@@ -1417,6 +1444,10 @@ class AgentsController extends StateNotifier<AgentsState> {
         state.statusQueryErrors.containsKey(daemonDid) ||
         !_daemonAcceptsControlCommands(daemon)) {
       state = state.copyWith(error: AgentUiMessageCodes.selectDaemon);
+      return;
+    }
+    if (!daemon.supportedAcpDrivers.contains('hermes')) {
+      state = state.copyWith(error: AgentUiMessageCodes.acpUpgradeRequired);
       return;
     }
     final daemonBootstrapPublicKey = _daemonBootstrapPublicKey(daemon);
@@ -2538,12 +2569,9 @@ class AgentsController extends StateNotifier<AgentsState> {
           !waiter.isCompleted &&
           pending.isNotEmpty &&
           pending.first.daemonAgentDid == payload['daemon_agent_did']) {
-        if (payload['state'] == 'failed') {
-          waiter.complete(
-            creation['phase'] == 'client_readiness'
-                ? (_string(creation['error_code']) ?? 'creation_failed')
-                : 'creation_pending',
-          );
+        if (payload['state'] == 'failed' &&
+            creation['phase'] == 'client_readiness') {
+          waiter.complete(_string(creation['error_code']) ?? 'creation_failed');
         } else if (payload['state'] == 'ready' &&
             _controlPayloadMatchesPendingRuntimeCreation(
               payload,
@@ -3902,6 +3930,12 @@ class AgentsController extends StateNotifier<AgentsState> {
     final retained = <PendingRuntimeCreation>[];
     for (final pending in state.pendingRuntimeCreations) {
       if (_hasMatchingRuntimeAgentWithConfirmedRoute(agents, pending)) {
+        // Inventory and command receipts are independently ordered. Resolve the
+        // same device-local operation before removing its correlation record.
+        final confirmation = _creationConfirmations[pending.requestId];
+        if (confirmation != null && !confirmation.isCompleted) {
+          confirmation.complete(null);
+        }
         _runtimeCreationTimeouts.remove(pending.requestId)?.cancel();
         _runtimeCreationReconcileTimers.remove(pending.requestId)?.cancel();
         continue;

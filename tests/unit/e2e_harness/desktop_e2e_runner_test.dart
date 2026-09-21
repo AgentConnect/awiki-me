@@ -1887,7 +1887,7 @@ daemon:
   readyFile: .e2e/daemon-ready.json
   envFile: .e2e/agent-cli.env
   handle: daemon-from-file
-  fakeHermesGatewayCommand: python3 fake_hermes_gateway.py
+  fakeHermesHome: /tmp/fake-hermes-home
 personalAgent:
   enabled: true
   runtimeProvider: hermes
@@ -1929,10 +1929,7 @@ cliPeer:
       expect(config.daemonReadyFile, '${root.path}/.e2e/daemon-ready.json');
       expect(config.daemonEnvFile, '${root.path}/.e2e/agent-cli.env');
       expect(config.daemonHandle, 'daemon-from-file');
-      expect(
-        config.daemonFakeHermesGatewayCommand,
-        'python3 fake_hermes_gateway.py',
-      );
+      expect(config.daemonFakeHermesHome, '/tmp/fake-hermes-home');
       expect(config.personalAgentEnabled, isTrue);
       expect(config.personalAgentRuntimeProvider, 'hermes');
       expect(config.personalAgentProcessingScope, 'all_conversations');
@@ -2034,7 +2031,7 @@ cliHandle: legacy-cli
           daemonReadyFile: '/tmp/daemon-ready.json',
           daemonEnvFile: '/tmp/agent-cli.env',
           daemonHandle: 'daemon-from-file',
-          daemonFakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
+          daemonFakeHermesHome: '/tmp/fake-hermes-home',
           personalAgentEnabled: true,
           personalAgentRuntimeProvider: 'hermes',
           personalAgentProcessingScope: 'all_conversations',
@@ -2062,10 +2059,7 @@ cliHandle: legacy-cli
       expect(config.daemonReadyFile, '/tmp/daemon-ready.json');
       expect(config.daemonEnvFile, '/tmp/agent-cli.env');
       expect(config.daemonHandle, 'daemon-from-file');
-      expect(
-        config.daemonFakeHermesGatewayCommand,
-        'python3 fake_hermes_gateway.py',
-      );
+      expect(config.daemonFakeHermesHome, '/tmp/fake-hermes-home');
       expect(config.personalAgentEnabled, isTrue);
       expect(config.personalAgentRuntimeProvider, 'hermes');
       expect(config.personalAgentProcessingScope, 'all_conversations');
@@ -2197,7 +2191,7 @@ cliHandle: legacy-cli
             daemonBinary: '/tmp/awiki-deamon',
             daemonStateRoot: '/tmp/daemon-state',
             daemonReadyFile: '/tmp/daemon-ready.json',
-            daemonFakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
+            daemonFakeHermesHome: '/tmp/fake-hermes-home',
             otpPhone: 'test-phone-secret',
             otpCode: 'test-otp-secret',
             appHandle: 'app-from-file',
@@ -3705,7 +3699,7 @@ performance:
         daemonStateRoot: '.e2e/daemon-state',
         daemonReadyFile: '.e2e/daemon-ready.json',
         daemonHandle: 'personal-agent-daemon',
-        fakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
+        fakeHermesHome: '/tmp/fake-hermes-home',
         personalAgentEnabled: true,
         personalAgentRealBackend: true,
       );
@@ -3786,10 +3780,7 @@ performance:
       expect(daemon['stateRoot'], '${root.path}/.e2e/daemon-state');
       expect(daemon['readyFile'], '${root.path}/.e2e/daemon-ready.json');
       expect(daemon['handle'], 'personal-agent-daemon');
-      expect(
-        daemon['fakeHermesGatewayCommand'],
-        'python3 fake_hermes_gateway.py',
-      );
+      expect(daemon['fakeHermesHome'], '/tmp/fake-hermes-home');
       final runPersonalAgent =
           runConfigJson['personalAgent'] as Map<String, dynamic>;
       expect(runPersonalAgent['enabled'], isTrue);
@@ -3827,7 +3818,7 @@ performance:
           daemonBinary: '/tmp/awiki-deamon',
           daemonStateRoot: '.e2e/daemon-state',
           daemonReadyFile: '.e2e/daemon-ready.json',
-          fakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
+          fakeHermesHome: '/tmp/fake-hermes-home',
           includePersonalAgent: false,
         );
         final lines = <String>[];
@@ -3908,7 +3899,7 @@ performance:
           daemonBinary: '/tmp/awiki-deamon',
           daemonStateRoot: '.e2e/daemon-state',
           daemonReadyFile: '.e2e/daemon-ready.json',
-          fakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
+          fakeHermesHome: '/tmp/fake-hermes-home',
           personalAgentEnabled: true,
           personalAgentRealBackend: true,
         );
@@ -4628,7 +4619,7 @@ void _writeLocalConfig(
   String? daemonReadyFile,
   String? daemonEnvFile,
   String? daemonHandle,
-  String? fakeHermesGatewayCommand,
+  String? fakeHermesHome,
   bool personalAgentEnabled = false,
   bool personalAgentRealBackend = false,
   bool includePersonalAgent = true,
@@ -4647,11 +4638,11 @@ void _writeLocalConfig(
           daemonReadyFile == null &&
           daemonEnvFile == null &&
           daemonHandle == null &&
-          fakeHermesGatewayCommand == null
+          fakeHermesHome == null
       ? ''
       : '''
 daemon:
-${daemonRustRepo == null ? '' : '  rustRepo: $daemonRustRepo\n'}${daemonBinary == null ? '' : '  binary: $daemonBinary\n'}${daemonStateRoot == null ? '' : '  stateRoot: $daemonStateRoot\n'}${daemonReadyFile == null ? '' : '  readyFile: $daemonReadyFile\n'}${daemonEnvFile == null ? '' : '  envFile: $daemonEnvFile\n'}${daemonHandle == null ? '' : '  handle: $daemonHandle\n'}${fakeHermesGatewayCommand == null ? '' : '  fakeHermesGatewayCommand: $fakeHermesGatewayCommand\n'}
+${daemonRustRepo == null ? '' : '  rustRepo: $daemonRustRepo\n'}${daemonBinary == null ? '' : '  binary: $daemonBinary\n'}${daemonStateRoot == null ? '' : '  stateRoot: $daemonStateRoot\n'}${daemonReadyFile == null ? '' : '  readyFile: $daemonReadyFile\n'}${daemonEnvFile == null ? '' : '  envFile: $daemonEnvFile\n'}${daemonHandle == null ? '' : '  handle: $daemonHandle\n'}${fakeHermesHome == null ? '' : '  fakeHermesHome: $fakeHermesHome\n'}
 ''';
   final personalAgent = includePersonalAgent
       ? '''

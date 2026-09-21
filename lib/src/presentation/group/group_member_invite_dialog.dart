@@ -21,6 +21,8 @@ import '../../domain/entities/user_profile.dart';
 import '../../domain/entities/identity_type.dart';
 import '../../domain/services/peer_display_name_resolver.dart';
 import '../agents/agents_provider.dart';
+import '../agents/agent_availability_provider.dart';
+import '../agents/agent_availability_text.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 import '../friends/friends_provider.dart';
@@ -132,6 +134,15 @@ class _GroupMemberInviteDialogState
     setState(() {
       _isLoadingLocalCandidates = false;
     });
+    unawaited(
+      ref
+          .read(agentAvailabilityProvider.notifier)
+          .ensure(
+            _allCandidates(watch: false)
+                .where((candidate) => candidate.identityType.isAgent)
+                .map((candidate) => candidate.did),
+          ),
+    );
   }
 
   Future<void> _loadSkillGroupMembership() async {
@@ -176,13 +187,9 @@ class _GroupMemberInviteDialogState
       if (!mounted) {
         return;
       }
-      if (!_currentEligibilityPolicy().allowsIdentity(did: candidate.did)) {
-        setState(() {
-          _isResolving = false;
-          _errorText = context.l10n.groupInviteIdentityUnavailable;
-        });
-        return;
-      }
+      unawaited(
+        ref.read(agentAvailabilityProvider.notifier).ensure([candidate.did]),
+      );
       setState(() {
         _resolvedCandidates[_normalizeDid(candidate.did)] = candidate;
         _isResolving = false;
@@ -464,7 +471,10 @@ class _GroupMemberInviteDialogState
     final query = _normalizedQuery;
     final candidates = _allCandidates();
     if (query.isEmpty) {
-      return candidates;
+      final eligibility = _currentEligibilityPolicy();
+      return candidates
+          .where((candidate) => eligibility.allowsIdentity(did: candidate.did))
+          .toList();
     }
     final matched = candidates
         .where((candidate) => candidate.matches(query))
@@ -492,20 +502,13 @@ class _GroupMemberInviteDialogState
         ? ref.watch(conversationListProvider)
         : ref.read(conversationListProvider);
     final conversations = conversationState.conversations;
-    final eligibility = GroupInviteEligibilityPolicy.fromSources(
-      agents: agentsState.agents,
-      pendingDeletionAgentDids: agentsState.pendingDeletionAgentDids,
-      conversations: conversations,
-      skillGroupMembership: _skillGroupMembership,
-    );
+    if (watch) ref.watch(effectiveAgentAvailabilityProvider);
     void add(GroupInviteCandidate? candidate) {
       if (candidate == null) {
         return;
       }
       final did = _normalizeDid(candidate.did);
-      if (did.isEmpty ||
-          _looksLikeGroupDid(did) ||
-          !eligibility.allowsIdentity(did: did)) {
+      if (did.isEmpty || _looksLikeGroupDid(did)) {
         return;
       }
       final existing = byDid[did];
@@ -513,7 +516,7 @@ class _GroupMemberInviteDialogState
     }
 
     for (final agent in agentsState.agents) {
-      if (eligibility.allowsAgent(agent)) {
+      if (agent.isRuntime) {
         add(GroupInviteCandidate.fromAgent(agent));
       }
     }
@@ -539,7 +542,7 @@ class _GroupMemberInviteDialogState
     }
 
     for (final conversation in conversations) {
-      if (eligibility.allowsConversation(conversation)) {
+      if (!conversation.isGroup) {
         add(GroupInviteCandidate.fromConversation(conversation));
       }
     }
@@ -579,6 +582,11 @@ class _GroupMemberInviteDialogState
     final agentsState = ref.read(agentsProvider);
     return GroupInviteEligibilityPolicy.fromSources(
       agents: agentsState.agents,
+      unavailableAgentDids: {
+        for (final entry
+            in ref.read(effectiveAgentAvailabilityProvider).entries)
+          if (entry.value.unavailable) entry.key,
+      },
       pendingDeletionAgentDids: agentsState.pendingDeletionAgentDids,
       conversations: ref.read(conversationListProvider).conversations,
       skillGroupMembership: _skillGroupMembership,
@@ -1151,7 +1159,7 @@ class _SelectedInviteChip extends StatelessWidget {
   }
 }
 
-class _InviteCandidateList extends StatelessWidget {
+class _InviteCandidateList extends ConsumerWidget {
   const _InviteCandidateList({
     required this.controller,
     required this.candidates,
@@ -1171,7 +1179,8 @@ class _InviteCandidateList extends StatelessWidget {
   final GroupInviteEligibilityPolicy eligibility;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final availability = ref.watch(effectiveAgentAvailabilityProvider);
     if (candidates.isEmpty) {
       return Container(
         width: double.infinity,
@@ -1228,12 +1237,20 @@ class _InviteCandidateList extends StatelessWidget {
               agentCapabilities: candidate.agentCapabilities,
             );
             final disabledReason =
+                (availability[candidate.did]?.unavailable == true
+                    ? agentAvailabilityReasonText(
+                        context,
+                        availability[candidate.did]!,
+                      )
+                    : null) ??
                 lifecycleDisabledReason ??
                 _groupInviteDenialText(context, decision.denialReason);
             return _InviteCandidateTile(
               candidate: candidate,
               selected: isSelected,
               disabledReason: disabledReason,
+              lifecycleUnavailable:
+                  availability[candidate.did]?.unavailable == true,
               onTap: disabledReason != null || onToggle == null
                   ? null
                   : () => onToggle!(candidate),
@@ -1250,12 +1267,14 @@ class _InviteCandidateTile extends StatelessWidget {
     required this.candidate,
     required this.selected,
     required this.disabledReason,
+    this.lifecycleUnavailable = false,
     required this.onTap,
   });
 
   final GroupInviteCandidate candidate;
   final bool selected;
   final String? disabledReason;
+  final bool lifecycleUnavailable;
   final VoidCallback? onTap;
 
   @override
@@ -1336,9 +1355,22 @@ class _InviteCandidateTile extends StatelessWidget {
                           label: candidate.localizedSourceLabel(context.l10n),
                         ),
                         if (disabledReason != null)
-                          _SourceBadge(label: disabledReason!, muted: true),
+                          _SourceBadge(
+                            label: lifecycleUnavailable
+                                ? context.l10n.agentLifecycleUnavailable
+                                : disabledReason!,
+                            muted: true,
+                          ),
                       ],
                     ),
+                    if (lifecycleUnavailable && disabledReason != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Text(
+                          disabledReason!,
+                          style: AwikiMeTextStyles.cardSubtitle,
+                        ),
+                      ),
                   ],
                 ),
               ),
