@@ -68,17 +68,12 @@ const installationDaemon = AgentSummary(
     diagnosticsSummary: {
       'config_summary': {
         'runtime_client_detection': {'schema_version': 1},
-        'generic_cli': {
-          'capability_schema_version': 1,
-          'supported_drivers': ['codex', 'claude-code'],
-          'supported_workspace_modes': ['route-root'],
-          'supported_sandbox_modes': ['danger-full-access'],
-          'route_session_supported': true,
-          'native_resume_supported': true,
-        },
         'acp': {
           'capability_schema_version': 1,
           'supported_drivers': [
+            'hermes',
+            'codex',
+            'claude-code',
             'opencode',
             'gemini',
             'kimi',
@@ -132,6 +127,81 @@ Future<void> openInstallationDialog(
 }
 
 void main() {
+  testWidgets(
+    'missing host Node has one shared guide and leaves other clients usable',
+    (tester) async {
+      final json = installationJson(ready: 'hermes');
+      for (final row
+          in (json['clients'] as List).cast<Map<String, Object?>>()) {
+        if (['codex', 'claude-code'].contains(row['kind'])) {
+          row['status'] = 'unavailable';
+          row['reason_code'] = 'node_missing';
+        }
+      }
+      final service = FakeClientInspection()
+        ..report = RuntimeClientInstallationReport.parse(json);
+      await openInstallationDialog(tester, service);
+      expect(find.byKey(const Key('agent-node-setup')), findsOneWidget);
+      expect(find.byKey(const Key('agent-node-download')), findsOneWidget);
+      expect(find.text('宿主机未检测到 Node.js。'), findsNWidgets(2));
+      expect(find.text('Hermes'), findsWidgets);
+      expect(tester.takeException(), isNull);
+      tester.view.physicalSize = const Size(390, 844);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('agent-node-download')));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  for (final closeEarly in [false, true]) {
+    testWidgets(
+      'slow creation stays single-flight with late confirmation; closed: $closeEarly',
+      (tester) async {
+        final service = FakeClientInspection();
+        final control = DelayedCreationControl()..agents = [installationDaemon];
+        await openInstallationDialog(tester, service, control: control);
+        control.controller = ProviderScope.containerOf(
+          tester.element(find.byType(AgentsWorkspacePage)),
+        ).read(agentsProvider.notifier);
+        await tester.enterText(
+          find.byKey(const Key('agent-create-name-field')),
+          'Later',
+        );
+        await tester.enterText(
+          find.byKey(const Key('agent-create-handle-field')),
+          'later',
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('创建').last);
+        await tester.pumpAndSettle();
+        expect(find.text('创建中…'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 95));
+        await tester.pumpAndSettle();
+        expect(find.text('等待确认'), findsOneWidget);
+        expect(find.text('创建中…'), findsNothing);
+        expect(
+          tester
+              .widget<CupertinoTextField>(
+                find.byKey(const Key('agent-create-handle-field')),
+              )
+              .readOnly,
+          isTrue,
+        );
+        expect(control.creates, 1);
+        if (closeEarly) {
+          await tester.tap(find.text('关闭'));
+          await tester.pumpAndSettle();
+        }
+        control.succeed();
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('agent-create-name-field')), findsNothing);
+        expect(control.creates, 1);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
   test(
     'installation parser is forward compatible and rejects ambiguous records',
     () {
@@ -476,4 +546,36 @@ class InspectionMessages extends FakeMessagingService
     );
     return correct;
   }
+}
+
+class DelayedCreationControl extends FakeAgentControlService {
+  late AgentsController controller;
+  int creates = 0;
+  String? request;
+  RuntimeAgentCreateOptions? options;
+  @override
+  Future<void> createRuntimeAgent({
+    required String daemonAgentDid,
+    required String controllerDid,
+    required RuntimeAgentCreateOptions options,
+    String? clientRequestId,
+  }) async {
+    creates++;
+    request = clientRequestId;
+    this.options = options;
+  }
+
+  void succeed() => controller.applyControlPayload({
+    'schema': 'awiki.agent.status.v1',
+    'event_id': 'late-created',
+    'daemon_agent_did': 'did:agent:daemon',
+    'state': 'ready',
+    'result': {
+      'command': 'runtime.agent.create',
+      'client_request_id': request,
+      'runtime': options!.kind.runtime,
+      'handle': options!.handle,
+      'runtime_agent_did': 'did:agent:later',
+    },
+  });
 }

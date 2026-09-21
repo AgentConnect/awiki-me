@@ -98,6 +98,36 @@ abstract class AppLocalizations {
     Locale('zh'),
   ];
 
+  /// No description provided for @agentLifecycleUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'不可用'**
+  String get agentLifecycleUnavailable;
+
+  /// No description provided for @agentLifecycleDeletedReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'该智能体已被删除。'**
+  String get agentLifecycleDeletedReason;
+
+  /// No description provided for @agentLifecycleRetiredReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'该智能体的旧版接入已停用，需要由控制者重新创建。'**
+  String get agentLifecycleRetiredReason;
+
+  /// No description provided for @agentLifecycleInactiveReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'该智能体已停用，暂时无法接收新指令。'**
+  String get agentLifecycleInactiveReason;
+
+  /// No description provided for @agentLifecycleMessageNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'{name}已不可用'**
+  String agentLifecycleMessageNotice(String name);
+
   /// No description provided for @identityMethodLabel.
   ///
   /// In zh, this message translates to:
@@ -4623,7 +4653,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentCreateHermesDescription.
   ///
   /// In zh, this message translates to:
-  /// **'使用宿主机上的 Hermes Gateway。'**
+  /// **'使用宿主机上的 Hermes CLI。'**
   String get agentCreateHermesDescription;
 
   /// No description provided for @agentCreateNeedsGenericCliCapability.
@@ -6823,7 +6853,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentClientGatewayHint.
   ///
   /// In zh, this message translates to:
-  /// **'未找到 Hermes Gateway 模块，请检查宿主机安装。'**
+  /// **'未找到 Hermes CLI 模块，请检查宿主机安装。'**
   String get agentClientGatewayHint;
 
   /// No description provided for @agentClientCustomHint.
@@ -6963,6 +6993,72 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'当前不允许使用此联系方式注册。'**
   String get onboardingRegistrationClosed;
+
+  /// No description provided for @chatRetiredAgentDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'旧版接入已停用，请重新创建智能体。聊天记录与草稿已保留。'**
+  String get chatRetiredAgentDisabled;
+
+  /// No description provided for @agentAcpUpgradeRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请升级 Daemon 以使用此智能体的 ACP 接入。'**
+  String get agentAcpUpgradeRequired;
+
+  /// No description provided for @agentClientAdapterHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon 的接入组件缺失或损坏，请重新安装 Daemon。'**
+  String get agentClientAdapterHint;
+
+  /// No description provided for @agentClientPlatformHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前平台不支持此智能体的接入组件。'**
+  String get agentClientPlatformHint;
+
+  /// No description provided for @agentClientHermesAcpHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Hermes 缺少可用的 ACP 支持，请在宿主机升级 Hermes CLI。'**
+  String get agentClientHermesAcpHint;
+
+  /// No description provided for @agentClientNodeMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'宿主机未检测到 Node.js。'**
+  String get agentClientNodeMissing;
+
+  /// No description provided for @agentClientNodeIncompatible.
+  ///
+  /// In zh, this message translates to:
+  /// **'Node.js 版本不兼容，需要 22 或更高版本。'**
+  String get agentClientNodeIncompatible;
+
+  /// No description provided for @agentClientNodeUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'Node.js 无法启动，请检查宿主机安装后重新检测。'**
+  String get agentClientNodeUnavailable;
+
+  /// No description provided for @agentClientNodeSetup.
+  ///
+  /// In zh, this message translates to:
+  /// **'Codex 和 Claude Code 需要在此 Daemon 宿主机安装 Node.js 22 或更高版本，推荐 24 LTS。安装后请重新检测。'**
+  String get agentClientNodeSetup;
+
+  /// No description provided for @agentClientNodeDownload.
+  ///
+  /// In zh, this message translates to:
+  /// **'Node.js 安装指南 ↗'**
+  String get agentClientNodeDownload;
+
+  /// No description provided for @agentClientWaitingConfirmation.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待确认'**
+  String get agentClientWaitingConfirmation;
 
   /// No description provided for @deviceJoinManagementRegistered.
   ///

@@ -10,6 +10,8 @@ class AppMessage {
   final String? value;
   final String? detail;
 
+  factory AppMessage.retiredAgent() => const AppMessage._('retiredAgent');
+
   factory AppMessage.profileUpdated() => const AppMessage._('profileUpdated');
 
   factory AppMessage.exportedTo(String path) =>
@@ -439,6 +441,8 @@ class AppMessage {
 
   String resolve(AppLocalizations l10n) {
     switch (id) {
+      case 'retiredAgent':
+        return l10n.chatRetiredAgentDisabled;
       case 'profileUpdated':
         return l10n.profileUpdated;
       case 'exportedTo':

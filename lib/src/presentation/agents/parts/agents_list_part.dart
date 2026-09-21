@@ -1304,6 +1304,7 @@ String _agentListSubtitle(
   PendingRuntimeCreation? pendingRuntimeCreation,
 }) {
   final l10n = context.l10n;
+  if (agent.isRetiredRuntime) return l10n.chatRetiredAgentDisabled;
   if (agent.isDaemon) {
     return localizeAgentListSubtitle(
       l10n,

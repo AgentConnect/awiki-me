@@ -2033,12 +2033,10 @@ Future<void> _runAppPairJoinerFunctional({
   if (!daemon.isDaemon ||
       !codex.isRuntime ||
       codex.daemonAgentDid != daemon.agentDid ||
-      (codex.runtime != RuntimeAgentKind.codex.runtime &&
-          codex.runtime != 'generic-cli') ||
+      !codex.usesAcp ||
       !claude.isRuntime ||
       claude.daemonAgentDid != daemon.agentDid ||
-      (claude.runtime != RuntimeAgentKind.claudeCode.runtime &&
-          claude.runtime != 'generic-cli')) {
+      !claude.usesAcp) {
     fail('The joining App did not converge the exact remote Agent topology.');
   }
   await _pumpUntil(
@@ -2213,6 +2211,7 @@ Future<void> _runAppPairAdminAccountStateDomains({
     agentDid: codex.agentDid,
     timeout: const Duration(minutes: 2),
   );
+  await _assertDeletedAgentAvailability(container, codex.agentDid);
   await config.coordinator.publish(
     'admin',
     'account_state_agent_deleted',
@@ -2229,6 +2228,7 @@ Future<void> _runAppPairAdminAccountStateDomains({
       'admin_app_submitted_real_runtime_delete',
       'admin_app_removed_deleted_runtime_after_authoritative_reconcile',
       'joining_app_confirmed_terminal_inventory_convergence',
+      'both_apps_confirmed_public_deleted_availability',
     ],
   );
 
@@ -2705,6 +2705,7 @@ Future<void> _runAppPairJoinerAccountStateDomains({
     agentDid: deletedDid,
     activeState: 'archived',
   );
+  await _assertDeletedAgentAvailability(container, deletedDid);
   versions = deleteAfter.domainVersions;
   await config.coordinator.publish(
     'joiner',
@@ -3596,7 +3597,7 @@ Future<_AppPairDaemonInstall> _installAppPairDaemon({
       config.daemonStateRoot,
     ],
     environment: _appPairDaemonEnvironment(config),
-    includeParentEnvironment: true,
+    includeParentEnvironment: false,
     runInShell: false,
   ).timeout(const Duration(minutes: 2));
   if (result.exitCode != 0) {
@@ -3620,7 +3621,7 @@ Future<_AppPairDaemonInstall> _installAppPairDaemon({
     config.daemonBinary,
     <String>['agent-list', '--state-root', config.daemonStateRoot],
     environment: _appPairDaemonEnvironment(config),
-    includeParentEnvironment: true,
+    includeParentEnvironment: false,
     runInShell: false,
   ).timeout(const Duration(seconds: 30));
   if (agentList.exitCode != 0) {
@@ -3703,7 +3704,7 @@ Future<_AppPairDaemonProcess> _startAppPairDaemon(
       '100',
     ],
     environment: _appPairDaemonEnvironment(config),
-    includeParentEnvironment: true,
+    includeParentEnvironment: false,
     runInShell: false,
   );
   final running = _AppPairDaemonProcess(process);
@@ -3712,7 +3713,16 @@ Future<_AppPairDaemonProcess> _startAppPairDaemon(
 }
 
 Map<String, String> _appPairDaemonEnvironment(_AppPairRunConfig config) {
-  final environment = <String, String>{};
+  final environment = <String, String>{
+    for (final key in [
+      'PATH',
+      'TMPDIR',
+      'LANG',
+      'NO_PROXY',
+      'AWIKI_IM_CORE_VAULT_ROOT_KEY_B64',
+    ])
+      if (Platform.environment[key] != null) key: Platform.environment[key]!,
+  };
   final envPath = config.daemonEnvFile?.trim();
   if (envPath != null && envPath.isNotEmpty) {
     for (final line in File(envPath).readAsLinesSync()) {
@@ -3734,6 +3744,10 @@ Map<String, String> _appPairDaemonEnvironment(_AppPairRunConfig config) {
       }
       environment[key] = value;
     }
+  }
+  if (environment['AWIKI_ACP_TEST_COMPONENTS_DIR'] == null ||
+      environment['HOME'] == null) {
+    fail('The App-pair test requires the runner-prepared offline ACP fixture.');
   }
   environment.addAll(<String, String>{
     'AWIKI_DAEMON_SERVICE_BASE_URL': config.baseUrl,
@@ -3946,14 +3960,12 @@ Future<void> _waitForAppPairDaemonDrivers({
         .toList(growable: false);
     final daemon = daemonMatches.isEmpty ? null : daemonMatches.single;
     final configSummary = daemon?.latest.diagnosticsSummary['config_summary'];
-    final genericCli = configSummary is Map
-        ? configSummary['generic_cli']
-        : null;
+    final acp = configSummary is Map ? configSummary['acp'] : null;
     if (daemon != null &&
         container.read(agentsProvider).canCreateRuntimeAgent(daemon) &&
-        genericCli is Map &&
-        genericCli['capability_schema_version']?.toString() == '1') {
-      final drivers = genericCli['supported_drivers'];
+        acp is Map &&
+        acp['capability_schema_version']?.toString() == '1') {
+      final drivers = acp['supported_drivers'];
       if (drivers is List &&
           drivers.map((value) => value.toString()).contains('codex') &&
           drivers.map((value) => value.toString()).contains('claude-code')) {
@@ -4878,7 +4890,9 @@ Future<AgentSummary> _waitForAppPairRuntime({
               agent.isRuntime &&
               agent.daemonAgentDid == daemonDid &&
               agent.handle == handle &&
-              (agent.runtime == runtime || agent.runtime == 'generic-cli'),
+              agent.usesAcp &&
+              (agent.runtime == runtime ||
+                  agent.runtimeConfiguration['driver_id'] == runtime),
         )
         .toList(growable: false);
     if (matches.length > 1) {
@@ -5320,4 +5334,24 @@ Future<void> _waitForLocalAndRegistryAdmins(
     'The local device and Registry did not converge to ready administrators '
     '(transient_identity_reads=$transientIdentityReads).',
   );
+}
+
+/// Checks the deployed public endpoint and the shared product projection. A
+/// previously cached tombstone alone cannot attest this API integration.
+Future<void> _assertDeletedAgentAvailability(
+  ProviderContainer container,
+  String agentDid,
+) async {
+  final port = container.read(agentAvailabilityPortProvider);
+  if (port == null) fail('Production Agent availability adapter is missing.');
+  final facts = await port.getAgentAvailability([agentDid]);
+  expect(facts, hasLength(1));
+  expect(facts.single.agentDid, agentDid);
+  expect(facts.single.unavailable, isTrue);
+  expect(facts.single.reason, 'agent_deleted');
+  await container.read(agentAvailabilityProvider.notifier).applyFacts(facts);
+  final projected = container.read(
+    effectiveAgentAvailabilityProvider,
+  )[agentDid];
+  expect(projected?.reason, 'agent_deleted');
 }

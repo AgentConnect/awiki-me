@@ -6,6 +6,32 @@
 
 ## 1. 当前结论
 
+### ACP 统一接入与旧会话（2026-09-20）
+
+七种 Runtime 共用 ACP。品牌标识不再代表执行协议；APP 依据 Daemon 已提交的
+`config_summary.protocol` / `runtime` 判断协议，创建入口依据 ACP supported_drivers
+与安装检测共同判断。旧 Daemon 仅声明四种 ACP 时，不允许创建另三种旧接入。
+旧接入的明确退役状态由 Daemon 发布并随 Agent 快照缓存；APP 保留历史与草稿，
+以“旧版接入已停用，请重新创建”禁用私聊发送、附件和控制，区别于删除。
+群内普通聊天与含旧 @ 的草稿继续正常发送，不再因永久停用的目标拦截整条消息；Daemon 仍是最终执行门禁。
+原四种 ACP 的品牌型历史标识继续可读，不能因为旧三种的品牌现在支持 ACP，
+就把旧记录推断成新的 ACP 实例。此变化不改变 Core 的身份、会话或消息事实源。
+
+### 群内 Agent 生命周期展示（2026-09-21）
+
+User Service 的有界批量 `get_agent_availability` 是跨控制者 Agent 可用状态的事实源。
+APP 通过现有认证 facade 查询，由 owner/SessionEpoch 隔离的共享 provider 投影，
+可丢弃缓存复用 ProductLocalStore 的 `agent-availability:v1` 命名空间。
+生命周期不进入 Core 消息、群 roster 或 profile DTO。离线、模型配置缺失、请求失败和
+未知 DID 不等于删除。已知终态不被旧版本、未知结果或普通心跳覆盖。
+
+已删除/退役 Agent 保留群成员关系、顺序、头像、名称与 Handle，仅增加灰色“不可用”标签；
+管理员仍可移除。@ 候选和搜索隐藏不可用者。邀请默认隐藏不可用者，但名称搜索命中时
+保留禁用项和原因。界面查询合并、每批最多 64，缓存一分钟，不按输入字符逐次请求。
+含已有 @ 的消息发送后异步确认目标状态，不增加发送前网络往返；只在发送者的原消息
+下方用灰色 footer 提示。生命周期只能说明“已不可用”，精确关联的执行拒绝才可说明
+“本条指令未执行”。已有任务终态与消息内容保持不变；广播不逐个提示失效目标。
+
 `im-core` / Flutter SDK 是 message、conversation identity、canonical `conversationId` read model、read-state、send/outbox、sync/realtime/backfill committed projection 的事实源。AWiki Me 只拥有 product overlay、User Service 权威账号域的本地展示快照、read presentation waterline、renderability、draft/scroll/loading、短生命周期 UI window 和 widget composition。账号域快照是可丢弃 cache，不是消息、会话、群或 Agent 控制事件的第二事实源。
 
 核心边界：
@@ -702,7 +728,7 @@ ACP 控制消息的订阅与修复也必须使用该规范 conversation ID；界
 
 `@all`／`@agents` 的 ACP 预检查只扩展到当前群 roster 中 active 的成员，不能用个人智能体清单代替群成员范围，也不能被已离群智能体的旧状态拦截。roster 尚未可用时不猜测广播目标；Daemon 仍负责收到指令后的最终任务接受和并发校验。
 
-ACP 创建保留两分钟的自动权威库存与 Core 路由核对窗口，容纳版本/协议探测和消息就绪门禁；原三种 Runtime 保持 45 秒。超时只转为等待状态，不伪造成功或重复创建。
+七种 ACP 类型统一保留两分钟的自动权威库存与 Core 路由核对窗口。库存匹配 Daemon、类型、Handle 且 Core 路由确认后，必须先完成同一创建操作的等待者，再清除关联记录；可靠 ready 回执也可独立完成，兼容任意到达顺序和重复回执。弹窗等待 15 秒后显示“等待确认”，允许关闭但不重复提交；不再用独立 90 秒 Future 超时丢弃迟到确认。关闭弹窗不取消已提交创建，身份切换／销毁仍统一释放等待者。明确注册前失败才允许重试，注册后不确定结果继续核对库存。
 
 ### ACP 界面与响应式行为
 
@@ -736,3 +762,5 @@ ACP 创建保留两分钟的自动权威库存与 Core 路由核对窗口，容�
 控制消息验证准确发送者与 command_id。短期 provider 按当前 session epoch 和 Daemon 隔离，
 不写入 Agent inventory 或修改在线状态。新 Daemon 检测通过才可选择；旧版无能力声明时保持
 原创建行为并说明无法检测。刷新保留表单；安装检测不验证登录、API Key 或模型。
+
+Codex / Claude Code 依赖宿主机 Node.js ≥22（推荐 24 LTS）。缺失或异常时仅禁用受影响类型，并在列表下显示一处可换行的环境提示及 Node 官方安装入口；不将用户带入自动安装或账号配置流程，安装后使用原“重新检测”。

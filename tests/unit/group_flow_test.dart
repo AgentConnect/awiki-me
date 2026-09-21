@@ -1632,7 +1632,7 @@ void main() {
     );
   });
 
-  testWidgets('群详情邀请候选排除已删除智能体的所有本地来源', (tester) async {
+  testWidgets('群详情邀请默认隐藏已删除智能体，搜索显示禁用项', (tester) async {
     const groupDid = 'did:wba:awiki.ai:group:deleted_agent_filter';
     const deletedAgentDid = 'did:wba:awiki.ai:agent:runtime:deleted:e1_deleted';
     const humanDid = 'did:wba:awiki.ai:user:active:e1_active';
@@ -1738,8 +1738,22 @@ void main() {
     await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('该身份已被删除或当前不可邀请。'), findsOneWidget);
-    expect(find.text('已删除智能体候选'), findsNothing);
+    expect(find.text('不可用'), findsOneWidget);
+    expect(find.text('该智能体已被删除。'), findsOneWidget);
+    expect(find.text('已删除智能体候选'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const Key('group-invite-candidate:$deletedAgentDid')),
+      warnIfMissed: false,
+    );
+    await tester.pump();
+    expect(
+      tester
+          .widget<AppPrimaryButton>(
+            find.byKey(const Key('identity-add-group-member-button')),
+          )
+          .onPressed,
+      isNull,
+    );
   });
 
   testWidgets('群详情添加成员搜索框支持一键清空', (tester) async {
