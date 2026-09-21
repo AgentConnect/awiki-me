@@ -332,7 +332,7 @@ class _AcpQuestionFormState extends ConsumerState<AcpQuestionForm>
             style: TextStyle(
               fontSize: 15,
               height: 1.5,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w400,
               color: theme.title,
             ),
           ),

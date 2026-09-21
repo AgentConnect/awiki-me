@@ -42,6 +42,25 @@ void main() {
     );
   });
 
+  test('rejects mutable release scripts and unreviewed operator revisions', () {
+    const script = '/usr/local/libexec/awiki-system-test/'
+        'user-operator-4a5ce03e4fa2/run_account_state_sync_test_action.py';
+    expect(reviewedLocalAccountStateOperatorCommand, contains(script));
+    for (final replacement in [
+      '/opt/awiki/services/user-service/current/scripts/'
+          'run_account_state_sync_test_action.py',
+      script.replaceFirst('4a5ce03e4fa2', 'unreviewed'),
+    ]) {
+      final command = reviewedLocalAccountStateOperatorCommand
+          .map((arg) => arg == script ? replacement : arg)
+          .toList();
+      expect(
+        () => parseAccountStateOperatorCommand(jsonEncode(command), mode: 'local'),
+        throwsFormatException,
+      );
+    }
+  });
+
   test('rejects alternate SSH hosts and missing bytecode protection', () {
     final alternateHost = List<String>.of(reviewedAccountStateOperatorCommand)
       ..[1] = 'other-host';

@@ -300,7 +300,9 @@ Linux 用例独立报告真实通过或失败。
 tail-only（补 Group 和 Attachment，普通 Direct 复用既有专项）、普通群聊同步、附件元数据与
 SHA-256、以及 Direct/Group 精确 `0→1→0` 未读隔离。该入口不启动
 Daemon、Agent、Profile、Recovery 或 Registry 流程；业务能力不满足时测试失败并保留报告，
-不由 E2E 用例修改业务实现。
+不由 E2E 用例修改业务实现。 两端完成 Join 后必须先通过实时连接就绪门禁，
+再发布内容场景的 ready checkpoint；Join UI 完成不等于新的认证 listener 已建立。
+失败时保留两端有界、脱敏的 App/driver 日志，避免只报告先超时一端而丢失另一端原因。
 
 `multi-device-app-pair-paging-recovery` 是本计划唯一真实分页 App case。它只建立一次账号、
 双 App member Join 和一个 CLI peer；joining App 在已有普通 Direct 基线后离线，operator 只准备

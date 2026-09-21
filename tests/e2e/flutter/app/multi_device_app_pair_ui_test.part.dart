@@ -68,7 +68,9 @@ void appPairAdminMain() {
       final handle = _uniqueHandle(config.handlePrefix);
       if (didWeb) {
         await coordinator.publish(
-          'admin', 'web_registration_intent', data: {'handle': handle},
+          'admin',
+          'web_registration_intent',
+          data: {'handle': handle},
         );
       }
       final genesisOtp = didWeb
@@ -83,16 +85,20 @@ void appPairAdminMain() {
       try {
         registration = didWeb
             ? await _registerWebThroughUi(
-                tester, bootstrap, account, handle, presence,
-                diagnosticPath: '${config.adminStateRoot}/web-registration-diagnostic.json',
+                tester,
+                bootstrap,
+                account,
+                handle,
+                presence,
+                diagnosticPath:
+                    '${config.adminStateRoot}/web-registration-diagnostic.json',
               )
-            : await bootstrap.onboardingService!
-                .registerHandleWithPhone(
-                  phone: account.phone,
-                  otp: genesisOtp!,
-                  handle: handle,
-                  nickName: 'AWiki App Pair Admin',
-                );
+            : await bootstrap.onboardingService!.registerHandleWithPhone(
+                phone: account.phone,
+                otp: genesisOtp!,
+                handle: handle,
+                nickName: 'AWiki App Pair Admin',
+              );
       } on Object catch (error) {
         fail(
           'The App-pair admin registration failed safely '
@@ -610,9 +616,14 @@ void appPairJoinerMain() {
         timeout: const Duration(seconds: 45),
         failure: 'The joining App did not expose the existing Handle choice.',
       );
-      if (didWeb && find.byKey(
-          const Key('existing-handle-recovery-action')).evaluate().isNotEmpty) {
-        fail('Existing Web Handle offered Recovery from WBA creation selection.');
+      if (didWeb &&
+          find
+              .byKey(const Key('existing-handle-recovery-action'))
+              .evaluate()
+              .isNotEmpty) {
+        fail(
+          'Existing Web Handle offered Recovery from WBA creation selection.',
+        );
       }
       await _tapOne(
         tester,
@@ -650,7 +661,9 @@ void appPairJoinerMain() {
         await bootstrap.dispose();
         bootstrap = await AppBootstrap.create(
           environment: _joinOnlyEnvironment(
-            config, enableMessageSyncCore: true, enableDeviceRevoke: true,
+            config,
+            enableMessageSyncCore: true,
+            enableDeviceRevoke: true,
           ),
           appStateRoot: config.joinerStateRoot,
         );
@@ -659,14 +672,19 @@ void appPairJoinerMain() {
         container = ProviderScope.containerOf(
           tester.element(find.byType(DeviceJoinPage)),
         );
-        await _pumpUntil(tester, () {
-          final restored = container.read(devicesProvider).activeJoin;
-          return restored?.joinSessionId == pending.joinSessionId &&
-              restored?.protocolDeviceId == pending.protocolDeviceId &&
-              restored?.did == did &&
-              restored?.sas == null &&
-              restored?.phase == DeviceJoinPhase.pending;
-        }, failure: 'Web pending Join did not reopen from the same root without OTP.');
+        await _pumpUntil(
+          tester,
+          () {
+            final restored = container.read(devicesProvider).activeJoin;
+            return restored?.joinSessionId == pending.joinSessionId &&
+                restored?.protocolDeviceId == pending.protocolDeviceId &&
+                restored?.did == did &&
+                restored?.sas == null &&
+                restored?.phase == DeviceJoinPhase.pending;
+          },
+          failure:
+              'Web pending Join did not reopen from the same root without OTP.',
+        );
       }
       await coordinator.publish(
         'joiner',
@@ -4636,23 +4654,88 @@ Future<void> _waitForAppPairUnreadCount({
   required bool Function(int count) matches,
   required String failure,
 }) async {
-  await _pumpUntil(
-    tester,
-    () {
-      final conversations = container
-          .read(conversationListProvider)
-          .conversations
-          .where((item) => item.conversationId == conversationId)
-          .toList(growable: false);
-      if (conversations.length > 1) {
-        fail('The App-pair projected a duplicate Direct conversation.');
-      }
-      return conversations.length == 1 &&
-          matches(conversations.single.unreadCount);
-    },
-    timeout: const Duration(seconds: 90),
-    failure: failure,
-  );
+  try {
+    await _pumpUntil(
+      tester,
+      () {
+        final conversations = container
+            .read(conversationListProvider)
+            .conversations
+            .where((item) => item.conversationId == conversationId)
+            .toList(growable: false);
+        if (conversations.length > 1) {
+          fail('The App-pair projected a duplicate Direct conversation.');
+        }
+        return conversations.length == 1 &&
+            matches(conversations.single.unreadCount);
+      },
+      timeout: const Duration(seconds: 90),
+      failure: failure,
+    );
+  } on TestFailure {
+    final diagnostic = await _appPairUnreadDiagnostic(
+      container,
+      conversationId,
+    );
+    fail('$failure ($diagnostic)');
+  }
+}
+
+Future<String> _appPairUnreadDiagnostic(
+  ProviderContainer container,
+  String conversationId,
+) async {
+  final state = container.read(messageSyncCoordinatorProvider);
+  final realtime = container.read(realtimeConnectionStatusProvider).valueOrNull;
+  final ui = container
+      .read(conversationListProvider)
+      .conversations
+      .where((row) => row.conversationId == conversationId)
+      .toList();
+  final result = <String, Object?>{
+    'uiUnread': ui.map((row) => row.unreadCount).toList(),
+    'status': state.status.name,
+    'realtime': realtime?.name,
+    'syncing': state.isSyncing,
+    'mode': state.mode.name,
+    'pending': state.pendingMutationCount,
+    'retry': state.retryState.name,
+    'failureCode': state.lastFailureCode == null
+        ? null
+        : _appPairSafeToken(state.lastFailureCode!),
+  };
+  try {
+    final owner = container.read(sessionProvider).session?.did;
+    if (owner != null) {
+      final rows = await container
+          .read(conversationServiceProvider)
+          .listConversationSummariesFast(ownerDid: owner);
+      result['coreUnread'] = rows
+          .where((row) => row.conversationId == conversationId)
+          .map((row) => row.unreadCount)
+          .toList();
+    }
+    final service = container.read(messagingServiceProvider);
+    if (service is MessageSyncDiagnosticsService) {
+      final diagnostics = await (service as MessageSyncDiagnosticsService)
+          .syncDiagnostics();
+      result.addAll({
+        'coreMode': diagnostics.mode.name,
+        'corePending': diagnostics.pendingMutationCount,
+        'coreRetry': diagnostics.retryState.name,
+        'dirty': diagnostics.dirtyDomains.map((domain) => domain.name).toList(),
+        'laneTransportFailures': diagnostics.lanes
+            .where((lane) => lane.lastTransportError != null)
+            .length,
+        'domainStatuses': diagnostics.domainStates
+            .map((domain) => domain.status.name)
+            .toList(),
+      });
+    }
+  } on Object catch (error) {
+    result['diagnosticError'] = _appPairClosedRegistrationError(error);
+  }
+  return jsonEncode(result);
 }
 
 Future<void> _resumeAppPairAndWaitForSync({
@@ -4904,6 +4987,9 @@ Future<String> _appPairHistoryDiagnostic({
 
 String _appPairErrorDiagnostic(Object? error) {
   if (error == null) return 'none';
+  if (error is MessageSyncCoordinatorFailure) {
+    return safeMessageSyncFailureDiagnostic(error.code);
+  }
   if (error is core.AwikiImCoreException) {
     return '${error.runtimeType}:${error.code}:${error.serviceCode ?? 'none'}:'
         '${error.message}';

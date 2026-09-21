@@ -2843,7 +2843,7 @@
       "caseId": "DEVICE-CONTENT-TAIL-ONLY-E2E-001",
       "feature": "Joined-device mixed-content tail boundary",
       "layer": "remote_product_ui",
-      "preconditions": "Two isolated AWiki Me Apps share one account only after a real member Join; an independent CLI peer, one Direct, one Group, and one small attachment fixture exist on awiki.info.",
+      "preconditions": "Two isolated AWiki Me Apps share one account only after a real member Join; an independent CLI peer, one Direct, one Group, and one small attachment fixture exist on awiki.info. Both Apps establish their authenticated realtime listeners before post-Join content traffic.",
       "action": "Create one unique Group message and one Direct attachment before Join, complete one real device Join, perform a reliable pull, then send one Group message and one Direct attachment after Join; ordinary Direct tail-only remains covered by DEVICE-MESSAGE-TAIL-ONLY-E2E-001.",
       "exactOracles": [
         "The joining App cannot project the pre-Join Group or attachment IDs, bodies, or filename, and those items contribute no unread state before or after an explicit reliable pull.",
@@ -2892,7 +2892,7 @@
       "caseId": "DEVICE-GROUP-SYNC-E2E-001",
       "feature": "Joined sibling ordinary Group message convergence",
       "layer": "remote_product_ui",
-      "preconditions": "Two isolated joined Apps and one independent CLI peer are active in the same ordinary Group on awiki.info.",
+      "preconditions": "Two isolated joined Apps and one independent CLI peer are active in the same ordinary Group on awiki.info. Both Apps establish their authenticated realtime listeners before post-Join content traffic.",
       "action": "Send one Group message from each App and one incoming Group message from the CLI peer in the shared App-pair scene.",
       "exactOracles": [
         "Both Apps preserve one canonical group, conversation, and message ID for each send; sibling-account sends remain isMine=true and the CLI send is isMine=false on both Apps.",
@@ -2943,7 +2943,7 @@
       "caseId": "DEVICE-ATTACHMENT-SYNC-E2E-001",
       "feature": "Joined sibling attachment convergence and download",
       "layer": "remote_product_ui",
-      "preconditions": "Two isolated Apps have completed one real member Join and share a canonical Direct with an independent CLI peer.",
+      "preconditions": "Two isolated Apps have completed one real member Join and share a canonical Direct with an independent CLI peer. Both Apps establish their authenticated realtime listeners before post-Join content traffic.",
       "action": "Send one deterministic small attachment from the existing App and inspect and download its sibling projection on the joining App.",
       "exactOracles": [
         "Both Apps preserve the same canonical message and attachment IDs, filename, MIME, size, and exact-one timeline projection.",
@@ -2993,7 +2993,7 @@
       "caseId": "DEVICE-GROUP-READ-SYNC-E2E-001",
       "feature": "Joined sibling Group read convergence and conversation isolation",
       "layer": "remote_product_ui",
-      "preconditions": "The two joined Apps are observing one Direct and one Group while an independent CLI peer can send into both conversations.",
+      "preconditions": "The two joined Apps are observing one Direct and one Group while an independent CLI peer can send into both conversations. Both Apps establish their authenticated realtime listeners before post-Join content traffic.",
       "action": "Create incoming unread messages in both conversations, read Direct first and Group second on the joining App, then repeat reliable sync.",
       "exactOracles": [
         "Direct and Group start at zero unread and advance to exactly one on both Apps; reading Direct converges to zero on the sibling without clearing Group, then reading Group converges to zero without regressing Direct.",

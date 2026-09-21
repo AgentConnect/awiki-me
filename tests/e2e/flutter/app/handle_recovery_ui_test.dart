@@ -499,6 +499,11 @@ void main() {
         final recoveryRow = find.byKey(
           const Key('settings-recover-handle-did-row'),
         );
+        await _pumpUntil(
+          tester,
+          () => recoveryRow.evaluate().length == 1,
+          failure: 'Settings did not load Handle DID Recovery capability.',
+        );
         await tester.ensureVisible(recoveryRow);
         await _tapOne(
           tester,
@@ -3006,8 +3011,10 @@ PlainDirectMessagingService _plainDirectMessaging(MessagingService messaging) {
 Future<File> _writeContinuityHermesGateway(
   _ContinuityDaemonConfig config,
 ) async {
-  final script = File('${config.stateRoot}/recovery_fake_hermes_gateway.py');
+  // Match the existing Hermes module discovery contract in an isolated fixture.
+  final script = File('${config.stateRoot}/fake-hermes/tui_gateway/entry.py');
   await script.parent.create(recursive: true);
+  await File('${script.parent.path}/__init__.py').writeAsString('');
   await script.writeAsString('''import json
 import sys
 
@@ -3040,8 +3047,10 @@ Map<String, String> _continuityDaemonEnvironment(
   'AWIKI_DAEMON_MESSAGE_SERVICE_BASE_URL': config.messageServiceUrl,
   'AWIKI_DAEMON_DID_DOMAIN': config.didDomain,
   'AWIKI_DAEMON_ALLOW_PLAIN_CONTROL': '1',
-  if (gatewayScript != null)
-    'AWIKI_HERMES_GATEWAY_CMD': '/usr/bin/env python3 ${gatewayScript.path}',
+  if (gatewayScript != null) ...<String, String>{
+    'AWIKI_HERMES_GATEWAY_CMD': 'python3 -m tui_gateway.entry',
+    'PYTHONPATH': gatewayScript.parent.parent.path,
+  },
 };
 
 class _RunningContinuityDaemon {
@@ -3811,6 +3820,11 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
     failure: 'Crash-cut setup did not open Settings.',
   );
   final recoveryRow = find.byKey(const Key('settings-recover-handle-did-row'));
+  await _pumpUntil(
+    tester,
+    () => recoveryRow.evaluate().length == 1,
+    failure: 'Settings did not load Handle DID Recovery capability.',
+  );
   await tester.ensureVisible(recoveryRow);
   await _tapOne(
     tester,
