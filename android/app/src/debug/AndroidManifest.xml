@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Manual local diagnostics only; absent from Profile and Release. -->
+        <activity android:name=".push.UrgentNotificationProbeActivity"
+            android:exported="true" android:label="AWiki Notify platform probe" />
+    </application>
+</manifest>

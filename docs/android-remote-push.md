@@ -243,6 +243,46 @@ separate from building/installing the diagnostic APK.
 
 This manual diagnostic entry point is not a product E2E test or release artifact.
 
+### Urgent channel preflight (development only)
+
+`UrgentNotificationChannel` and `ForegroundUrgentCueController` implement the
+Android platform portion of the text Notify proposal. They are **not yet wired
+to incoming messages or account settings**. The caller must authorize a committed
+Core message and enforce account preference, freshness, rate limits and durable
+message-level deduplication before invoking the controller. No Push payload or
+text keyword is authority to start it.
+
+The channel is `awiki_me_notify_urgent_v1`, created only by explicit setup. Existing
+channel choices are preserved. Foreground sound uses the channel's notification
+sound and notification audio usage, not a ringtone/call/alarm fallback. Permission
+denial, missing/disabled/downgraded channels and background lifecycle suppress the
+cue. DND (including priority mode) conservatively suppresses sound and vibration.
+Silent mode suppresses both; vibrate mode suppresses sound. An active cue rechecks
+system choices every 250 ms and never restarts sound when a restriction is lifted.
+The caller stops it on pause, close, navigation, logout and account/preference
+changes. A monotonic 30-second ceiling and single active window prevent a second
+start from extending a current cue. This window is not the durable message
+presentation ledger; that integration remains required.
+
+Debug builds alone contain `push.UrgentNotificationProbeActivity`, opened manually
+with ADB. It creates the channel and exposes explicit buttons for foreground
+cue/stop, one local notification, updating that same notification, and the system
+channel settings. It has no account access and does not send or synthesize IM
+messages. Its fixed test notification ID with `onlyAlertOnce` tests **App-owned**
+Android notifications only; it proves nothing about EMAS NOTICE retries or vendor
+offline delivery. Profile/Release do not contain this Activity or manifest entry.
+
+```sh
+adb -s <authorized-device> shell am start \
+  -n ai.awiki.awikime.dev/ai.awiki.awikime.push.UrgentNotificationProbeActivity
+```
+
+Run `:app:testDebugUnitTest` for policy/deadline coverage. Physical acceptance must
+separately report foreground lifecycle, local system channel, EMAS channel mapping,
+actual sound and actual vibration. A successful start or platform submission is
+not proof the user heard/felt it. Use the real authorized device; do not change its
+mute/DND/volume settings silently to obtain a pass.
+
 ### Bounded event tracing
 
 The native bridge and App coordinator emit bounded `[remote-push]` stages for
