@@ -180,7 +180,7 @@ void main() {
   );
 
   test(
-    'failed discovery does not block explicit existing account path',
+    'failed discovery preserves existing entry but cannot authorize registration OTP',
     () async {
       support.responder = (_, _) => Future.error(StateError('network'));
       await controller.checkAccount('abc', 'example.com');
@@ -189,9 +189,27 @@ void main() {
       controller.continueExisting('abc', 'example.com');
       expect(
         await controller.prepareVerification(phone: '+12025550123'),
+        isFalse,
+      );
+      expect(support.calls, hasLength(2));
+    },
+  );
+
+  test(
+    'existing shortcut cannot authorize a new account even when available',
+    () async {
+      support.responder = (handle, _) async => result(handle);
+      controller.continueExisting('alice', 'example.com');
+      expect(
+        await controller.prepareVerification(phone: '+12025550123'),
+        isFalse,
+      );
+      support.responder = (handle, _) async =>
+          result(handle, decision: 'existing');
+      expect(
+        await controller.prepareVerification(phone: '+12025550123'),
         isTrue,
       );
-      expect(support.calls, hasLength(1));
     },
   );
 

@@ -373,7 +373,7 @@ class AppTestCatalog {
       ..writeln('## Known coverage boundaries')
       ..writeln()
       ..writeln(
-        '- `full` aggregates every active audited case exactly once, including '
+        '- `full` aggregates active remote-product cases exactly once, excluding required local-fixture suites, including '
         'multi-device App pairs, Handle Recovery, Root Key Transfer, native '
         'Keychain, provider and performance suites. `messaging` is the former '
         '24-case Direct/Group/Contacts/Attachment flow. Platform-inapplicable '

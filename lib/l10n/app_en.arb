@@ -1642,7 +1642,6 @@
   "agentClientCreatePending": "Creation was submitted and is still pending. You can close this window and check the Agent list.",
   "agentClientProtocolHint": "Client protocol connection failed. Check sign-in, configuration or client errors on the host.",
   "agentClientCompatibilityHint": "This client version is not compatible with the integration. Update the client and try again.",
-  "onboardingAccountFirst": "Enter your handle to continue",
   "onboardingAccountNext": "Next",
   "onboardingInviteCode": "Invite code",
   "onboardingInviteRequired": "An invite code is required to register this handle.",

@@ -1642,7 +1642,6 @@
   "agentClientCreatePending": "创建已提交，仍在等待结果。可关闭此窗口，在智能体列表查看进度。",
   "agentClientProtocolHint": "客户端协议连接失败，请检查宿主机上的登录、配置或客户端错误后重试。",
   "agentClientCompatibilityHint": "客户端版本与当前接入能力不兼容，请更新客户端后重试。",
-  "onboardingAccountFirst": "先输入账号，检查后继续",
   "onboardingAccountNext": "下一步",
   "onboardingInviteCode": "邀请码",
   "onboardingInviteRequired": "此账号注册需要邀请码，请填写后继续。",

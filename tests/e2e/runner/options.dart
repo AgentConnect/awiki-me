@@ -206,7 +206,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       ? (<String>{
           for (final value in DesktopE2eCase.values)
             if (value != DesktopE2eCase.full &&
-                value != DesktopE2eCase.personalAgent)
+                value != DesktopE2eCase.personalAgent &&
+                value != DesktopE2eCase.registrationAccountFirst)
               ...value._caseIds,
           'NATIVE-E2E-002',
         }.toList(growable: false)..sort())

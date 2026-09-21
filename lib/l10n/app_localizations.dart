@@ -6922,12 +6922,6 @@ abstract class AppLocalizations {
   /// **'客户端版本与当前接入能力不兼容，请更新客户端后重试。'**
   String get agentClientCompatibilityHint;
 
-  /// No description provided for @onboardingAccountFirst.
-  ///
-  /// In zh, this message translates to:
-  /// **'先输入账号，检查后继续'**
-  String get onboardingAccountFirst;
-
   /// No description provided for @onboardingAccountNext.
   ///
   /// In zh, this message translates to:

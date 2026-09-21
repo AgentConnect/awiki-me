@@ -6168,6 +6168,7 @@
       "environment": "loopback_service",
       "cleanupPolicy": "isolated_scope_delete_and_disposable_service_fixture",
       "requiredFor": [
+        "local-fixture",
         "release"
       ],
       "owner": "awiki-me-identity",

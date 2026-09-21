@@ -511,8 +511,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final phone = _normalizedPhone;
     final profileMarkdown = '# $handle\n\n';
     final onboarding = ref.read(onboardingProvider);
-    if (onboarding.usesNoVerificationRegistration &&
-        !await _prepareRegistrationVerification()) {
+    if (!await _prepareRegistrationVerification()) {
       return;
     }
     if (!mounted) return;

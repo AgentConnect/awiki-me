@@ -75,7 +75,7 @@ class DesktopE2eSuiteManifest {
     );
   }
 
-  /// Every active leaf case has exactly one executor in full. Adding a new
+  /// Every active remote-product leaf has exactly one executor in full. Adding a new
   /// audited case without updating the aggregate is a catalog error.
   List<DesktopE2eSuiteDefinition> fullSuites() {
     final full = definitions['full'];
@@ -90,7 +90,8 @@ class DesktopE2eSuiteManifest {
       final suite = definitions[name];
       if (suite == null ||
           suite.includes.isNotEmpty ||
-          suite.catalogStatus != 'active') {
+          suite.catalogStatus != 'active' ||
+          suite.requiredFor.contains('local-fixture')) {
         throw E2eFailure(
           'full includes an unknown, aggregate, or unsupported suite.',
         );
@@ -104,7 +105,9 @@ class DesktopE2eSuiteManifest {
     }
     final active = <String>{
       for (final suite in definitions.values)
-        if (suite.includes.isEmpty && suite.catalogStatus == 'active')
+        if (suite.includes.isEmpty &&
+            suite.catalogStatus == 'active' &&
+            !suite.requiredFor.contains('local-fixture'))
           ...suite.caseIds,
     };
     if (covered.length != active.length ||
@@ -113,7 +116,9 @@ class DesktopE2eSuiteManifest {
           full.caseIds,
           selected.expand((suite) => suite.caseIds).toList()..sort(),
         )) {
-      throw E2eFailure('full must cover every active case exactly once.');
+      throw E2eFailure(
+        'full must cover every active remote-product case exactly once.',
+      );
     }
     return selected;
   }

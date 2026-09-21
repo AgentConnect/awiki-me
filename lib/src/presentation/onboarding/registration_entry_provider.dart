@@ -146,7 +146,7 @@ class RegistrationEntryController
     if (state.busy || state.step != RegistrationEntryStep.verification) {
       return false;
     }
-    if (state.existingAccountPath || state.check?.isExisting == true) {
+    if (state.check?.isExisting == true) {
       return true;
     }
     final revision = ++_revision;
@@ -165,9 +165,14 @@ class RegistrationEntryController
       if (!mounted || revision != _revision) return false;
       state = _state(
         check: result,
-        error: result.canVerify ? null : result.reason ?? 'handle_unavailable',
+        error: state.existingAccountPath && !result.isExisting
+            ? 'check_failed'
+            : result.canVerify
+            ? null
+            : result.reason ?? 'handle_unavailable',
       );
-      return result.canVerify;
+      return result.canVerify &&
+          (!state.existingAccountPath || result.isExisting);
     } catch (_) {
       if (mounted && revision == _revision) {
         state = _state(error: 'check_failed');

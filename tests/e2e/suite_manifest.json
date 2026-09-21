@@ -1344,7 +1344,6 @@
         "PERF-E2E-011",
         "PERF-E2E-012",
         "PROCESS-RESTART-E2E-001",
-        "REGISTRATION-ACCOUNT-FIRST-E2E-001",
         "ROOT-TRANSFER-APP-PAIR-E2E-001",
         "ROOT-TRANSFER-E2E-001",
         "SMOKE-E2E-001",
@@ -1378,8 +1377,7 @@
         "identity-switch",
         "restart",
         "display-name-fallback",
-        "production-keychain",
-        "registration-account-first"
+        "production-keychain"
       ]
     },
     "registration-account-first": {
@@ -1392,6 +1390,7 @@
         "flutter"
       ],
       "requiredFor": [
+        "local-fixture",
         "release"
       ],
       "owner": "awiki-me-identity",

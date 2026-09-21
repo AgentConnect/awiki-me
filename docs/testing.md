@@ -650,13 +650,13 @@ When dedicated test-account, OTP, operator, or platform prerequisites are
 unavailable, the suite fails closed before claiming success. Those prerequisites
 protect the test execution and do not imply a product account rollout.
 
-### Full aggregate (all active cases)
+### Full aggregate (active remote-product cases)
 
-Since 2026-09-11, `--case full` is the all-active-case aggregate, not the old
+Since 2026-09-11, `--case full` is the active remote-product aggregate, not the old
 24-case message flow. Use `--case messaging` for that narrower flow.
 The checked-in [suite manifest](../tests/e2e/suite_manifest.json) owns the
-`full.includes` execution order and exact case union: currently 27 disjoint
-leaf suites / 114 active cases. This includes all App-pair multi-device suites,
+`full.includes` execution order and exact case union: currently 26 disjoint
+leaf suites / 107 active cases. This includes all App-pair multi-device suites,
 Handle Recovery variants, Root Key Transfer, restart, performance, supported
 Agent providers, and the macOS production-Keychain gate. The 13 planned and
 4 unsupported catalog entries are reported as non-executable, not passes.
@@ -909,7 +909,7 @@ Supported E2E cases:
 - `contacts`: App and CLI peer follow/contact flow，包含从可见联系人行打开 canonical Direct 的发送、restart 和 unread/read 闭环。
 - `restart`: release-only two-Flutter-process cold restart using one isolated App state root; the second process must restore the active identity, canonical Direct/Group rows, exact messages, unread state, and cached display names without in-memory Provider reuse.
 - `messaging`: the 24-case Direct/Group/Contacts/Attachment flow.
-- `full`: all active audited leaf cases; see the aggregate contract above.
+- `full`: active audited remote-product leaf cases; see the aggregate contract above.
 
 群组 E2E 使用协议级身份规则：有 Handle 时必须发送完整 `local-part.provider-domain`，bare Handle 只能从当前已认证 `did:wba` 的 provider domain 补全；无法可信补全时只允许用户显式选择 DID-only。App 和测试不得把内部 User ID 放入 ANP group body，也不得先把 Handle 解析成 DID 后丢失 Handle-backed membership 语义。
 
@@ -1511,3 +1511,15 @@ a phone mismatch; the contact step retains binding-specific errors.
 CI regression repair: macOS keeps DID method selection and pending registration
 continuation visible before the contact step, matching the compact layout. Full
 runner contract tests compare exact active catalog IDs rather than stale totals.
+
+
+The loopback `registration-account-first` acceptance remains active and required
+under `requiredFor: [local-fixture, release]`, independently of the awiki.info `full` gate.
+Run it explicitly with its provisioned disposable fixture; missing configuration
+still fails closed. Remote full completion does not attest this local lane, and
+exhaustive acceptance requires both lanes. Never convert missing fixtures to skips.
+
+Registration discovery failure does not authorize OTP, email activation or final
+registration through the existing-account shortcut. A successful existing decision
+is required for that path; purpose-bound Recovery remains directly accessible
+without starting OTP on navigation, including existing local recovery continuation.

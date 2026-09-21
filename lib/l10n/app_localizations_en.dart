@@ -3952,9 +3952,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'This client version is not compatible with the integration. Update the client and try again.';
 
   @override
-  String get onboardingAccountFirst => 'Enter your handle to continue';
-
-  @override
   String get onboardingAccountNext => 'Next';
 
   @override

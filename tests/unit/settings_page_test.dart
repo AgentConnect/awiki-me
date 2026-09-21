@@ -1293,6 +1293,10 @@ void main() {
                   'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
               'bootstrap_key_algorithm': 'x25519',
               'config_summary': <String, Object?>{
+                'acp': {
+                  'capability_schema_version': 1,
+                  'supported_drivers': ['hermes'],
+                },
                 'delegated_subkey_proposal': <String, Object?>{
                   'schema': userSubkeyPackageSchema,
                   'user_did': 'did:human:me',
@@ -1474,7 +1478,12 @@ void main() {
           handle: 'hermes-msg-one',
           displayName: 'Hermes Personal Agent',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: {
+              'config_summary': {'protocol': 'acp'},
+            },
+          ),
         ),
         AgentSummary(
           agentDid: 'did:agent:daemon:two',
@@ -1501,7 +1510,12 @@ void main() {
           handle: 'hermes-msg-two',
           displayName: 'Hermes Personal Agent',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: {
+              'config_summary': {'protocol': 'acp'},
+            },
+          ),
         ),
       ];
     final identities = FakeIdentityCorePort();

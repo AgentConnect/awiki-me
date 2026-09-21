@@ -3692,9 +3692,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentClientCompatibilityHint => '客户端版本与当前接入能力不兼容，请更新客户端后重试。';
 
   @override
-  String get onboardingAccountFirst => '先输入账号，检查后继续';
-
-  @override
   String get onboardingAccountNext => '下一步';
 
   @override

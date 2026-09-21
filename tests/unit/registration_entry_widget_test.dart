@@ -1,6 +1,7 @@
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
+import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -172,7 +173,7 @@ void main() {
   }
 
   testWidgets(
-    'existing short account can verify without invitation during discovery failure',
+    'existing shortcut cannot send OTP until discovery confirms existing account',
     (tester) async {
       tester.view.physicalSize = const Size(800, 1000);
       tester.view.devicePixelRatio = 1;
@@ -201,9 +202,48 @@ void main() {
         '13800138000',
       );
       await tapVisible(tester, find.text('发送验证码'));
-      expect(gateway.sendOtpCalls, 1);
+      expect(gateway.sendOtpCalls, 0);
       expect(field('e2e-invite-input'), findsNothing);
-      expect(support.checks, 1);
+      expect(support.checks, 2);
+      support.fail = false;
+      support.decision = 'existing';
+      await tapVisible(tester, find.text('发送验证码'));
+      expect(gateway.sendOtpCalls, 1);
+    },
+  );
+  testWidgets(
+    'discovery failure still opens recovery without registration OTP',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final gateway = FakeAwikiGateway();
+      final support = InviteSupport(gateway)..fail = true;
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const OnboardingPage(),
+          gateway: gateway,
+          providerOverrides: [
+            onboardingSupportServiceProvider.overrideWithValue(support),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(field('e2e-handle-input'), 'abc');
+      await tapVisible(tester, find.text('下一步'));
+      await tapVisible(tester, find.text('已有账号，继续登录'));
+      final recovery = find.byWidgetPredicate(
+        (w) =>
+            w is AppSecondaryButton &&
+            w.semanticsIdentifier == 'e2e-existing-recovery',
+      );
+      await tapVisible(tester, recovery);
+      expect(find.byType(HandleRecoveryPage), findsOneWidget);
+      expect(gateway.sendOtpCalls, 0);
+      expect(gateway.registerHandleCalls, 0);
     },
   );
 }
