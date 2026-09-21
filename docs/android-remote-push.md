@@ -283,6 +283,31 @@ actual sound and actual vibration. A successful start or platform submission is
 not proof the user heard/felt it. Use the real authorized device; do not change its
 mute/DND/volume settings silently to obtain a pass.
 
+The EMAS 3.10.1 `MessageReceiver.hookNotificationBuild` callback now adds
+`FLAG_ONLY_ALERT_ONCE` only to notifications on `awiki_me_notify_urgent_v1`.
+This retains EMAS as the single background presenter and leaves ordinary
+notifications unchanged. The server must send a stable
+`AndroidNotificationNotifyId` to update the same active notification. This flag
+does not prevent another alert after dismissal, reboot, or an offline vendor
+path that does not invoke the receiver; durable presentation receipts and
+provider-outcome reconciliation remain required before enabling urgent Notify.
+
+M153 preflight on 2026-09-21 confirmed a real EMAS NOTICE used the requested
+urgent channel. The initial SDK notification lacked `ONLY_ALERT_ONCE`; the
+updated Debug build exposed that flag on the actual provider-created notification.
+Physical sound/vibration remained unverified while the device was silent.
+The test sent explicitly labelled channel probes directly to the registered
+development installation, without deploying a new service or changing account
+notification policy. It is transport evidence, not an end-to-end Notify pass.
+
+Push diagnostics distinguish pending processing counts from typed Core failures.
+Local incoming-message recovery now maps Core exceptions through the existing
+message-sync error mapper instead of losing that classification. Logs contain
+only counts, exception type and sanitized stable error code, not message bodies,
+credentials or identifiers. This diagnostic change is not a fix for notification
+navigation: M153 still reproduced `invalid_input` during warm-session processing,
+while restarting later recovered the already committed message and its route.
+
 ### Bounded event tracing
 
 The native bridge and App coordinator emit bounded `[remote-push]` stages for
