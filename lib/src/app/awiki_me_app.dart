@@ -23,6 +23,7 @@ import '../domain/entities/device_management.dart';
 import '../presentation/app_shell/app_shell.dart';
 import '../presentation/app_shell/providers/app_lifecycle_provider.dart';
 import '../presentation/app_shell/providers/session_provider.dart';
+import '../presentation/app_shell/providers/navigation_provider.dart';
 import '../presentation/agents/agents_provider.dart';
 import '../presentation/chat/chat_provider.dart';
 import '../presentation/recovery/handle_recovery_provider.dart';
@@ -396,6 +397,7 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
         systemNavigationBarDividerColor: AwikiMePalette.canvas,
       ),
       child: CupertinoApp(
+        navigatorKey: ref.watch(appNavigatorKeyProvider),
         onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
         debugShowCheckedModeBanner: false,
         localizationsDelegates: const <LocalizationsDelegate<dynamic>>[

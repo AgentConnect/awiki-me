@@ -316,7 +316,7 @@ Core 的 typed local Join inbox。通知自带的 title/body、payload JSON 或 
 Android EMAS message/notification/open callback 与 WebSocket 一样，只表示本地 Core
 projection 可能变脏。`RemotePushMessageSyncCoordinator` 将事件串行合并，并通过
 `MessageSyncCoordinator` 请求同一条 Core `receiveNow` 接收路径，并在接收之外等待独立业务
-回执。它不解析 Push title/body 来生成 `ChatMessage`，也不直接 upsert recents 或 timeline。
+回执。App 内部 `remote_push` 仅用于诊断及展示策略；在 `ImCoreMessageSyncService` 边界映射为现有 wire `websocket_hint`（传输唤醒提示），Core 和服务端冻结枚举不接受 `remote_push`。新 `receiveNow` 与兼容 `syncNow` 使用同一映射。它不解析 Push title/body 来生成 `ChatMessage`，也不直接 upsert recents 或 timeline。
 
 `MessageSyncCoordinator` 仍是唯一的 Core commit、conversation/Join/timeline 刷新和
 notification dedupe owner。native receiver 在 `showNotificationNow` 之前只用三项安全事实做
@@ -346,7 +346,7 @@ message reference 和必填未过期 `extraMap.exp`；App 用 committed logical/
 message ID 及 Core 保留的 raw message alias 派生 reference，匹配后只打开该 committed message
 的 canonical conversation。其他
 payload metadata、raw conversation ID、URL、title/body 都不能决定导航；无匹配时只显示会话
-列表。
+列表。打开事件通过当前 session fence 后，先通过当前 App 实例的根 Navigator 关闭覆盖 shell 的设置/详情页面，再选择 canonical conversation；仅修改 shell selection 不代表用户已看到目标会话。后台收到事件不关闭页面，只有有效 notification_opened 才执行该动作。
 
 activation、resume、event drain、ack 和 navigation 全程绑定相同
 `SessionEpoch(ownerDid, stableIdentityKey, generation)` 与 `StorageScopeId` tenant。

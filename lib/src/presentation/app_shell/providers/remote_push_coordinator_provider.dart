@@ -108,6 +108,12 @@ final class _RiverpodRemotePushNavigation implements RemotePushNavigationPort {
     if (!_contextMatches(ref, context)) {
       throw const RemotePushNavigationStaleSession();
     }
+    // A root-level settings/detail route can cover the selected conversation.
+    // This runs only for a validated open event, after the session fence above.
+    ref
+        .read(appNavigatorKeyProvider)
+        .currentState
+        ?.popUntil((route) => route.isFirst);
     ref
         .read(shellDestinationProvider.notifier)
         .select(ShellDestination.messages);
