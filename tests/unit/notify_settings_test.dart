@@ -18,7 +18,11 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       const channel = MethodChannel('ai.awiki.awikime/remote_push_events');
-      final local = <String, Object?>{'enabled': true, 'urgent_enabled': false};
+      final local = <String, Object?>{
+        'enabled': true,
+        'urgent_enabled': false,
+        'mutes_ready': true,
+      };
       final writes = <Map<Object?, Object?>>[];
       bool fail = false;
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
@@ -63,6 +67,7 @@ void main() {
       await tester.tap(find.byKey(const Key('settings-notify-row')));
       await tester.pumpAndSettle();
       expect(find.byType(NotifySettingsPage), findsOneWidget);
+      expect(find.text('会话免打扰尚未同步，任务提醒已暂停。'), findsNothing);
       expect(
         tester.widget<CupertinoSwitch>(find.byType(CupertinoSwitch).last).value,
         false,
@@ -95,6 +100,11 @@ void main() {
       expect(find.text('本机通知设置未保存，请重试。'), findsOneWidget);
       expect(local['enabled'], false);
       expect(writes.length, 3);
+      local['mutes_ready'] = false;
+      await tester.tap(find.text('重试'));
+      await tester.pumpAndSettle();
+      expect(find.text('会话免打扰尚未同步，任务提醒已暂停。'), findsOneWidget);
+      expect(find.text('同步设置'), findsOneWidget);
       expect(tester.takeException(), isNull);
       debugDefaultTargetPlatformOverride = null;
     },

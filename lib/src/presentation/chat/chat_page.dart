@@ -1,5 +1,5 @@
 import 'dart:async';
-import '../settings/notify_settings.dart' show saveLocalNotifyConversationMute;
+import '../app_shell/providers/remote_push_coordinator_provider.dart';
 import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';

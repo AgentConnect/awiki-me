@@ -1,12 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../../../app/app_services.dart';
 import '../../../application/ports/remote_push_sync_port.dart';
 import '../../../application/remote_push_installation_coordinator.dart';
 import '../../../application/remote_push_message_sync_coordinator.dart';
 import '../../../application/tenant/app_tenant.dart';
+import '../../../application/text_notify_mute_coordinator.dart';
 import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_provider.dart';
 import 'message_sync_coordinator_provider.dart';
@@ -26,6 +29,39 @@ RemotePushSessionContext? currentRemotePushSessionContext(Ref ref) {
   );
 }
 
+final currentTextNotifySessionContextProvider =
+    Provider<RemotePushSessionContext?>((ref) {
+      ref.watch(sessionProvider);
+      ref.watch(activeAppTenantProvider);
+      return currentRemotePushSessionContext(ref);
+    });
+
+final textNotifyMuteCoordinatorProvider = Provider<TextNotifyMuteCoordinator>((
+  ref,
+) {
+  const channel = MethodChannel('ai.awiki.awikime/remote_push_events');
+  return TextNotifyMuteCoordinator(
+    isCurrent: (context) => _contextMatches(ref, context),
+    loadMutedPeers: (context) {
+      final service = ref.read(conversationServiceProvider);
+      if (service is! NotifyMuteSnapshotSource) {
+        throw StateError('notify_mute_source_unavailable');
+      }
+      return (service as NotifyMuteSnapshotSource)
+          .loadMutedNotificationPeerDids(ownerDid: context.ownerDid);
+    },
+    begin: (target) =>
+        channel.invokeMethod<int>('beginTextNotifyMuteSync', target),
+    replace: (target, revision, identities) async =>
+        await channel.invokeMethod<bool>('replaceTextNotifyMutes', {
+          'target': target,
+          'revision': revision,
+          'identities': identities,
+        }) ==
+        true,
+  );
+});
+
 final remotePushMessageSyncCoordinatorProvider =
     Provider<RemotePushMessageSyncCoordinator?>((ref) {
       final client = ref.watch(remotePushClientProvider);
@@ -37,6 +73,10 @@ final remotePushMessageSyncCoordinatorProvider =
         client: client,
         sync: ref.read(remotePushSyncPortProvider),
         navigation: ref.read(remotePushNavigationPortProvider),
+        preparePresentation:
+            !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+            ? ref.read(textNotifyMuteCoordinatorProvider).ensureReady
+            : null,
         refreshInstallation: (context) async {
           try {
             await _refreshRemotePushInstallation(ref, context);

@@ -38,6 +38,7 @@ class TextNotifyAlertService : Service() {
             return START_NOT_STICKY
         }
         if (active) return START_NOT_STICKY
+        TextNotifyPresentation.pendingToken = null
         token = intent?.getStringExtra("token")
         payload = intent?.getStringExtra("payload")
         if (payload == null || !TextNotifyPresentation.allows(this, payload!!, true)) { stopSelf(); return START_NOT_STICKY }
@@ -117,6 +118,7 @@ class TextNotifyAlertService : Service() {
     }
 
     override fun onDestroy() {
+        TextNotifyPresentation.pendingToken = null
         active = false
         TextNotifyPresentation.activeToken = null
         TextNotifyPresentation.activePayload = null

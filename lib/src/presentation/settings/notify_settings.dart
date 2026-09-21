@@ -3,12 +3,18 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/remote_push_message_reference.dart';
 import '../app_shell/providers/session_provider.dart';
+import '../app_shell/providers/remote_push_coordinator_provider.dart';
 
 // Device-local, account-scoped settings. No User Service RPC or installation schema changes.
 class NotifyPreference {
-  const NotifyPreference({required this.enabled, required this.urgentEnabled});
+  const NotifyPreference({
+    required this.enabled,
+    required this.urgentEnabled,
+    this.mutesReady = false,
+  });
   final bool enabled;
   final bool urgentEnabled;
+  final bool mutesReady;
   factory NotifyPreference.fromJson(Map<String, Object?> value) {
     if (value['enabled'] is! bool || value['urgent_enabled'] is! bool) {
       throw const FormatException('Invalid local Notify preference');
@@ -16,6 +22,7 @@ class NotifyPreference {
     return NotifyPreference(
       enabled: value['enabled'] as bool,
       urgentEnabled: value['urgent_enabled'] as bool,
+      mutesReady: value['mutes_ready'] == true,
     );
   }
 }
@@ -112,7 +119,11 @@ class _NotifySettingsState extends ConsumerState<NotifySettings> {
       }
       if (applied != true) throw StateError('notify_local_write_failed');
       setState(() {
-        value = NotifyPreference(enabled: enabled, urgentEnabled: urgent);
+        value = NotifyPreference(
+          enabled: enabled,
+          urgentEnabled: urgent,
+          mutesReady: value!.mutesReady,
+        );
         busy = false;
       });
     } on Object {
@@ -122,6 +133,27 @@ class _NotifySettingsState extends ConsumerState<NotifySettings> {
           error = '本机通知设置未保存，请重试。';
         });
       }
+    }
+  }
+
+  Future<void> retryMuteSync() async {
+    final context = ref.read(currentTextNotifySessionContextProvider);
+    if (context == null || busy) return;
+    final id = ++request;
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      await ref.read(textNotifyMuteCoordinatorProvider).ensureReady(context);
+      if (!mounted || id != request) return;
+      await load();
+    } on Object {
+      if (!mounted || id != request) return;
+      setState(() {
+        busy = false;
+        error = '会话免打扰同步失败，任务提醒仍已暂停。请重试。';
+      });
     }
   }
 
@@ -164,6 +196,14 @@ class _NotifySettingsState extends ConsumerState<NotifySettings> {
             await channel.invokeMethod<void>('openNotifyFullScreenSettings');
           },
         ),
+        if (!busy && value?.mutesReady == false)
+          CupertinoListTile(
+            title: const Text('会话免打扰尚未同步，任务提醒已暂停。', maxLines: 3),
+            trailing: CupertinoButton(
+              onPressed: retryMuteSync,
+              child: const Text('同步设置'),
+            ),
+          ),
         if (busy)
           const CupertinoListTile(
             title: Text('正在读取本机设置…'),
@@ -177,24 +217,4 @@ class _NotifySettingsState extends ConsumerState<NotifySettings> {
       ],
     );
   }
-}
-
-Future<void> saveLocalNotifyConversationMute(
-  WidgetRef ref,
-  String peer,
-  bool muted,
-) async {
-  final epoch = ref.read(sessionProvider).activeEpoch;
-  if (epoch == null || peer.isEmpty) return;
-  const channel = MethodChannel('ai.awiki.awikime/remote_push_events');
-  final args = {
-    'target': remotePushOpaqueTargetReference(epoch.ownerDid),
-    'identity': remotePushOpaqueIdentityReference(peer),
-    'muted': muted,
-  };
-  final applied = await channel.invokeMethod<bool>(
-    'muteTextNotifyConversation',
-    args,
-  );
-  if (applied != true) throw StateError('notify_local_mute_not_saved');
 }

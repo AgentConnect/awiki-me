@@ -20,17 +20,20 @@ class RemotePushMessageSyncCoordinator {
     required RemotePushNavigationPort navigation,
     required RemotePushInstallationRefresh refreshInstallation,
     DateTime Function()? now,
+    RemotePushInstallationRefresh? preparePresentation,
   }) : _client = client,
        _sync = sync,
        _navigation = navigation,
        _refreshInstallation = refreshInstallation,
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _preparePresentation = preparePresentation;
 
   final RemotePushClient _client;
   final RemotePushSyncPort _sync;
   final RemotePushNavigationPort _navigation;
   final RemotePushInstallationRefresh _refreshInstallation;
   final DateTime Function() _now;
+  final RemotePushInstallationRefresh? _preparePresentation;
   final LinkedHashMap<String, RemotePushEvent> _queuedEvents =
       LinkedHashMap<String, RemotePushEvent>();
 
@@ -90,7 +93,19 @@ class RemotePushMessageSyncCoordinator {
       // be installed, so activation must remain best-effort.
     }
     if (!_isCurrent(context)) return;
+    await _preparePresentationBestEffort(context);
+    if (!_isCurrent(context)) return;
     await _drainOneBatch();
+  }
+
+  Future<void> _preparePresentationBestEffort(
+    RemotePushSessionContext context,
+  ) async {
+    try {
+      await _preparePresentation?.call(context);
+    } on Object {
+      // Native Notify stays fail-closed; message sync must still proceed.
+    }
   }
 
   Future<void> _setActiveNotificationTargetReference(String? value) async {
@@ -102,7 +117,11 @@ class RemotePushMessageSyncCoordinator {
   Future<void> resume() {
     if (_disposed) return Future<void>.value();
     _mergePendingEvents();
-    return _serialize(_drainOneBatch);
+    return _serialize(() async {
+      final context = _activeSession;
+      if (context != null) await _preparePresentationBestEffort(context);
+      await _drainOneBatch();
+    });
   }
 
   void _onEvent(RemotePushEvent event) {

@@ -85,8 +85,11 @@ object RemotePushEventBridge {
                         }
                         result.success(null)
                     }
-                    "muteTextNotifyConversation" -> {
-                        result.success(TextNotifyPresentation.mute(applicationContext, call.arguments as? Map<*, *> ?: emptyMap<String, Any>()))
+                    "beginTextNotifyMuteSync" -> {
+                        result.success(TextNotifyPresentation.beginMuteSync(applicationContext, call.arguments as? String))
+                    }
+                    "replaceTextNotifyMutes" -> {
+                        result.success(TextNotifyPresentation.replaceMutes(applicationContext, call.arguments as? Map<*, *> ?: emptyMap<String, Any>()))
                     }
                     "getTextNotifyPreferenceState" -> {
                         result.success(TextNotifyPresentation.effectiveSettings(applicationContext, call.arguments as? String))

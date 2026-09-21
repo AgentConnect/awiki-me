@@ -678,3 +678,12 @@ Core cutover 后继续显示 overlay 收尾阶段，完成前不创建业务 Sto
 - `tests/unit/identity_flow_test.dart`：固定 Direct 解析失败时不创建会话、不改变 selected state，并保留当前资料页。
 - `tests/e2e/flutter/app/app_smoke_test.dart`
 - `tests/e2e/flutter/app/ui_visual_verification_test.dart`
+
+### Android Text Notify mute mirror
+
+ProductLocalStore 的 canonical conversation overlay 仍是会话免打扰的唯一事实源。
+Android 激活登录会话时，ImCoreConversationService 使用 Core 分页路由解析所有静音会话
+（包括隐藏项），只将 Direct 的 opaque peer reference 投影到原生本机快照。
+快照缺失、路由未解析或写入失败时，typed Notify 展示暂停；普通消息同步不受影响。
+修改免打扰先关闭快照可用性，再保存 overlay 并完整替换快照；账号和同步批次共同拒绝
+迟到写入，失败由回前台或设置页重试恢复。该镜像不进入 Core DTO、User Service 或安装注册。

@@ -15,7 +15,13 @@ class TextNotifyPolicyTest {
         assertFalse(TextNotifyPolicy.canOpen(1000, 2000, target, "target_zyxwvutsrqponmlkjihgfedcba"))
     }
     @Test fun ownedFreshOptedInMessageCanStart() { assertTrue(accepts()) }
-    @Test fun oldAndFutureMessagesCannotStart() { assertFalse(accepts(expiry=1000)); assertFalse(accepts(expiry=1121)) }
+    @Test fun oldAndFutureMessagesCannotStart() { assertFalse(accepts(expiry=1000)); assertFalse(accepts(expiry=1151)) }
+    @Test fun freshMessageSurvivesFiveSecondClockLagAndOneSecondDelivery() {
+        assertTrue(accepts(now=996, expiry=1120))
+        assertTrue(accepts(expiry=1150))
+        assertFalse(accepts(expiry=1151))
+        assertFalse(accepts(expiry=999))
+    }
     @Test fun logoutAccountChangeAndMalformedIdentityCannotStart() {
         assertFalse(accepts(active=null)); assertFalse(accepts(active="target_zyxwvutsrqponmlkjihgfedc")); assertFalse(accepts(mid="bad"))
     }
