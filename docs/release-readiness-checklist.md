@@ -63,3 +63,11 @@ Invite at least three to five people who do not know the current architecture an
 - [ ] After 60 seconds, they can decide whether they are a target user.
 - [ ] Within five minutes, they complete a meaningful first success.
 - [ ] They can accurately state the maturity, platform status, and security boundaries.
+# 新加坡固定源码测试包（2026-09-22）
+
+本次使用 `package-app.yml` 的显式 `test_sources=true`，控制分支仅允许
+`test/singapore-full-20260922`，原有发布 actor 校验、签名、公证及装订检查保留。
+普通构建仍选择 registry；测试构建从 Core 仓单独提交的来源清单与 Cargo 锁导出
+固定源码，平台产物附带 `test-source-native.json`。它不是 SDK 已发布的证明。
+安装后在租户管理中添加并选择 `anpclaw.com`；默认租户入口保持不变。
+临时 `app-packaging` 分支授权在构建结束后撤销。

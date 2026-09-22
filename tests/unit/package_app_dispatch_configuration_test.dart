@@ -43,11 +43,15 @@ void main() {
     final windows = File('scripts/package_windows.ps1').readAsStringSync();
     expect(
       RegExp(
-        r'AWIKI_RELEASE_REGISTRY=1 scripts/flutter/build-sdk-native.sh',
+        r'AWIKI_RELEASE_REGISTRY="\$NATIVE_REGISTRY" AWIKI_TEST_SOURCE_MANIFEST="\$NATIVE_TEST_MANIFEST" scripts/flutter/build-sdk-native.sh',
       ).allMatches(unix).length,
       2,
     );
+    expect(unix, contains('DEPENDENCY_MODE="registry"'));
+    expect(unix, contains('NATIVE_REGISTRY=1'));
+    expect(unix, contains('unsupported dependency mode'));
     expect(windows, contains(r'$env:AWIKI_RELEASE_REGISTRY = "1"'));
+    expect(windows, contains("[ValidateSet('registry', 'test-source')]"));
   });
 
   test('package dispatch separates the controller from source revisions', () {
@@ -135,8 +139,8 @@ void main() {
     const expectedPrivilegedJobCondition = r'''
 ${{
   github.event_name == 'workflow_dispatch' &&
-  github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-  endsWith(github.workflow_ref, format('@refs/heads/{0}', github.event.repository.default_branch)) &&
+  github.ref == format('refs/heads/{0}', inputs.test_sources && 'test/singapore-full-20260922' || github.event.repository.default_branch) &&
+  endsWith(github.workflow_ref, format('@refs/heads/{0}', inputs.test_sources && 'test/singapore-full-20260922' || github.event.repository.default_branch)) &&
   contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.actor) &&
   contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.triggering_actor)
 }}
@@ -385,6 +389,41 @@ ${{
     expect(
       wrongWorkflowRef.stderr,
       contains('workflow file does not come from the default branch'),
+    );
+  });
+
+  test('test source signing requires the exact authorized branch and actor', () {
+    const branch = 'test/singapore-full-20260922';
+    const workflowRef =
+        'AgentConnect/awiki-me/.github/workflows/package-app.yml@refs/heads/$branch';
+    expect(
+      _runAuthorization(
+        testSources: true,
+        controlBranch: branch,
+        workflowRef: workflowRef,
+      ).exitCode,
+      0,
+    );
+    expect(
+      _runAuthorization(
+        controlBranch: branch,
+        workflowRef: workflowRef,
+      ).exitCode,
+      isNot(0),
+    );
+    expect(_runAuthorization(testSources: true).exitCode, isNot(0));
+    expect(
+      _runAuthorization(
+        testSources: true,
+        controlBranch: branch,
+        workflowRef: workflowRef,
+        actor: 'untrusted-user',
+      ).exitCode,
+      isNot(0),
+    );
+    expect(
+      _runAuthorization(testSources: true, controlBranch: branch).exitCode,
+      isNot(0),
     );
   });
 
@@ -639,6 +678,7 @@ ProcessResult _runAuthorization({
   String actor = 'smartGrey',
   String triggeringActor = 'SMARTGREY',
   String controlBranch = 'main',
+  bool testSources = false,
   String workflowRef =
       'AgentConnect/awiki-me/.github/workflows/package-app.yml@refs/heads/main',
 }) {
@@ -665,6 +705,7 @@ ProcessResult _runAuthorization({
       'CONTROL_REF': 'refs/heads/$controlBranch',
       'WORKFLOW_REF': workflowRef,
       'DEFAULT_BRANCH': 'main',
+      'TEST_SOURCES': testSources.toString(),
     },
   );
 }
