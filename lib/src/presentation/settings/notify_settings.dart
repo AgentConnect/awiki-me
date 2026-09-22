@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,11 +49,55 @@ class _NotifySettingsState extends ConsumerState<NotifySettings> {
   bool busy = true;
   String? error;
   int request = 0;
+  final List<Timer> _timeouts = <Timer>[];
   static const channel = MethodChannel('ai.awiki.awikime/remote_push_events');
   @override
   void initState() {
     super.initState();
     Future.microtask(load);
+  }
+
+  @override
+  void dispose() {
+    request++;
+    for (final timer in _timeouts) {
+      timer.cancel();
+    }
+    _timeouts.clear();
+    super.dispose();
+  }
+
+  Future<T> _withinTimeout<T>(Future<T> future) {
+    final completer = Completer<T>();
+    late final Timer timer;
+    timer = Timer(const Duration(seconds: 3), () {
+      _timeouts.remove(timer);
+      if (!completer.isCompleted) {
+        completer.completeError(TimeoutException('notify_settings_timeout'));
+      }
+    });
+    _timeouts.add(timer);
+    future.then(
+      (value) {
+        if (timer.isActive) {
+          timer.cancel();
+          _timeouts.remove(timer);
+        }
+        if (!completer.isCompleted) {
+          completer.complete(value);
+        }
+      },
+      onError: (Object error, StackTrace stack) {
+        if (timer.isActive) {
+          timer.cancel();
+          _timeouts.remove(timer);
+        }
+        if (!completer.isCompleted) {
+          completer.completeError(error, stack);
+        }
+      },
+    );
+    return completer.future;
   }
 
   Future<void> load() async {
@@ -71,12 +117,12 @@ class _NotifySettingsState extends ConsumerState<NotifySettings> {
       error = null;
     });
     try {
-      final values = await channel
-          .invokeMapMethod<String, Object?>(
-            'getTextNotifyPreferenceState',
-            remotePushOpaqueTargetReference(epoch.ownerDid),
-          )
-          .timeout(const Duration(seconds: 3));
+      final values = await _withinTimeout(
+        channel.invokeMapMethod<String, Object?>(
+          'getTextNotifyPreferenceState',
+          remotePushOpaqueTargetReference(epoch.ownerDid),
+        ),
+      );
       if (!mounted ||
           id != request ||
           ref.read(sessionProvider).activeEpoch != epoch) {

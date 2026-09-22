@@ -100,16 +100,29 @@ class _ChatInformationPageState extends ConsumerState<_ChatInformationPage> {
     }
 
     try {
+      await saveCanonical();
       if (muted != null &&
           !widget.conversation.isGroup &&
           defaultTargetPlatform == TargetPlatform.android) {
-        final context = ref.read(currentTextNotifySessionContextProvider);
-        if (context == null) throw sessionEpochChangedError();
-        await ref
-            .read(textNotifyMuteCoordinatorProvider)
-            .update(context, saveCanonical);
-      } else {
-        await saveCanonical();
+        final notifyContext = ref.read(currentTextNotifySessionContextProvider);
+        if (notifyContext != null) {
+          // The native mirror can fail to answer. The switch the user just
+          // set stays in the canonical store and the mirror catches up later.
+          unawaited(() async {
+            try {
+              await ref
+                  .read(textNotifyMuteCoordinatorProvider)
+                  .update(notifyContext, () async {});
+            } catch (error) {
+              if (!mounted || !epoch.matches(ref.read(sessionProvider))) {
+                return;
+              }
+              ref
+                  .read(uiFeedbackProvider.notifier)
+                  .showError(AppMessage.fromError(error));
+            }
+          }());
+        }
       }
       if (!epoch.matches(ref.read(sessionProvider))) {
         throw sessionEpochChangedError();
