@@ -3827,6 +3827,25 @@ Future<ChatMessage> _sendAppPairAgentPromptThroughUi({
     timeout: const Duration(seconds: 30),
     failure: 'The joining App runtime Agent chat input was unavailable.',
   );
+  // The composer can be enabled while ACP preparation still blocks submission.
+  // Observe the current chat's confirmed model projection before submitting.
+  await _pumpUntil(
+    tester,
+    () {
+      final bars = tester
+          .widgetList<AcpModelBar>(find.byType(AcpModelBar))
+          .where((bar) => bar.scope.agentDid == agent.agentDid)
+          .toList(growable: false);
+      if (bars.length != 1) return false;
+      final bar = bars.single;
+      final operation = container.read(acpModelControllerProvider(bar.scope));
+      return !operation.blocksSending &&
+          (bar.session?.data['model_configuration_ready'] == true ||
+              bar.session?.data['model_id'] is String);
+    },
+    timeout: const Duration(seconds: 60),
+    failure: 'The joining App ACP model configuration was not ready.',
+  );
   await tester.enterText(input, content);
   await tester.pump(const Duration(milliseconds: 100));
   // Opening an ACP chat prepares its model asynchronously. A visible input
