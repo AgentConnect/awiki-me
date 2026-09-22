@@ -1314,7 +1314,9 @@ execution profile or release denominator.
 所有写入 invocation completion 的 Flutter 入口（包括 App/Core Smoke、桌面 peer、
 Agent、Recovery 和 remote Join）必须从 binding.failureMethodsDetails 记录
 `failedTestCount`（框架失败数量，不含敏感异常内容）。`test_process_finished`
-只表示进程达到结束边界；执行器必须在存在 Flutter 失败时抛出受控的 E2E failure，
+只表示进程达到结束边界；`addTearDown` 的异步失败可能晚于零失败计数写入，
+因此执行器还必须等待 Flutter 最终的 `All tests passed!` / `Some tests failed.`
+终态行。缺少终态行或终态失败均不可标记成功；执行器必须抛出受控的 E2E failure，
 不能把该步骤标为成功后仅报告缺少 case attestation。其他未执行分支仍保持 not-run，
 不批量伪造失败或通过证据。写入器要求显式提供失败数量，读取器拒绝缺少计数的旧 completion，
 不能把未知结果视为成功；旧制品需要重新构建，逐用例 attestation gate 保留。

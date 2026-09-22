@@ -8192,7 +8192,22 @@ void _requireFreshRoot(String path) {
 
 Future<void> _deleteDirectory(String path) async {
   final directory = Directory(path);
-  if (await directory.exists()) await directory.delete(recursive: true);
+  for (var attempt = 0; attempt < 10; attempt += 1) {
+    if (!await directory.exists()) return;
+    try {
+      await directory.delete(recursive: true);
+      return;
+    } on FileSystemException catch (error) {
+      // Core's SQLite/WAL files can finish closing while the isolated App root
+      // is being removed. Retry only a transient non-empty directory; keep any
+      // persistent writer or different filesystem error visible to the test.
+      if (!const <int>{39, 66}.contains(error.osError?.errorCode) ||
+          attempt == 9) {
+        rethrow;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    }
+  }
 }
 
 Future<void> _pumpUntil(
