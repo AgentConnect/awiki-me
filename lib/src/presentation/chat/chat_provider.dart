@@ -783,7 +783,6 @@ class ChatThreadsController
 
   final Ref ref;
   final ThreadMemoryCachePolicy _cachePolicy;
-  static const Duration _pendingMatchWindow = Duration(minutes: 2);
   static const Duration _staleSendingAge = Duration(seconds: 30);
   static const Duration _sendTimeout = Duration(seconds: 20);
   static const Duration _attachmentSendTimeout = Duration(minutes: 3);
@@ -4971,7 +4970,9 @@ class ChatThreadsController
   ) {
     final current = List<ChatMessage>.from(thread(threadId).messages);
     ChatMessage? existing;
-    final index = current.indexWhere((item) => item.localId == localId);
+    final index = current.indexWhere(
+      (item) => _messageIdentityKeys(item).contains(localId),
+    );
     if (index >= 0) {
       existing = current.removeAt(index);
     } else if (replacement.sendState != MessageSendState.sent &&
@@ -5082,11 +5083,7 @@ class ChatThreadsController
         for (final message in incoming.where(
           (message) => message.hasRenderableContent,
         )) {
-          final index = indexes.matchingIndex(
-            current,
-            message,
-            _isMatchingPending,
-          );
+          final index = indexes.matchingIndex(current, message);
           if (index >= 0) {
             final previous = current[index];
             current[index] = _mergeMessageSemantics(
@@ -5332,17 +5329,15 @@ class ChatThreadsController
         existing.sendState != MessageSendState.sent) {
       return false;
     }
-    if (!_sameStableMessage(incoming, existing) &&
-        existing.serverSequence == null) {
-      return false;
-    }
-    return _sameMessageTextForMentions(incoming, existing);
+    // This method is reached only for an exact ID or explicit request/result
+    // association. A late local state cannot regress acknowledged delivery.
+    return true;
   }
 
   bool _sameStableMessage(ChatMessage first, ChatMessage second) {
-    final firstId = _stableMessageId(first);
-    final secondId = _stableMessageId(second);
-    return firstId.isNotEmpty && firstId == secondId;
+    return _messageIdentityKeys(
+      first,
+    ).intersection(_messageIdentityKeys(second)).isNotEmpty;
   }
 
   String? _firstNonEmptyText(String? first, String? second) {
@@ -6886,21 +6881,7 @@ class ChatThreadsController
   }
 
   int _matchingMessageIndex(List<ChatMessage> current, ChatMessage incoming) {
-    return _MessageMergeIndexes(
-      current,
-    ).matchingIndex(current, incoming, _isMatchingPending);
-  }
-
-  bool _isMatchingPending(ChatMessage pending, ChatMessage sent) {
-    if (!pending.isMine ||
-        pending.threadId != sent.threadId ||
-        pending.previewText != sent.previewText ||
-        pending.senderDid != sent.senderDid ||
-        pending.sendState == MessageSendState.sent) {
-      return false;
-    }
-    final delta = pending.createdAt.difference(sent.createdAt).abs();
-    return delta <= _pendingMatchWindow;
+    return _MessageMergeIndexes(current).matchingIndex(current, incoming);
   }
 
   bool _shouldLoadHistory(
@@ -7268,6 +7249,13 @@ String? _lastMessageIdentity(ChatMessage? message) {
   return null;
 }
 
+/// IDs are scoped by the owning thread. Cross-field matches preserve explicit
+/// Core local/remote aliases; content similarity never establishes identity.
+Set<String> _messageIdentityKeys(ChatMessage message) => {
+  if (message.localId.trim().isNotEmpty) message.localId.trim(),
+  if (message.remoteId?.trim().isNotEmpty == true) message.remoteId!.trim(),
+};
+
 class _MessageMergeIndexes {
   _MessageMergeIndexes(List<ChatMessage> messages) {
     for (var i = 0; i < messages.length; i += 1) {
@@ -7275,59 +7263,16 @@ class _MessageMergeIndexes {
     }
   }
 
-  final Map<String, List<int>> _byRemoteId = <String, List<int>>{};
-  final Map<String, List<int>> _byLocalId = <String, List<int>>{};
-  final Set<int> _pendingIndexes = <int>{};
-  final Set<int> _sentMineIndexes = <int>{};
+  final Map<String, Set<int>> _byId = {};
 
-  int matchingIndex(
-    List<ChatMessage> current,
-    ChatMessage incoming,
-    bool Function(ChatMessage pending, ChatMessage sent) isMatchingPending,
-  ) {
-    final remoteId = _nonEmptyKey(incoming.remoteId);
-    if (remoteId != null) {
-      final remoteIndex = _firstMatchingIndex(
-        _byRemoteId[remoteId],
-        current,
-        (message) => message.remoteId == remoteId,
-      );
-      if (remoteIndex != null) {
-        return remoteIndex;
-      }
-    }
-    final localId = _nonEmptyKey(incoming.localId);
-    if (localId != null) {
-      final localIndex = _firstMatchingIndex(
-        _byLocalId[localId],
-        current,
-        (message) => message.localId == localId,
-      );
-      if (localIndex != null) {
-        return localIndex;
-      }
-    }
-    if (incoming.isMine) {
-      if (incoming.sendState == MessageSendState.sent) {
-        for (final index in _pendingIndexes) {
-          if (index >= current.length) {
-            continue;
-          }
-          if (isMatchingPending(current[index], incoming)) {
-            return index;
-          }
-        }
-      } else {
-        for (final index in _sentMineIndexes) {
-          if (index >= current.length) {
-            continue;
-          }
-          final sent = current[index];
-          if (sent.sendState == MessageSendState.sent &&
-              sent.serverSequence != null &&
-              isMatchingPending(incoming, sent)) {
-            return index;
-          }
+  int matchingIndex(List<ChatMessage> current, ChatMessage incoming) {
+    for (final id in _messageIdentityKeys(incoming)) {
+      for (final index in _byId[id] ?? const <int>{}) {
+        // Replacing a row may leave an old index entry. Check the current row
+        // so an obsolete alias cannot match an unrelated message.
+        if (index < current.length &&
+            _messageIdentityKeys(current[index]).contains(id)) {
+          return index;
         }
       }
     }
@@ -7335,64 +7280,12 @@ class _MessageMergeIndexes {
   }
 
   void add(int index, ChatMessage message) {
-    final remoteId = _nonEmptyKey(message.remoteId);
-    if (remoteId != null) {
-      _addIndex(_byRemoteId.putIfAbsent(remoteId, () => <int>[]), index);
-    }
-    final localId = _nonEmptyKey(message.localId);
-    if (localId != null) {
-      _addIndex(_byLocalId.putIfAbsent(localId, () => <int>[]), index);
-    }
-    if (_isPendingCandidate(message)) {
-      _pendingIndexes.add(index);
-    }
-    if (_isSentMineCandidate(message)) {
-      _sentMineIndexes.add(index);
+    for (final id in _messageIdentityKeys(message)) {
+      _byId.putIfAbsent(id, () => <int>{}).add(index);
     }
   }
 
-  void replace(int index, ChatMessage next) {
-    _pendingIndexes.remove(index);
-    _sentMineIndexes.remove(index);
-    add(index, next);
-  }
-
-  static int? _firstMatchingIndex(
-    List<int>? indexes,
-    List<ChatMessage> current,
-    bool Function(ChatMessage message) matches,
-  ) {
-    if (indexes == null) {
-      return null;
-    }
-    for (final index in indexes) {
-      if (index < current.length && matches(current[index])) {
-        return index;
-      }
-    }
-    return null;
-  }
-
-  static void _addIndex(List<int> indexes, int index) {
-    if (!indexes.contains(index)) {
-      indexes.add(index);
-    }
-  }
-
-  static bool _isPendingCandidate(ChatMessage message) {
-    return message.isMine && message.sendState != MessageSendState.sent;
-  }
-
-  static bool _isSentMineCandidate(ChatMessage message) {
-    return message.isMine && message.sendState == MessageSendState.sent;
-  }
-
-  static String? _nonEmptyKey(String? value) {
-    if (value == null || value.isEmpty) {
-      return null;
-    }
-    return value;
-  }
+  void replace(int index, ChatMessage next) => add(index, next);
 }
 
 void _chatProviderTrace(

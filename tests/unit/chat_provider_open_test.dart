@@ -1168,8 +1168,8 @@ void main() {
         threadId: groupConversation.conversationId,
         conversationId: groupConversation.conversationId,
         message: ChatMessage(
-          localId: '$groupDid:42',
-          remoteId: '$groupDid:42',
+          localId: 'msg-local-timeout',
+          remoteId: 'msg-local-timeout',
           conversationId: groupConversation.conversationId,
           threadId: groupConversation.threadId,
           senderDid: 'did:me',
@@ -1218,7 +1218,7 @@ void main() {
     final displayed = messages.singleWhere(
       (item) => item.content == '后面我们在这里多发发消息',
     );
-    expect(displayed.localId, '$groupDid:42');
+    expect(displayed.localId, 'msg-local-timeout');
     expect(displayed.sendState, MessageSendState.sent);
     expect(displayed.serverSequence, 42);
   });
@@ -5849,9 +5849,9 @@ void main() {
     );
   });
 
-  test('thread-after 回补会用服务端已发送消息替换同内容 pending', () async {
+  test('thread-after 回补按相同消息 ID 替换 pending', () async {
     final pending = ChatMessage(
-      localId: 'pending-1',
+      localId: 'remote-5',
       threadId: conversation.threadId,
       senderDid: 'did:me',
       receiverDid: conversation.targetDid,
@@ -7365,6 +7365,157 @@ void main() {
         );
       },
     );
+
+    for (final ingress in ['result', 'projection']) {
+      for (final firstState in MessageSendState.values) {
+        for (final secondState in MessageSendState.values) {
+          test(
+            'distinct same-text IDs via $ingress: $firstState / $secondState',
+            () async {
+              final a = controller.sendMessage(
+                conversation: conversation,
+                content: 'repeat',
+              );
+              final b = controller.sendMessage(
+                conversation: conversation,
+                content: 'repeat',
+              );
+              final pending = current().displayMessages.toList();
+              final first = pending[0].copyWith(
+                sendState: firstState,
+                serverSequence: firstState == MessageSendState.sent
+                    ? 101
+                    : null,
+              );
+              final second = pending[1].copyWith(sendState: secondState);
+              controller.debugSeedMessageForTesting(
+                first,
+                threadId: conversation.conversationId,
+              );
+              if (ingress == 'result') {
+                messaging.results[1].complete(second);
+                await b;
+              } else {
+                controller.debugSeedMessageForTesting(
+                  second,
+                  threadId: conversation.conversationId,
+                );
+              }
+              final observed = current();
+              messaging.results[0].complete(first);
+              if (ingress == 'projection') {
+                messaging.results[1].complete(second);
+              }
+              await Future.wait([a, b]);
+              expect(observed.messages, hasLength(2));
+              expect(observed.localSendIntents, isEmpty);
+              final byId = {
+                for (final m in observed.displayMessages) m.localId: m,
+              };
+              expect(byId.keys.toSet(), pending.map((m) => m.localId).toSet());
+              expect(byId[first.localId]!.sendState, firstState);
+              expect(byId[first.localId]!.serverSequence, first.serverSequence);
+              expect(byId[second.localId]!.sendState, secondState);
+            },
+          );
+        }
+      }
+    }
+
+    test('history batch preserves distinct same-text message IDs', () async {
+      final a = controller.sendMessage(
+        conversation: conversation,
+        content: 'history repeat',
+      );
+      final b = controller.sendMessage(
+        conversation: conversation,
+        content: 'history repeat',
+      );
+      final rows = current().displayMessages.toList();
+      final sent = rows[1].copyWith(sendState: MessageSendState.sent);
+      controller.debugSeedMessagesForTesting(conversation.conversationId, [
+        rows[0],
+        sent,
+      ]);
+      final observed = current();
+      messaging.results[0].complete(rows[0]);
+      messaging.results[1].complete(sent);
+      await Future.wait([a, b]);
+      expect(
+        observed.messages.map((m) => m.localId).toSet(),
+        rows.map((m) => m.localId).toSet(),
+      );
+      expect(observed.localSendIntents, isEmpty);
+    });
+
+    for (final lateState in [
+      MessageSendState.sending,
+      MessageSendState.failed,
+    ]) {
+      test(
+        'exact sent ID keeps success without sequence despite late $lateState',
+        () async {
+          final sending = controller.sendMessage(
+            conversation: conversation,
+            content: 'acknowledged',
+          );
+          final pending = current().displayMessages.single;
+          final sent = pending.copyWith(sendState: MessageSendState.sent);
+          controller.debugSeedMessageForTesting(
+            sent,
+            threadId: conversation.conversationId,
+          );
+          controller.debugSeedMessageForTesting(
+            pending.copyWith(content: 'stale rendering', sendState: lateState),
+            threadId: conversation.conversationId,
+          );
+          messaging.results.single.complete(
+            pending.copyWith(sendState: lateState),
+          );
+          await sending;
+          expect(current().messages, hasLength(1));
+          expect(current().messages.single.content, 'acknowledged');
+          expect(current().messages.single.sendState, MessageSendState.sent);
+        },
+      );
+    }
+
+    for (final crossField in [true, false]) {
+      test(
+        'explicit local/remote alias merges one logical message crossField=$crossField',
+        () async {
+          final sending = controller.sendMessage(
+            conversation: conversation,
+            content: 'alias',
+          );
+          final pending = current().displayMessages.single;
+          final ack = ChatMessage(
+            localId: crossField ? 'server-alias' : pending.localId,
+            remoteId: crossField ? pending.localId : 'server-alias',
+            conversationId: conversation.conversationId,
+            threadId: conversation.conversationId,
+            senderDid: pending.senderDid,
+            content: pending.content,
+            createdAt: pending.createdAt,
+            isMine: true,
+            sendState: MessageSendState.sent,
+          );
+          controller.debugSeedMessageForTesting(
+            ack,
+            threadId: conversation.conversationId,
+          );
+          expect(current().localSendIntents, isEmpty);
+          controller.debugSeedMessageForTesting(
+            pending.copyWith(sendState: MessageSendState.failed),
+            threadId: conversation.conversationId,
+          );
+          messaging.results.single.complete(ack);
+          await sending;
+          expect(current().messages, hasLength(1));
+          expect(current().messages.single.sendState, MessageSendState.sent);
+        },
+      );
+    }
 
     test('identity switch clears overlay and ignores old completion', () async {
       final sending = controller.sendMessage(
