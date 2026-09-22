@@ -331,7 +331,10 @@ class AwikiImCoreMappers {
     );
   }
 
-  bool shouldIncludeConversation(core.Conversation conversation) {
+  bool shouldIncludeConversation(
+    core.Conversation conversation, {
+    bool includeControlMessages = false,
+  }) {
     if (!_isDisplayableConversation(
       conversationId: conversation.conversationId,
       resolutionState: conversation.resolutionState,
@@ -341,6 +344,7 @@ class AwikiImCoreMappers {
     )) {
       return false;
     }
+    if (includeControlMessages) return true;
     final lastMessage = conversation.lastMessage;
     if (lastMessage == null) {
       return true;

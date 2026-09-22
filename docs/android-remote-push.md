@@ -419,6 +419,17 @@ The native receiver reads current local controls and mirrored Direct mutes while
 
 Mute edits invalidate the native snapshot before saving the canonical overlay, then replace the complete snapshot. Account and monotonically increasing sync-revision checks reject stale writes; the App serializes hydration and edits. Failed mirror writes retain the canonical change and keep alerts paused. Foreground resume retries incomplete hydration; Settings shows the paused state and offers an explicit retry. No mute or consent data is sent to User Service.
 
+Mute hydration requests registry pages with control-tail visibility filtering disabled. Normal recents keep
+their existing filter. Canonical route validation is still required: blocked conflicts or missing/unresolved
+muted routes keep the snapshot unready rather than borrowing a peer DID from an untrusted route.
+
+The receiver attempts the foreground-service start synchronously before returning; Android can still deny
+background starts. A denied start falls back to an ordinary non-silent system notification, subject to the
+message channel, notification permission and system DND. The 60-second cooldown begins only after the
+service starts its cue. Receipts remain deduplicated even on denial; a new message may try again, but the
+same message never re-rings. Flutter event delivery alone is posted to the main looper. This is not proof
+that every OEM grants foreground-service or full-screen eligibility.
+
 One short foreground service owns the call-like heads-up/full-screen UI and sound/vibration, bounded to 60 seconds. View/Close stop the matching session; timeout leaves a silent openable notification. System mute/DND/channel/background/full-screen restrictions remain authoritative. Persistent per-account target+message receipts (24h, 1024 unexpired maximum) deduplicate retries; one active presenter and a 60-second device interval prevent overlap or extension. While a cue is active or its service is starting, each additional accepted message gets its own silent system notification (target + peer + message tag), separate from the foreground-service slot. There is no queued re-ringing. Unique PendingIntent data preserves the correct message even on hash collisions. Mute, master-off and account switch remove the appropriate Notify slots without cancelling unrelated chat notifications.
 
 Message Service only carries the marker through existing storage/projection and provider transport. Its existing retries may redeliver; no new delivery ledger or User Service authorization endpoint is required. New App support is required for Notify MESSAGE presentation; older clients can read the text but are not guaranteed a Notify system alert. Ordinary unmarked chat NOTICE behavior remains unchanged.

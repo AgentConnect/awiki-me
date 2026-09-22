@@ -155,6 +155,7 @@ class ImCoreConversationService
       final page = await _conversations.listConversationPage(
         limit: 100,
         cursor: cursor,
+        includeControlMessages: true,
       );
       for (final conversation in page.items) {
         if (!remaining.remove(conversation.conversationId)) continue;

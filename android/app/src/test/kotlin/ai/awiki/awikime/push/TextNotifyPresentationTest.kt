@@ -4,6 +4,9 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.ComponentName
+import android.content.Intent
 import android.os.Looper
 import org.json.JSONObject
 import org.junit.After
@@ -63,6 +66,45 @@ class TextNotifyPresentationTest {
         TextNotifyPresentation.activePayload = null
         manager.cancelAll()
         shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    @Test fun deniedStartIsSynchronousAudibleAndDoesNotConsumeCooldownOrReplay() {
+        var starts = 0
+        val denied = object : ContextWrapper(c) {
+            override fun startForegroundService(intent: Intent): ComponentName? {
+                starts++
+                throw IllegalStateException("background start denied")
+            }
+        }
+        assertTrue(TextNotifyPresentation.receive(denied, payload()))
+        // PAUSED looper: the receiver call itself must attempt the start.
+        assertEquals(1, starts)
+        assertNull(TextNotifyPresentation.pendingToken)
+        assertEquals(0L, c.getSharedPreferences("text_notify_local_binding_v1", Context.MODE_PRIVATE).getLong("last_urgent_at", 0))
+        val notice = manager.activeNotifications.single().notification
+        assertNotEquals(Notification.GROUP_ALERT_SUMMARY, notice.groupAlertBehavior)
+        assertTrue(TextNotifyPresentation.receive(denied, payload()))
+        assertEquals(1, starts)
+        assertTrue(TextNotifyPresentation.receive(denied, payload(second)))
+        assertEquals(2, starts)
+    }
+
+    @Test fun acceptedStartStaysPendingUntilServiceStartsCue() {
+        var starts = 0
+        val accepted = object : ContextWrapper(c) {
+            override fun startForegroundService(intent: Intent): ComponentName? {
+                starts++
+                return ComponentName(c, TextNotifyAlertService::class.java)
+            }
+        }
+        TextNotifyPresentation.receive(accepted, payload())
+        assertEquals(1, starts)
+        assertEquals("$target:$first", TextNotifyPresentation.pendingToken)
+        TextNotifyPresentation.receive(accepted, payload(second))
+        assertEquals(1, starts)
+        assertEquals(Notification.GROUP_ALERT_SUMMARY, manager.activeNotifications.single().notification.groupAlertBehavior)
+        TextNotifyPresentation.cueStarted(c)
+        assertTrue(c.getSharedPreferences("text_notify_local_binding_v1", Context.MODE_PRIVATE).getLong("last_urgent_at", 0) > 0)
     }
 
     @Test fun activeCueRetainsDistinctNormalAndUrgentWithoutReplacingOrExtendingIt() {

@@ -73,6 +73,7 @@ jobs:
         run: |
           flutter test --no-pub \
             tests/unit/application/text_notify_mute_coordinator_test.dart \
+            tests/unit/data/im_core/awiki_im_core_conversation_adapter_test.dart \
             tests/unit/application/messaging_conversation_service_test.dart \
             tests/unit/application/remote_push_message_sync_coordinator_test.dart \
             tests/unit/application/remote_push_message_reference_test.dart \

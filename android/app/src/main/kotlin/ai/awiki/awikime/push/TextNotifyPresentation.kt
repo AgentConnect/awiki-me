@@ -88,26 +88,34 @@ internal object TextNotifyPresentation {
             RemotePushEventBridge.emit(c, "notification_received", mapOf(
                 "title" to payload.optString("title"), "summary" to payload.optString("summary"),
                 "extraMap" to extra.toString()))
-            if (!allows(c, body, urgent = false)) return@post
+        }
+        // Start while the push callback is still active. Eligibility remains an
+        // Android decision; a denied start must fall back to an audible notice.
+        run {
+            if (!allows(c, body, urgent = false)) return@run
             if (activeToken != null || pendingToken != null) {
                 showPassive(c, body)
-                return@post
+                return@run
             }
             if (!TextNotifyPolicy.continuous(level, prefs(c).getBoolean("urgent", false))) {
                 if (activeToken == null && !RemotePushPresentationState.isActivityResumed()) showPassive(c, body, silent = false)
             } else if (android.os.Build.VERSION.SDK_INT < 26) {
-                showPassive(c, body)
+                showPassive(c, body, silent = false)
             } else if (activeToken == null) {
                 val last = binding(c).getLong("last_urgent_at", 0)
-                if (now - last < 60) { showPassive(c, body); return@post }
-                if (!binding(c).edit().putLong("last_urgent_at", now).commit()) return@post
+                if (now - last < 60) { showPassive(c, body); return@run }
                 pendingToken = token
                 try { c.startForegroundService(Intent(c, TextNotifyAlertService::class.java)
                     .putExtra("token", token).putExtra("payload", body)) }
-                catch (_: RuntimeException) { pendingToken = null; showPassive(c, body) }
+                catch (_: RuntimeException) { pendingToken = null; showPassive(c, body, silent = false) }
             }
         }
         return true
+    }
+
+    /** Cooldown starts only after the service has actually started its cue. */
+    @Synchronized fun cueStarted(c: Context) {
+        binding(c).edit().putLong("last_urgent_at", System.currentTimeMillis() / 1000).commit()
     }
 
     /** Invalidate before reading/writing the canonical overlay; stale snapshots cannot reopen it. */

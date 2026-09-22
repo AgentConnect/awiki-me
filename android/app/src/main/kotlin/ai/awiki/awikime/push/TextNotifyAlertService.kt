@@ -82,6 +82,7 @@ class TextNotifyAlertService : Service() {
                 finishCue("policy_denied")
                 return START_NOT_STICKY
             }
+            TextNotifyPresentation.cueStarted(this)
             // Bounded CPU lifetime only; no screen wake, system volume, or DND override.
             wakeLock = getSystemService(PowerManager::class.java)
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AWiki:TextNotify")
@@ -112,7 +113,9 @@ class TextNotifyAlertService : Service() {
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
         stopForeground(STOP_FOREGROUND_REMOVE)
-        if (reason == "timeout" || reason == "system_timeout" || reason == "policy_denied" || reason == "failure") payload?.let { TextNotifyPresentation.showPassive(this, it) }
+        if (reason == "timeout" || reason == "system_timeout" || reason == "policy_denied" || reason == "failure") payload?.let {
+            TextNotifyPresentation.showPassive(this, it, silent = reason != "failure")
+        }
         stopSelf()
         Log.i("AwikiContinuousService", "stopped reason=$reason elapsed=${SystemClock.elapsedRealtime()}")
     }
