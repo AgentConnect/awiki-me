@@ -1,0 +1,58 @@
+name: Singapore packaged macOS startup
+on:
+  workflow_dispatch:
+  push:
+    branches: [test/singapore-full-20260922]
+    paths: ['.github/workflows/singapore-macos-smoke.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  startup:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: macos-arm64
+            sha256: 50bc1c533bcf753ad3bac63078b0e106dccbaf1c86f1c11e0cf3d2ed73a91280
+          - runner: macos-15-intel
+            target: macos-x64
+            sha256: 1c76ed860f5f1f84be83037c8b944fa051740771848f0abd537982368327cdb4
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 35712980416
+          name: awiki-me-${{ matrix.target }}-c379cb48-eed3-4dd1-b0b2-887bfefe4d19
+          path: inputs
+      - name: Verify immutable signed DMG and launch its native application
+        env:
+          EXPECTED_SHA256: ${{ matrix.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg="$(find inputs -name '*.dmg' -type f)"
+          test "$(printf '%s\n' "$dmg" | wc -l | tr -d ' ')" = 1
+          test "$(shasum -a 256 "$dmg" | cut -d ' ' -f 1)" = "$EXPECTED_SHA256"
+          mount="$RUNNER_TEMP/sg-app-mount"
+          mkdir "$mount"
+          hdiutil attach -readonly -nobrowse -noautoopen -mountpoint "$mount" "$dmg" >/dev/null
+          app_pid=""
+          cleanup() {
+            if [[ -n "$app_pid" ]]; then kill "$app_pid" 2>/dev/null || true; fi
+            hdiutil detach "$mount" >/dev/null || true
+          }
+          trap cleanup EXIT
+          codesign --verify --deep --strict "$mount/AWikiMe.app"
+          xcrun stapler validate "$dmg"
+          "$mount/AWikiMe.app/Contents/MacOS/AWikiMe" > "$RUNNER_TEMP/sg-app-startup.log" 2>&1 &
+          app_pid=$!
+          sleep 12
+          kill -0 "$app_pid"
+          if grep -Eiq 'dyld.*(Library not loaded|Symbol not found)|Failed to load dynamic library|Fatal signal|SIGSEGV' "$RUNNER_TEMP/sg-app-startup.log"; then
+            echo 'Native startup failed'; exit 1
+          fi
+          echo 'Signed native application stayed alive for 12 seconds; no model or payment action was performed.'
