@@ -134,6 +134,10 @@ class AwikiImCoreMappers {
     return ChatMessage(
       localId: message.id,
       remoteId: message.id,
+      identityAliases: _coreMessageIdentityAliases(
+        message.metadata.attributes,
+        operationId: message.metadata.operationId,
+      ),
       conversationId: message.conversationId,
       threadId: _messageThreadId(
         ownerDid: ownerDid,
@@ -206,6 +210,7 @@ class AwikiImCoreMappers {
     return ChatMessage(
       localId: message.id,
       remoteId: message.id,
+      identityAliases: _coreMessageIdentityAliases(message.attributes),
       conversationId: conversationId,
       threadId: _messageThreadId(
         ownerDid: ownerDid,
@@ -1153,6 +1158,21 @@ bool _isEncrypted(String? contentType) {
   final raw = contentType?.toLowerCase() ?? '';
   return raw.contains('encrypted') || raw.contains('e2ee');
 }
+
+Set<String> _coreMessageIdentityAliases(
+  Iterable<core.MessageMetadataAttribute> attributes, {
+  String? operationId,
+}) => Set.unmodifiable({
+  if (operationId?.trim().isNotEmpty == true) operationId!.trim(),
+  for (final attribute in attributes)
+    if (const {
+          'raw_message_id',
+          'client_message_id',
+          'operation_id',
+        }.contains(attribute.key) &&
+        attribute.value.trim().isNotEmpty)
+      attribute.value.trim(),
+});
 
 String? _attribute(core.MessageMetadata metadata, String key) {
   for (final attribute in metadata.attributes) {

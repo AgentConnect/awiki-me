@@ -20,6 +20,7 @@ class ChatMessage {
     this.senderDidSnapshot,
     this.senderName,
     this.remoteId,
+    this.identityAliases = const <String>{},
     this.receiverDid,
     this.groupId,
     this.serverSequence,
@@ -33,6 +34,10 @@ class ChatMessage {
 
   final String localId;
   final String? remoteId;
+
+  /// Explicit Core/request identities for presentation reconciliation only.
+  /// These never replace the canonical ID used for reads or attachments.
+  final Set<String> identityAliases;
   final String? conversationId;
   final String? senderPeerPersonaId;
   final String? senderDidSnapshot;
@@ -109,6 +114,7 @@ class ChatMessage {
 
   ChatMessage copyWith({
     String? remoteId,
+    Set<String>? identityAliases,
     Object? conversationId = _chatMessageUnset,
     Object? senderPeerPersonaId = _chatMessageUnset,
     Object? senderDidSnapshot = _chatMessageUnset,
@@ -125,6 +131,7 @@ class ChatMessage {
     return ChatMessage(
       localId: localId,
       remoteId: remoteId ?? this.remoteId,
+      identityAliases: identityAliases ?? this.identityAliases,
       conversationId: _resolveNullableString(
         conversationId,
         this.conversationId,
