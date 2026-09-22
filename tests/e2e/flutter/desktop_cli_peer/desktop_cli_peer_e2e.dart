@@ -767,6 +767,21 @@ Future<_PerformanceWarmupResult> _warmPerformanceLocalConversationState(
       nonce: config.runId,
     );
     longThreadWatch.stop();
+    if (config.performance.longThreadMessageCount > 0) {
+      // This is dataset preparation, not the measured fresh-send latency.
+      // Without CLI catch-up, the hard budget measures the backlog created by
+      // the fixture rather than the next App-to-CLI message.
+      await _waitForCliInbox(
+        config: config,
+        expectedText: _longThreadMessageText(
+          config,
+          config.runId,
+          config.performance.longThreadMessageCount,
+        ),
+        description: 'CLI inbox contains the last prepared long-thread message',
+        timeout: const Duration(minutes: 8),
+      );
+    }
     datasetWatch.stop();
     final syncWatch = Stopwatch()..start();
     final syncResult = await bootstrap.messageSyncService!.syncNow(
