@@ -35,8 +35,6 @@ import 'dart:io';
     'tests/unit/agents/agent_control_service_test.dart',
     'tests/unit/agents/agents_provider_test.dart',
     'tests/unit/agents/agent_type_catalog_test.dart',
-    'tests/unit/agents/agent_control_service_test.dart',
-    'tests/unit/agents/agents_provider_test.dart',
     'tests/unit/agents/agents_page_layout_test.dart',
   ]);
   return (targets: targets, arguments: arguments);

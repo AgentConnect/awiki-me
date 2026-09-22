@@ -3042,12 +3042,22 @@ def stored(session_id):
     return root / (str(uuid.UUID(session_id)) + '.json')
 
 def user_text(blocks):
-    text = ''.join(block.get('text', '') for block in blocks)
-    marker = '[User request]'
-    try:
-        return str(json.loads(text.rsplit(marker, 1)[-1].strip())['user_message'])
-    except (ValueError, KeyError):
+    # The ACP host's final block is either a plain controller prompt or its
+    # canonical delegated-message envelope. Never echo background context.
+    prefix = '[User request]\\n'
+    for block in reversed(blocks):
+        body = block.get('text', '')
+        if not body.startswith(prefix):
+            continue
+        text = body[len(prefix):]
+        try:
+            payload = json.loads(text)
+        except ValueError:
+            return text
+        if isinstance(payload, dict) and payload.get('schema') == 'awiki.runtime.user_message_task.v1':
+            return payload['content_text']
         return text
+    raise ValueError('ACP fixture prompt omitted the user request block')
 
 for line in sys.stdin:
     request = json.loads(line)

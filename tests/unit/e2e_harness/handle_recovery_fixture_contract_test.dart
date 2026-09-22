@@ -20,6 +20,12 @@ void main() {
       expect(source, contains("method == 'initialize'"));
       expect(source, contains("method == 'session/load'"));
       expect(source, contains("method == 'session/prompt'"));
+      // The current ACP host forwards awiki.runtime.user_message_task.v1.
+      // Its user payload field is content_text, not the retired gateway shape.
+      expect(source, contains("['content_text']"));
+      expect(source, contains("text = body[len(prefix):]"));
+      expect(source, contains("for block in reversed(blocks):"));
+      expect(source, isNot(contains("['user_message']")));
       expect(source, isNot(contains('AWIKI_HERMES_GATEWAY_CMD')));
       expect(source, isNot(contains('tui_gateway.entry')));
     },
