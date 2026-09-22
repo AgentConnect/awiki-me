@@ -50,6 +50,7 @@ class ChatThreadState {
   const ChatThreadState({
     required this.threadId,
     this.messages = const <ChatMessage>[],
+    this.localSendIntents = const <String, ChatMessage>{},
     this.isLoading = false,
     this.isHydratingLocalHistory = false,
     this.agentPendingTurns = const <AgentPendingTurn>[],
@@ -59,6 +60,15 @@ class ChatThreadState {
 
   final String threadId;
   final List<ChatMessage> messages;
+
+  /// Ephemeral UI only; never used for persistence, previews or read watermarks.
+  final Map<String, ChatMessage> localSendIntents;
+
+  List<ChatMessage> get displayMessages => localSendIntents.isEmpty
+      ? messages
+      : ([...messages, ...localSendIntents.values]
+          ..sort(_compareMessagesForTimeline));
+
   final bool isLoading;
   final bool isHydratingLocalHistory;
   final List<AgentPendingTurn> agentPendingTurns;
@@ -90,6 +100,7 @@ class ChatThreadState {
 
   ChatThreadState copyWith({
     List<ChatMessage>? messages,
+    Map<String, ChatMessage>? localSendIntents,
     bool? isLoading,
     bool? isHydratingLocalHistory,
     List<AgentPendingTurn>? agentPendingTurns,
@@ -99,6 +110,10 @@ class ChatThreadState {
     return ChatThreadState(
       threadId: threadId,
       messages: messages ?? this.messages,
+      localSendIntents: _remainingSendIntents(
+        localSendIntents ?? this.localSendIntents,
+        messages ?? this.messages,
+      ),
       isLoading: isLoading ?? this.isLoading,
       isHydratingLocalHistory:
           isHydratingLocalHistory ?? this.isHydratingLocalHistory,
@@ -107,6 +122,23 @@ class ChatThreadState {
       appActionRecords: appActionRecords ?? this.appActionRecords,
     );
   }
+}
+
+Map<String, ChatMessage> _remainingSendIntents(
+  Map<String, ChatMessage> intents,
+  List<ChatMessage> messages,
+) {
+  if (intents.isEmpty) return intents;
+  final committedIds = <String>{
+    for (final message in messages) ...[
+      message.localId,
+      if (message.remoteId != null) message.remoteId!,
+    ],
+  };
+  return {
+    for (final entry in intents.entries)
+      if (!committedIds.contains(entry.key)) entry.key: entry.value,
+  };
 }
 
 class PersonalAgentSyncRecord {
@@ -3213,6 +3245,7 @@ class ChatThreadsController
     List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? expectedAgentReplyDid,
     String? displayThreadId,
+    VoidCallback? onSendStarted,
   }) async {
     if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
@@ -3240,6 +3273,36 @@ class ChatThreadsController
     }
     final clientMessageId = _newClientMessageId();
     final idempotencyKey = 'op-$clientMessageId';
+    final mentionPayload = validMentionDrafts.isEmpty
+        ? null
+        : ChatMentionPayload.toP9Json(
+            text: content,
+            draftMentions: validMentionDrafts,
+          );
+    _setLocalSendIntent(
+      targetThreadId,
+      ChatMessage(
+        localId: clientMessageId,
+        conversationId: conversationRef.conversationId,
+        threadId: targetThreadId,
+        senderDid: session.did,
+        senderDidSnapshot: session.did,
+        senderName: session.visibleDisplayName,
+        receiverDid: conversation.targetDid,
+        groupId: conversation.groupId,
+        content: validMentionDrafts.isEmpty ? content.trim() : content,
+        originalType: mentionPayload == null ? 'text' : 'application/json',
+        createdAt: DateTime.now(),
+        isMine: true,
+        sendState: MessageSendState.sending,
+        payloadJson: mentionPayload == null ? null : jsonEncode(mentionPayload),
+        mentions: [
+          for (final mention in validMentionDrafts)
+            ChatMessageMention.fromDraft(mention),
+        ],
+      ),
+    );
+    onSendStarted?.call();
     try {
       final messaging = ref.read(messagingServiceProvider);
       final sent = validMentionDrafts.isEmpty
@@ -3309,6 +3372,7 @@ class ChatThreadsController
     List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? expectedAgentReplyDid,
     String? displayThreadId,
+    VoidCallback? onSendStarted,
   }) async {
     if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
@@ -3376,6 +3440,7 @@ class ChatThreadsController
     final current = List<ChatMessage>.from(thread(targetThreadId).messages)
       ..add(pending);
     _setMessages(targetThreadId, current);
+    onSendStarted?.call();
     try {
       final sent = await ref
           .read(messagingServiceProvider)
@@ -3515,7 +3580,11 @@ class ChatThreadsController
       message.payloadJson,
     );
     final retrying = message.copyWith(sendState: MessageSendState.sending);
-    _replaceMessage(targetThreadId, message.localId, retrying);
+    if (thread(targetThreadId).localSendIntents.containsKey(clientMessageId)) {
+      _setLocalSendIntent(targetThreadId, retrying);
+    } else {
+      _replaceMessage(targetThreadId, message.localId, retrying);
+    }
     final idempotencyKey = 'op-$clientMessageId';
     try {
       final messaging = ref.read(messagingServiceProvider);
@@ -3588,8 +3657,14 @@ class ChatThreadsController
     required ChatMessage result,
   }) {
     final delivered = _withThreadId(result, displayThreadId);
-    if (delivered.sendState == MessageSendState.sending) {
-      return delivered;
+    if (thread(
+      displayThreadId,
+    ).localSendIntents.containsKey(submittedLocalMessageId)) {
+      return _replaceMessage(
+        displayThreadId,
+        submittedLocalMessageId,
+        delivered,
+      );
     }
     final current = thread(displayThreadId).messages;
     var index = current.indexWhere(
@@ -3620,6 +3695,16 @@ class ChatThreadsController
     required String displayThreadId,
     required String submittedLocalMessageId,
   }) {
+    final intent = thread(
+      displayThreadId,
+    ).localSendIntents[submittedLocalMessageId];
+    if (intent != null) {
+      _setLocalSendIntent(
+        displayThreadId,
+        intent.copyWith(sendState: MessageSendState.failed),
+      );
+      return;
+    }
     final current = thread(displayThreadId).messages;
     final index = current.indexWhere(
       (message) =>
@@ -4665,7 +4750,8 @@ class ChatThreadsController
     ChatThreadState thread,
     List<ChatMessage> messages,
   ) {
-    return _hardProtectedMessageIds(thread, messages).isNotEmpty;
+    return thread.localSendIntents.isNotEmpty ||
+        _hardProtectedMessageIds(thread, messages).isNotEmpty;
   }
 
   Set<String> _hardProtectedMessageIds(
@@ -4804,7 +4890,24 @@ class ChatThreadsController
     );
   }
 
-  void _setMessages(String threadId, List<ChatMessage> messages) {
+  void _setLocalSendIntent(String threadId, ChatMessage message) {
+    final current = thread(threadId);
+    state = {
+      ...state,
+      threadId: current.copyWith(
+        localSendIntents: {
+          ...current.localSendIntents,
+          message.localId: message,
+        },
+      ),
+    };
+  }
+
+  void _setMessages(
+    String threadId,
+    List<ChatMessage> messages, {
+    String? resolvedLocalSendId,
+  }) {
     final current = thread(threadId);
     _touchThreadCache(threadId, messages);
     _recordMessageRoutes(threadId, messages);
@@ -4817,7 +4920,11 @@ class ChatThreadsController
     ).messages;
     final nextState = <String, ChatThreadState>{
       ...state,
-      threadId: current.copyWith(messages: enforcedMessages),
+      threadId: current.copyWith(
+        messages: enforcedMessages,
+        localSendIntents: {...current.localSendIntents}
+          ..remove(resolvedLocalSendId),
+      ),
     };
     state = _enforceGlobalCachePolicy(nextState);
   }
@@ -4867,7 +4974,8 @@ class ChatThreadsController
     final index = current.indexWhere((item) => item.localId == localId);
     if (index >= 0) {
       existing = current.removeAt(index);
-    } else if (replacement.sendState != MessageSendState.sent) {
+    } else if (replacement.sendState != MessageSendState.sent &&
+        !thread(threadId).localSendIntents.containsKey(localId)) {
       return replacement;
     }
     late final ChatMessage resolved;
@@ -4895,7 +5003,7 @@ class ChatThreadsController
       replacement,
       if (!identical(replacement, resolved)) resolved,
     ]);
-    _setMessages(threadId, current);
+    _setMessages(threadId, current, resolvedLocalSendId: localId);
     return resolved;
   }
 
@@ -5051,8 +5159,7 @@ class ChatThreadsController
     );
     final nextState = <String, ChatThreadState>{
       ...state,
-      threadId: ChatThreadState(
-        threadId: threadId,
+      threadId: previous.copyWith(
         messages: enforced.messages,
         isLoading: isLoading ?? previous.isLoading,
         isHydratingLocalHistory: previous.isHydratingLocalHistory,
@@ -5262,14 +5369,6 @@ class ChatThreadsController
     return firstAttachment.attachmentId == secondAttachment.attachmentId &&
         firstAttachment.filename == secondAttachment.filename &&
         firstAttachment.mimeType == secondAttachment.mimeType;
-  }
-
-  String _stableMessageId(ChatMessage message) {
-    final remoteId = message.remoteId?.trim();
-    if (remoteId != null && remoteId.isNotEmpty) {
-      return remoteId;
-    }
-    return message.localId.trim();
   }
 
   Future<ChatMessage> _sendConversationText({
@@ -7064,23 +7163,6 @@ class ChatThreadsController
     sorted.sort(_compareMessagesForTimeline);
     return sorted;
   }
-
-  int _compareMessagesForTimeline(ChatMessage a, ChatMessage b) {
-    final aSeq = a.serverSequence;
-    final bSeq = b.serverSequence;
-    if (aSeq != null && bSeq != null && aSeq != bSeq) {
-      return aSeq.compareTo(bSeq);
-    }
-    final timeCompare = a.createdAt.compareTo(b.createdAt);
-    if (timeCompare != 0) {
-      return timeCompare;
-    }
-    final idCompare = _stableMessageId(a).compareTo(_stableMessageId(b));
-    if (idCompare != 0) {
-      return idCompare;
-    }
-    return a.localId.compareTo(b.localId);
-  }
 }
 
 AppThreadReadWatermark? _laterReadWatermark(
@@ -7661,3 +7743,30 @@ final chatThreadProvider = Provider.family<ChatThreadState, String>((
   final threads = ref.watch(chatThreadsProvider);
   return threads[threadId] ?? ChatThreadState(threadId: threadId);
 });
+
+int _compareMessagesForTimeline(ChatMessage a, ChatMessage b) {
+  final aSeq = a.serverSequence;
+  final bSeq = b.serverSequence;
+  if (aSeq != null && bSeq != null && aSeq != bSeq) {
+    return aSeq.compareTo(bSeq);
+  }
+  final timeCompare = a.createdAt.compareTo(b.createdAt);
+  if (timeCompare != 0) {
+    return timeCompare;
+  }
+  final idCompare = (a.remoteId ?? a.localId).compareTo(
+    b.remoteId ?? b.localId,
+  );
+  if (idCompare != 0) {
+    return idCompare;
+  }
+  return a.localId.compareTo(b.localId);
+}
+
+String _stableMessageId(ChatMessage message) {
+  final remoteId = message.remoteId?.trim();
+  if (remoteId != null && remoteId.isNotEmpty) {
+    return remoteId;
+  }
+  return message.localId.trim();
+}

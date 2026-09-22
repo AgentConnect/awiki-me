@@ -5335,7 +5335,9 @@ void main() {
     var thread = sendContainer.read(
       chatThreadProvider(_timelineThreadId(conversation)),
     );
-    expect(thread.messages, isEmpty);
+    expect(thread.messages, isEmpty); // Core has not acknowledged the send yet.
+    expect(thread.displayMessages.single.content, '总结一下');
+    expect(thread.displayMessages.single.sendState, MessageSendState.sending);
     expect(thread.agentPendingTurns, isEmpty);
 
     await sendFuture;
@@ -7033,6 +7035,359 @@ void main() {
     expect(messages.map((item) => item.content), isNot(contains('远端补拉消息')));
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
+  });
+
+  test(
+    'Core reset/upsert stream atomically replaces send overlay without regression',
+    () async {
+      final result = Completer<ChatMessage>();
+      final service = _PatchMessagingService(
+        localHistory: [],
+        textSendCompleter: result,
+      );
+      final sends = ProviderContainer(
+        overrides: [
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          ...fakeApplicationServiceOverrides(gateway),
+          messagingServiceProvider.overrideWithValue(service),
+        ],
+      );
+      addTearDown(sends.dispose);
+      sends
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+      final controller = sends.read(chatThreadsProvider.notifier);
+      controller.markConversationVisible(conversation);
+      await pumpEventQueue();
+      final sending = controller.sendMessage(
+        conversation: conversation,
+        content: 'stream handoff',
+      );
+      ChatThreadState current() =>
+          sends.read(chatThreadProvider(conversation.conversationId));
+      final pending = current().displayMessages.single;
+      void emit(
+        int version,
+        ThreadMessagePatchKind kind, {
+        ChatMessage? message,
+      }) {
+        service.emitPatch(
+          ThreadMessagePatch(
+            kind: kind,
+            ownerDid: 'did:me',
+            version: version,
+            threadKind: 'conversation',
+            threadId: conversation.conversationId,
+            conversationId: conversation.conversationId,
+            message: message,
+            messages: message == null ? [] : [message],
+          ),
+        );
+      }
+
+      emit(2, ThreadMessagePatchKind.reset);
+      await pumpEventQueue();
+      expect(current().displayMessages.single.localId, pending.localId);
+      expect(current().messages, isEmpty);
+      emit(3, ThreadMessagePatchKind.upsert, message: pending);
+      await pumpEventQueue();
+      expect(current().displayMessages, hasLength(1));
+      expect(current().localSendIntents, isEmpty);
+      emit(
+        4,
+        ThreadMessagePatchKind.reset,
+        message: pending.copyWith(sendState: MessageSendState.sent),
+      );
+      await pumpEventQueue();
+      emit(5, ThreadMessagePatchKind.upsert, message: pending);
+      await pumpEventQueue();
+      result.completeError(StateError('late send error after committed patch'));
+      await sending;
+      expect(current().displayMessages.single.sendState, MessageSendState.sent);
+      expect(current().displayMessages.single.localId, pending.localId);
+    },
+  );
+
+  group('local send presentation', () {
+    late _DeferredSendMessaging messaging;
+    late ProviderContainer sends;
+    late ChatThreadsController controller;
+
+    setUp(() {
+      messaging = _DeferredSendMessaging(gateway);
+      sends = ProviderContainer(
+        overrides: [
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          ...fakeApplicationServiceOverrides(gateway),
+          messagingServiceProvider.overrideWithValue(messaging),
+        ],
+      );
+      sends
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+      controller = sends.read(chatThreadsProvider.notifier);
+      addTearDown(sends.dispose);
+    });
+
+    ChatThreadState current() =>
+        sends.read(chatThreadProvider(conversation.conversationId));
+
+    test(
+      'immediate overlay is not a committed message or read/agent state',
+      () async {
+        var started = false;
+        final sending = controller.sendMessage(
+          conversation: conversation,
+          content: 'instant',
+          onSendStarted: () {
+            expect(current().displayMessages.single.content, 'instant');
+            started = true;
+          },
+        );
+        expect(started, isTrue);
+        // No pump, timer or await: this must exist in the click's synchronous turn.
+        final pending = current().displayMessages.single;
+        expect(pending.content, 'instant');
+        expect(pending.sendState, MessageSendState.sending);
+        expect(current().messages, isEmpty);
+        expect(current().agentPendingTurns, isEmpty);
+        expect(gateway.markConversationReadCalls, 0);
+        expect(messaging.ids.single, pending.localId);
+        messaging.results.single.complete(
+          pending.copyWith(sendState: MessageSendState.sent),
+        );
+        await sending;
+        expect(current().localSendIntents, isEmpty);
+        expect(current().messages.single.localId, pending.localId);
+        expect(current().displayMessages, hasLength(1));
+      },
+    );
+
+    test(
+      'early failure preserves content; retry keeps ID and operation key',
+      () async {
+        final sending = controller.sendMessage(
+          conversation: conversation,
+          content: 'keep me',
+        );
+        final id = current().displayMessages.single.localId;
+        messaging.results[0].completeError(
+          StateError('local persistence failed'),
+        );
+        await sending;
+        final failed = current().displayMessages.single;
+        expect(failed.content, 'keep me');
+        expect(failed.sendState, MessageSendState.failed);
+        expect(current().messages, isEmpty);
+        final retry = controller.retryMessage(
+          conversation: conversation,
+          message: failed,
+        );
+        expect(
+          current().displayMessages.single.sendState,
+          MessageSendState.sending,
+        );
+        expect(messaging.ids, [id, id]);
+        expect(messaging.keys, ['op-$id', 'op-$id']);
+        messaging.results[1].complete(
+          failed.copyWith(sendState: MessageSendState.sent),
+        );
+        await retry;
+        expect(
+          current().displayMessages.single.sendState,
+          MessageSendState.sent,
+        );
+        expect(current().localSendIntents, isEmpty);
+      },
+    );
+
+    test(
+      'same text sends remain separate through out-of-order results and stale patches',
+      () async {
+        final a = controller.sendMessage(
+          conversation: conversation,
+          content: 'same',
+        );
+        final b = controller.sendMessage(
+          conversation: conversation,
+          content: 'same',
+        );
+        final pending = current().displayMessages.toList();
+        expect(pending, hasLength(2));
+        expect(pending[0].localId, isNot(pending[1].localId));
+        messaging.results[1].complete(
+          pending[1].copyWith(sendState: MessageSendState.sent),
+        );
+        await b;
+        expect(current().displayMessages, hasLength(2));
+        expect(current().localSendIntents.keys, [pending[0].localId]);
+        controller.debugSeedMessageForTesting(
+          pending[0],
+          threadId: conversation.conversationId,
+        );
+        expect(current().localSendIntents, isEmpty);
+        expect(current().displayMessages, hasLength(2));
+        messaging.results[0].complete(
+          pending[0].copyWith(sendState: MessageSendState.sent),
+        );
+        await a;
+        controller.debugSeedMessagesForTesting(
+          conversation.conversationId,
+          pending,
+        );
+        expect(current().displayMessages, hasLength(2));
+        expect(
+          current().displayMessages.every(
+            (m) => m.sendState == MessageSendState.sent,
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'history reset retains pending overlay; late committed result wins over send error',
+      () async {
+        final sending = controller.sendMessage(
+          conversation: conversation,
+          content: 'late result',
+        );
+        final pending = current().displayMessages.single;
+        controller.debugSeedMessagesForTesting(conversation.conversationId, []);
+        expect(current().displayMessages.single.localId, pending.localId);
+        controller.debugSeedMessageForTesting(
+          pending.copyWith(sendState: MessageSendState.sent),
+          threadId: conversation.conversationId,
+        );
+        messaging.results.single.completeError(
+          StateError('late transport error'),
+        );
+        await sending;
+        expect(current().localSendIntents, isEmpty);
+        expect(
+          current().displayMessages.single.sendState,
+          MessageSendState.sent,
+        );
+      },
+    );
+
+    test(
+      'simultaneous conversations keep independent overlays and results',
+      () async {
+        final other = ConversationSummary(
+          conversationId: 'dm:did:other',
+          threadId: 'dm:did:other',
+          displayName: 'Other',
+          lastMessagePreview: '',
+          lastMessageAt: DateTime.now(),
+          unreadCount: 0,
+          isGroup: false,
+          targetDid: 'did:other',
+        );
+        final a = controller.sendMessage(
+          conversation: conversation,
+          content: 'first room',
+        );
+        final b = controller.sendMessage(
+          conversation: other,
+          content: 'second room',
+        );
+        final first = current().displayMessages.single;
+        final second = sends
+            .read(chatThreadProvider(other.conversationId))
+            .displayMessages
+            .single;
+        expect(first.content, 'first room');
+        expect(second.content, 'second room');
+        messaging.results[1].complete(
+          second.copyWith(sendState: MessageSendState.sent),
+        );
+        await b;
+        expect(
+          current().displayMessages.single.sendState,
+          MessageSendState.sending,
+        );
+        messaging.results[0].complete(
+          first.copyWith(sendState: MessageSendState.sent),
+        );
+        await a;
+        expect(current().displayMessages.single.content, 'first room');
+        expect(
+          sends
+              .read(chatThreadProvider(other.conversationId))
+              .displayMessages
+              .single
+              .content,
+          'second room',
+        );
+      },
+    );
+
+    test(
+      'rejected preflight never clears the composer or creates an overlay',
+      () async {
+        var started = false;
+        final invalid = ConversationSummary(
+          conversationId: '',
+          threadId: 'presentation-only',
+          displayName: 'Invalid',
+          lastMessagePreview: '',
+          lastMessageAt: DateTime.now(),
+          unreadCount: 0,
+          isGroup: false,
+          targetDid: 'did:peer',
+        );
+        await controller.sendMessage(
+          conversation: invalid,
+          content: 'keep draft',
+          onSendStarted: () => started = true,
+        );
+        expect(started, isFalse);
+        expect(messaging.results, isEmpty);
+        expect(
+          sends
+              .read(chatThreadsProvider)
+              .values
+              .every((thread) => thread.localSendIntents.isEmpty),
+          isTrue,
+        );
+      },
+    );
+
+    test('identity switch clears overlay and ignores old completion', () async {
+      final sending = controller.sendMessage(
+        conversation: conversation,
+        content: 'private',
+      );
+      final pending = current().displayMessages.single;
+      sends
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:other',
+              credentialName: 'other',
+              displayName: 'Other',
+            ),
+          );
+      expect(current().displayMessages, isEmpty);
+      messaging.results.single.complete(
+        pending.copyWith(sendState: MessageSendState.sent),
+      );
+      await sending;
+      expect(current().displayMessages, isEmpty);
+    });
   });
 
   test('文本重试等待 Core 时原消息保持 sending 且不产生重复气泡', () async {
@@ -8751,5 +9106,26 @@ class _BlockingConversationAfterSyncService extends FakeMessageSyncService {
       afterServerSeq: afterServerSeq,
       limit: limit,
     );
+  }
+}
+
+class _DeferredSendMessaging extends FakeMessagingService {
+  _DeferredSendMessaging(super.gateway);
+  final results = <Completer<ChatMessage>>[];
+  final ids = <String?>[];
+  final keys = <String?>[];
+
+  @override
+  Future<ChatMessage> sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    ids.add(clientMessageId);
+    keys.add(idempotencyKey);
+    final result = Completer<ChatMessage>();
+    results.add(result);
+    return result.future;
   }
 }
