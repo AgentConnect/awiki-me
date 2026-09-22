@@ -13,6 +13,72 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   const mapper = AwikiImCoreMappers();
 
+  test(
+    'Core and snapshot mapping preserve explicit aliases without replacing canonical IDs',
+    () {
+      const canonical = 'did:example:groups:test:42';
+      const attrs = [
+        core.MessageMetadataAttribute(
+          key: 'raw_message_id',
+          value: ' client-id ',
+        ),
+        core.MessageMetadataAttribute(
+          key: 'client_message_id',
+          value: 'client-id',
+        ),
+        core.MessageMetadataAttribute(key: 'operation_id', value: 'op-id'),
+        core.MessageMetadataAttribute(key: 'raw_message_id', value: '  '),
+        core.MessageMetadataAttribute(key: 'group_event_seq', value: '42'),
+        core.MessageMetadataAttribute(key: 'unrelated', value: 'not-an-alias'),
+      ];
+      final mapped = mapper.chatMessageFromCore(
+        const core.Message(
+          id: canonical,
+          conversationId: 'group:test',
+          threadId: 'group:test',
+          threadKind: 'group',
+          direction: core.MessageDirection.outgoing,
+          sender: 'did:me',
+          senderDidSnapshot: 'did:me',
+          group: 'test',
+          body: core.MessageBodyView(text: 'hello'),
+          metadata: core.MessageMetadata(
+            operationId: 'op-id',
+            attributes: attrs,
+          ),
+        ),
+        ownerDid: 'did:me',
+      );
+      final snapshot = mapper.chatMessageFromSnapshot(
+        const core.ConversationSnapshotMessage(
+          id: canonical,
+          threadId: 'group:test',
+          threadKind: 'group',
+          direction: 'outgoing',
+          sender: 'did:me',
+          group: 'test',
+          body: core.ConversationSnapshotMessageBody(text: 'hello'),
+          attributes: attrs,
+        ),
+        ownerDid: 'did:me',
+        conversationId: 'group:test',
+      );
+      for (final message in [
+        mapped,
+        snapshot,
+        mapped.copyWith(content: 'changed'),
+      ]) {
+        expect(message.localId, canonical);
+        expect(message.remoteId, canonical);
+        expect(message.identityAliases, {'client-id', 'op-id'});
+        expect(
+          () => message.identityAliases.add('mutate'),
+          throwsUnsupportedError,
+        );
+      }
+    },
+  );
+
   test('identity maps to app session and preserves JWT for legacy session', () {
     const identity = core.IdentitySummary(
       id: 'id-1',

@@ -1,3 +1,5 @@
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/data/im_core/awiki_im_core_mappers.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -1167,18 +1169,11 @@ void main() {
         threadKind: 'conversation',
         threadId: groupConversation.conversationId,
         conversationId: groupConversation.conversationId,
-        message: ChatMessage(
-          localId: 'msg-local-timeout',
-          remoteId: 'msg-local-timeout',
-          conversationId: groupConversation.conversationId,
-          threadId: groupConversation.threadId,
-          senderDid: 'did:me',
-          groupId: groupDid,
+        message: _mappedGroupReceipt(
+          groupConversation,
+          'msg-local-timeout',
           content: '后面我们在这里多发发消息',
-          createdAt: sentAt,
-          isMine: true,
-          sendState: MessageSendState.sent,
-          serverSequence: 42,
+          sentAt: sentAt,
         ),
       ),
     );
@@ -1218,7 +1213,9 @@ void main() {
     final displayed = messages.singleWhere(
       (item) => item.content == '后面我们在这里多发发消息',
     );
-    expect(displayed.localId, 'msg-local-timeout');
+    expect(displayed.localId, '$groupDid:42');
+    expect(displayed.remoteId, '$groupDid:42');
+    expect(displayed.identityAliases, contains('msg-local-timeout'));
     expect(displayed.sendState, MessageSendState.sent);
     expect(displayed.serverSequence, 42);
   });
@@ -7114,6 +7111,90 @@ void main() {
     },
   );
 
+  for (final removal in ['overlay', 'old-client-row', 'canonical-row']) {
+    test(
+      'group remove $removal clears only the intended presentation',
+      () async {
+        final group = _aliasGroupConversation();
+        final result = Completer<ChatMessage>();
+        final service = _PatchMessagingService(
+          localHistory: [],
+          textSendCompleter: result,
+        );
+        final sends = ProviderContainer(
+          overrides: [
+            notificationFacadeProvider.overrideWithValue(notificationFacade),
+            ...fakeApplicationServiceOverrides(gateway),
+            messagingServiceProvider.overrideWithValue(service),
+          ],
+        );
+        addTearDown(sends.dispose);
+        sends
+            .read(sessionProvider.notifier)
+            .setSession(
+              const SessionIdentity(
+                did: 'did:me',
+                credentialName: 'me.json',
+                displayName: 'Me',
+              ),
+            );
+        final controller = sends.read(chatThreadsProvider.notifier);
+        controller.markConversationVisible(group);
+        await pumpEventQueue();
+        final sending = controller.sendMessage(
+          conversation: group,
+          content: 'remove alias',
+        );
+        final id = service.lastClientMessageId!;
+        final canonical = _mappedGroupReceipt(
+          group,
+          id,
+          content: 'remove alias',
+        );
+        if (removal != 'overlay') {
+          service.emitPatch(
+            ThreadMessagePatch(
+              kind: ThreadMessagePatchKind.upsert,
+              ownerDid: 'did:me',
+              version: 2,
+              threadKind: 'conversation',
+              threadId: group.conversationId,
+              conversationId: group.conversationId,
+              message: canonical,
+            ),
+          );
+          await pumpEventQueue();
+        }
+        service.emitPatch(
+          ThreadMessagePatch(
+            kind: ThreadMessagePatchKind.remove,
+            ownerDid: 'did:me',
+            version: removal == 'overlay' ? 2 : 3,
+            threadKind: 'conversation',
+            threadId: group.conversationId,
+            conversationId: group.conversationId,
+            messageId: removal == 'canonical-row' ? canonical.localId : id,
+          ),
+        );
+        await pumpEventQueue();
+        result.completeError(TimeoutException('late failure after remove'));
+        await sending;
+        final observed = controller.thread(group.conversationId);
+        expect(observed.localSendIntents, isEmpty);
+        if (removal == 'old-client-row') {
+          expect(observed.displayMessages, hasLength(1));
+          expect(observed.displayMessages.single.localId, canonical.localId);
+          expect(
+            observed.displayMessages.single.sendState,
+            MessageSendState.sent,
+          );
+        } else {
+          expect(observed.displayMessages, isEmpty);
+        }
+      },
+    );
+  }
+
   group('local send presentation', () {
     late _DeferredSendMessaging messaging;
     late ProviderContainer sends;
@@ -7143,6 +7224,206 @@ void main() {
 
     ChatThreadState current() =>
         sends.read(chatThreadProvider(conversation.conversationId));
+
+    for (final pendingProjected in [false, true]) {
+      test(
+        'group alias resolves late failure (pending=$pendingProjected)',
+        () async {
+          final group = _aliasGroupConversation();
+          final sending = controller.sendMessage(
+            conversation: group,
+            content: 'alias overlay',
+          );
+          final pending = controller
+              .thread(group.conversationId)
+              .displayMessages
+              .single;
+          if (pendingProjected) {
+            controller.debugSeedMessageForTesting(
+              pending,
+              threadId: group.conversationId,
+            );
+          }
+          final canonical = _mappedGroupReceipt(
+            group,
+            pending.localId,
+            content: pending.content,
+          );
+          controller.debugSeedMessageForTesting(
+            canonical,
+            threadId: group.conversationId,
+          );
+          final beforeFailure = controller.thread(group.conversationId);
+          messaging.results.single.completeError(
+            TimeoutException('response lost'),
+          );
+          await sending;
+          expect(beforeFailure.displayMessages, hasLength(1));
+          expect(beforeFailure.localSendIntents, isEmpty);
+          final observed = controller.thread(group.conversationId);
+          expect(observed.displayMessages, hasLength(1));
+          expect(observed.displayMessages.single.localId, canonical.localId);
+          expect(
+            observed.displayMessages.single.sendState,
+            MessageSendState.sent,
+          );
+          expect(observed.localSendIntents, isEmpty);
+        },
+      );
+    }
+
+    for (final canonicalFirst in [false, true]) {
+      test(
+        'group alias history converges in either order ($canonicalFirst)',
+        () async {
+          final group = _aliasGroupConversation();
+          final canonical = _mappedGroupReceipt(group, 'local-history');
+          final local = ChatMessage(
+            localId: 'local-history',
+            threadId: group.threadId,
+            senderDid: 'did:me',
+            groupId: group.groupId,
+            content: canonical.content,
+            createdAt: canonical.createdAt,
+            isMine: true,
+            sendState: MessageSendState.failed,
+          );
+          controller.debugSeedMessagesForTesting(
+            group.conversationId,
+            canonicalFirst ? [canonical, local] : [local, canonical],
+          );
+          final rows = controller.thread(group.conversationId).displayMessages;
+          expect(rows, hasLength(1));
+          expect(rows.single.localId, canonical.localId);
+          expect(rows.single.remoteId, canonical.remoteId);
+          expect(rows.single.sendState, MessageSendState.sent);
+          expect(rows.single.identityAliases, contains(local.localId));
+        },
+      );
+    }
+
+    test(
+      'late group alias joins both existing rows and survives metadata-light updates',
+      () {
+        final group = _aliasGroupConversation();
+        final canonical = _mappedGroupReceipt(group, 'client-bridge');
+        final local = ChatMessage(
+          localId: 'client-bridge',
+          threadId: group.threadId,
+          senderDid: 'did:me',
+          groupId: group.groupId,
+          content: canonical.content,
+          createdAt: canonical.createdAt,
+          isMine: true,
+          sendState: MessageSendState.failed,
+        );
+        controller.debugSeedMessagesForTesting(group.conversationId, [
+          local,
+          canonical.copyWith(identityAliases: {}),
+        ]);
+        expect(controller.thread(group.conversationId).messages, hasLength(2));
+        controller.debugSeedMessageForTesting(
+          canonical,
+          threadId: group.conversationId,
+        );
+        controller.debugSeedMessageForTesting(
+          canonical.copyWith(identityAliases: {}),
+          threadId: group.conversationId,
+        );
+        controller.debugSeedMessageForTesting(
+          local,
+          threadId: group.conversationId,
+        );
+        final rows = controller.thread(group.conversationId).messages;
+        expect(rows, hasLength(1));
+        expect(rows.single.localId, canonical.localId);
+        expect(rows.single.sendState, MessageSendState.sent);
+        expect(rows.single.identityAliases, contains(local.localId));
+      },
+    );
+
+    test(
+      'canonical group receipt keeps its read ID after a late local sent result',
+      () async {
+        final group = _aliasGroupConversation();
+        final sending = controller.sendMessage(
+          conversation: group,
+          content: 'late local sent',
+        );
+        final pending = controller
+            .thread(group.conversationId)
+            .displayMessages
+            .single;
+        final canonical = _mappedGroupReceipt(
+          group,
+          pending.localId,
+          content: pending.content,
+        );
+        controller.debugSeedMessageForTesting(
+          canonical,
+          threadId: group.conversationId,
+        );
+        messaging.results.single.complete(
+          pending.copyWith(sendState: MessageSendState.sent),
+        );
+        await sending;
+        final row = controller.thread(group.conversationId).messages.single;
+        expect(row.localId, canonical.localId);
+        expect(row.remoteId, canonical.remoteId);
+        expect(row.serverSequence, canonical.serverSequence);
+        expect(row.sendState, MessageSendState.sent);
+      },
+    );
+
+    test('same group text with unrelated aliases stays separate', () {
+      final group = _aliasGroupConversation();
+      final a = _mappedGroupReceipt(group, 'client-a');
+      final b = _mappedGroupReceipt(group, 'client-b', sequence: 43);
+      controller.debugSeedMessagesForTesting(group.conversationId, [a, b]);
+      expect(
+        controller.thread(group.conversationId).messages.map((m) => m.localId),
+        containsAll([a.localId, b.localId]),
+      );
+      expect(controller.thread(group.conversationId).messages, hasLength(2));
+    });
+
+    test('group attachment receipt survives a late send failure', () async {
+      final group = _aliasGroupConversation();
+      final sending = controller.sendAttachment(
+        conversation: group,
+        attachment: AttachmentDraft(
+          filename: 'test.txt',
+          mimeType: 'text/plain',
+          bytes: Uint8List.fromList([65]),
+          sizeBytes: 1,
+        ),
+        caption: 'attachment alias',
+      );
+      final pending = controller.thread(group.conversationId).messages.single;
+      final canonical =
+          _mappedGroupReceipt(
+            group,
+            pending.localId,
+            content: pending.content,
+          ).copyWith(
+            attachment: pending.attachment,
+            originalType: 'application/anp-attachment-manifest+json',
+          );
+      controller.debugSeedMessageForTesting(
+        canonical,
+        threadId: group.conversationId,
+      );
+      messaging.results.single.completeError(
+        TimeoutException('attachment response lost'),
+      );
+      await sending;
+      final rows = controller.thread(group.conversationId).messages;
+      expect(rows, hasLength(1));
+      expect(rows.single.localId, canonical.localId);
+      expect(rows.single.remoteId, canonical.remoteId);
+      expect(rows.single.sendState, MessageSendState.sent);
+      expect(rows.single.attachment?.filename, 'test.txt');
+    });
 
     test(
       'immediate overlay is not a committed message or read/agent state',
@@ -9164,28 +9445,7 @@ List<ChatMessage> _withConversationId(
 ChatMessage _messageWithConversationId(
   ChatMessage message,
   String conversationId,
-) {
-  return ChatMessage(
-    localId: message.localId,
-    remoteId: message.remoteId,
-    conversationId: conversationId,
-    threadId: message.threadId,
-    senderDid: message.senderDid,
-    senderName: message.senderName,
-    receiverDid: message.receiverDid,
-    groupId: message.groupId,
-    content: message.content,
-    originalType: message.originalType,
-    createdAt: message.createdAt,
-    isMine: message.isMine,
-    sendState: message.sendState,
-    serverSequence: message.serverSequence,
-    isEncrypted: message.isEncrypted,
-    payloadJson: message.payloadJson,
-    mentions: message.mentions,
-    attachment: message.attachment,
-  );
-}
+) => message.copyWith(conversationId: conversationId);
 
 ThreadMessagePatch _patchWithConversationId(
   ThreadMessagePatch patch,
@@ -9267,6 +9527,21 @@ class _DeferredSendMessaging extends FakeMessagingService {
   final keys = <String?>[];
 
   @override
+  Future<ChatMessage> sendConversationAttachment({
+    required AppConversationReadRef conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const [],
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) => sendConversationText(
+    conversation: conversation,
+    content: caption ?? '',
+    clientMessageId: clientMessageId,
+    idempotencyKey: idempotencyKey,
+  );
+
+  @override
   Future<ChatMessage> sendConversationText({
     required AppConversationReadRef conversation,
     required String content,
@@ -9280,3 +9555,43 @@ class _DeferredSendMessaging extends FakeMessagingService {
     return result.future;
   }
 }
+
+ConversationSummary _aliasGroupConversation() => ConversationSummary(
+  conversationId: 'group:did:example:groups:alias-review',
+  threadId: 'group:did:example:groups:alias-review',
+  displayName: 'Alias group',
+  lastMessagePreview: '',
+  lastMessageAt: DateTime(2026, 9, 22),
+  unreadCount: 0,
+  isGroup: true,
+  groupId: 'did:example:groups:alias-review',
+);
+
+ChatMessage _mappedGroupReceipt(
+  ConversationSummary group,
+  String clientId, {
+  String content = 'group alias',
+  DateTime? sentAt,
+  int sequence = 42,
+}) => const AwikiImCoreMappers().chatMessageFromCore(
+  core.Message(
+    id: '${group.groupId}:$sequence',
+    conversationId: group.conversationId,
+    threadId: group.threadId,
+    threadKind: 'group',
+    direction: core.MessageDirection.outgoing,
+    sender: 'did:me',
+    senderDidSnapshot: 'did:me',
+    group: group.groupId,
+    body: core.MessageBodyView(text: content, kind: 'text'),
+    sentAt: (sentAt ?? DateTime.now()).toIso8601String(),
+    metadata: core.MessageMetadata(
+      deliveryState: 'sent',
+      serverSequence: sequence,
+      attributes: [
+        core.MessageMetadataAttribute(key: 'raw_message_id', value: clientId),
+      ],
+    ),
+  ),
+  ownerDid: 'did:me',
+);

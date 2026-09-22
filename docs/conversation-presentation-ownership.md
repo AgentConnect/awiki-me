@@ -464,9 +464,9 @@ Chat presentation 同时是 owner/session-generation scoped：
 seed”的兼容屏障；正式 v2 account session 必须走上述完整 fence，不允许从 DID 推断
 `ownerIdentityId` 或 `accountId`。
 
-Timeline merge、发送结果接替、Core patch 与历史回填共用精确消息身份规则：同一 canonical 会话内只有 `localId` / `remoteId` 存在明确共同 ID，或同一发送请求的明确结果关联，才可合并。发送者、正文、附件名、时间接近和 server sequence 存在与否都不能证明两条消息相同；不同 ID 的同文消息必须独立保留。已成功的同一条本机消息不得被迟到的 sending/failed 行覆盖，不以正文是否一致或是否已有服务端序号作为保留成功状态的条件。旧的正文猜测匹配已移除；无法确定身份的历史行保留独立记录，不能靠内容推测删除。这个规则只属于 presentation 合并边界，不改变 `im-core` 作为 send/outbox/local projection 事实源的职责。
+Timeline merge、发送结果接替、Core patch 与历史回填共用精确消息身份规则：同一 canonical 会话内只有 `localId` / `remoteId` 或 Core 明确提供的消息身份别名存在共同 ID，或同一发送请求的明确结果关联，才可合并。App mapper 将 Core 的 `raw_message_id` / `client_message_id` / `operation_id` 保留为只用于展示关联的 `identityAliases`，不从正文推导，不改变正式消息 ID、附件寻址和 read watermark 的语义；实时、发送结果与历史映射使用同一规则。合并保留已知别名，明确关联的多个展示行必须收敛为一条。发送者、正文、附件名、时间接近和 server sequence 存在与否都不能证明两条消息相同；没有明确别名关联的不同 ID 同文消息必须独立保留。已成功的同一条本机消息不得被迟到的 sending/failed 行覆盖，不以正文是否一致或是否已有服务端序号作为保留成功状态的条件。旧的正文猜测匹配已移除；无法确定身份的历史行保留独立记录，不能靠内容推测删除。这个规则只属于 presentation 合并边界，不改变 `im-core` 作为 send/outbox/local projection 事实源的职责。
 
-发送首帧由 App 的短生命周期 `localSendIntents` 展示层覆盖：通过本地发送前置校验后，使用与 Core 请求相同的 `clientMessageId` 同步显示发送中气泡，与清空输入框在下一帧一起生效。该覆盖与 `messages`（Core 投影）分开保存，仅 ChatView 的 `displayMessages` 合并展示；不参与持久化、会话摘要、read watermark、可靠同步或智能体任务接受状态。Core patch/history 或明确发送结果按精确消息 ID 接替覆盖，不按正文匹配，避免连续发送相同内容被合并。Core 建立消息之前失败时保留失败覆盖及原内容，重试复用同一消息 ID 和幂等键；身份 generation 改变时清理覆盖，旧请求完成不得回填。临时覆盖不跨进程持久化，Core 已落盘的消息继续由 Core 恢复。附件仍沿用既有本地 preview 机制。
+发送首帧由 App 的短生命周期 `localSendIntents` 展示层覆盖：通过本地发送前置校验后，使用与 Core 请求相同的 `clientMessageId` 同步显示发送中气泡，与清空输入框在下一帧一起生效。该覆盖与 `messages`（Core 投影）分开保存，仅 ChatView 的 `displayMessages` 合并展示；不参与持久化、会话摘要、read watermark、可靠同步或智能体任务接受状态。Core patch/history 或明确发送结果按精确消息 ID 及显式别名接替覆盖，不按正文匹配，避免连续发送相同内容被合并。Core 建立消息之前失败时保留失败覆盖及原内容，重试复用同一消息 ID 和幂等键；身份 generation 改变时清理覆盖，旧请求完成不得回填。临时覆盖不跨进程持久化，Core 已落盘的消息继续由 Core 恢复。附件仍沿用既有本地 preview 机制。Core remove 清理指定行及其对应临时覆盖；若删除的是已被正式消息接替的旧本机行，不因别名相同删除正式消息。
 
 发送状态的 UI 降噪规则：core timeline row 进入 `sending` 后，气泡先不显示转圈且不预留左侧空白；同一 row 连续保持 `sending` 满 3 秒才显示 indicator。row 更新为 `sent` 或 `failed` 时 indicator widget 立即销毁。若 `sendConversationText` / `sendConversationPayload` 已返回明确终态，App 用该 SDK 结果收敛或补入 Core 返回的消息，并按请求消息 ID 接替对应临时覆盖，但不得把临时覆盖当作 Core 消息，也不得触发 full conversation refresh 或 remote history reconcile。
 
@@ -630,7 +630,7 @@ copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
 - `tests/unit/chat_mention_composer_test.dart`：验证 draft mention range 维护、编辑失效、候选插入、本地 Profile single-flight 预热、首帧不闪现 Handle、连续 query 只使用一次 roster/Profile 请求，以及气泡按 DID 重投影但不修改原始消息。
 - `tests/unit/chat_page_test.dart`：验证聊天窗口渲染、read ack 边界、header 行为、发送首帧气泡与草稿清空、早期失败重试、离底发送即时滚动、sending indicator 的 3 秒延迟与明确终态清理等关键 widget 行为。
 - `tests/unit/chat_provider_open_test.dart`：验证打开会话 local-first conversation timeline、conversation-after/remote fallback、conversation timeline patch version gap repair、stream closed repair/re-subscribe、read ack、文本 / payload / 附件 send intent 和附件 retry 都按 `conversationId` / `AppConversationReadRef` 走主路径；其中可见群聊必须在 Controller 自身建立持久 intent，不依赖 Widget 二次回调，并覆盖在途 `seq 5 -> seq 6` 串行合并和 Core `pendingRemoteAck` local-first 成功。
-  - 即时发送覆盖与 Core 消息隔离，覆盖精确 ID 接替、同文连续发送（第一条已进入 Core 后第二条 result/patch 的 sending/sent/failed 组合）、历史批量回填、明确 local/remote ID 关联、成功状态防回退、乱序结果、早期失败重试、会话及身份切换；不调用真实模型或后端。
+  - 即时发送覆盖与 Core 消息隔离，覆盖精确 ID 接替、同文连续发送（第一条已进入 Core 后第二条 result/patch 的 sending/sent/failed 组合）、历史批量回填、Core mapper 的显式群消息别名关联、不同 ID 群回执与迟到失败收敛、附件与正式读取 ID 保留、旧本机行 remove 不误删正式行、明确 local/remote ID 关联、成功状态防回退、乱序结果、早期失败重试、会话及身份切换；不调用真实模型或后端。
   - Direct stale-route 恢复与手动 retry 必须覆盖稳定 `clientMessageId` / `op-<clientMessageId>`、原气泡原位 `failed -> sending -> sent|failed`、Mention/附件一致性，以及不触发 full refresh/history backfill。
   - Agent pending turn 必须覆盖精确 reply correlation、多个 legacy candidate 不猜测、单 candidate 旧回复兼容、final/terminal 后迟到 running 不复活，以及 session 切换清空完成 ledger。
   - 其中 `dm:peer-scope:*`、legacy direct、old Flutter direct alias 和 handle/DID rotation 必须由 core/SDK canonical identity 收敛；App 不因 raw thread history unsupported 而把错误暴露成可见 UI 报错。

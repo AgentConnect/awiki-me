@@ -130,14 +130,12 @@ Map<String, ChatMessage> _remainingSendIntents(
 ) {
   if (intents.isEmpty) return intents;
   final committedIds = <String>{
-    for (final message in messages) ...[
-      message.localId,
-      if (message.remoteId != null) message.remoteId!,
-    ],
+    for (final message in messages) ..._messageIdentityKeys(message),
   };
   return {
     for (final entry in intents.entries)
-      if (!committedIds.contains(entry.key)) entry.key: entry.value,
+      if (_messageIdentityKeys(entry.value).intersection(committedIds).isEmpty)
+        entry.key: entry.value,
   };
 }
 
@@ -3655,39 +3653,11 @@ class ChatThreadsController
     required String submittedLocalMessageId,
     required ChatMessage result,
   }) {
-    final delivered = _withThreadId(result, displayThreadId);
-    if (thread(
+    return _replaceMessage(
       displayThreadId,
-    ).localSendIntents.containsKey(submittedLocalMessageId)) {
-      return _replaceMessage(
-        displayThreadId,
-        submittedLocalMessageId,
-        delivered,
-      );
-    }
-    final current = thread(displayThreadId).messages;
-    var index = current.indexWhere(
-      (message) =>
-          message.localId == submittedLocalMessageId ||
-          message.remoteId == submittedLocalMessageId,
+      submittedLocalMessageId,
+      _withThreadId(result, displayThreadId),
     );
-    if (index < 0) {
-      index = _matchingMessageIndex(current, delivered);
-    }
-    if (index < 0) {
-      // A successful send result is authoritative even when the realtime
-      // pending patch has not arrived. Persist it immediately so the sender's
-      // timeline cannot remain empty because of patch timing or delivery loss.
-      return _replaceMessage(
-        displayThreadId,
-        submittedLocalMessageId,
-        delivered,
-      );
-    }
-    if (current[index].sendState == MessageSendState.sent) {
-      return delivered;
-    }
-    return _replaceMessage(displayThreadId, current[index].localId, delivered);
   }
 
   void _settleVisibleSendingFailure({
@@ -3708,8 +3678,7 @@ class ChatThreadsController
     final index = current.indexWhere(
       (message) =>
           message.sendState == MessageSendState.sending &&
-          (message.localId == submittedLocalMessageId ||
-              message.remoteId == submittedLocalMessageId),
+          _messageIdentityKeys(message).contains(submittedLocalMessageId),
     );
     if (index < 0) {
       return;
@@ -4930,37 +4899,49 @@ class ChatThreadsController
 
   void _removeMessageById(String threadId, String messageId) {
     final current = thread(threadId);
-    final removedRouteIds = <String>{};
-    for (final message in current.messages) {
-      if (message.localId == messageId || message.remoteId == messageId) {
-        removedRouteIds.add(message.localId);
-        final remoteId = message.remoteId?.trim();
-        if (remoteId != null && remoteId.isNotEmpty) {
-          removedRouteIds.add(remoteId);
-        }
-      }
-    }
-    final nextMessages = current.messages
+    // A Core remove names a stored row, not every row sharing an alias.
+    // Removing an obsolete client-ID row must not delete its canonical successor.
+    final removedMessages = current.messages
         .where(
           (message) =>
-              message.localId != messageId && message.remoteId != messageId,
+              message.localId == messageId || message.remoteId == messageId,
         )
         .toList();
-    if (nextMessages.length == current.messages.length) {
+    final removedIds = <String>{
+      messageId,
+      for (final message in removedMessages) ..._messageIdentityKeys(message),
+    };
+    final nextMessages = current.messages
+        .where((message) => !removedMessages.contains(message))
+        .toList();
+    final nextIntents = {
+      for (final entry in current.localSendIntents.entries)
+        if (_messageIdentityKeys(entry.value).intersection(removedIds).isEmpty)
+          entry.key: entry.value,
+    };
+    if (nextMessages.length == current.messages.length &&
+        nextIntents.length == current.localSendIntents.length) {
       return;
     }
-    _removeMessageRoutesForIds(removedRouteIds);
+    _removeMessageRoutesForIds({
+      for (final message in removedMessages) ...[
+        message.localId,
+        if (message.remoteId != null) message.remoteId!,
+      ],
+    });
     _touchThreadCache(threadId, nextMessages);
     final enforcedMessages = _enforceThreadMessageCache(
       threadId,
-      current.copyWith(messages: nextMessages),
+      current.copyWith(messages: nextMessages, localSendIntents: nextIntents),
       nextMessages,
     ).messages;
-    final nextState = <String, ChatThreadState>{
+    state = _enforceGlobalCachePolicy({
       ...state,
-      threadId: current.copyWith(messages: enforcedMessages),
-    };
-    state = _enforceGlobalCachePolicy(nextState);
+      threadId: current.copyWith(
+        messages: enforcedMessages,
+        localSendIntents: nextIntents,
+      ),
+    });
   }
 
   ChatMessage _replaceMessage(
@@ -4969,46 +4950,53 @@ class ChatThreadsController
     ChatMessage replacement,
   ) {
     final current = List<ChatMessage>.from(thread(threadId).messages);
-    ChatMessage? existing;
-    final index = current.indexWhere(
-      (item) => _messageIdentityKeys(item).contains(localId),
+    // The request/result association is explicit even if this result omits
+    // metadata aliases. Retain it for later patches, failures and history.
+    var resolved = replacement.copyWith(
+      identityAliases: Set.unmodifiable({
+        ...replacement.identityAliases,
+        localId,
+      }),
     );
-    if (index >= 0) {
-      existing = current.removeAt(index);
-    } else if (replacement.sendState != MessageSendState.sent &&
+    var index = _matchingMessageIndex(current, resolved);
+    if (index < 0 &&
+        replacement.sendState != MessageSendState.sent &&
         !thread(threadId).localSendIntents.containsKey(localId)) {
       return replacement;
     }
-    late final ChatMessage resolved;
-    final replacementIndex = _matchingMessageIndex(current, replacement);
-    if (replacementIndex >= 0) {
-      final merged = _mergeMessageSemantics(
-        replacement,
-        current[replacementIndex],
+    while (index >= 0) {
+      resolved = _mergeMessageSemantics(
+        resolved,
+        current.removeAt(index),
+        trustMessageMatch: true,
       );
-      resolved = existing == null
-          ? merged
-          : _mergeMessageSemantics(merged, existing, trustMessageMatch: true);
-      current[replacementIndex] = resolved;
-    } else {
-      resolved = existing == null
-          ? replacement
-          : _mergeMessageSemantics(
-              replacement,
-              existing,
-              trustMessageMatch: true,
-            );
-      current.add(resolved);
+      index = _matchingMessageIndex(current, resolved);
     }
-    _recordMessageRoutes(threadId, <ChatMessage>[
-      replacement,
-      if (!identical(replacement, resolved)) resolved,
-    ]);
+    current.add(resolved);
+    _recordMessageRoutes(threadId, [replacement, resolved]);
     _setMessages(threadId, current, resolvedLocalSendId: localId);
     return resolved;
   }
 
   ChatMessage _mergeMessageSemantics(
+    ChatMessage incoming,
+    ChatMessage existing, {
+    bool trustMessageMatch = false,
+  }) {
+    final resolved = _mergeMessageContentSemantics(
+      incoming,
+      existing,
+      trustMessageMatch: trustMessageMatch,
+    );
+    return resolved.copyWith(
+      identityAliases: Set.unmodifiable(
+        {..._messageIdentityKeys(incoming), ..._messageIdentityKeys(existing)}
+          ..removeAll({resolved.localId, resolved.remoteId}),
+      ),
+    );
+  }
+
+  ChatMessage _mergeMessageContentSemantics(
     ChatMessage incoming,
     ChatMessage existing, {
     bool trustMessageMatch = false,
@@ -5073,7 +5061,7 @@ class ChatThreadsController
   }) {
     final totalWatch = Stopwatch()..start();
     final current = List<ChatMessage>.from(thread(threadId).messages);
-    final indexes = _MessageMergeIndexes(current);
+    var indexes = _MessageMergeIndexes(current);
     final newlyMergedMessages = <ChatMessage>[];
     _touchThreadCache(threadId, incoming);
     _recordMessageRoutes(threadId, incoming);
@@ -5083,15 +5071,27 @@ class ChatThreadsController
         for (final message in incoming.where(
           (message) => message.hasRenderableContent,
         )) {
-          final index = indexes.matchingIndex(current, message);
-          if (index >= 0) {
-            final previous = current[index];
-            current[index] = _mergeMessageSemantics(
-              message,
-              previous,
-              trustMessageMatch: true,
-            );
-            indexes.replace(index, current[index]);
+          final matches = indexes.matchingIndexes(current, message);
+          if (matches.isNotEmpty) {
+            var resolved = message;
+            for (final index in matches) {
+              resolved = _mergeMessageSemantics(
+                resolved,
+                current[index],
+                trustMessageMatch: true,
+              );
+            }
+            final index = matches.first;
+            current[index] = resolved;
+            if (matches.length == 1) {
+              indexes.replace(index, resolved);
+            } else {
+              // A newly supplied alias may connect previously separate rows.
+              for (final duplicate in matches.skip(1).toList().reversed) {
+                current.removeAt(duplicate);
+              }
+              indexes = _MessageMergeIndexes(current);
+            }
           } else {
             current.add(message);
             indexes.add(current.length - 1, message);
@@ -5325,13 +5325,13 @@ class ChatThreadsController
         !incoming.isMine ||
         !existing.isMine ||
         incoming.threadId != existing.threadId ||
-        incoming.sendState == MessageSendState.sent ||
         existing.sendState != MessageSendState.sent) {
       return false;
     }
-    // This method is reached only for an exact ID or explicit request/result
-    // association. A late local state cannot regress acknowledged delivery.
-    return true;
+    // A late local state cannot regress acknowledged delivery or replace
+    // a canonical receipt with a sequence-less client-ID result.
+    return incoming.sendState != MessageSendState.sent ||
+        (existing.serverSequence != null && incoming.serverSequence == null);
   }
 
   bool _sameStableMessage(ChatMessage first, ChatMessage second) {
@@ -7250,10 +7250,12 @@ String? _lastMessageIdentity(ChatMessage? message) {
 }
 
 /// IDs are scoped by the owning thread. Cross-field matches preserve explicit
-/// Core local/remote aliases; content similarity never establishes identity.
+/// Core aliases and request/result associations; content similarity is not identity.
 Set<String> _messageIdentityKeys(ChatMessage message) => {
   if (message.localId.trim().isNotEmpty) message.localId.trim(),
   if (message.remoteId?.trim().isNotEmpty == true) message.remoteId!.trim(),
+  for (final alias in message.identityAliases)
+    if (alias.trim().isNotEmpty) alias.trim(),
 };
 
 class _MessageMergeIndexes {
@@ -7266,17 +7268,27 @@ class _MessageMergeIndexes {
   final Map<String, Set<int>> _byId = {};
 
   int matchingIndex(List<ChatMessage> current, ChatMessage incoming) {
-    for (final id in _messageIdentityKeys(incoming)) {
+    final matches = matchingIndexes(current, incoming);
+    return matches.isEmpty ? -1 : matches.first;
+  }
+
+  List<int> matchingIndexes(List<ChatMessage> current, ChatMessage incoming) {
+    final matches = <int>{};
+    final ids = _messageIdentityKeys(incoming).toList();
+    final visited = <String>{};
+    // Follow explicit aliases transitively when an update joins existing rows.
+    for (var cursor = 0; cursor < ids.length; cursor++) {
+      final id = ids[cursor];
+      if (!visited.add(id)) continue;
       for (final index in _byId[id] ?? const <int>{}) {
-        // Replacing a row may leave an old index entry. Check the current row
-        // so an obsolete alias cannot match an unrelated message.
         if (index < current.length &&
-            _messageIdentityKeys(current[index]).contains(id)) {
-          return index;
+            _messageIdentityKeys(current[index]).contains(id) &&
+            matches.add(index)) {
+          ids.addAll(_messageIdentityKeys(current[index]));
         }
       }
     }
-    return -1;
+    return matches.toList()..sort();
   }
 
   void add(int index, ChatMessage message) {
@@ -7526,6 +7538,7 @@ ChatMessage _withThreadId(ChatMessage message, String threadId) {
   return ChatMessage(
     localId: message.localId,
     remoteId: message.remoteId,
+    identityAliases: message.identityAliases,
     conversationId: message.conversationId,
     threadId: threadId,
     senderDid: message.senderDid,
