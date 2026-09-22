@@ -435,9 +435,15 @@ continuity.
 Recovery's isolated Hermes ACP fixture reads the final `[User request]` block:
 controller prompts remain plain text, while `awiki.runtime.user_message_task.v1`
 delegated prompts use `content_text`. It must not echo the host's background
-context. Session persistence and the exact-one reply assertions remain active
+context. Both `session/new` and `session/load` return the same confirmed offline
+model catalog; a restored native session must remain usable for the next turn.
+Session persistence and the exact-one reply assertions remain active
 across the crash A/B lifecycle; a successful fixture setup does not attest
 post-Recovery Agent continuity.
+The Fresh Recovery UI case waits for the current chat's ACP model configuration
+to be confirmed before submitting its prompt. A visible or hit-testable send
+button alone does not attest model readiness; the product may retain the draft
+and show its existing preparation guard dialog.
 
 `cliPeer.binary`, `daemon.rustRepo`, and `daemon.binary` may be omitted from the
 local YAML. The runner then uses the sibling `../awiki-cli-rs2` checkout and its
