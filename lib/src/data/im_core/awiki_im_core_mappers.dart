@@ -164,6 +164,7 @@ class AwikiImCoreMappers {
       isMine: isMine,
       sendState: _sendStateFromCore(message.metadata, isMine: isMine),
       serverSequence: message.metadata.serverSequence,
+      notifyLevel: _attribute(message.metadata, 'notify_level'),
       isEncrypted: _isEncrypted(message.metadata.contentType),
       attachment: attachment,
       payloadJson: payloadJson,
@@ -218,6 +219,7 @@ class AwikiImCoreMappers {
         message,
         'sender_peer_persona_id',
       ),
+      notifyLevel: _snapshotAttribute(message, 'notify_level'),
       senderDidSnapshot:
           _snapshotAttribute(message, 'sender_did_snapshot') ?? message.sender,
       senderName:
@@ -329,7 +331,10 @@ class AwikiImCoreMappers {
     );
   }
 
-  bool shouldIncludeConversation(core.Conversation conversation) {
+  bool shouldIncludeConversation(
+    core.Conversation conversation, {
+    bool includeControlMessages = false,
+  }) {
     if (!_isDisplayableConversation(
       conversationId: conversation.conversationId,
       resolutionState: conversation.resolutionState,
@@ -339,6 +344,7 @@ class AwikiImCoreMappers {
     )) {
       return false;
     }
+    if (includeControlMessages) return true;
     final lastMessage = conversation.lastMessage;
     if (lastMessage == null) {
       return true;

@@ -91,10 +91,26 @@ class _ChatInformationPageState extends ConsumerState<_ChatInformationPage> {
       _overlay = next;
       _isSaving = true;
     });
-    try {
+    bool canonicalSaved = false;
+    Future<void> saveCanonical() async {
       await ref
           .read(productLocalStoreProvider)
           .upsertConversationOverlayByConversationId(next);
+      canonicalSaved = true;
+    }
+
+    try {
+      if (muted != null &&
+          !widget.conversation.isGroup &&
+          defaultTargetPlatform == TargetPlatform.android) {
+        final context = ref.read(currentTextNotifySessionContextProvider);
+        if (context == null) throw sessionEpochChangedError();
+        await ref
+            .read(textNotifyMuteCoordinatorProvider)
+            .update(context, saveCanonical);
+      } else {
+        await saveCanonical();
+      }
       if (!epoch.matches(ref.read(sessionProvider))) {
         throw sessionEpochChangedError();
       }
@@ -103,7 +119,8 @@ class _ChatInformationPageState extends ConsumerState<_ChatInformationPage> {
       if (!mounted || !epoch.matches(ref.read(sessionProvider))) {
         return;
       }
-      setState(() => _overlay = previous);
+      // A mirror failure does not roll back a successfully saved canonical mute.
+      if (!canonicalSaved) setState(() => _overlay = previous);
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));

@@ -1,0 +1,18 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <application>
+        <!-- Manual local diagnostics only; absent from Profile and Release. -->
+        <activity android:name=".push.UrgentNotificationProbeActivity"
+            android:exported="true" android:launchMode="singleTop" android:label="AWiki Notify platform probe" />
+        <receiver android:name=".push.ContinuousUrgentProbeStopReceiver" android:exported="false" />
+        <activity android:name=".push.ContinuousUrgentProbeActivity" android:exported="false" android:excludeFromRecents="true" android:showWhenLocked="true" android:turnScreenOn="true" />
+        <service android:name=".push.ContinuousUrgentProbeService" android:exported="false" android:foregroundServiceType="shortService" />
+        <receiver android:name=".push.AwikiAliyunPushReceiver" tools:node="remove" />
+        <receiver android:name=".push.ContinuousUrgentProbePushReceiver" android:exported="false">
+            <intent-filter><action android:name="com.alibaba.push2.action.NOTIFICATION_OPENED" /></intent-filter>
+            <intent-filter><action android:name="com.alibaba.push2.action.NOTIFICATION_REMOVED" /></intent-filter>
+            <intent-filter><action android:name="com.alibaba.sdk.android.push.RECEIVE" /></intent-filter>
+        </receiver>
+    </application>
+</manifest>

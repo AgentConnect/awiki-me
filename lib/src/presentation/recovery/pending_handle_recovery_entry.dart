@@ -83,10 +83,9 @@ class PendingHandleRecoveryEntry extends ConsumerWidget {
             return ref
                 .watch(provider)
                 .when(
-                  loading: () => Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(context.l10n.handleRecoveryChecking),
-                  ),
+                  // Typing only inspects local state; it has not started a
+                  // recovery. Show an entry only after finding resumable work.
+                  loading: () => const SizedBox.shrink(),
                   error: (_, _) => AppSecondaryButton(
                     key: const Key('onboarding-recovery-lookup-retry'),
                     label:

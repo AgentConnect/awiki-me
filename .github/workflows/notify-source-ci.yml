@@ -1,0 +1,96 @@
+name: Notify source validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/notify-source-ci.yml'
+      - 'dependencies.source.json'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'lib/**'
+      - 'android/**'
+      - 'tests/unit/**'
+
+permissions:
+  contents: read
+
+jobs:
+  source-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: awiki-me
+          persist-credentials: false
+      - name: Validate the reviewed Core source pin
+        id: source
+        working-directory: awiki-me
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const source = JSON.parse(fs.readFileSync('dependencies.source.json', 'utf8'));
+          assert.equal(source.schema_version, 1);
+          assert.deepEqual(Object.keys(source.dependencies), ['awiki-im-core']);
+          const entry = source.dependencies['awiki-im-core'];
+          assert.deepEqual(Object.keys(entry).sort(), ['commit', 'pull_request', 'repository']);
+          assert.equal(entry.repository, 'https://github.com/AgentConnect/awiki-cli-rs2.git');
+          assert.match(entry.commit, /^[0-9a-f]{40}$/);
+          assert.match(entry.pull_request, /^https:\/\/github\.com\/AgentConnect\/awiki-cli-rs2\/pull\/[1-9][0-9]*$/);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `commit=${entry.commit}\n`);
+          NODE
+      - name: Checkout the exact candidate wrapper
+        uses: actions/checkout@v6
+        with:
+          repository: AgentConnect/awiki-cli-rs2
+          ref: ${{ steps.source.outputs.commit }}
+          path: awiki-cli-rs2
+          persist-credentials: false
+      - name: Verify source identity
+        env:
+          EXPECTED_COMMIT: ${{ steps.source.outputs.commit }}
+        run: test "$(git -C awiki-cli-rs2 rev-parse HEAD)" = "$EXPECTED_COMMIT"
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install locked Flutter dependencies
+        working-directory: awiki-me
+        run: flutter pub get --enforce-lockfile
+      - name: Analyze the App against the candidate wrapper
+        working-directory: awiki-me
+        run: dart analyze
+      - name: Verify Notify, routing, mute and settings behavior
+        working-directory: awiki-me
+        run: |
+          flutter test --no-pub \
+            tests/unit/application/text_notify_mute_coordinator_test.dart \
+            tests/unit/data/im_core/awiki_im_core_conversation_adapter_test.dart \
+            tests/unit/application/messaging_conversation_service_test.dart \
+            tests/unit/application/remote_push_message_sync_coordinator_test.dart \
+            tests/unit/application/remote_push_message_reference_test.dart \
+            tests/unit/notify_settings_test.dart \
+            tests/unit/settings_page_test.dart \
+            tests/unit/data/push
+      - name: Verify native Android presentation without provider credentials
+        working-directory: awiki-me
+        run: |
+          notify_flutter_sdk="$(dirname "$(dirname "$(readlink -f "$(command -v flutter)")")")"
+          printf 'sdk.dir=%s\nflutter.sdk=%s\n' "$ANDROID_HOME" "$notify_flutter_sdk" > android/local.properties
+          android/gradlew -p android :app:testDebugUnitTest --console=plain
+      - name: Upload native test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: notify-source-native-tests-${{ github.run_id }}
+          path: awiki-me/build/app/test-results/testDebugUnitTest/*.xml
+          if-no-files-found: warn
+          retention-days: 14

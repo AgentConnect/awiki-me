@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:flutter/foundation.dart';
+
 import '../domain/entities/remote_push_event.dart';
 import '../domain/services/remote_push_client.dart';
 import 'models/remote_push_sync_receipt.dart';
@@ -18,17 +20,20 @@ class RemotePushMessageSyncCoordinator {
     required RemotePushNavigationPort navigation,
     required RemotePushInstallationRefresh refreshInstallation,
     DateTime Function()? now,
+    RemotePushInstallationRefresh? preparePresentation,
   }) : _client = client,
        _sync = sync,
        _navigation = navigation,
        _refreshInstallation = refreshInstallation,
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _preparePresentation = preparePresentation;
 
   final RemotePushClient _client;
   final RemotePushSyncPort _sync;
   final RemotePushNavigationPort _navigation;
   final RemotePushInstallationRefresh _refreshInstallation;
   final DateTime Function() _now;
+  final RemotePushInstallationRefresh? _preparePresentation;
   final LinkedHashMap<String, RemotePushEvent> _queuedEvents =
       LinkedHashMap<String, RemotePushEvent>();
 
@@ -88,7 +93,19 @@ class RemotePushMessageSyncCoordinator {
       // be installed, so activation must remain best-effort.
     }
     if (!_isCurrent(context)) return;
+    await _preparePresentationBestEffort(context);
+    if (!_isCurrent(context)) return;
     await _drainOneBatch();
+  }
+
+  Future<void> _preparePresentationBestEffort(
+    RemotePushSessionContext context,
+  ) async {
+    try {
+      await _preparePresentation?.call(context);
+    } on Object {
+      // Native Notify stays fail-closed; message sync must still proceed.
+    }
   }
 
   Future<void> _setActiveNotificationTargetReference(String? value) async {
@@ -100,11 +117,19 @@ class RemotePushMessageSyncCoordinator {
   Future<void> resume() {
     if (_disposed) return Future<void>.value();
     _mergePendingEvents();
-    return _serialize(_drainOneBatch);
+    return _serialize(() async {
+      final context = _activeSession;
+      if (context != null) await _preparePresentationBestEffort(context);
+      await _drainOneBatch();
+    });
   }
 
   void _onEvent(RemotePushEvent event) {
     if (_disposed) return;
+    debugPrint(
+      '[awiki_me][remote-push][event] kind=${event.kind.wireName} '
+      'active_session=${_activeSession != null}',
+    );
     switch (event.kind) {
       case RemotePushEventKind.messageReceived:
       case RemotePushEventKind.notificationReceived:
@@ -166,6 +191,7 @@ class RemotePushMessageSyncCoordinator {
       ),
     );
     if (batch.isEmpty) return;
+    debugPrint('[awiki_me][remote-push][drain] events=${batch.length}');
     final deliveryIds = batch
         .map((event) => event.deliveryId)
         .toList(growable: false);
@@ -176,9 +202,17 @@ class RemotePushMessageSyncCoordinator {
         presentation: _presentationDisposition(batch),
         messageReferences: _ordinaryMessageReferences(batch),
       );
-    } on Object {
+    } on Object catch (error) {
+      debugPrint(
+        '[awiki_me][remote-push][sync-failed] type=${error.runtimeType}',
+      );
       return;
     }
+    debugPrint(
+      '[awiki_me][remote-push][receipt] disposition=${receipt.disposition.name} '
+      'committed=${receipt.committedIncomingMessages.length} '
+      'recovered=${receipt.recoveredIncomingMessages.length}',
+    );
     if (!_isCurrent(context) || !receipt.canAcknowledge) return;
     final references = _ordinaryMessageReferences(batch);
     if (!references.every(
@@ -190,12 +224,16 @@ class RemotePushMessageSyncCoordinator {
             (message) => message.opaqueMessageReferences.contains(reference),
           ),
     )) {
+      debugPrint('[awiki_me][remote-push][references-pending]');
       return;
     }
 
     final openedEvent = _lastOpenedEvent(batch);
     if (openedEvent != null) {
       final conversationId = _resolveConversationId(openedEvent, receipt);
+      debugPrint(
+        '[awiki_me][remote-push][open] matched=${conversationId != null}',
+      );
       try {
         await _navigation.showConversationList(context);
       } on Object {

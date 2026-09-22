@@ -143,3 +143,8 @@ class AwikiShellNavigationScope extends InheritedWidget {
   @override
   bool updateShouldNotify(AwikiShellNavigationScope oldWidget) => false;
 }
+
+// Scoped to one App instance; notifications must reveal the shell before selecting a chat.
+final appNavigatorKeyProvider = Provider<GlobalKey<NavigatorState>>(
+  (ref) => GlobalKey<NavigatorState>(),
+);

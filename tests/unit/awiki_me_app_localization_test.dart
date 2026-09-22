@@ -610,6 +610,7 @@ class _StaticConversationCore implements ConversationCorePort {
     int limit = 100,
     String? cursor,
     bool unreadOnly = false,
+    bool includeControlMessages = false,
   }) async {
     return CoreConversationPage(
       items: items.take(limit).toList(),
