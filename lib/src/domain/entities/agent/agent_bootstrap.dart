@@ -470,10 +470,7 @@ class DaemonSecureBootstrapEncryptor {
       aad: <String, Object?>{
         'human_did': internalEnvelope.controllerDid,
         'daemon_agent_did': recipientDaemonDid,
-        'binding_id': personalAgentEnsureOnceKey(
-          userDid: internalEnvelope.userSubkeyPackage.userDid,
-          appInstanceId: internalEnvelope.appInstanceId,
-        ),
+        'binding_id': internalEnvelope.desiredPersonalAgent.ensureOnceKey,
         'runtime_provider': appMessageHandlerRuntimeProvider,
         'runtime_profile': appMessageHandlerRuntimeProfile,
       },
@@ -516,12 +513,12 @@ class DaemonSecureBootstrapEncryptor {
 String personalAgentBootstrapId({
   required String userDid,
   required String appInstanceId,
-}) => 'boot_${_stableBootstrapSuffix(userDid, appInstanceId)}';
+}) => 'boot_acp_v1_${_stableBootstrapSuffix(userDid, appInstanceId)}';
 
 String personalAgentBootstrapIdempotencyKey({
   required String userDid,
   required String appInstanceId,
-}) => 'personal-agent-bootstrap:$userDid:$appInstanceId';
+}) => 'personal-agent-bootstrap:acp-v1:$userDid:$appInstanceId';
 
 String personalAgentBootstrapAttemptId({
   required String userDid,
@@ -552,7 +549,7 @@ String personalAgentBootstrapAttemptIdempotencyKey({
 String personalAgentEnsureOnceKey({
   required String userDid,
   required String appInstanceId,
-}) => 'app-personal-agent:$userDid:$appInstanceId';
+}) => 'app-personal-agent:acp-v1:$userDid:$appInstanceId';
 
 bool isPersonalAgentBootstrapIdempotencyKey(String value) {
   final normalized = value.trim();

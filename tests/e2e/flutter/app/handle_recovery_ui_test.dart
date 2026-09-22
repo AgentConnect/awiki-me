@@ -60,6 +60,8 @@ import 'package:awiki_me/src/presentation/app_shell/providers/account_state_sync
 import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/acp_model_controller.dart';
+import 'package:awiki_me/src/presentation/agents/acp_task_status.dart';
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
@@ -325,7 +327,11 @@ void main() {
                 runtime.activatedDid == oldDid &&
                 session?.did == oldDid &&
                 session?.localIdentityId == oldSession.identityId &&
-                find.byKey(const Key('app-shell-page-background')).evaluate().length == 1;
+                find
+                        .byKey(const Key('app-shell-page-background'))
+                        .evaluate()
+                        .length ==
+                    1;
           },
           timeout: const Duration(seconds: 45),
           failure: 'Fresh Recovery setup did not open the authenticated App.',
@@ -498,6 +504,11 @@ void main() {
         );
         final recoveryRow = find.byKey(
           const Key('settings-recover-handle-did-row'),
+        );
+        await _pumpUntil(
+          tester,
+          () => recoveryRow.evaluate().length == 1,
+          failure: 'Settings did not load Handle DID Recovery capability.',
         );
         await tester.ensureVisible(recoveryRow);
         await _tapOne(
@@ -947,7 +958,7 @@ void main() {
               freshDaemon ??= await _RunningContinuityDaemon.start(
                 config: config,
                 daemonConfig: _requireContinuityDaemonConfig(config),
-                gatewayScript: await _writeContinuityHermesGateway(
+                gatewayScript: await _writeContinuityHermesAcp(
                   _requireContinuityDaemonConfig(config),
                 ),
               );
@@ -1342,6 +1353,8 @@ void main() {
       }
 
       if (_invocationExpects(_caseId)) {
+        // Group continuity has separate fresh-Recovery case IDs and fixtures;
+        // this basic lifecycle must only attest checks executed in this flow.
         await E2eCaseAttestationWriter.markPassed(
           _caseId,
           startedAt: startedAt,
@@ -1357,9 +1370,6 @@ void main() {
             'recovery_navigation_followed_confirmed_session_activation',
             'new_local_owner_handle_and_replacement_did_verified',
             'old_did_absent_from_fresh_local_projection',
-            'old_transport_group_rebound_to_recovered_did',
-            'old_group_message_recognized_as_account_owned',
-            'recovered_identity_sent_in_old_group',
           ],
         );
       }
@@ -1955,7 +1965,7 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
       controllerDid: ownerDid,
       controllerHandle: ownerHandle,
     );
-    final gatewayScript = await _writeContinuityHermesGateway(daemonConfig);
+    final gatewayScript = await _writeContinuityHermesAcp(daemonConfig);
     final daemon = await _RunningContinuityDaemon.start(
       config: config,
       daemonConfig: daemonConfig,
@@ -2927,11 +2937,11 @@ Future<void> _waitForRuntimeMessageSyncReady({
       observation['coreBootstrapReady'] = coreReady;
       var publicReady = false;
       if (ownerIdentityId != null && completedSyncCount > 0 && coreReady) {
-        final status = await Process.run(
-          daemonBinary,
-          <String>['status', '--state-root', daemonStateRoot],
-          environment: daemonEnvironment,
-        );
+        final status = await Process.run(daemonBinary, <String>[
+          'status',
+          '--state-root',
+          daemonStateRoot,
+        ], environment: daemonEnvironment);
         observation['publicStatusExitCode'] = status.exitCode;
         if (status.exitCode == 0) {
           try {
@@ -2952,7 +2962,10 @@ Future<void> _waitForRuntimeMessageSyncReady({
         debugPrint('Runtime message sync readiness: $diagnostic');
         lastDiagnostic = diagnostic;
       }
-      if (ownerIdentityId != null && completedSyncCount > 0 && coreReady && publicReady) {
+      if (ownerIdentityId != null &&
+          completedSyncCount > 0 &&
+          coreReady &&
+          publicReady) {
         await Future<void>.delayed(const Duration(seconds: 2));
         return;
       }
@@ -3004,31 +3017,93 @@ PlainDirectMessagingService _plainDirectMessaging(MessagingService messaging) {
   return messaging as PlainDirectMessagingService;
 }
 
-Future<File> _writeContinuityHermesGateway(
-  _ContinuityDaemonConfig config,
-) async {
-  final script = File('${config.stateRoot}/recovery_fake_hermes_gateway.py');
+Future<File> _writeContinuityHermesAcp(_ContinuityDaemonConfig config) async {
+  final script = File('${config.stateRoot}/acp-home/.local/bin/hermes');
   await script.parent.create(recursive: true);
-  await script.writeAsString('''import json
+  await script.writeAsString('''#!/usr/bin/env python3
+"""Offline native Hermes ACP peer; session state lives only in the test home."""
+import json
+import os
+from pathlib import Path
 import sys
+import uuid
 
-print(json.dumps({"jsonrpc": "2.0", "method": "event", "params": {"type": "gateway.ready", "payload": {"version": "recovery-e2e"}}}), flush=True)
+if '--version' in sys.argv:
+    print('Hermes ACP 0.15.1')
+    raise SystemExit(0)
+if '--check' in sys.argv:
+    raise SystemExit(0)
+root = Path(os.environ['HERMES_HOME'])
+root.mkdir(parents=True, exist_ok=True)
+models = {'currentModelId': 'offline', 'availableModels': [{'modelId': 'offline', 'name': 'Offline fixture'}]}
+
+def emit(value):
+    print(json.dumps(value), flush=True)
+
+def stored(session_id):
+    # Only internally generated opaque UUIDs become filenames.
+    return root / (str(uuid.UUID(session_id)) + '.json')
+
+def user_text(blocks):
+    # The ACP host's final block is either a plain controller prompt or its
+    # canonical delegated-message envelope. Never echo background context.
+    prefix = '[User request]\\n'
+    for block in reversed(blocks):
+        body = block.get('text', '')
+        if not body.startswith(prefix):
+            continue
+        text = body[len(prefix):]
+        try:
+            payload = json.loads(text)
+        except ValueError:
+            return text
+        if isinstance(payload, dict) and payload.get('schema') == 'awiki.runtime.user_message_task.v1':
+            return payload['content_text']
+        return text
+    raise ValueError('ACP fixture prompt omitted the user request block')
+
 for line in sys.stdin:
     request = json.loads(line)
-    method = request.get("method")
-    if method == "session.create":
-        print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": {"session_id": "recovery_e2e", "stored_session_id": "recovery_e2e"}}), flush=True)
-    elif method == "session.resume":
-        print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": {"session_id": "recovery_e2e", "stored_session_id": "recovery_e2e"}}), flush=True)
-    elif method == "prompt.submit":
-        params = request.get("params", {})
-        prompt = str(params.get("text", ""))
-        marker = "\\nuser_message:\\n"
-        user_message = prompt.rsplit(marker, 1)[-1] if marker in prompt else prompt
-        print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": {"final_text": "$_agentReplyPrefix" + user_message}}), flush=True)
+    method, params = request.get('method'), request.get('params', {})
+    result = {}
+    if method == 'initialize':
+        result = {'protocolVersion': 1, 'agentInfo': {'name': 'hermes-offline-fixture', 'version': '0.15.1'},
+                  'agentCapabilities': {'loadSession': True, 'sessionCapabilities': {'list': {}}, 'promptCapabilities': {'embeddedContext': True}}}
+    elif method == 'session/new':
+        session_id = str(uuid.uuid4())
+        stored(session_id).write_text('[]')
+        result = {'sessionId': session_id, 'models': models}
+    elif method == 'session/load':
+        session_id = params['sessionId']
+        if not stored(session_id).is_file():
+            emit({'jsonrpc': '2.0', 'id': request['id'], 'error': {'code': -32000, 'message': 'Session not found'}})
+            continue
+        # Restoring the native session must also restore its model catalog.
+        # The host reapplies the last confirmed model before the next prompt.
+        result = {'models': models, '_meta': {'hermes': {'sessionProvenance': {'acpSessionId': session_id}}}}
+    elif method == 'session/list':
+        result = {'sessions': [{'sessionId': path.stem, 'cwd': os.getcwd()} for path in root.glob('*.json')]}
+    elif method == 'session/prompt':
+        session_id = params['sessionId']
+        history = json.loads(stored(session_id).read_text())
+        history.append(params['prompt'])
+        stored(session_id).write_text(json.dumps(history))
+        emit({'jsonrpc': '2.0', 'method': 'session/update', 'params': {'sessionId': session_id,
+              'update': {'sessionUpdate': 'agent_message_chunk', 'content': {'type': 'text', 'text': '$_agentReplyPrefix' + user_text(params['prompt'])}}}})
+        result = {'stopReason': 'end_turn'}
+    elif method == 'session/cancel':
+        continue
     else:
-        print(json.dumps({"jsonrpc": "2.0", "id": request.get("id"), "error": {"message": "unknown method"}}), flush=True)
+        if 'id' in request:
+            emit({'jsonrpc': '2.0', 'id': request['id'], 'error': {'code': -32601, 'message': 'Unknown method'}})
+        continue
+    if 'id' in request:
+        emit({'jsonrpc': '2.0', 'id': request['id'], 'result': result})
 ''', flush: true);
+  final chmod = await Process.run('chmod', ['700', script.path]);
+  if (chmod.exitCode != 0) {
+    throw StateError('Cannot prepare offline ACP fixture');
+  }
   return script;
 }
 
@@ -3041,8 +3116,16 @@ Map<String, String> _continuityDaemonEnvironment(
   'AWIKI_DAEMON_MESSAGE_SERVICE_BASE_URL': config.messageServiceUrl,
   'AWIKI_DAEMON_DID_DOMAIN': config.didDomain,
   'AWIKI_DAEMON_ALLOW_PLAIN_CONTROL': '1',
-  if (gatewayScript != null)
-    'AWIKI_HERMES_GATEWAY_CMD': '/usr/bin/env python3 ${gatewayScript.path}',
+  if (gatewayScript != null) 'HOME': gatewayScript.parent.parent.parent.path,
+  'AWIKI_DAEMON_AGENT_PROXY_MODE': 'inherit',
+  for (final key in [
+    'PATH',
+    'TMPDIR',
+    'LANG',
+    'NO_PROXY',
+    'AWIKI_IM_CORE_VAULT_ROOT_KEY_B64',
+  ])
+    if (Platform.environment[key] != null) key: Platform.environment[key]!,
 };
 
 class _RunningContinuityDaemon {
@@ -3080,7 +3163,7 @@ class _RunningContinuityDaemon {
         config,
         gatewayScript: gatewayScript,
       ),
-      includeParentEnvironment: true,
+      includeParentEnvironment: false,
       runInShell: false,
     );
     final stdoutSubscription = process.stdout
@@ -3425,19 +3508,29 @@ Future<void> _runIdentityDeletionPhaseA(WidgetTester tester) async {
     phone: account.phone,
     localIdentityId: identity.identityId,
   );
-  if (!await sessionService.hasPendingLocalIdentityRecovery(identity.identityId)) {
+  if (!await sessionService.hasPendingLocalIdentityRecovery(
+    identity.identityId,
+  )) {
     fail('Pending recovery was missing from the deletion impact query.');
   }
   // One explicit deletion decision ends the recovery; no separate discard or
   // resume is required. The deliberate Product/Core cut remains unchanged.
   await container.read(appRuntimeProvider.notifier).deleteCurrentData();
-  final operations = await recovery.listOperations(HandleRecoveryOwner(
-    localIdentityId: identity.identityId, handle: identity.handle!,
-  ));
-  final deletedOperation = operations.singleWhere((item) => item.operationId == otp.operationId);
-  if (deletedOperation.lifecycleClass != HandleRecoveryLifecycleClass.locallyDeleted ||
+  final operations = await recovery.listOperations(
+    HandleRecoveryOwner(
+      localIdentityId: identity.identityId,
+      handle: identity.handle!,
+    ),
+  );
+  final deletedOperation = operations.singleWhere(
+    (item) => item.operationId == otp.operationId,
+  );
+  if (deletedOperation.lifecycleClass !=
+          HandleRecoveryLifecycleClass.locallyDeleted ||
       deletedOperation.commitAttempted ||
-      await sessionService.hasPendingLocalIdentityRecovery(identity.identityId)) {
+      await sessionService.hasPendingLocalIdentityRecovery(
+        identity.identityId,
+      )) {
     fail('Explicit deletion did not end the pending recovery.');
   }
   final pending = await deletionSessions.pendingLocalIdentityDataDeletions();
@@ -3812,6 +3905,11 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
     failure: 'Crash-cut setup did not open Settings.',
   );
   final recoveryRow = find.byKey(const Key('settings-recover-handle-did-row'));
+  await _pumpUntil(
+    tester,
+    () => recoveryRow.evaluate().length == 1,
+    failure: 'Settings did not load Handle DID Recovery capability.',
+  );
   await tester.ensureVisible(recoveryRow);
   await _tapOne(
     tester,
@@ -4169,7 +4267,7 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   }
   final peerDid = peerIdentity.did;
 
-  final gatewayScript = await _writeContinuityHermesGateway(daemonConfig!);
+  final gatewayScript = await _writeContinuityHermesAcp(daemonConfig!);
   daemon = await _RunningContinuityDaemon.start(
     config: config,
     daemonConfig: daemonConfig,
@@ -5135,6 +5233,28 @@ Future<void> _runFreshFocusedGates({
           tester,
           () => input.evaluate().length == 1,
           failure: 'Fresh Recovery Runtime Agent composer was unavailable.',
+        );
+        // A hit-testable send action can still show the model-preparation
+        // guard dialog. Wait for the current chat's confirmed ACP projection,
+        // just as the user must, before entering and submitting this prompt.
+        await _pumpUntil(
+          tester,
+          () {
+            final bars = tester
+                .widgetList<AcpModelBar>(find.byType(AcpModelBar))
+                .where((bar) => bar.scope.agentDid == runtime.agentDid)
+                .toList(growable: false);
+            if (bars.length != 1) return false;
+            final bar = bars.single;
+            final operation = container.read(
+              acpModelControllerProvider(bar.scope),
+            );
+            return !operation.blocksSending &&
+                (bar.session?.data['model_configuration_ready'] == true ||
+                    bar.session?.data['model_id'] is String);
+          },
+          timeout: const Duration(seconds: 60),
+          failure: 'Fresh Recovery ACP model configuration was not ready.',
         );
         await tester.enterText(input, promptText);
         final send = find.bySemanticsIdentifier('e2e-chat-send-button');
@@ -7590,7 +7710,8 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
   var idMatches = 0;
   var contentMatches = 0;
   final statuses = <String, int>{};
-  String diagnostic() => 'attempts=$attempts successes=$successes '
+  String diagnostic() =>
+      'attempts=$attempts successes=$successes '
       'local_state_errors=$localStateErrors transport_errors=$transportErrors '
       'events=$eventsApplied pages=$pagesFetched statuses=$statuses '
       'candidates=$candidateCount id_matches=$idMatches content_matches=$contentMatches';
@@ -7598,11 +7719,18 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
   while (DateTime.now().isBefore(deadline)) {
     try {
       attempts++;
-      final outcome = await sync.syncNow(reason: 'handle-recovery-rejoin-e2e', limit: 100);
+      final outcome = await sync.syncNow(
+        reason: 'handle-recovery-rejoin-e2e',
+        limit: 100,
+      );
       successes++;
       eventsApplied += outcome.eventsApplied;
       pagesFetched += outcome.pagesFetched;
-      statuses.update(outcome.status.name, (count) => count + 1, ifAbsent: () => 1);
+      statuses.update(
+        outcome.status.name,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
     } on MessageSyncCoreFailure catch (error) {
       if (!const <String>{
         'local_state_unavailable',
@@ -7622,8 +7750,12 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
       messageId: messageId,
     );
     candidateCount = messages.length;
-    idMatches = messages.where((message) => message.remoteId == messageId).length;
-    contentMatches = messages.where((message) => message.content == content).length;
+    idMatches = messages
+        .where((message) => message.remoteId == messageId)
+        .length;
+    contentMatches = messages
+        .where((message) => message.content == content)
+        .length;
     final matches = messages
         .where(
           (message) =>
@@ -7671,9 +7803,11 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
   }
   final session = await appBootstrap.appSessionService!.currentSession();
   final expectedOwner = isMine ? senderDid : receiverDid;
-  fail('An App did not converge the exact thread message. '
-      '${diagnostic()} session_present=${session != null} '
-      'session_owner_matches=${session?.did == expectedOwner}');
+  fail(
+    'An App did not converge the exact thread message. '
+    '${diagnostic()} session_present=${session != null} '
+    'session_owner_matches=${session?.did == expectedOwner}',
+  );
 }
 
 Future<void> _syncHandleRecoveryFixtureWithRetry({
@@ -7684,11 +7818,16 @@ Future<void> _syncHandleRecoveryFixtureWithRetry({
   final deadline = DateTime.now().add(const Duration(seconds: 30));
   while (DateTime.now().isBefore(deadline)) {
     try {
-      final outcome = await bootstrap.messageSyncService!.syncNow(reason: reason, limit: 100);
+      final outcome = await bootstrap.messageSyncService!.syncNow(
+        reason: reason,
+        limit: 100,
+      );
       if (outcome.status != MessageSyncStatus.idle &&
           outcome.status != MessageSyncStatus.changed) {
-        fail('Handle Recovery fixture sync did not become ready '
-            '(status=${outcome.status.name}).');
+        fail(
+          'Handle Recovery fixture sync did not become ready '
+          '(status=${outcome.status.name}).',
+        );
       }
       return;
     } on MessageSyncCoreFailure catch (error) {

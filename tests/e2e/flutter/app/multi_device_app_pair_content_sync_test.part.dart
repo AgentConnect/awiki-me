@@ -152,6 +152,7 @@ Future<void> _runAppPairAdminContentSync({
   required _AppPairContentAdminResources resources,
 }) async {
   await _leaveCompletedAppPairApproval(tester);
+  await _waitForContentRealtimeReady(tester, container);
   final peer = resources.peer;
   final peerDid = resources.peerDid;
   final directId = resources.directConversationId;
@@ -308,7 +309,10 @@ Future<void> _runAppPairAdminContentSync({
       'groupMessageId': incomingGroupId,
     },
   );
-  await config.coordinator.waitFor('joiner', 'content_direct_read_committed');
+  await config.coordinator.waitFor(
+    'joiner',
+    'content_direct_read_committed',
+  );
   await _waitForAppPairUnreadCount(
     tester: tester,
     container: container,
@@ -360,6 +364,7 @@ Future<void> _runAppPairJoinerContentSync({
   required String accountDid,
 }) async {
   await _leaveCompletedAppPairJoin(tester);
+  await _waitForContentRealtimeReady(tester, container);
   final fixture = await config.coordinator.waitFor(
     'admin',
     'content_fixture_ready',
@@ -575,6 +580,7 @@ Future<void> _runAppPairJoinerContentSync({
     matches: (value) => value == 1,
     failure: 'Opening Direct incorrectly cleared Group unread state.',
   );
+  debugPrint('[content-read-commit] ${await _appPairUnreadDiagnostic(container, directId)}');
   await config.coordinator.publish('joiner', 'content_direct_read_committed');
   await config.coordinator.waitFor('admin', 'content_direct_read_converged');
 
@@ -631,6 +637,25 @@ Future<void> _runAppPairJoinerContentSync({
       'group_read_converged_without_regressing_direct',
       'repeat_sync_preserved_exact_once_and_zero_unread',
     ],
+  );
+}
+
+Future<void> _waitForContentRealtimeReady(
+  WidgetTester tester,
+  ProviderContainer container,
+) async {
+  // Match the functional suite's notification readiness gate. Completing
+  // member Join alone does not establish the new authenticated listener.
+  await _pumpUntil(
+    tester,
+    () => container
+        .read(realtimeConnectionStatusProvider)
+        .maybeWhen(
+          data: (status) => status == RealtimeConnectionStatus.connected,
+          orElse: () => false,
+        ),
+    timeout: const Duration(seconds: 45),
+    failure: 'The content-sync App realtime listener was not ready.',
   );
 }
 

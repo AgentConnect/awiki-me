@@ -6,6 +6,44 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/handle_recovery_fixture_contract.dart';
 
 void main() {
+  test(
+    'Recovery fake Hermes supports canonical local installation discovery',
+    () {
+      final source = File(
+        'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+      ).readAsStringSync();
+      expect(source, contains('/acp-home/.local/bin/hermes'));
+      expect(
+        source,
+        contains("'HOME': gatewayScript.parent.parent.parent.path"),
+      );
+      expect(source, contains("method == 'initialize'"));
+      expect(source, contains("method == 'session/load'"));
+      expect(source, contains("method == 'session/prompt'"));
+      // The current ACP host forwards awiki.runtime.user_message_task.v1.
+      // Its user payload field is content_text, not the retired gateway shape.
+      expect(source, contains("['content_text']"));
+      expect(source, contains("text = body[len(prefix):]"));
+      expect(source, contains("for block in reversed(blocks):"));
+      expect(source, isNot(contains("['user_message']")));
+      expect(source, isNot(contains('AWIKI_HERMES_GATEWAY_CMD')));
+      expect(source, isNot(contains('tui_gateway.entry')));
+    },
+  );
+
+  test(
+    'Recovery waits for asynchronous Settings capability before scrolling',
+    () {
+      final source = File(
+        'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+      ).readAsStringSync();
+      final readyWait = RegExp(
+        r"await _pumpUntil\(\s*tester,\s*\(\) => recoveryRow.evaluate\(\).length == 1,[\s\S]*?\);\s*await tester.ensureVisible\(recoveryRow\);",
+      );
+      expect(readyWait.allMatches(source), hasLength(2));
+    },
+  );
+
   group('Handle Recovery fixture checkpoint', () {
     test('persists only opaque references, counts, and stage state', () async {
       final checkpoint = _localCheckpoint();
@@ -247,7 +285,12 @@ void main() {
           "'local_state_unavailable',\n        'transport_unavailable',",
         ),
       );
-      expect(source, contains("syncNow(reason: 'handle-recovery-rejoin-e2e'"));
+      expect(
+        RegExp(
+          r"syncNow\(\s*reason: 'handle-recovery-rejoin-e2e'",
+        ).hasMatch(source),
+        isTrue,
+      );
     },
   );
 

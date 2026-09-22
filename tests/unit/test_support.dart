@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'identity_method_test_support.dart';
+export 'identity_method_test_support.dart';
+
 import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
@@ -90,37 +93,20 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-const Map<String, Object?> genericCliCapabilityDiagnostics = <String, Object?>{
-  'config_summary': <String, Object?>{
-    'generic_cli': <String, Object?>{
+const Map<String, Object?> acpCapabilityDiagnostics = {
+  'config_summary': {
+    'protocol': 'acp',
+    'acp': {
       'capability_schema_version': 1,
-      'supported_drivers': <String>['codex', 'claude-code', 'command'],
-      'supported_workspace_modes': <String>[
-        'route-root',
-        'shared-root',
-        'worktree-per-task',
+      'supported_drivers': [
+        'hermes',
+        'codex',
+        'claude-code',
+        'opencode',
+        'gemini',
+        'kimi',
+        'deepseek-harness',
       ],
-      'supported_sandbox_modes': <String>[
-        'read-only',
-        'workspace-write',
-        'danger-full-access',
-      ],
-      'supported_runtime_create_args': <String>[
-        'runtime',
-        'driver_id',
-        'workspace_mode',
-        'workspace_strategy',
-        'default_sandbox',
-        'default_model',
-        'driver_config',
-        'recipient_policy',
-        'client_request_id',
-      ],
-      'route_session_supported': true,
-      'native_resume_supported': true,
-      'profile_concurrency_cap_supported': false,
-      'max_parallel_runs_per_profile': 1,
-      'runtime_target_required': true,
     },
   },
 };
@@ -168,12 +154,11 @@ ConversationSummary? selectedConversationSummary(ProviderContainer container) {
   return null;
 }
 
-const AgentLatestStatus readyDaemonStatusWithGenericCliCapability =
-    AgentLatestStatus(
-      status: 'ready',
-      platform: 'darwin-arm64',
-      diagnosticsSummary: genericCliCapabilityDiagnostics,
-    );
+const AgentLatestStatus readyDaemonStatusWithAcpCapability = AgentLatestStatus(
+  status: 'ready',
+  platform: 'darwin-arm64',
+  diagnosticsSummary: acpCapabilityDiagnostics,
+);
 
 Map<String, Object?> genericCliRuntimeCardDiagnostics({
   String lifecycleState = 'needs_setup',
@@ -1869,7 +1854,9 @@ class FakeAppSessionService
   }
 
   @override
-  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+  Future<bool> hasPendingLocalIdentityRecovery(
+    String identityIdOrAlias,
+  ) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
@@ -2909,7 +2896,7 @@ class FakeAgentControlService implements AgentControlService {
       handle: 'awiki-daemon-test',
       displayName: '代理 1',
       activeState: 'active',
-      latest: readyDaemonStatusWithGenericCliCapability,
+      latest: readyDaemonStatusWithAcpCapability,
     ),
   ];
   InstallCommand? lastInstallCommand;
@@ -4050,6 +4037,7 @@ class FakeOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithEmail({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String email,
     required String handle,
     String? inviteCode,
@@ -4066,6 +4054,7 @@ class FakeOnboardingService implements OnboardingService {
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
       return const IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
+        existingHandleMethodCapabilities: wbaMethodCapabilities,
         existingHandleContinuationId: 'existing-handle-test',
         existingHandleJoinMode: ExistingHandleJoinMode.ordinary,
       );
@@ -4090,6 +4079,7 @@ class FakeOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithPhone({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String otp,
     required String handle,
@@ -4118,6 +4108,7 @@ class FakeOnboardingService implements OnboardingService {
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
       return IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
+        existingHandleMethodCapabilities: wbaMethodCapabilities,
         existingHandleContinuationId: 'existing-handle-test',
         existingHandleJoinMode: gateway.existingHandleJoinMode,
         existingHandleJoinRequiresUserPresence:
@@ -4145,6 +4136,7 @@ class FakeOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String handle,
     String? inviteCode,
@@ -4161,6 +4153,7 @@ class FakeOnboardingService implements OnboardingService {
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
       return const IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
+        existingHandleMethodCapabilities: wbaMethodCapabilities,
         existingHandleContinuationId: 'existing-handle-test',
         existingHandleJoinMode: ExistingHandleJoinMode.ordinary,
       );
@@ -4261,7 +4254,27 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
 
 class FakeIdentityCorePort
     implements IdentityCorePort, DaemonSubkeyAuthorizationCorePort {
+  @override
+  Future<IdentityMethodCapabilities> identityMethodCapabilities(
+    String did,
+  ) async => methodCapabilities;
+
+  @override
+  Future<List<IdentityDidMethod>> identityCreationMethods() async =>
+      creationMethods;
+
+  @override
+  Future<List<PendingIdentityRegistration>>
+  pendingIdentityRegistrations() async => pendingRegistrations;
+
+  final IdentityMethodCapabilities methodCapabilities;
+  final List<IdentityDidMethod> creationMethods;
+  final List<PendingIdentityRegistration> pendingRegistrations;
+
   FakeIdentityCorePort({
+    this.methodCapabilities = wbaMethodCapabilities,
+    this.creationMethods = const [IdentityDidMethod.wba],
+    this.pendingRegistrations = const [],
     UserSubkeyPackage? daemonSubkeyPackage,
     AppSession? defaultSession,
   }) : daemonSubkeyPackage =
@@ -4332,6 +4345,7 @@ class FakeIdentityCorePort
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithEmail({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String email,
     required String handle,
     String? inviteCode,
@@ -4343,6 +4357,7 @@ class FakeIdentityCorePort
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithPhone({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String otp,
     required String handle,
@@ -4355,6 +4370,7 @@ class FakeIdentityCorePort
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String handle,
     String? inviteCode,
     String? displayName,
@@ -4380,7 +4396,9 @@ class FakeIdentityCorePort
   }
 
   @override
-  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+  Future<bool> hasPendingLocalIdentityRecovery(
+    String identityIdOrAlias,
+  ) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async =>

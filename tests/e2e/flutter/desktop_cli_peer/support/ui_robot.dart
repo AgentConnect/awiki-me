@@ -1719,23 +1719,11 @@ class _DesktopAppRobot {
     );
   }
 
-  Future<void> enterHiddenLifecycle() async {
-    for (final state in const <AppLifecycleState>[
-      AppLifecycleState.inactive,
-      AppLifecycleState.hidden,
-    ]) {
-      tester.binding.handleAppLifecycleStateChanged(state);
-    }
-    await tester.pump();
-  }
-
-  Future<void> resumeFromHiddenLifecycle() async {
-    for (final state in const <AppLifecycleState>[
-      AppLifecycleState.inactive,
-      AppLifecycleState.resumed,
-    ]) {
-      tester.binding.handleAppLifecycleStateChanged(state);
-    }
+  Future<void> inHiddenLifecycle(Future<void> Function() action) async {
+    await runInHiddenDesktopLifecycle(
+      transition: tester.binding.handleAppLifecycleStateChanged,
+      action: action,
+    );
     await tester.pump();
     await pumpUntilFinder(
       find.bySemanticsIdentifier('e2e-authenticated'),

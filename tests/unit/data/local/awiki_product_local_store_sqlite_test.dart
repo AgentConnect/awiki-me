@@ -37,6 +37,57 @@ void main() {
     }
   });
 
+  test('Web Registry epoch is persisted unchanged after reopen', () async {
+    const binding = ProductAccountBinding(
+      ownerIdentityId: 'web-owner',
+      accountId: 'web-account',
+    );
+    const epoch = ProductDeviceRegistryEpoch(
+      currentDid: 'did:web:identity.example:awiki:web:alice',
+      bindingGeneration: '9',
+    );
+    var store = _store(databaseDir);
+    await store.replaceDeviceRegistrySnapshot(
+      ProductDeviceRegistrySnapshot(
+        binding: binding,
+        epoch: epoch,
+        domainVersion: '42',
+        refreshedAt: DateTime.utc(2026, 9, 14),
+        devices: const [
+          ProductDeviceRegistryItem(
+            protocolDeviceId: 'member',
+            authGeneration: '2',
+            payloadJson: '{"role":"member","management_ready":false}',
+          ),
+        ],
+      ),
+    );
+    await store.close();
+    store = _store(databaseDir);
+    final snapshot = await store.loadDeviceRegistrySnapshot(binding: binding);
+    expect(snapshot?.epoch.currentDid, epoch.currentDid);
+    expect(snapshot?.epoch.bindingGeneration, '9');
+    expect(snapshot?.domainVersion, '42');
+    expect(snapshot?.devices.single.protocolDeviceId, 'member');
+    await store.close();
+    for (final invalid in [
+      'did:',
+      'did:web:identity.example#key',
+      'did:web:identity.example?query',
+      ' did:web:identity.example',
+    ]) {
+      expect(
+        () => validateProductDeviceRegistryEpoch(
+          ProductDeviceRegistryEpoch(
+            currentDid: invalid,
+            bindingGeneration: '1',
+          ),
+        ),
+        throwsArgumentError,
+      );
+    }
+  });
+
   test('persists overlays drafts and preferences by owner', () async {
     final store = _store(databaseDir);
     final now = DateTime.utc(2026, 6, 15, 1, 2, 3);
@@ -1436,6 +1487,115 @@ void main() {
       );
 
       expect(overlays['dm:alice:bob']?.customTitle, 'Bob');
+    },
+  );
+
+  test(
+    'foreign Persona alias repair preserves overlays and drafts on reopen',
+    () async {
+      var store = _store(databaseDir);
+      const didAlias = 'dm:did:wba:remote.test:peer';
+      const oldId = 'dm:peer-scope:v1:private-subject';
+      const newId = 'dm:peer-scope:v1:public-handle';
+      const first = ProductConversationAliasMigration(
+        ownerDid: 'did:alice',
+        legacyConversationId: didAlias,
+        canonicalConversationId: oldId,
+      );
+      await store.upsertConversationOverlay(
+        ProductConversationOverlay(
+          ownerDid: 'did:alice',
+          threadId: didAlias,
+          conversationId: didAlias,
+          customTitle: 'keep foreign title',
+          pinned: true,
+          updatedAt: DateTime.utc(2026, 9, 21),
+        ),
+      );
+      await store.saveDraft(
+        MessageDraft(
+          ownerDid: 'did:alice',
+          threadId: didAlias,
+          draftText: 'keep unsent draft',
+          updatedAt: DateTime.utc(2026, 9, 21),
+        ),
+      );
+      await store.upsertConversationOverlay(
+        ProductConversationOverlay(
+          ownerDid: 'did:other',
+          threadId: oldId,
+          conversationId: oldId,
+          customTitle: 'other owner',
+          updatedAt: DateTime.utc(2026, 9, 21),
+        ),
+      );
+      await store.migrateCanonicalConversationAliases(const [first]);
+      const repaired = [
+        ProductConversationAliasMigration(
+          ownerDid: 'did:alice',
+          legacyConversationId: didAlias,
+          canonicalConversationId: newId,
+        ),
+        ProductConversationAliasMigration(
+          ownerDid: 'did:alice',
+          legacyConversationId: oldId,
+          canonicalConversationId: newId,
+        ),
+      ];
+      await store.migrateCanonicalConversationAliases(repaired);
+      await store.close();
+      store = _store(databaseDir);
+      await store.migrateCanonicalConversationAliases(repaired);
+      final overlay = await store.loadConversationOverlayByConversationId(
+        ownerDid: 'did:alice',
+        conversationId: newId,
+      );
+      expect(overlay?.customTitle, 'keep foreign title');
+      expect(overlay?.pinned, isTrue);
+      expect(
+        (await store.loadDraft(
+          ownerDid: 'did:alice',
+          threadId: newId,
+        ))?.draftText,
+        'keep unsent draft',
+      );
+      expect(
+        (await store.loadConversationOverlayByConversationId(
+          ownerDid: 'did:other',
+          conversationId: oldId,
+        ))?.customTitle,
+        'other owner',
+      );
+      expect(await File(_canonicalBackupPath(databaseDir)).exists(), isTrue);
+    },
+  );
+
+  test(
+    'alias journal rejects a changed target without an owner-scoped bridge',
+    () async {
+      final store = _store(databaseDir);
+      await store.migrateCanonicalConversationAliases(const [
+        ProductConversationAliasMigration(
+          ownerDid: 'did:alice',
+          legacyConversationId: 'old',
+          canonicalConversationId: 'first',
+        ),
+      ]);
+      await expectLater(
+        store.migrateCanonicalConversationAliases(const [
+          ProductConversationAliasMigration(
+            ownerDid: 'did:alice',
+            legacyConversationId: 'old',
+            canonicalConversationId: 'second',
+          ),
+          ProductConversationAliasMigration(
+            ownerDid: 'did:other',
+            legacyConversationId: 'first',
+            canonicalConversationId: 'second',
+          ),
+        ]),
+        throwsStateError,
+      );
     },
   );
 

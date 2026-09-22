@@ -28,6 +28,7 @@ import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
+import '../application/ports/agent_availability_port.dart';
 import '../application/ports/account_state_sync_port.dart';
 import '../application/ports/device_management_core_port.dart';
 import '../application/ports/group_encryption_core_port.dart';
@@ -92,6 +93,23 @@ final identityCorePortProvider = Provider<IdentityCorePort>(
   (ref) =>
       throw UnimplementedError('identityCorePortProvider must be overridden'),
 );
+
+final identityMethodCapabilitiesProvider = FutureProvider.autoDispose
+    .family<IdentityMethodCapabilities, String>((ref, did) {
+      return ref
+          .watch(identityCorePortProvider)
+          .identityMethodCapabilities(did);
+    });
+
+final identityDocumentCorePortProvider = Provider<IdentityDocumentCorePort>((
+  ref,
+) {
+  final identities = ref.watch(identityCorePortProvider);
+  if (identities is IdentityDocumentCorePort) {
+    return identities as IdentityDocumentCorePort;
+  }
+  throw StateError('identity_document_core_unavailable');
+});
 
 final deviceManagementCorePortProvider = Provider<DeviceManagementCorePort>(
   (ref) => throw UnimplementedError(
@@ -174,6 +192,11 @@ final conversationServiceProvider = Provider<ConversationService>(
 final agentInventoryPortProvider = Provider<AgentInventoryPort>(
   (ref) =>
       throw UnimplementedError('agentInventoryPortProvider must be overridden'),
+);
+
+/// Additive capability; legacy hosts and isolated tests can omit it.
+final agentAvailabilityPortProvider = Provider<AgentAvailabilityPort?>(
+  (ref) => null,
 );
 
 final agentControlServiceProvider = Provider<AgentControlService>(

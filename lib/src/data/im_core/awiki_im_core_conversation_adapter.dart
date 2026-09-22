@@ -92,12 +92,12 @@ class AwikiImCoreConversationAdapter
   Stream<CoreConversationPatch> watchConversationPatches() async* {
     final client = await _runtime.currentClient();
     final ownerDid = (await client.identity.current()).did;
-    await for (final patch in client.messages.watchConversationPatches()) {
-      final mapped = _patchFromCore(patch, ownerDid: ownerDid);
-      if (mapped != null) {
-        yield mapped;
-      }
-    }
+    // Delegate cancellation even while Core has no new committed patches.
+    yield* client.messages
+        .watchConversationPatches()
+        .map((patch) => _patchFromCore(patch, ownerDid: ownerDid))
+        .where((patch) => patch != null)
+        .cast<CoreConversationPatch>();
   }
 
   @override

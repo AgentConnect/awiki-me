@@ -9,6 +9,7 @@ import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_identity.dart';
 import '../../domain/entities/group_summary.dart';
 import '../app_shell/providers/session_provider.dart';
+import '../agents/agent_availability_provider.dart';
 import '../profile/peer_display_profile_provider.dart';
 
 class GroupState {
@@ -229,7 +230,11 @@ class GroupController extends StateNotifier<GroupState> {
     return _ensureGroupMembersLoaded(
       groupId.trim(),
       ownerOperation: ownerOperation,
-    );
+    ).then((members) {
+      _requireCurrentOwnerOperation(ownerOperation);
+      _refreshAgentAvailability(members);
+      return members;
+    });
   }
 
   Future<List<GroupMemberSummary>> _ensureGroupMembersLoaded(
@@ -360,6 +365,22 @@ class GroupController extends StateNotifier<GroupState> {
                 groupStateVersion: page.groupStateVersion,
               ),
             },
+    );
+    _refreshAgentAvailability(members);
+  }
+
+  void _refreshAgentAvailability(List<GroupMemberSummary> members) {
+    unawaited(
+      ref
+          .read(agentAvailabilityProvider.notifier)
+          .ensure(
+            members
+                .where(
+                  (member) =>
+                      member.subjectType != GroupMemberSubjectType.human,
+                )
+                .map((member) => member.did),
+          ),
     );
   }
 

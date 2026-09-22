@@ -58,6 +58,7 @@ void main() {
         notificationFacade: FakeNotificationFacade(),
         localePreferenceService: FakeLocalePreferenceService(),
         updateService: FakeUpdateService(),
+        identityCorePort: FakeIdentityCorePort(),
         appSessionService: FakeAppSessionService(gateway),
         onboardingService: FakeOnboardingService(gateway),
         onboardingSupportService: FakeOnboardingSupportService(gateway),

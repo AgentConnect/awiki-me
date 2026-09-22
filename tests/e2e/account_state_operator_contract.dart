@@ -1,5 +1,5 @@
 // [INPUT]: Operator-provided Account State test-action argv.
-// [OUTPUT]: Exact reviewed Mac-to-Ali managed-release command or a closed error.
+// [OUTPUT]: Exact reviewed managed Python + immutable operator asset or a closed error.
 // [POS]: Shared App-pair runner/product-test boundary; environment input cannot
 //        select another host, script, config, shell, or mutable workspace.
 
@@ -15,7 +15,7 @@ const List<String> reviewedAccountStateOperatorCommand = <String>[
   'PYTHONDONTWRITEBYTECODE=1',
   'PYTHONPATH=/opt/awiki/services/user-service/current/src',
   '/opt/awiki/services/user-service/current/.venv/bin/python',
-  '/opt/awiki/services/user-service/current/scripts/'
+  '/usr/local/libexec/awiki-system-test/user-operator-aadcaa641890/'
       'run_account_state_sync_test_action.py',
   '--env-file',
   '/etc/awiki/user-service.env',
@@ -29,7 +29,7 @@ const List<String> reviewedLocalAccountStateOperatorCommand = <String>[
   'PYTHONDONTWRITEBYTECODE=1',
   'PYTHONPATH=/opt/awiki/services/user-service/current/src',
   '/opt/awiki/services/user-service/current/.venv/bin/python',
-  '/opt/awiki/services/user-service/current/scripts/'
+  '/usr/local/libexec/awiki-system-test/user-operator-aadcaa641890/'
       'run_account_state_sync_test_action.py',
   '--env-file',
   '/etc/awiki/user-service.env',

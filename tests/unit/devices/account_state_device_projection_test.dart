@@ -36,14 +36,19 @@ void main() {
         ),
       ],
     );
-    const state = DevicesState(registry: fresh, cachedRegistry: cached);
+    const state = DevicesState(
+      registry: fresh,
+      cachedRegistry: cached,
+      localManagementReady: true,
+    );
 
     expect(state.displayRegistry?.registryVersion, '2');
     expect(state.displayRegistry?.currentDevice?.status, DeviceStatus.revoked);
     expect(
       state.currentDeviceCanManage,
       isTrue,
-      reason: 'authorization remains derived from the fresh Core Registry',
+      reason:
+          'authorization requires fresh Core Registry and local management readiness',
     );
   });
 

@@ -5,6 +5,7 @@ final class AgentUiMessageCodes {
   static const handleUnavailable = 'agent.handle_unavailable';
   static const personalAgentDisabled = 'agent.personal_agent_disabled';
   static const tenantUnsupported = 'agent.tenant_unsupported';
+  static const acpUpgradeRequired = 'agent.acp_upgrade_required';
   static const selectDaemon = 'agent.select_daemon';
   static const daemonBootstrapMissing = 'agent.daemon_bootstrap_missing';
   static const daemonUnreachableDelete = 'agent.daemon_unreachable_delete';

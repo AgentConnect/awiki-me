@@ -21,6 +21,7 @@ void appPairAdminMain() {
       );
       final coordinator = config.coordinator;
       final rootGrant = !config.functional && !config.contentSync;
+      final didWeb = _invocationExplicitlyExpects(_didWebAppCaseId);
       final pagingRecovery = _invocationExplicitlyExpects(
         _appPairPagingRecoveryCaseId,
       );
@@ -40,12 +41,16 @@ void appPairAdminMain() {
       ]);
       addTearDown(() async {
         await functionalResources.dispose();
-        await contentResources.dispose();
+        if (didWeb) {
+          await contentResources.peer?.retainLocalState();
+        } else {
+          await contentResources.dispose();
+        }
         httpClient.close();
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
         await bootstrap?.dispose();
-        await _deleteDirectory(config.adminStateRoot);
+        if (!didWeb) await _deleteDirectory(config.adminStateRoot);
         await tester.binding.setSurfaceSize(null);
       });
 
@@ -56,25 +61,44 @@ void appPairAdminMain() {
           enableAppPairFunctional: config.functional,
           enableRootTransfer: rootGrant,
           enableMessageSyncCore: config.contentSync || rootGrant,
+          enableDeviceRevoke: didWeb,
         ),
         appStateRoot: config.adminStateRoot,
       );
       final handle = _uniqueHandle(config.handlePrefix);
-      final genesisOtp = await _requestAppRegistrationOtp(
-        bootstrap: bootstrap,
-        config: config,
-        account: account,
-        handle: handle,
-      );
+      if (didWeb) {
+        await coordinator.publish(
+          'admin',
+          'web_registration_intent',
+          data: {'handle': handle},
+        );
+      }
+      final genesisOtp = didWeb
+          ? null
+          : await _requestAppRegistrationOtp(
+              bootstrap: bootstrap,
+              config: config,
+              account: account,
+              handle: handle,
+            );
       final IdentityRegistrationResult registration;
       try {
-        registration = await bootstrap.onboardingService!
-            .registerHandleWithPhone(
-              phone: account.phone,
-              otp: genesisOtp,
-              handle: handle,
-              nickName: 'AWiki App Pair Admin',
-            );
+        registration = didWeb
+            ? await _registerWebThroughUi(
+                tester,
+                bootstrap,
+                account,
+                handle,
+                presence,
+                diagnosticPath:
+                    '${config.adminStateRoot}/web-registration-diagnostic.json',
+              )
+            : await bootstrap.onboardingService!.registerHandleWithPhone(
+                phone: account.phone,
+                otp: genesisOtp!,
+                handle: handle,
+                nickName: 'AWiki App Pair Admin',
+              );
       } on Object catch (error) {
         fail(
           'The App-pair admin registration failed safely '
@@ -134,7 +158,7 @@ void appPairAdminMain() {
         );
       }
       if (config.contentSync) {
-        if (pagingRecovery) {
+        if (pagingRecovery || didWeb) {
           await _prepareAppPairPagingPeer(
             config: config,
             account: account,
@@ -358,28 +382,16 @@ void appPairAdminMain() {
           () {
             final state = container.read(devicesProvider);
             _failOnDeviceError(state, 'The admin App approval failed');
-            final sheet = find.byType(DeviceJoinApprovalSheet);
-            final done = find.descendant(
-              of: sheet,
-              matching: find.text(tester.element(sheet).l10n.commonDone),
-            );
-            if (done.hitTestable().evaluate().isNotEmpty) {
-              fail(
-                'Two-App approval offered Done instead of management grant '
-                '(pending=${state.isActionPending}, phase=${state.activeJoin?.phase.name}, '
-                'target=${state.activeJoin?.authorizedDevice != null}, '
-                'senderReady=${state.registry?.currentDevice?.canManageDevices}).',
-              );
-            }
-            return find
-                    .byKey(const Key('root-transfer-grant-management'))
-                    .hitTestable()
-                    .evaluate()
-                    .length ==
-                1;
+            return !state.isActionPending &&
+                find
+                        .byKey(const Key('device-join-management-phase'))
+                        .evaluate()
+                        .length ==
+                    1;
           },
           timeout: const Duration(seconds: 45),
-          failure: 'The two-App approval did not expose management grant.',
+          failure:
+              'The two-App approval did not show automatic management state.',
         );
       }
 
@@ -415,7 +427,7 @@ void appPairAdminMain() {
           'management_ready',
           timeout: const Duration(minutes: 3),
         );
-        await _waitForTwoAppAdmins(
+        await _waitForLocalAndRegistryAdmins(
           tester,
           bootstrap.deviceManagementCorePort!,
           adminSession.did,
@@ -435,13 +447,13 @@ void appPairAdminMain() {
         await E2eCaseAttestationWriter.markPassed(
           _appPairRootGrantCaseId,
           phases: const [
-            'active_join_grant_visible',
-            'device_list_grant_confirmed',
-            'single_root_presence',
+            'automatic_management_state_visible',
+            'automatic_delivery_accepted',
+            'no_second_presence',
             'receiver_app_management_ready',
             'both_apps_ready_admins',
             'next_join_after_registry_only_promotion',
-            'next_join_grant_visible_without_done',
+            'next_join_automatic_management',
             'third_device_management_ready',
           ],
         );
@@ -460,7 +472,19 @@ void appPairAdminMain() {
           resources: functionalResources,
         );
       } else if (config.contentSync) {
-        if (pagingRecovery) {
+        if (didWeb) {
+          await _runWebAdmin(
+            tester: tester,
+            config: config,
+            bootstrap: bootstrap,
+            container: container,
+            did: adminSession.did,
+            joinedDeviceId: joinedDeviceId,
+            resources: contentResources,
+            presence: presence,
+            onReopened: (value) => bootstrap = value,
+          );
+        } else if (pagingRecovery) {
           await _runAppPairAdminPagingRecovery(
             tester: tester,
             config: config,
@@ -510,6 +534,7 @@ void appPairJoinerMain() {
       );
       final coordinator = config.coordinator;
       final rootGrant = !config.functional && !config.contentSync;
+      final didWeb = _invocationExplicitlyExpects(_didWebAppCaseId);
       final pagingRecovery = _invocationExplicitlyExpects(
         _appPairPagingRecoveryCaseId,
       );
@@ -521,7 +546,7 @@ void appPairJoinerMain() {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
         await bootstrap?.dispose();
-        await _deleteDirectory(config.joinerStateRoot);
+        if (!didWeb) await _deleteDirectory(config.joinerStateRoot);
         await tester.binding.setSurfaceSize(null);
       });
 
@@ -542,6 +567,7 @@ void appPairJoinerMain() {
           enableAppPairFunctional: config.functional,
           enableRootTransfer: rootGrant,
           enableMessageSyncCore: config.contentSync || rootGrant,
+          enableDeviceRevoke: didWeb,
         ),
         appStateRoot: config.joinerStateRoot,
       );
@@ -590,6 +616,15 @@ void appPairJoinerMain() {
         timeout: const Duration(seconds: 45),
         failure: 'The joining App did not expose the existing Handle choice.',
       );
+      if (didWeb &&
+          find
+              .byKey(const Key('existing-handle-recovery-action'))
+              .evaluate()
+              .isNotEmpty) {
+        fail(
+          'Existing Web Handle offered Recovery from WBA creation selection.',
+        );
+      }
       await _tapOne(
         tester,
         find.byKey(const Key('existing-handle-join-action')),
@@ -601,7 +636,7 @@ void appPairJoinerMain() {
         timeout: const Duration(seconds: 45),
         failure: 'The joining App continuation did not open Device Join.',
       );
-      final container = ProviderScope.containerOf(
+      var container = ProviderScope.containerOf(
         tester.element(find.byType(DeviceJoinPage)),
       );
       await _pumpUntil(
@@ -620,6 +655,37 @@ void appPairJoinerMain() {
         failure: 'OTP did not leave the joining App pending without a SAS.',
       );
       final pending = container.read(devicesProvider).activeJoin!;
+      if (didWeb) {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await bootstrap.dispose();
+        bootstrap = await AppBootstrap.create(
+          environment: _joinOnlyEnvironment(
+            config,
+            enableMessageSyncCore: true,
+            enableDeviceRevoke: true,
+          ),
+          appStateRoot: config.joinerStateRoot,
+        );
+        await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+        await _openRestoredNewDeviceJoin(tester);
+        container = ProviderScope.containerOf(
+          tester.element(find.byType(DeviceJoinPage)),
+        );
+        await _pumpUntil(
+          tester,
+          () {
+            final restored = container.read(devicesProvider).activeJoin;
+            return restored?.joinSessionId == pending.joinSessionId &&
+                restored?.protocolDeviceId == pending.protocolDeviceId &&
+                restored?.did == did &&
+                restored?.sas == null &&
+                restored?.phase == DeviceJoinPhase.pending;
+          },
+          failure:
+              'Web pending Join did not reopen from the same root without OTP.',
+        );
+      }
       await coordinator.publish(
         'joiner',
         'pending',
@@ -662,8 +728,7 @@ void appPairJoinerMain() {
               progress?.remoteState == DeviceJoinRemoteState.consumed &&
               progress?.sas == null &&
               device?.protocolDeviceId == pending.protocolDeviceId &&
-              device?.role == DeviceRole.member &&
-              device?.managementReady == false &&
+              _validJoinedDeviceRole(device) &&
               device?.isCurrent == true;
         },
         timeout: const Duration(minutes: 2),
@@ -702,7 +767,7 @@ void appPairJoinerMain() {
           'root_grant_sent',
           timeout: const Duration(minutes: 2),
         );
-        await _waitForTwoAppAdmins(
+        await _waitForLocalAndRegistryAdmins(
           tester,
           bootstrap.deviceManagementCorePort!,
           did,
@@ -725,7 +790,15 @@ void appPairJoinerMain() {
           joinedDeviceId: pending.protocolDeviceId,
         );
       } else if (config.contentSync) {
-        if (pagingRecovery) {
+        if (didWeb) {
+          await _runWebJoiner(
+            tester: tester,
+            config: config,
+            bootstrap: bootstrap,
+            container: container,
+            did: did,
+          );
+        } else if (pagingRecovery) {
           await _runAppPairJoinerPagingRecovery(
             tester: tester,
             config: config,
@@ -868,31 +941,18 @@ Future<void> _appPairAdminRejoin(
     () {
       final state = container.read(devicesProvider);
       _failOnDeviceError(state, 'Post-promotion approval failed');
-      final sheet = find.byType(DeviceJoinApprovalSheet);
-      if (find
-          .descendant(
-            of: sheet,
-            matching: find.text(tester.element(sheet).l10n.commonDone),
-          )
-          .hitTestable()
-          .evaluate()
-          .isNotEmpty) {
-        fail(
-          'The post-promotion Join offered Done instead of management grant.',
-        );
-      }
       return !state.isActionPending &&
           state.activeJoin?.phase == DeviceJoinPhase.authorized &&
           state.activeJoin?.authorizedDevice?.protocolDeviceId == deviceId &&
           find
-                  .byKey(const Key('root-transfer-grant-management'))
-                  .hitTestable()
+                  .byKey(const Key('device-join-management-phase'))
                   .evaluate()
                   .length ==
               1;
     },
     timeout: const Duration(seconds: 90),
-    failure: 'Post-promotion Join did not expose the management grant step.',
+    failure:
+        'Post-promotion Join did not show automatic management configuration.',
   );
   if (presence.calls != beforePresence + 1) {
     fail('Second Join approval did not use exactly one confirmation.');
@@ -923,7 +983,7 @@ Future<void> _appPairAdminRejoin(
     'rejoin_management_ready',
     timeout: const Duration(minutes: 3),
   );
-  await _waitForTwoAppAdmins(
+  await _waitForLocalAndRegistryAdmins(
     tester,
     bootstrap.deviceManagementCorePort!,
     did,
@@ -1032,7 +1092,7 @@ Future<void> _appPairJoinerRejoin(
     'rejoin_root_grant_sent',
     timeout: const Duration(minutes: 3),
   );
-  await _waitForTwoAppAdmins(
+  await _waitForLocalAndRegistryAdmins(
     tester,
     bootstrap.deviceManagementCorePort!,
     did,
@@ -1306,6 +1366,7 @@ void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
       _invocationExpects(_appPairRegistrySyncCaseId) ||
       _invocationExpects(_appPairDomainIsolationCaseId);
   final expectsContentSync =
+      _invocationExpects(_didWebAppCaseId) ||
       _invocationExpects(_appPairContentTailOnlyCaseId) ||
       _invocationExpects(_appPairGroupSyncCaseId) ||
       _invocationExpects(_appPairAttachmentSyncCaseId) ||
@@ -1970,12 +2031,10 @@ Future<void> _runAppPairJoinerFunctional({
   if (!daemon.isDaemon ||
       !codex.isRuntime ||
       codex.daemonAgentDid != daemon.agentDid ||
-      (codex.runtime != RuntimeAgentKind.codex.runtime &&
-          codex.runtime != 'generic-cli') ||
+      !codex.usesAcp ||
       !claude.isRuntime ||
       claude.daemonAgentDid != daemon.agentDid ||
-      (claude.runtime != RuntimeAgentKind.claudeCode.runtime &&
-          claude.runtime != 'generic-cli')) {
+      !claude.usesAcp) {
     fail('The joining App did not converge the exact remote Agent topology.');
   }
   await _pumpUntil(
@@ -2150,6 +2209,7 @@ Future<void> _runAppPairAdminAccountStateDomains({
     agentDid: codex.agentDid,
     timeout: const Duration(minutes: 2),
   );
+  await _assertDeletedAgentAvailability(container, codex.agentDid);
   await config.coordinator.publish(
     'admin',
     'account_state_agent_deleted',
@@ -2166,6 +2226,7 @@ Future<void> _runAppPairAdminAccountStateDomains({
       'admin_app_submitted_real_runtime_delete',
       'admin_app_removed_deleted_runtime_after_authoritative_reconcile',
       'joining_app_confirmed_terminal_inventory_convergence',
+      'both_apps_confirmed_public_deleted_availability',
     ],
   );
 
@@ -2642,6 +2703,7 @@ Future<void> _runAppPairJoinerAccountStateDomains({
     agentDid: deletedDid,
     activeState: 'archived',
   );
+  await _assertDeletedAgentAvailability(container, deletedDid);
   versions = deleteAfter.domainVersions;
   await config.coordinator.publish(
     'joiner',
@@ -3533,7 +3595,7 @@ Future<_AppPairDaemonInstall> _installAppPairDaemon({
       config.daemonStateRoot,
     ],
     environment: _appPairDaemonEnvironment(config),
-    includeParentEnvironment: true,
+    includeParentEnvironment: false,
     runInShell: false,
   ).timeout(const Duration(minutes: 2));
   if (result.exitCode != 0) {
@@ -3557,7 +3619,7 @@ Future<_AppPairDaemonInstall> _installAppPairDaemon({
     config.daemonBinary,
     <String>['agent-list', '--state-root', config.daemonStateRoot],
     environment: _appPairDaemonEnvironment(config),
-    includeParentEnvironment: true,
+    includeParentEnvironment: false,
     runInShell: false,
   ).timeout(const Duration(seconds: 30));
   if (agentList.exitCode != 0) {
@@ -3640,7 +3702,7 @@ Future<_AppPairDaemonProcess> _startAppPairDaemon(
       '100',
     ],
     environment: _appPairDaemonEnvironment(config),
-    includeParentEnvironment: true,
+    includeParentEnvironment: false,
     runInShell: false,
   );
   final running = _AppPairDaemonProcess(process);
@@ -3649,7 +3711,16 @@ Future<_AppPairDaemonProcess> _startAppPairDaemon(
 }
 
 Map<String, String> _appPairDaemonEnvironment(_AppPairRunConfig config) {
-  final environment = <String, String>{};
+  final environment = <String, String>{
+    for (final key in [
+      'PATH',
+      'TMPDIR',
+      'LANG',
+      'NO_PROXY',
+      'AWIKI_IM_CORE_VAULT_ROOT_KEY_B64',
+    ])
+      if (Platform.environment[key] != null) key: Platform.environment[key]!,
+  };
   final envPath = config.daemonEnvFile?.trim();
   if (envPath != null && envPath.isNotEmpty) {
     for (final line in File(envPath).readAsLinesSync()) {
@@ -3671,6 +3742,10 @@ Map<String, String> _appPairDaemonEnvironment(_AppPairRunConfig config) {
       }
       environment[key] = value;
     }
+  }
+  if (environment['AWIKI_ACP_TEST_COMPONENTS_DIR'] == null ||
+      environment['HOME'] == null) {
+    fail('The App-pair test requires the runner-prepared offline ACP fixture.');
   }
   environment.addAll(<String, String>{
     'AWIKI_DAEMON_SERVICE_BASE_URL': config.baseUrl,
@@ -3752,8 +3827,40 @@ Future<ChatMessage> _sendAppPairAgentPromptThroughUi({
     timeout: const Duration(seconds: 30),
     failure: 'The joining App runtime Agent chat input was unavailable.',
   );
+  // The composer can be enabled while ACP preparation still blocks submission.
+  // Observe the current chat's confirmed model projection before submitting.
+  await _pumpUntil(
+    tester,
+    () {
+      final bars = tester
+          .widgetList<AcpModelBar>(find.byType(AcpModelBar))
+          .where((bar) => bar.scope.agentDid == agent.agentDid)
+          .toList(growable: false);
+      if (bars.length != 1) return false;
+      final bar = bars.single;
+      final operation = container.read(acpModelControllerProvider(bar.scope));
+      return !operation.blocksSending &&
+          (bar.session?.data['model_configuration_ready'] == true ||
+              bar.session?.data['model_id'] is String);
+    },
+    timeout: const Duration(seconds: 60),
+    failure: 'The joining App ACP model configuration was not ready.',
+  );
   await tester.enterText(input, content);
   await tester.pump(const Duration(milliseconds: 100));
+  // Opening an ACP chat prepares its model asynchronously. A visible input
+  // does not mean the production composer has enabled sending yet.
+  final sendButton = find.byKey(const Key('chat-send-button'));
+  await _pumpUntil(
+    tester,
+    () {
+      if (sendButton.evaluate().length != 1) return false;
+      final button = tester.widget<AppPressable>(sendButton);
+      return button.enabled && button.onTap != null;
+    },
+    timeout: const Duration(seconds: 60),
+    failure: 'The joining App ACP composer did not enable sending.',
+  );
   await _tapOne(
     tester,
     find.bySemanticsIdentifier('e2e-chat-send-button'),
@@ -3883,14 +3990,12 @@ Future<void> _waitForAppPairDaemonDrivers({
         .toList(growable: false);
     final daemon = daemonMatches.isEmpty ? null : daemonMatches.single;
     final configSummary = daemon?.latest.diagnosticsSummary['config_summary'];
-    final genericCli = configSummary is Map
-        ? configSummary['generic_cli']
-        : null;
+    final acp = configSummary is Map ? configSummary['acp'] : null;
     if (daemon != null &&
         container.read(agentsProvider).canCreateRuntimeAgent(daemon) &&
-        genericCli is Map &&
-        genericCli['capability_schema_version']?.toString() == '1') {
-      final drivers = genericCli['supported_drivers'];
+        acp is Map &&
+        acp['capability_schema_version']?.toString() == '1') {
+      final drivers = acp['supported_drivers'];
       if (drivers is List &&
           drivers.map((value) => value.toString()).contains('codex') &&
           drivers.map((value) => value.toString()).contains('claude-code')) {
@@ -4593,23 +4698,88 @@ Future<void> _waitForAppPairUnreadCount({
   required bool Function(int count) matches,
   required String failure,
 }) async {
-  await _pumpUntil(
-    tester,
-    () {
-      final conversations = container
-          .read(conversationListProvider)
-          .conversations
-          .where((item) => item.conversationId == conversationId)
-          .toList(growable: false);
-      if (conversations.length > 1) {
-        fail('The App-pair projected a duplicate Direct conversation.');
-      }
-      return conversations.length == 1 &&
-          matches(conversations.single.unreadCount);
-    },
-    timeout: const Duration(seconds: 90),
-    failure: failure,
-  );
+  try {
+    await _pumpUntil(
+      tester,
+      () {
+        final conversations = container
+            .read(conversationListProvider)
+            .conversations
+            .where((item) => item.conversationId == conversationId)
+            .toList(growable: false);
+        if (conversations.length > 1) {
+          fail('The App-pair projected a duplicate Direct conversation.');
+        }
+        return conversations.length == 1 &&
+            matches(conversations.single.unreadCount);
+      },
+      timeout: const Duration(seconds: 90),
+      failure: failure,
+    );
+  } on TestFailure {
+    final diagnostic = await _appPairUnreadDiagnostic(
+      container,
+      conversationId,
+    );
+    fail('$failure ($diagnostic)');
+  }
+}
+
+Future<String> _appPairUnreadDiagnostic(
+  ProviderContainer container,
+  String conversationId,
+) async {
+  final state = container.read(messageSyncCoordinatorProvider);
+  final realtime = container.read(realtimeConnectionStatusProvider).valueOrNull;
+  final ui = container
+      .read(conversationListProvider)
+      .conversations
+      .where((row) => row.conversationId == conversationId)
+      .toList();
+  final result = <String, Object?>{
+    'uiUnread': ui.map((row) => row.unreadCount).toList(),
+    'status': state.status.name,
+    'realtime': realtime?.name,
+    'syncing': state.isSyncing,
+    'mode': state.mode.name,
+    'pending': state.pendingMutationCount,
+    'retry': state.retryState.name,
+    'failureCode': state.lastFailureCode == null
+        ? null
+        : _appPairSafeToken(state.lastFailureCode!),
+  };
+  try {
+    final owner = container.read(sessionProvider).session?.did;
+    if (owner != null) {
+      final rows = await container
+          .read(conversationServiceProvider)
+          .listConversationSummariesFast(ownerDid: owner);
+      result['coreUnread'] = rows
+          .where((row) => row.conversationId == conversationId)
+          .map((row) => row.unreadCount)
+          .toList();
+    }
+    final service = container.read(messagingServiceProvider);
+    if (service is MessageSyncDiagnosticsService) {
+      final diagnostics = await (service as MessageSyncDiagnosticsService)
+          .syncDiagnostics();
+      result.addAll({
+        'coreMode': diagnostics.mode.name,
+        'corePending': diagnostics.pendingMutationCount,
+        'coreRetry': diagnostics.retryState.name,
+        'dirty': diagnostics.dirtyDomains.map((domain) => domain.name).toList(),
+        'laneTransportFailures': diagnostics.lanes
+            .where((lane) => lane.lastTransportError != null)
+            .length,
+        'domainStatuses': diagnostics.domainStates
+            .map((domain) => domain.status.name)
+            .toList(),
+      });
+    }
+  } on Object catch (error) {
+    result['diagnosticError'] = _appPairClosedRegistrationError(error);
+  }
+  return jsonEncode(result);
 }
 
 Future<void> _resumeAppPairAndWaitForSync({
@@ -4750,7 +4920,9 @@ Future<AgentSummary> _waitForAppPairRuntime({
               agent.isRuntime &&
               agent.daemonAgentDid == daemonDid &&
               agent.handle == handle &&
-              (agent.runtime == runtime || agent.runtime == 'generic-cli'),
+              agent.usesAcp &&
+              (agent.runtime == runtime ||
+                  agent.runtimeConfiguration['driver_id'] == runtime),
         )
         .toList(growable: false);
     if (matches.length > 1) {
@@ -4768,6 +4940,9 @@ Future<AgentSummary> _waitForAppPairRuntime({
   fail(
     'The App-pair runtime Agent or its local creation state did not converge: '
     '$handle. '
+    'inventory_matches=${container.read(agentsProvider).agents.where((agent) => agent.isRuntime && agent.daemonAgentDid == daemonDid && agent.handle == handle).length}, '
+    'pending_states=${container.read(agentsProvider).pendingRuntimeCreations.where((pending) => pending.daemonAgentDid == daemonDid && pending.handle == handle).map((pending) => pending.state.name).toList()}, '
+    'action_pending=${container.read(agentsProvider).isActing}. '
     'daemon=${daemon.safeDiagnostics}',
   );
 }
@@ -4861,6 +5036,9 @@ Future<String> _appPairHistoryDiagnostic({
 
 String _appPairErrorDiagnostic(Object? error) {
   if (error == null) return 'none';
+  if (error is MessageSyncCoordinatorFailure) {
+    return safeMessageSyncFailureDiagnostic(error.code);
+  }
   if (error is core.AwikiImCoreException) {
     return '${error.runtimeType}:${error.code}:${error.serviceCode ?? 'none'}:'
         '${error.message}';
@@ -4869,13 +5047,18 @@ String _appPairErrorDiagnostic(Object? error) {
 }
 
 String _appPairClosedRegistrationError(Object error) {
+  if (error is TestFailure) {
+    final stage = didWebRegistrationFailureStage(error.message);
+    if (stage != null) return 'type=TestFailure,stage=$stage';
+  }
   final appCode = structuredAppErrorCode(error);
   if (appCode != null) {
     return 'type=AppStructuredError,code=${_appPairSafeToken(appCode)}';
   }
   if (error is core.AwikiImCoreException) {
     return 'type=AwikiImCoreException,code=${_appPairSafeToken(error.code)},'
-        'service=${_appPairSafeToken(error.serviceCode ?? 'none')}';
+        'service=${_appPairSafeToken(error.serviceCode ?? 'none')},'
+        'status=${error.statusCode ?? 0}';
   }
   return 'type=${_appPairSafeToken(error.runtimeType.toString())}';
 }
@@ -5095,103 +5278,43 @@ Future<void> _appPairGrantManagement(
   String deviceId,
 ) async {
   final before = presence.calls;
-  await _tapOne(
-    tester,
-    find.byKey(const Key('root-transfer-grant-management')),
-    failure: 'The admin App Join grant action was unavailable.',
-  );
-  await _pumpUntil(
-    tester,
-    () {
-      final transfer = container.read(devicesProvider).rootTransfer;
-      if (transfer.phase == RootKeyTransferPhase.failed) {
-        fail(
-          'Two-App active grant prepare failed (${_appPairSafeToken(transfer.errorCode ?? 'unknown')}).',
-        );
-      }
-      return transfer.phase == RootKeyTransferPhase.awaitingConfirmation;
-    },
-    timeout: const Duration(seconds: 45),
-    failure: 'Two-App grant did not reach confirmation.',
-  );
-  if (presence.calls != before ||
-      container.read(devicesProvider).rootTransfer.receipt != null) {
-    fail('Active Join preparation crossed user confirmation.');
+  var retried = false;
+  final deadline = DateTime.now().add(const Duration(minutes: 3));
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.pump(const Duration(milliseconds: 200));
+    final tasks = container
+        .read(devicesProvider)
+        .managementStatuses
+        .where((task) => task.recipientDeviceId == deviceId)
+        .toList();
+    if (tasks.length != 1) continue;
+    final task = tasks.single;
+    if (task.phase == 'failed') {
+      if (retried) fail('The exact Join management retry failed.');
+      await _tapOne(
+        tester,
+        find.byKey(const Key('device-join-management-retry')),
+        failure: 'Failed Join management did not expose retry.',
+      );
+      retried = true;
+    }
+    if (presence.calls != before ||
+        find
+            .byKey(const Key('root-transfer-confirm-send'))
+            .evaluate()
+            .isNotEmpty) {
+      fail('Automatic App-pair management asked for a second root approval.');
+    }
+    if (task.phase == 'waiting_for_recipient' ||
+        task.phase == 'management_registered') {
+      await _leaveCompletedAppPairApproval(tester);
+      return;
+    }
   }
-  if (find.byKey(const Key('root-transfer-confirm-send')).evaluate().length !=
-      1) {
-    fail('Active Join did not show the explicit root confirmation step.');
-  }
-  await _leaveCompletedAppPairApproval(tester);
-  if (find.byType(DevicesPage).evaluate().isEmpty) {
-    await _openDevicesPage(tester);
-  }
-  final action = find.byKey(Key('device-grant-management-$deviceId'));
-  await _pumpUntil(
-    tester,
-    () => action.hitTestable().evaluate().length == 1,
-    failure: 'The new App member did not expose the Devices grant action.',
-  );
-  await _tapOne(tester, action, failure: 'Devices grant was unavailable.');
-  await _pumpUntil(
-    tester,
-    () {
-      if (find
-          .byKey(const Key('device-root-transfer-failed-dialog'))
-          .evaluate()
-          .isNotEmpty) {
-        fail('Two-App Devices grant preparation failed.');
-      }
-      return find
-              .byKey(const Key('device-root-transfer-confirm-dialog'))
-              .evaluate()
-              .length ==
-          1;
-    },
-    timeout: const Duration(seconds: 45),
-    failure: 'Devices grant click produced no confirmation.',
-  );
-  if (presence.calls != before) {
-    fail('Devices preparation prompted for user presence.');
-  }
-  await _tapOne(
-    tester,
-    find.byKey(const Key('device-root-transfer-confirm-action')),
-    failure: 'Devices root confirmation was unavailable.',
-  );
-  await _pumpUntil(
-    tester,
-    () {
-      if (find
-          .byKey(const Key('device-root-transfer-failed-dialog'))
-          .evaluate()
-          .isNotEmpty) {
-        fail('Two-App root send failed.');
-      }
-      return find
-              .byKey(const Key('device-root-transfer-sent-dialog'))
-              .evaluate()
-              .length ==
-          1;
-    },
-    timeout: const Duration(seconds: 45),
-    failure: 'The admin App did not report root send acceptance.',
-  );
-  if (presence.calls != before + 1) {
-    fail('Root transfer did not use exactly one user-presence decision.');
-  }
-  final dialog = find.byKey(const Key('device-root-transfer-sent-dialog'));
-  await _tapOne(
-    tester,
-    find.descendant(
-      of: dialog,
-      matching: find.text(tester.element(dialog).l10n.commonDone),
-    ),
-    failure: 'The successful root transfer dialog did not close.',
-  );
+  fail('Automatic App-pair management configuration did not accept delivery.');
 }
 
-Future<void> _waitForTwoAppAdmins(
+Future<void> _waitForLocalAndRegistryAdmins(
   WidgetTester tester,
   DeviceManagementCorePort port,
   String did,
@@ -5224,6 +5347,10 @@ Future<void> _waitForTwoAppAdmins(
     if (registry.did == did &&
         registry.devices.length == expectedDeviceCount &&
         registry.currentDevice?.canManageDevices == true &&
+        await port.localManagementReady(
+          selector: did,
+          protocolDeviceId: registry.currentDevice!.protocolDeviceId,
+        ) &&
         registry.devices.every(
           (device) =>
               device.status == DeviceStatus.active &&
@@ -5237,7 +5364,27 @@ Future<void> _waitForTwoAppAdmins(
     }
   }
   fail(
-    'The two real App devices did not converge to ready administrators '
+    'The local device and Registry did not converge to ready administrators '
     '(transient_identity_reads=$transientIdentityReads).',
   );
+}
+
+/// Checks the deployed public endpoint and the shared product projection. A
+/// previously cached tombstone alone cannot attest this API integration.
+Future<void> _assertDeletedAgentAvailability(
+  ProviderContainer container,
+  String agentDid,
+) async {
+  final port = container.read(agentAvailabilityPortProvider);
+  if (port == null) fail('Production Agent availability adapter is missing.');
+  final facts = await port.getAgentAvailability([agentDid]);
+  expect(facts, hasLength(1));
+  expect(facts.single.agentDid, agentDid);
+  expect(facts.single.unavailable, isTrue);
+  expect(facts.single.reason, 'agent_deleted');
+  await container.read(agentAvailabilityProvider.notifier).applyFacts(facts);
+  final projected = container.read(
+    effectiveAgentAvailabilityProvider,
+  )[agentDid];
+  expect(projected?.reason, 'agent_deleted');
 }

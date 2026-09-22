@@ -280,82 +280,86 @@ class ImCoreConversationService
   @override
   Stream<ConversationListPatch> watchConversationPatches({
     required String ownerDid,
-  }) async* {
-    await for (final patch in _conversations.watchConversationPatches()) {
-      if (patch.ownerDid != ownerDid) {
-        continue;
-      }
-      switch (patch.kind) {
-        case CoreConversationPatchKind.reset:
-          yield await _normalizePatchReset(ownerDid: ownerDid, patch: patch);
-        case CoreConversationPatchKind.upsert:
-          final item = patch.item;
-          if (item == null) {
-            yield _repairPatch(
-              ownerIdentityId: patch.ownerIdentityId,
-              ownerDid: ownerDid,
-              version: patch.version,
-              unreadTotal: patch.unreadTotal,
-              reason: 'missing_upsert_item',
-            );
-            continue;
-          }
-          final normalized = await normalizeConversationForRecents(
-            ownerDid: ownerDid,
-            conversation: item,
-          );
-          if (normalized == null) {
-            yield ConversationListPatch(
-              kind: ConversationListPatchKind.remove,
-              ownerIdentityId: patch.ownerIdentityId,
-              ownerDid: ownerDid,
-              version: patch.version,
-              unreadTotal: patch.unreadTotal,
-              threadId: item.threadId,
-              conversationId: item.conversationId,
-              conversationKey: item.conversationKey,
-            );
-            continue;
-          }
-          yield ConversationListPatch(
-            kind: ConversationListPatchKind.upsert,
+  }) {
+    // asyncMap keeps normalization ordered and forwards cancellation while idle.
+    return _conversations
+        .watchConversationPatches()
+        .where((patch) => patch.ownerDid == ownerDid)
+        .asyncMap((patch) => _normalizePatch(ownerDid: ownerDid, patch: patch));
+  }
+
+  Future<ConversationListPatch> _normalizePatch({
+    required String ownerDid,
+    required CoreConversationPatch patch,
+  }) async {
+    switch (patch.kind) {
+      case CoreConversationPatchKind.reset:
+        return await _normalizePatchReset(ownerDid: ownerDid, patch: patch);
+      case CoreConversationPatchKind.upsert:
+        final item = patch.item;
+        if (item == null) {
+          return _repairPatch(
             ownerIdentityId: patch.ownerIdentityId,
             ownerDid: ownerDid,
             version: patch.version,
             unreadTotal: patch.unreadTotal,
-            item: normalized,
-            conversationId: normalized.conversationId,
+            reason: 'missing_upsert_item',
           );
-        case CoreConversationPatchKind.remove:
-          yield ConversationListPatch(
+        }
+        final normalized = await normalizeConversationForRecents(
+          ownerDid: ownerDid,
+          conversation: item,
+        );
+        if (normalized == null) {
+          return ConversationListPatch(
             kind: ConversationListPatchKind.remove,
             ownerIdentityId: patch.ownerIdentityId,
             ownerDid: ownerDid,
             version: patch.version,
             unreadTotal: patch.unreadTotal,
-            threadId: patch.threadId,
-            conversationId: patch.conversationId,
+            threadId: item.threadId,
+            conversationId: item.conversationId,
+            conversationKey: item.conversationKey,
           );
-        case CoreConversationPatchKind.reorder:
-          yield ConversationListPatch(
-            kind: ConversationListPatchKind.reorder,
-            ownerIdentityId: patch.ownerIdentityId,
-            ownerDid: ownerDid,
-            version: patch.version,
-            unreadTotal: patch.unreadTotal,
-            threadId: patch.threadId,
-            conversationId: patch.conversationId,
-            index: patch.index,
-          );
-        case CoreConversationPatchKind.repairRequired:
-          yield _repairPatch(
-            ownerIdentityId: patch.ownerIdentityId,
-            ownerDid: ownerDid,
-            version: patch.version,
-            unreadTotal: patch.unreadTotal,
-            reason: patch.reason ?? 'repair_required',
-          );
-      }
+        }
+        return ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerIdentityId: patch.ownerIdentityId,
+          ownerDid: ownerDid,
+          version: patch.version,
+          unreadTotal: patch.unreadTotal,
+          item: normalized,
+          conversationId: normalized.conversationId,
+        );
+      case CoreConversationPatchKind.remove:
+        return ConversationListPatch(
+          kind: ConversationListPatchKind.remove,
+          ownerIdentityId: patch.ownerIdentityId,
+          ownerDid: ownerDid,
+          version: patch.version,
+          unreadTotal: patch.unreadTotal,
+          threadId: patch.threadId,
+          conversationId: patch.conversationId,
+        );
+      case CoreConversationPatchKind.reorder:
+        return ConversationListPatch(
+          kind: ConversationListPatchKind.reorder,
+          ownerIdentityId: patch.ownerIdentityId,
+          ownerDid: ownerDid,
+          version: patch.version,
+          unreadTotal: patch.unreadTotal,
+          threadId: patch.threadId,
+          conversationId: patch.conversationId,
+          index: patch.index,
+        );
+      case CoreConversationPatchKind.repairRequired:
+        return _repairPatch(
+          ownerIdentityId: patch.ownerIdentityId,
+          ownerDid: ownerDid,
+          version: patch.version,
+          unreadTotal: patch.unreadTotal,
+          reason: patch.reason ?? 'repair_required',
+        );
     }
   }
 

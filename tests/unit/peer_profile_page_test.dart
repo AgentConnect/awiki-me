@@ -1,3 +1,5 @@
+import 'package:awiki_me/src/domain/entities/agent/agent_availability.dart';
+import 'package:awiki_me/src/presentation/agents/agent_availability_provider.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
@@ -21,6 +23,43 @@ void main() {
     did: 'did:test:me',
     credentialName: 'me.json',
     displayName: 'Me',
+  );
+
+  testWidgets(
+    'deleted Agent reason remains visible when public profile no longer resolves',
+    (tester) async {
+      _useCompactSurface(tester);
+      const did = 'did:test:deleted';
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const PeerProfilePage(did: did),
+          gateway: FakeAwikiGateway(),
+          session: testSession,
+          homepageMarkdownLoader: (_) async => null,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(PeerProfilePage)),
+      );
+      await container
+          .read(agentAvailabilityProvider.notifier)
+          .applyFacts(const [
+            AgentAvailability(
+              agentDid: did,
+              state: AgentAvailabilityState.unavailable,
+              reason: 'agent_deleted',
+              version: '2',
+            ),
+          ]);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('peer-profile-agent-unavailable')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('不可用'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
   );
 
   testWidgets('未关注的公开资料可执行真实关注并更新关系状态', (tester) async {

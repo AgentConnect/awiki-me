@@ -19,8 +19,12 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional,
       contentSync:
           options.e2eCase == DesktopE2eCase.multiDeviceAppPairContentSync ||
+          options.e2eCase == DesktopE2eCase.didMethodWeb ||
           pagingRecovery,
     );
+    if (pairConfig.functional || pagingRecovery) {
+      validateAppPairCleanupHandlePrefix(pairConfig.handlePrefix);
+    }
     remoteMultiDeviceAppPairConfig = pairConfig;
     _addRuntimeSecret(pairConfig.phone);
     _addRuntimeSecret(pairConfig.fixedOtp);
@@ -205,12 +209,14 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
             artifact: artifacts.admin,
             environment: productEnvironment,
             platform: pairConfig.platform,
+            redactor: redactor,
           );
           joinerApp = await _RunningIsolatedApp.start(
             role: 'joiner',
             artifact: artifacts.joiner,
             environment: productEnvironment,
             platform: pairConfig.platform,
+            redactor: redactor,
           );
           await _driveAppPair(
             adminApp: adminApp,
@@ -228,14 +234,48 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           if (pairConfig.functional || pagingRecovery) {
             await _cleanupAppPairMessages(coordinator.cleanupAccountIds);
           }
-          await coordinator.close();
-          if (appPairRunConfigFile.existsSync()) {
-            appPairRunConfigFile.deleteSync();
+          try {
+            if (options.e2eCase == DesktopE2eCase.didMethodWeb) {
+              final ledger = File(
+                '${reportDir.parent.path}/web_resources.private.json',
+              );
+              await ledger.create();
+              final permission = await Process.run('chmod', [
+                '600',
+                ledger.path,
+              ]);
+              if (permission.exitCode != 0) {
+                throw E2eFailure('Web cleanup ledger permissions failed.');
+              }
+              await ledger.writeAsString(
+                jsonEncode({
+                  'schemaVersion': 1,
+                  'runId': runId,
+                  'didDomain': pairConfig.didDomain,
+                  'status': 'remote_resources_pending_exact_cleanup',
+                  'localRootsRetained': !appPairCompleted,
+                  ...coordinator.webCleanupLedger,
+                }),
+                flush: true,
+              );
+            }
+          } finally {
+            await coordinator.close();
+            if (appPairRunConfigFile.existsSync()) {
+              appPairRunConfigFile.deleteSync();
+            }
           }
-          await _deleteDirectoryBestEffort(appPairAdminStateRootDir);
-          await _deleteDirectoryBestEffort(appPairJoinerStateRootDir);
+          // A failed Web publication may still own a pending candidate key.
+          // Preserve both roots for explicit result inspection and cleanup.
+          if (options.e2eCase != DesktopE2eCase.didMethodWeb ||
+              appPairCompleted) {
+            await _deleteDirectoryBestEffort(appPairAdminStateRootDir);
+            await _deleteDirectoryBestEffort(appPairJoinerStateRootDir);
+          }
           await _deleteDirectoryBestEffort(appPairDaemonStateRootDir);
-          if (pairConfig.functional || pairConfig.contentSync) {
+          if ((pairConfig.functional || pairConfig.contentSync) &&
+              (options.e2eCase != DesktopE2eCase.didMethodWeb ||
+                  appPairCompleted)) {
             await _deleteDirectoryBestEffort(cliWorkspaceDir);
             await _deleteDirectoryBestEffort(cliHomeDir);
           }
@@ -366,6 +406,31 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
     AppPairCoordinatorServer coordinator,
     String token,
   ) async {
+    String? fixtureEnvFile;
+    if (pairConfig.functional) {
+      final repo = Directory(
+        fileConfig.daemonRustRepo ?? '${root.parent.path}/awiki-cli-rs2',
+      );
+      final fixtureRoot = '${appPairArtifactRootDir.path}/acp-clients';
+      final result = await commands.captureResult('python3', <String>[
+        '${repo.path}/scripts/testing/prepare_acp_fixture.py',
+        '--root',
+        fixtureRoot,
+      ]);
+      final fixture = Map<String, Object?>.from(
+        jsonDecode(result.output) as Map,
+      );
+      final file = File('${appPairArtifactRootDir.path}/acp-fixture.env');
+      // Append the offline fixture last: a user's test env may specify service
+      // settings, but cannot redirect these tests to installed Agent clients.
+      final existing = pairConfig.daemonEnvFile == null
+          ? ''
+          : await File(pairConfig.daemonEnvFile!).readAsString();
+      await file.writeAsString(
+        '$existing\n${fixture.entries.map((e) => '${e.key}=${e.value}').join('\n')}\n',
+      );
+      fixtureEnvFile = file.path;
+    }
     final payload = <String, Object?>{
       'schemaVersion': 2,
       'enabled': true,
@@ -412,7 +477,7 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
             'stateRoot': appPairDaemonStateRootDir.path,
             'readyFile': appPairDaemonReadyFile.path,
             'handle': pairConfig.daemonHandle,
-            'envFile': pairConfig.daemonEnvFile,
+            'envFile': fixtureEnvFile,
           },
           'accountState': <String, Object?>{
             'operatorCommand': _accountStateOperatorCommand(
@@ -534,10 +599,12 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
 
       final first = await Future.any(exits).timeout(remaining());
       if (first.value != 0) {
-        final failedDriver = first.key == 'admin' ? adminDriver : joinerDriver;
         throw E2eFailure(
           'The isolated ${first.key} App integration driver failed.\n'
-          '${failedDriver.diagnosticTail}',
+          'admin driver:\n${adminDriver.diagnosticTail}\n'
+          'joiner driver:\n${joinerDriver.diagnosticTail}\n'
+          'admin App:\n${adminApp.diagnosticTail}\n'
+          'joiner App:\n${joinerApp.diagnosticTail}',
         );
       }
       final results = await Future.wait(exits).timeout(remaining());
@@ -549,10 +616,12 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
         }
       }
       if (failed != null) {
-        final failedDriver = failed.key == 'admin' ? adminDriver : joinerDriver;
         throw E2eFailure(
           'The isolated ${failed.key} App integration driver failed.\n'
-          '${failedDriver.diagnosticTail}',
+          'admin driver:\n${adminDriver.diagnosticTail}\n'
+          'joiner driver:\n${joinerDriver.diagnosticTail}\n'
+          'admin App:\n${adminApp.diagnosticTail}\n'
+          'joiner App:\n${joinerApp.diagnosticTail}',
         );
       }
     } on TimeoutException {

@@ -91,6 +91,40 @@ void main() {
       );
     },
   );
+
+  test(
+    'idle SDK patch stream cancels before subscribing to a new generation',
+    () async {
+      final client = _FakeClient();
+      addTearDown(client.messages._patches.close);
+      final adapter = AwikiImCoreConversationAdapter(
+        runtime: _FakeRuntime(client),
+      );
+      for (var generation = 1; generation <= 2; generation++) {
+        final received = Completer<CoreConversationPatch>();
+        final subscription = adapter.watchConversationPatches().listen(
+          received.complete,
+        );
+        await Future<void>.delayed(Duration.zero);
+        client.messages.emitPatch(
+          core.ConversationStorePatch(
+            kind: core.ConversationStorePatchKind.reset,
+            ownerIdentityId: 'alice-id',
+            ownerDid: 'did:alice',
+            version: generation,
+            unreadTotal: 0,
+          ),
+        );
+        final patch = await received.future.timeout(const Duration(seconds: 1));
+        expect(patch.kind, CoreConversationPatchKind.reset);
+        expect(patch.version, generation);
+        await Future<void>.delayed(Duration.zero);
+        await subscription.cancel().timeout(const Duration(seconds: 1));
+        expect(client.messages._patches.hasListener, isFalse);
+      }
+    },
+  );
+
   test('mark-read resolves canonical direct and group thread refs', () {
     final direct = coreThreadRefForMarkRead(
       const AppThreadRef.thread('dm:did:alice:did:bob'),

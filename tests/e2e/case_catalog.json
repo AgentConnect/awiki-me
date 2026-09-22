@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-09-11.full-active-case-aggregate-v1",
+  "sourceRevision": "2026-09-18.model-free-agent-tests-v1",
   "cases": [
     {
       "caseId": "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001",
@@ -640,366 +640,6 @@
           [
             "AUTH-E2E-001:app_identity_prepared",
             "AUTH-E2E-001:authenticated_app_shell_visible"
-          ]
-        ]
-      }
-    },
-    {
-      "caseId": "CLAUDECODEAGENT-E2E-001",
-      "feature": "Claude Code runtime creation",
-      "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Create/select a Claude Code runtime Agent and open chat through UI.",
-      "exactOracles": [
-        "The committed daemon create status converges the Agent page without a manual inventory refresh.",
-        "From the optimistic pending intent through authoritative Inventory and canonical Direct route reconciliation, the exact runtime Handle has exactly one E2E-identified Agent row, including any pending-plus-Runtime overlap.",
-        "One canonical runtime Agent is selected and its chat is visible."
-      ],
-      "negativeChecks": [
-        "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, more or fewer than one target row at any observed creation phase, duplicate authoritative Runtime, or backend/UI divergence fails."
-      ],
-      "environment": "awiki_info_remote",
-      "cleanupPolicy": "fixed_account_pool_residual_ledger",
-      "requiredFor": [
-        "optional_nightly"
-      ],
-      "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
-      "evidenceType": "case_attestation",
-      "catalogStatus": "active",
-      "assertionContract": {
-        "assertionIds": [
-          "CLAUDECODEAGENT-E2E-001:daemon_selected",
-          "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
-          "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
-          "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
-        ],
-        "exactOracleAssertions": [
-          [
-            "CLAUDECODEAGENT-E2E-001:daemon_selected",
-            "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
-            "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
-            "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
-          ],
-          [
-            "CLAUDECODEAGENT-E2E-001:daemon_selected",
-            "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
-            "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
-            "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
-          ],
-          [
-            "CLAUDECODEAGENT-E2E-001:daemon_selected",
-            "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
-            "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
-            "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
-          ]
-        ],
-        "negativeCheckAssertions": [
-          [
-            "CLAUDECODEAGENT-E2E-001:daemon_selected",
-            "CLAUDECODEAGENT-E2E-001:runtime_agent_created",
-            "CLAUDECODEAGENT-E2E-001:runtime_creation_row_unique_throughout",
-            "CLAUDECODEAGENT-E2E-001:runtime_chat_opened"
-          ]
-        ]
-      }
-    },
-    {
-      "caseId": "CLAUDECODEAGENT-E2E-002",
-      "feature": "Claude Code prompt send",
-      "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Enter and send the deterministic prompt through UI.",
-      "exactOracles": [
-        "Visible send action completes for the exact prompt."
-      ],
-      "negativeChecks": [
-        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
-      ],
-      "environment": "awiki_info_remote",
-      "cleanupPolicy": "fixed_account_pool_residual_ledger",
-      "requiredFor": [
-        "optional_nightly"
-      ],
-      "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
-      "evidenceType": "case_attestation",
-      "catalogStatus": "active",
-      "assertionContract": {
-        "assertionIds": [
-          "CLAUDECODEAGENT-E2E-002:prompt_entered_through_ui",
-          "CLAUDECODEAGENT-E2E-002:send_action_completed"
-        ],
-        "exactOracleAssertions": [
-          [
-            "CLAUDECODEAGENT-E2E-002:prompt_entered_through_ui",
-            "CLAUDECODEAGENT-E2E-002:send_action_completed"
-          ]
-        ],
-        "negativeCheckAssertions": [
-          [
-            "CLAUDECODEAGENT-E2E-002:prompt_entered_through_ui",
-            "CLAUDECODEAGENT-E2E-002:send_action_completed"
-          ]
-        ]
-      }
-    },
-    {
-      "caseId": "CLAUDECODEAGENT-E2E-003",
-      "feature": "Claude Code runtime completion",
-      "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Wait for daemon runtime_run and final outbox.",
-      "exactOracles": [
-        "One run reaches finished and one final outbox record reaches sent."
-      ],
-      "negativeChecks": [
-        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
-      ],
-      "environment": "awiki_info_remote",
-      "cleanupPolicy": "fixed_account_pool_residual_ledger",
-      "requiredFor": [
-        "optional_nightly"
-      ],
-      "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
-      "evidenceType": "case_attestation",
-      "catalogStatus": "active",
-      "assertionContract": {
-        "assertionIds": [
-          "CLAUDECODEAGENT-E2E-003:runtime_run_finished",
-          "CLAUDECODEAGENT-E2E-003:runtime_final_outbox_sent"
-        ],
-        "exactOracleAssertions": [
-          [
-            "CLAUDECODEAGENT-E2E-003:runtime_run_finished",
-            "CLAUDECODEAGENT-E2E-003:runtime_final_outbox_sent"
-          ]
-        ],
-        "negativeCheckAssertions": [
-          [
-            "CLAUDECODEAGENT-E2E-003:runtime_run_finished",
-            "CLAUDECODEAGENT-E2E-003:runtime_final_outbox_sent"
-          ]
-        ]
-      }
-    },
-    {
-      "caseId": "CLAUDECODEAGENT-E2E-004",
-      "feature": "Claude Code reply visibility",
-      "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Sync App history and wait for the visible reply.",
-      "exactOracles": [
-        "Exact expected reply appears once in canonical history and UI."
-      ],
-      "negativeChecks": [
-        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
-      ],
-      "environment": "awiki_info_remote",
-      "cleanupPolicy": "fixed_account_pool_residual_ledger",
-      "requiredFor": [
-        "optional_nightly"
-      ],
-      "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
-      "evidenceType": "case_attestation",
-      "catalogStatus": "active",
-      "assertionContract": {
-        "assertionIds": [
-          "CLAUDECODEAGENT-E2E-004:app_history_exact_reply_verified",
-          "CLAUDECODEAGENT-E2E-004:visible_reply_verified"
-        ],
-        "exactOracleAssertions": [
-          [
-            "CLAUDECODEAGENT-E2E-004:app_history_exact_reply_verified",
-            "CLAUDECODEAGENT-E2E-004:visible_reply_verified"
-          ]
-        ],
-        "negativeCheckAssertions": [
-          [
-            "CLAUDECODEAGENT-E2E-004:app_history_exact_reply_verified",
-            "CLAUDECODEAGENT-E2E-004:visible_reply_verified"
-          ]
-        ]
-      }
-    },
-    {
-      "caseId": "CODEXAGENT-E2E-001",
-      "feature": "Codex runtime creation",
-      "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Create/select a Codex runtime Agent and open its chat through UI.",
-      "exactOracles": [
-        "The committed daemon create status converges the Agent page without a manual inventory refresh.",
-        "From the optimistic pending intent through authoritative Inventory and canonical Direct route reconciliation, the exact runtime Handle has exactly one E2E-identified Agent row, including any pending-plus-Runtime overlap.",
-        "One canonical runtime Agent is selected and its chat is visible."
-      ],
-      "negativeChecks": [
-        "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, more or fewer than one target row at any observed creation phase, duplicate authoritative Runtime, or backend/UI divergence fails."
-      ],
-      "environment": "awiki_info_remote",
-      "cleanupPolicy": "fixed_account_pool_residual_ledger",
-      "requiredFor": [
-        "optional_nightly"
-      ],
-      "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
-      "evidenceType": "case_attestation",
-      "catalogStatus": "active",
-      "assertionContract": {
-        "assertionIds": [
-          "CODEXAGENT-E2E-001:daemon_selected",
-          "CODEXAGENT-E2E-001:runtime_agent_created",
-          "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
-          "CODEXAGENT-E2E-001:runtime_chat_opened"
-        ],
-        "exactOracleAssertions": [
-          [
-            "CODEXAGENT-E2E-001:daemon_selected",
-            "CODEXAGENT-E2E-001:runtime_agent_created",
-            "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
-            "CODEXAGENT-E2E-001:runtime_chat_opened"
-          ],
-          [
-            "CODEXAGENT-E2E-001:daemon_selected",
-            "CODEXAGENT-E2E-001:runtime_agent_created",
-            "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
-            "CODEXAGENT-E2E-001:runtime_chat_opened"
-          ],
-          [
-            "CODEXAGENT-E2E-001:daemon_selected",
-            "CODEXAGENT-E2E-001:runtime_agent_created",
-            "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
-            "CODEXAGENT-E2E-001:runtime_chat_opened"
-          ]
-        ],
-        "negativeCheckAssertions": [
-          [
-            "CODEXAGENT-E2E-001:daemon_selected",
-            "CODEXAGENT-E2E-001:runtime_agent_created",
-            "CODEXAGENT-E2E-001:runtime_creation_row_unique_throughout",
-            "CODEXAGENT-E2E-001:runtime_chat_opened"
-          ]
-        ]
-      }
-    },
-    {
-      "caseId": "CODEXAGENT-E2E-002",
-      "feature": "Codex prompt send",
-      "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Enter and send the deterministic prompt through UI.",
-      "exactOracles": [
-        "Visible send action completes for the exact prompt."
-      ],
-      "negativeChecks": [
-        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
-      ],
-      "environment": "awiki_info_remote",
-      "cleanupPolicy": "fixed_account_pool_residual_ledger",
-      "requiredFor": [
-        "optional_nightly"
-      ],
-      "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
-      "evidenceType": "case_attestation",
-      "catalogStatus": "active",
-      "assertionContract": {
-        "assertionIds": [
-          "CODEXAGENT-E2E-002:prompt_entered_through_ui",
-          "CODEXAGENT-E2E-002:send_action_completed"
-        ],
-        "exactOracleAssertions": [
-          [
-            "CODEXAGENT-E2E-002:prompt_entered_through_ui",
-            "CODEXAGENT-E2E-002:send_action_completed"
-          ]
-        ],
-        "negativeCheckAssertions": [
-          [
-            "CODEXAGENT-E2E-002:prompt_entered_through_ui",
-            "CODEXAGENT-E2E-002:send_action_completed"
-          ]
-        ]
-      }
-    },
-    {
-      "caseId": "CODEXAGENT-E2E-003",
-      "feature": "Codex runtime completion",
-      "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Wait for daemon runtime_run and final outbox.",
-      "exactOracles": [
-        "One run reaches finished and one final outbox record reaches sent."
-      ],
-      "negativeChecks": [
-        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
-      ],
-      "environment": "awiki_info_remote",
-      "cleanupPolicy": "fixed_account_pool_residual_ledger",
-      "requiredFor": [
-        "optional_nightly"
-      ],
-      "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
-      "evidenceType": "case_attestation",
-      "catalogStatus": "active",
-      "assertionContract": {
-        "assertionIds": [
-          "CODEXAGENT-E2E-003:runtime_run_finished",
-          "CODEXAGENT-E2E-003:runtime_final_outbox_sent"
-        ],
-        "exactOracleAssertions": [
-          [
-            "CODEXAGENT-E2E-003:runtime_run_finished",
-            "CODEXAGENT-E2E-003:runtime_final_outbox_sent"
-          ]
-        ],
-        "negativeCheckAssertions": [
-          [
-            "CODEXAGENT-E2E-003:runtime_run_finished",
-            "CODEXAGENT-E2E-003:runtime_final_outbox_sent"
-          ]
-        ]
-      }
-    },
-    {
-      "caseId": "CODEXAGENT-E2E-004",
-      "feature": "Codex reply visibility",
-      "layer": "optional_provider_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Sync App history and wait for the visible reply.",
-      "exactOracles": [
-        "Exact expected reply appears once in canonical history and UI."
-      ],
-      "negativeChecks": [
-        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
-      ],
-      "environment": "awiki_info_remote",
-      "cleanupPolicy": "fixed_account_pool_residual_ledger",
-      "requiredFor": [
-        "optional_nightly"
-      ],
-      "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
-      "evidenceType": "case_attestation",
-      "catalogStatus": "active",
-      "assertionContract": {
-        "assertionIds": [
-          "CODEXAGENT-E2E-004:app_history_exact_reply_verified",
-          "CODEXAGENT-E2E-004:visible_reply_verified"
-        ],
-        "exactOracleAssertions": [
-          [
-            "CODEXAGENT-E2E-004:app_history_exact_reply_verified",
-            "CODEXAGENT-E2E-004:visible_reply_verified"
-          ]
-        ],
-        "negativeCheckAssertions": [
-          [
-            "CODEXAGENT-E2E-004:app_history_exact_reply_verified",
-            "CODEXAGENT-E2E-004:visible_reply_verified"
           ]
         ]
       }
@@ -3203,7 +2843,7 @@
       "caseId": "DEVICE-CONTENT-TAIL-ONLY-E2E-001",
       "feature": "Joined-device mixed-content tail boundary",
       "layer": "remote_product_ui",
-      "preconditions": "Two isolated AWiki Me Apps share one account only after a real member Join; an independent CLI peer, one Direct, one Group, and one small attachment fixture exist on awiki.info.",
+      "preconditions": "Two isolated AWiki Me Apps share one account only after a real member Join; an independent CLI peer, one Direct, one Group, and one small attachment fixture exist on awiki.info. Both Apps establish their authenticated realtime listeners before post-Join content traffic.",
       "action": "Create one unique Group message and one Direct attachment before Join, complete one real device Join, perform a reliable pull, then send one Group message and one Direct attachment after Join; ordinary Direct tail-only remains covered by DEVICE-MESSAGE-TAIL-ONLY-E2E-001.",
       "exactOracles": [
         "The joining App cannot project the pre-Join Group or attachment IDs, bodies, or filename, and those items contribute no unread state before or after an explicit reliable pull.",
@@ -3252,7 +2892,7 @@
       "caseId": "DEVICE-GROUP-SYNC-E2E-001",
       "feature": "Joined sibling ordinary Group message convergence",
       "layer": "remote_product_ui",
-      "preconditions": "Two isolated joined Apps and one independent CLI peer are active in the same ordinary Group on awiki.info.",
+      "preconditions": "Two isolated joined Apps and one independent CLI peer are active in the same ordinary Group on awiki.info. Both Apps establish their authenticated realtime listeners before post-Join content traffic.",
       "action": "Send one Group message from each App and one incoming Group message from the CLI peer in the shared App-pair scene.",
       "exactOracles": [
         "Both Apps preserve one canonical group, conversation, and message ID for each send; sibling-account sends remain isMine=true and the CLI send is isMine=false on both Apps.",
@@ -3303,7 +2943,7 @@
       "caseId": "DEVICE-ATTACHMENT-SYNC-E2E-001",
       "feature": "Joined sibling attachment convergence and download",
       "layer": "remote_product_ui",
-      "preconditions": "Two isolated Apps have completed one real member Join and share a canonical Direct with an independent CLI peer.",
+      "preconditions": "Two isolated Apps have completed one real member Join and share a canonical Direct with an independent CLI peer. Both Apps establish their authenticated realtime listeners before post-Join content traffic.",
       "action": "Send one deterministic small attachment from the existing App and inspect and download its sibling projection on the joining App.",
       "exactOracles": [
         "Both Apps preserve the same canonical message and attachment IDs, filename, MIME, size, and exact-one timeline projection.",
@@ -3353,7 +2993,7 @@
       "caseId": "DEVICE-GROUP-READ-SYNC-E2E-001",
       "feature": "Joined sibling Group read convergence and conversation isolation",
       "layer": "remote_product_ui",
-      "preconditions": "The two joined Apps are observing one Direct and one Group while an independent CLI peer can send into both conversations.",
+      "preconditions": "The two joined Apps are observing one Direct and one Group while an independent CLI peer can send into both conversations. Both Apps establish their authenticated realtime listeners before post-Join content traffic.",
       "action": "Create incoming unread messages in both conversations, read Direct first and Group second on the joining App, then repeat reliable sync.",
       "exactOracles": [
         "Direct and Group start at zero unread and advance to exactly one on both Apps; reading Direct converges to zero on the sibling without clearing Group, then reading Group converges to zero without regressing Direct.",
@@ -3403,11 +3043,12 @@
       "feature": "AWiki Me new-device Join with CLI admin",
       "layer": "remote_product_ui_security",
       "preconditions": "The dedicated phone allowlist is enabled on awiki.info; the protected ignored YAML contains the fixed test phone/code; AWiki Me and an exact-revision CLI admin use independent fresh native Core roots; the CLI admin runs its production foreground listener with the dedicated file host-notification sink before Join starts.",
-      "action": "Bootstrap the existing CLI admin, start its real listener, verify that same existing Handle through unified AWiki Me onboarding, choose Join so the opaque continuation creates the pending session without duplicate Join inputs, restart the App while Join is pending, require the CLI listener to emit the redacted im.device.join.requested event before reading the local Core projection or starting verification, compare the independently displayed six-digit SAS, approve through the foreground CLI as a member, and wait for AWiki Me to re-resolve authorization.",
+      "action": "Bootstrap the existing CLI admin, start its real listener, verify that same existing Handle through unified AWiki Me onboarding, choose Join so the opaque continuation creates the pending session without duplicate Join inputs, restart the App while Join is pending, require the CLI listener to emit the redacted im.device.join.requested event before reading the local Core projection or starting verification, compare the independently displayed six-digit SAS, approve through the foreground CLI as a member, and wait for AWiki Me to re-resolve authorization. The active Join receipt is intermediate: automatic management may still be pending or already registered; full Root readiness is separately attested by the Root suites. If the bounded CLI round exhausted before activation, explicitly retry only that Join; require the receiving App local root capability and both Registry roles to converge.",
       "exactOracles": [
         "The independently bootstrapped CLI admin and App requester use distinct fresh native Core roots; the OTP-authenticated App request remains pending before the admin starts verification, an App restart restores that same pending session without persisting SAS, and the listener emits exactly the dedicated redacted Join wake before any admin mutation.",
         "The App-visible and CLI-derived six-digit SAS match without recording either value, and the production foreground CLI contract approves the fixed member role without an admin-role choice.",
-        "Both Registries contain exactly two devices: AWiki Me is the current active member with management_ready false only after authoritative re-resolution, while the CLI remains the current active management-ready admin."
+        "Both Registries contain exactly two devices: AWiki Me is the current active joined device with a consistent member/not-ready or admin/registered state only after authoritative re-resolution, while the CLI remains the current active management-ready admin.",
+        "The receiving App has native adminReady on its exact protocol device and both Registry devices are active management-ready admins; CLI accepted delivery alone cannot satisfy this oracle."
       ],
       "negativeChecks": [
         "A fake provider, copied state, missing or reported protected OTP, duplicate Join credential input, missing onboarding continuation, missing listener host wake, direct Message Inbox hydration, unapproved host-event fields, split claim or admin polling, missing pending phase, changed or terminal Join after restart, persisted SAS, mismatched SAS/session/device, non-foreground approval, retained terminal SAS, admin role, or server success without final Registry authorization prevents pass attestation."
@@ -3430,7 +3071,8 @@
           "DEVICE-JOIN-E2E-001:cli_listener_join_wake_received",
           "DEVICE-JOIN-E2E-001:sas_matched_without_secret_evidence",
           "DEVICE-JOIN-E2E-001:cli_foreground_member_approval_completed",
-          "DEVICE-JOIN-E2E-001:app_joined_after_authority_reresolution"
+          "DEVICE-JOIN-E2E-001:app_joined_after_authority_reresolution",
+          "DEVICE-JOIN-E2E-001:joined_app_management_ready"
         ],
         "exactOracleAssertions": [
           [
@@ -3445,6 +3087,9 @@
           ],
           [
             "DEVICE-JOIN-E2E-001:app_joined_after_authority_reresolution"
+          ],
+          [
+            "DEVICE-JOIN-E2E-001:joined_app_management_ready"
           ]
         ],
         "negativeCheckAssertions": [
@@ -3455,24 +3100,25 @@
             "DEVICE-JOIN-E2E-001:cli_listener_join_wake_received",
             "DEVICE-JOIN-E2E-001:sas_matched_without_secret_evidence",
             "DEVICE-JOIN-E2E-001:cli_foreground_member_approval_completed",
-            "DEVICE-JOIN-E2E-001:app_joined_after_authority_reresolution"
+            "DEVICE-JOIN-E2E-001:app_joined_after_authority_reresolution",
+            "DEVICE-JOIN-E2E-001:joined_app_management_ready"
           ]
         ]
       }
     },
     {
       "caseId": "DEVICE-JOIN-E2E-002",
-      "feature": "AWiki Me admin-side approval defaults to member",
+      "feature": "AWiki Me admin-side Join authorization intermediate state",
       "layer": "remote_product_ui_security",
       "preconditions": "The dedicated phone allowlist is enabled on awiki.info; the protected ignored YAML contains the fixed test phone/code; the runner explicitly enables the E2E-only unattended UserPresencePort; AWiki Me and an exact-revision CLI use independent native Core roots; the authenticated App runtime is connected before the CLI starts Join.",
-      "action": "Bootstrap AWiki Me as the ready admin, start an independent CLI Join request while the App is on its normal authenticated shell, wait for system_notification_changed to refresh the Core Join inbox and expose the global review entry, open that entry to start verification exactly once, compare the independently derived six-digit SAS, approve the fixed member role through exactly one test-scoped user-presence decision, and poll the new-device result.",
+      "action": "Bootstrap AWiki Me as the ready admin, start an independent CLI Join request while the App is on its normal authenticated shell, wait for system_notification_changed to refresh the Core Join inbox and expose the global review entry, open that entry to start verification exactly once, compare the independently derived six-digit SAS, authorize Join and automatic management through exactly one test-scoped user-presence decision, and poll the new-device result. The active Join receipt is intermediate: automatic management may still be pending or already registered; full Root readiness is separately attested by the Root suites.",
       "exactOracles": [
         "The independently bootstrapped App admin and CLI requester use distinct fresh native Core roots; the OTP-authenticated request remains pending until the App receives its system notification, refreshes the typed Core Join inbox independently of general message sync, exposes the global review entry, and the user explicitly starts verification.",
         "The App-visible and CLI-derived six-digit SAS match without recording either value, and exactly one E2E-only user-presence confirmation succeeds without changing the production LocalAuthentication implementation.",
-        "Both Registries contain exactly two devices: the joining protocol_device_id is the CLI current active member with management_ready false, while the original App device remains the unique current active management-ready admin."
+        "Both Registries contain exactly two devices: the joining protocol_device_id is the CLI current active joined device with a consistent member/not-ready or admin/registered state, while the original App device remains the unique current active management-ready admin."
       ],
       "negativeChecks": [
-        "A production user-presence override, copied or non-fresh local state, missing or reported protected OTP, Registry discovery, direct requestSync/refreshJoinInbox calls, pre-opening Devices to bypass the global entry, split claim or admin polling, repeated verification start, secret-bearing evidence, mismatched SAS, an enabled approval action before SAS confirmation, any admin-role control, a denied or repeated user-presence result, mismatched protocol_device_id, or an active-admin joining result prevents pass attestation."
+        "A production user-presence override, copied or non-fresh local state, missing or reported protected OTP, Registry discovery, direct requestSync/refreshJoinInbox calls, pre-opening Devices to bypass the global entry, split claim or admin polling, repeated verification start, secret-bearing evidence, mismatched SAS, an enabled approval action before SAS confirmation, any admin-role control, a denied or repeated user-presence result, mismatched protocol_device_id, or an inconsistent role/management-ready pair prevents this intermediate Join attestation. A valid admin/ready Registry state may already be visible; this case does not attest recipient Root activation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
@@ -3491,7 +3137,7 @@
           "DEVICE-JOIN-E2E-002:app_global_join_review_entry_received",
           "DEVICE-JOIN-E2E-002:sas_matched_without_secret_evidence",
           "DEVICE-JOIN-E2E-002:single_e2e_user_presence_confirmed",
-          "DEVICE-JOIN-E2E-002:joined_device_active_member_not_admin"
+          "DEVICE-JOIN-E2E-002:join_authorization_observed_management_completion_not_attested"
         ],
         "exactOracleAssertions": [
           [
@@ -3504,7 +3150,7 @@
             "DEVICE-JOIN-E2E-002:single_e2e_user_presence_confirmed"
           ],
           [
-            "DEVICE-JOIN-E2E-002:joined_device_active_member_not_admin"
+            "DEVICE-JOIN-E2E-002:join_authorization_observed_management_completion_not_attested"
           ]
         ],
         "negativeCheckAssertions": [
@@ -3514,7 +3160,7 @@
             "DEVICE-JOIN-E2E-002:app_global_join_review_entry_received",
             "DEVICE-JOIN-E2E-002:sas_matched_without_secret_evidence",
             "DEVICE-JOIN-E2E-002:single_e2e_user_presence_confirmed",
-            "DEVICE-JOIN-E2E-002:joined_device_active_member_not_admin"
+            "DEVICE-JOIN-E2E-002:join_authorization_observed_management_completion_not_attested"
           ]
         ]
       }
@@ -3718,20 +3364,19 @@
     },
     {
       "caseId": "ROOT-TRANSFER-E2E-001",
-      "feature": "AWiki Me management-device root import",
+      "feature": "AWiki Me Join-bound automatic management configuration",
       "layer": "remote_product_ui_security",
-      "preconditions": "An accepted Step 3 contract has established a management-ready AWiki Me admin and an independent CLI active member with management_ready false; both use fresh native Core roots and exact protocol device IDs, and the unattended suite uses the test-scoped user-presence port while production LocalAuthentication remains unchanged.",
-      "action": "Hold the real successful approval result while its terminal notice is processed, and reject any premature Done action that exits the grant flow. Hold one real pre-approval verification response until approval completes, then release it and require the grant entry to remain available. Before the CLI activation poll, click the active Join management grant and require a retryable PreKey wait. Activate that same CLI member, retry through the visible Join button, require a fresh summary without sending or extra presence, then cancel preparation. Approve the CLI as a rootless member, close the short-lived Join sheet, clear its transient state, open Devices on the ready AWiki Me admin, select the exact eligible member, let Core perform a fresh prepare and display a safe recipient summary, complete exactly one E2E-only user-presence decision, stop the App sender flow at standard P5 accepted, bring the CLI receiver online to import and complete readiness directly, then create a Group immediately after the sender observes the fresh Registry.",
+      "preconditions": "Root completion V1 is supported by User Service and both native Core builds; an accepted Join contract has established a management-ready AWiki Me admin and an independent CLI active member with management_ready false; both use fresh native Core roots and exact protocol device IDs, and the unattended suite uses the test-scoped user-presence port while production LocalAuthentication remains unchanged.",
+      "action": "Approve the exact Join once; preserve terminal-notice and stale-response race checks. Withhold CLI activation until Core exhausts four PreKey attempts, activate the CLI, use the visible exact-Join retry without a second approval, verify accepted delivery while the receiver remains rootless, then receive/import/register/activate on the CLI and verify no Root projection and fresh sender identity binding.",
       "exactOracles": [
-        "A terminal Join notice cannot expose Done while approval is still pending; the grant step becomes available after the authorized-device result arrives. A delayed verification response must not replace the authorized Join or hide its management-grant entry. An approved but unactivated CLI member yields retryable root_transfer.prekey_unavailable; after activation, the visible Join retry re-prepares the same recipient and stops at fresh confirmation without exporting or sending Root material.",
-        "Before receiver completion, the exact recipient remains active member with management_ready false; no Init-only pending, sender waiting, or App-owned transfer state is projected.",
-        "The later-grant action remains available after the Join sheet and active Join presentation state are gone, and its Core preparation is bound to the exact eligible Devices row rather than a retained Join session or handle. Clicking that row must perform a new authoritative Registry read before Core preparation; display cache alone never authorizes a grant.",
-        "The App displays only Core's safe recipient summary, delegates exactly one E2E-only user-presence decision without changing production LocalAuthentication, and treats the closed standard P5 accepted receipt as the end of the sender operation.",
-        "The CLI receiver imports the envelope, completes directly with User Service, and becomes active admin with management_ready true after fresh device auth and Registry convergence; Root control never appears in either product inbox.",
-        "The sender refreshes its same-identity client from the changed authoritative Registry before the immediate Group create, so no stale identity_binding_conflict is possible."
+        "Pending approval cannot exit early and late verification cannot overwrite authorization; unavailable PreKeys consume exactly four attempts.",
+        "The explicit retry uses the existing Join authority without a second presence decision; the recipient remains member before import.",
+        "Sender accepted delivery is a waiting state, not recipient readiness, and completion does not increase send attempts.",
+        "CLI receiver completes its existing root import chain and becomes admin-ready with local root active; Root controls never enter normal conversations.",
+        "The sender uses refreshed identity binding for the post-completion Group create."
       ],
       "negativeChecks": [
-        "Overwriting successful approval with an earlier response, silently ignoring an enabled grant, or preparing solely from cached device state fails. A wrong or ineligible target, dependence on retained Join presentation state, reuse of an old authorization handle, caller-supplied message ID, automatic pending send before fresh user presence, a second user-presence action, treating accepted as receiver readiness, waiting for or emitting an imported ACK/Reply, root/control JSON in inbox or UI, Root bytes in logs/errors/reports, management actions before Registry readiness, a fixed sleep, or retrying Group create with a stale identity binding fails."
+        "Duplicate approval, expanded recipient authority, reset automatic budget, premature readiness, additional Root send after acceptance, secret projection, or stale post-completion identity binding fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_root_transfer_residual_ledger",
@@ -3745,38 +3390,28 @@
       "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
-          "ROOT-TRANSFER-E2E-001:active_join_missing_prekey_retryable",
-          "ROOT-TRANSFER-E2E-001:active_join_retry_requires_fresh_confirmation",
+          "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape",
+          "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
+          "ROOT-TRANSFER-E2E-001:automatic_prekey_budget_exhausted",
+          "ROOT-TRANSFER-E2E-001:exact_join_retry_without_second_approval",
           "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion",
-          "ROOT-TRANSFER-E2E-001:join_sheet_closed_before_later_grant",
-          "ROOT-TRANSFER-E2E-001:device_list_fresh_prepare",
-          "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
-          "ROOT-TRANSFER-E2E-001:sender_accepted_terminal",
+          "ROOT-TRANSFER-E2E-001:sender_accepted_waits_for_recipient",
           "ROOT-TRANSFER-E2E-001:receiver_completion_ready",
           "ROOT-TRANSFER-E2E-001:root_p5_not_projected",
-          "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding",
-          "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
-          "ROOT-TRANSFER-E2E-001:device_list_click_refreshes_registry",
-          "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape"
+          "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding"
         ],
         "exactOracleAssertions": [
           [
-            "ROOT-TRANSFER-E2E-001:active_join_missing_prekey_retryable",
-            "ROOT-TRANSFER-E2E-001:active_join_retry_requires_fresh_confirmation",
+            "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape",
             "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
-            "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape"
+            "ROOT-TRANSFER-E2E-001:automatic_prekey_budget_exhausted"
           ],
           [
+            "ROOT-TRANSFER-E2E-001:exact_join_retry_without_second_approval",
             "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion"
           ],
           [
-            "ROOT-TRANSFER-E2E-001:join_sheet_closed_before_later_grant",
-            "ROOT-TRANSFER-E2E-001:device_list_fresh_prepare",
-            "ROOT-TRANSFER-E2E-001:device_list_click_refreshes_registry"
-          ],
-          [
-            "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
-            "ROOT-TRANSFER-E2E-001:sender_accepted_terminal"
+            "ROOT-TRANSFER-E2E-001:sender_accepted_waits_for_recipient"
           ],
           [
             "ROOT-TRANSFER-E2E-001:receiver_completion_ready",
@@ -3788,19 +3423,15 @@
         ],
         "negativeCheckAssertions": [
           [
-            "ROOT-TRANSFER-E2E-001:active_join_missing_prekey_retryable",
-            "ROOT-TRANSFER-E2E-001:active_join_retry_requires_fresh_confirmation",
+            "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape",
+            "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
+            "ROOT-TRANSFER-E2E-001:automatic_prekey_budget_exhausted",
+            "ROOT-TRANSFER-E2E-001:exact_join_retry_without_second_approval",
             "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion",
-            "ROOT-TRANSFER-E2E-001:join_sheet_closed_before_later_grant",
-            "ROOT-TRANSFER-E2E-001:device_list_fresh_prepare",
-            "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
-            "ROOT-TRANSFER-E2E-001:sender_accepted_terminal",
+            "ROOT-TRANSFER-E2E-001:sender_accepted_waits_for_recipient",
             "ROOT-TRANSFER-E2E-001:receiver_completion_ready",
             "ROOT-TRANSFER-E2E-001:root_p5_not_projected",
-            "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding",
-            "ROOT-TRANSFER-E2E-001:late_verification_preserves_authorized_join",
-            "ROOT-TRANSFER-E2E-001:device_list_click_refreshes_registry",
-            "ROOT-TRANSFER-E2E-001:pending_approval_has_no_done_escape"
+            "ROOT-TRANSFER-E2E-001:post_transfer_group_create_used_refreshed_binding"
           ]
         ]
       }
@@ -4163,7 +3794,7 @@
       "feature": "A joined App sends a default-plain runtime Agent prompt that converges on the other App",
       "layer": "remote_product_ui",
       "preconditions": "Two isolated App devices share one joined account identity; AWiki Me ordinary-message policy defaults to plain and this suite additionally disables the Direct E2EE gate; both Apps have converged the same real Codex runtime Agent and the joining App is displaying the normal Agents workspace.",
-      "action": "On the joining App, select the existing Codex runtime Agent, open its chat through visible UI, send one exact prompt through the real composer, then observe the exact canonical own-sync message on the admin App.",
+      "action": "On the joining App, select the existing Codex runtime Agent, open its chat through visible UI, wait for the current ACP model configuration and command confirmation, send one exact prompt through the real composer, then observe the exact canonical own-sync message on the admin App.",
       "exactOracles": [
         "The joining App opens the already-converged runtime Agent chat and commits the exact prompt through the visible composer as a sent default-plain Direct message with the account DID and runtime Agent DID.",
         "The admin App projects the same canonical conversation and exact message ID as isMine=true and visibly renders the prompt."
@@ -5052,10 +4683,11 @@
       "feature": "A real runtime delete completes on the writing App and converges to its sibling",
       "layer": "remote_product_ui",
       "preconditions": "Both Apps project the same active Codex runtime and the real Daemon reports an actionable control channel.",
-      "action": "Submit runtime deletion through the admin App controller and wait for the service-backed terminal reconcile before accepting sibling completion.",
+      "action": "Submit runtime deletion through the admin App controller and wait for the service-backed terminal reconcile before accepting sibling completion. Both Apps also query the authenticated by-DID availability API and require agent_deleted in the shared product projection; cached state alone cannot attest this check.",
       "exactOracles": [
         "The admin App submits the real runtime delete and removes the target only after authoritative reconcile.",
-        "The joining App confirms terminal convergence for the exact Agent DID."
+        "The joining App confirms terminal convergence for the exact Agent DID.",
+        "Both authenticated Apps query the deployed by-DID availability endpoint and project agent_deleted; local cached state cannot substitute for the endpoint check."
       ],
       "negativeChecks": [
         "Local optimistic removal alone, a Daemon command failure, a retained visible runtime, or treating a UI disappearance without sibling confirmation as delete success prevents pass."
@@ -5074,7 +4706,8 @@
         "assertionIds": [
           "DEVICE-AGENT-DELETE-SYNC-E2E-001:admin_app_submitted_real_runtime_delete",
           "DEVICE-AGENT-DELETE-SYNC-E2E-001:admin_app_removed_deleted_runtime_after_authoritative_reconcile",
-          "DEVICE-AGENT-DELETE-SYNC-E2E-001:joining_app_confirmed_terminal_inventory_convergence"
+          "DEVICE-AGENT-DELETE-SYNC-E2E-001:joining_app_confirmed_terminal_inventory_convergence",
+          "DEVICE-AGENT-DELETE-SYNC-E2E-001:both_apps_confirmed_public_deleted_availability"
         ],
         "exactOracleAssertions": [
           [
@@ -5083,6 +4716,9 @@
           ],
           [
             "DEVICE-AGENT-DELETE-SYNC-E2E-001:joining_app_confirmed_terminal_inventory_convergence"
+          ],
+          [
+            "DEVICE-AGENT-DELETE-SYNC-E2E-001:both_apps_confirmed_public_deleted_availability"
           ]
         ],
         "negativeCheckAssertions": [
@@ -5612,10 +5248,11 @@
       "exactOracles": [
         "The fresh App has no local identity, unified onboarding exposes Join/Recovery only after existing-Handle verification, and Recovery reuses the exact verified Handle and phone as read-only context with only one OTP input before requesting one OTP bound to purpose awiki.identity.handle-recovery.v1 plus the exact opaque operation ID without supplying a local selector.",
         "The UI reaches prepared, visibly presents irreversible consequences, requires explicit confirmation, and uses exactly one test-only user-presence decision before activation; any intermediate Core phase completes only through the visible bounded resume action.",
-        "Completion preserves the canonical Handle, installs the Core-returned new local owner, replaces the old DID with the Core-authorized current DID, leaves one ready current admin Registry device, and keeps the old DID absent from the fresh local projection."
+        "Completion preserves the canonical Handle, installs the Core-returned new local owner, replaces the old DID with the Core-authorized current DID, leaves one ready current admin Registry device, and keeps the old DID absent from the fresh local projection.",
+        "The App automatically opens the message workspace with the recovered session DID and activated runtime DID, and the Recovery page is no longer visible."
       ],
       "negativeChecks": [
-        "A fake Core/provider, retained or copied setup identity, checked-in or reported OTP, staged SMS-error continuation, supplied local selector, missing operation binding, legacy recovery purpose, direct activation/resume service call, bypassed risk UI, production LocalAuthentication claim, unchanged DID, changed Handle, non-ready replacement Registry, old DID in the fresh local projection, secret-bearing evidence, or unaudited remote host prevents pass attestation."
+        "A fake Core/provider, retained or copied setup identity, checked-in or reported OTP, staged SMS-error continuation, supplied local selector, missing operation binding, legacy recovery purpose, direct activation/resume service call, bypassed risk UI, production LocalAuthentication claim, unchanged DID, changed Handle, non-ready replacement Registry, old DID in the fresh local projection, secret-bearing evidence, or unaudited remote host prevents pass attestation. A retained Recovery page, missing message workspace, or workspace without the recovered active session/runtime also prevents pass."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
@@ -5636,6 +5273,8 @@
           "HANDLE-RECOVERY-V1-E2E-001:operation_bound_otp_prepared_through_ui",
           "HANDLE-RECOVERY-V1-E2E-001:irreversible_risks_confirmed_through_ui",
           "HANDLE-RECOVERY-V1-E2E-001:recovery_completed_through_ui_resume",
+          "HANDLE-RECOVERY-V1-E2E-001:recovery_opened_message_workspace",
+          "HANDLE-RECOVERY-V1-E2E-001:recovery_navigation_followed_confirmed_session_activation",
           "HANDLE-RECOVERY-V1-E2E-001:new_local_owner_handle_and_replacement_did_verified",
           "HANDLE-RECOVERY-V1-E2E-001:old_did_absent_from_fresh_local_projection"
         ],
@@ -5654,6 +5293,10 @@
             "HANDLE-RECOVERY-V1-E2E-001:existing_ready_admin_created",
             "HANDLE-RECOVERY-V1-E2E-001:new_local_owner_handle_and_replacement_did_verified",
             "HANDLE-RECOVERY-V1-E2E-001:old_did_absent_from_fresh_local_projection"
+          ],
+          [
+            "HANDLE-RECOVERY-V1-E2E-001:recovery_opened_message_workspace",
+            "HANDLE-RECOVERY-V1-E2E-001:recovery_navigation_followed_confirmed_session_activation"
           ]
         ],
         "negativeCheckAssertions": [
@@ -5665,6 +5308,8 @@
             "HANDLE-RECOVERY-V1-E2E-001:operation_bound_otp_prepared_through_ui",
             "HANDLE-RECOVERY-V1-E2E-001:irreversible_risks_confirmed_through_ui",
             "HANDLE-RECOVERY-V1-E2E-001:recovery_completed_through_ui_resume",
+            "HANDLE-RECOVERY-V1-E2E-001:recovery_opened_message_workspace",
+            "HANDLE-RECOVERY-V1-E2E-001:recovery_navigation_followed_confirmed_session_activation",
             "HANDLE-RECOVERY-V1-E2E-001:new_local_owner_handle_and_replacement_did_verified",
             "HANDLE-RECOVERY-V1-E2E-001:old_did_absent_from_fresh_local_projection"
           ]
@@ -6369,18 +6014,18 @@
     },
     {
       "caseId": "ROOT-TRANSFER-APP-PAIR-E2E-001",
-      "feature": "Two real Apps grant administrator permissions after Join",
+      "feature": "Two real Apps automatically configure management after one Join approval",
       "layer": "remote_product_ui_security",
-      "preconditions": "Two isolated real App processes complete ordinary member Join on awiki.info; no CLI substitutes for either device.",
-      "action": "Check the grant entry immediately after approval, prepare from that entry without sending, leave the sheet through its Back action, then grant from Devices with one explicit confirmation. The joining App receives the root material and both real App Registries must show two ready admins. After local deletion of the joining credential, actually complete a fresh third-device Join and another management grant from the original admin, not merely reopen the form.",
+      "preconditions": "User Service and both native Core builds support Root completion V2. Two isolated real App processes complete member Join on the selected target; no CLI substitutes for either device.",
+      "action": "Complete one exact Join approval, observe Core automatic management state and accepted delivery with no second root confirmation, and require both App Registries plus receiver activation. Complete the subsequent fresh third-device Join and automatic management configuration using the existing isolated recovery scenario.",
       "exactOracles": [
-        "The approving App exposes the management grant step rather than premature Done, and preparation does not send or invoke user presence.",
-        "The Devices grant opens confirmation and sends only after exactly one additional user-presence decision.",
+        "The approving App shows automatic management state after the single Join confirmation.",
+        "Automatic delivery and any explicit failure retry never ask for a second root presence decision.",
         "The receiving App completes root import and both App Registries contain exactly two active management-ready admins.",
-        "With two existing ready admins and independent Document/Registry versions, the next Join exposes grant rather than Done; the new third device then becomes management-ready without reusing the deleted local identity."
+        "The next distinct device completes Join and automatic management after Registry-only promotion."
       ],
       "negativeChecks": [
-        "CLI receiver substitution, forged identity facts, direct state injection, hidden/no-op grant actions, early root send, extra confirmation, or a receiver left as member prevents pass."
+        "CLI receiver substitution, forged facts, direct state injection, root transfer before the single Join authorization, a second root confirmation, or an unready receiver prevents pass."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
@@ -6394,22 +6039,22 @@
       "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
-          "ROOT-TRANSFER-APP-PAIR-E2E-001:active_join_grant_visible",
-          "ROOT-TRANSFER-APP-PAIR-E2E-001:device_list_grant_confirmed",
-          "ROOT-TRANSFER-APP-PAIR-E2E-001:single_root_presence",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:automatic_management_state_visible",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:automatic_delivery_accepted",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:no_second_presence",
           "ROOT-TRANSFER-APP-PAIR-E2E-001:receiver_app_management_ready",
           "ROOT-TRANSFER-APP-PAIR-E2E-001:both_apps_ready_admins",
           "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_after_registry_only_promotion",
-          "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_grant_visible_without_done",
+          "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_automatic_management",
           "ROOT-TRANSFER-APP-PAIR-E2E-001:third_device_management_ready"
         ],
         "exactOracleAssertions": [
           [
-            "ROOT-TRANSFER-APP-PAIR-E2E-001:active_join_grant_visible"
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:automatic_management_state_visible"
           ],
           [
-            "ROOT-TRANSFER-APP-PAIR-E2E-001:device_list_grant_confirmed",
-            "ROOT-TRANSFER-APP-PAIR-E2E-001:single_root_presence"
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:automatic_delivery_accepted",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:no_second_presence"
           ],
           [
             "ROOT-TRANSFER-APP-PAIR-E2E-001:receiver_app_management_ready",
@@ -6417,20 +6062,90 @@
           ],
           [
             "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_after_registry_only_promotion",
-            "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_grant_visible_without_done",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_automatic_management",
             "ROOT-TRANSFER-APP-PAIR-E2E-001:third_device_management_ready"
           ]
         ],
         "negativeCheckAssertions": [
           [
-            "ROOT-TRANSFER-APP-PAIR-E2E-001:active_join_grant_visible",
-            "ROOT-TRANSFER-APP-PAIR-E2E-001:device_list_grant_confirmed",
-            "ROOT-TRANSFER-APP-PAIR-E2E-001:single_root_presence",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:automatic_management_state_visible",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:automatic_delivery_accepted",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:no_second_presence",
             "ROOT-TRANSFER-APP-PAIR-E2E-001:receiver_app_management_ready",
             "ROOT-TRANSFER-APP-PAIR-E2E-001:both_apps_ready_admins",
             "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_after_registry_only_promotion",
-            "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_grant_visible_without_done",
+            "ROOT-TRANSFER-APP-PAIR-E2E-001:next_join_automatic_management",
             "ROOT-TRANSFER-APP-PAIR-E2E-001:third_device_management_ready"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DID-WEB-APP-E2E-001",
+      "feature": "Web identity product lifecycle with two Apps and a WBA CLI peer",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Protected same-origin remote configuration advertises Web creation; current local/source Core native artifacts and CLI; two isolated Linux/Xvfb or macOS Apps.",
+      "action": "Create Web via onboarding, reopen pending member Join from disk, compare SAS, edit ordinary services, exchange Direct messages with WBA CLI, revoke the member and reopen the surviving admin root.",
+      "exactOracles": [
+        "The visible creation picker defaults to WBA, selects Web explicitly, explains first-admin loss, and activates an authenticated Web DID.",
+        "Two isolated Apps complete exact member Join with matching in-memory SAS; the joining App reopens the original pending Core session without another OTP and offers no Web Recovery or Root Transfer.",
+        "The Web admin edits an ordinary service through Devices; protected service fields stay identical, while the member has no write action.",
+        "An independent source-verified WBA CLI sends to both Web Apps and receives the joined Web member reply with canonical message identity.",
+        "Visible exact-device revoke requires confirmation and fresh user presence; the member receives an authentication fence.",
+        "Closing and reopening the admin App/Core root retains the same DID and published service and can send to the WBA CLI."
+      ],
+      "negativeChecks": [
+        "A changed DID or pending Join, exposed Web recovery/transfer or member write, modified protected service, arbitrary network error used as revocation proof, or missing CLI delivery prevents pass."
+      ],
+      "environment": "configured_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/did_method_web_test.part.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DID-WEB-APP-E2E-001:visible_web_creation_default_wba",
+          "DID-WEB-APP-E2E-001:same_pending_join_reopened_without_otp",
+          "DID-WEB-APP-E2E-001:sas_member_join_and_method_gates",
+          "DID-WEB-APP-E2E-001:protected_services_preserved",
+          "DID-WEB-APP-E2E-001:wba_cli_web_apps_bidirectional",
+          "DID-WEB-APP-E2E-001:exact_revoke_and_auth_fence",
+          "DID-WEB-APP-E2E-001:admin_root_reopened_and_sent"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DID-WEB-APP-E2E-001:visible_web_creation_default_wba"
+          ],
+          [
+            "DID-WEB-APP-E2E-001:same_pending_join_reopened_without_otp",
+            "DID-WEB-APP-E2E-001:sas_member_join_and_method_gates"
+          ],
+          [
+            "DID-WEB-APP-E2E-001:protected_services_preserved"
+          ],
+          [
+            "DID-WEB-APP-E2E-001:wba_cli_web_apps_bidirectional"
+          ],
+          [
+            "DID-WEB-APP-E2E-001:exact_revoke_and_auth_fence"
+          ],
+          [
+            "DID-WEB-APP-E2E-001:admin_root_reopened_and_sent"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DID-WEB-APP-E2E-001:visible_web_creation_default_wba",
+            "DID-WEB-APP-E2E-001:same_pending_join_reopened_without_otp",
+            "DID-WEB-APP-E2E-001:sas_member_join_and_method_gates",
+            "DID-WEB-APP-E2E-001:protected_services_preserved",
+            "DID-WEB-APP-E2E-001:wba_cli_web_apps_bidirectional",
+            "DID-WEB-APP-E2E-001:exact_revoke_and_auth_fence",
+            "DID-WEB-APP-E2E-001:admin_root_reopened_and_sent"
           ]
         ]
       }

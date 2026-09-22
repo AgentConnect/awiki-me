@@ -58,10 +58,6 @@ const String _desktopCliPeerProductTimingsFileName = 'product_timings.json';
 const String _caseAttestationFileName = 'case_attestation.json';
 const String _personalAgentRunConfigPath =
     '.e2e/personal-agent/current/run_config.json';
-const String _codexAgentRunConfigPath =
-    '.e2e/codex-agent/current/run_config.json';
-const String _claudeCodeAgentRunConfigPath =
-    '.e2e/claude-code-agent/current/run_config.json';
 const String _desktopCliPeerScenario = 'desktop-app-cli-peer';
 const String _desktopCliPeerPerformanceScenario =
     'desktop-app-cli-peer-performance';
@@ -157,8 +153,6 @@ const Set<String> _accountStateRequiredTargetCapabilities = <String>{
 };
 const String _desktopCliPeerDisplayName = 'AWiki E2E CLI Peer';
 const String _personalAgentScenario = 'personal-agent-full-ui';
-const String _codexAgentScenario = 'codex-agent-full-ui';
-const String _claudeCodeAgentScenario = 'claude-code-agent-full-ui';
 const List<String> _desktopCliPeerCaseIds = <String>[
   'AUTH-E2E-001',
   'CONV-CANON-E2E-001',
@@ -387,18 +381,6 @@ const List<String> _personalAgentCaseIds = <String>[
   'PERSONALAGENT-E2E-001', // App UI selects daemon and enables Personal Agent.
   'PERSONALAGENT-E2E-002', // CLI peer message is recovered into App UI.
   'PERSONALAGENT-E2E-004', // UI revoke converges in User Service and daemon state.
-];
-const List<String> _codexAgentCaseIds = <String>[
-  'CODEXAGENT-E2E-001', // App creates/selects a Codex runtime Agent.
-  'CODEXAGENT-E2E-002', // App UI sends a deterministic prompt to Codex.
-  'CODEXAGENT-E2E-003', // daemon records runtime_run + runtime_final_outbox sent.
-  'CODEXAGENT-E2E-004', // App local history and visible UI show the Codex reply.
-];
-const List<String> _claudeCodeAgentCaseIds = <String>[
-  'CLAUDECODEAGENT-E2E-001', // App creates/selects a Claude Code runtime Agent.
-  'CLAUDECODEAGENT-E2E-002', // App UI sends a deterministic prompt to Claude Code.
-  'CLAUDECODEAGENT-E2E-003', // daemon records runtime_run + runtime_final_outbox sent.
-  'CLAUDECODEAGENT-E2E-004', // App local history and visible UI show the Claude Code reply.
 ];
 
 Future<void> main(List<String> args) async {
@@ -739,6 +721,7 @@ class DesktopE2eRunner {
         case DesktopE2eCase.identityDeletionRecoveryGuard:
           await _runRemoteHandleRecovery();
         case DesktopE2eCase.multiDeviceAppPair:
+        case DesktopE2eCase.didMethodWeb:
           await _runRemoteMultiDeviceAppPair();
         case DesktopE2eCase.multiDeviceAppPairFunctional:
           await _runRemoteMultiDeviceAppPair();

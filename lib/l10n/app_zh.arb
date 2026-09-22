@@ -1,5 +1,25 @@
 {
+  "agentLifecycleUnavailable": "不可用",
+  "agentLifecycleDeletedReason": "该智能体已被删除。",
+  "agentLifecycleRetiredReason": "该智能体的旧版接入已停用，需要由控制者重新创建。",
+  "agentLifecycleInactiveReason": "该智能体已停用，暂时无法接收新指令。",
+  "agentLifecycleMessageNotice": "{name}已不可用",
+  "@agentLifecycleMessageNotice": {"placeholders": {"name": {"type": "String"}}},
   "@@locale": "zh",
+  "identityMethodLabel": "身份方法",
+  "identityWebAdminLimitation": "Web 身份不支持账号恢复、根密钥导入或管理权转移。请保管好首个管理员设备；失去该设备后无法恢复管理权限。",
+  "identityRegistrationPending": "继续未完成的注册",
+  "identityRegistrationResumeHint": "将继续原来的身份注册。请使用原联系方式；如需验证码，请重新获取。",
+  "identityServicesTitle": "身份服务",
+  "identityServicesHint": "管理此身份公开的其他服务。Handle、消息服务和个人资料仍由各自的设置管理。",
+  "identityServicesFailed": "未能完成操作。请刷新查看进度；若仍待确认，请继续原操作。",
+  "identityServicesPending": "服务更新仍待确认。继续原操作后才能提交其他更改。",
+  "identityServicesResume": "继续服务更新",
+  "identityServiceAdd": "添加服务",
+  "identityServiceId": "服务标识",
+  "identityServiceType": "服务类型",
+  "identityServiceEndpoint": "服务地址",
+  "identityServiceEdit": "编辑",
   "appTitle": "AWikiMe",
   "commonCancel": "取消",
   "commonConfirm": "确定",
@@ -356,9 +376,15 @@
   "deviceRootTransferTarget": "目标设备：{deviceId}\n签名密钥：{signingKeyId}\n端到端加密密钥：{e2eeKeyId}",
   "@deviceRootTransferTarget": {
     "placeholders": {
-      "deviceId": {"type": "String"},
-      "signingKeyId": {"type": "String"},
-      "e2eeKeyId": {"type": "String"}
+      "deviceId": {
+        "type": "String"
+      },
+      "signingKeyId": {
+        "type": "String"
+      },
+      "e2eeKeyId": {
+        "type": "String"
+      }
     }
   },
   "deviceRootTransferSent": "根密钥已发送",
@@ -376,7 +402,9 @@
   "deviceRevokeConfirmDetail": "将永久撤销 {deviceId}。该设备会失去未来访问权限，但已经取得的数据无法远程清除。此操作不可撤销。",
   "@deviceRevokeConfirmDetail": {
     "placeholders": {
-      "deviceId": {"type": "String"}
+      "deviceId": {
+        "type": "String"
+      }
     }
   },
   "deviceRevokeConfirmAction": "永久撤销",
@@ -397,7 +425,9 @@
   "deviceJoinResendOtpIn": "重新发送（{seconds}秒）",
   "@deviceJoinResendOtpIn": {
     "placeholders": {
-      "seconds": {"type": "int"}
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "deviceJoinStart": "开始关联",
@@ -416,17 +446,23 @@
   "deviceJoinFingerprint": "密钥指纹：{fingerprint}",
   "@deviceJoinFingerprint": {
     "placeholders": {
-      "fingerprint": {"type": "String"}
+      "fingerprint": {
+        "type": "String"
+      }
     }
   },
   "deviceJoinRequestWindow": "发起时间：{issuedAt}；过期时间：{expiresAt}",
   "@deviceJoinRequestWindow": {
     "placeholders": {
-      "issuedAt": {"type": "String"},
-      "expiresAt": {"type": "String"}
+      "issuedAt": {
+        "type": "String"
+      },
+      "expiresAt": {
+        "type": "String"
+      }
     }
   },
-  "deviceJoinApprove": "确认并授权",
+  "deviceJoinApprove": "允许加入并成为管理设备",
   "deviceJoinCancel": "取消关联",
   "deviceJoinAuthorized": "设备已加入",
   "deviceJoinFinalizing": "正在完成设备操作...",
@@ -434,7 +470,7 @@
   "deviceJoinExpired": "设备关联已过期，请重新发起",
   "deviceJoinActivating": "正在激活此设备…",
   "deviceJoinActivationRetry": "重试设备激活",
-  "deviceJoinUserPresenceReason": "确认授权新设备",
+  "deviceJoinUserPresenceReason": "允许该设备加入并成为管理设备",
   "deviceJoinErrorUnavailable": "多设备功能当前未开放",
   "deviceJoinErrorConflict": "状态已发生变化，请刷新后重试",
   "deviceJoinErrorSas": "验证码状态不一致，已停止授权",
@@ -443,7 +479,9 @@
   "deviceJoinOtpRateLimited": "验证码发送过于频繁，请 {seconds} 秒后重试",
   "@deviceJoinOtpRateLimited": {
     "placeholders": {
-      "seconds": {"type": "int"}
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "deviceJoinErrorFailed": "设备操作失败，请刷新后重试",
@@ -603,7 +641,9 @@
   "groupIdentityCurrentHandle": "Handle：{handle}",
   "@groupIdentityCurrentHandle": {
     "placeholders": {
-      "handle": {"type": "String"}
+      "handle": {
+        "type": "String"
+      }
     }
   },
   "groupNoDescription": "暂无群描述",
@@ -639,13 +679,17 @@
   "groupRecoveryPending": "身份已恢复，仍有 {count} 个群等待更新",
   "@groupRecoveryPending": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "groupRecoveryBlocked": "身份已恢复，有 {count} 个群需要处理",
   "@groupRecoveryBlocked": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "groupRecoveryStatusUnavailable": "身份已恢复，群更新将在稍后重试",
@@ -675,6 +719,8 @@
   "groupInviteShowMore": "查看更多",
   "groupInviteAdding": "添加中...",
   "groupInviteAddFailed": "添加失败，请稍后重试",
+  "groupInviteAdmissionDenied": "服务器不允许此身份加入群聊",
+  "groupInviteFederatedDenied": "服务器策略不允许该外域身份加入群聊",
   "groupInviteConfirmCount": "确认添加 ({count})",
   "@groupInviteConfirmCount": {
     "placeholders": {
@@ -972,7 +1018,7 @@
   "agentRemoveDaemonFromAccountMessage": "当前 Daemon 不可连接。此操作只会从当前账号移除这个 Daemon 以及它创建的智能体，不会访问或清理宿主机上的本地文件。",
   "agentRemoveRuntimeFromAccountMessage": "当前无法通过所属 Daemon 删除这个智能体。此操作只会把它从当前账号移除，不会访问或清理宿主机上的本地文件。",
   "agentInstallTitle": "到宿主机安装代理",
-  "agentInstallSupportedTypes": "支持的 Agent 类型：Hermes、Codex、Claude Code。安装宿主代理后，可在 Daemon 下创建 Runtime Agent。",
+  "agentInstallSupportedTypes": "支持 {types}。安装 Daemon 后可创建智能体；外部客户端需在同一设备上安装并完成配置。",
   "agentInstallTokenExpiresAt": "有效期至: {expiresAt}",
   "@agentInstallTokenExpiresAt": {
     "placeholders": {
@@ -1031,38 +1077,38 @@
   },
   "agentCreateHandleInvalidPattern": "仅支持小写字母、数字和连字符，且首尾必须是字母或数字",
   "agentCreateHandleNoDoubleHyphen": "Handle 不能包含连续连字符",
-  "agentCreateNeedsRouteWorkspace": "{agentType} 需要按会话目录工作模式。",
+  "agentCreateNeedsRouteWorkspace": "请升级此设备的 Daemon，以启用 {agentType}。",
   "@agentCreateNeedsRouteWorkspace": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateHermesDescription": "内置 Hermes Runtime Agent。",
-  "agentCreateNeedsGenericCliCapability": "{agentType} 需要 Daemon 提供 generic-cli capability。",
+  "agentCreateHermesDescription": "使用宿主机上的 Hermes CLI。",
+  "agentCreateNeedsGenericCliCapability": "请先刷新设备状态，以确认是否支持 {agentType}。",
   "@agentCreateNeedsGenericCliCapability": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateUnsupportedDriver": "当前 Daemon 不支持 {agentType} driver。",
+  "agentCreateUnsupportedDriver": "当前设备的 Daemon 尚不支持 {agentType}，请升级后重试。",
   "@agentCreateUnsupportedDriver": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateNeedsRouteSession": "{agentType} 需要 route session 和 native resume 支持。",
+  "agentCreateNeedsRouteSession": "请升级此设备的 Daemon，以启用 {agentType}。",
   "@agentCreateNeedsRouteSession": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateNeedsHostAccess": "{agentType} 需要 Daemon 支持宿主机全权限模式。",
+  "agentCreateNeedsHostAccess": "请升级此设备的 Daemon，以启用 {agentType}。",
   "@agentCreateNeedsHostAccess": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateRequiresSignedInCli": "需要 Daemon 上已安装并登录的 {agentType} CLI。",
+  "agentCreateRequiresSignedInCli": "使用宿主机上的 {agentType} 客户端。",
   "@agentCreateRequiresSignedInCli": {
     "placeholders": {
       "agentType": {}
@@ -1344,7 +1390,13 @@
   "updateInstallFailed": "更新失败，请打开下载页手动安装。",
   "updateRestrictedTitle": "当前租户需要更新",
   "updateRestrictedMessage": "{tenantName} 要求 AWiki Me {minimumVersion} 或更高版本，当前版本为 {currentVersion}。请更新客户端后继续使用；你也可以切换租户。",
-  "@updateRestrictedMessage": {"placeholders": {"tenantName": {}, "minimumVersion": {}, "currentVersion": {}}},
+  "@updateRestrictedMessage": {
+    "placeholders": {
+      "tenantName": {},
+      "minimumVersion": {},
+      "currentVersion": {}
+    }
+  },
   "updateRestrictedInstall": "打开官方下载页面",
   "updateRestrictedSwitchTenant": "切换租户",
   "updateRestrictedSettings": "设置和本地数据",
@@ -1404,7 +1456,9 @@
   "attachmentDownloadingProgress": "正在下载 · {progress}",
   "@attachmentDownloadingProgress": {
     "placeholders": {
-      "progress": {"type": "String"}
+      "progress": {
+        "type": "String"
+      }
     }
   },
   "attachmentDownloadPaused": "下载已暂停",
@@ -1550,5 +1604,58 @@
   "handleRecoveryChecking": "正在检查恢复进度…",
   "handleRecoveryRunning": "正在处理恢复操作，请稍候…",
   "handleRecoveryEntering": "恢复已完成，正在进入消息…",
-  "handleRecoveryContinueExisting": "继续上次恢复"
+  "handleRecoveryContinueExisting": "继续上次恢复",
+  "@agentInstallSupportedTypes": {
+    "placeholders": {
+      "types": {
+        "type": "String"
+      }
+    }
+  },
+  "agentClientReady": "已检测到",
+  "agentClientMissing": "未检测到",
+  "agentClientUnavailable": "启动异常",
+  "agentClientUnknown": "尚未确认",
+  "agentClientChecking": "检测中…",
+  "agentClientRefresh": "重新检测",
+  "agentClientOffline": "设备离线",
+  "agentClientOfflineHint": "连接 Daemon 后重新检测。",
+  "agentClientRetryHint": "暂时无法确认，请重新检测。",
+  "agentClientInstallHint": "请在此 Daemon 的宿主机安装客户端，再重新检测。",
+  "agentClientPermissionHint": "客户端没有执行权限，请在宿主机修复后重新检测。",
+  "agentClientGatewayHint": "未找到 Hermes CLI 模块，请检查宿主机安装。",
+  "agentClientCustomHint": "无法轻量检测自定义启动命令，请检查启动入口。",
+  "agentClientTimeoutHint": "检测超时，请稍后重新检测。",
+  "agentClientLaunchHint": "客户端启动失败，请检查宿主机的安装与依赖。",
+  "agentClientHost": "检测 {host} 所在宿主机的客户端。",
+  "agentClientLegacy": "当前 Daemon 暂不支持安装检测，创建时将按原流程校验。",
+  "agentClientScope": "仅检测客户端安装与启动情况。使用前，请在宿主机完成登录或模型配置。",
+  "@agentClientHost": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "agentClientCreating": "创建中…",
+  "agentClientCreateFailed": "创建失败，请检查客户端环境后重试。已保留填写内容。",
+  "agentClientCreatePending": "创建已提交，仍在等待结果。可关闭此窗口，在智能体列表查看进度。",
+  "agentClientProtocolHint": "客户端协议连接失败，请检查宿主机上的登录、配置或客户端错误后重试。",
+  "agentClientCompatibilityHint": "客户端版本与当前接入能力不兼容，请更新客户端后重试。",
+  "chatRetiredAgentDisabled": "旧版接入已停用，请重新创建智能体。聊天记录与草稿已保留。",
+  "agentAcpUpgradeRequired": "请升级 Daemon 以使用此智能体的 ACP 接入。",
+  "agentClientAdapterHint": "Daemon 的接入组件缺失或损坏，请重新安装 Daemon。",
+  "agentClientPlatformHint": "当前平台不支持此智能体的接入组件。",
+  "agentClientHermesAcpHint": "Hermes 缺少可用的 ACP 支持，请在宿主机升级 Hermes CLI。",
+  "agentClientNodeMissing": "宿主机未检测到 Node.js。",
+  "agentClientNodeIncompatible": "Node.js 版本不兼容，需要 22 或更高版本。",
+  "agentClientNodeUnavailable": "Node.js 无法启动，请检查宿主机安装后重新检测。",
+  "agentClientNodeSetup": "Codex 和 Claude Code 需要在此 Daemon 宿主机安装 Node.js 22 或更高版本，推荐 24 LTS。安装后请重新检测。",
+  "agentClientNodeDownload": "Node.js 安装指南 ↗",
+  "agentClientWaitingConfirmation": "等待确认",
+  "deviceJoinManagementRegistered": "管理权限已登记，请在新设备确认管理能力已就绪。",
+  "deviceJoinManagementWaiting": "根密钥发送已接受，等待新设备完成管理权限配置。",
+  "deviceJoinManagementConfiguring": "设备已加入，正在配置管理权限。可安全离开此页面。",
+  "deviceJoinManagementRejoinRequired": "管理权限配置已失效，请由管理设备撤销此设备，再在此设备上退出本地身份（保留数据）后重新加入。",
+  "deviceJoinManagementFailed": "设备已加入，管理权限配置失败"
 }

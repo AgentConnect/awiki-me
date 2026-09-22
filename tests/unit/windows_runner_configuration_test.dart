@@ -152,7 +152,9 @@ void main() {
   test('Windows shell uses one IPC and graceful-exit boundary', () {
     final constants = File('windows/runner/app_constants.h').readAsStringSync();
     final main = File('windows/runner/main.cpp').readAsStringSync();
-    final shell = File('windows/runner/desktop_shell.cpp').readAsStringSync();
+    final shell = File(
+      'windows/runner/desktop_shell.cpp',
+    ).readAsStringSync().replaceAll('\r\n', '\n');
     final smoke = File('scripts/windows/run_pr_smoke.ps1').readAsStringSync();
 
     expect(constants, contains(r'Local\\ai.awiki.awikime.single-instance'));

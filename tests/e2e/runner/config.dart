@@ -79,7 +79,8 @@ class _RemoteMultiDeviceBaseConfig {
       );
     }
     final handlePrefix =
-        (environment[_multiDeviceRemoteHandlePrefixEnv] ?? 'appmd')
+        (environment[_multiDeviceRemoteHandlePrefixEnv] ??
+                appPairCleanupHandlePrefix)
             .trim()
             .toLowerCase();
     if (handlePrefix.length > 20 ||
@@ -352,19 +353,11 @@ class DesktopCliPeerConfig implements DesktopRemoteTargetContract {
     this.daemonReadyFile,
     this.daemonHandle,
     this.daemonEnvFile,
-    this.daemonFakeHermesGatewayCommand,
+    this.daemonFakeHermesHome,
     this.personalAgentEnabled = false,
     this.personalAgentRuntimeProvider = 'hermes',
     this.personalAgentProcessingScope = 'all_conversations',
     this.personalAgentRealBackend = false,
-    this.codexAgentEnabled = false,
-    this.codexAgentRealBackend = false,
-    this.codexAgentPrompt,
-    this.codexAgentExpectedReply,
-    this.claudeCodeAgentEnabled = false,
-    this.claudeCodeAgentRealBackend = false,
-    this.claudeCodeAgentPrompt,
-    this.claudeCodeAgentExpectedReply,
   });
 
   final DesktopE2ePlatform platform;
@@ -396,19 +389,11 @@ class DesktopCliPeerConfig implements DesktopRemoteTargetContract {
   final String? daemonReadyFile;
   final String? daemonHandle;
   final String? daemonEnvFile;
-  final String? daemonFakeHermesGatewayCommand;
+  final String? daemonFakeHermesHome;
   final bool personalAgentEnabled;
   final String personalAgentRuntimeProvider;
   final String personalAgentProcessingScope;
   final bool personalAgentRealBackend;
-  final bool codexAgentEnabled;
-  final bool codexAgentRealBackend;
-  final String? codexAgentPrompt;
-  final String? codexAgentExpectedReply;
-  final bool claudeCodeAgentEnabled;
-  final bool claudeCodeAgentRealBackend;
-  final String? claudeCodeAgentPrompt;
-  final String? claudeCodeAgentExpectedReply;
 
   Duration get flutterTimeout {
     if (e2eCase == DesktopE2eCase.performance) {
@@ -508,7 +493,7 @@ class DesktopCliPeerConfig implements DesktopRemoteTargetContract {
       daemonReadyFile: fileConfig.daemonReadyFile,
       daemonHandle: fileConfig.daemonHandle,
       daemonEnvFile: fileConfig.daemonEnvFile,
-      daemonFakeHermesGatewayCommand: fileConfig.daemonFakeHermesGatewayCommand,
+      daemonFakeHermesHome: fileConfig.daemonFakeHermesHome,
       personalAgentEnabled: _effectivePersonalAgentEnabled(
         options,
         fileConfig,
@@ -523,28 +508,6 @@ class DesktopCliPeerConfig implements DesktopRemoteTargetContract {
         fileConfig,
         sourcePath,
       ),
-      codexAgentEnabled: _effectiveCodexAgentEnabled(
-        options,
-        fileConfig,
-        sourcePath,
-      ),
-      codexAgentRealBackend: _effectiveCodexAgentRealBackend(
-        options,
-        fileConfig,
-      ),
-      codexAgentPrompt: fileConfig.codexAgentPrompt,
-      codexAgentExpectedReply: fileConfig.codexAgentExpectedReply,
-      claudeCodeAgentEnabled: _effectiveClaudeCodeAgentEnabled(
-        options,
-        fileConfig,
-        sourcePath,
-      ),
-      claudeCodeAgentRealBackend: _effectiveClaudeCodeAgentRealBackend(
-        options,
-        fileConfig,
-      ),
-      claudeCodeAgentPrompt: fileConfig.claudeCodeAgentPrompt,
-      claudeCodeAgentExpectedReply: fileConfig.claudeCodeAgentExpectedReply,
     );
     peerConfig.validateSelectedCaseConfig(sourcePath);
     return peerConfig;
@@ -606,86 +569,6 @@ bool _effectivePersonalAgentRealBackend(
   return true;
 }
 
-bool _effectiveCodexAgentEnabled(
-  DesktopE2eOptions options,
-  DesktopE2eFileConfig fileConfig,
-  String sourcePath,
-) {
-  final configured = fileConfig.codexAgentEnabled;
-  if (options.e2eCase != DesktopE2eCase.codexAgent) {
-    return configured ?? false;
-  }
-  if (configured == false) {
-    throw E2eFailure(
-      'codexAgent.enabled must be true for --case codex-agent in $sourcePath.',
-    );
-  }
-  return true;
-}
-
-bool _effectiveCodexAgentRealBackend(
-  DesktopE2eOptions options,
-  DesktopE2eFileConfig fileConfig,
-) {
-  if (options.e2eCase == DesktopE2eCase.codexAgent) {
-    return fileConfig.codexAgentRealBackend ?? true;
-  }
-  return fileConfig.codexAgentRealBackend ?? false;
-}
-
-bool _effectiveClaudeCodeAgentEnabled(
-  DesktopE2eOptions options,
-  DesktopE2eFileConfig fileConfig,
-  String sourcePath,
-) {
-  final configured = fileConfig.claudeCodeAgentEnabled;
-  if (options.e2eCase != DesktopE2eCase.claudeCodeAgent) {
-    return configured ?? false;
-  }
-  if (configured == false) {
-    throw E2eFailure(
-      'claudeCodeAgent.enabled must be true for --case claude-code-agent in $sourcePath.',
-    );
-  }
-  return true;
-}
-
-bool _effectiveClaudeCodeAgentRealBackend(
-  DesktopE2eOptions options,
-  DesktopE2eFileConfig fileConfig,
-) {
-  if (options.e2eCase == DesktopE2eCase.claudeCodeAgent) {
-    return fileConfig.claudeCodeAgentRealBackend ?? true;
-  }
-  return fileConfig.claudeCodeAgentRealBackend ?? false;
-}
-
-String _defaultCodexExpectedReply(String runId) {
-  final suffix = runId
-      .toUpperCase()
-      .replaceAll(RegExp(r'[^A-Z0-9]+'), '-')
-      .replaceAll(RegExp(r'-+'), '-')
-      .replaceAll(RegExp(r'^-|-$'), '');
-  return 'OK-CODEX-${suffix.isEmpty ? 'E2E' : suffix}';
-}
-
-String _defaultCodexPrompt(String runId) {
-  return 'Reply exactly ${_defaultCodexExpectedReply(runId)} and nothing else';
-}
-
-String _defaultClaudeCodeExpectedReply(String runId) {
-  final suffix = runId
-      .toUpperCase()
-      .replaceAll(RegExp(r'[^A-Z0-9]+'), '-')
-      .replaceAll(RegExp(r'-+'), '-')
-      .replaceAll(RegExp(r'^-|-$'), '');
-  return 'OK-CLAUDE-CODE-${suffix.isEmpty ? 'E2E' : suffix}';
-}
-
-String _defaultClaudeCodePrompt(String runId) {
-  return 'Reply exactly ${_defaultClaudeCodeExpectedReply(runId)} and nothing else';
-}
-
 class DesktopE2eFileConfig {
   const DesktopE2eFileConfig({
     this.path,
@@ -704,19 +587,11 @@ class DesktopE2eFileConfig {
     this.daemonReadyFile,
     this.daemonHandle,
     this.daemonEnvFile,
-    this.daemonFakeHermesGatewayCommand,
+    this.daemonFakeHermesHome,
     this.personalAgentEnabled,
     this.personalAgentRuntimeProvider,
     this.personalAgentProcessingScope,
     this.personalAgentRealBackend,
-    this.codexAgentEnabled,
-    this.codexAgentRealBackend,
-    this.codexAgentPrompt,
-    this.codexAgentExpectedReply,
-    this.claudeCodeAgentEnabled,
-    this.claudeCodeAgentRealBackend,
-    this.claudeCodeAgentPrompt,
-    this.claudeCodeAgentExpectedReply,
     this.otpPhone,
     this.otpCode,
     this.appHandle,
@@ -744,19 +619,11 @@ class DesktopE2eFileConfig {
       daemonReadyFile = null,
       daemonHandle = null,
       daemonEnvFile = null,
-      daemonFakeHermesGatewayCommand = null,
+      daemonFakeHermesHome = null,
       personalAgentEnabled = null,
       personalAgentRuntimeProvider = null,
       personalAgentProcessingScope = null,
       personalAgentRealBackend = null,
-      codexAgentEnabled = null,
-      codexAgentRealBackend = null,
-      codexAgentPrompt = null,
-      codexAgentExpectedReply = null,
-      claudeCodeAgentEnabled = null,
-      claudeCodeAgentRealBackend = null,
-      claudeCodeAgentPrompt = null,
-      claudeCodeAgentExpectedReply = null,
       otpPhone = null,
       otpCode = null,
       appHandle = null,
@@ -782,19 +649,11 @@ class DesktopE2eFileConfig {
   final String? daemonReadyFile;
   final String? daemonHandle;
   final String? daemonEnvFile;
-  final String? daemonFakeHermesGatewayCommand;
+  final String? daemonFakeHermesHome;
   final bool? personalAgentEnabled;
   final String? personalAgentRuntimeProvider;
   final String? personalAgentProcessingScope;
   final bool? personalAgentRealBackend;
-  final bool? codexAgentEnabled;
-  final bool? codexAgentRealBackend;
-  final String? codexAgentPrompt;
-  final String? codexAgentExpectedReply;
-  final bool? claudeCodeAgentEnabled;
-  final bool? claudeCodeAgentRealBackend;
-  final String? claudeCodeAgentPrompt;
-  final String? claudeCodeAgentExpectedReply;
   final String? otpPhone;
   final String? otpCode;
   final String? appHandle;
@@ -828,8 +687,6 @@ class DesktopE2eFileConfig {
     final personalAgent = raw.containsKey('personalAgent')
         ? _mapAt(raw, 'personalAgent', optional: true)
         : _mapAt(raw, 'messageAgent', optional: true);
-    final codexAgent = _mapAt(raw, 'codexAgent', optional: true);
-    final claudeCodeAgent = _mapAt(raw, 'claudeCodeAgent', optional: true);
     final performance = _mapAt(raw, 'performance', optional: true);
     final otp = _mapAt(raw, 'otp', optional: true);
 
@@ -909,22 +766,11 @@ class DesktopE2eFileConfig {
       ),
       daemonHandle: _stringAt(daemon, 'handle'),
       daemonEnvFile: _resolveOptionalPath(root, _stringAt(daemon, 'envFile')),
-      daemonFakeHermesGatewayCommand: _stringAt(
-        daemon,
-        'fakeHermesGatewayCommand',
-      ),
+      daemonFakeHermesHome: _stringAt(daemon, 'fakeHermesHome'),
       personalAgentEnabled: _boolAt(personalAgent, 'enabled'),
       personalAgentRuntimeProvider: _stringAt(personalAgent, 'runtimeProvider'),
       personalAgentProcessingScope: _stringAt(personalAgent, 'processingScope'),
       personalAgentRealBackend: _boolAt(personalAgent, 'realBackend'),
-      codexAgentEnabled: _boolAt(codexAgent, 'enabled'),
-      codexAgentRealBackend: _boolAt(codexAgent, 'realBackend'),
-      codexAgentPrompt: _stringAt(codexAgent, 'prompt'),
-      codexAgentExpectedReply: _stringAt(codexAgent, 'expectedReply'),
-      claudeCodeAgentEnabled: _boolAt(claudeCodeAgent, 'enabled'),
-      claudeCodeAgentRealBackend: _boolAt(claudeCodeAgent, 'realBackend'),
-      claudeCodeAgentPrompt: _stringAt(claudeCodeAgent, 'prompt'),
-      claudeCodeAgentExpectedReply: _stringAt(claudeCodeAgent, 'expectedReply'),
       otpPhone: otpPhone,
       otpCode: otpCode,
       appHandle: appHandle,

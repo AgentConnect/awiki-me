@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart' as crypto;
@@ -15,6 +16,12 @@ import '../messaging_service.dart';
 import '../ports/agent_inventory_port.dart';
 import '../ports/identity_core_port.dart';
 import '../ports/personal_agent_binding_port.dart';
+
+/// Sending is still owned by Core after the caller's bounded wait expires.
+/// The App must await committed creation status for the same request ID.
+class RuntimeAgentCreateDeliveryPending implements Exception {
+  const RuntimeAgentCreateDeliveryPending();
+}
 
 abstract interface class AgentControlService {
   Future<List<AgentSummary>> listAgents({bool includeInactive = false});
@@ -276,30 +283,35 @@ class DefaultAgentControlService
       displayName: options.displayName,
       preferredLanguage: preferredLanguage,
       driverId: kind.driverId,
-      workspaceMode: kind.isGenericCli ? options.workspaceMode : null,
-      defaultSandbox: kind.isGenericCli ? options.sandbox : null,
-      defaultModel: kind.isGenericCli ? options.model : null,
+      workspaceMode: options.workspaceMode,
+      defaultSandbox: options.sandbox,
+      defaultModel: options.model,
       driverConfig: driverConfig,
     );
     final requestId = clientRequestId ?? agentCommandId('app_req');
-    await _sendDaemonPayload(
-      daemonAgentDid,
-      runtimeAgentCreatePayload(
-        controllerDid: controllerDid,
-        registrationToken: token.token,
-        clientRequestId: requestId,
-        runtime: kind.runtime,
-        handle: options.handle,
-        displayName: options.displayName,
-        driverId: kind.driverId,
-        workspaceMode: kind.isGenericCli ? options.workspaceMode : null,
-        defaultSandbox: kind.isGenericCli ? options.sandbox : null,
-        defaultModel: kind.isGenericCli ? options.model : null,
-        preferredLanguage: preferredLanguage,
-        driverConfig: driverConfig,
-      ),
-      idempotencyKey: 'runtime-create:$daemonAgentDid:$requestId',
-    );
+    try {
+      await _sendDaemonPayload(
+        daemonAgentDid,
+        runtimeAgentCreatePayload(
+          controllerDid: controllerDid,
+          registrationToken: token.token,
+          clientRequestId: requestId,
+          runtime: kind.runtime,
+          handle: options.handle,
+          displayName: options.displayName,
+          driverId: kind.driverId,
+          workspaceMode: options.workspaceMode,
+          defaultSandbox: options.sandbox,
+          defaultModel: options.model,
+          preferredLanguage: preferredLanguage,
+          driverConfig: driverConfig,
+        ),
+        idempotencyKey: 'runtime-create:$daemonAgentDid:$requestId',
+      );
+    } on TimeoutException {
+      if (!kind.isAcp) rethrow;
+      throw const RuntimeAgentCreateDeliveryPending();
+    }
   }
 
   @override
@@ -863,7 +875,7 @@ String _personalAgentRuntimeHandle({
   required String appInstanceId,
 }) {
   const prefix = personalAgentProviderHermesHandlePrefix;
-  final seed = '${userDid.trim()}|${appInstanceId.trim()}';
+  final seed = 'acp-v1|${userDid.trim()}|${appInstanceId.trim()}';
   final hash = crypto.sha256
       .convert(utf8.encode(seed))
       .toString()

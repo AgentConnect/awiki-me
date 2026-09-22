@@ -192,9 +192,16 @@ GroupMemberAdmissionException? mapCoreGroupMemberAdmissionError(Object error) {
   if (raw != null) {
     try {
       final data = jsonDecode(raw);
-      if (data is Map &&
-          data['admission_reason'] == 'agent_not_group_invitable') {
-        reason = GroupMemberAdmissionDenialReason.agentNotGroupInvitable;
+      if (data is Map) {
+        reason = switch (data['admission_reason']) {
+          'agent_not_group_invitable' =>
+            GroupMemberAdmissionDenialReason.agentNotGroupInvitable,
+          'federated_group_denied' =>
+            GroupMemberAdmissionDenialReason.federatedGroupDenied,
+          'agent_inactive' || 'agent_inventory_not_found' =>
+            GroupMemberAdmissionDenialReason.identityUnavailable,
+          _ => GroupMemberAdmissionDenialReason.unspecified,
+        };
       }
     } on FormatException {
       // The stable service code still identifies a group-admission denial.
