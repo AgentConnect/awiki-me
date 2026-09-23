@@ -32,6 +32,7 @@ option_value() {
   printf '%s\n' "$value"
 }
 
+DEPENDENCY_MODE="registry"
 TARGET=""
 VERSION=""
 BUILD_NUMBER=""
@@ -47,6 +48,7 @@ ANP_DIR="$(cd "$ROOT_DIR/../anp/anp" 2>/dev/null && pwd || true)"
 
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
+    --dependency-mode) DEPENDENCY_MODE="$(option_value "$1" "${2:-}")"; shift 2 ;;
     --target) TARGET="$(option_value "$1" "${2:-}")"; shift 2 ;;
     --version) VERSION="$(option_value "$1" "${2:-}")"; shift 2 ;;
     --build-number) BUILD_NUMBER="$(option_value "$1" "${2:-}")"; shift 2 ;;
@@ -85,6 +87,18 @@ case "$ANDROID_STARTUP_SMOKE_TEST" in
   *) fail "Android startup smoke policy must be auto, always, or never" ;;
 esac
 [[ -d "$CORE_DIR" && -d "$ANP_DIR" ]] || fail "Core or ANP checkout is missing"
+
+NATIVE_REGISTRY=1
+NATIVE_TEST_MANIFEST=""
+case "$DEPENDENCY_MODE" in
+  registry) ;;
+  test-source)
+    NATIVE_REGISTRY=0
+    NATIVE_TEST_MANIFEST="$(cd "$CORE_DIR" && pwd)/scripts/release/singapore-test-sources.json"
+    [[ -f "$NATIVE_TEST_MANIFEST" ]] || fail "fixed test source manifest is missing"
+    ;;
+  *) fail "unsupported dependency mode: $DEPENDENCY_MODE" ;;
+esac
 
 require_cmd dart
 require_cmd flutter
@@ -278,7 +292,7 @@ build_android() {
   python3 "$ANDROID_EMAS_CONFIG_TOOL" validate \
     --path android/emas.properties || fail "Android Release EMAS configuration is invalid"
   (cd "$CORE_DIR" &&
-    AWIKI_RELEASE_REGISTRY=1 scripts/flutter/build-sdk-native.sh \
+    AWIKI_RELEASE_REGISTRY="$NATIVE_REGISTRY" AWIKI_TEST_SOURCE_MANIFEST="$NATIVE_TEST_MANIFEST" scripts/flutter/build-sdk-native.sh \
       --android-only \
       --android-abi arm64-v8a \
       --skip-codegen-check)
@@ -488,7 +502,7 @@ build_macos() {
     arch_label="x64"
   fi
   (cd "$CORE_DIR" &&
-    AWIKI_RELEASE_REGISTRY=1 scripts/flutter/build-sdk-native.sh \
+    AWIKI_RELEASE_REGISTRY="$NATIVE_REGISTRY" AWIKI_TEST_SOURCE_MANIFEST="$NATIVE_TEST_MANIFEST" scripts/flutter/build-sdk-native.sh \
       --macos-only \
       --macos-arch "$arch" \
       --skip-codegen-check)
@@ -572,4 +586,8 @@ if [[ "$TARGET" == "android-arm64" ]]; then
   build_android
 else
   build_macos
+fi
+
+if [[ "$DEPENDENCY_MODE" == test-source ]]; then
+  cp "$CORE_DIR/target/test-source-native.json" "$OUTPUT_DIR/test-source-native.json"
 fi

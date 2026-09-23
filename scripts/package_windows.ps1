@@ -11,11 +11,13 @@ param(
     [Parameter(Mandatory = $true)][string]$OutputDir,
     [string]$CoreDir = (Join-Path $PSScriptRoot '..\..\awiki-cli-rs2'),
     [string]$AnpDir = (Join-Path $PSScriptRoot '..\..\anp\anp'),
+    [ValidateSet('registry', 'test-source')][string]$DependencyMode = 'registry',
     [string]$InnoCompiler = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $env:AWIKI_RELEASE_REGISTRY = "1"
+$env:AWIKI_TEST_SOURCE_MANIFEST = ""
 
 Set-StrictMode -Version Latest
 
@@ -23,6 +25,11 @@ $RootDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $CoreDir = (Resolve-Path $CoreDir).Path
 $AnpDir = (Resolve-Path $AnpDir).Path
 $OutputDir = [IO.Path]::GetFullPath($OutputDir)
+if ($DependencyMode -eq 'test-source') {
+    $env:AWIKI_RELEASE_REGISTRY = "0"
+    $env:AWIKI_TEST_SOURCE_MANIFEST = Join-Path $CoreDir 'scripts/release/singapore-test-sources.json'
+    if (-not (Test-Path $env:AWIKI_TEST_SOURCE_MANIFEST)) { throw 'Fixed test source manifest is missing' }
+}
 $RuntimeManifestName = 'awiki-runtime-manifest.json'
 $RuntimeFileListName = 'awiki-runtime-files.txt'
 
@@ -357,4 +364,8 @@ try {
 }
 finally {
     Pop-Location
+}
+
+if ($DependencyMode -eq 'test-source') {
+    Copy-Item -LiteralPath (Join-Path $CoreDir 'target/test-source-native.json') -Destination (Join-Path $OutputDir 'test-source-native.json')
 }
