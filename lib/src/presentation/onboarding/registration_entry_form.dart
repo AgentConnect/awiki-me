@@ -40,6 +40,8 @@ class RegistrationEntryForm extends ConsumerWidget {
         state.step == RegistrationEntryStep.invite
             ? l10n.onboardingInviteInvalidBeforeContact
             : l10n.onboardingInviteInvalid,
+      'invite_length_six' => l10n.onboardingInviteLengthSix,
+      'invite_length_max_64' => l10n.onboardingInviteLengthMax64,
       'registration_closed' => l10n.onboardingRegistrationClosed,
       'check_failed' => l10n.onboardingAccountCheckFailed,
       _ => l10n.onboardingAccountUnavailable,

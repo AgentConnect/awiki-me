@@ -16,6 +16,7 @@ class InviteSupport extends FakeOnboardingSupportService {
   int checks = 0;
   String? lastInvite;
   String? lastEmail;
+  bool? lastCheckInvite;
   String decision = 'register';
   bool fail = false;
   String? boundPhone;
@@ -33,9 +34,10 @@ class InviteSupport extends FakeOnboardingSupportService {
     if (fail) throw StateError('network');
     lastInvite = inviteCode;
     lastEmail = email;
+    lastCheckInvite = checkInvite;
     final required = decision == 'register' && handle.length <= 4;
     final valid =
-        inviteCode == 'fixture-valid' &&
+        inviteCode == 'ABC123' &&
         (boundPhone == null ||
             (phone == null && email == null) ||
             phone == boundPhone);
@@ -69,9 +71,7 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
-  testWidgets('fixed login/register form checks invite on OTP request', (
-    tester,
-  ) async {
+  testWidgets('OTP checks invite length only', (tester) async {
     tester.view.physicalSize = const Size(390, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -110,18 +110,28 @@ void main() {
     await tester.enterText(field('e2e-invite-input'), 'wrong');
     await tapVisible(tester, find.text('发送验证码'));
     expect(gateway.sendOtpCalls, 0);
-    expect(find.text('邀请码无效、已过期或已用完，请检查后重试。'), findsOneWidget);
+    expect(find.text('请输入6位邀请码。'), findsOneWidget);
 
-    await tester.enterText(field('e2e-invite-input'), 'fixture-valid');
+    await tester.enterText(field('e2e-invite-input'), 'WRONG1');
     await tapVisible(tester, find.text('发送验证码'));
     expect(gateway.sendOtpCalls, 1);
-    expect(support.lastInvite, 'fixture-valid');
+    expect(field('e2e-invite-input'), findsOneWidget);
+    expect(support.lastInvite, isNull);
+    expect(support.lastCheckInvite, isFalse);
+    expect(
+      ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
+      ).read(registrationEntryProvider).inviteCode,
+      'WRONG1',
+    );
+    await tester.enterText(field('e2e-otp-input'), '123456');
+    await tapVisible(tester, find.text('登录/注册'));
+    expect(gateway.registerHandleCalls, 1);
+    expect(gateway.lastRegisteredInviteCode, 'WRONG1');
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('email activation waits for a valid short-handle invite', (
-    tester,
-  ) async {
+  testWidgets('email activation checks invite length only', (tester) async {
     tester.view.physicalSize = const Size(390, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -150,12 +160,15 @@ void main() {
     await tester.enterText(field('e2e-invite-input'), 'wrong');
     await tapVisible(tester, find.text('发送激活邮件'));
     expect(gateway.sendEmailVerificationCalls, 0);
-    expect(find.text('邀请码无效、已过期或已用完，请检查后重试。'), findsOneWidget);
+    expect(find.text('请输入6位邀请码。'), findsOneWidget);
 
-    await tester.enterText(field('e2e-invite-input'), 'fixture-valid');
+    await tester.enterText(field('e2e-invite-input'), 'WRONG1');
     await tapVisible(tester, find.text('发送激活邮件'));
     expect(gateway.sendEmailVerificationCalls, 1);
     expect(support.lastEmail, 'fixture@example.com');
+    expect(support.lastInvite, isNull);
+    expect(support.lastCheckInvite, isFalse);
+    expect(field('e2e-invite-input'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

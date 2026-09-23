@@ -3707,6 +3707,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingInviteRequired => '此账号注册需要邀请码，请填写后继续。';
 
   @override
+  String get onboardingInviteLengthSix => '请输入6位邀请码。';
+
+  @override
+  String get onboardingInviteLengthMax64 => '邀请码不能超过64位。';
+
+  @override
   String get onboardingInviteInvalidBeforeContact => '邀请码无效、已过期或已用完，请检查后重试。';
 
   @override

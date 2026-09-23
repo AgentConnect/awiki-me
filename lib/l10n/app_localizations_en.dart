@@ -3970,6 +3970,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'An invite code is required to register this handle.';
 
   @override
+  String get onboardingInviteLengthSix => 'Enter a 6-character invite code.';
+
+  @override
+  String get onboardingInviteLengthMax64 =>
+      'The invite code must be 64 characters or fewer.';
+
+  @override
   String get onboardingInviteInvalidBeforeContact =>
       'This invitation code is invalid, expired, or exhausted. Please check and try again.';
 

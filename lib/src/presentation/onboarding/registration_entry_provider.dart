@@ -168,20 +168,24 @@ class RegistrationEntryController
           .checkRegistration(
             handle: state.handle,
             domain: state.domain,
-            inviteCode: inviteCode.isEmpty ? null : inviteCode,
             phone: phone,
             email: email,
-            checkInvite: inviteCode.isNotEmpty,
           )
           .timeout(const Duration(seconds: 20));
       if (!mounted || revision != _revision) return false;
       final needsInvite =
-          result.decision == 'register' &&
-          result.inviteRequired &&
-          result.inviteStatus != 'valid';
+          result.decision == 'register' && result.inviteRequired;
       final missingInvite = needsInvite && inviteCode.isEmpty;
+      final invalidInviteLength =
+          needsInvite &&
+          !missingInvite &&
+          (state.handle.length == 4
+              ? inviteCode.runes.length != 6
+              : inviteCode.runes.length > 64);
       final canVerify =
-          result.canVerify && (!state.existingAccountPath || result.isExisting);
+          (result.isExisting || result.decision == 'register') &&
+          (!needsInvite || (!missingInvite && !invalidInviteLength)) &&
+          (!state.existingAccountPath || result.isExisting);
       state = _state(
         check: result,
         step: result.decision == 'unavailable' || needsInvite
@@ -191,6 +195,10 @@ class RegistrationEntryController
             ? null
             : state.existingAccountPath && !result.isExisting
             ? 'check_failed'
+            : invalidInviteLength
+            ? state.handle.length == 4
+                  ? 'invite_length_six'
+                  : 'invite_length_max_64'
             : canVerify
             ? null
             : result.reason ?? 'handle_unavailable',

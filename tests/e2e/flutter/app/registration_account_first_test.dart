@@ -191,14 +191,16 @@ Future<String> _runInvitedHandleJoin(
           find.text(labels.onboardingShortHandleInviteHint),
           findsOneWidget,
         );
-        await _enter(tester, 'e2e-invite-input', 'invalid-invite-precheck');
+        await _enter(tester, 'e2e-invite-input', 'x' * 65);
         await _tap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));
         await _until(
           tester,
           () =>
               container.read(registrationEntryProvider).error ==
-              'invite_invalid',
-          'Invalid invite is rejected before contact verification',
+              (expectedLength == 4
+                  ? 'invite_length_six'
+                  : 'invite_length_max_64'),
+          'Invite length is checked before contact verification',
         );
         expect(find.bySemanticsIdentifier('e2e-phone-input'), findsOneWidget);
         await _enter(tester, 'e2e-invite-input', invite);
@@ -210,7 +212,10 @@ Future<String> _runInvitedHandleJoin(
             find.bySemanticsIdentifier('e2e-phone-input').evaluate().isNotEmpty,
         'Contact verification follows account admission',
       );
-      expect(find.bySemanticsIdentifier('e2e-invite-input'), findsNothing);
+      expect(
+        find.bySemanticsIdentifier('e2e-invite-input'),
+        existing ? findsNothing : findsOneWidget,
+      );
       if (existing) {
         expect(find.bySemanticsIdentifier('e2e-invite-input'), findsNothing);
         await _tap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));

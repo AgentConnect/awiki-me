@@ -1647,6 +1647,8 @@
   "onboardingInviteCode": "Invite code",
   "onboardingInviteHandleHint": "An invite code is required to register this handle.",
   "onboardingInviteRequired": "An invite code is required to register this handle.",
+  "onboardingInviteLengthSix": "Enter a 6-character invite code.",
+  "onboardingInviteLengthMax64": "The invite code must be 64 characters or fewer.",
   "onboardingInviteInvalidBeforeContact": "This invitation code is invalid, expired, or exhausted. Please check and try again.",
   "onboardingInviteInvalid": "The invite code is invalid, expired, exhausted, or does not match this phone. Check it and retry.",
   "onboardingAccountUnavailable": "This handle cannot be registered. Choose another handle.",
