@@ -80,46 +80,71 @@ void main() {
   );
 
   test(
-    'SecureAppKeyValueStore pins the Android preference namespace on plugin fallback',
+    'SecureAppKeyValueStore migrates the exact v9 key into an isolated v10 namespace',
     () async {
       TestWidgetsFlutterBinding.ensureInitialized();
       const keychainChannel = MethodChannel('ai.awiki.awikime/keychain_access');
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(keychainChannel, null);
-      final secureStorage = _CapturingSecureStorage();
-      final store = SecureAppKeyValueStore(secureStorage: secureStorage);
+      final secureStorage = _CapturingSecureStorage()
+        ..seed(
+          namespace: 'FlutterSecureStorage',
+          key: 'active-session',
+          value: 'identity-1',
+        );
+      final store = SecureAppKeyValueStore(
+        secureStorage: secureStorage,
+        isAndroid: true,
+      );
 
-      await store.write(key: 'active-session', value: 'identity-1');
-      await store.read(key: 'active-session');
-      await store.delete(key: 'active-session');
+      expect(await store.read(key: 'active-session'), 'identity-1');
 
-      final options = secureStorage.writeAndroidOptions;
-      expect(options, isNotNull);
-      expect(options, containsPair('encryptedSharedPreferences', 'false'));
-      expect(options, containsPair('resetOnError', 'false'));
-      expect(options, isNot(contains('migrateOnAlgorithmChange')));
-      expect(options, isNot(contains('migrateWithBackup')));
       expect(
-        options,
+        secureStorage.value('awiki_me_app_state_v1', 'active-session'),
+        'identity-1',
+      );
+      expect(
+        secureStorage.value('FlutterSecureStorage', 'active-session'),
+        'identity-1',
+      );
+      expect(secureStorage.calls.map((call) => call.$1), <String>[
+        'read:awiki_me_app_state_v1',
+        'read:FlutterSecureStorage',
+        'write:awiki_me_app_state_v1',
+        'read:awiki_me_app_state_v1',
+      ]);
+
+      final targetOptions = secureStorage.calls.first.$2;
+      expect(targetOptions, containsPair('resetOnError', 'false'));
+      expect(targetOptions, containsPair('migrateWithBackup', 'true'));
+      expect(
+        targetOptions,
+        containsPair('storageNamespace', 'awiki_me_app_state_v1'),
+      );
+      expect(targetOptions['sharedPreferencesName'], isEmpty);
+
+      final legacyOptions = secureStorage.calls[1].$2;
+      expect(legacyOptions, containsPair('resetOnError', 'false'));
+      expect(legacyOptions, containsPair('migrateOnAlgorithmChange', 'false'));
+      expect(
+        legacyOptions,
         containsPair('keyCipherAlgorithm', 'RSA_ECB_PKCS1Padding'),
       );
       expect(
-        options,
+        legacyOptions,
         containsPair('storageCipherAlgorithm', 'AES_CBC_PKCS7Padding'),
       );
       expect(
-        options,
+        legacyOptions,
         containsPair('sharedPreferencesName', 'FlutterSecureStorage'),
       );
       expect(
-        options,
+        legacyOptions,
         containsPair(
           'preferencesKeyPrefix',
           'VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIHNlY3VyZSBzdG9yYWdlCg',
         ),
       );
-      expect(secureStorage.readAndroidOptions, options);
-      expect(secureStorage.deleteAndroidOptions, options);
     },
   );
 
@@ -205,7 +230,7 @@ void main() {
       expect(legacyCalls, hasLength(1));
       final arguments = legacyCalls.single.arguments as Map<Object?, Object?>;
       final options = arguments['options'] as Map<Object?, Object?>;
-      expect(options['useDataProtectionKeyChain'], 'false');
+      expect(options['usesDataProtectionKeychain'], 'false');
     },
   );
 
@@ -387,9 +412,20 @@ Future<String> _mode(String path) async {
 }
 
 class _CapturingSecureStorage extends FlutterSecureStorage {
-  Map<String, String>? writeAndroidOptions;
-  Map<String, String>? readAndroidOptions;
-  Map<String, String>? deleteAndroidOptions;
+  final Map<String, Map<String, String>> _values =
+      <String, Map<String, String>>{};
+  final List<(String, Map<String, String>)> calls =
+      <(String, Map<String, String>)>[];
+
+  void seed({
+    required String namespace,
+    required String key,
+    required String value,
+  }) {
+    (_values[namespace] ??= <String, String>{})[key] = value;
+  }
+
+  String? value(String namespace, String key) => _values[namespace]?[key];
 
   @override
   Future<void> write({
@@ -402,7 +438,10 @@ class _CapturingSecureStorage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
-    writeAndroidOptions = aOptions?.toMap();
+    final options = aOptions!.toMap();
+    final namespace = _namespace(options);
+    calls.add(('write:$namespace', options));
+    (_values[namespace] ??= <String, String>{})[key] = value!;
   }
 
   @override
@@ -415,8 +454,10 @@ class _CapturingSecureStorage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
-    readAndroidOptions = aOptions?.toMap();
-    return null;
+    final options = aOptions!.toMap();
+    final namespace = _namespace(options);
+    calls.add(('read:$namespace', options));
+    return _values[namespace]?[key];
   }
 
   @override
@@ -429,6 +470,14 @@ class _CapturingSecureStorage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
-    deleteAndroidOptions = aOptions?.toMap();
+    final options = aOptions!.toMap();
+    final namespace = _namespace(options);
+    calls.add(('delete:$namespace', options));
+    _values[namespace]?.remove(key);
+  }
+
+  String _namespace(Map<String, String> options) {
+    final target = options['storageNamespace']!;
+    return target.isNotEmpty ? target : options['sharedPreferencesName']!;
   }
 }
