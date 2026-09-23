@@ -17,7 +17,11 @@ void main() {
       expect(
         ids.toSet(),
         catalog.cases
-            .where((c) => c.catalogStatus == 'active')
+            .where(
+              (c) =>
+                  c.catalogStatus == 'active' &&
+                  !c.requiredFor.contains('local-fixture'),
+            )
             .map((c) => c.caseId)
             .toSet(),
       );

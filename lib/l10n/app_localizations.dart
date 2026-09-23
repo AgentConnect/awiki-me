@@ -6922,6 +6922,72 @@ abstract class AppLocalizations {
   /// **'客户端版本与当前接入能力不兼容，请更新客户端后重试。'**
   String get agentClientCompatibilityHint;
 
+  /// No description provided for @onboardingAccountNext.
+  ///
+  /// In zh, this message translates to:
+  /// **'下一步'**
+  String get onboardingAccountNext;
+
+  /// No description provided for @onboardingInviteCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'邀请码'**
+  String get onboardingInviteCode;
+
+  /// No description provided for @onboardingInviteRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'此账号注册需要邀请码，请填写后继续。'**
+  String get onboardingInviteRequired;
+
+  /// No description provided for @onboardingInviteInvalidBeforeContact.
+  ///
+  /// In zh, this message translates to:
+  /// **'邀请码无效、已过期或已用完，请检查后重试。'**
+  String get onboardingInviteInvalidBeforeContact;
+
+  /// No description provided for @onboardingInviteInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'邀请码无效、已过期、已用完或与手机号不匹配，请检查后重试。'**
+  String get onboardingInviteInvalid;
+
+  /// No description provided for @onboardingAccountUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'此账号无法注册，请修改账号后重试。'**
+  String get onboardingAccountUnavailable;
+
+  /// No description provided for @onboardingAccountCheckFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法检查账号，请重试。已有账号可继续登录。'**
+  String get onboardingAccountCheckFailed;
+
+  /// No description provided for @onboardingExistingAccount.
+  ///
+  /// In zh, this message translates to:
+  /// **'已有账号，继续验证后登录、加入设备或恢复。'**
+  String get onboardingExistingAccount;
+
+  /// No description provided for @onboardingExistingAccountAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'已有账号，继续登录'**
+  String get onboardingExistingAccountAction;
+
+  /// No description provided for @onboardingChangeAccount.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回修改账号或邀请码'**
+  String get onboardingChangeAccount;
+
+  /// No description provided for @onboardingRegistrationClosed.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前不允许使用此联系方式注册。'**
+  String get onboardingRegistrationClosed;
+
   /// No description provided for @chatRetiredAgentDisabled.
   ///
   /// In zh, this message translates to:

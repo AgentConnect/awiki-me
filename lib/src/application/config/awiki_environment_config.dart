@@ -51,6 +51,7 @@ class AwikiEnvironmentConfig {
     String? didDomain,
     String? anpServiceUrl,
     String? anpServiceDid,
+    this.caBundle,
     String? daemonDownloadBaseUrl,
     String? updateManifestUrl,
     String? releasesUrl,
@@ -132,6 +133,9 @@ class AwikiEnvironmentConfig {
   late final String didDomain;
   late final String anpServiceUrl;
   late final String anpServiceDid;
+
+  /// Explicit local PEM roots for native Core; never supplied by server discovery.
+  final String? caBundle;
   late final String daemonDownloadBaseUrl;
   late final String updateManifestUrl;
   late final String releasesUrl;

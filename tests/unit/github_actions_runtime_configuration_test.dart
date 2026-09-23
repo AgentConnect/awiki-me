@@ -11,6 +11,123 @@ const Map<String, int> _minimumNode24ActionMajors = <String, int>{
 };
 
 void main() {
+  test('development CI explicitly selects locked source integration', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    final inputs = workflow['on']['workflow_dispatch']['inputs'] as YamlMap;
+    expect(inputs['sdk_dependencies']['options'], ['source', 'registry']);
+    expect(inputs['sdk_dependencies']['default'], 'source');
+    final environment = workflow['env'] as YamlMap;
+    expect(
+      environment['AWIKI_SOURCE_INTEGRATION'],
+      contains("github.event.inputs.sdk_dependencies == 'source'"),
+    );
+    expect(environment['AWIKI_RELEASE_REGISTRY'], contains("&& '0' || '1'"));
+    final jobs = workflow['jobs'] as YamlMap;
+    for (final name in ['validate', 'remote-product']) {
+      final builds = (jobs[name]['steps'] as YamlList).cast<YamlMap>().where(
+        (step) => (step['run']?.toString() ?? '').contains('native_root='),
+      );
+      expect(builds, hasLength(1));
+      final command = builds.single['run'].toString();
+      expect(
+        command,
+        contains(
+          '--deps source --source-manifest dependencies.source.json --cargo-command build -p im-core-dart -p awiki-cli --locked',
+        ),
+      );
+      expect(
+        command,
+        contains('native_root=.artifacts/dependencies/source/target'),
+      );
+      expect(command, contains('scripts/release/registry-build.py'));
+    }
+    final windowsSteps = (jobs['windows-pr']['steps'] as YamlList)
+        .cast<YamlMap>()
+        .toList();
+    final entryCheck = windowsSteps.indexWhere(
+      (step) => step['name'] == 'Check Windows native build entrypoint',
+    );
+    final hostTests = windowsSteps.indexWhere(
+      (step) => step['name'] == 'Run IM Core Rust host tests',
+    );
+    expect(entryCheck, greaterThanOrEqualTo(0));
+    expect(entryCheck, lessThan(hostTests));
+    expect(
+      windowsSteps[entryCheck]['run'],
+      './scripts/flutter/test-build-windows.ps1',
+    );
+    final windows = (jobs['windows-pr']['steps'] as YamlList)
+        .cast<YamlMap>()
+        .singleWhere(
+          (step) => step['name'] == 'Run IM Core Rust host tests',
+        )['run']
+        .toString();
+    expect(windows, contains('--cargo-command @cargoArgs'));
+    expect(
+      windows,
+      contains(r'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }'),
+    );
+  });
+
+  test('automatic source mode is scoped to the registration PR only', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    const selection =
+        "github.event.inputs.sdk_dependencies == 'source' || (github.event_name == 'pull_request' && github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first')";
+    expect(
+      workflow['env']['AWIKI_SOURCE_INTEGRATION'],
+      '\u0024{{ ($selection) && \'1\' || \'0\' }}',
+    );
+    expect(
+      workflow['env']['AWIKI_RELEASE_REGISTRY'],
+      '\u0024{{ ($selection) && \'0\' || \'1\' }}',
+    );
+    final source = File('.github/workflows/ci.yml').readAsStringSync();
+    // Every fixed consumer pin (including shell/report refs) must have the head fence.
+    final pins = source
+        .split('\n')
+        .where(
+          (line) => line.contains('eccadfa05a03410f405fc7760ce45ed8cd9ff533'),
+        );
+    expect(pins, isNotEmpty);
+    for (final line in pins) {
+      expect(
+        line,
+        contains(
+          "github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05",
+        ),
+      );
+    }
+  });
+
+  test('validation-only dispatch cannot start remote account and OTP jobs', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    final inputs = workflow['on']['workflow_dispatch']['inputs'] as YamlMap;
+    expect(inputs['validation_only']['type'], 'boolean');
+    expect(inputs['validation_only']['default'], isFalse);
+    expect(inputs['cli_ref']['required'], isTrue);
+    final jobs = workflow['jobs'] as YamlMap;
+    expect(
+      jobs['remote-product']['if'],
+      "github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.validation_only)",
+    );
+    expect(jobs['validate'].containsKey('if'), isFalse);
+    expect(jobs['remote-product']['needs'], [
+      'validate',
+      'cross-repository-contracts',
+    ]);
+    // Registry source and exact input selection remain shared with native CI.
+    expect(
+      jobs['windows-pr']['env']['WINDOWS_CORE_REF'],
+      contains('github.event.inputs.cli_ref'),
+    );
+  });
+
   test('E2E report uploads include hidden reports without runtime secrets', () {
     final workflow =
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
@@ -64,12 +181,43 @@ void main() {
     }
   });
 
+  test('registration feature alone selects the compatible Core baseline', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    final jobs = workflow['jobs'] as YamlMap;
+    const pin =
+        "(github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05a03410f405fc7760ce45ed8cd9ff533')";
+    for (final name in [
+      'validate',
+      'cross-repository-contracts',
+      'remote-product',
+    ]) {
+      final checkout = (jobs[name]['steps'] as YamlList)
+          .cast<YamlMap>()
+          .singleWhere(
+            (step) =>
+                step['with'] is YamlMap &&
+                step['with']['path'] == 'awiki-cli-rs2',
+          );
+      expect(
+        checkout['with']['ref'],
+        '\u0024{{ github.event.inputs.cli_ref || $pin || \'d3289db6732f6028fa7e54909b768bd48838f7fb\' }}',
+      );
+    }
+    expect(
+      jobs['windows-pr']['env']['WINDOWS_CORE_REF'],
+      '\u0024{{ github.event.inputs.cli_ref || $pin || \'d3289db6732f6028fa7e54909b768bd48838f7fb\' }}',
+    );
+  });
+
   test('PR checkout credentials are scoped to private contract sources', () {
     final workflow =
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
             as YamlMap;
     final jobs = workflow['jobs'] as YamlMap;
-    final validateSteps = (jobs['validate'] as YamlMap)['steps'] as YamlList;
+    final validateSteps =
+        (jobs['cross-repository-contracts'] as YamlMap)['steps'] as YamlList;
     final coordinator =
         validateSteps.cast<YamlMap>().singleWhere(
               (step) =>
@@ -118,36 +266,91 @@ void main() {
     }
   });
 
-  test(
-    'CI native consumers use the published registry SDK build entrypoint',
-    () {
-      final workflow =
-          loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
-              as YamlMap;
-      expect((workflow['env'] as YamlMap)['AWIKI_RELEASE_REGISTRY'], '1');
-      final jobs = workflow['jobs'] as YamlMap;
-      var cargoCommands = 0;
-      for (final job in jobs.values.cast<YamlMap>()) {
-        for (final step in (job['steps'] as YamlList).cast<YamlMap>()) {
-          final script = step['run'];
-          if (script is! String) continue;
-          for (final line in script.split('\n')) {
-            if (!RegExp(
-              r'\bcargo (?:\+\S+ )?(?:build|test)\b',
-            ).hasMatch(line)) {
-              continue;
-            }
-            cargoCommands++;
-            expect(
-              line,
-              contains('python3 scripts/release/registry-build.py -- cargo'),
-            );
+  test('private contract failure cannot block App validation', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    final jobs = workflow['jobs'] as YamlMap;
+    for (final entry in {
+      'validate': 'app',
+      'cross-repository-contracts': 'system',
+    }.entries) {
+      final job = jobs[entry.key] as YamlMap;
+      expect(job.containsKey('needs'), isFalse);
+      expect(job.containsKey('if'), isFalse);
+      expect(job.containsKey('continue-on-error'), isFalse);
+      final steps = (job['steps'] as YamlList).cast<YamlMap>().toList();
+      expect(
+        steps.any((step) => step.containsKey('continue-on-error')),
+        isFalse,
+      );
+      final profile = steps.singleWhere(
+        (step) => (step['run']?.toString() ?? '').contains('--profile pr'),
+      );
+      expect(
+        profile['run'],
+        contains('--profile pr --component ${entry.value}'),
+      );
+      final repositories = steps
+          .where((step) => step['with'] is YamlMap)
+          .map((step) => step['with']['repository']?.toString() ?? '')
+          .join('\n');
+      for (final repository in [
+        'awiki-web',
+        'user-service',
+        'dsh-awiki',
+        'deepseek-harness-desktop',
+      ]) {
+        expect(repositories.contains('/$repository'), entry.value == 'system');
+      }
+      if (entry.value == 'app') {
+        expect(
+          job.toString(),
+          isNot(contains('access to awiki-system-test, user-service')),
+        );
+        expect(
+          steps.map((step) => step['name']),
+          containsAll([
+            'Dart analyze',
+            'Flutter unit/widget/provider gate',
+            'Validate case catalog and generated documentation',
+            'Real desktop smoke (no service dependency)',
+          ]),
+        );
+      }
+    }
+  });
+
+  test('registry branches retain the published SDK build entrypoint', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    expect(
+      (workflow['env'] as YamlMap)['AWIKI_RELEASE_REGISTRY'],
+      contains("&& '0' || '1'"),
+    );
+    final jobs = workflow['jobs'] as YamlMap;
+    var cargoCommands = 0;
+    for (final job in jobs.values.cast<YamlMap>()) {
+      for (final step in (job['steps'] as YamlList).cast<YamlMap>()) {
+        final script = step['run'];
+        if (script is! String) continue;
+        for (final line in script.split('\n')) {
+          if (!RegExp(
+            r'\bcargo (?:\+\S+ )?(?:build|test|@cargoArgs)\b',
+          ).hasMatch(line)) {
+            continue;
           }
+          cargoCommands++;
+          expect(
+            line,
+            contains('python3 scripts/release/registry-build.py -- cargo'),
+          );
         }
       }
-      expect(cargoCommands, 3);
-    },
-  );
+    }
+    expect(cargoCommands, 3);
+  });
 
   test('GitHub workflows use actions with native Node 24 runtimes', () {
     final workflowFiles =

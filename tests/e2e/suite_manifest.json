@@ -1379,6 +1379,40 @@
         "display-name-fallback",
         "production-keychain"
       ]
+    },
+    "registration-account-first": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "requiredTools": [
+        "flutter"
+      ],
+      "requiredFor": [
+        "local-fixture",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 5,
+      "timeoutMinutes": 8,
+      "cleanupPolicy": "isolated_scope_delete_and_disposable_service_fixture",
+      "allowedHosts": [
+        "127.0.0.1",
+        "localhost",
+        "::1"
+      ],
+      "allowedDidDomains": [
+        "registration.test"
+      ],
+      "resourceCategories": [
+        "isolated_app_state",
+        "dedicated_test_identity",
+        "invitation_fixture"
+      ],
+      "caseIds": [
+        "REGISTRATION-ACCOUNT-FIRST-E2E-001"
+      ]
     }
   }
 }

@@ -143,3 +143,5 @@ account/cursor/token/page ref/manifest。App runner 不接收或转发 account I
 receipt 也不作为消息或恢复 oracle。
 
 ⚡触发器：App 目录职责、SDK/App 边界、tenant/state/vault 归属、测试结构或平台支持变化时同步更新本文件。
+
+`full` covers active remote-product cases. The active `registration-account-first` loopback suite is separately required under `[local-fixture, release]`; exhaustive acceptance includes both, and missing local fixture prerequisites remain blocked/failed, never silently skipped.

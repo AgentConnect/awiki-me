@@ -11,6 +11,67 @@ import '../../../tool/build_isolated_e2e_app.dart';
 
 void main() {
   test(
+    'deployment override changes build configuration and cache identity',
+    () {
+      IsolatedE2eAppBuildRequest request(
+        String version, {
+        IsolatedE2eAppPlatform platform = IsolatedE2eAppPlatform.macos,
+      }) => IsolatedE2eAppBuildRequest(
+        projectRoot: Directory('/tmp/project'),
+        name: 'registration',
+        target: 'integration_test/registration_account_first_test.dart',
+        stateRoot: Directory('/tmp/project/state'),
+        workRoot: Directory('/tmp/project/work'),
+        artifactRoot: Directory('/tmp/project/artifact'),
+        bundleId: 'ai.awiki.e2e.registration',
+        platform: platform,
+        flutterBin: 'flutter',
+        dartDefines: const [],
+        dryRun: true,
+        macosDeploymentTarget: version,
+      );
+      Map<String, Object?> payload(String version) => isolatedCompileKeyPayload(
+        request: request(version),
+        hostPlatform: const E2eHostPlatform(
+          operatingSystem: 'macos',
+          processArchitecture: 'arm64',
+          hardwareArchitecture: 'arm64',
+          translated: false,
+        ),
+        sourceDigest: 'source',
+        pubspecLockSha256: 'lock',
+        pubspecOverridesSha256: '',
+        pathDependencySha256: 'dependency',
+        nativeCoreSha256: 'native',
+        nativeCoreProvenanceSha256: 'provenance',
+        flutterIdentity: const {'frameworkVersion': '1'},
+        rustcVersion: 'rustc 1',
+      );
+      expect(
+        request('12.0').macosOverrideConfiguration,
+        contains('MACOSX_DEPLOYMENT_TARGET = 12.0\n'),
+      );
+      expect(
+        request('12.0').macosOverrideConfiguration,
+        contains('AWIKI_MACOS_DEV_BUNDLE_ID = ai.awiki.e2e.registration'),
+      );
+      expect(payload('12.0')['macosDeploymentTarget'], '12.0');
+      expect(payload('12.0'), isNot(payload('13.0')));
+      expect(
+        request(
+          '12.0',
+          platform: IsolatedE2eAppPlatform.linux,
+        ).macosDeploymentTarget,
+        isNull,
+      );
+      expect(
+        () => request('12.0\nCODE_SIGNING_ALLOWED = NO'),
+        throwsA(isA<IsolatedE2eAppBuildException>()),
+      );
+    },
+  );
+
+  test(
     'compile inputs follow only the selected target local Dart graph',
     () async {
       final project = await Directory.systemTemp.createTemp(

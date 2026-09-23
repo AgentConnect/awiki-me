@@ -577,6 +577,7 @@ void appPairJoinerMain() {
         () => find.byType(OnboardingPage).evaluate().length == 1,
         failure: 'The joining App did not open unified onboarding.',
       );
+      await enterExistingAccount(tester, handle);
       await _pumpUntil(
         tester,
         () => find.bySemanticsIdentifier('e2e-otp-input').evaluate().isNotEmpty,
@@ -1226,6 +1227,7 @@ Future<void> _requireRetiredIdentityOnboardingChoice({
   required _DedicatedAccount account,
   required String handle,
 }) async {
+  await enterExistingAccount(tester, handle);
   final phoneInput = find.bySemanticsIdentifier('e2e-phone-input');
   final handleInput = find.bySemanticsIdentifier('e2e-handle-input');
   final sendOtp = find.bySemanticsIdentifier('e2e-send-otp-button');

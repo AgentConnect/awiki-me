@@ -248,6 +248,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        await _advanceAccountStep(tester);
         await tester.tap(find.text('+86'));
         await tester.pump();
 
@@ -549,6 +550,8 @@ Future<void> _pumpDesktopOnboarding(WidgetTester tester, Widget app) async {
   });
 
   await tester.pumpWidget(app);
+  await tester.pumpAndSettle();
+  await _advanceAccountStep(tester);
   final phoneMethod = find.byKey(const Key('auth-mode-phone'));
   final emailMethod = find.byKey(const Key('auth-mode-email'));
   final input = find.byType(CupertinoTextField);
@@ -561,6 +564,20 @@ Future<void> _pumpDesktopOnboarding(WidgetTester tester, Widget app) async {
     }
   }
   fail('Desktop onboarding did not become ready within 500 ms.');
+}
+
+Future<void> _advanceAccountStep(WidgetTester tester) async {
+  expect(find.byType(CupertinoTextField), findsOneWidget);
+  expect(find.byKey(const Key('auth-mode-phone')), findsNothing);
+  await tester.enterText(find.byType(CupertinoTextField), 'locale-check');
+  final next = find.byWidgetPredicate(
+    (widget) =>
+        widget is AppPrimaryButton &&
+        widget.semanticsIdentifier == 'e2e-account-next',
+  );
+  await tester.ensureVisible(next);
+  await tester.tap(next);
+  await tester.pumpAndSettle();
 }
 
 class _StaticConversationCore implements ConversationCorePort {

@@ -3692,6 +3692,39 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentClientCompatibilityHint => '客户端版本与当前接入能力不兼容，请更新客户端后重试。';
 
   @override
+  String get onboardingAccountNext => '下一步';
+
+  @override
+  String get onboardingInviteCode => '邀请码';
+
+  @override
+  String get onboardingInviteRequired => '此账号注册需要邀请码，请填写后继续。';
+
+  @override
+  String get onboardingInviteInvalidBeforeContact => '邀请码无效、已过期或已用完，请检查后重试。';
+
+  @override
+  String get onboardingInviteInvalid => '邀请码无效、已过期、已用完或与手机号不匹配，请检查后重试。';
+
+  @override
+  String get onboardingAccountUnavailable => '此账号无法注册，请修改账号后重试。';
+
+  @override
+  String get onboardingAccountCheckFailed => '暂时无法检查账号，请重试。已有账号可继续登录。';
+
+  @override
+  String get onboardingExistingAccount => '已有账号，继续验证后登录、加入设备或恢复。';
+
+  @override
+  String get onboardingExistingAccountAction => '已有账号，继续登录';
+
+  @override
+  String get onboardingChangeAccount => '返回修改账号或邀请码';
+
+  @override
+  String get onboardingRegistrationClosed => '当前不允许使用此联系方式注册。';
+
+  @override
   String get chatRetiredAgentDisabled => '旧版接入已停用，请重新创建智能体。聊天记录与草稿已保留。';
 
   @override

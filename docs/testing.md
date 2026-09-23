@@ -55,6 +55,111 @@ the same change:
 Code-only feature changes without corresponding tests are not acceptable unless
 the exception and follow-up are explicitly documented.
 
+## Account-first registration
+
+The mobile and desktop onboarding entry first asks for a Handle in the selected
+tenant. `registration_check` decides whether to show the invitation step or the
+contact verification step. Three-character new names require a database invitation;
+four-character names retain the existing algorithm-invitation policy. The App does
+not infer account ownership or admission from length or availability.
+
+The invitation stays in transient form state and is passed to the existing Core
+registration facade. Contact-bound invitation validation happens before OTP/email
+activation. Existing-account and pending local Recovery entrances remain usable
+when public discovery fails. Editing the Handle, tenant or contact discards stale
+results; an already accepted SMS receipt still sets the shared cooldown.
+
+Focused coverage:
+
+```bash
+flutter test tests/unit/registration_entry_test.dart \
+  tests/unit/registration_entry_widget_test.dart \
+  tests/unit/onboarding_page_test.dart \
+  tests/unit/onboarding_recovery_lookup_test.dart \
+  tests/unit/onboarding_otp_lifecycle_test.dart \
+  tests/unit/data/services/awiki_onboarding_support_service_test.dart
+```
+
+`SMOKE-E2E-001` checks the visible account-first transition in a native App with
+fake service ports. It does not prove real invitation consumption or completed
+registration. Real service and product registration acceptance must separately
+record the service source, Core artifact source, target tenant and cleanup.
+
+`registration-account-first` / `REGISTRATION-ACCOUNT-FIRST-E2E-001` uses real
+native Core and disposable loopback User/Message Services. Set
+`AWIKI_REGISTRATION_FIXTURE` to an ignored, permission-restricted JSON file with
+`userServiceUrl`, `domain`, `handle`, `inviteCode`, `fourCharHandle`,
+`fourCharInviteCode`, `phone`, `otp`, `emailHandle`, `emailInviteCode`, and `email`. An optional
+`caBundle` names a local PEM CA file for disposable HTTPS DID resolution; default
+trust remains unchanged. The test process may use a loopback HTTPS CONNECT proxy,
+which must serve the real User Service DID documents for both account and system
+notification Agent paths. The fixture must route both asynchronous and synchronous
+DID resolution to its loopback HTTPS listener: `HTTPS_PROXY` alone does not cover
+the synchronous Core HTTP client. A macOS process-local exact-host resolver can
+provide this without changing system DNS; its loading must be verified in the
+actual App process. Never disable certificate verification. Provision
+unused three- and four-character names, a one-use database invitation for the
+three-character name, a valid algorithm invitation for the four-character name,
+and local development OTP in
+the disposable service before running the case. The domain must be a valid App
+tenant hostname; the ANP service DID is its bare-domain `did:wba` DID. Never use
+production credentials or an SMS provider for this local case. Email requires a
+loopback-only SMTP receiver and the actual activation-confirmation endpoint;
+use official Turnstile test credentials only in the disposable service. Capture
+activation links without logging tokens, and clean the exact email verification
+row after the case. Do not substitute a preverified database row for delivery
+and confirmation.
+
+```bash
+dart run tests/e2e/runner.dart --case registration-account-first
+```
+
+For each name length, the case follows the visible account/invitation/phone
+steps, registers through Core, then uses a second fresh App scope to verify that
+the existing short name
+reaches authenticated Join/Recovery choices without an invitation and completes
+real notification-driven member Join. A third fresh scope for each name then
+completes Recovery through its separate operation-bound OTP, risk confirmation,
+and user-presence decision. The case checks the same durable operation completes,
+the old DID changes to the successor, the App activates that successor, and its
+registry has an active management-ready admin. A seventh fresh scope registers another three-character account using the
+required invitation and real SMTP activation. It checks the resulting local
+identity and active management-ready admin registry. The ten-phase attestation
+covers these phone and email flows; ordinary messaging is outside this case. The invoking service
+fixture owns database readback (three accounts and two database invitations, each used once)
+and remote-row cleanup; the algorithm invitation keeps its existing stateless policy;
+the App case deletes its temporary local scopes before attesting success.
+
+The registration case also completes member Join: the original admin Core receives
+the real Join notification, verifies the challenge/response and matching SAS, then
+approves through the existing user-presence boundary. The joining App must activate
+the same account and appear as one active member device. Its local Message Service
+must listen on port 19992; the provisioner must clean both User and Message Service
+rows for the exact disposable account, including Recovery transition edges before
+removing their owning account. The user-presence adapter is E2E-only.
+
+The runner conservatively records possible service resources as `residual` after
+launch; the provisioner must attach its own database cleanup readback. A successful
+case attestation alone is not evidence that the external fixture was removed.
+Existing Join/Recovery product cases use the explicit existing-account entrance
+before their unchanged authentication and continuation assertions.
+
+E2E OTP retries stop after an accepted receipt even when its cooldown is shorter
+than the retry interval. Verify this with
+`flutter test tests/unit/onboarding_page_test.dart --dart-define=AWIKI_E2E=true --plain-name 'accepted OTP with no cooldown does not trigger automatic resend'`.
+
+For a manual CI comparison against an exact compatible Core source, set the
+`cli_ref` input and `validation_only=true` on `ci.yml`. This runs deterministic
+and native build checks while excluding `remote-product`, so it does not use
+remote account/OTP scenarios. Scheduled runs and ordinary manual product runs
+retain their existing behavior. Record the explicit ref; do not treat a run
+against the repository's older default ref as evidence for the new baseline.
+The registration feature PR targeting `release/0910` pins Core consumer
+`eccadfa05a03410f405fc7760ce45ed8cd9ff533`, whose source manifest pins SDK
+`4023161ea76a39f80da67512345eafafb12b0e6a` in both native lanes, including
+the optional CA configuration bridge and iOS keyring build support. Explicit manual refs still
+take precedence; other target branches retain repository-managed defaults.
+
 ## 智能体运行时专项
 
 桌面后台消息测试通过 `runInHiddenDesktopLifecycle` 执行真实后台操作：进入 `hidden` 后不等待绘制帧，操作结束或失败时均经过 `inactive` 恢复 `resumed`，随后再校验 UI。`hidden` 会关闭 Live test binding 的帧调度，在此状态等待 `tester.pump()` 会使测试无法推进。
@@ -558,13 +663,13 @@ When dedicated test-account, OTP, operator, or platform prerequisites are
 unavailable, the suite fails closed before claiming success. Those prerequisites
 protect the test execution and do not imply a product account rollout.
 
-### Full aggregate (all active cases)
+### Full aggregate (active remote-product cases)
 
-Since 2026-09-11, `--case full` is the all-active-case aggregate, not the old
+Since 2026-09-11, `--case full` is the active remote-product aggregate, not the old
 24-case message flow. Use `--case messaging` for that narrower flow.
 The checked-in [suite manifest](../tests/e2e/suite_manifest.json) owns the
-`full.includes` execution order and exact case union: currently 27 disjoint
-leaf suites / 114 active cases. This includes all App-pair multi-device suites,
+`full.includes` execution order and exact case union: currently 26 disjoint
+leaf suites / 107 active cases. This includes all App-pair multi-device suites,
 Handle Recovery variants, Root Key Transfer, restart, performance, supported
 Agent providers, and the macOS production-Keychain gate. The 13 planned and
 4 unsupported catalog entries are reported as non-executable, not passes.
@@ -817,7 +922,7 @@ Supported E2E cases:
 - `contacts`: App and CLI peer follow/contact flow，包含从可见联系人行打开 canonical Direct 的发送、restart 和 unread/read 闭环。
 - `restart`: release-only two-Flutter-process cold restart using one isolated App state root; the second process must restore the active identity, canonical Direct/Group rows, exact messages, unread state, and cached display names without in-memory Provider reuse.
 - `messaging`: the 24-case Direct/Group/Contacts/Attachment flow.
-- `full`: all active audited leaf cases; see the aggregate contract above.
+- `full`: active audited remote-product leaf cases; see the aggregate contract above.
 
 群组 E2E 使用协议级身份规则：有 Handle 时必须发送完整 `local-part.provider-domain`，bare Handle 只能从当前已认证 `did:wba` 的 provider domain 补全；无法可信补全时只允许用户显式选择 DID-only。App 和测试不得把内部 User ID 放入 ANP group body，也不得先把 Handle 解析成 DID 后丢失 Handle-backed membership 语义。
 
@@ -1175,13 +1280,13 @@ do not require the packaging environment's `AWIKI_CI_READ_TOKEN`.
 
 The private System Test coordinator is pinned to a reviewed exact commit in
 `ci.yml`. Its checkout requires repository secret `AWIKI_CI_READ_TOKEN` with
-Contents read-only access to `AgentConnect/awiki-system-test` and
-`AgentConnect/user-service`. The portable parallel-tenant contract also reads
-the pinned User Service source. Use a separate
+Contents read-only access to `AgentConnect/awiki-system-test`. The independent
+System contract job additionally needs `AgentConnect/user-service` and
+`AgentConnect/awiki-web`; the App validation job does not read those repositories. Use a separate
 credential from the packaging environment; ordinary PR jobs must not receive
 release credentials or repository-write permissions. Checkout removes the
 credential before test code executes (`persist-credentials: false`). Missing
-private-source access fails before builds; fork PRs do not receive this secret.
+private-source access fails its owning job; fork PRs do not receive this secret.
 The current System Test repository disables deploy keys, so an SSH deploy key
 cannot supply this checkout credential.
 
@@ -1328,6 +1433,27 @@ DSH remote Join 使用 active-only Host 快照：撤销后要求精确成员消�
 ready-admin 保留，并再次刷新确认；不能在该过滤快照中要求出现 revoked 条目。
 Core 原始 Registry 的设备状态及授权围栏由其对应测试保持验证。
 
+
+For local registration acceptance with Xcode 27, the simulator App can require
+an ignored `XCODE_XCCONFIG_FILE` setting `IPHONEOS_DEPLOYMENT_TARGET = 15.0`,
+`ONLY_ACTIVE_ARCH = YES`, and the actual host architecture. This is a local
+verification override; the repository's iOS minimum remains 13.0 and a successful
+build on the override does not prove iOS 13 compatibility or simulator runtime
+acceptance. Build with `flutter build ios --simulator --debug --target
+integration_test/registration_account_first_test.dart --dart-define=AWIKI_E2E=true`
+after building and verifying the iOS Core XCFramework. Provision the restricted
+fixture before launching; compilation alone does not execute the registration case.
+
+
+For the prepared macOS runner path on newer Xcode, set
+`AWIKI_E2E_MACOS_DEPLOYMENT_TARGET=12.0` explicitly when the local toolchain no
+longer accepts the project's older target. The isolated builder validates this
+numeric version, writes it beside its own bundle identity settings, and includes
+it in the compile key and artifact provenance. It does not inherit arbitrary
+external xcconfig contents, and Linux builds ignore this macOS-only setting.
+The default keeps the project target. This local override is not evidence for
+older macOS compatibility.
+
 ### 2026-09-17 ACP 修复专项
 
 首条消息前的模型可见性、停止后状态回到空闲、问答补充文字和历史消息归属由组件／状态测试覆盖；群上下文读取由 Daemon 的模拟分页测试覆盖。
@@ -1345,3 +1471,68 @@ Linux 还需安装 `xclip`，以独立 X11 剪贴板所有者准备 PNG，结束
 ```sh
 xvfb-run -a flutter test --no-pub integration_test/chat_composer_clipboard_test.dart -d linux
 ```
+
+
+### CI private contract source access
+
+The independent `cross-repository-contracts` job uses `AWIKI_CI_READ_TOKEN` for the exact pinned checkouts of
+`awiki-system-test`, `user-service`, and `awiki-web`. A missing secret fails
+before checkout. A 403 during checkout requires checking the credential's selected
+repositories, Contents: read access, expiry, organization approval/SSO where
+applicable, and availability for the triggering event. Secret metadata only proves
+that a named secret exists; it does not prove the underlying token is valid or
+authorized. Do not print tokens or authentication headers for diagnosis.
+
+After the administrator repairs access, rerun the failed job for the same source
+commit (or run the updated commit if code changed) and verify the actual checkout
+SHA and downstream checks. Do not skip a private contract source, substitute a
+personal session credential, or use `pull_request_target` to work around access.
+All dependent checkouts keep `persist-credentials: false`.
+
+
+For isolated iOS registration acceptance, compile only a relative fixture path
+(`AWIKI_REGISTRATION_FIXTURE=registration-acceptance/fixture.json`) and relative
+`AWIKI_E2E_ATTESTATION_PATH=registration-acceptance/case_attestation.json`, plus the
+non-secret scenario/run/case identifiers. Copy the protected fixture and optional
+local CA into the installed App container's temporary directory before launch.
+Mobile E2E file resolution uses the current App temporary directory, so reinstalling
+the App does not bind the build to an obsolete container UUID. Relative traversal
+outside that directory is rejected; desktop absolute paths retain their meaning.
+Do not compile phone numbers, OTPs, invitation codes or fixture JSON into the App.
+
+### 注册开发分支的 source CI
+
+仅 Feature/registration-account-first → release/0910 的 PR CI 自动选择 AWIKI_SOURCE_INTEGRATION=1，固定 Core consumer eccadfa05a03410f405fc7760ce45ed8cd9ff533；其 source manifest 固定 SDK 4023161ea76a39f80da67512345eafafb12b0e6a，使用配套提交锁。手动验证可选 sdk_dependencies=source/registry，默认 source；validation_only=true 保持禁止远端账号/OTP job。正式 package workflow 不变，开发不提前发布 SDK。
+
+Linux Core/CLI、原生 guard rebuild 和 Windows Rust host test/native build 复用隔离 source builder；读取 .artifacts/dependencies/source/target，不混入 registry 的 target。Linux 来源摘要覆盖模式、source manifest/lock 和构建脚本，切换输入使旧 provenance 失效。Windows 保留 PE x64/FRB 实际 DLL 校验。私有合同源读取仍使用现有最小权限 token，403 不以跳过测试代替。
+
+
+### App 与跨仓契约 CI 隔离
+
+`validate` 保留 App analyze、unit/widget/provider、catalog、Linux native provenance、desktop smoke 与编排检查，统一入口使用 `--profile pr --component app`。它只需 Core 与 System Test coordinator 源码，不检出 Web、User Service、DSH 或 Desktop 合同源。
+
+独立的 `cross-repository-contracts` job 使用同一 coordinator 的 `--profile pr --component system`，保留原 PR profile 的全部 System contract/acp-contract 用例以及精确源码 pin。两个 job 没有 `needs` 依赖，也不使用 `continue-on-error`；Web 403 仅使跨仓 job 失败，App 验证继续并单独报告。完整 CI 通过仍要求两边通过，不能用 App 通过替代跨仓契约通过。源码集成模式与正式发布边界不变。
+
+源码模式的自动选择和临时 Core pin 同时限定 base/head，其他功能 PR 使用仓库变量与 registry 默认。workflow_dispatch 仍可显式选 source，需提供精确 cli_ref。push 触发器目前仅 main；schedule 使用 registry 默认。合入 release/0910 不会将临时 source pin 扩展到该发布线的其他 PR。
+
+Invitation follow-up coverage: `registration_entry_widget_test.dart` checks mobile
+and desktop invitation rejection before contact entry, then bound-invitation rejection
+for a different phone and for email without invoking either delivery API. Matching
+phone and unbound email success remain covered. Pre-contact errors do not mention
+a phone mismatch; the contact step retains binding-specific errors.
+
+CI regression repair: macOS keeps DID method selection and pending registration
+continuation visible before the contact step, matching the compact layout. Full
+runner contract tests compare exact active catalog IDs rather than stale totals.
+
+
+The loopback `registration-account-first` acceptance remains active and required
+under `requiredFor: [local-fixture, release]`, independently of the awiki.info `full` gate.
+Run it explicitly with its provisioned disposable fixture; missing configuration
+still fails closed. Remote full completion does not attest this local lane, and
+exhaustive acceptance requires both lanes. Never convert missing fixtures to skips.
+
+Registration discovery failure does not authorize OTP, email activation or final
+registration through the existing-account shortcut. A successful existing decision
+is required for that path; purpose-bound Recovery remains directly accessible
+without starting OTP on navigation, including existing local recovery continuation.

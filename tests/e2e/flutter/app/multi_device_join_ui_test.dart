@@ -8,6 +8,8 @@
 //        copied state, fake Core, static OTP, or secret-bearing evidence.
 
 import 'dart:async';
+
+import '../support/enter_existing_account.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -229,6 +231,7 @@ void main() {
         timeout: const Duration(seconds: 45),
         failure: 'The joining App did not open unified onboarding.',
       );
+      await enterExistingAccount(tester, handle);
       await _pumpUntil(
         tester,
         () => find.bySemanticsIdentifier('e2e-otp-input').evaluate().isNotEmpty,

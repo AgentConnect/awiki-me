@@ -7,6 +7,92 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'receive preserves partial Core outcome and normalizes the trigger',
+    () async {
+      final core = _ReceiveCore();
+      final service = ImCoreMessageSyncService(sync: core);
+      final result = await service.receiveNow(
+        reason: ' realtime_message ',
+        limit: 7,
+      );
+      expect(core.receiveReason, 'websocket_hint');
+      expect(core.receiveLimit, 7);
+      expect(result, same(core.outcome));
+      expect(result.complete, isFalse);
+      expect(result.errorCode, 'transport_unavailable');
+    },
+  );
+
+  test(
+    'processing and local recovery retain Core-owned session and references',
+    () async {
+      final core = _ReceiveCore();
+      final service = ImCoreMessageSyncService(sync: core);
+      final references = {'push-opaque-reference', 'message-opaque-reference'};
+      expect(await service.openProcessingSession(), same(core.processing));
+      final result = await service.findLocalIncoming(references);
+      expect(core.references, references);
+      expect(result, same(core.incoming));
+      expect(result.single.message.remoteId, 'recovered-message');
+    },
+  );
+
+  test('receive APIs fail closed when the Core capability is absent', () {
+    final service = ImCoreMessageSyncService(
+      sync: _ThreadOnlyMessageSyncCore(),
+    );
+    expect(() => service.receiveNow(reason: 'startup'), throwsUnsupportedError);
+    expect(service.openProcessingSession, throwsUnsupportedError);
+    expect(
+      () => service.findLocalIncoming({'reference'}),
+      throwsUnsupportedError,
+    );
+  });
+
+  test(
+    'receive failure is propagated without a successful empty result',
+    () async {
+      final core = _ReceiveCore()..failure = StateError('core-failed');
+      final service = ImCoreMessageSyncService(sync: core);
+      await expectLater(
+        service.receiveNow(reason: 'startup'),
+        throwsA(same(core.failure)),
+      );
+      await expectLater(
+        service.openProcessingSession(),
+        throwsA(same(core.failure)),
+      );
+      await expectLater(
+        service.findLocalIncoming({'reference'}),
+        throwsA(same(core.failure)),
+      );
+    },
+  );
+
+  test('sync without a cursor preserves first-page defaults', () async {
+    final core = _FakeMessageSyncCore();
+    final service = ImCoreMessageSyncService(sync: core);
+    await service.syncThreadAfter(thread: const AppThreadRef.direct('did:bob'));
+    await service.syncConversationAfter(
+      conversation: AppConversationReadRef.fromConversationId(
+        'canonical-conversation',
+      ),
+    );
+    expect(core.threadAfterSeqs, [null]);
+    expect(core.threadAfterLimits, [100]);
+    expect(core.conversationAfterSeqs, [null]);
+    expect(core.conversationAfterLimits, [100]);
+    expect(maxServerSequenceForMessages([]), isNull);
+    expect(
+      maxServerSequenceForMessages([
+        _message('a', serverSequence: 4),
+        _message('b', serverSequence: 9),
+      ]),
+      '9',
+    );
+  });
+
+  test(
     'remote Push reception reaches Core using a supported hint reason',
     () async {
       final core = _ReceivingCore();
@@ -235,6 +321,69 @@ class _ThreadOnlyMessageSyncCore implements MessageSyncCorePort {
       hasMore: false,
     );
   }
+}
+
+class _ReceiveCore extends _FakeMessageSyncCore
+    implements MessageReceiveCorePort {
+  String? receiveReason;
+  int? receiveLimit;
+  Set<String>? references;
+  Object? failure;
+  final processing = _ProcessingSession();
+  final outcome = const MessageReceiveOutcome(
+    status: MessageSyncStatus.retryableFailure,
+    complete: false,
+    eventsReceived: 2,
+    pagesFetched: 1,
+    errorCode: 'transport_unavailable',
+  );
+  final incoming = [
+    LocalIncomingMessage(
+      message: _message('recovered-message'),
+      opaqueMessageReferences: {'push-opaque-reference'},
+    ),
+  ];
+
+  @override
+  Future<MessageReceiveOutcome> receiveNow({
+    int? limit,
+    required String reason,
+  }) async {
+    if (failure case final error?) throw error;
+    receiveReason = reason;
+    receiveLimit = limit;
+    return outcome;
+  }
+
+  @override
+  Future<MessageProcessingSession> openProcessingSession() async {
+    if (failure case final error?) throw error;
+    return processing;
+  }
+
+  @override
+  Future<List<LocalIncomingMessage>> findLocalIncoming(
+    Set<String> references,
+  ) async {
+    if (failure case final error?) throw error;
+    this.references = references;
+    return incoming;
+  }
+}
+
+class _ProcessingSession implements MessageProcessingSession {
+  @override
+  Stream<MessageProcessingUpdate> get updates => const Stream.empty();
+  @override
+  Future<void> close() async {}
+  @override
+  Future<MessageProcessingOutcome> waitUntilSettled() async =>
+      const MessageProcessingOutcome(
+        complete: true,
+        pendingCount: 0,
+        blockedCount: 0,
+        discardedCount: 0,
+      );
 }
 
 ChatMessage _message(String id, {String? conversationId, int? serverSequence}) {

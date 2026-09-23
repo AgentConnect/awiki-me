@@ -43,12 +43,31 @@ void main() {
           )
           as Map<String, dynamic>;
 
+  test('remote full excludes required local fixture acceptance', () {
+    final manifest = DesktopE2eSuiteManifest.load(source);
+    expect(
+      manifest.fullSuites().map((s) => s.name),
+      isNot(contains('registration-account-first')),
+    );
+    final local = manifest.definitions['registration-account-first']!;
+    expect(local.catalogStatus, 'active');
+    expect(local.requiredFor, ['local-fixture', 'release']);
+    expect(local.allowedHosts, contains('127.0.0.1'));
+    expect(local.caseIds, ['REGISTRATION-ACCOUNT-FIRST-E2E-001']);
+    manifest.definitions['full']!.includes.add(local.name);
+    expect(manifest.fullSuites, throwsA(isA<E2eFailure>()));
+  });
+
   test('full covers every active case once, including native and recovery', () {
     final manifest = DesktopE2eSuiteManifest.load(source);
     final selected = manifest.fullSuites();
     final ids = selected.expand((s) => s.caseIds).toList();
     final active = AppTestCatalog.load(source).cases
-        .where((c) => c.catalogStatus == 'active')
+        .where(
+          (c) =>
+              c.catalogStatus == 'active' &&
+              !c.requiredFor.contains('local-fixture'),
+        )
         .map((c) => c.caseId)
         .toSet();
     expect(ids.toSet(), active);
@@ -104,7 +123,18 @@ void main() {
       expect(commands.suites, isEmpty);
       expect(result['status'], 'dry_run');
       expect(result['passedCaseIds'], isEmpty);
-      expect(result['caseResults'], hasLength(107));
+      expect(
+        (result['caseResults'] as List).map((c) => c['caseId']),
+        unorderedEquals(
+          AppTestCatalog.load(source).cases
+              .where(
+                (c) =>
+                    c.catalogStatus == 'active' &&
+                    !c.requiredFor.contains('local-fixture'),
+              )
+              .map((c) => c.caseId),
+        ),
+      );
       expect(result['catalogNotExecutable'], hasLength(17));
       AppTestCatalog.load(source).validateReport(result);
       await expectLater(
@@ -177,7 +207,22 @@ void main() {
       );
       final result = report('success');
       expect(result['status'], 'passed');
-      expect(result['passedCaseIds'], hasLength(Platform.isMacOS ? 107 : 106));
+      expect(
+        result['passedCaseIds'],
+        unorderedEquals(
+          AppTestCatalog.load(source).cases
+              .where(
+                (c) =>
+                    c.catalogStatus == 'active' &&
+                    !c.requiredFor.contains('local-fixture') &&
+                    (Platform.isMacOS ||
+                        !AppTestCatalog.load(source)
+                            .suiteCaseIds['production-keychain']!
+                            .contains(c.caseId)),
+              )
+              .map((c) => c.caseId),
+        ),
+      );
       AppTestCatalog.load(source).validateReport(result);
       expect(
         (result['children'] as List).singleWhere(

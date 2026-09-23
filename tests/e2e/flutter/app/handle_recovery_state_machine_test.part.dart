@@ -780,6 +780,7 @@ Future<void> _smSubmitHandle(
   String handle,
   String domain,
 ) async {
+  await enterExistingAccount(tester, handle);
   final fields = find.descendant(
     of: find.byType(OnboardingPage),
     matching: find.byType(CupertinoTextField),

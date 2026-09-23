@@ -364,6 +364,14 @@ void main() {
     expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(OnboardingPage), findsOneWidget);
     expect(find.text('登录或注册'), findsWidgets);
+    expect(find.text('下一步'), findsOneWidget);
+    expect(find.byType(CupertinoTextField), findsOneWidget);
+    expect(find.text('发送验证码'), findsNothing);
+    expect(harness.gateway.lastRegistrationOtpPhone, isNull);
+    await tester.enterText(find.byType(CupertinoTextField), 'smoke-otp');
+    await tester.ensureVisible(find.text('下一步'));
+    await tester.tap(find.text('下一步'));
+    await tester.pumpAndSettle();
     if (find
         .byKey(const Key('onboarding-mac-auth-method-tabs'))
         .evaluate()
@@ -388,8 +396,10 @@ void main() {
       expect(fields, findsNWidgets(3));
       await tester.enterText(fields.at(0), '13800138000');
       await tester.enterText(fields.at(1), 'smoke-otp');
+      await tester.ensureVisible(find.text('发送验证码'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('发送验证码'));
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(harness.gateway.lastRegistrationOtpPhone, '13800138000');
       expect(harness.gateway.lastRegistrationOtpHandle, 'smoke-otp');
       expect(harness.gateway.lastRegistrationOtpDomain, primaryTenantDomain);
@@ -423,7 +433,7 @@ void main() {
         'onboarding_visible',
         'onboarding_auth_entry_visible',
         'mac_phone_otp_handle_scope_preserved',
-        'phone_single_stage_submit_visible',
+        'account_first_then_verification_visible',
         'unauthenticated_realtime_disconnected',
       ],
     );
@@ -1014,12 +1024,16 @@ void main() {
           matching: find.text('😀'),
         );
         expect(sentEmoji, findsOneWidget);
-        final bubbleSurface = find.descendant(
-          of: sentBubble,
-          matching: find.byWidgetPredicate(
-            (widget) => widget is Container && widget.constraints != null,
-          ),
-        ).first;
+        final bubbleSurface = find
+            .descendant(
+              of: sentBubble,
+              matching: find.byWidgetPredicate(
+                (widget) =>
+                    widget is Container &&
+                    widget.constraints?.maxWidth.isFinite == true,
+              ),
+            )
+            .first;
         final wideMaxWidth = tester
             .widget<Container>(bubbleSurface)
             .constraints!

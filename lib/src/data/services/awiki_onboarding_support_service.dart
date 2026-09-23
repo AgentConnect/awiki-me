@@ -105,6 +105,35 @@ class AwikiOnboardingSupportService implements OnboardingSupportService {
   }
 
   @override
+  Future<RegistrationCheck> checkRegistration({
+    required String handle,
+    required String domain,
+    String? inviteCode,
+    String? phone,
+    String? email,
+    bool checkInvite = false,
+  }) async {
+    final normalizedHandle = _normalizeHandle(
+      handle,
+      minLength: 1,
+      maxLength: 63,
+    );
+    final normalizedDomain = _normalizeDomain(domain);
+    final payload = await _users.checkRegistration(
+      handle: normalizedHandle,
+      domain: normalizedDomain,
+      inviteCode: inviteCode?.trim(),
+      phone: phone == null ? null : _normalizePhone(phone),
+      email: email?.trim().toLowerCase(),
+      checkInvite: checkInvite,
+    );
+    return RegistrationCheck.fromJson(
+      payload,
+      expectedFullHandle: '$normalizedHandle.$normalizedDomain',
+    );
+  }
+
+  @override
   Future<HandleAvailability> validateHandle({
     required String handle,
     String? domain,

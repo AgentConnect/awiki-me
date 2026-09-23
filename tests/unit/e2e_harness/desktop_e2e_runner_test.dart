@@ -8,6 +8,36 @@ import '../../e2e/runner.dart';
 import '../../e2e/performance_contract.dart';
 
 void main() {
+  test(
+    'registration diagnostics redact phone and email matrix credentials',
+    () {
+      final fixture = <String, dynamic>{
+        'inviteCode': 'phone-invitation-private',
+        'phone': '+15555559876',
+        'otp': '123456',
+        'handle': 'zqx',
+        'fourCharHandle': 'vbnm',
+        'fourCharInviteCode': 'ABCDEF',
+        'emailHandle': 'rtz',
+        'emailInviteCode': 'email-invitation-private',
+        'email': 'fixture-private@example.com',
+        'caBundle': '/private/local-test-ca.pem',
+      };
+      final redactor = DesktopSecretRedactor(
+        registrationFixtureSecrets(fixture),
+      );
+      final output = redactor.redact(
+        'Registration failed: ${jsonEncode(fixture)}; retry is available',
+      );
+      for (final value in fixture.values) {
+        expect(output, isNot(contains(value as String)));
+      }
+      expect(output, contains('Registration failed:'));
+      expect(output, contains('retry is available'));
+      expect(output, contains('<redacted>'));
+    },
+  );
+
   test('removed model-backed suites cannot be selected', () {
     for (final name in [
       'acp-agent',
