@@ -176,4 +176,104 @@ class TextNotifyAlertActivityTest {
         assertNull(shadowOf(controller.get()).nextStartedActivity)
         controller.pause().stop().destroy()
     }
+    private val secondMid = "message_second_abcdefghijklmnop"
+    private val secondToken get() = "$target:$secondMid"
+    private fun secondIntent() = intent().putExtra("token", secondToken)
+        .putExtra("payload", payload().replace(mid, secondMid).replace("Task", "New task"))
+        .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+
+    @Test fun cancelledUnlockThenNewIntentClosesOnlyTheNewCue() {
+        val controller = Robolectric.buildActivity(TextNotifyAlertActivity::class.java, intent()).setup()
+        val activity = controller.get()
+        click(activity)
+        shadowOf(activity).nextStartedService
+        TextNotifyPresentation.activeToken = null
+        keyguard.setKeyguardLocked(true)
+        TextNotifyPresentation.activeToken = secondToken
+        controller.newIntent(secondIntent())
+        assertEquals(secondToken, activity.intent.getStringExtra("token"))
+        click(activity, "关闭提醒")
+        assertEquals(secondToken, shadowOf(activity).nextStartedService.getStringExtra("token"))
+        assertEquals(0, queued().length())
+        controller.pause().stop().destroy()
+    }
+
+    @Test fun oldUnlockCallbackCannotOpenReplacementReminder() {
+        val controller = Robolectric.buildActivity(TextNotifyAlertActivity::class.java, intent()).setup()
+        val activity = controller.get()
+        click(activity)
+        shadowOf(activity).nextStartedService
+        TextNotifyPresentation.activeToken = secondToken
+        controller.newIntent(secondIntent())
+        keyguard.setKeyguardLocked(false) // success callback still belongs to the first message
+        assertEquals(0, queued().length())
+        assertFalse(activity.isFinishing)
+        click(activity)
+        assertEquals(secondToken, shadowOf(activity).nextStartedService.getStringExtra("token"))
+        assertEquals(secondMid, JSONObject(queued().getJSONObject(0)
+            .getJSONObject("payload").getString("extraMap")).getString("mid"))
+        assertEquals(1, queued().length())
+        controller.pause().stop().destroy()
+    }
+
+    @Test fun replacementReminderSurvivesRecreationEvenWithOriginalLaunchIntent() {
+        val first = Robolectric.buildActivity(TextNotifyAlertActivity::class.java, intent()).setup()
+        TextNotifyPresentation.activeToken = secondToken
+        first.newIntent(secondIntent())
+        click(first.get())
+        val state = Bundle()
+        first.saveInstanceState(state).pause().stop().destroy()
+        keyguard.setKeyguardLocked(true)
+        TextNotifyPresentation.activeToken = null
+        val next = Robolectric.buildActivity(TextNotifyAlertActivity::class.java, intent())
+            .create(state).start().restoreInstanceState(state).resume().visible()
+        keyguard.setKeyguardLocked(false)
+        assertEquals(1, queued().length())
+        assertEquals(secondMid, JSONObject(queued().getJSONObject(0)
+            .getJSONObject("payload").getString("extraMap")).getString("mid"))
+        next.pause().stop().destroy()
+    }
+
+    @Test fun duplicateIntentPreservesPendingUnlock() {
+        val controller = Robolectric.buildActivity(TextNotifyAlertActivity::class.java, intent()).setup()
+        click(controller.get())
+        controller.newIntent(Intent(controller.get().intent))
+        keyguard.setKeyguardLocked(false)
+        assertRoutedOnce(controller.get())
+        controller.pause().stop().destroy()
+    }
+
+    @Test fun replacementViewActionWaitsForResumeAndOpensNewMessage() {
+        val controller = Robolectric.buildActivity(TextNotifyAlertActivity::class.java, intent()).setup()
+        controller.pause()
+        controller.newIntent(secondIntent().setAction("view"))
+        assertEquals(0, queued().length())
+        controller.resume()
+        keyguard.setKeyguardLocked(false)
+        assertEquals(1, queued().length())
+        assertEquals(secondMid, JSONObject(queued().getJSONObject(0)
+            .getJSONObject("payload").getString("extraMap")).getString("mid"))
+        controller.pause().stop().destroy()
+    }
+
+    @Test @Config(sdk = [24])
+    fun staleCredentialResultCannotOpenReplacementReminder() {
+        keyguard.setIsDeviceSecure(true)
+        val controller = Robolectric.buildActivity(TextNotifyAlertActivity::class.java, intent()).setup()
+        click(controller.get())
+        val old = shadowOf(controller.get()).nextStartedActivityForResult
+        assertNotNull(old)
+        TextNotifyPresentation.activeToken = secondToken
+        controller.newIntent(secondIntent())
+        keyguard.setKeyguardLocked(false)
+        shadowOf(controller.get()).callOnActivityResult(old.requestCode, android.app.Activity.RESULT_OK, null)
+        assertEquals(0, queued().length())
+        assertFalse(controller.get().isFinishing)
+        click(controller.get())
+        assertEquals(1, queued().length())
+        assertEquals(secondMid, JSONObject(queued().getJSONObject(0)
+            .getJSONObject("payload").getString("extraMap")).getString("mid"))
+        controller.pause().stop().destroy()
+    }
+
 }

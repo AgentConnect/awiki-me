@@ -32,6 +32,8 @@ class TextNotifyAlertActivity : Activity() {
     private var dismissPending = false
     private var opened = false
     private var openOnResume = false
+    private var generation = 0
+    private var credentialRequestCode: Int? = null
     private val tick = object : Runnable {
         override fun run() {
             if (viewing) return
@@ -48,9 +50,34 @@ class TextNotifyAlertActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        token = intent.getStringExtra("token")
-        payload = intent.getStringExtra("payload")
-        viewing = savedInstanceState?.getBoolean("viewing") == true || intent.action == "view"
+        val restoredIntent = Intent(intent)
+        if (savedInstanceState?.containsKey("payload") == true) {
+            restoredIntent.putExtra("token", savedInstanceState.getString("token"))
+                .putExtra("payload", savedInstanceState.getString("payload"))
+        }
+        bindIntent(restoredIntent, savedInstanceState?.getBoolean("viewing") == true)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Re-delivery must not replace an in-flight unlock for the same message.
+        if (token == intent.getStringExtra("token") && payload == intent.getStringExtra("payload")) {
+            if (intent.action == "view") requestOpen()
+            return
+        }
+        bindIntent(intent)
+    }
+
+    private fun bindIntent(next: Intent, restoredViewing: Boolean = false) {
+        generation++ // Fence callbacks belonging to the previous reminder.
+        handler.removeCallbacks(tick)
+        setIntent(next)
+        token = next.getStringExtra("token")
+        payload = next.getStringExtra("payload")
+        dismissPending = false
+        credentialRequestCode = null
+        opened = false
+        viewing = restoredViewing || next.action == "view"
         openOnResume = viewing
         val content = runCatching { org.json.JSONObject(payload ?: "") }.getOrNull()
         if (content == null) { finish(); return }
@@ -120,6 +147,8 @@ class TextNotifyAlertActivity : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("viewing", viewing)
+        outState.putString("token", token)
+        outState.putString("payload", payload)
         super.onSaveInstanceState(outState)
     }
 
@@ -150,20 +179,25 @@ class TextNotifyAlertActivity : Activity() {
         if (!keyguard.isKeyguardLocked) { openAfterUnlock(); return }
         countdown.text = "请先解锁手机，再查看消息"
         dismissPending = true
+        val requestGeneration = generation
         if (Build.VERSION.SDK_INT >= 26) {
             keyguard.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
                 override fun onDismissSucceeded() {
+                    if (requestGeneration != generation) return
                     dismissPending = false
                     openAfterUnlock()
                 }
-                override fun onDismissCancelled() { unlockNotCompleted() }
-                override fun onDismissError() { unlockNotCompleted() }
+                override fun onDismissCancelled() { if (requestGeneration == generation) unlockNotCompleted() }
+                override fun onDismissError() { if (requestGeneration == generation) unlockNotCompleted() }
             })
         } else {
             // Android 7: let the system authenticate; never disable or bypass the lock.
             @Suppress("DEPRECATION")
             val unlock = keyguard.createConfirmDeviceCredentialIntent("查看 AWiki 消息", null)
-            if (unlock != null) startActivityForResult(unlock, 4101)
+            if (unlock != null) {
+                credentialRequestCode = 4101 + generation
+                startActivityForResult(unlock, credentialRequestCode!!)
+            }
             else unlockNotCompleted()
         }
     }
@@ -187,7 +221,8 @@ class TextNotifyAlertActivity : Activity() {
     @Deprecated("Legacy Android credential result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 4101) {
+        if (requestCode == credentialRequestCode) {
+            credentialRequestCode = null
             dismissPending = false
             if (resultCode == RESULT_OK) openAfterUnlock() else unlockNotCompleted()
         }
