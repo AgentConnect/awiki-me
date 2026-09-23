@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../e2e/runner.dart';
 import '../../e2e/test_catalog.dart';
+import '../../e2e/user_test_exclusions.dart';
 
 void main() {
   final source = Directory.current;
@@ -210,18 +211,24 @@ void main() {
       );
       final result = report('success');
       expect(result['status'], 'passed');
+      final catalog = AppTestCatalog.load(source);
+      final excluded = DesktopE2eUserExclusions.load(source).appSuites;
+      final excludedCaseIds = <String>{
+        for (final suite in excluded) ...catalog.suiteCaseIds[suite]!,
+      };
       expect(
         result['passedCaseIds'],
         unorderedEquals(
-          AppTestCatalog.load(source).cases
+          catalog.cases
               .where(
                 (c) =>
                     c.catalogStatus == 'active' &&
                     !c.requiredFor.contains('local-fixture') &&
                     (Platform.isMacOS ||
-                        !AppTestCatalog.load(source)
-                            .suiteCaseIds['production-keychain']!
-                            .contains(c.caseId)),
+                        !catalog.suiteCaseIds['production-keychain']!.contains(
+                          c.caseId,
+                        )) &&
+                    !excludedCaseIds.contains(c.caseId),
               )
               .map((c) => c.caseId),
         ),
@@ -233,6 +240,19 @@ void main() {
         )['status'],
         Platform.isMacOS ? 'passed' : 'not_applicable',
       );
+      expect(
+        (result['children'] as List).singleWhere(
+          (r) => r['suite'] == 'did-method-web',
+        )['status'],
+        'user_excluded',
+      );
+      expect(
+        (result['caseResults'] as List).singleWhere(
+          (r) => r['caseId'] == 'DID-WEB-APP-E2E-001',
+        )['status'],
+        'user_excluded',
+      );
+      expect(commands.suites, isNot(contains('did-method-web')));
     },
   );
 

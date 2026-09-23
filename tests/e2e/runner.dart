@@ -7,6 +7,7 @@ import 'package:yaml/yaml.dart';
 import 'package:crypto/crypto.dart' show sha256;
 
 import 'test_catalog.dart';
+import 'user_test_exclusions.dart';
 
 import 'account_state_operator_contract.dart';
 import 'app_artifact_spec.dart';
@@ -479,6 +480,9 @@ class DesktopE2eRunner {
     suiteManifest = DesktopE2eSuiteManifest.load(root);
     suiteDefinition = suiteManifest.definitionFor(options.e2eCase);
     suiteDefinition.validateCodeCaseIds(options.e2eCase.caseIds);
+    final userExclusions = DesktopE2eUserExclusions.load(root);
+    userExclusions.validateAgainst(suiteManifest);
+    userExclusions.requireAllowed(suiteDefinition.name);
     fileConfig = DesktopE2eFileConfig.load(
       root: root,
       path: options.configPath,
