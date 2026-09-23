@@ -120,3 +120,8 @@ JDK 17 执行 `android/gradlew -p android :app:testDebugUnitTest --console=plain
 The native Robolectric and Dart tests cover deterministic decisions and
 persistence/concurrency behavior. They do not attest M153 display, vibration,
 sound, background survival or the real server-to-device transport.
+
+基线同步补充：App 合入 `e2256161276b20eaa11c0bcc7be1447095f42ae2` 后，Android native suite
+再次 41 passed、0 failed/skipped。Core 合入 `900a4c49cf325d0b28030704eec7b39703a78beb`
+（仅 ACP 测试调度变化），依赖清单更新为 `4d0a2c9664a2ede64fbf9789121ae34af216513f`。上述真机 APK 的精确源码仍为前文记录，
+基线新增内容未改变该 APK 的 Android 产品实现；未将未安装的新提交冒充真机安装版本。
