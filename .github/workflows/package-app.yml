@@ -4,6 +4,11 @@ run-name: package-app ${{ inputs.version }}+${{ inputs.build_number }} by ${{ gi
 on:
   workflow_dispatch:
     inputs:
+      test_sources:
+        description: Fixed-source Singapore test packages on the explicitly authorized branch
+        required: false
+        default: false
+        type: boolean
       request_id:
         description: Unique package request UUID
         required: true
@@ -62,6 +67,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  TEST_SOURCES: ${{ inputs.test_sources }}
   FLUTTER_VERSION: 3.44.0
   RUST_VERSION: 1.88.0
   PYTHON_VERSION: 3.13.7
@@ -87,6 +93,7 @@ jobs:
           CONTROL_REF: ${{ github.ref }}
           WORKFLOW_REF: ${{ github.workflow_ref }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          TEST_SOURCES: ${{ inputs.test_sources }}
         run: |
           python3 - <<'PY'
           import json, os, re
@@ -118,9 +125,11 @@ jobs:
               raise SystemExit("package workflow only accepts workflow_dispatch events")
           if os.environ.get("CONTROL_REF_TYPE") != "branch":
               raise SystemExit("package workflow controller must run from a branch")
-          if os.environ.get("CONTROL_BRANCH") != os.environ.get("DEFAULT_BRANCH"):
+          controller = ("test/singapore-refresh-20260923" if os.environ.get("TEST_SOURCES") == "true"
+                        else os.environ.get("DEFAULT_BRANCH"))
+          if os.environ.get("CONTROL_BRANCH") != controller:
               raise SystemExit("package workflow controller must run from the default branch")
-          expected_ref = f'refs/heads/{os.environ.get("DEFAULT_BRANCH", "")}'
+          expected_ref = f"refs/heads/{controller}"
           if os.environ.get("CONTROL_REF") != expected_ref:
               raise SystemExit("package workflow event ref does not match the default branch")
           if not os.environ.get("WORKFLOW_REF", "").endswith(f"@{expected_ref}"):
@@ -131,8 +140,8 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' &&
-        github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-        endsWith(github.workflow_ref, format('@refs/heads/{0}', github.event.repository.default_branch)) &&
+        github.ref == format('refs/heads/{0}', inputs.test_sources && 'test/singapore-refresh-20260923' || github.event.repository.default_branch) &&
+        endsWith(github.workflow_ref, format('@refs/heads/{0}', inputs.test_sources && 'test/singapore-refresh-20260923' || github.event.repository.default_branch)) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.actor) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.triggering_actor)
       }}
@@ -218,6 +227,9 @@ jobs:
           import json, os, re
           with open("awiki-cli-rs2/scripts/release/cli/release-config.json", encoding="utf-8") as source:
               revision = json.load(source)["anp_identity_commit"]
+          if os.environ.get("TEST_SOURCES") == "true":
+              with open("awiki-cli-rs2/scripts/release/singapore-test-sources.json", encoding="utf-8") as source:
+                  revision = json.load(source)["dependencies"]["anp-identity"]["commit"]
           if not re.fullmatch(r"[0-9a-f]{40}", revision):
               raise SystemExit("ANP Identity must be pinned to an exact commit")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
@@ -264,7 +276,10 @@ jobs:
           config = json.loads(pathlib.Path(
               "awiki-cli-rs2/scripts/release/cli/release-config.json"
           ).read_text(encoding="utf-8"))
-          if config.get("anp_commit") != os.environ["ANP_REF"]:
+          expected_anp = config.get("anp_commit")
+          if os.environ.get("TEST_SOURCES") == "true":
+              expected_anp = json.loads(pathlib.Path("awiki-cli-rs2/scripts/release/singapore-test-sources.json").read_text())["dependencies"]["anp"]["commit"]
+          if expected_anp != os.environ["ANP_REF"]:
               raise SystemExit("Core release config does not pin the requested ANP SHA")
           PY
 
@@ -299,8 +314,8 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' &&
-        github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-        endsWith(github.workflow_ref, format('@refs/heads/{0}', github.event.repository.default_branch)) &&
+        github.ref == format('refs/heads/{0}', inputs.test_sources && 'test/singapore-refresh-20260923' || github.event.repository.default_branch) &&
+        endsWith(github.workflow_ref, format('@refs/heads/{0}', inputs.test_sources && 'test/singapore-refresh-20260923' || github.event.repository.default_branch)) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.actor) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.triggering_actor)
       }}
@@ -335,6 +350,9 @@ jobs:
           import json, os, re
           with open("awiki-cli-rs2/scripts/release/cli/release-config.json", encoding="utf-8") as source:
               revision = json.load(source)["anp_identity_commit"]
+          if os.environ.get("TEST_SOURCES") == "true":
+              with open("awiki-cli-rs2/scripts/release/singapore-test-sources.json", encoding="utf-8") as source:
+                  revision = json.load(source)["dependencies"]["anp-identity"]["commit"]
           if not re.fullmatch(r"[0-9a-f]{40}", revision):
               raise SystemExit("ANP Identity must be pinned to an exact commit")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
@@ -508,6 +526,7 @@ jobs:
           ANDROID_STARTUP_SMOKE_TEST: ${{ inputs.skip_android_startup_smoke && 'never' || vars.AWIKI_ANDROID_STARTUP_SMOKE_TEST || 'auto' }}
         run: |
           scripts/package_unix_worker.sh \
+            --dependency-mode "${{ inputs.test_sources && 'test-source' || 'registry' }}" \
             --target "${{ matrix.target }}" \
             --version "${{ inputs.version }}" \
             --build-number "${{ inputs.build_number }}" \
@@ -527,6 +546,7 @@ jobs:
         shell: pwsh
         run: |
           ./scripts/package_windows.ps1 `
+            -DependencyMode '${{ inputs.test_sources && 'test-source' || 'registry' }}' `
             -Target '${{ matrix.target }}' `
             -Version '${{ inputs.version }}' `
             -BuildNumber '${{ inputs.build_number }}' `
@@ -581,8 +601,8 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' &&
-        github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-        endsWith(github.workflow_ref, format('@refs/heads/{0}', github.event.repository.default_branch)) &&
+        github.ref == format('refs/heads/{0}', inputs.test_sources && 'test/singapore-refresh-20260923' || github.event.repository.default_branch) &&
+        endsWith(github.workflow_ref, format('@refs/heads/{0}', inputs.test_sources && 'test/singapore-refresh-20260923' || github.event.repository.default_branch)) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.actor) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.triggering_actor)
       }}
