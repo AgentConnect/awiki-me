@@ -5385,18 +5385,18 @@
       "caseId": "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001",
       "feature": "Settings Handle DID Recovery preserves Direct, transport Group, and Agent continuity across restart",
       "layer": "remote_product_ui_security",
-      "preconditions": "One fresh signed-in App owner, one independently rooted App peer, one Handle-backed non-E2EE transport Group, and one real daemon plus Runtime Agent exist on audited awiki.info; the deterministic test gateway substitutes only the external LLM reply.",
-      "action": "Seed exact Direct, Group, and Agent prompt/reply history, start Recovery from Settings, prove an empty phone is rejected before Core, continue with the exact local identity, cut after the Core commit, then reopen the same App, peer, and daemon roots and continue all three conversations.",
+      "preconditions": "One fresh signed-in App owner, one independently rooted App peer, one Handle-backed non-E2EE transport Group, and one real daemon plus Runtime Agent exist on an explicitly configured same-origin HTTPS/DID target with protected OTP and exact-scope cleanup; the deterministic test gateway substitutes only the external LLM reply.",
+      "action": "Seed exact Direct/Group text, one sent and one received Group PNG, and Agent prompt/reply history; verify the peer received the sent PNG bytes, then start Recovery from Settings, reject an empty phone before Core, continue with the exact local identity, cut after Core commit, and reopen the same App, peer, and daemon roots.",
       "exactOracles": [
         "An empty Settings Recovery phone shows a local input prompt and does not call the Recovery Core or report a transition mismatch.",
         "Handle, account, stable owner, conversation IDs, Group DID, Agent DIDs, and Runtime handle remain unchanged while DID/generation advances exactly once and the old DID is absent after same-root restart; Direct and Group read state remains cleared after that restart.",
-        "All pre-Recovery Direct, Handle-backed transport Group, and Agent prompt/reply messages remain exact-one; old outgoing messages remain mine; Group profile, role, membership status, member count, and owner/peer member metadata remain unchanged with the old DID absent and replacement DID exact-one; Direct and Group each continue bidirectionally and the original Agent returns one deterministic reply.",
+        "All pre-Recovery Direct, Handle-backed transport Group (including both PNGs), and Agent prompt/reply messages remain exact-one; old outgoing messages remain mine; the historical sent and received PNGs both download through Core and preview through the App with exact bytes and valid dimensions; Group profile, role, membership status, member count, and owner/peer metadata remain unchanged with the old DID absent and replacement DID exact-one; Direct and Group continue bidirectionally and the original Agent replies deterministically.",
         "Conversation and Agent ID sets do not change, each thread grows by exactly its two expected post-Recovery messages, and no key message or Agent is duplicated."
       ],
       "negativeChecks": [
-        "Forwarding an empty phone to Core, reporting it as a transition mismatch, creating a new conversation, Group, or Agent ID, duplicate inventory or message, changed Handle/account, skipped generation, missing history, wrong ownership, one-way messaging, unavailable original Agent, abnormal count growth, different state root, E2EE/DID-only Group claim, fake App/Core/service dependency, secret-bearing evidence, or unaudited host prevents pass attestation."
+        "Forwarding an empty phone to Core, reporting it as a transition mismatch, creating a new conversation, Group, or Agent ID, duplicate inventory or message, changed Handle/account, skipped generation, missing history or either historical PNG download/preview, wrong ownership, one-way messaging, unavailable original Agent, abnormal count growth, different state root, E2EE/DID-only Group claim, fake App/Core/service dependency, secret-bearing evidence, or an unconfigured/mismatched/insecure target prevents pass attestation."
       ],
-      "environment": "awiki_info_remote",
+      "environment": "configured_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
       "requiredFor": [
         "optional_nightly",
@@ -5416,6 +5416,9 @@
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:direct_id_history_ownership_and_bidirectional_send_preserved",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:handle_backed_transport_group_id_history_and_send_preserved",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:group_profile_role_status_count_and_members_preserved",
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:pre_recovery_group_png_sent_and_peer_received_exact_bytes",
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:historical_sent_group_png_download_and_preview_preserved",
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:historical_received_group_png_download_and_preview_preserved",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:agent_inventory_conversation_history_and_reply_preserved",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:conversation_message_and_agent_counts_remained_exact",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:all_key_messages_converged_exactly_once"
@@ -5433,6 +5436,9 @@
           [
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:direct_id_history_ownership_and_bidirectional_send_preserved",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:handle_backed_transport_group_id_history_and_send_preserved",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:pre_recovery_group_png_sent_and_peer_received_exact_bytes",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:historical_sent_group_png_download_and_preview_preserved",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:historical_received_group_png_download_and_preview_preserved",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:group_profile_role_status_count_and_members_preserved",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:agent_inventory_conversation_history_and_reply_preserved"
           ],
@@ -5451,6 +5457,9 @@
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:direct_id_history_ownership_and_bidirectional_send_preserved",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:handle_backed_transport_group_id_history_and_send_preserved",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:group_profile_role_status_count_and_members_preserved",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:pre_recovery_group_png_sent_and_peer_received_exact_bytes",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:historical_sent_group_png_download_and_preview_preserved",
+            "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:historical_received_group_png_download_and_preview_preserved",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:agent_inventory_conversation_history_and_reply_preserved",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:conversation_message_and_agent_counts_remained_exact",
             "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:all_key_messages_converged_exactly_once"

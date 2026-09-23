@@ -49,6 +49,7 @@ void main() {
     );
   });
   for (final suite in <String>[
+    'handle-recovery-local-data',
     'multi-device-app-pair-recovery-retirement-ordinary-rejoin',
     'identity-deletion-recovery-guard',
   ]) {
@@ -90,7 +91,12 @@ void main() {
         throwsException,
       );
     });
-    for (final domain in <String>['awiki.info', 'rwiki.cn', 'qa.example.org']) {
+    for (final domain in <String>[
+      'awiki.info',
+      'anpclaw.com',
+      'rwiki.cn',
+      'qa.example.org',
+    ]) {
       test('$suite uses the externally configured $domain target', () {
         final definition = DesktopE2eSuiteManifest.load(
           Directory.current,

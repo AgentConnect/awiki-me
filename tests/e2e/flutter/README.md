@@ -180,13 +180,16 @@ production LocalAuthentication. See
 the same App root. It starts Recovery from Settings without deleting local
 data, then requires one generation advance and stable Handle/account, Direct
 conversation, Handle-backed non-E2EE transport Group, and Runtime Agent IDs.
-Pre-Recovery history and ownership must remain exact-one; Direct and Group must
-continue in both directions, the same Agent must reply, Group
+Pre-Recovery history and ownership must remain exact-one; the peer must receive
+the sent PNG. After Recovery both historical sent/received Group PNGs must
+download and preview with exact bytes. Direct and Group must continue in both
+directions, the same Agent must reply, Group
 profile/role/status/member count and owner/peer metadata must remain stable,
 Direct/Group read state must remain cleared after restart, and conversation,
 message, and Agent counts must grow only by the expected post-Recovery events.
 It reuses the existing fixture and crash-cut handoff without running the base
-Recovery UI or old-peer re-Join cases.
+Recovery UI or old-peer re-Join cases. The protected YAML selects the tenant;
+this case validates a shared HTTPS/DID origin instead of hard-coding a domain.
 
 `--case multi-device-app-pair-recovery-registration-rejoin-management-transfer`
 selects one Linux/Xvfb-or-macOS `awiki.info` case from the same real App-pair Recovery

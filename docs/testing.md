@@ -895,12 +895,15 @@ the remote attachment lookup. A raw `dm:peer-scope:*` storage thread must never
 be sent to the core `thread-attachment-download` capability.
 
 All live product cases are constrained by `tests/e2e/suite_manifest.json` to an
-explicit per-suite allowlist. The selected YAML configuration remains the
+explicit per-suite allowlist or the audited `configured_same_origin` policy.
+The selected YAML configuration remains the
 source of the actual target: remote compatibility runs use `awiki.info`, local
 server runs use `agentwiki.info`, and approved Singapore staging runs use
 `anpclaw.com`. They reject localhost, `awiki.test`, insecure schemes, and other
-domains before starting Flutter. Adding a generic staging target does not
-authorize operator-bound security suites on that target.
+domains before starting Flutter. A `configured_same_origin` suite still requires
+an explicit protected target config, matching HTTPS/DID origin, its capability
+and OTP gates, and exact-scope cleanup; it does not authorize an allowlisted
+operator-bound suite on a new target.
 The smoke case has no service dependency. Dry-run only validates orchestration
 and never counts as a real gate.
 

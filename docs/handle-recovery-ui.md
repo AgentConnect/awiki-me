@@ -71,6 +71,10 @@ Recovery 的完整断言。
   Direct ownership。普通 transport-protected Handle 群则复用现有 `group.rebind_member`：群
   列表刷新先续跑 Core repair，旧 DID 成员换绑到新 DID，旧 DID 发出的群消息继续显示为本人。
   DID-only 与 Group E2EE 群仍保持 fail closed。
+- 同一 stable owner 已保留的普通群附件消息，不因新副本的 `tail_only` 历史不可见而必须
+  丢失下载入口：Core 可从精确 owner/群/消息位置匹配的本地非 E2EE Manifest 取得原始业务
+  消息 ID，再由当前 DID 申请服务端下载 ticket。App 不直接读取 Core SQLite；此路径不扩展
+  远端历史可见性，当前群成员资格、附件 grant、对象有效期与 digest 校验仍由原边界执行。
 - activate 需要 user presence。正式 App 使用平台 LocalAuthentication；自动化 E2E
   只能覆盖测试专用 `UserPresencePort`，不能声称验证了真实系统认证。
 - Core 是唯一恢复状态机。App 只展示粗粒度 phase，并在 Core 标记可恢复时提供精确
@@ -139,11 +143,14 @@ Linux Flutter desktop runner，也可在 macOS runner 上执行。
 
 `HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001` 专门覆盖已登录用户从设置发起恢复。Phase A
 在同一 stable owner 下建立双向 Direct、Handle-backed 非 E2EE transport Group，以及真实
-daemon/Runtime Agent 的 prompt/reply，再从设置使用 exact `localIdentityId` 完成一次 Recovery，
+daemon/Runtime Agent 的 prompt/reply；Group 还双向发送两张尺寸不同的真实 PNG，验证对端
+收到其中一张的字节，再从设置使用 exact `localIdentityId` 完成一次 Recovery，
 并在 Core commit 后制造进程切断。Phase B 用相同 App、peer 和 daemon state root 重启，要求
 Handle/account 不变且 generation 只增加 1；三个 conversation ID、Group DID、Agent DID 和
-Runtime handle 均不变；原消息完整、exact-one，旧 DID 发出的消息仍显示为本人。随后 Direct
-和 Group 双向各发送一条消息，原 Agent 接收一条新 prompt 并返回一条确定性回复；最终
+Runtime handle 均不变；原消息完整、exact-one，旧 DID 发出的消息仍显示为本人。恢复后先验证
+Group 的历史发出/收到 PNG 可从同一 App/Core root 经真实附件 ticket 下载、由 App 预览
+服务读取，PNG 摘要与尺寸均与发送前一致；随后 Direct 和 Group 双向各发送一条消息，原 Agent
+接收一条新 prompt 并返回一条确定性回复；最终
 conversation/Agent ID 集合完全不增长，三个线程只增加各自预期的两条消息。Agent 流程使用真实
 App/Core、daemon、User Service 和 Message Service，测试 gateway 只替代外部 LLM；群断言不
 扩展到当前架构明确 fail-closed 的 MLS/E2EE 或 DID-only 群。Runtime Agent prompt 固定走
@@ -161,7 +168,7 @@ bootstrap 状态及错误码；审计尚未出现时也读取 Core，避免把�
 `tests/e2e/handle_recovery_fixture_contract.dart`。它分别定义 Fresh Root 与 Local Data 的固定
 资源形状；ready checkpoint 只允许 `sha256:` 脱敏引用、非负期望计数、fixture kind 和阶段，
 严格拒绝额外字段、full identity、路径、消息正文及 secret 类字段。Local Data Phase A 依次建立
-identity、Direct 双向历史/read、Group 双向历史/read/双成员 metadata、真实 Daemon/Runtime
+identity、Direct 双向历史/read、Group 双向文本与 PNG 历史/read/双成员 metadata、真实 Daemon/Runtime
 及 prompt/reply；Phase B 在发送新消息前用相同 run reference 和 observed count 重建 checkpoint，
 任何 ID 替换或资源数增长都会 fail closed。准备失败按最后完成的阶段写入当前 case 自己的
 `failureObservation`；公共 exact-one oracle 同时在 raw collection 上统计 canonical ID 和
@@ -234,16 +241,21 @@ AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
 AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=recovery \
 dart run tests/e2e/runner.dart \
   --case handle-recovery-local-data \
-  --config <local-awiki-info-config.yaml>
+  --config <protected-remote-config.yaml>
 ```
 
-该 case 要求 Direct、Handle-backed Group 与原 Runtime Agent 的 ID/历史保留，恢复后消息
-继续追加；Group profile、role、membership status、member count 和 owner/peer 成员元数据
+该 case 的目标由受保护配置选择，并要求同源 HTTPS 服务；不会把 `awiki.info` 作为隐式
+回退。它要求 Direct、Handle-backed Group 与原 Runtime Agent 的 ID/历史保留，恢复前发送和
+接收的两张 Group PNG 在恢复后都可下载、预览且字节不变，随后消息继续追加；Group profile、
+role、membership status、member count 和 owner/peer 成员元数据
 保持，old DID 缺失且 replacement DID exact-one；Direct/Group 已读状态经同-root 新进程不
 回退。
 
-上述两个 suite 都只允许受审计的 `https://awiki.info` 配置。注册和 Recovery 复用 ignored、
-权限受限的 local YAML 中同一个测试手机号和六位固定验证码；仍须先调用真实、精确绑定
+Fresh Root suite 保留其独立的 `awiki.info` 审计目标；`handle-recovery-local-data` 使用
+`configured_same_origin`，目标域名由 ignored、权限受限的 local YAML 明确选择，不在测试
+逻辑中固定。HTTP 服务必须与 DID domain 同属一个 HTTPS origin；不同环境须各自提供可用的
+Recovery capability、Daemon fixture 与清理边界。注册和 Recovery 复用该配置中同一个测试
+手机号和六位固定验证码；仍须先调用真实、精确绑定
 purpose/Handle/operation ID 的短信接口。OTP 只在测试进程内读取并注册到 redactor，不能
 写入 run config、版本控制文件、attestation、诊断或报告。
 

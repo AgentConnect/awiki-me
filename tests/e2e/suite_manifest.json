@@ -191,12 +191,9 @@
       "estimatedMinutes": 30,
       "timeoutMinutes": 45,
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
-      "allowedHosts": [
-        "awiki.info"
-      ],
-      "allowedDidDomains": [
-        "awiki.info"
-      ],
+      "remoteTargetPolicy": "configured_same_origin",
+      "allowedHosts": [],
+      "allowedDidDomains": [],
       "resourceCategories": [
         "dedicated_test_identity",
         "handle_recovery_operation",
@@ -204,6 +201,7 @@
         "isolated_app_state",
         "groups",
         "group_messages",
+        "attachments",
         "agent_inventory",
         "runtime_agents"
       ],

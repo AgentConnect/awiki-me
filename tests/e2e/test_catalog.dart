@@ -453,7 +453,8 @@ class AppTestCatalog {
       ..writeln(
         '- `handle-recovery-local-data` independently runs the existing '
         'Settings Recovery continuity case over one preserved App/Core root. '
-        'It verifies Direct, Group, Agent, read-state, membership metadata, '
+        'It verifies Direct/Group text, historical sent/received Group PNG '
+        'download/preview bytes, Agent, read-state, membership metadata, '
         'exact-count, and same-root restart continuity without executing the '
         'base Recovery UI or old-peer re-Join cases.',
       )

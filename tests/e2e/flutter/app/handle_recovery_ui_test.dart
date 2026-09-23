@@ -4,7 +4,8 @@
 //          an E2E-only user-presence decision.
 // [OUTPUT]: Secret-free proof that Recovery replaces the DID once, exactly
 //           resumes post-commit local transition, preserves Direct/transport
-//           Group/Agent continuity, attributes fixture failure to the active
+//           Group/Agent continuity plus historical sent/received Group PNG
+//           download and preview, attributes fixture failure to the active
 //           identity/Direct/Group/Daemon/Runtime/Agent/checkpoint stage,
 //           converges Root-promotion authorization without logging out the
 //           promoted device, and fences an old App principal.
@@ -17,6 +18,7 @@ import '../support/enter_existing_account.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/awiki_me_app.dart';
@@ -34,6 +36,7 @@ import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
@@ -78,6 +81,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:crypto/crypto.dart';
+import 'package:image/image.dart' as image;
 import 'package:integration_test/integration_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -1555,6 +1560,8 @@ class _HandleRecoveryBusinessFixture {
     required this.groupPeer,
     required this.groupOutgoing,
     required this.groupIncoming,
+    required this.groupOutgoingImage,
+    required this.groupIncomingImage,
     required this.daemonDid,
     required this.runtimeDid,
     required this.runtimeHandle,
@@ -1583,6 +1590,8 @@ class _HandleRecoveryBusinessFixture {
   final GroupMemberSummary groupPeer;
   final ChatMessage groupOutgoing;
   final ChatMessage groupIncoming;
+  final ChatMessage? groupOutgoingImage;
+  final ChatMessage? groupIncomingImage;
   final String daemonDid;
   final String runtimeDid;
   final String runtimeHandle;
@@ -1649,7 +1658,19 @@ class _HandleRecoveryBusinessFixture {
               'group_outgoing_semantic': groupOutgoing.content,
               'group_incoming_message': _requiredMessageId(groupIncoming),
               'group_incoming_semantic': groupIncoming.content,
-              'group_read_message': _requiredMessageId(groupIncoming),
+              'group_read_message': _requiredMessageId(groupIncomingImage!),
+              'group_outgoing_image_message': _requiredMessageId(
+                groupOutgoingImage!,
+              ),
+              'group_outgoing_image_attachment':
+                  groupOutgoingImage!.attachment!.attachmentId,
+              'group_outgoing_image_semantic': groupOutgoingImage!.content,
+              'group_incoming_image_message': _requiredMessageId(
+                groupIncomingImage!,
+              ),
+              'group_incoming_image_attachment':
+                  groupIncomingImage!.attachment!.attachmentId,
+              'group_incoming_image_semantic': groupIncomingImage!.content,
               'agent_conversation': agentConversationId,
               'agent_prompt_message': _requiredMessageId(agentPrompt),
               'agent_prompt_semantic': agentPrompt.content,
@@ -1932,10 +1953,115 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
       isMine: false,
       conversationId: group.conversationId,
     );
+    ChatMessage? groupOutgoingImage;
+    ChatMessage? groupIncomingImage;
+    var groupReadMessage = ownerGroupIncomingProjection;
+    if (kind == HandleRecoveryFixtureKind.localData) {
+      final groupConversation = AppConversationReadRef.fromConversationId(
+        group.conversationId,
+      );
+      final outgoingBytes = _continuityImageBytes(incoming: false);
+      final outgoingCaption =
+          'group-image-before-out ${config.runId} ${_nonce(8)}';
+      groupOutgoingImage = await messaging.sendConversationAttachment(
+        conversation: groupConversation,
+        attachment: AttachmentDraft(
+          filename: 'recovery-outgoing.png',
+          mimeType: 'image/png',
+          bytes: outgoingBytes,
+          sizeBytes: outgoingBytes.length,
+        ),
+        caption: outgoingCaption,
+      );
+      _requireCommittedGroup(
+        groupOutgoingImage,
+        groupDid: group.groupId,
+        senderDid: ownerDid,
+        isMine: true,
+        conversationId: group.conversationId,
+      );
+      _requireContinuityImage(
+        groupOutgoingImage,
+        filename: 'recovery-outgoing.png',
+        caption: outgoingCaption,
+        expectedBytes: outgoingBytes,
+      );
+      final peerOutgoingImage = await _waitForGroupMessageExactOne(
+        tester: tester,
+        bootstrap: peerBootstrap,
+        groupDid: group.groupId,
+        messageId: _requiredMessageId(groupOutgoingImage),
+        content: outgoingCaption,
+        senderDid: ownerDid,
+        isMine: false,
+        conversationId: group.conversationId,
+      );
+      _requireContinuityImage(
+        peerOutgoingImage,
+        filename: 'recovery-outgoing.png',
+        caption: outgoingCaption,
+        expectedBytes: outgoingBytes,
+      );
+      final peerDownloaded = await peerBootstrap.messagingService!
+          .downloadAttachment(
+            thread: AppThreadRef.group(group.groupId),
+            messageId: _requiredMessageId(peerOutgoingImage),
+            attachmentId: peerOutgoingImage.attachment!.attachmentId,
+          );
+      if (peerDownloaded.bytes == null ||
+          sha256.convert(peerDownloaded.bytes!) !=
+              sha256.convert(outgoingBytes)) {
+        fail('The pre-Recovery peer did not receive the sent PNG bytes.');
+      }
+
+      final incomingBytes = _continuityImageBytes(incoming: true);
+      final incomingCaption =
+          'group-image-before-in ${config.runId} ${_nonce(8)}';
+      groupIncomingImage = await peerBootstrap.messagingService!
+          .sendConversationAttachment(
+            conversation: groupConversation,
+            attachment: AttachmentDraft(
+              filename: 'recovery-incoming.png',
+              mimeType: 'image/png',
+              bytes: incomingBytes,
+              sizeBytes: incomingBytes.length,
+            ),
+            caption: incomingCaption,
+          );
+      _requireCommittedGroup(
+        groupIncomingImage,
+        groupDid: group.groupId,
+        senderDid: peerSession.did,
+        isMine: true,
+        conversationId: group.conversationId,
+      );
+      _requireContinuityImage(
+        groupIncomingImage,
+        filename: 'recovery-incoming.png',
+        caption: incomingCaption,
+        expectedBytes: incomingBytes,
+      );
+      groupReadMessage = await _waitForGroupMessageExactOne(
+        tester: tester,
+        bootstrap: bootstrap,
+        groupDid: group.groupId,
+        messageId: _requiredMessageId(groupIncomingImage),
+        content: incomingCaption,
+        senderDid: peerSession.did,
+        isMine: false,
+        conversationId: group.conversationId,
+      );
+      _requireContinuityImage(
+        groupReadMessage,
+        filename: 'recovery-incoming.png',
+        caption: incomingCaption,
+        expectedBytes: incomingBytes,
+      );
+    }
     await _markRecoveryFixtureRead(
       conversations: conversations,
       conversationId: group.conversationId,
-      message: ownerGroupIncomingProjection,
+      message: groupReadMessage,
     );
     final groupBeforeRecovery = await groups.getGroup(group.groupId);
     final groupMembers = await groups.listMembers(group.groupId, limit: 100);
@@ -2085,6 +2211,20 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         isMine: false,
         conversationId: group.conversationId,
       );
+      if (kind == HandleRecoveryFixtureKind.localData) {
+        _requireExactMessage(
+          groupHistory,
+          expected: groupOutgoingImage!,
+          isMine: true,
+          conversationId: group.conversationId,
+        );
+        _requireExactMessage(
+          groupHistory,
+          expected: groupIncomingImage!,
+          isMine: false,
+          conversationId: group.conversationId,
+        );
+      }
       _requireExactMessage(
         agentHistory,
         expected: prompt,
@@ -2132,6 +2272,8 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         groupPeer: groupPeer,
         groupOutgoing: groupOutgoing,
         groupIncoming: groupIncoming,
+        groupOutgoingImage: groupOutgoingImage,
+        groupIncomingImage: groupIncomingImage,
         daemonDid: daemonInstall.daemonDid,
         runtimeDid: runtimeAgent.agentDid,
         runtimeHandle: runtimeAgent.handle!,
@@ -2234,6 +2376,81 @@ void _requireCommittedGroup(
       message.isMine != isMine ||
       message.sendState != MessageSendState.sent) {
     fail('A continuity Group message was not committed exactly.');
+  }
+}
+
+Uint8List _continuityImageBytes({required bool incoming}) => Uint8List.fromList(
+  image.encodePng(
+    image.Image(width: incoming ? 3 : 2, height: incoming ? 2 : 3),
+  ),
+);
+
+void _requireContinuityImage(
+  ChatMessage message, {
+  required String filename,
+  required String caption,
+  required Uint8List expectedBytes,
+}) {
+  final attachment = message.attachment;
+  if (message.content != caption ||
+      attachment == null ||
+      attachment.attachmentId.trim().isEmpty ||
+      attachment.filename != filename ||
+      attachment.mimeType != 'image/png' ||
+      attachment.sizeBytes != expectedBytes.length) {
+    fail('A Recovery Group PNG projection lost its exact attachment metadata.');
+  }
+}
+
+Future<void> _assertHistoricalGroupImageAvailable({
+  required ProviderContainer container,
+  required AppBootstrap bootstrap,
+  required ChatMessage message,
+  required String groupDid,
+  required bool incoming,
+}) async {
+  final expectedBytes = _continuityImageBytes(incoming: incoming);
+  _requireContinuityImage(
+    message,
+    filename: incoming ? 'recovery-incoming.png' : 'recovery-outgoing.png',
+    caption: message.content,
+    expectedBytes: expectedBytes,
+  );
+  final attachmentId = message.attachment!.attachmentId;
+  final messageId = _requiredMessageId(message);
+  final messaging = bootstrap.messagingService!;
+  final downloaded = await messaging.downloadAttachment(
+    thread: AppThreadRef.group(groupDid),
+    messageId: messageId,
+    attachmentId: attachmentId,
+  );
+  if (downloaded.bytes == null ||
+      sha256.convert(downloaded.bytes!) != sha256.convert(expectedBytes)) {
+    fail(
+      'A pre-Recovery sent/received PNG could not be downloaded after Recovery.',
+    );
+  }
+  final preview = container.read(attachmentPreviewServiceProvider);
+  final previewPath = await preview.previewPathFor(
+    message: message,
+    download: () => messaging.downloadAttachment(
+      thread: AppThreadRef.group(groupDid),
+      messageId: messageId,
+      attachmentId: attachmentId,
+    ),
+    downloadToPath: (path) => messaging.downloadAttachment(
+      thread: AppThreadRef.group(groupDid),
+      messageId: messageId,
+      attachmentId: attachmentId,
+      localPath: path,
+    ),
+  );
+  final previewBytes = await preview.readPreviewBytes(previewPath);
+  final decoded = image.decodePng(previewBytes);
+  if (sha256.convert(previewBytes) != sha256.convert(expectedBytes) ||
+      decoded?.width != (incoming ? 3 : 2) ||
+      decoded?.height != (incoming ? 2 : 3)) {
+    fail('A pre-Recovery sent/received PNG preview changed after Recovery.');
   }
 }
 
@@ -4451,6 +4668,32 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     isMine: false,
     conversationId: groupConversationId,
   );
+  final groupOutgoingImageBefore = _requireExactStoredMessageByReference(
+    groupHistory,
+    checkpoint: checkpoint,
+    messageReferenceName: 'group_outgoing_image_message',
+    semanticReferenceName: 'group_outgoing_image_semantic',
+    senderDid: oldDid,
+    isMine: true,
+    conversationId: groupConversationId,
+  );
+  final groupIncomingImageBefore = _requireExactStoredMessageByReference(
+    groupHistory,
+    checkpoint: checkpoint,
+    messageReferenceName: 'group_incoming_image_message',
+    semanticReferenceName: 'group_incoming_image_semantic',
+    senderDid: peerDid,
+    isMine: false,
+    conversationId: groupConversationId,
+  );
+  checkpoint.requireReference(
+    'group_outgoing_image_attachment',
+    groupOutgoingImageBefore.attachment?.attachmentId ?? '',
+  );
+  checkpoint.requireReference(
+    'group_incoming_image_attachment',
+    groupIncomingImageBefore.attachment?.attachmentId ?? '',
+  );
   final agentPromptBefore = _requireExactStoredMessageByReference(
     agentHistory,
     checkpoint: checkpoint,
@@ -4505,7 +4748,19 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       'group_outgoing_semantic': groupOutgoingBefore.content,
       'group_incoming_message': _requiredMessageId(groupIncomingBefore),
       'group_incoming_semantic': groupIncomingBefore.content,
-      'group_read_message': _requiredMessageId(groupIncomingBefore),
+      'group_read_message': _requiredMessageId(groupIncomingImageBefore),
+      'group_outgoing_image_message': _requiredMessageId(
+        groupOutgoingImageBefore,
+      ),
+      'group_outgoing_image_attachment':
+          groupOutgoingImageBefore.attachment!.attachmentId,
+      'group_outgoing_image_semantic': groupOutgoingImageBefore.content,
+      'group_incoming_image_message': _requiredMessageId(
+        groupIncomingImageBefore,
+      ),
+      'group_incoming_image_attachment':
+          groupIncomingImageBefore.attachment!.attachmentId,
+      'group_incoming_image_semantic': groupIncomingImageBefore.content,
       'agent_conversation': agentConversationId,
       'agent_prompt_message': _requiredMessageId(agentPromptBefore),
       'agent_prompt_semantic': agentPromptBefore.content,
@@ -4542,6 +4797,21 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       agentHistory.length != agentMessageCount) {
     fail('Recovery changed a continuity thread message count.');
   }
+
+  await _assertHistoricalGroupImageAvailable(
+    container: appContainer,
+    bootstrap: bootstrap,
+    message: groupOutgoingImageBefore,
+    groupDid: groupDid,
+    incoming: false,
+  );
+  await _assertHistoricalGroupImageAvailable(
+    container: appContainer,
+    bootstrap: bootstrap,
+    message: groupIncomingImageBefore,
+    groupDid: groupDid,
+    incoming: true,
+  );
 
   final directOutgoingAfter = await messaging.sendText(
     thread: AppThreadRef.direct(peerDid),
@@ -4709,6 +4979,18 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     conversationId: groupConversationId,
   );
   _requireExactMessage(
+    finalGroupHistory,
+    expected: groupOutgoingImageBefore,
+    isMine: true,
+    conversationId: groupConversationId,
+  );
+  _requireExactMessage(
+    finalGroupHistory,
+    expected: groupIncomingImageBefore,
+    isMine: false,
+    conversationId: groupConversationId,
+  );
+  _requireExactMessage(
     finalAgentHistory,
     expected: agentPromptAfter,
     isMine: true,
@@ -4735,6 +5017,8 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     _requiredMessageId(directIncomingBefore),
     _requiredMessageId(groupOutgoingBefore),
     _requiredMessageId(groupIncomingBefore),
+    _requiredMessageId(groupOutgoingImageBefore),
+    _requiredMessageId(groupIncomingImageBefore),
     _requiredMessageId(agentPromptBefore),
     _requiredMessageId(agentReplyBefore),
     _requiredMessageId(directOutgoingAfter),
@@ -4763,6 +5047,9 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       'direct_and_group_read_state_preserved_after_restart',
       'direct_id_history_ownership_and_bidirectional_send_preserved',
       'handle_backed_transport_group_id_history_and_send_preserved',
+      'pre_recovery_group_png_sent_and_peer_received_exact_bytes',
+      'historical_sent_group_png_download_and_preview_preserved',
+      'historical_received_group_png_download_and_preview_preserved',
       'group_profile_role_status_count_and_members_preserved',
       'agent_inventory_conversation_history_and_reply_preserved',
       'conversation_message_and_agent_counts_remained_exact',
