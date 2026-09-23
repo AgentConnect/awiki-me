@@ -1,0 +1,114 @@
+name: Singapore packaged app installation
+on:
+  workflow_dispatch:
+  push:
+    branches: [test/singapore-refresh-20260923-2]
+    paths: ['.github/workflows/singapore-macos-smoke.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  startup:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: macos-arm64
+            sha256: b38223d65160167e6ebb712b359edcf9b92417b21664f2d16acc685e95f8e281
+          - runner: macos-15-intel
+            target: macos-x64
+            sha256: 93aff7def33ddb49f95ba0327c17a4d91d4603c6834726f5c266ef5c40c452c5
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 35890190024
+          name: awiki-me-${{ matrix.target }}-c59d735c-1c8c-4cf0-ac95-8d01192827b7
+          path: inputs
+      - name: Verify immutable signed DMG and launch its native application
+        env:
+          EXPECTED_SHA256: ${{ matrix.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg="$(find inputs -name '*.dmg' -type f)"
+          test "$(printf '%s\n' "$dmg" | wc -l | tr -d ' ')" = 1
+          test "$(shasum -a 256 "$dmg" | cut -d ' ' -f 1)" = "$EXPECTED_SHA256"
+          mount="$RUNNER_TEMP/sg-app-mount"
+          mkdir "$mount"
+          hdiutil attach -readonly -nobrowse -noautoopen -mountpoint "$mount" "$dmg" >/dev/null
+          app_pid=""
+          cleanup() {
+            if [[ -n "$app_pid" ]]; then kill "$app_pid" 2>/dev/null || true; fi
+            hdiutil detach "$mount" >/dev/null || true
+          }
+          trap cleanup EXIT
+          codesign --verify --deep --strict "$mount/AWikiMe.app"
+          xcrun stapler validate "$dmg"
+          "$mount/AWikiMe.app/Contents/MacOS/AWikiMe" > "$RUNNER_TEMP/sg-app-startup.log" 2>&1 &
+          app_pid=$!
+          sleep 12
+          kill -0 "$app_pid"
+          if grep -Eiq 'dyld.*(Library not loaded|Symbol not found)|Failed to load dynamic library|Fatal signal|SIGSEGV' "$RUNNER_TEMP/sg-app-startup.log"; then
+            echo 'Native startup failed'; exit 1
+          fi
+          echo 'Signed native application stayed alive for 12 seconds; no model or payment action was performed.'
+
+  windows-upgrade:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 35890190024
+          name: awiki-me-windows-x64-c59d735c-1c8c-4cf0-ac95-8d01192827b7
+          path: inputs
+      - name: Install previous package, upgrade running app, verify runtime and restart
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+          $old = Join-Path $env:RUNNER_TEMP 'AWiki-Me-0.1.32.exe'
+          Invoke-WebRequest 'https://anpclaw.com/downloads/singapore-refresh-20260923/app/AWiki-Me-Windows-x64-0.1.32.exe' -OutFile $old
+          if ((Get-FileHash $old -Algorithm SHA256).Hash.ToLowerInvariant() -cne 'e03200e2839c7df2560b24ecb9995bbab40408fa03d2ad7e9d5e5c97fdea0bf0') { throw 'Old installer hash mismatch' }
+          $new = (Resolve-Path 'inputs/AWiki-Me-Windows-x64-0.1.33.exe').Path
+          if ((Get-FileHash $new -Algorithm SHA256).Hash.ToLowerInvariant() -cne 'f35c22149c1977b3e6a3ea5d81fffd7340b480f8b3c8806bf0d1176776b8a38b') { throw 'New installer hash mismatch' }
+          $dir = Join-Path $env:RUNNER_TEMP 'AWiki release upgrade'
+          $support = Join-Path $env:LOCALAPPDATA 'AWiki/AWikiMe/support'
+          New-Item -ItemType Directory -Force $support | Out-Null
+          $sentinel = Join-Path $support 'sg-release-sentinel.txt'
+          'isolated release verification' | Set-Content $sentinel
+          $sentinelHash = (Get-FileHash $sentinel).Hash
+          function Install-Package([string]$path) {
+            $p = Start-Process $path -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER',('/DIR="' + $dir + '"')) -Wait -PassThru
+            if ($p.ExitCode -ne 0) { throw "Installer failed: $($p.ExitCode)" }
+          }
+          function Start-Checked {
+            $p = Start-Process (Join-Path $dir 'AWikiMe.exe') -PassThru
+            Start-Sleep -Seconds 12
+            $p.Refresh()
+            if ($p.HasExited) { throw 'Packaged native App did not stay alive' }
+            return $p
+          }
+          Install-Package $old
+          $oldProcess = Start-Checked
+          Install-Package $new
+          $oldProcess.Refresh()
+          if (-not $oldProcess.HasExited) { throw 'Upgrade did not stop the old App process' }
+          $expected = Get-Content 'inputs/awiki-runtime-manifest.json' -Raw | ConvertFrom-Json
+          if ($expected.version -ne '0.1.33' -or $expected.buildNumber -ne 43) { throw 'Unexpected runtime version' }
+          if ($expected.sourceRefs.imCore -ne '9081551c1a5f8a25a9aac743c794fb6b095e9982') { throw 'Unexpected Core source' }
+          $actualManifest = Join-Path $dir 'awiki-runtime-manifest.json'
+          if ((Get-FileHash $actualManifest).Hash -cne (Get-FileHash 'inputs/awiki-runtime-manifest.json').Hash) { throw 'Installed manifest differs' }
+          foreach ($entry in $expected.files) {
+            $path = Join-Path $dir $entry.path
+            if ((Get-Item $path).Length -ne $entry.sizeBytes -or (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256) { throw "Installed file mismatch: $($entry.path)" }
+          }
+          if ((Get-FileHash $sentinel).Hash -cne $sentinelHash) { throw 'External support state changed' }
+          $newProcess = Start-Checked
+          Stop-Process -Id $newProcess.Id
+          Write-Output 'Windows 0.1.32 -> 0.1.33 installation, running-app replacement, runtime hashes and native restart passed; account migration was not exercised.'
