@@ -376,6 +376,12 @@ payload metadata、raw conversation ID、URL、title/body 都不能决定导航�
 
 activation、resume、event drain、ack 和 navigation 全程绑定相同
 `SessionEpoch(ownerDid, stableIdentityKey, generation)` 与 `StorageScopeId` tenant。
+
+Android 紧急提醒页的“查看消息”先停止当前匹配的声振，再通过系统 Keyguard 请求正常解锁；
+解锁成功后才发出 `notification_opened` 并启动 App，仍走上述 Core 消息解析与 session fence。
+等待解锁期间不能因声振已停止或原 60 秒截止而销毁打开入口。取消/失败时保留“查看消息”重试，
+不重启声振、不提前消费打开事件；Activity 重建保留原消息打开意图。通知栏 action 与超时后的
+普通通知点击使用同一流程。“关闭提醒”只停止提醒，不请求解锁或打开聊天。
 每个 await 前后都重新验证 fence；A→B、logout、tenant replacement 或 registration refresh
 期间的旧完成只能保留事件待后续真实触发重试，不能确认 A 的 delivery、选择 B 的会话或把
 A 的安装绑定到 B。
@@ -776,3 +782,7 @@ ACP 控制消息的订阅与修复也必须使用该规范 conversation ID；界
 原创建行为并说明无法检测。刷新保留表单；安装检测不验证登录、API Key 或模型。
 
 Codex / Claude Code 依赖宿主机 Node.js ≥22（推荐 24 LTS）。缺失或异常时仅禁用受影响类型，并在列表下显示一处可换行的环境提示及 Node 官方安装入口；不将用户带入自动安装或账号配置流程，安装后使用原“重新检测”。
+
+### 紧急提醒 Activity 复用与解锁
+
+Android 收到复用现有弹窗的新 Intent 时，必须整体替换该弹窗的消息 payload、声振 token、倒计时和查看状态；关闭与查看只作用于当前消息。相同消息重复投递不能打断正在进行的解锁。解锁回调按弹窗消息代次隔离，旧消息的成功、取消或失败不得打开新消息或清除新请求状态。旋转及进程恢复保存最新消息，账号与消息有效性仍由既有打开入口校验。
