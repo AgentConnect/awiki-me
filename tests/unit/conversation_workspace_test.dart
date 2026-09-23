@@ -385,6 +385,68 @@ void main() {
     );
   });
 
+  testWidgets('Group ID 占位名称不覆盖 Core 已提交的群标题', (tester) async {
+    const groupDid = 'did:wba:awiki.info:groups:restart:e1_group';
+    const conversationId = 'group:$groupDid';
+    final groupConversation = ConversationSummary(
+      threadId: groupDid,
+      conversationId: conversationId,
+      displayName: 'Persisted Group',
+      lastMessagePreview: 'new message',
+      lastMessageAt: DateTime(2026, 9, 24, 3),
+      unreadCount: 1,
+      isGroup: true,
+      groupId: groupDid,
+      canonicalGroupDid: groupDid,
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[groupConversation];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) => _StaticConversationListController(
+              ref,
+              <ConversationSummary>[groupConversation],
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationListPage)),
+    );
+    container
+        .read(groupProvider.notifier)
+        .upsertGroup(
+          GroupSummary(
+            conversationId: conversationId,
+            groupId: groupDid,
+            displayName: groupDid,
+            description: '',
+            memberCount: 2,
+            lastMessageAt: DateTime(2026, 9, 24, 3),
+          ),
+        );
+    await tester.pump();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('conversation-row-title:$conversationId')),
+        matching: find.text('Persisted Group', findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      container.read(conversationListProvider).conversations.single.displayName,
+      'Persisted Group',
+    );
+  });
+
   testWidgets('macOS 宽度下聊天头部不显示身份卡或会话信息入口', (tester) async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]
