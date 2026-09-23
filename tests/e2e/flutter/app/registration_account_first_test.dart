@@ -30,6 +30,7 @@ import 'package:integration_test/integration_test.dart';
 
 import '../../case_attestation.dart';
 import '../../remote_target.dart';
+import '../../delete_isolated_directory.dart';
 import '../../e2e_user_presence_port.dart';
 
 const String _registrationCaseId = 'REGISTRATION-ACCOUNT-FIRST-E2E-001';
@@ -316,7 +317,7 @@ Future<String> _runInvitedHandleJoin(
     await bootstrap?.dispose();
     await admin?.dispose();
     for (final root in roots) {
-      if (await root.exists()) await root.delete(recursive: true);
+      await deleteIsolatedDirectory(root);
     }
   }
   return adminDid!;
@@ -489,7 +490,7 @@ Future<void> _runExistingHandleRecovery(
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     await bootstrap.dispose();
-    await root.delete(recursive: true);
+    await deleteIsolatedDirectory(root);
   }
 }
 
