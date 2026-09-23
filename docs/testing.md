@@ -86,57 +86,43 @@ registration. Real service and product registration acceptance must separately
 record the service source, Core artifact source, target tenant and cleanup.
 
 `registration-account-first` / `REGISTRATION-ACCOUNT-FIRST-E2E-001` uses real
-native Core and disposable loopback User/Message Services. Set
+native Core against the reviewed `awiki.info` test tenant. Set
 `AWIKI_REGISTRATION_FIXTURE` to an ignored, permission-restricted JSON file with
 `userServiceUrl`, `domain`, `handle`, `inviteCode`, `fourCharHandle`,
-`fourCharInviteCode`, `phone`, `otp`, `emailHandle`, `emailInviteCode`, and `email`. An optional
-`caBundle` names a local PEM CA file for disposable HTTPS DID resolution; default
-trust remains unchanged. The test process may use a loopback HTTPS CONNECT proxy,
-which must serve the real User Service DID documents for both account and system
-notification Agent paths. The fixture must route both asynchronous and synchronous
-DID resolution to its loopback HTTPS listener: `HTTPS_PROXY` alone does not cover
-the synchronous Core HTTP client. A macOS process-local exact-host resolver can
-provide this without changing system DNS; its loading must be verified in the
-actual App process. Never disable certificate verification. Provision
-unused three- and four-character names, a one-use database invitation for the
-three-character name, a valid algorithm invitation for the four-character name,
-and local development OTP in
-the disposable service before running the case. The domain must be a valid App
-tenant hostname; the ANP service DID is its bare-domain `did:wba` DID. Never use
-production credentials or an SMS provider for this local case. Email requires a
-loopback-only SMTP receiver and the actual activation-confirmation endpoint;
-use official Turnstile test credentials only in the disposable service. Capture
-activation links without logging tokens, and clean the exact email verification
-row after the case. Do not substitute a preverified database row for delivery
-and confirmation.
+`fourCharInviteCode`, `phone`, and `otp`. The URL and DID domain must be exactly
+`https://awiki.info` and `awiki.info`; an optional `caBundle` preserves normal
+TLS trust. Provision unused three- and four-character names, a one-use database
+invitation for the three-character name, a valid algorithm invitation for the
+four-character name, and the protected test OTP before running the case.
+The ANP service DID is `did:wba:awiki.info`. The provisioner checks exact
+selector absence, records the account/DID/invitation scope, and cleans both
+User and Message rows from the same-host test databases afterward. Email
+sending and activation are outside this case by user decision.
 
 ```bash
 dart run tests/e2e/runner.dart --case registration-account-first
 ```
 
 For each name length, the case follows the visible account/invitation/phone
-steps, registers through Core, then uses a second fresh App scope to verify that
-the existing short name
-reaches authenticated Join/Recovery choices without an invitation and completes
-real notification-driven member Join. A third fresh scope for each name then
-completes Recovery through its separate operation-bound OTP, risk confirmation,
-and user-presence decision. The case checks the same durable operation completes,
-the old DID changes to the successor, the App activates that successor, and its
-registry has an active management-ready admin. A seventh fresh scope registers another three-character account using the
-required invitation and real SMTP activation. It checks the resulting local
-identity and active management-ready admin registry. The ten-phase attestation
-covers these phone and email flows; ordinary messaging is outside this case. The invoking service
-fixture owns database readback (three accounts and two database invitations, each used once)
-and remote-row cleanup; the algorithm invitation keeps its existing stateless policy;
-the App case deletes its temporary local scopes before attesting success.
+steps, registers through Core, then uses a second fresh App scope to verify
+that the existing short name reaches authenticated Join/Recovery choices without
+an invitation and completes real notification-driven member Join. A third fresh
+scope for each name completes Recovery through operation-bound OTP, risk
+confirmation, and user presence. The old DID changes to the successor, the App
+activates that successor, and its Registry has an active management-ready admin.
+The nine-phase attestation covers these phone and Recovery flows; ordinary
+messaging is outside this case. The fixture owns database readback for two
+accounts and one database invitation used once, plus exact remote-row cleanup.
+The algorithm invitation keeps its existing stateless policy; the App case
+deletes its temporary local scopes before attesting success.
 
-The registration case also completes member Join: the original admin Core receives
-the real Join notification, verifies the challenge/response and matching SAS, then
-approves through the existing user-presence boundary. The joining App must activate
-the same account and appear as one active member device. Its local Message Service
-must listen on port 19992; the provisioner must clean both User and Message Service
-rows for the exact disposable account, including Recovery transition edges before
-removing their owning account. The user-presence adapter is E2E-only.
+The registration case also completes member Join: the original admin Core
+receives the real Join notification, verifies challenge/response and matching
+SAS, then approves through the existing user-presence boundary. The joining
+App activates the same account and appears as one active member device. The
+provisioner cleans both User and Message Service rows for the exact test account,
+including Recovery transition edges before removing the owning account. The
+user-presence adapter is E2E-only.
 
 The runner conservatively records possible service resources as `residual` after
 launch; the provisioner must attach its own database cleanup readback. A successful
@@ -1531,11 +1517,10 @@ continuation visible before the contact step, matching the compact layout. Full
 runner contract tests compare exact active catalog IDs rather than stale totals.
 
 
-The loopback `registration-account-first` acceptance remains active and required
-under `requiredFor: [local-fixture, release]`, independently of the awiki.info `full` gate.
-Run it explicitly with its provisioned disposable fixture; missing configuration
-still fails closed. Remote full completion does not attest this local lane, and
-exhaustive acceptance requires both lanes. Never convert missing fixtures to skips.
+The `registration-account-first` acceptance is included in the remote `full`
+gate and requires the exact `awiki.info` fixture. Missing configuration fails
+closed; no local-only success substitutes for this remote case. Never convert
+missing fixtures to skips.
 
 Registration discovery failure does not authorize OTP, email activation or final
 registration through the existing-account shortcut. A successful existing decision

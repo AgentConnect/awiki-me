@@ -38,6 +38,23 @@ void main() {
     },
   );
 
+  test('remote phone registration fixture does not require Email fields', () {
+    final fixture = <String, dynamic>{
+      'inviteCode': 'phone-invitation-private',
+      'phone': '+15555559876',
+      'otp': '123456',
+      'handle': 'zqx',
+      'fourCharHandle': 'vbnm',
+      'fourCharInviteCode': 'ABCDEF',
+    };
+    final output = DesktopSecretRedactor(
+      registrationFixtureSecrets(fixture),
+    ).redact(jsonEncode(fixture));
+    for (final value in fixture.values) {
+      expect(output, isNot(contains(value as String)));
+    }
+  });
+
   test('removed model-backed suites cannot be selected', () {
     for (final name in [
       'acp-agent',

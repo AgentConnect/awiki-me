@@ -74,7 +74,8 @@ Iterable<String> registrationFixtureSecrets(
     'emailInviteCode',
     'email',
   ]) {
-    yield fixture[key] as String;
+    final value = fixture[key];
+    if (value is String) yield value;
   }
   final caBundle = fixture['caBundle'];
   if (caBundle is String) yield caBundle;

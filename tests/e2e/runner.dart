@@ -703,7 +703,7 @@ class DesktopE2eRunner {
         case DesktopE2eCase.multiDevice:
           await _runLocalMultiDeviceCapabilityGate();
         case DesktopE2eCase.registrationAccountFirst:
-          await _runLocalRegistrationAccountFirst();
+          await _runRemoteRegistrationAccountFirst();
         case DesktopE2eCase.multiDeviceRemoteJoin:
           await _runRemoteMultiDeviceJoin();
         case DesktopE2eCase.multiDeviceRemoteRecovery:
@@ -1069,22 +1069,22 @@ class DesktopE2eRunner {
     }
   }
 
-  Future<void> _runLocalRegistrationAccountFirst() async {
+  Future<void> _runRemoteRegistrationAccountFirst() async {
     final fixturePath = Platform.environment['AWIKI_REGISTRATION_FIXTURE']
         ?.trim();
     if (!options.dryRun && !commands.dryRun && !options.prepareOnly) {
       if (fixturePath == null || fixturePath.isEmpty) {
         throw E2eFailure(
-          'AWIKI_REGISTRATION_FIXTURE must name a provisioned local fixture.',
+          'AWIKI_REGISTRATION_FIXTURE must name a provisioned awiki.info test fixture.',
         );
       }
       final fixture =
           jsonDecode(await File(fixturePath).readAsString())
               as Map<String, dynamic>;
-      final host = Uri.parse(fixture['userServiceUrl'] as String).host;
-      if (!const {'127.0.0.1', 'localhost', '::1'}.contains(host)) {
+      if (fixture['userServiceUrl'] != 'https://awiki.info' ||
+          fixture['domain'] != 'awiki.info') {
         throw E2eFailure(
-          'Registration acceptance requires a loopback User Service.',
+          'Registration acceptance requires the reviewed awiki.info test tenant.',
         );
       }
       for (final secret in registrationFixtureSecrets(fixture)) {

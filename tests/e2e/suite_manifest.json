@@ -1342,6 +1342,7 @@
         "PERF-E2E-011",
         "PERF-E2E-012",
         "PROCESS-RESTART-E2E-001",
+        "REGISTRATION-ACCOUNT-FIRST-E2E-001",
         "ROOT-TRANSFER-APP-PAIR-E2E-001",
         "ROOT-TRANSFER-E2E-001",
         "SMOKE-E2E-001",
@@ -1351,6 +1352,7 @@
       ],
       "includes": [
         "did-method-web",
+        "registration-account-first",
         "smoke",
         "multi-device",
         "multi-device-remote-join",
@@ -1388,20 +1390,17 @@
         "flutter"
       ],
       "requiredFor": [
-        "local-fixture",
         "release"
       ],
       "owner": "awiki-me-identity",
       "estimatedMinutes": 5,
       "timeoutMinutes": 8,
-      "cleanupPolicy": "isolated_scope_delete_and_disposable_service_fixture",
+      "cleanupPolicy": "exact_scope_remote_database_cleanup",
       "allowedHosts": [
-        "127.0.0.1",
-        "localhost",
-        "::1"
+        "awiki.info"
       ],
       "allowedDidDomains": [
-        "registration.test"
+        "awiki.info"
       ],
       "resourceCategories": [
         "isolated_app_state",

@@ -1,5 +1,6 @@
-// Real native Core and loopback User Service; fixture provisioning/DB cleanup
-// belong to the invoking local acceptance environment, never to production UI.
+import 'package:awiki_me/src/presentation/onboarding/registration_entry_provider.dart';
+// Real native Core and awiki.info test tenant; exact invitation provisioning
+// and database cleanup belong to the invoking private acceptance fixture.
 import 'dart:convert';
 import 'dart:io';
 
@@ -80,7 +81,6 @@ void main() {
         handle: fixture['fourCharHandle'] as String,
         previousDid: fourDid,
       );
-      await _runEmailRegistration(tester, fixture);
       await E2eCaseAttestationWriter.markPassed(
         _registrationCaseId,
         phases: const <String>[
@@ -93,10 +93,29 @@ void main() {
           'four_character_registration_and_join_completed',
           'three_character_recovery_completed',
           'four_character_recovery_completed',
-          'three_character_email_registration_completed',
         ],
       );
     },
+  );
+}
+
+AwikiEnvironmentConfig _remoteRegistrationEnvironment(
+  Map<String, dynamic> fixture,
+) {
+  final origin = fixture['userServiceUrl'] as String;
+  final domain = fixture['domain'] as String;
+  expect(origin, 'https://awiki.info');
+  expect(domain, 'awiki.info');
+  return AwikiEnvironmentConfig(
+    baseUrl: origin,
+    userServiceUrl: origin,
+    didDomain: domain,
+    messageServiceUrl: origin,
+    mailServiceUrl: origin,
+    anpServiceUrl: '$origin/anp-im/rpc',
+    anpServiceDid: 'did:wba:$domain',
+    caBundle: fixture['caBundle'] as String?,
+    agentImEnabled: false,
   );
 }
 
@@ -108,11 +127,9 @@ Future<String> _runInvitedHandleJoin(
   required int expectedLength,
 }) async {
   final url = fixture['userServiceUrl'] as String;
-  expect(
-    {'localhost', '127.0.0.1', '::1'}.contains(Uri.parse(url).host),
-    isTrue,
-  );
+  expect(url, 'https://awiki.info');
   final domain = fixture['domain'] as String;
+  expect(domain, 'awiki.info');
   final phone = fixture['phone'] as String;
   final otp = fixture['otp'] as String;
   expect(handle.length, expectedLength);
@@ -128,19 +145,7 @@ Future<String> _runInvitedHandleJoin(
       );
       roots.add(root);
       bootstrap = await AppBootstrap.create(
-        environment: AwikiEnvironmentConfig(
-          // Core's realtime origin follows serviceBaseUrl; User Service
-          // remains separately routed through the registration fault proxy.
-          baseUrl: 'http://127.0.0.1:19992',
-          userServiceUrl: url,
-          didDomain: domain,
-          messageServiceUrl: 'http://127.0.0.1:19992',
-          mailServiceUrl: 'http://127.0.0.1:19993',
-          anpServiceUrl: 'http://127.0.0.1:19992/im/rpc',
-          anpServiceDid: 'did:wba:$domain',
-          caBundle: fixture['caBundle'] as String?,
-          agentImEnabled: false,
-        ),
+        environment: _remoteRegistrationEnvironment(fixture),
         appStateRoot: root.path,
       );
       if (!Platform.isIOS && !Platform.isAndroid) {
@@ -198,6 +203,27 @@ Future<String> _runInvitedHandleJoin(
         () =>
             find.bySemanticsIdentifier('e2e-phone-input').evaluate().isNotEmpty,
         'Contact verification follows account admission',
+        diagnostic: () {
+          final entry = container.read(registrationEntryProvider);
+          final field = find.descendant(
+            of: find.bySemanticsIdentifier('e2e-invite-input'),
+            matching: find.byType(CupertinoTextField),
+          );
+          final fieldMatches =
+              field.evaluate().isNotEmpty &&
+              (field.evaluate().single.widget as CupertinoTextField)
+                      .controller
+                      ?.text ==
+                  invite;
+          return 'step=${entry.step.name} error=${entry.error ?? "none"} '
+              'decision=${entry.check?.decision ?? "none"} '
+              'inviteStatus=${entry.check?.inviteStatus ?? "none"} '
+              'busy=${entry.busy} '
+              'fieldCount=${field.evaluate().length} '
+              'fieldMatches=$fieldMatches '
+              'stateMatches=${entry.inviteCode == invite} '
+              'clientVersion=${bootstrap!.userServiceHttpClient?.clientVersionHeader ?? "none"}';
+        },
       );
       expect(
         find.bySemanticsIdentifier('e2e-invite-input'),
@@ -217,16 +243,7 @@ Future<String> _runInvitedHandleJoin(
       await _enter(tester, 'e2e-otp-input', otp);
       expect(container.read(onboardingProvider).canSubmitPhoneOtp, isTrue);
       expect(container.read(onboardingProvider).isBusy, isFalse);
-      await _tap(
-        tester,
-        find.byKey(
-          Key(
-            Platform.isMacOS
-                ? 'onboarding-mac-phone-submit-action'
-                : 'onboarding-phone-submit-action',
-          ),
-        ),
-      );
+      await _tap(tester, _visiblePhoneSubmitAction());
       if (existing) {
         await _until(
           tester,
@@ -318,17 +335,7 @@ Future<void> _runExistingHandleRecovery(
   final root = await Directory.systemTemp.createTemp('awiki_recovery_native_');
   final presence = E2eUserPresencePort();
   final bootstrap = await AppBootstrap.create(
-    environment: AwikiEnvironmentConfig(
-      baseUrl: 'http://127.0.0.1:19992',
-      userServiceUrl: fixture['userServiceUrl'] as String,
-      didDomain: domain,
-      messageServiceUrl: 'http://127.0.0.1:19992',
-      mailServiceUrl: 'http://127.0.0.1:19993',
-      anpServiceUrl: 'http://127.0.0.1:19992/im/rpc',
-      anpServiceDid: 'did:wba:$domain',
-      caBundle: fixture['caBundle'] as String?,
-      agentImEnabled: false,
-    ),
+    environment: _remoteRegistrationEnvironment(fixture),
     appStateRoot: root.path,
   );
   try {
@@ -373,16 +380,7 @@ Future<void> _runExistingHandleRecovery(
       'Existing account OTP is scoped',
     );
     await _enter(tester, 'e2e-otp-input', otp);
-    await _tap(
-      tester,
-      find.byKey(
-        Key(
-          Platform.isMacOS
-              ? 'onboarding-mac-phone-submit-action'
-              : 'onboarding-phone-submit-action',
-        ),
-      ),
-    );
+    await _tap(tester, _visiblePhoneSubmitAction());
     await _until(
       tester,
       () => find
@@ -634,6 +632,13 @@ Future<void> _enter(WidgetTester tester, String id, String text) async {
   await tester.pump();
 }
 
+Finder _visiblePhoneSubmitAction() {
+  final desktop = find.byKey(const Key('onboarding-mac-phone-submit-action'));
+  return desktop.evaluate().isNotEmpty
+      ? desktop
+      : find.byKey(const Key('onboarding-phone-submit-action'));
+}
+
 Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
   await _until(
@@ -660,112 +665,4 @@ Future<void> _until(
     isTrue,
     reason: '$reason ${ready() ? "" : diagnostic?.call() ?? ""}',
   );
-}
-
-Future<void> _runEmailRegistration(
-  WidgetTester tester,
-  Map<String, dynamic> fixture,
-) async {
-  final handle = fixture['emailHandle'] as String;
-  final invite = fixture['emailInviteCode'] as String;
-  final email = fixture['email'] as String;
-  final domain = fixture['domain'] as String;
-  expect(handle.length, 3);
-  final root = await Directory.systemTemp.createTemp('awiki_email_native_');
-  final bootstrap = await AppBootstrap.create(
-    environment: AwikiEnvironmentConfig(
-      baseUrl: 'http://127.0.0.1:19992',
-      userServiceUrl: fixture['userServiceUrl'] as String,
-      didDomain: domain,
-      messageServiceUrl: 'http://127.0.0.1:19992',
-      mailServiceUrl: 'http://127.0.0.1:19993',
-      anpServiceUrl: 'http://127.0.0.1:19992/im/rpc',
-      anpServiceDid: 'did:wba:$domain',
-      caBundle: fixture['caBundle'] as String?,
-      agentImEnabled: false,
-    ),
-    appStateRoot: root.path,
-  );
-  try {
-    await tester.pumpWidget(
-      AwikiMeApp(
-        bootstrap: bootstrap,
-        providerOverrides: [
-          desktopStartupPresentationServiceProvider.overrideWithValue(
-            buildDesktopStartupPresentationService(),
-          ),
-        ],
-      ),
-    );
-    await _until(
-      tester,
-      () => find.byType(OnboardingPage).evaluate().isNotEmpty,
-      'Email registration starts with an isolated account step',
-    );
-    final element = tester.element(find.byType(OnboardingPage));
-    final container = ProviderScope.containerOf(element);
-    final labels = element.l10n;
-    await _until(
-      tester,
-      () => container.read(onboardingProvider).supportsEmailRegistration,
-      'Real service advertises email registration',
-    );
-    await _tap(tester, find.byKey(const Key('auth-mode-email')));
-    await _enter(tester, 'e2e-handle-input', handle);
-    await _enter(tester, 'e2e-email-input', email);
-    await _tap(tester, find.text(labels.onboardingSendActivationEmail));
-    await _until(
-      tester,
-      () =>
-          find.bySemanticsIdentifier('e2e-invite-input').evaluate().isNotEmpty,
-      'Email short Handle requires invitation',
-    );
-    expect(find.bySemanticsIdentifier('e2e-handle-input'), findsOneWidget);
-    expect(find.bySemanticsIdentifier('e2e-email-input'), findsOneWidget);
-    expect(find.text(labels.onboardingInviteHandleHint), findsOneWidget);
-    await _until(
-      tester,
-      () => container.read(onboardingProvider).isEmailResendCoolingDown,
-      'Real SMTP activation delivery accepted',
-    );
-    await _enter(tester, 'e2e-invite-input', invite);
-    await _tap(
-      tester,
-      find.byKey(
-        Key(
-          Platform.isMacOS
-              ? 'onboarding-mac-email-action'
-              : 'onboarding-email-action',
-        ),
-      ),
-    );
-    await _until(
-      tester,
-      () => container.read(onboardingProvider).emailVerified,
-      'Real activation status is bound to this email and Handle',
-    );
-    // The mobile action wrapper spans the row while the verified button is
-    // right-aligned. Target the visible action instead of the wrapper's center.
-    await _tap(tester, find.text(labels.onboardingCompleteEmailRegister));
-    await _until(
-      tester,
-      () => container.read(sessionProvider).session != null,
-      'Native Core completes invited email registration',
-      diagnostic: () => container.read(uiFeedbackProvider)?.message.id ?? '',
-    );
-    final identities = await bootstrap.appSessionService!.listLocalIdentities();
-    expect(identities.length, 1);
-    expect(identities.single.handle, '$handle.$domain');
-    expect(identities.single.did, container.read(sessionProvider).session!.did);
-    final registry = await bootstrap.deviceManagementCorePort!
-        .identityDeviceRegistry(identities.single.did);
-    expect(registry.currentDevice!.status, DeviceStatus.active);
-    expect(registry.currentDevice!.role, DeviceRole.admin);
-    expect(registry.currentDevice!.managementReady, isTrue);
-  } finally {
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-    await bootstrap.dispose();
-    await root.delete(recursive: true);
-  }
 }
