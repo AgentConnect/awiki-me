@@ -166,15 +166,18 @@ Future<String> _runInvitedHandleJoin(
       final container = ProviderScope.containerOf(
         tester.element(find.byType(OnboardingPage)),
       );
+      final labels = tester.element(find.byType(OnboardingPage)).l10n;
       await _until(
         tester,
         () => container.read(onboardingProvider).serverInfo != null,
         'Real User Service capabilities loaded',
       );
       await _enter(tester, 'e2e-handle-input', handle);
-      expect(find.bySemanticsIdentifier('e2e-send-otp-button'), findsNothing);
-      await _tap(tester, find.bySemanticsIdentifier('e2e-account-next'));
+      expect(find.bySemanticsIdentifier('e2e-send-otp-button'), findsOneWidget);
+      expect(find.bySemanticsIdentifier('e2e-phone-input'), findsOneWidget);
+      await _enter(tester, 'e2e-phone-input', phone);
       if (!existing) {
+        await _tap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));
         await _until(
           tester,
           () => find
@@ -183,10 +186,13 @@ Future<String> _runInvitedHandleJoin(
               .isNotEmpty,
           '$expectedLength-character invitation required',
         );
-        await _tap(tester, find.bySemanticsIdentifier('e2e-invite-next'));
-        expect(find.bySemanticsIdentifier('e2e-send-otp-button'), findsNothing);
+        expect(find.bySemanticsIdentifier('e2e-handle-input'), findsOneWidget);
+        expect(
+          find.text(labels.onboardingShortHandleInviteHint),
+          findsOneWidget,
+        );
         await _enter(tester, 'e2e-invite-input', 'invalid-invite-precheck');
-        await _tap(tester, find.bySemanticsIdentifier('e2e-invite-next'));
+        await _tap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));
         await _until(
           tester,
           () =>
@@ -194,9 +200,9 @@ Future<String> _runInvitedHandleJoin(
               'invite_invalid',
           'Invalid invite is rejected before contact verification',
         );
-        expect(find.bySemanticsIdentifier('e2e-phone-input'), findsNothing);
+        expect(find.bySemanticsIdentifier('e2e-phone-input'), findsOneWidget);
         await _enter(tester, 'e2e-invite-input', invite);
-        await _tap(tester, find.bySemanticsIdentifier('e2e-invite-next'));
+        await _tap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));
       }
       await _until(
         tester,
@@ -205,8 +211,10 @@ Future<String> _runInvitedHandleJoin(
         'Contact verification follows account admission',
       );
       expect(find.bySemanticsIdentifier('e2e-invite-input'), findsNothing);
-      await _enter(tester, 'e2e-phone-input', phone);
-      await _tap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));
+      if (existing) {
+        expect(find.bySemanticsIdentifier('e2e-invite-input'), findsNothing);
+        await _tap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));
+      }
       await _until(
         tester,
         () =>
@@ -357,15 +365,14 @@ Future<void> _runExistingHandleRecovery(
       'Recovery tenant capabilities loaded',
     );
     await _enter(tester, 'e2e-handle-input', handle);
-    await _tap(tester, find.bySemanticsIdentifier('e2e-account-next'));
+    await _enter(tester, 'e2e-phone-input', phone);
+    await _tap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));
     await _until(
       tester,
       () => find.bySemanticsIdentifier('e2e-phone-input').evaluate().isNotEmpty,
       'Existing short account goes directly to contact verification',
     );
     expect(find.bySemanticsIdentifier('e2e-invite-input'), findsNothing);
-    await _enter(tester, 'e2e-phone-input', phone);
-    await _tap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));
     await _until(
       tester,
       () =>
@@ -711,25 +718,20 @@ Future<void> _runEmailRegistration(
       () => container.read(onboardingProvider).supportsEmailRegistration,
       'Real service advertises email registration',
     );
+    await _tap(tester, find.byKey(const Key('auth-mode-email')));
     await _enter(tester, 'e2e-handle-input', handle);
-    await _tap(tester, find.bySemanticsIdentifier('e2e-account-next'));
+    await _enter(tester, 'e2e-email-input', email);
+    await _tap(tester, find.text(labels.onboardingSendActivationEmail));
     await _until(
       tester,
       () =>
           find.bySemanticsIdentifier('e2e-invite-input').evaluate().isNotEmpty,
       'Email short Handle requires invitation',
     );
-    await _tap(tester, find.bySemanticsIdentifier('e2e-invite-next'));
-    expect(find.bySemanticsIdentifier('e2e-email-input'), findsNothing);
+    expect(find.bySemanticsIdentifier('e2e-handle-input'), findsOneWidget);
+    expect(find.bySemanticsIdentifier('e2e-email-input'), findsOneWidget);
+    expect(find.text(labels.onboardingInviteHandleHint), findsOneWidget);
     await _enter(tester, 'e2e-invite-input', invite);
-    await _tap(tester, find.bySemanticsIdentifier('e2e-invite-next'));
-    await _tap(tester, find.byKey(const Key('auth-mode-email')));
-    await _until(
-      tester,
-      () => find.bySemanticsIdentifier('e2e-email-input').evaluate().isNotEmpty,
-      'Email form finishes switching verification method',
-    );
-    await _enter(tester, 'e2e-email-input', email);
     await _tap(tester, find.text(labels.onboardingSendActivationEmail));
     await _until(
       tester,

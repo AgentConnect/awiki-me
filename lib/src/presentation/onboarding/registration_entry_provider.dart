@@ -142,37 +142,60 @@ class RegistrationEntryController
     );
   }
 
-  Future<bool> prepareVerification({String? phone, String? email}) async {
-    if (state.busy || state.step != RegistrationEntryStep.verification) {
-      return false;
-    }
-    if (state.check?.isExisting == true) {
-      return true;
-    }
+  Future<bool> prepareVerification({
+    String? handle,
+    String? domain,
+    String? inviteCode,
+    String? phone,
+    String? email,
+  }) async {
+    if (state.busy) return false;
     final revision = ++_revision;
-    state = _state(busy: true);
+    final normalizedHandle = (handle ?? state.handle).trim().toLowerCase();
+    final normalizedDomain = (domain ?? state.domain).trim().toLowerCase();
+    final sameAccount =
+        state.handle == normalizedHandle && state.domain == normalizedDomain;
+    state = RegistrationEntryState(
+      handle: normalizedHandle,
+      domain: normalizedDomain,
+      inviteCode: inviteCode?.trim() ?? (sameAccount ? state.inviteCode : ''),
+      busy: true,
+      existingAccountPath: sameAccount && state.existingAccountPath,
+    );
     try {
+      final inviteCode = state.inviteCode.trim();
       final result = await support
           .checkRegistration(
             handle: state.handle,
             domain: state.domain,
-            inviteCode: state.inviteCode,
+            inviteCode: inviteCode.isEmpty ? null : inviteCode,
             phone: phone,
             email: email,
-            checkInvite: true,
+            checkInvite: inviteCode.isNotEmpty,
           )
           .timeout(const Duration(seconds: 20));
       if (!mounted || revision != _revision) return false;
+      final needsInvite =
+          result.decision == 'register' &&
+          result.inviteRequired &&
+          result.inviteStatus != 'valid';
+      final missingInvite = needsInvite && inviteCode.isEmpty;
+      final canVerify =
+          result.canVerify && (!state.existingAccountPath || result.isExisting);
       state = _state(
         check: result,
-        error: state.existingAccountPath && !result.isExisting
+        step: result.decision == 'unavailable' || needsInvite
+            ? RegistrationEntryStep.invite
+            : RegistrationEntryStep.verification,
+        error: missingInvite
+            ? null
+            : state.existingAccountPath && !result.isExisting
             ? 'check_failed'
-            : result.canVerify
+            : canVerify
             ? null
             : result.reason ?? 'handle_unavailable',
       );
-      return result.canVerify &&
-          (!state.existingAccountPath || result.isExisting);
+      return canVerify;
     } catch (_) {
       if (mounted && revision == _revision) {
         state = _state(error: 'check_failed');

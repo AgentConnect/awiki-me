@@ -105,6 +105,7 @@
     }
   },
   "onboardingOtp": "Verification code",
+  "onboardingShortHandleInviteHint": "Handles shorter than 5 characters require an invite code to register.",
   "onboardingOtpPlaceholder": "Enter verification code",
   "onboardingEmail": "Email",
   "onboardingEmailPlaceholder": "Enter email address",
@@ -1644,6 +1645,7 @@
   "agentClientCompatibilityHint": "This client version is not compatible with the integration. Update the client and try again.",
   "onboardingAccountNext": "Next",
   "onboardingInviteCode": "Invite code",
+  "onboardingInviteHandleHint": "An invite code is required to register this handle.",
   "onboardingInviteRequired": "An invite code is required to register this handle.",
   "onboardingInviteInvalidBeforeContact": "This invitation code is invalid, expired, or exhausted. Please check and try again.",
   "onboardingInviteInvalid": "The invite code is invalid, expired, exhausted, or does not match this phone. Check it and retry.",

@@ -265,6 +265,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingOtp => '验证码';
 
   @override
+  String get onboardingShortHandleInviteHint => '注册位数小于5位的handle需要使用邀请码';
+
+  @override
   String get onboardingOtpPlaceholder => '输入验证码';
 
   @override
@@ -3696,6 +3699,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get onboardingInviteCode => '邀请码';
+
+  @override
+  String get onboardingInviteHandleHint => '注册此handle需要使用邀请码';
 
   @override
   String get onboardingInviteRequired => '此账号注册需要邀请码，请填写后继续。';

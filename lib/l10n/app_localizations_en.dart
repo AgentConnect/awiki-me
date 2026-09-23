@@ -274,6 +274,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingOtp => 'Verification code';
 
   @override
+  String get onboardingShortHandleInviteHint =>
+      'Handles shorter than 5 characters require an invite code to register.';
+
+  @override
   String get onboardingOtpPlaceholder => 'Enter verification code';
 
   @override
@@ -3956,6 +3960,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingInviteCode => 'Invite code';
+
+  @override
+  String get onboardingInviteHandleHint =>
+      'An invite code is required to register this handle.';
 
   @override
   String get onboardingInviteRequired =>

@@ -105,6 +105,7 @@
     }
   },
   "onboardingOtp": "验证码",
+  "onboardingShortHandleInviteHint": "注册位数小于5位的handle需要使用邀请码",
   "onboardingOtpPlaceholder": "输入验证码",
   "onboardingEmail": "邮箱",
   "onboardingEmailPlaceholder": "输入邮箱地址",
@@ -1644,6 +1645,7 @@
   "agentClientCompatibilityHint": "客户端版本与当前接入能力不兼容，请更新客户端后重试。",
   "onboardingAccountNext": "下一步",
   "onboardingInviteCode": "邀请码",
+  "onboardingInviteHandleHint": "注册此handle需要使用邀请码",
   "onboardingInviteRequired": "此账号注册需要邀请码，请填写后继续。",
   "onboardingInviteInvalidBeforeContact": "邀请码无效、已过期或已用完，请检查后重试。",
   "onboardingInviteInvalid": "邀请码无效、已过期、已用完或与手机号不匹配，请检查后重试。",

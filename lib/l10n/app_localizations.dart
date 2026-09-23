@@ -578,6 +578,12 @@ abstract class AppLocalizations {
   /// **'验证码'**
   String get onboardingOtp;
 
+  /// No description provided for @onboardingShortHandleInviteHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'注册位数小于5位的handle需要使用邀请码'**
+  String get onboardingShortHandleInviteHint;
+
   /// No description provided for @onboardingOtpPlaceholder.
   ///
   /// In zh, this message translates to:
@@ -6933,6 +6939,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'邀请码'**
   String get onboardingInviteCode;
+
+  /// No description provided for @onboardingInviteHandleHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'注册此handle需要使用邀请码'**
+  String get onboardingInviteHandleHint;
 
   /// No description provided for @onboardingInviteRequired.
   ///

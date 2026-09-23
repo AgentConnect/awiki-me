@@ -73,7 +73,7 @@ void main() {
       await controller.prepareVerification(phone: '+12025550123'),
       isFalse,
     );
-    expect(support.calls, hasLength(1));
+    expect(support.calls, hasLength(2));
     await controller.continueWithInvite(' fixture ');
     expect(controller.state.step, RegistrationEntryStep.verification);
     expect(controller.state.inviteCode, 'fixture');
@@ -174,7 +174,7 @@ void main() {
         await controller.prepareVerification(phone: '+12025550123'),
         isTrue,
       );
-      expect(support.calls, hasLength(1));
+      expect(support.calls, hasLength(2));
       expect(controller.state.inviteCode, isEmpty);
     },
   );

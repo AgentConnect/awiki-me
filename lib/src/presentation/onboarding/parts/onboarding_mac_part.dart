@@ -472,7 +472,6 @@ class _MacAuthCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 20),
-              registrationEntry,
               IdentityMethodPicker(handleController: handleController),
               if (registrationReady) ...[
                 _MacAuthMethodSelector(
@@ -489,6 +488,7 @@ class _MacAuthCard extends StatelessWidget {
                       'mac-register-${onboarding.authMode}',
                     ),
                     onboarding: onboarding,
+                    registrationEntry: registrationEntry,
                     otpCooldown: otpCooldown,
                     phoneController: phoneController,
                     otpController: otpController,
@@ -926,6 +926,7 @@ class _MacRegisterForm extends StatelessWidget {
   const _MacRegisterForm({
     super.key,
     required this.onboarding,
+    required this.registrationEntry,
     required this.otpCooldown,
     required this.phoneController,
     required this.otpController,
@@ -938,6 +939,7 @@ class _MacRegisterForm extends StatelessWidget {
   });
 
   final OnboardingState onboarding;
+  final Widget registrationEntry;
   final SmsOtpCooldownState otpCooldown;
   final TextEditingController phoneController;
   final TextEditingController otpController;
@@ -1001,6 +1003,8 @@ class _MacRegisterForm extends StatelessWidget {
             placeholder: context.l10n.onboardingHandlePlaceholder,
             icon: CupertinoIcons.at,
           ),
+          const SizedBox(height: 16),
+          registrationEntry,
           const SizedBox(height: 22),
           _MacPrimaryAction(
             label: context.l10n.onboardingCompleteRegister,
@@ -1052,6 +1056,8 @@ class _MacRegisterForm extends StatelessWidget {
           ),
           if (otpCooldown.isCoolingDown) const E2eMarker('e2e-otp-sent'),
           _OtpCompleteMarker(controller: otpController),
+          const SizedBox(height: 16),
+          registrationEntry,
           const SizedBox(height: 22),
           SizedBox(
             key: const Key('onboarding-mac-phone-submit-action'),
@@ -1096,6 +1102,8 @@ class _MacRegisterForm extends StatelessWidget {
                 : onRequestEmailActivation,
           ),
         ),
+        const SizedBox(height: 16),
+        registrationEntry,
         const SizedBox(height: 22),
         SizedBox(
           key: const Key('onboarding-mac-email-action'),
