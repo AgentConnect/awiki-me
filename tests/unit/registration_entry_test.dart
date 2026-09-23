@@ -69,11 +69,17 @@ void main() {
     expect(controller.state.step, RegistrationEntryStep.invite);
     await controller.continueWithInvite(' ');
     expect(controller.state.error, 'invite_required');
+    expect(await controller.prepareVerification(phone: '+12025550123'), isTrue);
+    expect(support.calls, hasLength(2));
+    expect(controller.state.step, RegistrationEntryStep.invite);
     expect(
-      await controller.prepareVerification(phone: '+12025550123'),
+      await controller.prepareVerification(
+        phone: '+12025550123',
+        requireInvite: true,
+      ),
       isFalse,
     );
-    expect(support.calls, hasLength(1));
+    expect(controller.state.error, 'invite_required');
     await controller.continueWithInvite(' fixture ');
     expect(controller.state.step, RegistrationEntryStep.verification);
     expect(controller.state.inviteCode, 'fixture');
@@ -92,8 +98,10 @@ void main() {
       expect(support.calls.last['phone'], isNull);
       expect(
         await controller.prepareVerification(phone: '+12025550123'),
-        isFalse,
+        isTrue,
       );
+      expect(support.calls.last, containsPair('checkInvite', false));
+      expect(support.calls.last['inviteCode'], isNull);
       support.responder = (handle, _) async =>
           result(handle, required: true, status: 'valid');
       await controller.continueWithInvite('valid');
@@ -136,7 +144,7 @@ void main() {
   });
 
   test(
-    'invite is checked with contact before permission to send verification',
+    'contact availability is checked without validating the invite',
     () async {
       await controller.checkAccount('abc', 'example.com');
       await controller.continueWithInvite('fixture');
@@ -146,22 +154,72 @@ void main() {
         await controller.prepareVerification(phone: '+12025550123'),
         isTrue,
       );
-      expect(support.calls.last, containsPair('inviteCode', 'fixture'));
+      expect(support.calls.last['inviteCode'], isNull);
       expect(support.calls.last, containsPair('phone', '+12025550123'));
-      expect(support.calls.last, containsPair('checkInvite', true));
+      expect(support.calls.last, containsPair('checkInvite', false));
     },
   );
 
-  test('invalid invitation does not permit OTP or email activation', () async {
+  test('wrong invitation contents do not block email activation', () async {
     await controller.checkAccount('abc', 'example.com');
     await controller.continueWithInvite('wrong');
     support.responder = (handle, _) async =>
         result(handle, required: true, status: 'invalid');
     expect(
       await controller.prepareVerification(email: 'person@example.net'),
+      isTrue,
+    );
+    expect(controller.state.error, isNull);
+    expect(controller.state.step, RegistrationEntryStep.invite);
+    expect(support.calls.last, containsPair('checkInvite', false));
+  });
+
+  test(
+    'four-character invitation must have six characters before OTP',
+    () async {
+      support.responder = (handle, _) async => result(handle, required: true);
+      expect(
+        await controller.prepareVerification(
+          handle: 'abcd',
+          domain: 'example.com',
+          inviteCode: 'short',
+          phone: '+12025550123',
+        ),
+        isFalse,
+      );
+      expect(controller.state.error, 'invite_length_six');
+      expect(support.calls.last, containsPair('checkInvite', false));
+      expect(
+        await controller.prepareVerification(
+          inviteCode: 'WRONG1',
+          phone: '+12025550123',
+        ),
+        isTrue,
+      );
+      expect(controller.state.inviteCode, 'WRONG1');
+      expect(controller.state.step, RegistrationEntryStep.invite);
+    },
+  );
+
+  test('database invitations allow variable length up to 64', () async {
+    support.responder = (handle, _) async => result(handle, required: true);
+    expect(
+      await controller.prepareVerification(
+        handle: 'abc',
+        domain: 'example.com',
+        inviteCode: 'x' * 65,
+        email: 'person@example.net',
+      ),
       isFalse,
     );
-    expect(controller.state.error, 'invite_invalid');
+    expect(controller.state.error, 'invite_length_max_64');
+    expect(
+      await controller.prepareVerification(
+        inviteCode: 'x',
+        email: 'person@example.net',
+      ),
+      isTrue,
+    );
   });
 
   test(
@@ -174,7 +232,7 @@ void main() {
         await controller.prepareVerification(phone: '+12025550123'),
         isTrue,
       );
-      expect(support.calls, hasLength(1));
+      expect(support.calls, hasLength(2));
       expect(controller.state.inviteCode, isEmpty);
     },
   );

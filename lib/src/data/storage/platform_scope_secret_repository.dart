@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../application/tenant/app_tenant.dart';
+import 'android_secure_storage_value_migrator.dart';
 import 'scope_secret_envelope.dart';
 import 'scope_secret_repository.dart';
 
@@ -208,18 +209,43 @@ class MacOsScopeSecretPlatformStore
 /// Calls are serialized in-process because these plugin APIs do not expose CAS.
 class FlutterSecureScopeSecretPlatformStore
     implements ScopeSecretPlatformStore {
-  FlutterSecureScopeSecretPlatformStore({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+  FlutterSecureScopeSecretPlatformStore({
+    FlutterSecureStorage? storage,
+    bool? isAndroid,
+  }) : _storage = storage ?? const FlutterSecureStorage(),
+       _isAndroid =
+           isAndroid ?? defaultTargetPlatform == TargetPlatform.android;
 
   final FlutterSecureStorage _storage;
+  final bool _isAndroid;
   static Future<void> _sharedPending = Future<void>.value();
 
-  static const AndroidOptions _androidOptions = AndroidOptions(
+  static const AndroidOptions _androidTargetOptions = AndroidOptions(
+    resetOnError: false,
+    migrateWithBackup: true,
+    storageNamespace: 'awiki_me_scope_secrets_v1',
+    preferencesKeyPrefix: 'awiki_scope_',
+  );
+
+  static const AndroidOptions _androidLegacyOptions = AndroidOptions(
+    // ignore: deprecated_member_use
     encryptedSharedPreferences: true,
     resetOnError: false,
+    migrateOnAlgorithmChange: false,
+    migrateWithBackup: false,
+    // ignore: deprecated_member_use
     sharedPreferencesName: 'awiki_me_scope_secrets',
     preferencesKeyPrefix: 'awiki_scope_',
   );
+
+  AndroidSecureStorageValueMigrator get _androidMigrator =>
+      AndroidSecureStorageValueMigrator(
+        storage: _storage,
+        targetOptions: _androidTargetOptions,
+        legacyOptions: _androidLegacyOptions,
+        verificationFailure: () =>
+            const ScopeSecretException(ScopeSecretFailure.corrupt),
+      );
 
   IOSOptions _iosOptions(String service) => IOSOptions(
     accountName: service,
@@ -229,12 +255,18 @@ class FlutterSecureScopeSecretPlatformStore
 
   @override
   Future<String?> read({required String service, required String account}) =>
-      _serialized(() {
-        _validatedScope(service, account);
+      _serialized(() async {
+        final scope = _validatedScope(service, account);
+        if (_isAndroid) {
+          return _androidMigrator.readAndMigrate(
+            key: account,
+            validateLegacyValue: (value) => _decode(scope, value),
+          );
+        }
         return _storage.read(
           key: account,
           iOptions: _iosOptions(service),
-          aOptions: _androidOptions,
+          aOptions: _androidTargetOptions,
         );
       });
 
@@ -249,20 +281,11 @@ class FlutterSecureScopeSecretPlatformStore
     if (envelope.revision != 1) {
       throw const ScopeSecretException(ScopeSecretFailure.corrupt);
     }
-    final existing = await _storage.read(
-      key: account,
-      iOptions: _iosOptions(service),
-      aOptions: _androidOptions,
-    );
+    final existing = await _readValue(service, account, scope);
     if (existing != null) {
       throw const ScopeSecretException(ScopeSecretFailure.alreadyExists);
     }
-    await _storage.write(
-      key: account,
-      value: value,
-      iOptions: _iosOptions(service),
-      aOptions: _androidOptions,
-    );
+    await _writeValue(service, account, value);
   });
 
   @override
@@ -277,11 +300,7 @@ class FlutterSecureScopeSecretPlatformStore
     if (replacement.revision != expectedRevision + 1) {
       throw const ScopeSecretException(ScopeSecretFailure.revisionConflict);
     }
-    final existing = await _storage.read(
-      key: account,
-      iOptions: _iosOptions(service),
-      aOptions: _androidOptions,
-    );
+    final existing = await _readValue(service, account, scope);
     if (existing == null) {
       throw const ScopeSecretException(ScopeSecretFailure.revisionConflict);
     }
@@ -289,24 +308,52 @@ class FlutterSecureScopeSecretPlatformStore
     if (current.revision != expectedRevision) {
       throw const ScopeSecretException(ScopeSecretFailure.revisionConflict);
     }
-    await _storage.write(
-      key: account,
-      value: value,
-      iOptions: _iosOptions(service),
-      aOptions: _androidOptions,
-    );
+    await _writeValue(service, account, value);
   });
 
   @override
   Future<void> delete({required String service, required String account}) =>
-      _serialized(() {
+      _serialized(() async {
         _validatedScope(service, account);
+        if (_isAndroid) {
+          return _androidMigrator.deleteBoth(key: account);
+        }
         return _storage.delete(
           key: account,
           iOptions: _iosOptions(service),
-          aOptions: _androidOptions,
+          aOptions: _androidTargetOptions,
         );
       });
+
+  Future<String?> _readValue(
+    String service,
+    String account,
+    StorageScopeId scope,
+  ) {
+    if (_isAndroid) {
+      return _androidMigrator.readAndMigrate(
+        key: account,
+        validateLegacyValue: (value) => _decode(scope, value),
+      );
+    }
+    return _storage.read(
+      key: account,
+      iOptions: _iosOptions(service),
+      aOptions: _androidTargetOptions,
+    );
+  }
+
+  Future<void> _writeValue(String service, String account, String value) {
+    if (_isAndroid) {
+      return _androidMigrator.writeVerified(key: account, value: value);
+    }
+    return _storage.write(
+      key: account,
+      value: value,
+      iOptions: _iosOptions(service),
+      aOptions: _androidTargetOptions,
+    );
+  }
 
   StorageScopeId _validatedScope(String service, String account) {
     final expectedService = kReleaseMode

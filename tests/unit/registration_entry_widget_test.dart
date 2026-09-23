@@ -1,10 +1,12 @@
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
+import 'package:awiki_me/src/presentation/onboarding/registration_entry_provider.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
@@ -14,6 +16,7 @@ class InviteSupport extends FakeOnboardingSupportService {
   int checks = 0;
   String? lastInvite;
   String? lastEmail;
+  bool? lastCheckInvite;
   String decision = 'register';
   bool fail = false;
   String? boundPhone;
@@ -31,9 +34,10 @@ class InviteSupport extends FakeOnboardingSupportService {
     if (fail) throw StateError('network');
     lastInvite = inviteCode;
     lastEmail = email;
-    final required = decision == 'register';
+    lastCheckInvite = checkInvite;
+    final required = decision == 'register' && handle.length <= 4;
     final valid =
-        inviteCode == 'fixture-valid' &&
+        inviteCode == 'ABC123' &&
         (boundPhone == null ||
             (phone == null && email == null) ||
             phone == boundPhone);
@@ -67,115 +71,190 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
-  for (final desktop in [false, true]) {
-    for (final email in [false, true]) {
-      testWidgets(
-        '${desktop ? "desktop" : "mobile"}: account then mandatory invite then ${email ? 'email' : 'OTP'}',
-        (tester) async {
-          debugDefaultTargetPlatformOverride = desktop
-              ? TargetPlatform.macOS
-              : TargetPlatform.android;
-          tester.view.physicalSize = desktop
-              ? const Size(1200, 1000)
-              : const Size(390, 1000);
-          tester.view.devicePixelRatio = 1;
-          addTearDown(() {
-            debugDefaultTargetPlatformOverride = null;
-            tester.view.resetPhysicalSize();
-            tester.view.resetDevicePixelRatio();
-          });
-          final gateway = FakeAwikiGateway()..emailVerificationResult = true;
-          final support = InviteSupport(gateway);
-          await tester.pumpWidget(
-            buildLocalizedTestApp(
-              home: const OnboardingPage(),
-              gateway: gateway,
-              providerOverrides: [
-                onboardingSupportServiceProvider.overrideWithValue(support),
-              ],
-            ),
-          );
-          await tester.pumpAndSettle();
-          expect(find.text('先输入账号，检查后继续'), findsNothing);
-          expect(field('e2e-handle-input'), findsOneWidget);
-          expect(find.text('发送验证码'), findsNothing);
-          await tester.enterText(field('e2e-handle-input'), 'abc');
-          await tapVisible(tester, find.text('下一步'));
-          expect(field('e2e-invite-input'), findsOneWidget);
-          expect(find.text('发送验证码'), findsNothing);
-          await tapVisible(tester, find.text('下一步'));
-          expect(
-            find.byKey(const Key('registration-entry-error')),
-            findsOneWidget,
-          );
-          expect(gateway.sendOtpCalls, 0);
-          await tester.enterText(field('e2e-invite-input'), 'wrong');
-          await tapVisible(tester, find.text('下一步'));
-          expect(field('e2e-invite-input'), findsOneWidget);
-          expect(find.text('邀请码无效、已过期或已用完，请检查后重试。'), findsOneWidget);
-          expect(gateway.sendOtpCalls, 0);
-          expect(gateway.sendEmailVerificationCalls, 0);
-          support.boundPhone = '13800138000';
-          await tester.enterText(field('e2e-invite-input'), 'fixture-valid');
-          await tapVisible(tester, find.text('下一步'));
-          // Desktop retains its existing outlined fields; semantics select the
-          // nested Cupertino field independently of the shared/mobile component.
-          if (email) {
-            await tapVisible(tester, find.byKey(const Key('auth-mode-email')));
-          }
-          final fields = find.byType(CupertinoTextField);
-          await tester.enterText(
-            email && !desktop
-                ? field('e2e-email-input')
-                : fields.at(email ? 1 : 0),
-            email ? 'fixture@example.com' : '13800138000',
-          );
-          final sendLabel = email ? '发送激活邮件' : '发送验证码';
-          // Bound invitations pass the contact-free step but must reject a
-          // different phone or email before either delivery API is invoked.
-          if (!email) {
-            await tester.enterText(fields.at(0), '13900139000');
-          }
-          await tapVisible(tester, find.text(sendLabel));
-          expect(gateway.sendOtpCalls, 0);
-          expect(gateway.sendEmailVerificationCalls, 0);
-          expect(find.textContaining('邀请码无效'), findsOneWidget);
-          if (email) {
-            // The existing unbound email success path remains covered below.
-            support.boundPhone = null;
-          } else {
-            await tester.enterText(fields.at(0), '13800138000');
-          }
-          await tapVisible(tester, find.text(sendLabel));
-          expect(support.lastInvite, 'fixture-valid');
-          if (email) {
-            expect(gateway.sendEmailVerificationCalls, 1);
-            expect(support.lastEmail, 'fixture@example.com');
-            expect(gateway.sendOtpCalls, 0);
-            await tapVisible(tester, find.text('我已激活，检查状态'));
-            await tapVisible(tester, find.text('完成注册'));
-            expect(gateway.registerHandleWithEmailCalls, 1);
-          } else {
-            expect(gateway.sendOtpCalls, 1);
-            await tester.enterText(
-              find.byType(CupertinoTextField).at(2),
-              '123456',
-            );
-            await tapVisible(tester, find.text('登录/注册'));
-            expect(gateway.registerHandleCalls, 1);
-          }
-          expect(gateway.lastRegisteredInviteCode, 'fixture-valid');
-          expect(tester.takeException(), isNull);
-          debugDefaultTargetPlatformOverride = null;
-        },
-      );
-    }
-  }
+  testWidgets('OTP sends with blank invite', (tester) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final gateway = FakeAwikiGateway();
+    final support = InviteSupport(gateway);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        gateway: gateway,
+        providerOverrides: [
+          onboardingSupportServiceProvider.overrideWithValue(support),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(field('e2e-handle-input'), findsOneWidget);
+    expect(field('e2e-phone-input'), findsOneWidget);
+    expect(field('e2e-otp-input'), findsOneWidget);
+    expect(find.text('发送验证码'), findsOneWidget);
+    expect(find.text('下一步'), findsNothing);
+    expect(field('e2e-invite-input'), findsNothing);
+
+    await tester.enterText(field('e2e-handle-input'), 'abcd');
+    await tester.enterText(field('e2e-phone-input'), '13800138000');
+    await tapVisible(tester, find.text('发送验证码'));
+    expect(support.checks, 1);
+    expect(field('e2e-invite-input'), findsOneWidget);
+    expect(find.text('注册位数小于5位的handle需要使用邀请码'), findsOneWidget);
+    expect(field('e2e-phone-input'), findsOneWidget);
+    expect(field('e2e-otp-input'), findsOneWidget);
+    expect(gateway.sendOtpCalls, 1);
+    await tester.enterText(field('e2e-otp-input'), '123456');
+    await tapVisible(tester, find.text('登录/注册'));
+    expect(gateway.registerHandleCalls, 0);
+    expect(find.text('此账号注册需要邀请码，请填写后继续。'), findsOneWidget);
+
+    await tester.enterText(field('e2e-invite-input'), 'WRONG1');
+    await tapVisible(tester, find.text('登录/注册'));
+    expect(field('e2e-invite-input'), findsOneWidget);
+    expect(support.lastInvite, isNull);
+    expect(support.lastCheckInvite, isFalse);
+    expect(
+      ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
+      ).read(registrationEntryProvider).inviteCode,
+      'WRONG1',
+    );
+    expect(gateway.registerHandleCalls, 1);
+    expect(gateway.lastRegisteredInviteCode, 'WRONG1');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('email activation sends without invite', (tester) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final gateway = FakeAwikiGateway();
+    final support = InviteSupport(gateway);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        gateway: gateway,
+        providerOverrides: [
+          onboardingSupportServiceProvider.overrideWithValue(support),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.byKey(const Key('auth-mode-email')));
+    await tester.enterText(field('e2e-handle-input'), 'abcd');
+    await tester.enterText(field('e2e-email-input'), 'fixture@example.com');
+    await tapVisible(tester, find.text('发送激活邮件'));
+    expect(field('e2e-invite-input'), findsOneWidget);
+    expect(gateway.sendEmailVerificationCalls, 1);
+
+    await tester.enterText(field('e2e-invite-input'), 'WRONG1');
+    expect(gateway.sendEmailVerificationCalls, 1);
+    expect(support.lastEmail, 'fixture@example.com');
+    expect(support.lastInvite, isNull);
+    expect(support.lastCheckInvite, isFalse);
+    expect(field('e2e-invite-input'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('desktop invite hint aligns with the invite label', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final gateway = FakeAwikiGateway();
+    final support = InviteSupport(gateway);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        gateway: gateway,
+        providerOverrides: [
+          onboardingSupportServiceProvider.overrideWithValue(support),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final handleField = find.descendant(
+      of: find.bySemanticsIdentifier('e2e-handle-input'),
+      matching: find.byType(CupertinoTextField),
+    );
+    final phoneField = find.descendant(
+      of: find.bySemanticsIdentifier('e2e-phone-input'),
+      matching: find.byType(CupertinoTextField),
+    );
+    await tester.enterText(handleField, 'abcd');
+    await tester.enterText(phoneField, '13800138000');
+    await tapVisible(tester, find.text('发送验证码'));
+
+    final inviteLabel = find.text('邀请码').first;
+    final hint = find.text('注册位数小于5位的handle需要使用邀请码');
+    expect(find.bySemanticsIdentifier('e2e-invite-input'), findsOneWidget);
+    expect(hint, findsOneWidget);
+    expect(
+      tester.getTopLeft(hint).dx,
+      greaterThan(tester.getTopLeft(inviteLabel).dx),
+    );
+    expect(
+      (tester.getTopLeft(hint).dy - tester.getTopLeft(inviteLabel).dy).abs(),
+      lessThan(4),
+    );
+    expect(tester.takeException(), isNull);
+    debugDefaultTargetPlatformOverride = null;
+  });
 
   testWidgets(
-    'existing shortcut cannot send OTP until discovery confirms existing account',
+    'five-character new handle requests OTP without an invite field',
     (tester) async {
-      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.physicalSize = const Size(390, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final gateway = FakeAwikiGateway();
+      final support = InviteSupport(gateway);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const OnboardingPage(),
+          gateway: gateway,
+          providerOverrides: [
+            onboardingSupportServiceProvider.overrideWithValue(support),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(field('e2e-handle-input'), 'abcde');
+      await tester.enterText(field('e2e-phone-input'), '13800138000');
+      await tapVisible(tester, find.text('发送验证码'));
+
+      expect(field('e2e-invite-input'), findsNothing);
+      expect(gateway.sendOtpCalls, 1);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
+      );
+      expect(
+        container.read(registrationEntryProvider).step,
+        RegistrationEntryStep.verification,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'registration status failure blocks OTP and an existing account proceeds without invite',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 1000);
       tester.view.devicePixelRatio = 1;
       addTearDown(() {
         tester.view.resetPhysicalSize();
@@ -194,34 +273,30 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.enterText(field('e2e-handle-input'), 'abc');
-      await tapVisible(tester, find.text('下一步'));
-      expect(find.textContaining('暂时无法检查账号'), findsOneWidget);
-      await tapVisible(tester, find.text('已有账号，继续登录'));
-      await tester.enterText(
-        find.byType(CupertinoTextField).at(0),
-        '13800138000',
-      );
+      await tester.enterText(field('e2e-phone-input'), '13800138000');
       await tapVisible(tester, find.text('发送验证码'));
+      expect(find.textContaining('暂时无法检查账号'), findsOneWidget);
       expect(gateway.sendOtpCalls, 0);
       expect(field('e2e-invite-input'), findsNothing);
-      expect(support.checks, 2);
+      expect(support.checks, 1);
       support.fail = false;
       support.decision = 'existing';
       await tapVisible(tester, find.text('发送验证码'));
       expect(gateway.sendOtpCalls, 1);
+      expect(field('e2e-invite-input'), findsNothing);
     },
   );
   testWidgets(
-    'discovery failure still opens recovery without registration OTP',
+    'existing account keeps recovery available inside the fixed form',
     (tester) async {
-      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.physicalSize = const Size(390, 1000);
       tester.view.devicePixelRatio = 1;
       addTearDown(() {
         tester.view.resetPhysicalSize();
         tester.view.resetDevicePixelRatio();
       });
       final gateway = FakeAwikiGateway();
-      final support = InviteSupport(gateway)..fail = true;
+      final support = InviteSupport(gateway)..decision = 'existing';
       await tester.pumpWidget(
         buildLocalizedTestApp(
           home: const OnboardingPage(),
@@ -233,8 +308,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.enterText(field('e2e-handle-input'), 'abc');
-      await tapVisible(tester, find.text('下一步'));
-      await tapVisible(tester, find.text('已有账号，继续登录'));
+      await tester.enterText(field('e2e-phone-input'), '13800138000');
+      await tapVisible(tester, find.text('发送验证码'));
       final recovery = find.byWidgetPredicate(
         (w) =>
             w is AppSecondaryButton &&
@@ -242,7 +317,7 @@ void main() {
       );
       await tapVisible(tester, recovery);
       expect(find.byType(HandleRecoveryPage), findsOneWidget);
-      expect(gateway.sendOtpCalls, 0);
+      expect(gateway.sendOtpCalls, 1);
       expect(gateway.registerHandleCalls, 0);
     },
   );

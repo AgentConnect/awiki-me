@@ -122,7 +122,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   @override
   Widget build(BuildContext context) {
     final onboarding = ref.watch(onboardingProvider);
-    final entry = ref.watch(registrationEntryProvider);
     final otpCooldown = ref.watch(smsOtpCooldownProvider);
     final credentials = ref.watch(sessionProvider).localCredentials;
     final activeTenant = ref.watch(activeAppTenantProvider);
@@ -133,7 +132,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       return _withLegacyUpgradeProjection(
         _MacOnboardingScaffold(
           registrationEntry: _registrationEntryForm(),
-          registrationReady: entry.step == RegistrationEntryStep.verification,
+          registrationReady: true,
           onboarding: onboarding,
           otpCooldown: otpCooldown,
           credentials: credentials,
@@ -196,9 +195,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                   child: Align(
                                     alignment: Alignment.center,
                                     child: _CompactOnboardingCard(
-                                      showAuthMethods:
-                                          entry.step ==
-                                          RegistrationEntryStep.verification,
+                                      showAuthMethods: true,
                                       onboarding: onboarding,
                                       onAuthModeChanged: _setAuthMode,
                                       child: Column(
@@ -326,13 +323,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         ),
       ];
     }
-    if (ref.watch(registrationEntryProvider).step !=
-        RegistrationEntryStep.verification) {
-      return [_registrationEntryForm()];
-    }
     if (onboarding.usesNoVerificationRegistration) {
       return <Widget>[
-        _registrationEntryForm(),
         Text(
           context.l10n.onboardingNoVerificationHint,
           style: TextStyle(
@@ -360,6 +352,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           placeholder: context.l10n.onboardingHandlePlaceholder,
           semanticsIdentifier: 'e2e-handle-input',
         ),
+        SizedBox(height: responsive.spacing(14)),
+        _registrationEntryForm(),
         SizedBox(height: responsive.spacing(20)),
         _OnboardingAlignedAction(
           key: const Key('onboarding-no-verification-complete-action'),
@@ -377,7 +371,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
 
     return <Widget>[
-      _registrationEntryForm(),
       Text(
         context.l10n.onboardingLoginRegisterHint,
         style: TextStyle(
@@ -414,6 +407,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           placeholder: context.l10n.onboardingOtpPlaceholder,
           keyboardType: TextInputType.number,
           showLabel: !responsive.isPhone,
+          bottomPadding: 4,
           semanticsIdentifier: 'e2e-otp-input',
           suffix: AppInlineActionButton(
             semanticsIdentifier: 'e2e-send-otp-button',
@@ -429,6 +423,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         ),
         if (otpCooldown.isCoolingDown) const E2eMarker('e2e-otp-sent'),
         _OtpCompleteMarker(controller: otpController),
+        SizedBox(height: responsive.spacing(14)),
+        _registrationEntryForm(),
         SizedBox(height: responsive.spacing(16)),
         _OnboardingAlignedAction(
           key: const Key('onboarding-phone-submit-action'),
@@ -458,6 +454,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           placeholder: context.l10n.onboardingEmailPlaceholder,
           keyboardType: TextInputType.emailAddress,
           showLabel: !responsive.isPhone,
+          bottomPadding: 4,
           suffix: AppInlineActionButton(
             label: onboarding.isEmailResendCoolingDown
                 ? context.l10n.onboardingResendActivationEmailIn(
@@ -469,6 +466,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 : _requestEmailActivation,
           ),
         ),
+        SizedBox(height: responsive.spacing(14)),
+        _registrationEntryForm(),
         SizedBox(height: responsive.spacing(14)),
         _OnboardingAlignedAction(
           key: const Key('onboarding-email-action'),
@@ -511,7 +510,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final phone = _normalizedPhone;
     final profileMarkdown = '# $handle\n\n';
     final onboarding = ref.read(onboardingProvider);
-    if (!await _prepareRegistrationVerification()) {
+    if (!await _prepareRegistrationVerification(requireInvite: true)) {
       return;
     }
     if (!mounted) return;
@@ -741,7 +740,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     handleController: handleController,
     inviteController: inviteController,
     phoneController: phoneController,
-    onBack: _resetRegistrationEntry,
   );
 
   void _onHandleChanged() {
@@ -761,11 +759,15 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     ref.read(onboardingProvider.notifier).resetEmailActivation();
   }
 
-  Future<bool> _prepareRegistrationVerification() {
+  Future<bool> _prepareRegistrationVerification({bool requireInvite = false}) {
     final onboarding = ref.read(onboardingProvider);
     return ref
         .read(registrationEntryProvider.notifier)
         .prepareVerification(
+          handle: _normalizedHandle,
+          domain: ref.read(activeAppTenantProvider).didHost,
+          inviteCode: inviteController.text,
+          requireInvite: requireInvite,
           phone: onboarding.authMode == 'email' ? null : _normalizedPhone,
           email: onboarding.authMode == 'email'
               ? emailController.text.trim()

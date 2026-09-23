@@ -989,7 +989,9 @@ class AppTextField extends StatefulWidget {
     this.showLabel = true,
     this.prefix,
     this.suffix,
+    this.labelTrailing,
     this.backgroundColor,
+    this.bottomPadding = 12,
     this.semanticsIdentifier,
     this.semanticsLabel,
   });
@@ -1004,7 +1006,9 @@ class AppTextField extends StatefulWidget {
   final bool showLabel;
   final Widget? prefix;
   final Widget? suffix;
+  final Widget? labelTrailing;
   final Color? backgroundColor;
+  final double bottomPadding;
   final String? semanticsIdentifier;
   final String? semanticsLabel;
 
@@ -1067,18 +1071,26 @@ class _AppTextFieldState extends State<AppTextField> {
         child: AppSurface(
           color: widget.backgroundColor ?? theme.subtleSurface,
           padding: responsive.scaledInsets(
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            EdgeInsets.fromLTRB(16, 12, 16, widget.bottomPadding),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               if (widget.showLabel) ...<Widget>[
-                Text(
-                  widget.label,
-                  style: AwikiMeTextStyles.fieldLabel.copyWith(
-                    fontSize: responsive.metaSm,
-                    color: theme.secondaryText,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    Text(
+                      widget.label,
+                      style: AwikiMeTextStyles.fieldLabel.copyWith(
+                        fontSize: responsive.metaSm,
+                        color: theme.secondaryText,
+                      ),
+                    ),
+                    if (widget.labelTrailing != null)
+                      Flexible(child: widget.labelTrailing!),
+                  ],
                 ),
                 SizedBox(height: responsive.spacing(6)),
               ],

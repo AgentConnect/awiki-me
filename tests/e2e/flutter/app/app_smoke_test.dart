@@ -364,14 +364,10 @@ void main() {
     expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(OnboardingPage), findsOneWidget);
     expect(find.text('登录或注册'), findsWidgets);
-    expect(find.text('下一步'), findsOneWidget);
-    expect(find.byType(CupertinoTextField), findsOneWidget);
-    expect(find.text('发送验证码'), findsNothing);
+    expect(find.text('下一步'), findsNothing);
+    expect(find.byType(CupertinoTextField), findsNWidgets(3));
+    expect(find.text('发送验证码'), findsOneWidget);
     expect(harness.gateway.lastRegistrationOtpPhone, isNull);
-    await tester.enterText(find.byType(CupertinoTextField), 'smoke-otp');
-    await tester.ensureVisible(find.text('下一步'));
-    await tester.tap(find.text('下一步'));
-    await tester.pumpAndSettle();
     if (find
         .byKey(const Key('onboarding-mac-auth-method-tabs'))
         .evaluate()
@@ -433,7 +429,7 @@ void main() {
         'onboarding_visible',
         'onboarding_auth_entry_visible',
         'mac_phone_otp_handle_scope_preserved',
-        'account_first_then_verification_visible',
+        'phone_single_stage_submit_visible',
         'unauthenticated_realtime_disconnected',
       ],
     );

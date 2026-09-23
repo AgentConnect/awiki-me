@@ -578,6 +578,12 @@ abstract class AppLocalizations {
   /// **'验证码'**
   String get onboardingOtp;
 
+  /// No description provided for @onboardingShortHandleInviteHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'注册位数小于5位的handle需要使用邀请码'**
+  String get onboardingShortHandleInviteHint;
+
   /// No description provided for @onboardingOtpPlaceholder.
   ///
   /// In zh, this message translates to:
@@ -6934,11 +6940,29 @@ abstract class AppLocalizations {
   /// **'邀请码'**
   String get onboardingInviteCode;
 
+  /// No description provided for @onboardingInviteHandleHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'注册此handle需要使用邀请码'**
+  String get onboardingInviteHandleHint;
+
   /// No description provided for @onboardingInviteRequired.
   ///
   /// In zh, this message translates to:
   /// **'此账号注册需要邀请码，请填写后继续。'**
   String get onboardingInviteRequired;
+
+  /// No description provided for @onboardingInviteLengthSix.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入6位邀请码。'**
+  String get onboardingInviteLengthSix;
+
+  /// No description provided for @onboardingInviteLengthMax64.
+  ///
+  /// In zh, this message translates to:
+  /// **'邀请码不能超过64位。'**
+  String get onboardingInviteLengthMax64;
 
   /// No description provided for @onboardingInviteInvalidBeforeContact.
   ///
