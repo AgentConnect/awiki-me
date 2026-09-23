@@ -28,6 +28,7 @@ void main() {
           '${jsonEncode(payload.toJson())}\n'
           'PAYLOAD\n'
           'mv "${completion.path}.tmp" "${completion.path}"\n'
+          'echo "00:00 +0${failures == 0 ? '' : ' -1'}: ${failures == 0 ? 'All tests passed!' : 'Some tests failed.'}"\n'
           'sleep 30\n',
         );
         expect(
@@ -65,4 +66,55 @@ void main() {
       skip: !Platform.isLinux && !Platform.isMacOS,
     );
   }
+
+  test(
+    'Flutter teardown failure overrides a zero completion failure count',
+    () async {
+      final root = await Directory.systemTemp.createTemp('awiki_completion_');
+      addTearDown(() => root.delete(recursive: true));
+      final completion = File('${root.path}/completion.json');
+      final executable = File('${root.path}/prepared.sh');
+      const payload = E2eInvocationCompletion(
+        scenario: 'fixture',
+        runId: 'fixture-run',
+        expectedCaseIds: <String>['CASE-001'],
+        finishedAt: '2026-09-06T00:00:00Z',
+        failedTestCount: 0,
+      );
+      await executable.writeAsString(
+        '#!/bin/sh\n'
+        'cat > "${completion.path}.tmp" <<\'PAYLOAD\'\n'
+        '${jsonEncode(payload.toJson())}\n'
+        'PAYLOAD\n'
+        'mv "${completion.path}.tmp" "${completion.path}"\n'
+        'sleep 0.1\n'
+        'echo "flutter: 00:01 +0 -1: Some tests failed."\n'
+        'sleep 30\n',
+      );
+      expect(
+        (await Process.run('chmod', <String>['700', executable.path])).exitCode,
+        0,
+      );
+      await expectLater(
+        runPreparedIntegrationExecutable(
+          executable: executable,
+          operatingSystem: Platform.isLinux ? 'linux' : 'macos',
+          environment: const <String, String>{},
+          completionFile: completion,
+          expectedScenario: 'fixture',
+          expectedRunId: 'fixture-run',
+          expectedCaseIds: const <String>['CASE-001'],
+          timeout: const Duration(seconds: 10),
+        ),
+        throwsA(
+          isA<PreparedIntegrationProcessException>().having(
+            (error) => error.message,
+            'message',
+            contains('Flutter tests failed'),
+          ),
+        ),
+      );
+    },
+    skip: !Platform.isLinux && !Platform.isMacOS,
+  );
 }

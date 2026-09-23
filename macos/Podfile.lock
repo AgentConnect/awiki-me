@@ -92,19 +92,19 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos
 
 SPEC CHECKSUMS:
-  awiki_im_core: 4049b9726f0e13119b4faf59e19873e3b8720b9c
-  desktop_drop: 10a3e6a7fa9dbe350541f2574092fecfa345a07b
-  file_selector_macos: 9e9e068e90ebee155097d00e89ae91edb2374db7
-  flutter_local_notifications: 1fc7ffb10a83d6a2eeeeddb152d43f1944b0aad0
-  flutter_secure_storage_macos: 7f45e30f838cf2659862a4e4e3ee1c347c2b3b54
+  awiki_im_core: 981b9e739e65420946933943386f519b3e8d7313
+  desktop_drop: 1eeeb9484299585770b6461e4f3d60950e99efa2
+  file_selector_macos: 3e56eaea051180007b900eacb006686fd54da150
+  flutter_local_notifications: 14e285ca39907db50704f7f46c9ab7a526bd7ead
+  flutter_secure_storage_macos: c2754d3483d20bb207bb9e5a14f1b8e771abcdb9
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
-  local_auth_darwin: c3ee6cce0a8d56be34c8ccb66ba31f7f180aaebb
-  package_info_plus: f0052d280d17aa382b932f399edf32507174e870
-  pasteboard: b594eaf838d930b276d7a35a44a32b4f489170cb
-  sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
+  local_auth_darwin: 63c73d6d28cc3e239be2b6aa460ea6e317cd5100
+  package_info_plus: 12f1c5c2cfe8727ca46cbd0b26677728972d9a5b
+  pasteboard: f179698f095f9778bb5753a249027e697ba98953
+  sqflite_darwin: 5a7236e3b501866c1c9befc6771dfd73ffb8702d
   sqlite3: a51c07cf16e023d6c48abd5e5791a61a47354921
-  sqlite3_flutter_libs: b3e120efe9a82017e5552a620f696589ed4f62ab
-  url_launcher_macos: f87a979182d112f911de6820aefddaf56ee9fbfd
+  sqlite3_flutter_libs: f9114e4bbe1f2e03dd543373c53d23245982ca13
+  url_launcher_macos: 175a54c831f4375a6cf895875f716ee5af3888ce
 
 PODFILE CHECKSUM: 9ebaf0ce3d369aaa26a9ea0e159195ed94724cf3
 
