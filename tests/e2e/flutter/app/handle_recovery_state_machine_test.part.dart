@@ -800,17 +800,46 @@ Future<void> _smSubmitHandle(
     timeout: const Duration(minutes: 2),
     failure: 'Registration SMS retry boundary did not open.',
   );
+  final expectedFullHandle = '$handle.$domain';
+  final feedbackBefore = app.read(uiFeedbackProvider)?.id;
   await _smTap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));
   await _pumpUntil(
     tester,
-    () => !app.read(onboardingProvider).isBusy,
+    () {
+      final state = app.read(onboardingProvider);
+      final feedback = app.read(uiFeedbackProvider);
+      if (!state.isBusy &&
+          feedback?.id != feedbackBefore &&
+          feedback?.message.id == 'otpRateLimited') {
+        return true;
+      }
+      _failOnDangerousUiFeedback(
+        app,
+        'Registration OTP request',
+        existingEventId: feedbackBefore,
+      );
+      return !state.isBusy &&
+          state.otpTargetFullHandle == expectedFullHandle &&
+          state.otpTargetPhone != null;
+    },
     timeout: const Duration(minutes: 1),
-    failure: 'Registration OTP did not return.',
+    failure: 'Registration OTP did not bind the exact Handle.',
   );
   if (app.read(uiFeedbackProvider)?.message.id == 'otpRateLimited') {
     await _retryRegistrationOtpAfterRateLimit(tester, app);
+    await _pumpUntil(
+      tester,
+      () {
+        final state = app.read(onboardingProvider);
+        return !state.isBusy &&
+            state.otpTargetFullHandle == expectedFullHandle &&
+            state.otpTargetPhone != null;
+      },
+      timeout: const Duration(minutes: 1),
+      failure: 'Registration OTP retry did not bind the exact Handle.',
+    );
   }
-  if (app.read(onboardingProvider).otpTargetFullHandle != '$handle.$domain') {
+  if (app.read(onboardingProvider).otpTargetFullHandle != expectedFullHandle) {
     fail('Registration OTP target was not exact.');
   }
   final otp = await _resolveOtp(
