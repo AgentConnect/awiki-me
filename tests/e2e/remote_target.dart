@@ -1,3 +1,14 @@
+/// The registration provisioner only supports these reviewed, isolated targets.
+void validateRegistrationFixtureTarget({
+  required String didDomain,
+  required String userServiceUrl,
+}) {
+  if (!const {'awiki.info', 'anpclaw.com'}.contains(didDomain) ||
+      userServiceUrl != 'https://$didDomain') {
+    throw const FormatException('Registration fixture target is not reviewed.');
+  }
+}
+
 /// Test target comes from the explicit host config, never from a case's domain.
 /// This checks transport/scope consistency; it does not grant operator access.
 void validateConfiguredRemoteTarget({

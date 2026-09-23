@@ -1,3 +1,4 @@
+import 'remote_target.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -1075,16 +1076,20 @@ class DesktopE2eRunner {
     if (!options.dryRun && !commands.dryRun && !options.prepareOnly) {
       if (fixturePath == null || fixturePath.isEmpty) {
         throw E2eFailure(
-          'AWIKI_REGISTRATION_FIXTURE must name a provisioned awiki.info test fixture.',
+          'AWIKI_REGISTRATION_FIXTURE must name a provisioned reviewed test fixture.',
         );
       }
       final fixture =
           jsonDecode(await File(fixturePath).readAsString())
               as Map<String, dynamic>;
-      if (fixture['userServiceUrl'] != 'https://awiki.info' ||
-          fixture['domain'] != 'awiki.info') {
+      validateRegistrationFixtureTarget(
+        didDomain: fixture['domain'] as String,
+        userServiceUrl: fixture['userServiceUrl'] as String,
+      );
+      if (fixture['userServiceUrl'] != fileConfig.userServiceUrl ||
+          fixture['domain'] != fileConfig.didDomain) {
         throw E2eFailure(
-          'Registration acceptance requires the reviewed awiki.info test tenant.',
+          'Registration fixture must match the explicitly configured test tenant.',
         );
       }
       for (final secret in registrationFixtureSecrets(fixture)) {

@@ -1,5 +1,5 @@
 import 'package:awiki_me/src/presentation/onboarding/registration_entry_provider.dart';
-// Real native Core and awiki.info test tenant; exact invitation provisioning
+// Real native Core and reviewed test tenant; exact invitation provisioning
 // and database cleanup belong to the invoking private acceptance fixture.
 import 'dart:convert';
 import 'dart:io';
@@ -29,6 +29,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import '../../case_attestation.dart';
+import '../../remote_target.dart';
 import '../../e2e_user_presence_port.dart';
 
 const String _registrationCaseId = 'REGISTRATION-ACCOUNT-FIRST-E2E-001';
@@ -104,8 +105,7 @@ AwikiEnvironmentConfig _remoteRegistrationEnvironment(
 ) {
   final origin = fixture['userServiceUrl'] as String;
   final domain = fixture['domain'] as String;
-  expect(origin, 'https://awiki.info');
-  expect(domain, 'awiki.info');
+  validateRegistrationFixtureTarget(didDomain: domain, userServiceUrl: origin);
   return AwikiEnvironmentConfig(
     baseUrl: origin,
     userServiceUrl: origin,
@@ -127,9 +127,8 @@ Future<String> _runInvitedHandleJoin(
   required int expectedLength,
 }) async {
   final url = fixture['userServiceUrl'] as String;
-  expect(url, 'https://awiki.info');
   final domain = fixture['domain'] as String;
-  expect(domain, 'awiki.info');
+  validateRegistrationFixtureTarget(didDomain: domain, userServiceUrl: url);
   final phone = fixture['phone'] as String;
   final otp = fixture['otp'] as String;
   expect(handle.length, expectedLength);

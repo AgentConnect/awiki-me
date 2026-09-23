@@ -6,6 +6,39 @@ import '../../e2e/runner/manifest.dart';
 import '../../e2e/remote_target.dart';
 
 void main() {
+  test('registration fixture accepts only reviewed exact origins', () {
+    for (final domain in ['awiki.info', 'anpclaw.com']) {
+      expect(
+        () => validateRegistrationFixtureTarget(
+          didDomain: domain,
+          userServiceUrl: 'https://$domain',
+        ),
+        returnsNormally,
+      );
+    }
+    for (final url in [
+      'http://anpclaw.com',
+      'https://awiki.info',
+      'https://anpclaw.com.evil.example',
+      'https://anpclaw.com:8443',
+      'https://anpclaw.com/path',
+    ]) {
+      expect(
+        () => validateRegistrationFixtureTarget(
+          didDomain: 'anpclaw.com',
+          userServiceUrl: url,
+        ),
+        throwsFormatException,
+      );
+    }
+    expect(
+      () => validateRegistrationFixtureTarget(
+        didDomain: 'awiki.ai',
+        userServiceUrl: 'https://awiki.ai',
+      ),
+      throwsFormatException,
+    );
+  });
   test('configured target preserves HTTPS, exact domain and origin guards', () {
     for (final url in <String>[
       'http://qa.example.org',

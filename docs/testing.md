@@ -1526,3 +1526,7 @@ Registration discovery failure does not authorize OTP, email activation or final
 registration through the existing-account shortcut. A successful existing decision
 is required for that path; purpose-bound Recovery remains directly accessible
 without starting OTP on navigation, including existing local recovery continuation.
+
+### 新加坡增量测试目标（2026-09-24）
+
+`registration-account-first` 可使用明确配置的 `https://anpclaw.com` 与 `anpclaw.com`。fixture 的域名／origin 必须与 runner 配置完全相同；邀请码由新加坡同机受管 fixture 创建，按精确账号、Handle、DID、邀请范围清理，不能使用其他环境账号。目标校验测试：`tests/unit/e2e_harness/recovery_remote_target_test.dart`。
