@@ -137,11 +137,9 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
               if (canManage)
                 CupertinoButton(
                   key: const Key('identity-services-open'),
-                  onPressed: () => Navigator.of(context).push<void>(
-                    CupertinoPageRoute(
-                      builder: (_) =>
-                          IdentityServicesPage(selector: registry!.did),
-                    ),
+                  onPressed: () => AppNavigator.push<void>(
+                    context,
+                    (_) => IdentityServicesPage(selector: registry!.did),
                   ),
                   child: Text(context.l10n.identityServicesTitle),
                 ),
