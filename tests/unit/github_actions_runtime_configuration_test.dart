@@ -71,12 +71,12 @@ void main() {
     );
   });
 
-  test('automatic source mode is scoped to the registration PR only', () {
+  test('release/0910 pull requests use the locked Core source', () {
     final workflow =
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
             as YamlMap;
     const selection =
-        "github.event.inputs.sdk_dependencies == 'source' || (github.event_name == 'pull_request' && github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first')";
+        "github.event.inputs.sdk_dependencies == 'source' || (github.event_name == 'pull_request' && github.base_ref == 'release/0910')";
     expect(
       workflow['env']['AWIKI_SOURCE_INTEGRATION'],
       '\u0024{{ ($selection) && \'1\' || \'0\' }}',
@@ -86,20 +86,22 @@ void main() {
       '\u0024{{ ($selection) && \'0\' || \'1\' }}',
     );
     final source = File('.github/workflows/ci.yml').readAsStringSync();
-    // Every fixed consumer pin (including shell/report refs) must have the head fence.
+    // Every fixed consumer pin (including shell/report refs) must be scoped to
+    // the release baseline; unrelated branches retain the registry fallback.
     final pins = source
         .split('\n')
         .where(
-          (line) => line.contains('eccadfa05a03410f405fc7760ce45ed8cd9ff533'),
+          (line) => line.contains('457845db7e483ccdcdb5556decd209125db44ca9'),
         );
-    expect(pins, isNotEmpty);
+    expect(pins, hasLength(10));
     for (final line in pins) {
       expect(
         line,
         contains(
-          "github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05",
+          "github.base_ref == 'release/0910' && '457845db7e483ccdcdb5556decd209125db44ca9'",
         ),
       );
+      expect(line, contains('d3289db6732f6028fa7e54909b768bd48838f7fb'));
     }
   });
 
@@ -181,13 +183,13 @@ void main() {
     }
   });
 
-  test('registration feature alone selects the compatible Core baseline', () {
+  test('release/0910 consumers select the compatible Core baseline', () {
     final workflow =
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
             as YamlMap;
     final jobs = workflow['jobs'] as YamlMap;
     const pin =
-        "(github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05a03410f405fc7760ce45ed8cd9ff533')";
+        "(github.base_ref == 'release/0910' && '457845db7e483ccdcdb5556decd209125db44ca9')";
     for (final name in [
       'validate',
       'cross-repository-contracts',
