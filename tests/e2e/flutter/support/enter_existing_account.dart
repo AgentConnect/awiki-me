@@ -19,6 +19,15 @@ Future<void> enterExistingAccount(
     of: control('e2e-handle-input'),
     matching: find.byType(CupertinoTextField),
   );
+  final deadline = DateTime.now().add(const Duration(seconds: 45));
+  while (field.evaluate().isEmpty && DateTime.now().isBefore(deadline)) {
+    await tester.pump(const Duration(milliseconds: 200));
+  }
+  expect(
+    field,
+    findsOneWidget,
+    reason: 'The onboarding Handle field did not become available.',
+  );
   await tester.ensureVisible(field);
   await tester.enterText(field, handle);
   await tester.pump();
