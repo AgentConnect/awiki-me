@@ -62,6 +62,49 @@ void main() {
     addTearDown(container.dispose);
   });
 
+  test(
+    'group mention is visible before Core returns and preserves mention metadata',
+    () async {
+      final gate = Completer<void>();
+      gateway.sendTextMessageCompleter = gate;
+      const mention = ChatMentionDraft(
+        localId: 'instant-mention',
+        surface: '@alice',
+        start: 0,
+        end: 6,
+        target: ChatMentionTargetDraft.member(
+          kind: ChatMentionTargetKind.human,
+          did: 'did:wba:awiki.info:user:alice',
+          handle: 'alice',
+        ),
+      );
+      final sending = container
+          .read(chatThreadsProvider.notifier)
+          .sendMessage(
+            conversation: conversation,
+            content: '@alice 请看',
+            mentions: [mention],
+          );
+      var thread = container.read(
+        chatThreadProvider(conversation.conversationId),
+      );
+      expect(thread.messages, isEmpty);
+      expect(thread.displayMessages.single.content, '@alice 请看');
+      expect(thread.displayMessages.single.hasValidMentions, isTrue);
+      expect(
+        thread.displayMessages.single.mentions.single.target.did,
+        'did:wba:awiki.info:user:alice',
+      );
+      final id = thread.displayMessages.single.localId;
+      gate.complete();
+      await sending;
+      thread = container.read(chatThreadProvider(conversation.conversationId));
+      expect(thread.displayMessages.single.localId, id);
+      expect(thread.displayMessages.single.hasValidMentions, isTrue);
+      expect(thread.localSendIntents, isEmpty);
+    },
+  );
+
   test('send mention uses P9 payload without sender or proof fields', () async {
     const text = '@alice 请看';
     const mention = ChatMentionDraft(

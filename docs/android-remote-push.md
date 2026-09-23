@@ -214,3 +214,238 @@ application, source control, logs, screenshots, or E2E evidence. AppKey and
 AppSecret provisioning, EMAS package/application alignment, outbox deployment,
 OEM background policy, permission recovery, and the Nubia P0110 (or explicitly
 named equivalent) physical-device run remain release-environment obligations.
+
+## Delivery diagnostics
+
+### Local physical-device build
+
+Use a local Android Debug build for development diagnostics, not the release
+packaging workflow. `tool/run_android_notify_diagnostic.dart` runs the real App
+bootstrap with a separate `notify-diagnostic` directory inside the development
+App's support directory. It retains the normal platform secret store and real
+EMAS, authentication, sync, and navigation adapters. It refuses non-Android,
+non-Debug, or `AWIKI_E2E` builds; it does not import an identity or fake events.
+Existing development state and the production application's data remain separate.
+
+```sh
+flutter build apk --debug --target-platform android-arm64 \
+  --target tool/run_android_notify_diagnostic.dart
+```
+
+Provision ignored `android/emas.properties` with the existing **debug** EMAS
+application configuration, and prepare the matching Android Core library using
+the repository's development dependency setup. Compare the APK's package and
+signing certificate with an installed development App before an authorized
+in-place installation. A signing mismatch is a blocker, not permission to
+uninstall or reset app data. The isolated directory requires normal user login
+or device join before account-backed push can be tested. Keep that authorization
+separate from building/installing the diagnostic APK.
+
+This manual diagnostic entry point is not a product E2E test or release artifact.
+
+### Urgent channel preflight (development only)
+
+`UrgentNotificationChannel` and `ForegroundUrgentCueController` implement the
+Android platform portion of the text Notify proposal. They are **not yet wired
+to incoming messages or account settings**. The caller must authorize a committed
+Core message and enforce account preference, freshness, rate limits and durable
+message-level deduplication before invoking the controller. No Push payload or
+text keyword is authority to start it.
+
+The channel is `awiki_me_notify_urgent_v1`, created only by explicit setup. Existing
+channel choices are preserved. Foreground sound uses the channel's notification
+sound and notification audio usage, not a ringtone/call/alarm fallback. Permission
+denial, missing/disabled/downgraded channels and background lifecycle suppress the
+cue. DND (including priority mode) conservatively suppresses sound and vibration.
+Silent mode suppresses both; vibrate mode suppresses sound. An active cue rechecks
+system choices every 250 ms and never restarts sound when a restriction is lifted.
+The caller stops it on pause, close, navigation, logout and account/preference
+changes. A monotonic 60-second ceiling and single active window prevent a second
+start from extending a current cue. This window is not the durable message
+presentation ledger; that integration remains required.
+
+Debug builds alone contain `push.UrgentNotificationProbeActivity`, opened manually
+with ADB. It creates the channel and exposes explicit buttons for foreground
+cue/stop, one local notification, updating that same notification, and the system
+channel settings. It has no account access and does not send or synthesize IM
+messages. Its fixed test notification ID with `onlyAlertOnce` tests **App-owned**
+Android notifications only; it proves nothing about EMAS NOTICE retries or vendor
+offline delivery. Profile/Release do not contain this Activity or manifest entry.
+
+```sh
+adb -s <authorized-device> shell am start \
+  -n ai.awiki.awikime.dev/ai.awiki.awikime.push.UrgentNotificationProbeActivity
+```
+
+Run `:app:testDebugUnitTest` for policy/deadline coverage. Physical acceptance must
+separately report foreground lifecycle, local system channel, EMAS channel mapping,
+actual sound and actual vibration. A successful start or platform submission is
+not proof the user heard/felt it. Use the real authorized device; do not change its
+mute/DND/volume settings silently to obtain a pass.
+
+The EMAS 3.10.1 `MessageReceiver.hookNotificationBuild` callback now adds
+`FLAG_ONLY_ALERT_ONCE` only to notifications on `awiki_me_notify_urgent_v1`.
+This retains EMAS as the single background presenter and leaves ordinary
+notifications unchanged. The server must send a stable
+`AndroidNotificationNotifyId` to update the same active notification. This flag
+does not prevent another alert after dismissal, reboot, or an offline vendor
+path that does not invoke the receiver; durable presentation receipts and
+provider-outcome reconciliation remain required before enabling urgent Notify.
+
+M153 preflight on 2026-09-21 confirmed a real EMAS NOTICE used the requested
+urgent channel. The initial SDK notification lacked `ONLY_ALERT_ONCE`; the
+updated Debug build exposed that flag on the actual provider-created notification.
+Physical sound/vibration remained unverified while the device was silent.
+The test sent explicitly labelled channel probes directly to the registered
+development installation, without deploying a new service or changing account
+notification policy. It is transport evidence, not an end-to-end Notify pass.
+
+Push diagnostics distinguish pending processing counts from typed Core failures.
+Local incoming-message recovery now maps Core exceptions through the existing
+message-sync error mapper instead of losing that classification. Logs contain
+only counts, exception type and sanitized stable error code, not message bodies,
+credentials or identifiers. This diagnostic change is not a fix for notification
+navigation: M153 still reproduced `invalid_input` during warm-session processing,
+while restarting later recovered the already committed message and its route.
+
+### Bounded event tracing
+
+The native bridge and App coordinator emit bounded `[remote-push]` stages for
+incoming/opened events, Flutter attachment, sync disposition, reference recovery
+counts, and whether the opened message matched a committed conversation. These
+records never include titles, message bodies, DIDs, tokens, provider device IDs,
+or raw exceptions. A delivered Android broadcast alone does not prove that sync
+or navigation completed; correlate these stages with an actual notification tap.
+
+For device acceptance, start outside the destination conversation (for example,
+on the Me page), background the App, send a new message, and tap its actual system
+notification. Confirm the exact conversation and message, including after a normal
+Back exit. For lock-screen acceptance, verify the keyguard is already showing
+before sending; a notification arriving while the phone is transitioning to sleep
+is not sufficient. Record provider connectivity and Android process-freeze events
+separately from service outbox completion.
+
+### OEM lock-screen networking
+
+On the M153 (Nubia P0110, Android 16), AWiki Me's per-app battery settings can
+independently select `后台联网设置 → 锁屏断网`. Notification permission, an allowed
+background AppOp, an active standby bucket, or a live process does not override
+this setting. Inspect the visible setting before attributing lock-screen failures
+to the server or SDK. With the user's authorization, select `永不断网` for AWiki Me
+and read the value back; do not change global battery policy or unrelated apps.
+
+The 2026-09-20 device investigation reproduced EMAS going offline under the
+original setting. After this single setting changed, a new message sent after
+confirmed keyguard activation produced a system notification and visible
+lock-screen text. A subsequent longer locked interval triggered OEM process
+freezing again and the provider went offline; the network setting alone did not
+resolve the failure. Check per-app background execution policy separately. This
+is bounded device evidence, not a guarantee after process termination or prolonged idle. Preserve the original setting and timing in the
+acceptance record, and verify notification-tap routing separately.
+
+
+A subsequent M153 check enabled AWiki Me's `允许后台高耗电运行` while retaining
+`永不断网` (autostart and associated-start switches remained off). The App stayed
+connected for 320 seconds of confirmed screen-off/keyguard state; a newly sent
+message then appeared in Android's active notifications and the lock-screen UI.
+This per-app setting may increase battery use. Record its state and the actual
+idle interval; overnight idle and killed-process delivery remain unverified.
+
+
+### Debug C0: continuous cue and automatic presentation
+
+The approved urgent experience is now up to 60 seconds of looping sound and
+repeated vibration, with view/dismiss stopping immediately. A remote alert should
+show a heads-up notification while unlocked and a full-screen presentation while
+locked, when the user/system permits it. These requirements are **not yet wired
+to authoritative IM metadata, account preferences, or conversation routing**.
+
+The Debug source set contains two explicit experiments:
+
+- `ContinuousUrgentNotificationProbe`: a local system-owned `FLAG_INSISTENT`
+  notification with `setTimeoutAfter(60000)` and a dismiss PendingIntent. It does
+  not combine repeated notification updates with `ONLY_ALERT_ONCE`, which can
+  stop ongoing alerting. M153 looped audio but rendered only one short OEM
+  vibration; this path does not satisfy repeated-vibration requirements.
+- `ContinuousUrgentProbeService` and `ContinuousUrgentProbeActivity`: an
+  explicitly armed, five-minute diagnostic window accepts one matching EMAS
+  MESSAGE test token, consumes it before attempting a non-sticky `shortService`,
+  and ignores duplicates. The service uses one foreground cue owner, a 60-second
+  monotonic deadline, bounded CPU wake lock, visible stop action, and cleanup on
+  stop/destroy/system timeout. Full-screen intent opens the Debug visual surface;
+  an Activity launch alone does not restart or stop the cue. View/close/back stop
+  the service; timeout closes the visual surface. The prototype's view action
+  opens the App, not an asserted real conversation.
+
+Only the Debug manifest replaces the ordinary receiver with its subclass,
+declares the short service and full-screen intent permission, and exposes the
+manual arming page. Profile/Release retain the ordinary receiver and contain no
+probe service, full-screen Activity, or test-message handler. A locally armed
+token is a test control, **not** production sender authority or a durable
+message-scoped presentation receipt.
+
+M153 background start succeeded with `SYSTEM_ALLOW_LISTED` under the existing
+per-app battery whitelist. Do not generalize this result to devices without a
+valid background-start exemption or to vendor offline channels. Check EMAS
+registration/online status after an APK replacement: opening only the native
+probe page initializes the SDK but does not execute the existing Flutter-driven
+registration flow. An earlier attempt without a registration/online precheck was accepted by the
+provider but produced no receiver/service evidence; registration became ready
+afterward. It was not treated as device delivery.
+
+Automatic unlocked heads-up and locked full-screen presentation were observed
+through actual remote MESSAGE delivery. The locked test began after confirmed
+screen-off/keyguard, and full-screen permission was read back as allowed. The
+user had returned the device to silent mode for this stage; that validates silent
+suppression, not audible/tactile continuity. Record actual 60-second completion,
+manual stopping, duplicate rejection and physical sound/vibration separately.
+Do not bypass FSI restrictions or battery policy with ADB grants in acceptance.
+
+
+The locked silent-mode experiment kept one active notification/service and the
+full-screen UI at 3/30/50 seconds. A duplicate remote delivery after about 34.7
+seconds was rejected without reposting. The service stopped itself after
+60,005 ms; at 65 seconds the notification/service/UI were gone and keyguard
+remained enabled. Manual stopping was separately observed on the preceding
+unlocked run. These are Debug platform results, not a completed IM feature.
+
+## Text Notify v1: device-local controls (development candidate)
+
+`TextNotifyPresentation` consumes a typed EMAS MESSAGE for the original plaintext message. The marker is intent, not server-issued consent. Core retains `notify_level`; Dart suppresses a second ordinary Android notification. Opening still resolves the original message through Core.
+
+Settings are stored on this installation, separately for each opaque receiving DID. Master defaults on, urgent defaults off. They load/save without HTTP or a User Service update. Account switch/logout stops the active reminder; another account cannot inherit consent. Switching back restores that account's local choices. No preferences, mute set, capability or version is uploaded with installation registration. Old server-authority preference storage is not imported as local consent.
+
+The native receiver reads current local controls and mirrored Direct mutes while Dart is absent. Turning urgent off downgrades future urgent requests to ordinary presentation; turning master off suppresses all typed Notify alerts while messages remain available. The canonical mute remains the App ProductLocalStore overlay. On Android session activation, the App reads all muted canonical conversation IDs and resolves Direct peers through Core registry pages, including hidden conversations. It atomically replaces the native opaque-identity snapshot before enabling presentation. Missing/unresolved routes fail closed instead of guessing a DID from a thread ID. Older installations without the readiness marker suppress typed Notify until this first hydration completes.
+
+Mute edits invalidate the native snapshot before saving the canonical overlay, then replace the complete snapshot. Account and monotonically increasing sync-revision checks reject stale writes; the App serializes hydration and edits. Failed mirror writes retain the canonical change and keep alerts paused. Foreground resume retries incomplete hydration; Settings shows the paused state and offers an explicit retry. No mute or consent data is sent to User Service.
+
+Mute hydration requests registry pages with control-tail visibility filtering disabled. Normal recents keep
+their existing filter. Canonical route validation is still required: blocked conflicts or missing/unresolved
+muted routes keep the snapshot unready rather than borrowing a peer DID from an untrusted route.
+
+The receiver attempts the foreground-service start synchronously before returning; Android can still deny
+background starts. A denied start falls back to an ordinary non-silent system notification, subject to the
+message channel, notification permission and system DND. The 60-second cooldown begins only after the
+service starts its cue. Receipts remain deduplicated even on denial; a new message may try again, but the
+same message never re-rings. Flutter event delivery alone is posted to the main looper. This is not proof
+that every OEM grants foreground-service or full-screen eligibility.
+
+One short foreground service owns the call-like heads-up/full-screen UI and sound/vibration, bounded to 60 seconds. View/Close stop the matching session; timeout leaves a silent openable notification. System mute/DND/channel/background/full-screen restrictions remain authoritative. Persistent per-account target+message receipts (24h, 1024 unexpired maximum) deduplicate retries; one active presenter and a 60-second device interval prevent overlap or extension. While a cue is active or its service is starting, each additional accepted message gets its own silent system notification (target + peer + message tag), separate from the foreground-service slot. There is no queued re-ringing. Unique PendingIntent data preserves the correct message even on hash collisions. Mute, master-off and account switch remove the appropriate Notify slots without cancelling unrelated chat notifications.
+
+Message Service only carries the marker through existing storage/projection and provider transport. Its existing retries may redeliver; no new delivery ledger or User Service authorization endpoint is required. New App support is required for Notify MESSAGE presentation; older clients can read the text but are not guaranteed a Notify system alert. Ordinary unmarked chat NOTICE behavior remains unchanged.
+
+No offline provider queue is enabled for Notify. The server expiry stays 120 seconds. Native acceptance allows at most 30 additional seconds in the future to tolerate a lagging device clock; an expiry at or before device now is always rejected, and duplicate receipts still last 24 hours. This is bounded clock tolerance, not a renewal of the service expiry or the 60-second cue deadline. Full task-to-phone E2E and real-device upgrade/multi-message acceptance remain separate gates. The Debug probe is not the product path. Development changes do not authorize release or deployment.
+
+
+### Notify development source CI
+
+`Notify source validation` reads the committed `dependencies.source.json`, checks
+its closed repository/PR identity and exact SHA, and checks out that candidate's
+Dart wrapper. It runs App analysis, focused Notify/routing/settings tests and
+native Android tests without provider credentials or a phone. The Flutter lock
+is enforced. This gives the development PR a reproducible source lane without
+changing shared repository variables or the existing registry/native release
+checks. It does not build/publish a distributable SDK and does not attest phone
+sound, vibration or real transport. Rust source compilation remains the exact
+source integration gate in CLI PR #43; the existing App registry CI is reported
+separately until its formal wrapper/SDK inputs are coordinated.

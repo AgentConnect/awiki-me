@@ -76,6 +76,11 @@ The runner creates an authenticated loopback-only coordinator for the duration
 of the pair. Product state still advances only through the visible App UI,
 native Core, realtime notification path, and remote services.
 
+Functional 中的 Agent 首次发言必须等待当前聊天会话的 ACP 模型配置投影确认。
+发送按钮可点击并不代表模型准备已经完成；用例先观察匹配 Runtime Agent 的
+`AcpModelBar` 和对应模型操作状态，再通过原 UI 输入、点击发送。仍从公开规范
+时间线校验消息 ID、归属、目标与 sent 状态，并验证另一 App 的 own-sync 投影。
+
 The coordinator may:
 
 - exchange bounded lifecycle checkpoints between the two test roles;

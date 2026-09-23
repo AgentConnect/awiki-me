@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../app_shell/providers/remote_push_coordinator_provider.dart';
 import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
@@ -1039,7 +1040,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       (previous, next) =>
           _handleThreadChanged(previous, next, currentConversation),
     );
-    final messages = thread.messages;
+    final messages = thread.displayMessages;
     final acpFinals = <String, ChatMessage>{
       for (final task in acpRecords)
         if (acpFinalReplyForTask(task, messages) case final reply?)
@@ -2382,13 +2383,18 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return;
     }
     final messageContent = validMentionDrafts.isEmpty ? content : rawContent;
-    textController.clear();
-    ref.read(chatComposerDraftsProvider.notifier).clearDraft(conversation);
-    if (attachment != null) {
-      setState(() {
-        _pendingAttachment = null;
-      });
+    // Called synchronously only after the controller has accepted this intent
+    // and published its bubble; rejected sends keep the original draft.
+    void clearSubmittedDraft() {
+      textController.clear();
+      ref.read(chatComposerDraftsProvider.notifier).clearDraft(conversation);
+      if (attachment != null) {
+        setState(() {
+          _pendingAttachment = null;
+        });
+      }
     }
+
     final expectedAgentReplyDid = _expectedAgentReplyDidForConversation(
       conversation,
       runtimeAgent: _runtimeAgentForConversation(
@@ -2407,6 +2413,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             mentions: validMentionDrafts,
             expectedAgentReplyDid: expectedAgentReplyDid,
             displayThreadId: _displayThreadId,
+            onSendStarted: clearSubmittedDraft,
           );
       return;
     }
@@ -2418,6 +2425,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
           mentions: validMentionDrafts,
           expectedAgentReplyDid: expectedAgentReplyDid,
           displayThreadId: _displayThreadId,
+          onSendStarted: clearSubmittedDraft,
         );
   }
 
@@ -3187,7 +3195,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return;
     }
     if (previous == null) {
-      if (next.messages.isNotEmpty) {
+      if (next.displayMessages.isNotEmpty) {
         _scheduleScrollToBottom(settleFrames: 2);
         _acknowledgeVisibleConversationRead(
           conversation,
@@ -3196,10 +3204,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
       }
       return;
     }
-    final previousLast = _lastMessage(previous.messages);
-    final nextLast = _lastMessage(next.messages);
+    final previousLast = _lastMessage(previous.displayMessages);
+    final nextLast = _lastMessage(next.displayMessages);
     final messageAdded =
-        next.messages.length > previous.messages.length &&
+        next.displayMessages.length > previous.displayMessages.length &&
         nextLast != null &&
         !_sameMessageIdentity(previousLast, nextLast);
     final pendingAdded =
@@ -3233,7 +3241,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return;
     }
     final contentGrew =
-        next.messages.length > previous.messages.length ||
+        next.displayMessages.length > previous.displayMessages.length ||
         next.agentPendingTurns.length > previous.agentPendingTurns.length ||
         _visiblePersonalAgentTimelineCount(next) >
             _visiblePersonalAgentTimelineCount(previous);
@@ -3325,7 +3333,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (previous == null) {
       return true;
     }
-    return next.messages.length != previous.messages.length ||
+    return next.displayMessages.length != previous.displayMessages.length ||
         _activePendingTurnCount(next) != _activePendingTurnCount(previous) ||
         _visiblePersonalAgentTimelineCount(next) !=
             _visiblePersonalAgentTimelineCount(previous);
@@ -3342,7 +3350,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   bool _threadHasBottomAnchorContent(ChatThreadState thread) {
-    return thread.messages.isNotEmpty ||
+    return thread.displayMessages.isNotEmpty ||
         _activePendingTurnCount(thread) > 0 ||
         _visiblePersonalAgentTimelineCount(thread) > 0;
   }
@@ -3471,7 +3479,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   bool _latestMessageIsMine(ChatThreadState thread) {
-    final latest = _lastMessage(thread.messages);
+    final latest = _lastMessage(thread.displayMessages);
     return latest?.isMine == true;
   }
 

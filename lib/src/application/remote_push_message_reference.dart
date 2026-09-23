@@ -41,3 +41,10 @@ String _remotePushOpaqueReference({
       .replaceAll('=', '');
   return '${label}_$encoded';
 }
+
+String remotePushOpaqueIdentityReference(String did) =>
+    _remotePushOpaqueReference(
+      label: 'identity',
+      value: did,
+      argumentName: 'did',
+    );

@@ -12,10 +12,86 @@ import 'package:awiki_me/src/data/im_core/awiki_im_core_paths.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_runtime.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_secret_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:awiki_me/src/application/conversation_service.dart';
+import 'package:awiki_me/src/application/models/product_local_models.dart';
+import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
 
 const _testScopeValue = '33333333-3333-4333-8333-333333333333';
 
 void main() {
+  test(
+    'Notify mute hydration uses hidden control routes through the real adapter',
+    () async {
+      final client = _FakeClient();
+      client.messages.conversationItems = const [
+        core.Conversation(
+          conversationId: 'dm:peer-scope:v1:agent',
+          peerPersonaId: 'persona:v1:agent',
+          resolutionState: core.ConversationResolutionState.resolved,
+          threadKind: 'direct',
+          threadId: 'did:agent',
+          participants: ['did:alice', 'did:agent'],
+          unreadCount: 0,
+          messageCount: 1,
+          lastMessage: core.Message(
+            id: 'control',
+            conversationId: 'dm:peer-scope:v1:agent',
+            senderDidSnapshot: 'did:agent',
+            threadKind: 'direct',
+            threadId: 'did:agent',
+            direction: core.MessageDirection.incoming,
+            sender: 'did:agent',
+            body: core.MessageBodyView(
+              kind: 'payload',
+              payloadJson:
+                  '{"schema":"awiki.agent.status.v1","status_scope":"runtime"}',
+            ),
+            metadata: core.MessageMetadata(contentType: 'application/json'),
+          ),
+        ),
+      ];
+      final adapter = AwikiImCoreConversationAdapter(
+        runtime: _FakeRuntime(client),
+      );
+      expect((await adapter.listConversationPage()).items, isEmpty);
+      final store = InMemoryAwikiProductLocalStore();
+      await store.upsertConversationOverlayByConversationId(
+        ProductConversationOverlay(
+          ownerDid: 'did:alice',
+          threadId: 'did:agent',
+          conversationId: 'dm:peer-scope:v1:agent',
+          muted: true,
+          hidden: true,
+          updatedAt: DateTime.now(),
+        ),
+      );
+      final service = ImCoreConversationService(
+        conversations: adapter,
+        localStore: store,
+      );
+      expect(
+        await service.loadMutedNotificationPeerDids(ownerDid: 'did:alice'),
+        {'did:agent'},
+      );
+      // A conflicting canonical route must still fail closed; never guess its DID.
+      client.messages.conversationItems = const [
+        core.Conversation(
+          conversationId: 'dm:peer-scope:v1:agent',
+          resolutionState: core.ConversationResolutionState.blockedConflict,
+          threadKind: 'direct',
+          threadId: 'did:agent',
+          participants: ['did:alice', 'did:agent'],
+          unreadCount: 0,
+          messageCount: 1,
+        ),
+      ];
+      await expectLater(
+        service.loadMutedNotificationPeerDids(ownerDid: 'did:alice'),
+        throwsStateError,
+      );
+    },
+  );
+
   test(
     'idle SDK patch stream cancels before subscribing to a new generation',
     () async {
@@ -540,6 +616,18 @@ class _FakeIdentityApi implements core.IdentityApi {
 }
 
 class _FakeMessageApi implements core.MessageApi {
+  List<core.Conversation> conversationItems = [];
+  @override
+  Future<core.ConversationPage> conversations({
+    int limit = 100,
+    String? cursor,
+    bool includeGroups = true,
+    bool includeDirect = true,
+    bool unreadOnly = false,
+  }) async {
+    return core.ConversationPage(items: conversationItems, hasMore: false);
+  }
+
   final StreamController<core.ConversationStorePatch> _patches =
       StreamController<core.ConversationStorePatch>.broadcast(sync: true);
   int markThreadReadCalls = 0;

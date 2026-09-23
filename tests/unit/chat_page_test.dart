@@ -2908,6 +2908,55 @@ void main() {
     expect(find.textContaining('发送失败'), findsNothing);
   });
 
+  for (final isGroup in [false, true]) {
+    testWidgets('发送首帧显示气泡且清空输入框 group=$isGroup', (tester) async {
+      final gate = Completer<void>();
+      final gateway = FakeAwikiGateway()..sendTextMessageCompleter = gate;
+      const session = SessionIdentity(
+        did: 'did:test:me',
+        handle: 'me',
+        displayName: 'Me',
+        credentialName: 'default',
+      );
+      final conversation = ConversationSummary(
+        conversationId: isGroup ? 'group:did:test:group' : 'dm:did:test:peer',
+        threadId: isGroup ? 'group:did:test:group' : 'dm:did:test:peer',
+        displayName: 'Test',
+        lastMessagePreview: '',
+        lastMessageAt: DateTime(2026, 4, 5),
+        unreadCount: 0,
+        isGroup: isGroup,
+        targetDid: isGroup ? null : 'did:test:peer',
+        groupId: isGroup ? 'did:test:group' : null,
+      );
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: CupertinoPageScaffold(
+            child: ChatView(conversation: conversation, embedded: false),
+          ),
+          gateway: gateway,
+          session: session,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final field = find.byType(CupertinoTextField);
+      await tester.enterText(field, '立即可见');
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await tester.pump();
+      expect(
+        tester.widget<CupertinoTextField>(field).controller!.text,
+        isEmpty,
+      );
+      expect(find.text('立即可见'), findsOneWidget);
+      // Still waiting on the service: the first frame must not depend on it.
+      expect(gate.isCompleted, isFalse);
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('立即可见'), findsOneWidget);
+      expect(find.text('发送失败'), findsNothing);
+    });
+  }
+
   testWidgets('聊天输入框回车后直接发送消息', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
@@ -3017,7 +3066,8 @@ void main() {
   });
 
   testWidgets('自己发送消息后即使原本离开底部也会滚到底部', (tester) async {
-    final gateway = FakeAwikiGateway();
+    final sendGate = Completer<void>();
+    final gateway = FakeAwikiGateway()..sendTextMessageCompleter = sendGate;
     const session = SessionIdentity(
       did: 'did:test:me',
       handle: 'me',
@@ -3073,6 +3123,12 @@ void main() {
 
     await tester.enterText(find.byType(CupertinoTextField), 'my new message');
     await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text('my new message'), findsOneWidget);
+    expect(_chatScrollPixels(tester), moreOrLessEquals(_chatScrollMax(tester)));
+    sendGate.complete();
+    await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ChatView)),
     );
@@ -5682,7 +5738,7 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('pending hello'), findsNothing);
+    expect(find.text('pending hello'), findsOneWidget);
     expect(find.text('发送中...'), findsNothing);
     expect(gateway.sendTextMessageCalls, 1);
     final sendButton = find.byKey(const Key('chat-send-button'));
@@ -5848,7 +5904,14 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump(const Duration(milliseconds: 20));
 
-    expect(find.text('请总结'), findsNothing);
+    expect(find.text('请总结'), findsOneWidget);
+    expect(
+      tester
+          .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+          .controller!
+          .text,
+      isEmpty,
+    );
     expect(find.text('发送中...'), findsNothing);
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
     expect(find.text('智能体正在处理...'), findsNothing);
@@ -7645,7 +7708,7 @@ void main() {
     );
   });
 
-  testWidgets('文本发送失败不创建旧内存失败气泡', (tester) async {
+  testWidgets('文本在 Core 建立消息前失败仍保留内容并可重试', (tester) async {
     final gateway = FakeAwikiGateway()..failNextSend = true;
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -7678,9 +7741,15 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pumpAndSettle();
 
+    expect(find.text('hello'), findsOneWidget);
+    expect(find.text('发送失败'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+    expect(gateway.lastSentContent, 'hello');
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(find.text('hello'), findsOneWidget);
     expect(find.text('发送失败'), findsNothing);
     expect(find.text('重试'), findsNothing);
-    expect(gateway.lastSentContent, 'hello');
   });
 
   testWidgets('附件按钮会先暂存附件，点击发送后再发送附件消息', (tester) async {

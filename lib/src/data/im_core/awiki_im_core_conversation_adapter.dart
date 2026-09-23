@@ -133,6 +133,7 @@ class AwikiImCoreConversationAdapter
     int limit = 100,
     String? cursor,
     bool unreadOnly = false,
+    bool includeControlMessages = false,
   }) async {
     return _runtime.withCurrentClient((client) async {
       final totalWatch = Stopwatch()..start();
@@ -156,7 +157,12 @@ class AwikiImCoreConversationAdapter
       final conversations = AwikiPerformanceLogger.sync(
         'im_core_conversations.map',
         () => page.items
-            .where(_mappers.shouldIncludeConversation)
+            .where(
+              (conversation) => _mappers.shouldIncludeConversation(
+                conversation,
+                includeControlMessages: includeControlMessages,
+              ),
+            )
             .map(
               (conversation) => _mappers.conversationFromCore(
                 conversation,

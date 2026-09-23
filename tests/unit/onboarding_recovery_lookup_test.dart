@@ -48,6 +48,31 @@ void main() {
   });
 
   testWidgets(
+    'typing keeps recovery lookup silent until a resumable operation is found',
+    (tester) async {
+      final run = await _LookupRun.open(tester);
+      final pending = run.core.defer(_alice);
+      await tester.enterText(run.handleField, 'alice');
+      await tester.pump();
+
+      expect(find.text('正在检查恢复进度…'), findsNothing);
+      await run.settleLookup();
+      expect(run.core.lookups, [_alice]);
+      expect(find.text('正在检查恢复进度…'), findsNothing);
+      expect(_continue, findsNothing);
+      expect(find.byType(HandleRecoveryPage), findsNothing);
+      expect(run.gateway.registerHandleCalls, 0);
+      expect(run.core.mutations, 0);
+
+      pending.complete([_operation(_alice)]);
+      await tester.pumpAndSettle();
+      expect(_continue, findsOneWidget);
+      expect(find.byType(HandleRecoveryPage), findsNothing);
+      expect(run.core.mutations, 0);
+    },
+  );
+
+  testWidgets(
     'rapid Handle edits only query the latest target after debounce',
     (tester) async {
       final run = await _LookupRun.open(tester);

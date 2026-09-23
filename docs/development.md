@@ -53,6 +53,17 @@ scripts/flutter/build-sdk-native.sh --android-only
 scripts/flutter/build-sdk-native.sh --ios-only
 ```
 
+Native SDK dependency source is owned by `awiki-cli-rs2`. From the App checkout,
+switch to that sibling repository to run the build entrypoint. Debug defaults to
+the published registry pins:
+
+```bash
+cd ../awiki-cli-rs2
+python3 scripts/dependencies/build.py --package im-core-dart --check
+```
+
+To switch only ANP to source, copy `scripts/dependencies/local-anp.example.json` to `dependencies.local.json` in `awiki-cli-rs2` and pass `--deps local --local-config dependencies.local.json`. App Release packaging keeps `AWIKI_RELEASE_REGISTRY=1` and rejects local overlays.
+
 ## 4. Routine development gates
 
 ```bash

@@ -25,6 +25,7 @@ import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'language_selection_page.dart';
+import 'notify_settings.dart';
 import 'display_settings_page.dart';
 import '../shared/display_scale.dart';
 import '../shared/local_credential_delete_dialog.dart';
@@ -62,6 +63,8 @@ class SettingsPage extends ConsumerWidget {
     final responsive = context.awikiResponsive;
     Widget? leading(Widget icon) => responsive.usesDesktopLayout ? null : icon;
     final sections = <Widget>[
+      if (session != null && defaultTargetPlatform == TargetPlatform.android)
+        const NotifySettings(),
       if (!embedded && responsive.isCompact && session != null) ...<Widget>[
         _SettingsSection(
           key: const Key('settings-profile-section'),
@@ -403,6 +406,18 @@ class SettingsPage extends ConsumerWidget {
                 (_) => const LanguageSelectionPage(),
               ),
             ),
+            if (session != null &&
+                defaultTargetPlatform == TargetPlatform.android)
+              _QuietSettingsRow(
+                key: const Key('settings-notify-row'),
+                icon: CupertinoIcons.bell,
+                title: '任务通知',
+                height: optionRowHeight,
+                onTap: () => AppNavigator.push<void>(
+                  context,
+                  (_) => const NotifySettingsPage(),
+                ),
+              ),
             if (isDesktopPlatform)
               _QuietSettingsRow(
                 key: const Key('settings-display-row'),

@@ -92,6 +92,22 @@ void main() {
     );
   });
 
+  test(
+    'remote Push reception reaches Core using a supported hint reason',
+    () async {
+      final core = _ReceivingCore();
+      final service = ImCoreMessageSyncService(sync: core);
+      final result = await service.receiveNow(reason: 'remote_push', limit: 50);
+      expect(result.complete, isTrue);
+      expect(core.receiveReasons, ['websocket_hint']);
+      expect(core.receiveLimits, [50]);
+      expect(
+        core.syncReasons,
+        isEmpty,
+      ); // Keep the separate receive/processing path.
+    },
+  );
+
   test('syncNow delegates only app-safe controls to core port', () async {
     final core = _FakeMessageSyncCore();
     final service = ImCoreMessageSyncService(sync: core);
@@ -123,7 +139,7 @@ void main() {
       'websocket_hint': 'websocket_hint',
       'after_mutation': 'after_mutation',
       'manual_refresh': 'manual_refresh',
-      'remote_push': 'remote_push',
+      'remote_push': 'websocket_hint',
       'realtime_future_hint': 'websocket_hint',
       'unknown_internal_trigger': 'manual_refresh',
     };
@@ -384,4 +400,48 @@ ChatMessage _message(String id, {String? conversationId, int? serverSequence}) {
     serverSequence: serverSequence,
     sendState: MessageSendState.sent,
   );
+}
+
+class _ReceivingCore extends _FakeMessageSyncCore
+    implements MessageReceiveCorePort {
+  final receiveReasons = <String>[];
+  final receiveLimits = <int?>[];
+  @override
+  Future<MessageReceiveOutcome> receiveNow({
+    int? limit,
+    required String reason,
+  }) async {
+    // Same frozen transport reason set accepted by Core and Message Service.
+    if (!{
+      'session_start',
+      'app_resume',
+      'websocket_hint',
+      'websocket_reconnect',
+      'foreground_reconcile',
+      'manual_refresh',
+      'after_mutation',
+    }.contains(reason)) {
+      throw ArgumentError.value(
+        reason,
+        'reason',
+        'unsupported message sync reason',
+      );
+    }
+    receiveReasons.add(reason);
+    receiveLimits.add(limit);
+    return const MessageReceiveOutcome(
+      status: MessageSyncStatus.idle,
+      complete: true,
+      eventsReceived: 0,
+      pagesFetched: 0,
+    );
+  }
+
+  @override
+  Future<MessageProcessingSession> openProcessingSession() =>
+      throw UnimplementedError();
+  @override
+  Future<List<LocalIncomingMessage>> findLocalIncoming(
+    Set<String> references,
+  ) => throw UnimplementedError();
 }

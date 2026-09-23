@@ -3829,8 +3829,40 @@ Future<ChatMessage> _sendAppPairAgentPromptThroughUi({
     timeout: const Duration(seconds: 30),
     failure: 'The joining App runtime Agent chat input was unavailable.',
   );
+  // The composer can be enabled while ACP preparation still blocks submission.
+  // Observe the current chat's confirmed model projection before submitting.
+  await _pumpUntil(
+    tester,
+    () {
+      final bars = tester
+          .widgetList<AcpModelBar>(find.byType(AcpModelBar))
+          .where((bar) => bar.scope.agentDid == agent.agentDid)
+          .toList(growable: false);
+      if (bars.length != 1) return false;
+      final bar = bars.single;
+      final operation = container.read(acpModelControllerProvider(bar.scope));
+      return !operation.blocksSending &&
+          (bar.session?.data['model_configuration_ready'] == true ||
+              bar.session?.data['model_id'] is String);
+    },
+    timeout: const Duration(seconds: 60),
+    failure: 'The joining App ACP model configuration was not ready.',
+  );
   await tester.enterText(input, content);
   await tester.pump(const Duration(milliseconds: 100));
+  // Opening an ACP chat prepares its model asynchronously. A visible input
+  // does not mean the production composer has enabled sending yet.
+  final sendButton = find.byKey(const Key('chat-send-button'));
+  await _pumpUntil(
+    tester,
+    () {
+      if (sendButton.evaluate().length != 1) return false;
+      final button = tester.widget<AppPressable>(sendButton);
+      return button.enabled && button.onTap != null;
+    },
+    timeout: const Duration(seconds: 60),
+    failure: 'The joining App ACP composer did not enable sending.',
+  );
   await _tapOne(
     tester,
     find.bySemanticsIdentifier('e2e-chat-send-button'),
@@ -4910,6 +4942,9 @@ Future<AgentSummary> _waitForAppPairRuntime({
   fail(
     'The App-pair runtime Agent or its local creation state did not converge: '
     '$handle. '
+    'inventory_matches=${container.read(agentsProvider).agents.where((agent) => agent.isRuntime && agent.daemonAgentDid == daemonDid && agent.handle == handle).length}, '
+    'pending_states=${container.read(agentsProvider).pendingRuntimeCreations.where((pending) => pending.daemonAgentDid == daemonDid && pending.handle == handle).map((pending) => pending.state.name).toList()}, '
+    'action_pending=${container.read(agentsProvider).isActing}. '
     'daemon=${daemon.safeDiagnostics}',
   );
 }

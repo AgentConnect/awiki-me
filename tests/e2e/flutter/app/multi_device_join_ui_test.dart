@@ -51,6 +51,8 @@ import 'package:awiki_me/src/data/im_core/awiki_im_core_device_management_adapte
 import 'package:awiki_me/src/l10n/l10n.dart';
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/acp_model_controller.dart';
+import 'package:awiki_me/src/presentation/agents/acp_task_status.dart';
 import 'package:awiki_me/src/presentation/agents/agent_availability_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/account_state_sync_coordinator_provider.dart';

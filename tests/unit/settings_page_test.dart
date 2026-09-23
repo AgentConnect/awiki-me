@@ -20,6 +20,7 @@ import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,6 +29,21 @@ import 'app_update_provider_test.dart' show buildManifest;
 import 'test_support.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const notifyChannel = MethodChannel('ai.awiki.awikime/remote_push_events');
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(notifyChannel, (call) async {
+          if (call.method == 'getTextNotifyPreferenceState') {
+            return {'enabled': true, 'urgent_enabled': false};
+          }
+          return null;
+        });
+  });
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(notifyChannel, null);
+  });
   testWidgets(
     'desktop display settings remain usable at the minimum compact width',
     (tester) async {
@@ -289,8 +305,8 @@ void main() {
     expect(profileRect, const Rect.fromLTWH(0, 64, 390, 104));
     expect(avatarRect, const Rect.fromLTWH(20, 87, 58, 58));
     expect(accountRect, const Rect.fromLTWH(0, 208, 390, 61));
-    expect(appRect, const Rect.fromLTWH(0, 309, 390, 183));
-    expect(securityRect, const Rect.fromLTWH(0, 532, 390, 244));
+    expect(appRect, const Rect.fromLTWH(0, 309, 390, 244));
+    expect(securityRect, const Rect.fromLTWH(0, 593, 390, 244));
 
     for (final titleKey in <String>[
       'settings-account-section-title',
@@ -467,7 +483,9 @@ void main() {
     expect(find.text('退出并删除当前数据'), findsOneWidget);
     expect(find.text('删除当前本地数据：default'), findsNothing);
 
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('退出并删除当前数据'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('退出并删除当前数据'));
     await tester.pumpAndSettle();
 
@@ -552,7 +570,9 @@ void main() {
 
     expect(find.byType(SettingsPage), findsOneWidget);
 
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('退出并删除当前数据'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('退出并删除当前数据'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('退出并删除数据'));
@@ -1293,9 +1313,9 @@ void main() {
                   'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
               'bootstrap_key_algorithm': 'x25519',
               'config_summary': <String, Object?>{
-                'acp': {
+                'acp': <String, Object?>{
                   'capability_schema_version': 1,
-                  'supported_drivers': ['hermes'],
+                  'supported_drivers': <String>['hermes'],
                 },
                 'delegated_subkey_proposal': <String, Object?>{
                   'schema': userSubkeyPackageSchema,
@@ -1480,8 +1500,11 @@ void main() {
           activeState: 'active',
           latest: AgentLatestStatus(
             status: 'ready',
-            diagnosticsSummary: {
-              'config_summary': {'protocol': 'acp'},
+            diagnosticsSummary: <String, Object?>{
+              'config_summary': <String, Object?>{
+                'protocol': 'acp',
+                'driver': 'hermes',
+              },
             },
           ),
         ),
@@ -1512,8 +1535,11 @@ void main() {
           activeState: 'active',
           latest: AgentLatestStatus(
             status: 'ready',
-            diagnosticsSummary: {
-              'config_summary': {'protocol': 'acp'},
+            diagnosticsSummary: <String, Object?>{
+              'config_summary': <String, Object?>{
+                'protocol': 'acp',
+                'driver': 'hermes',
+              },
             },
           ),
         ),

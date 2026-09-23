@@ -117,7 +117,7 @@ Rust im-core
 | conversation patch stream | Rust `im-core` runtime store | committed sync/local write invalidation；patch 保留 `ownerIdentityId` | `ConversationCorePort.watchConversationPatches`；App 用完整 session/account/auth generation fence 消费 |
 | conversation timeline patch stream | Rust `im-core` runtime store | committed local message projection、sync、realtime incoming；patch 保留 `ownerIdentityId` | `ConversationTimelineMessageCorePort.watchConversationTimelinePatches` / `ChatThreadsController`；同 DID 换 generation 后旧 patch 失效 |
 | unread count、unread mention、read-state 展示事实 | Rust `im-core` local state 和 read-state API | `markConversationRead` / sync apply / local projection | App 只消费 projected count，不拥有 checkpoint 或 read watermark 事实 |
-| text / payload / attachment send/outbox/local echo | Rust `im-core` messages / attachments projection + send state | `sendConversationText` / `sendConversationPayload` / `sendConversationAttachment` / retry result | App 发送 intent 并渲染 core timeline row 的 pending/failed/sent；sending row 连续可见满 3 秒后才显示转圈，明确 send result 只可收敛已由 core patch 暴露的 row；附件可保留本地文件 preview 作为短生命周期 UI 状态，但不得用 memory pending、thread move 或本地 upsert conversation row 决定 correctness |
+| text / payload / attachment send/outbox/local echo | Rust `im-core` messages / attachments projection + send state | `sendConversationText` / `sendConversationPayload` / `sendConversationAttachment` / retry result | App 发送 intent 并渲染 core timeline row 的 pending/failed/sent；sending row 连续可见满 3 秒后才显示转圈，Core patch 或明确 send result 接替独立的短生命周期发送展示覆盖，不能将覆盖当作持久消息；附件可保留本地文件 preview 作为短生命周期 UI 状态，但不得用 memory pending、thread move 或本地 upsert conversation row 决定 correctness |
 | realtime / backfill | Rust `im-core` sync/realtime committed projection | realtime hint 调度 `syncDelta`，conversation-after 补新，projection commit 后 patch | App 不从 realtime typed event 直接写 list/timeline truth；只消费 core patch/read model 并在 gap 时 repair |
 | remote Push hint | Android native EMAS transport + `RemotePushMessageSyncCoordinator` | message/notification/open callback、activation、resume、registration refresh | 只以 `remote_push` 原因请求同一个 `MessageSyncCoordinator`；payload 不写 list/timeline，不携带 message truth |
 | Core commit / projection / notification dedupe | `MessageSyncCoordinator` | WebSocket、remote Push、startup、resume、repair 等可靠触发合并后调用 Core sync | Core commit 后统一刷新 recents、Join inbox、timeline，并以 committed message identity 执行普通消息与 Coding Agent 通知去重 |
@@ -342,7 +342,7 @@ Core 的 typed local Join inbox。通知自带的 title/body、payload JSON 或 
 Android EMAS message/notification/open callback 与 WebSocket 一样，只表示本地 Core
 projection 可能变脏。`RemotePushMessageSyncCoordinator` 将事件串行合并，并通过
 `MessageSyncCoordinator` 请求同一条 Core `receiveNow` 接收路径，并在接收之外等待独立业务
-回执。它不解析 Push title/body 来生成 `ChatMessage`，也不直接 upsert recents 或 timeline。
+回执。App 内部 `remote_push` 仅用于诊断及展示策略；在 `ImCoreMessageSyncService` 边界映射为现有 wire `websocket_hint`（传输唤醒提示），Core 和服务端冻结枚举不接受 `remote_push`。新 `receiveNow` 与兼容 `syncNow` 使用同一映射。它不解析 Push title/body 来生成 `ChatMessage`，也不直接 upsert recents 或 timeline。
 
 `MessageSyncCoordinator` 仍是唯一的 Core commit、conversation/Join/timeline 刷新和
 notification dedupe owner。native receiver 在 `showNotificationNow` 之前只用三项安全事实做
@@ -372,7 +372,7 @@ message reference 和必填未过期 `extraMap.exp`；App 用 committed logical/
 message ID 及 Core 保留的 raw message alias 派生 reference，匹配后只打开该 committed message
 的 canonical conversation。其他
 payload metadata、raw conversation ID、URL、title/body 都不能决定导航；无匹配时只显示会话
-列表。
+列表。打开事件通过当前 session fence 后，先通过当前 App 实例的根 Navigator 关闭覆盖 shell 的设置/详情页面，再选择 canonical conversation；仅修改 shell selection 不代表用户已看到目标会话。后台收到事件不关闭页面，只有有效 notification_opened 才执行该动作。
 
 activation、resume、event drain、ack 和 navigation 全程绑定相同
 `SessionEpoch(ownerDid, stableIdentityKey, generation)` 与 `StorageScopeId` tenant。
@@ -464,9 +464,11 @@ Chat presentation 同时是 owner/session-generation scoped：
 seed”的兼容屏障；正式 v2 account session 必须走上述完整 fence，不允许从 DID 推断
 `ownerIdentityId` 或 `accountId`。
 
-Timeline merge 必须把“同一条本机发送消息的 durable server row”和“迟到的本地 echo/pending/failed row”视为同一展示实体：如果 mine、thread、sender、可见文本和时间窗口匹配，且其中一条已经是 `sent`，UI window 保留已发送的 server row，不再把迟到的本地失败 echo 渲染成第二个气泡。这个规则只属于 presentation 去重防线，不改变 `im-core` 作为 send/outbox/local projection 事实源的职责。
+Timeline merge、发送结果接替、Core patch 与历史回填共用精确消息身份规则：同一 canonical 会话内只有 `localId` / `remoteId` 或 Core 明确提供的消息身份别名存在共同 ID，或同一发送请求的明确结果关联，才可合并。App mapper 将 Core 的 `raw_message_id` / `client_message_id` / `operation_id` 保留为只用于展示关联的 `identityAliases`，不从正文推导，不改变正式消息 ID、附件寻址和 read watermark 的语义；实时、发送结果与历史映射使用同一规则。合并保留已知别名，明确关联的多个展示行必须收敛为一条。发送者、正文、附件名、时间接近和 server sequence 存在与否都不能证明两条消息相同；没有明确别名关联的不同 ID 同文消息必须独立保留。已成功的同一条本机消息不得被迟到的 sending/failed 行覆盖，不以正文是否一致或是否已有服务端序号作为保留成功状态的条件。旧的正文猜测匹配已移除；无法确定身份的历史行保留独立记录，不能靠内容推测删除。这个规则只属于 presentation 合并边界，不改变 `im-core` 作为 send/outbox/local projection 事实源的职责。
 
-发送状态的 UI 降噪规则：core timeline row 进入 `sending` 后，气泡先不显示转圈且不预留左侧空白；同一 row 连续保持 `sending` 满 3 秒才显示 indicator。row 更新为 `sent` 或 `failed` 时 indicator widget 立即销毁。若 `sendConversationText` / `sendConversationPayload` 已返回明确终态，App 只允许用该 SDK 结果收敛当前 timeline 中已经存在、且 message id 或严格 pending match 对应的 core row；不得因此插入新的 memory-only message，也不得触发 full conversation refresh 或 remote history reconcile。
+发送首帧由 App 的短生命周期 `localSendIntents` 展示层覆盖：通过本地发送前置校验后，使用与 Core 请求相同的 `clientMessageId` 同步显示发送中气泡，与清空输入框在下一帧一起生效。该覆盖与 `messages`（Core 投影）分开保存，仅 ChatView 的 `displayMessages` 合并展示；不参与持久化、会话摘要、read watermark、可靠同步或智能体任务接受状态。Core patch/history 或明确发送结果按精确消息 ID 及显式别名接替覆盖，不按正文匹配，避免连续发送相同内容被合并。Core 建立消息之前失败时保留失败覆盖及原内容，重试复用同一消息 ID 和幂等键；身份 generation 改变时清理覆盖，旧请求完成不得回填。临时覆盖不跨进程持久化，Core 已落盘的消息继续由 Core 恢复。附件仍沿用既有本地 preview 机制。Core remove 清理指定行及其对应临时覆盖；若删除的是已被正式消息接替的旧本机行，不因别名相同删除正式消息。
+
+发送状态的 UI 降噪规则：core timeline row 进入 `sending` 后，气泡先不显示转圈且不预留左侧空白；同一 row 连续保持 `sending` 满 3 秒才显示 indicator。row 更新为 `sent` 或 `failed` 时 indicator widget 立即销毁。若 `sendConversationText` / `sendConversationPayload` 已返回明确终态，App 用该 SDK 结果收敛或补入 Core 返回的消息，并按请求消息 ID 接替对应临时覆盖，但不得把临时覆盖当作 Core 消息，也不得触发 full conversation refresh 或 remote history reconcile。
 
 特殊边界：`dm:peer-scope:*`、legacy DID direct、old Flutter direct alias、handle 切换和 DID rotation 都必须在 `im-core` identity resolver / migration 中收敛到 canonical `conversationId`。AWiki Me 可以展示 alias/handle/DID，但不能用这些字段决定消息归属、read ack key 或 timeline patch key。旧 `ThreadRef` / raw thread history 能力只作为 compatibility adapter；App 主路径不得把 `unsupported_capability: thread-history` 暴露为可见错误。附件下载是明确的网络寻址例外：timeline 归属仍保持 canonical peer-scoped conversation，但下载请求必须使用该会话已解析的 direct peer reference，不能把不可逆的 `dm:peer-scope:*` storage thread 传给只支持 direct/group 的 attachment lookup。
 
@@ -626,8 +628,9 @@ copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
 - `tests/unit/data/im_core/awiki_im_core_payload_mapper_test.dart`：验证 payload / mention 解析、合法 range 投影和无效 payload fallback。
 - `tests/unit/chat_mention_send_test.dart`：验证有 valid mentions 时发送 payload，无 mentions 时继续走普通 sendText。
 - `tests/unit/chat_mention_composer_test.dart`：验证 draft mention range 维护、编辑失效、候选插入、本地 Profile single-flight 预热、首帧不闪现 Handle、连续 query 只使用一次 roster/Profile 请求，以及气泡按 DID 重投影但不修改原始消息。
-- `tests/unit/chat_page_test.dart`：验证聊天窗口渲染、read ack 边界、header 行为、sending indicator 的 3 秒延迟与明确终态清理等关键 widget 行为。
+- `tests/unit/chat_page_test.dart`：验证聊天窗口渲染、read ack 边界、header 行为、发送首帧气泡与草稿清空、早期失败重试、离底发送即时滚动、sending indicator 的 3 秒延迟与明确终态清理等关键 widget 行为。
 - `tests/unit/chat_provider_open_test.dart`：验证打开会话 local-first conversation timeline、conversation-after/remote fallback、conversation timeline patch version gap repair、stream closed repair/re-subscribe、read ack、文本 / payload / 附件 send intent 和附件 retry 都按 `conversationId` / `AppConversationReadRef` 走主路径；其中可见群聊必须在 Controller 自身建立持久 intent，不依赖 Widget 二次回调，并覆盖在途 `seq 5 -> seq 6` 串行合并和 Core `pendingRemoteAck` local-first 成功。
+  - 即时发送覆盖与 Core 消息隔离，覆盖精确 ID 接替、同文连续发送（第一条已进入 Core 后第二条 result/patch 的 sending/sent/failed 组合）、历史批量回填、Core mapper 的显式群消息别名关联、不同 ID 群回执与迟到失败收敛、附件与正式读取 ID 保留、旧本机行 remove 不误删正式行、明确 local/remote ID 关联、成功状态防回退、乱序结果、早期失败重试、会话及身份切换；不调用真实模型或后端。
   - Direct stale-route 恢复与手动 retry 必须覆盖稳定 `clientMessageId` / `op-<clientMessageId>`、原气泡原位 `failed -> sending -> sent|failed`、Mention/附件一致性，以及不触发 full refresh/history backfill。
   - Agent pending turn 必须覆盖精确 reply correlation、多个 legacy candidate 不猜测、单 candidate 旧回复兼容、final/terminal 后迟到 running 不复活，以及 session 切换清空完成 ledger。
   - 其中 `dm:peer-scope:*`、legacy direct、old Flutter direct alias 和 handle/DID rotation 必须由 core/SDK canonical identity 收敛；App 不因 raw thread history unsupported 而把错误暴露成可见 UI 报错。
@@ -712,6 +715,15 @@ Core cutover 后继续显示 overlay 收尾阶段，完成前不创建业务 Sto
 - `tests/unit/identity_flow_test.dart`：固定 Direct 解析失败时不创建会话、不改变 selected state，并保留当前资料页。
 - `tests/e2e/flutter/app/app_smoke_test.dart`
 - `tests/e2e/flutter/app/ui_visual_verification_test.dart`
+
+### Android Text Notify mute mirror
+
+ProductLocalStore 的 canonical conversation overlay 仍是会话免打扰的唯一事实源。
+Android 激活登录会话时，ImCoreConversationService 使用 Core 分页路由解析所有静音会话
+（包括隐藏项），只将 Direct 的 opaque peer reference 投影到原生本机快照。
+快照缺失、路由未解析或写入失败时，typed Notify 展示暂停；普通消息同步不受影响。
+修改免打扰先关闭快照可用性，再保存 overlay 并完整替换快照；账号和同步批次共同拒绝
+迟到写入，失败由回前台或设置页重试恢复。该镜像不进入 Core DTO、User Service 或安装注册。
 # ACP 智能体会话投影
 
 OpenCode、Gemini CLI、Kimi、DeepSeek Harness 使用 Daemon 的 ACP v1 状态机。APP 仅投影 Core 已提交的 `awiki.acp.status.v1` 和已验证 Daemon 控制通道中的 `acp` 会话快照；实时提示不能接受任务、推进等待位或确认问答。原三种智能体与普通聊天继续沿用已有合同。

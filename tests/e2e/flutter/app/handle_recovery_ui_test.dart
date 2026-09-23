@@ -62,6 +62,8 @@ import 'package:awiki_me/src/presentation/app_shell/providers/account_state_sync
 import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/acp_model_controller.dart';
+import 'package:awiki_me/src/presentation/agents/acp_task_status.dart';
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
@@ -3036,6 +3038,7 @@ if '--check' in sys.argv:
     raise SystemExit(0)
 root = Path(os.environ['HERMES_HOME'])
 root.mkdir(parents=True, exist_ok=True)
+models = {'currentModelId': 'offline', 'availableModels': [{'modelId': 'offline', 'name': 'Offline fixture'}]}
 
 def emit(value):
     print(json.dumps(value), flush=True)
@@ -3045,12 +3048,22 @@ def stored(session_id):
     return root / (str(uuid.UUID(session_id)) + '.json')
 
 def user_text(blocks):
-    text = ''.join(block.get('text', '') for block in blocks)
-    marker = '[User request]'
-    try:
-        return str(json.loads(text.rsplit(marker, 1)[-1].strip())['user_message'])
-    except (ValueError, KeyError):
+    # The ACP host's final block is either a plain controller prompt or its
+    # canonical delegated-message envelope. Never echo background context.
+    prefix = '[User request]\\n'
+    for block in reversed(blocks):
+        body = block.get('text', '')
+        if not body.startswith(prefix):
+            continue
+        text = body[len(prefix):]
+        try:
+            payload = json.loads(text)
+        except ValueError:
+            return text
+        if isinstance(payload, dict) and payload.get('schema') == 'awiki.runtime.user_message_task.v1':
+            return payload['content_text']
         return text
+    raise ValueError('ACP fixture prompt omitted the user request block')
 
 for line in sys.stdin:
     request = json.loads(line)
@@ -3062,13 +3075,15 @@ for line in sys.stdin:
     elif method == 'session/new':
         session_id = str(uuid.uuid4())
         stored(session_id).write_text('[]')
-        result = {'sessionId': session_id, 'models': {'currentModelId': 'offline', 'availableModels': [{'modelId': 'offline', 'name': 'Offline fixture'}]}}
+        result = {'sessionId': session_id, 'models': models}
     elif method == 'session/load':
         session_id = params['sessionId']
         if not stored(session_id).is_file():
             emit({'jsonrpc': '2.0', 'id': request['id'], 'error': {'code': -32000, 'message': 'Session not found'}})
             continue
-        result = {'_meta': {'hermes': {'sessionProvenance': {'acpSessionId': session_id}}}}
+        # Restoring the native session must also restore its model catalog.
+        # The host reapplies the last confirmed model before the next prompt.
+        result = {'models': models, '_meta': {'hermes': {'sessionProvenance': {'acpSessionId': session_id}}}}
     elif method == 'session/list':
         result = {'sessions': [{'sessionId': path.stem, 'cwd': os.getcwd()} for path in root.glob('*.json')]}
     elif method == 'session/prompt':
@@ -5221,6 +5236,28 @@ Future<void> _runFreshFocusedGates({
           tester,
           () => input.evaluate().length == 1,
           failure: 'Fresh Recovery Runtime Agent composer was unavailable.',
+        );
+        // A hit-testable send action can still show the model-preparation
+        // guard dialog. Wait for the current chat's confirmed ACP projection,
+        // just as the user must, before entering and submitting this prompt.
+        await _pumpUntil(
+          tester,
+          () {
+            final bars = tester
+                .widgetList<AcpModelBar>(find.byType(AcpModelBar))
+                .where((bar) => bar.scope.agentDid == runtime.agentDid)
+                .toList(growable: false);
+            if (bars.length != 1) return false;
+            final bar = bars.single;
+            final operation = container.read(
+              acpModelControllerProvider(bar.scope),
+            );
+            return !operation.blocksSending &&
+                (bar.session?.data['model_configuration_ready'] == true ||
+                    bar.session?.data['model_id'] is String);
+          },
+          timeout: const Duration(seconds: 60),
+          failure: 'Fresh Recovery ACP model configuration was not ready.',
         );
         await tester.enterText(input, promptText);
         final send = find.bySemanticsIdentifier('e2e-chat-send-button');

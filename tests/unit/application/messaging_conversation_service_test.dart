@@ -24,6 +24,103 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('ImCoreConversationService', () {
     test(
+      'Notify mute snapshot includes hidden Directs, excludes groups and other owners',
+      () async {
+        final store = InMemoryAwikiProductLocalStore();
+        for (final id in ['hidden', 'group']) {
+          await store.upsertConversationOverlayByConversationId(
+            ProductConversationOverlay(
+              ownerDid: 'did:alice',
+              threadId: id,
+              conversationId: id,
+              muted: true,
+              hidden: true,
+              updatedAt: DateTime.now(),
+            ),
+          );
+        }
+        await store.upsertConversationOverlayByConversationId(
+          ProductConversationOverlay(
+            ownerDid: 'did:other',
+            threadId: 'other',
+            conversationId: 'other',
+            muted: true,
+            updatedAt: DateTime.now(),
+          ),
+        );
+        final service = ImCoreConversationService(
+          conversations: _FakeConversations(
+            items: [
+              _conversation('hidden', minutesAgo: 1, targetDid: 'did:hidden'),
+              _conversation('group', minutesAgo: 1).copyWith(isGroup: true),
+            ],
+          ),
+          localStore: store,
+        );
+        expect(
+          await service.loadMutedNotificationPeerDids(ownerDid: 'did:alice'),
+          {'did:hidden'},
+        );
+      },
+    );
+
+    test(
+      'Notify hydrates a muted Direct beyond the first registry page',
+      () async {
+        final store = InMemoryAwikiProductLocalStore();
+        await store.upsertConversationOverlayByConversationId(
+          ProductConversationOverlay(
+            ownerDid: 'did:alice',
+            threadId: 'c100',
+            conversationId: 'c100',
+            muted: true,
+            updatedAt: DateTime.now(),
+          ),
+        );
+        final core = _FakeConversations(
+          paginate: true,
+          items: List.generate(
+            101,
+            (i) => _conversation('c$i', minutesAgo: 1, targetDid: 'did:peer$i'),
+          ),
+        );
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: store,
+        );
+        expect(
+          await service.loadMutedNotificationPeerDids(ownerDid: 'did:alice'),
+          {'did:peer100'},
+        );
+        expect(core.listCount, 2);
+      },
+    );
+
+    test(
+      'Notify mute snapshot fails closed for missing canonical routes',
+      () async {
+        final store = InMemoryAwikiProductLocalStore();
+        await store.upsertConversationOverlayByConversationId(
+          ProductConversationOverlay(
+            ownerDid: 'did:alice',
+            threadId: 'dm:not-a-route',
+            conversationId: 'missing',
+            muted: true,
+            updatedAt: DateTime.now(),
+          ),
+        );
+        final service = ImCoreConversationService(
+          conversations: _FakeConversations(),
+          localStore: store,
+        );
+        await expectLater(
+          service.loadMutedNotificationPeerDids(ownerDid: 'did:alice'),
+          throwsStateError,
+        );
+      },
+    );
+
+    test(
       'idle patch subscription cancels and a new generation receives reset',
       () async {
         final core = _FakeConversations();
@@ -1672,8 +1769,10 @@ class _FakeConversations implements ConversationCorePort {
     this.snapshotItems = const <ConversationSummary>[],
     this.nextCursor,
     this.hasMore = false,
+    this.paginate = false,
   });
 
+  final bool paginate;
   final List<ConversationSummary> items;
   final List<ConversationSummary> snapshotItems;
   final String? nextCursor;
@@ -1734,10 +1833,20 @@ class _FakeConversations implements ConversationCorePort {
     int limit = 100,
     String? cursor,
     bool unreadOnly = false,
+    bool includeControlMessages = false,
   }) async {
     listCount += 1;
     lastLimit = limit;
     lastCursor = cursor;
+    if (paginate) {
+      final start = int.parse(cursor ?? '0');
+      final end = (start + limit).clamp(0, items.length);
+      return CoreConversationPage(
+        items: items.sublist(start, end),
+        nextCursor: end < items.length ? '$end' : null,
+        hasMore: end < items.length,
+      );
+    }
     return CoreConversationPage(
       items: items.take(limit).toList(),
       nextCursor: nextCursor,

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 
 import '../../../app/app_services.dart';
 import '../../../app/app_locale.dart';
@@ -337,6 +338,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
           .read(appSessionServiceProvider)
           .refreshSession();
       if (refreshed == null || !_isCurrentEpoch(epoch)) {
+        debugPrint('[awiki_me][remote-push][session-refresh-stale]');
         return const RemotePushSyncReceipt(
           disposition: RemotePushSyncDisposition.staleSession,
         );
@@ -349,7 +351,11 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
           disposition: RemotePushSyncDisposition.staleSession,
         );
       }
-    } on Object {
+    } on Object catch (error) {
+      debugPrint(
+        '[awiki_me][remote-push][session-refresh-failed] '
+        'type=${error.runtimeType}',
+      );
       return const RemotePushSyncReceipt(
         disposition: RemotePushSyncDisposition.staleSession,
       );
@@ -1016,6 +1022,14 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
           );
         }
         if (!processed.complete) {
+          if (reason == 'remote_push') {
+            debugPrint(
+              '[awiki_me][remote-push][processing-pending] '
+              'pending=${processed.pendingCount} '
+              'blocked=${processed.blockedCount} '
+              'discarded=${processed.discardedCount}',
+            );
+          }
           return RemotePushSyncReceipt(
             disposition:
                 processed.blockedCount > 0 || processed.discardedCount > 0
@@ -1075,6 +1089,13 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
             category: failure.category,
             code: failure.code,
             httpStatus: failure.httpStatus,
+          );
+        }
+        if (reason == 'remote_push') {
+          debugPrint(
+            '[awiki_me][remote-push][processing-failed] '
+            'type=${error.runtimeType} '
+            'code=${error is MessageSyncCoreFailure ? _sanitizeFailureCode(error.code) : 'unclassified'}',
           );
         }
         // A processing/Join failure cannot overwrite a completed receive status.
@@ -1782,6 +1803,11 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       },
     );
     if (isForeground) {
+      return;
+    }
+    // Text Notify has one native presenter for both foreground and background.
+    if (defaultTargetPlatform == TargetPlatform.android &&
+        message.notifyLevel != null) {
       return;
     }
     final conversationId = message.conversationId?.trim() ?? '';
