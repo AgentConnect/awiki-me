@@ -510,7 +510,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final phone = _normalizedPhone;
     final profileMarkdown = '# $handle\n\n';
     final onboarding = ref.read(onboardingProvider);
-    if (!await _prepareRegistrationVerification()) {
+    if (!await _prepareRegistrationVerification(requireInvite: true)) {
       return;
     }
     if (!mounted) return;
@@ -759,7 +759,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     ref.read(onboardingProvider.notifier).resetEmailActivation();
   }
 
-  Future<bool> _prepareRegistrationVerification() {
+  Future<bool> _prepareRegistrationVerification({bool requireInvite = false}) {
     final onboarding = ref.read(onboardingProvider);
     return ref
         .read(registrationEntryProvider.notifier)
@@ -767,6 +767,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           handle: _normalizedHandle,
           domain: ref.read(activeAppTenantProvider).didHost,
           inviteCode: inviteController.text,
+          requireInvite: requireInvite,
           phone: onboarding.authMode == 'email' ? null : _normalizedPhone,
           email: onboarding.authMode == 'email'
               ? emailController.text.trim()

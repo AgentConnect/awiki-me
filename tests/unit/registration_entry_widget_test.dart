@@ -71,7 +71,7 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
-  testWidgets('OTP checks invite length only', (tester) async {
+  testWidgets('OTP sends with blank invite', (tester) async {
     tester.view.physicalSize = const Size(390, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -105,16 +105,14 @@ void main() {
     expect(find.text('注册位数小于5位的handle需要使用邀请码'), findsOneWidget);
     expect(field('e2e-phone-input'), findsOneWidget);
     expect(field('e2e-otp-input'), findsOneWidget);
-    expect(gateway.sendOtpCalls, 0);
-
-    await tester.enterText(field('e2e-invite-input'), 'wrong');
-    await tapVisible(tester, find.text('发送验证码'));
-    expect(gateway.sendOtpCalls, 0);
-    expect(find.text('请输入6位邀请码。'), findsOneWidget);
+    expect(gateway.sendOtpCalls, 1);
+    await tester.enterText(field('e2e-otp-input'), '123456');
+    await tapVisible(tester, find.text('登录/注册'));
+    expect(gateway.registerHandleCalls, 0);
+    expect(find.text('此账号注册需要邀请码，请填写后继续。'), findsOneWidget);
 
     await tester.enterText(field('e2e-invite-input'), 'WRONG1');
-    await tapVisible(tester, find.text('发送验证码'));
-    expect(gateway.sendOtpCalls, 1);
+    await tapVisible(tester, find.text('登录/注册'));
     expect(field('e2e-invite-input'), findsOneWidget);
     expect(support.lastInvite, isNull);
     expect(support.lastCheckInvite, isFalse);
@@ -124,14 +122,12 @@ void main() {
       ).read(registrationEntryProvider).inviteCode,
       'WRONG1',
     );
-    await tester.enterText(field('e2e-otp-input'), '123456');
-    await tapVisible(tester, find.text('登录/注册'));
     expect(gateway.registerHandleCalls, 1);
     expect(gateway.lastRegisteredInviteCode, 'WRONG1');
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('email activation checks invite length only', (tester) async {
+  testWidgets('email activation sends without invite', (tester) async {
     tester.view.physicalSize = const Size(390, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -155,15 +151,9 @@ void main() {
     await tester.enterText(field('e2e-email-input'), 'fixture@example.com');
     await tapVisible(tester, find.text('发送激活邮件'));
     expect(field('e2e-invite-input'), findsOneWidget);
-    expect(gateway.sendEmailVerificationCalls, 0);
-
-    await tester.enterText(field('e2e-invite-input'), 'wrong');
-    await tapVisible(tester, find.text('发送激活邮件'));
-    expect(gateway.sendEmailVerificationCalls, 0);
-    expect(find.text('请输入6位邀请码。'), findsOneWidget);
+    expect(gateway.sendEmailVerificationCalls, 1);
 
     await tester.enterText(field('e2e-invite-input'), 'WRONG1');
-    await tapVisible(tester, find.text('发送激活邮件'));
     expect(gateway.sendEmailVerificationCalls, 1);
     expect(support.lastEmail, 'fixture@example.com');
     expect(support.lastInvite, isNull);

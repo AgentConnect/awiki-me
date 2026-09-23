@@ -148,6 +148,7 @@ class RegistrationEntryController
     String? inviteCode,
     String? phone,
     String? email,
+    bool requireInvite = false,
   }) async {
     if (state.busy) return false;
     final revision = ++_revision;
@@ -184,7 +185,8 @@ class RegistrationEntryController
               : inviteCode.runes.length > 64);
       final canVerify =
           (result.isExisting || result.decision == 'register') &&
-          (!needsInvite || (!missingInvite && !invalidInviteLength)) &&
+          (!needsInvite ||
+              (!invalidInviteLength && (!requireInvite || !missingInvite))) &&
           (!state.existingAccountPath || result.isExisting);
       state = _state(
         check: result,
@@ -192,7 +194,9 @@ class RegistrationEntryController
             ? RegistrationEntryStep.invite
             : RegistrationEntryStep.verification,
         error: missingInvite
-            ? null
+            ? requireInvite
+                  ? 'invite_required'
+                  : null
             : state.existingAccountPath && !result.isExisting
             ? 'check_failed'
             : invalidInviteLength

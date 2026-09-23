@@ -69,11 +69,17 @@ void main() {
     expect(controller.state.step, RegistrationEntryStep.invite);
     await controller.continueWithInvite(' ');
     expect(controller.state.error, 'invite_required');
+    expect(await controller.prepareVerification(phone: '+12025550123'), isTrue);
+    expect(support.calls, hasLength(2));
+    expect(controller.state.step, RegistrationEntryStep.invite);
     expect(
-      await controller.prepareVerification(phone: '+12025550123'),
+      await controller.prepareVerification(
+        phone: '+12025550123',
+        requireInvite: true,
+      ),
       isFalse,
     );
-    expect(support.calls, hasLength(2));
+    expect(controller.state.error, 'invite_required');
     await controller.continueWithInvite(' fixture ');
     expect(controller.state.step, RegistrationEntryStep.verification);
     expect(controller.state.inviteCode, 'fixture');

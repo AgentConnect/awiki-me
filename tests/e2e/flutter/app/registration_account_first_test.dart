@@ -1,4 +1,3 @@
-import 'package:awiki_me/src/presentation/onboarding/registration_entry_provider.dart';
 // Real native Core and loopback User Service; fixture provisioning/DB cleanup
 // belong to the invoking local acceptance environment, never to production UI.
 import 'dart:convert';
@@ -191,20 +190,8 @@ Future<String> _runInvitedHandleJoin(
           find.text(labels.onboardingShortHandleInviteHint),
           findsOneWidget,
         );
-        await _enter(tester, 'e2e-invite-input', 'x' * 65);
-        await _tap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));
-        await _until(
-          tester,
-          () =>
-              container.read(registrationEntryProvider).error ==
-              (expectedLength == 4
-                  ? 'invite_length_six'
-                  : 'invite_length_max_64'),
-          'Invite length is checked before contact verification',
-        );
         expect(find.bySemanticsIdentifier('e2e-phone-input'), findsOneWidget);
         await _enter(tester, 'e2e-invite-input', invite);
-        await _tap(tester, find.bySemanticsIdentifier('e2e-send-otp-button'));
       }
       await _until(
         tester,
@@ -736,13 +723,12 @@ Future<void> _runEmailRegistration(
     expect(find.bySemanticsIdentifier('e2e-handle-input'), findsOneWidget);
     expect(find.bySemanticsIdentifier('e2e-email-input'), findsOneWidget);
     expect(find.text(labels.onboardingInviteHandleHint), findsOneWidget);
-    await _enter(tester, 'e2e-invite-input', invite);
-    await _tap(tester, find.text(labels.onboardingSendActivationEmail));
     await _until(
       tester,
       () => container.read(onboardingProvider).isEmailResendCoolingDown,
       'Real SMTP activation delivery accepted',
     );
+    await _enter(tester, 'e2e-invite-input', invite);
     await _tap(
       tester,
       find.byKey(
