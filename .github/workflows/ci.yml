@@ -40,18 +40,18 @@ concurrency:
 env:
   PUB_HOSTED_URL: https://pub.dev
   FLUTTER_STORAGE_BASE_URL: https://storage.googleapis.com
-  AWIKI_SOURCE_INTEGRATION: ${{ (github.event.inputs.sdk_dependencies == 'source' || (github.event_name == 'pull_request' && github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first')) && '1' || '0' }}
-  AWIKI_RELEASE_REGISTRY: ${{ (github.event.inputs.sdk_dependencies == 'source' || (github.event_name == 'pull_request' && github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first')) && '0' || '1' }}
+  AWIKI_SOURCE_INTEGRATION: ${{ (github.event.inputs.sdk_dependencies == 'source' || (github.event_name == 'pull_request' && github.base_ref == 'release/0910')) && '1' || '0' }}
+  AWIKI_RELEASE_REGISTRY: ${{ (github.event.inputs.sdk_dependencies == 'source' || (github.event_name == 'pull_request' && github.base_ref == 'release/0910')) && '0' || '1' }}
 
 # release/0910 App code already requires the Core processing-session API.
-# Pin this feature PR to its merged Core; retain the release baseline pin elsewhere.
+# Pin release/0910 development PRs to merged Core; retain registry builds elsewhere.
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - name: Require exact CLI / SDK source ref and private repository read token
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05a03410f405fc7760ce45ed8cd9ff533') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '457845db7e483ccdcdb5556decd209125db44ca9') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
           SYSTEM_TEST_READ_TOKEN: ${{ secrets.AWIKI_CI_READ_TOKEN }}
         run: |
           [[ "$CLI_REF" =~ ^[0-9a-fA-F]{40}$ ]] || {
@@ -72,7 +72,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
-          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05a03410f405fc7760ce45ed8cd9ff533') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '457845db7e483ccdcdb5556decd209125db44ca9') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
           token: ${{ github.token }}
           path: awiki-cli-rs2
           persist-credentials: false
@@ -148,7 +148,7 @@ jobs:
 
       - name: Record exact CLI / SDK source ref
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05a03410f405fc7760ce45ed8cd9ff533') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '457845db7e483ccdcdb5556decd209125db44ca9') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
         run: |
           test "$(git -C awiki-cli-rs2 rev-parse HEAD)" = "$CLI_REF"
           git -C awiki-cli-rs2 rev-parse HEAD | tee /tmp/awiki-cli-ref
@@ -225,7 +225,7 @@ jobs:
     steps:
       - name: Require exact CLI / SDK source ref and private repository read token
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05a03410f405fc7760ce45ed8cd9ff533') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '457845db7e483ccdcdb5556decd209125db44ca9') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
           SYSTEM_TEST_READ_TOKEN: ${{ secrets.AWIKI_CI_READ_TOKEN }}
         run: |
           [[ "$CLI_REF" =~ ^[0-9a-fA-F]{40}$ ]] || {
@@ -246,7 +246,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
-          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05a03410f405fc7760ce45ed8cd9ff533') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '457845db7e483ccdcdb5556decd209125db44ca9') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
           token: ${{ github.token }}
           path: awiki-cli-rs2
           persist-credentials: false
@@ -354,7 +354,7 @@ jobs:
     steps:
       - name: Require exact ref and remote account pool secrets
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05a03410f405fc7760ce45ed8cd9ff533') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '457845db7e483ccdcdb5556decd209125db44ca9') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
           E2E_PHONE: ${{ secrets.AWIKI_E2E_OTP_PHONE }}
           E2E_OTP: ${{ secrets.AWIKI_E2E_OTP_CODE }}
           APP_HANDLE: ${{ secrets.AWIKI_E2E_APP_HANDLE }}
@@ -371,7 +371,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
-          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05a03410f405fc7760ce45ed8cd9ff533') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '457845db7e483ccdcdb5556decd209125db44ca9') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
           token: ${{ github.token }}
           path: awiki-cli-rs2
           persist-credentials: false
@@ -425,7 +425,7 @@ jobs:
       - name: Write secret-backed awiki.info config
         working-directory: test-awiki-me
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05a03410f405fc7760ce45ed8cd9ff533') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '457845db7e483ccdcdb5556decd209125db44ca9') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
           E2E_PHONE: ${{ secrets.AWIKI_E2E_OTP_PHONE }}
           E2E_OTP: ${{ secrets.AWIKI_E2E_OTP_CODE }}
           APP_HANDLE: ${{ secrets.AWIKI_E2E_APP_HANDLE }}
@@ -465,7 +465,7 @@ jobs:
           AWIKI_SQLITE3_SOURCE_DIR: /tmp/awiki-sqlite3
         run: |
           test "$(git -C ../awiki-cli-rs2 rev-parse HEAD)" = \
-            "${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05a03410f405fc7760ce45ed8cd9ff533') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}"
+            "${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '457845db7e483ccdcdb5556decd209125db44ca9') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}"
           dart run tests/e2e/runner.dart \
             --case "${{ github.event.inputs.e2e_case || 'full' }}" \
             --config .e2e/ci/remote.json \
@@ -489,7 +489,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 75
     env:
-      WINDOWS_CORE_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && github.head_ref == 'Feature/registration-account-first' && 'eccadfa05a03410f405fc7760ce45ed8cd9ff533') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+      WINDOWS_CORE_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '457845db7e483ccdcdb5556decd209125db44ca9') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
     steps:
       - name: Require exact Core source ref
         shell: bash
