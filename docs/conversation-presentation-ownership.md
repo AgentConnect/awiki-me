@@ -376,6 +376,12 @@ payload metadata、raw conversation ID、URL、title/body 都不能决定导航�
 
 activation、resume、event drain、ack 和 navigation 全程绑定相同
 `SessionEpoch(ownerDid, stableIdentityKey, generation)` 与 `StorageScopeId` tenant。
+
+Android 紧急提醒页的“查看消息”先停止当前匹配的声振，再通过系统 Keyguard 请求正常解锁；
+解锁成功后才发出 `notification_opened` 并启动 App，仍走上述 Core 消息解析与 session fence。
+等待解锁期间不能因声振已停止或原 60 秒截止而销毁打开入口。取消/失败时保留“查看消息”重试，
+不重启声振、不提前消费打开事件；Activity 重建保留原消息打开意图。通知栏 action 与超时后的
+普通通知点击使用同一流程。“关闭提醒”只停止提醒，不请求解锁或打开聊天。
 每个 await 前后都重新验证 fence；A→B、logout、tenant replacement 或 registration refresh
 期间的旧完成只能保留事件待后续真实触发重试，不能确认 A 的 delivery、选择 B 的会话或把
 A 的安装绑定到 B。

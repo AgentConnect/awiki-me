@@ -1,6 +1,7 @@
 package ai.awiki.awikime.push
 
 import android.app.Activity
+import android.app.KeyguardManager
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -11,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.Gravity
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -26,8 +28,13 @@ class TextNotifyAlertActivity : Activity() {
     private var token: String? = null
     private var payload: String? = null
     private lateinit var countdown: TextView
+    private var viewing = false
+    private var dismissPending = false
+    private var opened = false
+    private var openOnResume = false
     private val tick = object : Runnable {
         override fun run() {
+            if (viewing) return
             if (token == null || token != TextNotifyPresentation.activeToken) {
                 finish()
                 return
@@ -43,11 +50,16 @@ class TextNotifyAlertActivity : Activity() {
         super.onCreate(savedInstanceState)
         token = intent.getStringExtra("token")
         payload = intent.getStringExtra("payload")
-        if (intent.action == "view") { payload?.let { TextNotifyPresentation.open(this, it) }; finish(); return }
+        viewing = savedInstanceState?.getBoolean("viewing") == true || intent.action == "view"
+        openOnResume = viewing
         val content = runCatching { org.json.JSONObject(payload ?: "") }.getOrNull()
         if (content == null) { finish(); return }
-        if (token == null || token != TextNotifyPresentation.activeToken) { finish(); return }
+        if (!viewing && (token == null || token != TextNotifyPresentation.activeToken)) { finish(); return }
         if (Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(true); setTurnScreenOn(true) }
+        else {
+            @Suppress("DEPRECATION")
+            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
+        }
         actionBar?.hide()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
@@ -95,17 +107,90 @@ class TextNotifyAlertActivity : Activity() {
             insets
         }
         setContentView(scroll)
-        handler.post(tick)
+        if (!viewing) handler.post(tick)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (openOnResume) {
+            openOnResume = false
+            requestOpen()
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("viewing", viewing)
+        super.onSaveInstanceState(outState)
     }
 
     @Suppress("DEPRECATION")
     override fun onBackPressed() { stopAndExit(false) }
 
     private fun stopAndExit(view: Boolean) {
-        startService(Intent(this, TextNotifyAlertService::class.java)
-            .setAction("stop").putExtra("token", token))
-        if (view) payload?.let { TextNotifyPresentation.open(this, it) }
+        if (view) requestOpen()
+        else {
+            stopMatchingCue()
+            finish()
+        }
+    }
+
+    private fun stopMatchingCue() {
+        if (token != null && token == TextNotifyPresentation.activeToken) {
+            startService(Intent(this, TextNotifyAlertService::class.java)
+                .setAction("stop").putExtra("token", token))
+        }
+    }
+
+    private fun requestOpen() {
+        if (dismissPending || opened || isFinishing || isDestroyed) return
+        viewing = true
+        handler.removeCallbacks(tick)
+        stopMatchingCue()
+        val keyguard = getSystemService(KeyguardManager::class.java)
+        if (!keyguard.isKeyguardLocked) { openAfterUnlock(); return }
+        countdown.text = "请先解锁手机，再查看消息"
+        dismissPending = true
+        if (Build.VERSION.SDK_INT >= 26) {
+            keyguard.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissSucceeded() {
+                    dismissPending = false
+                    openAfterUnlock()
+                }
+                override fun onDismissCancelled() { unlockNotCompleted() }
+                override fun onDismissError() { unlockNotCompleted() }
+            })
+        } else {
+            // Android 7: let the system authenticate; never disable or bypass the lock.
+            @Suppress("DEPRECATION")
+            val unlock = keyguard.createConfirmDeviceCredentialIntent("查看 AWiki 消息", null)
+            if (unlock != null) startActivityForResult(unlock, 4101)
+            else unlockNotCompleted()
+        }
+    }
+
+    private fun unlockNotCompleted() {
+        dismissPending = false
+        if (!isFinishing && !isDestroyed) countdown.text = "尚未解锁，点击查看消息可重试"
+    }
+
+    private fun openAfterUnlock() {
+        if (opened || isFinishing || isDestroyed) return
+        if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) {
+            unlockNotCompleted()
+            return
+        }
+        opened = true
+        payload?.let { TextNotifyPresentation.open(this, it) }
         finish()
+    }
+
+    @Deprecated("Legacy Android credential result")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 4101) {
+            dismissPending = false
+            if (resultCode == RESULT_OK) openAfterUnlock() else unlockNotCompleted()
+        }
     }
 
     override fun onDestroy() { handler.removeCallbacks(tick); super.onDestroy() }
