@@ -38,16 +38,22 @@ void main() {
     expect(release['anp_identity_commit'], (lock['identity'] as Map)['commit']);
   });
 
-  test('release workers select published SDK dependencies', () {
+  test('release workers require explicit test source selection', () {
     final unix = File('scripts/package_unix_worker.sh').readAsStringSync();
     final windows = File('scripts/package_windows.ps1').readAsStringSync();
+    expect(unix, contains('DEPENDENCY_MODE="registry"'));
+    expect(unix, contains('NATIVE_REGISTRY=1'));
+    expect(unix, contains('test-source)'));
+    expect(unix, contains('singapore-test-sources.json'));
     expect(
       RegExp(
-        r'AWIKI_RELEASE_REGISTRY=1 scripts/flutter/build-sdk-native.sh',
+        r'AWIKI_RELEASE_REGISTRY="\$NATIVE_REGISTRY"',
       ).allMatches(unix).length,
       2,
     );
     expect(windows, contains(r'$env:AWIKI_RELEASE_REGISTRY = "1"'));
+    expect(windows, contains("[ValidateSet('registry', 'test-source')]"));
+    expect(windows, contains('singapore-test-sources.json'));
   });
 
   test('package dispatch separates the controller from source revisions', () {
@@ -131,12 +137,14 @@ void main() {
       authorizationScript,
       contains('package workflow file does not come from the default branch'),
     );
+    expect(authorizationScript, contains('test/singapore-refresh-20260923'));
+    expect(authorizationScript, contains('TEST_SOURCES'));
 
     const expectedPrivilegedJobCondition = r'''
 ${{
   github.event_name == 'workflow_dispatch' &&
-  github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-  endsWith(github.workflow_ref, format('@refs/heads/{0}', github.event.repository.default_branch)) &&
+  github.ref == format('refs/heads/{0}', inputs.test_sources && 'test/singapore-refresh-20260923' || github.event.repository.default_branch) &&
+  endsWith(github.workflow_ref, format('@refs/heads/{0}', inputs.test_sources && 'test/singapore-refresh-20260923' || github.event.repository.default_branch)) &&
   contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.actor) &&
   contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.triggering_actor)
 }}
