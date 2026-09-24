@@ -8,6 +8,7 @@ class AppUpdateCheckResult {
     this.usedCache = false,
     this.policyUnavailable = false,
     this.failureReason,
+    this.failureCode,
     this.cachedAt,
     this.versionUnsupported = false,
   });
@@ -18,6 +19,7 @@ class AppUpdateCheckResult {
   final bool usedCache;
   final bool policyUnavailable;
   final String? failureReason;
+  final String? failureCode;
   final DateTime? cachedAt;
   final bool versionUnsupported;
 

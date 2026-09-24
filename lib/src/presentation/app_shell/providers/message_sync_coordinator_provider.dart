@@ -250,7 +250,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     this.minInterval = const Duration(seconds: 2),
     this.failureBackoff = const Duration(seconds: 8),
     this.failureSurfaceDelay = const Duration(seconds: 30),
-    this.syncWatchdog = const Duration(seconds: 30),
+    this.syncWatchdog = const Duration(seconds: 90),
   }) : _sessionEpoch = ref.read(sessionProvider).activeEpoch,
        super(const MessageSyncCoordinatorState()) {
     _sessionSubscription = ref.listen<SessionState>(

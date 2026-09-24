@@ -2739,6 +2739,7 @@ cliHandle: legacy-cli
       final root = await Directory.systemTemp.createTemp(
         'awiki_desktop_cli_peer_file_runner_test_',
       );
+      _writeUserExclusions(root);
       addTearDown(() async {
         if (await root.exists()) {
           await root.delete(recursive: true);
@@ -2825,6 +2826,7 @@ cliPeer:
       final root = await Directory.systemTemp.createTemp(
         'awiki_desktop_smoke_runner_test_',
       );
+      _writeUserExclusions(root);
       addTearDown(() async {
         if (await root.exists()) {
           await root.delete(recursive: true);
@@ -2910,6 +2912,7 @@ cliPeer:
       final root = await Directory.systemTemp.createTemp(
         'awiki_multi_device_capability_runner_test_',
       );
+      _writeUserExclusions(root);
       addTearDown(() async {
         if (await root.exists()) {
           await root.delete(recursive: true);
@@ -4672,6 +4675,7 @@ void _writeLocalConfig(
   bool includePersonalAgent = true,
   String performanceBlock = '',
 }) {
+  _writeUserExclusions(root);
   final messageService = messageServiceUrl == null
       ? ''
       : '  messageServiceUrl: $messageServiceUrl\n';
@@ -4722,4 +4726,11 @@ cliPeer:
   binary: $cliBin
   sourceRef: "$cliSourceRef"
 ''');
+}
+
+void _writeUserExclusions(Directory root) {
+  const path = 'tests/e2e/user_test_exclusions.json';
+  File('${root.path}/$path')
+    ..createSync(recursive: true)
+    ..writeAsStringSync(File(path).readAsStringSync());
 }

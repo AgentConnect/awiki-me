@@ -140,7 +140,7 @@ Rust im-core
 | 用户显式打开的空会话 | Rust `im-core` conversation registry | identity flow 先 `resolve/open`，再 `ensureConversation(conversationId)` | Core list/snapshot/patch 返回 committed row；App 不保留 locally-started bridge，也不构造 fake summary |
 | recents read presentation waterline | `ConversationListController` presentation memory | refresh / fast-local / patch / repair / visible message watermark / read ack | 发布 recents 前统一投影：latest message watermark 只前进，read watermark 只前进；普通 snapshot/refresh 的瞬时 0 不能清掉更新消息，但 Core committed conversation reset/upsert/repair 是权威 read-state，可以把同消息或新消息的 sibling-device unread 清零；read watermark 覆盖的旧 unread 不能重新出现；可见状态只在严格 canonical conversation 内推进 |
 | Agent display / lifecycle projection | `awiki-me` application service | `AgentInventoryPort` / agent control projection | `ImCoreConversationService._applyAgentLifecycleProjection` |
-| group display name / avatar | `awiki-me` group application/provider | group summary refresh | Widget 按相同 canonical `conversationId` 组合；不得回写 `ConversationSummary` |
+| group display name / avatar | `awiki-me` group application/provider；Core committed conversation title 作回退 | group summary refresh、Core conversation projection | Widget 按相同 canonical `conversationId` 组合；Group provider 只提供 DID/Group ID 样式占位名时保留 Core 已提交的友好标题，不得回写 `ConversationSummary` |
 | 可见会话 read intent | `ChatThreadsController` 可见状态 + 单调串行 read-intent drain | `ChatPage` 只声明挂载/隐藏；当前可见 summary/timeline 更新、用户回到底部 | 可见且有未读时立即建立 intent；history/lifecycle 未就绪只延后 drain，不丢 intent。每个 canonical conversation 同时最多一个 `markConversationRead(AppConversationReadRef, watermark)`；更高 watermark 单调合并并只前进。以 Core `effectiveWatermark` 确认本地持久提交；`pendingRemoteAck` 表示 local-first 已成功 |
 
 ## 5. API 与 DTO 约束

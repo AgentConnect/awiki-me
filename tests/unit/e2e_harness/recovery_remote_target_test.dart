@@ -6,8 +6,8 @@ import '../../e2e/runner/manifest.dart';
 import '../../e2e/remote_target.dart';
 
 void main() {
-  test('registration fixture accepts only reviewed exact origins', () {
-    for (final domain in ['awiki.info', 'anpclaw.com']) {
+  test('registration fixture uses any configured exact HTTPS origin', () {
+    for (final domain in ['qa.example.org', 'stage.example.net']) {
       expect(
         () => validateRegistrationFixtureTarget(
           didDomain: domain,
@@ -17,15 +17,15 @@ void main() {
       );
     }
     for (final url in [
-      'http://anpclaw.com',
-      'https://awiki.info',
-      'https://anpclaw.com.evil.example',
-      'https://anpclaw.com:8443',
-      'https://anpclaw.com/path',
+      'http://qa.example.org',
+      'https://other.example.org',
+      'https://qa.example.org.evil.example',
+      'https://qa.example.org/path',
+      'https://qa.example.org/',
     ]) {
       expect(
         () => validateRegistrationFixtureTarget(
-          didDomain: 'anpclaw.com',
+          didDomain: 'qa.example.org',
           userServiceUrl: url,
         ),
         throwsFormatException,
@@ -33,8 +33,8 @@ void main() {
     }
     expect(
       () => validateRegistrationFixtureTarget(
-        didDomain: 'awiki.ai',
-        userServiceUrl: 'https://awiki.ai',
+        didDomain: 'localhost',
+        userServiceUrl: 'https://localhost',
       ),
       throwsFormatException,
     );
@@ -85,6 +85,7 @@ void main() {
     'handle-recovery-local-data',
     'multi-device-app-pair-recovery-retirement-ordinary-rejoin',
     'identity-deletion-recovery-guard',
+    'registration-account-first',
   ]) {
     test('$suite checks the configured secure WebSocket origin', () {
       final definition = DesktopE2eSuiteManifest.load(

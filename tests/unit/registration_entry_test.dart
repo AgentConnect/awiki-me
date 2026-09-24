@@ -2,6 +2,10 @@
 // ignore_for_file: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
 
 import 'dart:async';
+import 'dart:io';
+import 'package:awiki_me/src/core/app_error_classifier.dart';
+import 'package:awiki_me/src/core/app_transport_failure.dart';
+import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
 
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/presentation/onboarding/registration_entry_provider.dart';
@@ -63,6 +67,55 @@ void main() {
     controller = RegistrationEntryController(support);
   });
   tearDown(() => controller.dispose());
+  for (final entry in <Object, String>{
+    const AppStructuredError(
+      code: tlsHandshakeFailureCode,
+      cause: AppTransportDiagnostic(
+        code: tlsHandshakeFailureCode,
+        host: 'example.com',
+        appVersion: 'test',
+        caVersion: 'test',
+      ),
+    ): tlsHandshakeFailureCode,
+    const AppStructuredError(code: trustBundleFailureCode, cause: 'resource'):
+        trustBundleFailureCode,
+    TimeoutException('timeout'): 'check_timeout',
+    const SocketException('connection refused'): 'check_network',
+    const AwikiOnboardingUtilityError(rpcCode: -32601, message: 'unsupported'):
+        'check_unsupported',
+  }.entries) {
+    test(
+      'account failure ${entry.value} preserves input and permits retry',
+      () async {
+        support.responder = (_, __) async => throw entry.key;
+        await controller.checkAccount('fixture', 'example.com');
+        expect(controller.state.error, entry.value);
+        expect(controller.state.handle, 'fixture');
+        expect(controller.state.busy, isFalse);
+        if (entry.value == tlsHandshakeFailureCode) {
+          expect(controller.state.errorDetail, contains('host=example.com'));
+        }
+        support.responder = null;
+        await controller.checkAccount('fixture', 'example.com');
+        expect(controller.state.error, isNull);
+        expect(controller.state.errorDetail, isNull);
+        expect(controller.state.step, RegistrationEntryStep.verification);
+      },
+    );
+  }
+
+  test('late TLS failure cannot overwrite reset tenant state', () async {
+    final pending = Completer<RegistrationCheck>();
+    support.responder = (_, __) => pending.future;
+    final request = controller.checkAccount('fixture', 'example.com');
+    controller.reset();
+    pending.completeError(
+      const AppStructuredError(code: tlsHandshakeFailureCode, cause: 'TLS'),
+    );
+    await request;
+    expect(controller.state.error, isNull);
+    expect(controller.state.handle, isEmpty);
+  });
 
   test('three-character name requires invite before verification', () async {
     await controller.checkAccount(' ABC ', 'EXAMPLE.COM');

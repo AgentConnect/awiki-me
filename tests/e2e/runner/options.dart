@@ -69,6 +69,7 @@ class DesktopE2eOptions {
   static void printUsage() {
     stdout.writeln('''
 Run AWiki Me E2E. full aggregates every active audited case; messaging is the former 24-case flow.
+Checked-in user exclusions stay in full reports as user_excluded and are not executed.
 
 Usage:
   dart run tests/e2e/runner.dart --case smoke

@@ -296,6 +296,22 @@ ActiveSyncAccountBinding.ownerIdentityId
 
 新设备和已有设备的恢复语义不同：
 
+- Handle Recovery 已由服务端提交但本机仍在 `identity_switched` 时，App 从 Core
+  的精确 operation 上下文显示“继续恢复”，不重新申请短信验证码。只有 Core 验证
+  旧版重复 Handle 投影可安全收敛后才能退役旧活跃投影；App 不直接修改 Registry、
+  Vault 或 SQLite。若恢复创建 fresh owner，旧 owner 本地消息和附件保留但不自动
+  出现在新身份中，文案不得称本机没有旧数据或把本机登录完成称为历史附件已恢复。
+- 冷启动已完成 scope/Vault 校验、Core open 后，若枚举身份明确返回
+  `service_error / identity.local_registry_conflict`，仅延后本次身份枚举与 custody
+  预检，保留 Core 供登录页调用精确 Recovery inspect/resume。不得将该冲突变成
+  阻断整个 APP 的启动错误页，也不得将普通身份查询伪装为空列表或激活任一冲突身份。
+  Vault/open、其他枚举错误及逐身份 custody 校验失败仍阻断启动；实际身份修复仍由
+  Core 验证和完成，App 不修改权威索引。
+
+- 本次修复的跨仓源码联调由 `dependencies.source.json` 固定 Core PR #48 的完整提交；
+  主 CI 的 release/0910 wrapper 引用使用同一提交，其 Core 清单与 Cargo 锁再固定
+  实际 Rust SDK / ANP / Identity 来源。正式 SDK 发布和客户端打包仍遵循各自门禁。
+
 - 新 replica 使用 tail-only bootstrap，从服务端当前流尾开始，不导入加入前的普通消息。
 - 已有 replica 出现 retention gap、epoch mismatch 或长期离线时，由 Core 驱动 compact
   recovery；服务端按自己的时间同时限制为最近 48 小时且最多 500 条普通逻辑消息。

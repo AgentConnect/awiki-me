@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../core/app_error_classifier.dart';
+import '../../core/app_transport_failure.dart';
+import '../../data/services/awiki_onboarding_utility_client.dart';
 import '../../application/onboarding_support_service.dart';
 import '../../application/tenant/app_tenant.dart';
 
@@ -15,6 +18,7 @@ class RegistrationEntryState {
     this.inviteCode = '',
     this.busy = false,
     this.error,
+    this.errorDetail,
     this.existingAccountPath = false,
   });
 
@@ -25,6 +29,7 @@ class RegistrationEntryState {
   final String inviteCode;
   final bool busy;
   final String? error;
+  final String? errorDetail;
   final bool existingAccountPath;
 }
 
@@ -52,6 +57,7 @@ class RegistrationEntryController
     String? inviteCode,
     bool busy = false,
     String? error,
+    String? errorDetail,
   }) => RegistrationEntryState(
     step: step ?? state.step,
     check: check ?? state.check,
@@ -60,6 +66,7 @@ class RegistrationEntryController
     inviteCode: inviteCode ?? state.inviteCode,
     busy: busy,
     error: error,
+    errorDetail: errorDetail,
     existingAccountPath: state.existingAccountPath,
   );
 
@@ -87,9 +94,12 @@ class RegistrationEntryController
             ? result.reason ?? 'handle_unavailable'
             : null,
       );
-    } catch (_) {
+    } catch (error) {
       if (mounted && revision == _revision) {
-        state = _state(error: 'check_failed');
+        state = _state(
+          error: _checkFailureCode(error),
+          errorDetail: appTransportDiagnostic(error),
+        );
       }
     }
   }
@@ -119,9 +129,12 @@ class RegistrationEntryController
             : RegistrationEntryStep.invite,
         error: result.canVerify ? null : result.reason ?? 'handle_unavailable',
       );
-    } catch (_) {
+    } catch (error) {
       if (mounted && revision == _revision) {
-        state = _state(error: 'check_failed');
+        state = _state(
+          error: _checkFailureCode(error),
+          errorDetail: appTransportDiagnostic(error),
+        );
       }
     }
   }
@@ -208,9 +221,12 @@ class RegistrationEntryController
             : result.reason ?? 'handle_unavailable',
       );
       return canVerify;
-    } catch (_) {
+    } catch (error) {
       if (mounted && revision == _revision) {
-        state = _state(error: 'check_failed');
+        state = _state(
+          error: _checkFailureCode(error),
+          errorDetail: appTransportDiagnostic(error),
+        );
       }
       return false;
     }
@@ -227,3 +243,18 @@ final registrationEntryProvider =
         ref.watch(onboardingSupportServiceProvider),
       );
     });
+
+String _checkFailureCode(Object error) {
+  final code = structuredAppErrorCode(error);
+  if (code == tlsHandshakeFailureCode || code == trustBundleFailureCode) {
+    return code!;
+  }
+  if (error is AwikiOnboardingUtilityError && error.rpcCode == -32601) {
+    return 'check_unsupported';
+  }
+  return switch (classifyAppError(error)) {
+    AppErrorKind.timeout => 'check_timeout',
+    AppErrorKind.networkUnavailable => 'check_network',
+    _ => 'check_failed',
+  };
+}

@@ -1491,9 +1491,16 @@ the App does not bind the build to an obsolete container UUID. Relative traversa
 outside that directory is rejected; desktop absolute paths retain their meaning.
 Do not compile phone numbers, OTPs, invitation codes or fixture JSON into the App.
 
-### 注册开发分支的 source CI
+### 按需运行的 source CI
 
-仅 Feature/registration-account-first → release/0910 的 PR CI 自动选择 AWIKI_SOURCE_INTEGRATION=1，固定 Core consumer eccadfa05a03410f405fc7760ce45ed8cd9ff533；其 source manifest 固定 SDK 4023161ea76a39f80da67512345eafafb12b0e6a，使用配套提交锁。手动验证可选 sdk_dependencies=source/registry，默认 source；validation_only=true 保持禁止远端账号/OTP job。正式 package workflow 不变，开发不提前发布 SDK。
+用户于 2026-09-24 决定：提交、更新或合并 PR 不自动运行本仓 `ci.yml` 与
+`notify-source-ci.yml`。两者保留 `workflow_dispatch` 显式入口；本次改动仍保留
+`ci.yml` 原有夜间 schedule。手动运行需选择目标 ref 并提供精确 `cli_ref`，可选
+`sdk_dependencies=source/registry`（默认 source）。source 模式固定 Core consumer
+950487d61a7dee0ad5cb4910a86e73e5f91a8893；其 source manifest 保留已验收的 Core
+d3ad7075、ANP 4208d1ca、Identity 0b6369fe 和配套锁。
+`validation_only=true` 保持禁止远端账号/OTP job。未显式执行的 CI 不能记为通过；
+正式 package workflow 与发布门禁不变，开发不提前发布 SDK。
 
 Linux Core/CLI、原生 guard rebuild 和 Windows Rust host test/native build 复用隔离 source builder；读取 .artifacts/dependencies/source/target，不混入 registry 的 target。Linux 来源摘要覆盖模式、source manifest/lock 和构建脚本，切换输入使旧 provenance 失效。Windows 保留 PE x64/FRB 实际 DLL 校验。私有合同源读取仍使用现有最小权限 token，403 不以跳过测试代替。
 
@@ -1504,7 +1511,22 @@ Linux Core/CLI、原生 guard rebuild 和 Windows Rust host test/native build �
 
 独立的 `cross-repository-contracts` job 使用同一 coordinator 的 `--profile pr --component system`，保留原 PR profile 的全部 System contract/acp-contract 用例以及精确源码 pin。两个 job 没有 `needs` 依赖，也不使用 `continue-on-error`；Web 403 仅使跨仓 job 失败，App 验证继续并单独报告。完整 CI 通过仍要求两边通过，不能用 App 通过替代跨仓契约通过。源码集成模式与正式发布边界不变。
 
-源码模式的自动选择和临时 Core pin 同时限定 base/head，其他功能 PR 使用仓库变量与 registry 默认。workflow_dispatch 仍可显式选 source，需提供精确 cli_ref。push 触发器目前仅 main；schedule 使用 registry 默认。合入 release/0910 不会将临时 source pin 扩展到该发布线的其他 PR。
+源码模式由手动 `sdk_dependencies=source` 显式选择并提供精确 `cli_ref`；schedule
+使用原 registry 默认。`pull_request` 与 `push` 触发器已移除。
+
+跨仓契约 job 按实际需求使用 Python、Rust、Node，不安装 Flutter。固定 System Test
+coordinator a191665c8173dbcb6434d9484fa533f5de3321a4 将 Flutter 工具链限制在 native
+Flutter 产物；固定 Core consumer 通过原隔离 source/registry 入口编译 ACP 测试。
+对应依赖 PR 为 awiki-system-test #39、awiki-cli-rs2 #49，先审查合入依赖，再合入消费者。
+DSH 合同源码固定 6c9cd866b217641ab78fc34cb31db1ce64754c25，包含已合入 Release 的
+Device Join driver 等待 provider 初始化后才报告 ready 的修复；保留原初始化顺序断言。
+
+缓存仅保存 Cargo 下载/编译目录及 coordinator 的不可变产物目录，不保存测试现场或账号。
+缓存 key 包含平台、精确 Core/coordinator 提交、实际 Python/Rust 工具链及依赖来源模式；
+固定提交同时锁住 source manifest/lock。CLI 导入仍核验来源指纹与 SHA-256，缓存命中
+不跳过测试。冷机只在独立 prepare 步骤允许 CLI 下载锁定依赖，随后执行原 PR 范围。
+ACP 保持既有 owner 编译及隔离执行，不把该流程描述为全量 release 的零构建 execute。
+缓存缺失可重建，损坏制品仍失败；各 job 保持并行，不为共享产物增加串行依赖。
 
 Invitation follow-up coverage: `registration_entry_widget_test.dart` checks mobile
 and desktop invitation rejection before contact entry, then bound-invitation rejection
@@ -1518,15 +1540,24 @@ runner contract tests compare exact active catalog IDs rather than stale totals.
 
 
 The `registration-account-first` acceptance is included in the remote `full`
-gate and requires the exact `awiki.info` fixture. Missing configuration fails
-closed; no local-only success substitutes for this remote case. Never convert
-missing fixtures to skips.
+gate. Its disposable fixture must use the exact DID domain and HTTPS origin in
+the explicit runner configuration; neither the suite manifest nor App tests
+fix a domain. Missing configuration fails closed; no local-only success
+substitutes for this remote case. Never convert missing fixtures to skips.
 
 Registration discovery failure does not authorize OTP, email activation or final
 registration through the existing-account shortcut. A successful existing decision
 is required for that path; purpose-bound Recovery remains directly accessible
 without starting OTP on navigation, including existing local recovery continuation.
 
-### 新加坡增量测试目标（2026-09-24）
+### Windows HTTPS trust regression
 
-`registration-account-first` 可使用明确配置的 `https://anpclaw.com` 与 `anpclaw.com`。fixture 的域名／origin 必须与 runner 配置完全相同；邀请码由新加坡同机受管 fixture 创建，按精确账号、Handle、DID、邀请范围清理，不能使用其他环境账号。目标校验测试：`tests/unit/e2e_harness/recovery_remote_target_test.dart`。
+The Windows CI native job runs the process-local TLS fixture suite and the
+account/update error-path tests. Use [Windows HTTPS trust](windows-https-trust.md)
+for the fixed public CA asset, maintenance, field-probe and explicit source
+verification installer procedure. These checks do not mutate system certificate
+stores or substitute for manual account login.
+
+### 注册 E2E 远程目标（2026-09-24）
+
+`registration-account-first` 使用 runner 显式配置的 DID 域名和 HTTPS origin；fixture 必须与该配置精确匹配。目标域名不写入测试清单。邀请码由所选环境的受管 fixture 创建，按精确账号、Handle、DID、邀请范围清理，不能使用其他环境账号。目标校验测试：`tests/unit/e2e_harness/recovery_remote_target_test.dart`。

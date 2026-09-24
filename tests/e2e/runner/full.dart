@@ -16,6 +16,8 @@ Future<void> runDesktopFull({
   final env = environment ?? Platform.environment;
   final manifest = DesktopE2eSuiteManifest.load(root);
   final suites = manifest.fullSuites();
+  final userExclusions = DesktopE2eUserExclusions.load(root);
+  userExclusions.validateAgainst(manifest);
   manifest
       .definitionFor(DesktopE2eCase.full)
       .validateCodeCaseIds(DesktopE2eCase.full.caseIds);
@@ -80,6 +82,7 @@ Future<void> runDesktopFull({
           .where((r) => r['status'] == 'passed')
           .map((r) => r['caseId'])
           .toList(),
+      'userExcludedSuites': userExclusions.appSuites.toList()..sort(),
       'children': children,
       'catalogNotExecutable': <Map<String, String>>[
         for (final item in catalog.cases)
@@ -119,6 +122,19 @@ Future<void> runDesktopFull({
     };
     children.add(child);
     commands.logLine('full [${index + 1}/${suites.length}] ${suite.name}');
+    if (userExclusions.excludes(suite.name)) {
+      child['status'] = 'user_excluded';
+      child['reportPath'] = '';
+      child['cleanupStatus'] = 'not_needed';
+      child['reasonCode'] = 'user_excluded';
+      child['reason'] = userExclusions.reason;
+      for (final id in suite.caseIds) {
+        rows[id]!['status'] = 'user_excluded';
+        rows[id]!['reasonCode'] = 'user_excluded';
+      }
+      writeReport('running');
+      continue;
+    }
     if (!suite.supportedPlatforms.contains(platform.name)) {
       child['status'] = 'not_applicable';
       for (final id in suite.caseIds) {

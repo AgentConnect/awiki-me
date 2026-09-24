@@ -1,0 +1,2 @@
+# Preserve the reviewed upstream CA bytes on Windows (compiled SHA-256).
+assets/security/*.pem -text

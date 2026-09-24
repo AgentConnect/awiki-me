@@ -2134,6 +2134,7 @@ void main() {
   });
 
   for (final continuityCase in <String, String>{
+    'identity.local_registry_conflict': 'registrationLocalStateNeedsAttention',
     'handle_recovery.local_state_conflict':
         'registrationLocalStateNeedsAttention',
     'handle_recovery.transition_missing': 'registrationContinuityChanged',
@@ -2176,6 +2177,12 @@ void main() {
         container.read(uiFeedbackProvider)?.message.id,
         continuityCase.value,
       );
+      if (continuityCase.value == 'registrationLocalStateNeedsAttention') {
+        expect(
+          find.byKey(const Key('registration-local-state-guidance')),
+          findsOneWidget,
+        );
+      }
       expect(gateway.onboardingPhoneRegistrationCalls, 1);
     });
   }

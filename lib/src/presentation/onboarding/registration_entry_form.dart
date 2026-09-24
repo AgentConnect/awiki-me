@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
+import '../../core/app_transport_failure.dart';
+import '../shared/awiki_me_feedback.dart';
 import '../../domain/entities/identity_method.dart';
 import '../../l10n/l10n.dart';
 import '../shared/awiki_me_design.dart';
@@ -43,6 +45,11 @@ class RegistrationEntryForm extends ConsumerWidget {
       'invite_length_six' => l10n.onboardingInviteLengthSix,
       'invite_length_max_64' => l10n.onboardingInviteLengthMax64,
       'registration_closed' => l10n.onboardingRegistrationClosed,
+      tlsHandshakeFailureCode => l10n.secureConnectionFailed,
+      trustBundleFailureCode => l10n.trustResourcesInvalid,
+      'check_timeout' => l10n.requestTimeoutRetry,
+      'check_network' => l10n.networkUnavailableRetry,
+      'check_unsupported' => l10n.onboardingAccountCheckUnsupported,
       'check_failed' => l10n.onboardingAccountCheckFailed,
       _ => l10n.onboardingAccountUnavailable,
     };
@@ -115,6 +122,27 @@ class RegistrationEntryForm extends ConsumerWidget {
           handleController: handleController,
           phoneController: phoneController,
         ),
+        if (const <String>{
+          'identity.local_registry_conflict',
+          'handle_recovery.local_state_conflict',
+        }.contains(onboarding.phoneRegistrationFailureCode))
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              l10n.registrationLocalStateNeedsAttention,
+              key: const Key('registration-local-state-guidance'),
+              style: const TextStyle(color: CupertinoColors.systemRed),
+            ),
+          ),
+        if (error != null && state.errorDetail != null)
+          AppSecondaryButton(
+            label: l10n.commonDetails,
+            onPressed: () => showAwikiMeErrorDetailDialog(
+              context,
+              message: error,
+              detail: state.errorDetail!,
+            ),
+          ),
         if (state.busy) const CupertinoActivityIndicator(),
         if (error != null)
           Padding(

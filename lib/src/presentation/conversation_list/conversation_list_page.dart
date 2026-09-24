@@ -9,6 +9,7 @@ import 'package:awiki_me/l10n/app_localizations.dart';
 import '../../app/app_router.dart';
 import '../../app/ui_feedback.dart';
 import '../../core/date_time_formatter.dart';
+import '../../core/group_display_name.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_system_event.dart';
@@ -1438,7 +1439,7 @@ String _conversationPresentationTitle(
   if (conversation.isGroup) {
     final group = _presentationGroup(ref, conversation);
     final groupName = group?.displayName.trim() ?? '';
-    if (groupName.isNotEmpty) {
+    if (!GroupDisplayName.isIdLike(groupName, group?.groupId)) {
       return groupName;
     }
   }

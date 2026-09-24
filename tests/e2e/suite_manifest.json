@@ -1396,14 +1396,9 @@
       "estimatedMinutes": 5,
       "timeoutMinutes": 8,
       "cleanupPolicy": "exact_scope_remote_database_cleanup",
-      "allowedHosts": [
-        "awiki.info",
-        "anpclaw.com"
-      ],
-      "allowedDidDomains": [
-        "awiki.info",
-        "anpclaw.com"
-      ],
+      "remoteTargetPolicy": "configured_same_origin",
+      "allowedHosts": [],
+      "allowedDidDomains": [],
       "resourceCategories": [
         "isolated_app_state",
         "dedicated_test_identity",

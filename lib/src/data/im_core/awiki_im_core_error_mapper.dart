@@ -64,6 +64,7 @@ class AwikiImCoreErrorMapper {
     final serviceCode = error.serviceCode?.trim();
     final code =
         const <String>{
+          'identity.local_registry_conflict',
           'handle_recovery.local_state_conflict',
           'handle_recovery.transition_missing',
           'handle_recovery.join_terminal_wait',

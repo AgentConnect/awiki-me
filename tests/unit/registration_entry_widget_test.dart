@@ -5,6 +5,8 @@ import 'package:awiki_me/src/presentation/onboarding/registration_entry_provider
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:awiki_me/src/core/app_error_classifier.dart';
+import 'package:awiki_me/src/core/app_transport_failure.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +21,7 @@ class InviteSupport extends FakeOnboardingSupportService {
   bool? lastCheckInvite;
   String decision = 'register';
   bool fail = false;
+  Object? failure;
   String? boundPhone;
 
   @override
@@ -31,6 +34,7 @@ class InviteSupport extends FakeOnboardingSupportService {
     bool checkInvite = false,
   }) async {
     checks++;
+    if (failure != null) throw failure!;
     if (fail) throw StateError('network');
     lastInvite = inviteCode;
     lastEmail = email;
@@ -71,6 +75,54 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  testWidgets('TLS guidance retains form input and opens redacted details', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final gateway = FakeAwikiGateway();
+    final support = InviteSupport(gateway)
+      ..failure = const AppStructuredError(
+        code: tlsHandshakeFailureCode,
+        cause: AppTransportDiagnostic(
+          code: tlsHandshakeFailureCode,
+          host: 'example.com',
+          appVersion: 'test',
+          caVersion: 'test',
+        ),
+      );
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        gateway: gateway,
+        providerOverrides: [
+          onboardingSupportServiceProvider.overrideWithValue(support),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(field('e2e-handle-input'), 'fixture');
+    await tester.enterText(field('e2e-phone-input'), '13800138000');
+    await tapVisible(tester, find.text('发送验证码'));
+    expect(find.text('无法建立安全连接。请检查系统日期和时间，或联系支持人员。'), findsOneWidget);
+    expect(
+      tester
+          .widget<CupertinoTextField>(field('e2e-handle-input'))
+          .controller!
+          .text,
+      'fixture',
+    );
+    expect(gateway.sendOtpCalls, 0);
+    await tapVisible(tester, find.text('详情'));
+    expect(find.textContaining('host=example.com'), findsOneWidget);
+    expect(find.text('复制详情'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('OTP sends with blank invite', (tester) async {
     tester.view.physicalSize = const Size(390, 1000);
     tester.view.devicePixelRatio = 1;

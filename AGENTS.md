@@ -110,6 +110,11 @@ assertion that genuinely depends on macOS operating-system behavior, such as
 codesigning, Keychain, or LocalAuthentication, and never claim that Linux
 simulates or attests those macOS-specific behaviors.
 
+用户于 2026-09-24 确认 `did-method-web` 持续默认跳过；机器配置为
+`tests/e2e/user_test_exclusions.json`。`full` 保留其 case ID 并标记
+`user_excluded`，不准备或运行该 suite；直接定向选择在设置环境和执行前拒绝。
+只有用户明确恢复后才修改该配置，历史失败仍保留。
+
 The suite platform schema also preserves `windows`; the existing Windows x64
 build/native-smoke CI remains authoritative for that lane. The Mac/Linux E2E
 runner must not silently treat Windows as an unknown platform or delete that
