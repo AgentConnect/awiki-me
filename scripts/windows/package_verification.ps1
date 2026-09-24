@@ -1,7 +1,7 @@
 # Explicit source-build verification packaging; never publishes a release.
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory=$true)][ValidatePattern('^\d+\.\d+\.\d+[-.0-9A-Za-z]*$')][string]$Version,
+  [Parameter(Mandatory=$true)][string]$Version,
   [Parameter(Mandatory=$true)][int]$BuildNumber,
   [Parameter(Mandatory=$true)][ValidatePattern('^[0-9a-f]{40}$')][string]$CoreRef
 )
@@ -9,12 +9,16 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if ($env:AWIKI_SOURCE_INTEGRATION -ne '1' -or $env:AWIKI_RELEASE_REGISTRY -eq '1') { throw 'Explicit source integration required' }
 $RootDir = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+& dart (Join-Path $RootDir 'tool/validate_windows_verification_version.dart') $Version $BuildNumber
+if ($LASTEXITCODE -ne 0) { throw 'Invalid verification package version' }
 $CoreDir = (Resolve-Path (Join-Path $RootDir '../awiki-cli-rs2')).Path
 $AppRef = (git -C $RootDir rev-parse HEAD).Trim()
 if ((git -C $CoreDir rev-parse HEAD).Trim() -ne $CoreRef) { throw 'Core source mismatch' }
 $manifest = Get-Content (Join-Path $CoreDir 'dependencies.source.json') -Raw | ConvertFrom-Json
 $AnpRef = $manifest.dependencies.anp.commit
 $ReleaseDir = Join-Path $RootDir 'build/windows/x64/runner/Release'
+$actualVersion = (Get-Item (Join-Path $ReleaseDir 'AWikiMe.exe')).VersionInfo.ProductVersion
+if ($actualVersion -cne "$Version+$BuildNumber") { throw 'Built App version differs from installer version' }
 $OutputDir = Join-Path $RootDir 'build/windows-verification'
 New-Item -ItemType Directory -Force $OutputDir | Out-Null
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
@@ -87,8 +91,8 @@ function Write-RuntimeManifest(
 Write-RuntimeManifest $ReleaseDir $Version (Join-Path $OutputDir $RuntimeManifestName)
 $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
 & $compiler "/DMyAppSourceDir=$ReleaseDir" "/DMySetupIcon=$RootDir/windows/runner/resources/app_icon.ico" `
-  "/DMyAppVersion=$Version" "/DMyVersionInfoVersion=$(($Version -split '-')[0]).$BuildNumber" `
-  "/DMyBuildNumber=$BuildNumber" "/DMyOutputDir=$OutputDir" "/DMyOutputBaseFilename=AWikiMe-$Version-windows-x64-test" `
+  "/DMyAppVersion=$Version" "/DMyVersionInfoVersion=$Version.$BuildNumber" `
+  "/DMyBuildNumber=$BuildNumber" "/DMyOutputDir=$OutputDir" "/DMyOutputBaseFilename=AWikiMe-$Version-$BuildNumber-windows-x64-test" `
   (Join-Path $RootDir 'installer/windows/awiki-me.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
 Copy-Item (Join-Path $CoreDir 'dependencies.source.json') (Join-Path $OutputDir 'core-dependencies.source.json')

@@ -68,6 +68,18 @@ and uploads private Actions artifacts for review. The verification tenant fixtur
 selects Singapore. Formal `package-app.yml` / `package_windows.ps1` retain their
 registry requirements. No download pointer or server version policy is changed.
 
+Use numeric package metadata, for example `0.1.34` and build `45`. Core's
+client-version contract does not accept a prerelease suffix such as `-test.1`;
+that suffix causes `invalid_input` during App bootstrap, before login. The test
+marker belongs in the installer filename. CI and the packager validate canonical
+numeric metadata and Windows component bounds before packaging, and the packager
+requires the executable's ProductVersion to match the installer metadata.
+The native bootstrap test receives the actual Release executable version through
+a test-only PackageInfo seam (Flutter test has no build-name/build-number flags),
+then opens/reopens the real Core with isolated local state. It also reproduces the
+rejected prerelease version. The process/single-instance smoke alone does not
+prove successful App bootstrap: the startup error screen keeps a process alive.
+
 The separately built `windows_https_probe.dart` uses the production factory and
 adapters, process-memory update storage, synthetic account input and public
 read-only endpoints. It records default trust before/after, account-check and
