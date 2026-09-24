@@ -1540,9 +1540,10 @@ runner contract tests compare exact active catalog IDs rather than stale totals.
 
 
 The `registration-account-first` acceptance is included in the remote `full`
-gate and requires the exact `awiki.info` fixture. Missing configuration fails
-closed; no local-only success substitutes for this remote case. Never convert
-missing fixtures to skips.
+gate. Its disposable fixture must use the exact DID domain and HTTPS origin in
+the explicit runner configuration; neither the suite manifest nor App tests
+fix a domain. Missing configuration fails closed; no local-only success
+substitutes for this remote case. Never convert missing fixtures to skips.
 
 Registration discovery failure does not authorize OTP, email activation or final
 registration through the existing-account shortcut. A successful existing decision
@@ -1556,3 +1557,7 @@ account/update error-path tests. Use [Windows HTTPS trust](windows-https-trust.m
 for the fixed public CA asset, maintenance, field-probe and explicit source
 verification installer procedure. These checks do not mutate system certificate
 stores or substitute for manual account login.
+
+### 注册 E2E 远程目标（2026-09-24）
+
+`registration-account-first` 使用 runner 显式配置的 DID 域名和 HTTPS origin；fixture 必须与该配置精确匹配。目标域名不写入测试清单。邀请码由所选环境的受管 fixture 创建，按精确账号、Handle、DID、邀请范围清理，不能使用其他环境账号。目标校验测试：`tests/unit/e2e_harness/recovery_remote_target_test.dart`。

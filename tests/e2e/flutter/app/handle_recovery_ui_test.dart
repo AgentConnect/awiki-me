@@ -13,6 +13,7 @@
 //        while the tested onboarding or Settings Recovery is UI-driven.
 
 import 'dart:async';
+import '../../delete_isolated_directory.dart';
 
 import '../support/enter_existing_account.dart';
 import 'dart:convert';
@@ -8481,25 +8482,8 @@ void _requireFreshRoot(String path) {
   }
 }
 
-Future<void> _deleteDirectory(String path) async {
-  final directory = Directory(path);
-  for (var attempt = 0; attempt < 10; attempt += 1) {
-    if (!await directory.exists()) return;
-    try {
-      await directory.delete(recursive: true);
-      return;
-    } on FileSystemException catch (error) {
-      // Core's SQLite/WAL files can finish closing while the isolated App root
-      // is being removed. Retry only a transient non-empty directory; keep any
-      // persistent writer or different filesystem error visible to the test.
-      if (!const <int>{39, 66}.contains(error.osError?.errorCode) ||
-          attempt == 9) {
-        rethrow;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 150));
-    }
-  }
-}
+Future<void> _deleteDirectory(String path) =>
+    deleteIsolatedDirectory(Directory(path));
 
 Future<void> _pumpUntil(
   WidgetTester tester,

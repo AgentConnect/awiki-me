@@ -55,7 +55,9 @@ void main() {
       final registration = manifest.definitions['registration-account-first']!;
       expect(registration.catalogStatus, 'active');
       expect(registration.requiredFor, ['release']);
-      expect(registration.allowedHosts, ['awiki.info']);
+      expect(registration.remoteTargetPolicy, 'configured_same_origin');
+      expect(registration.allowedHosts, isEmpty);
+      expect(registration.allowedDidDomains, isEmpty);
       expect(registration.caseIds, ['REGISTRATION-ACCOUNT-FIRST-E2E-001']);
       manifest.definitions['full']!.includes.add(registration.name);
       expect(manifest.fullSuites, throwsA(isA<E2eFailure>()));

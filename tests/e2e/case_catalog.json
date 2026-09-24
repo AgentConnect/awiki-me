@@ -6163,17 +6163,17 @@
       "caseId": "REGISTRATION-ACCOUNT-FIRST-E2E-001",
       "feature": "Native account-first invited registration and existing short-account reentry",
       "layer": "remote_product_ui_security",
-      "preconditions": "Reviewed awiki.info test tenant, protected preset phone/OTP, exact new three- and four-character invitation fixtures in its same-host MySQL database, native Core artifact and isolated App roots. Email delivery is outside this case.",
-      "action": "Enter three- and four-character Handles on awiki.info, require invitation, send scoped preset OTP, register through native Core, then reopen a fresh scope and complete notification-driven member Join without invitation. Finally verify each existing account again and complete risk-confirmed Recovery from a third fresh scope.",
+      "preconditions": "Explicitly configured HTTPS remote tenant and matching disposable fixture, protected preset phone/OTP, exact new three- and four-character invitation fixtures in its same-host MySQL database, native Core artifact and isolated App roots. Email delivery is outside this case.",
+      "action": "Enter three- and four-character Handles on the configured remote tenant, require invitation, send scoped preset OTP, register through native Core, then reopen a fresh scope and complete notification-driven member Join without invitation. Finally verify each existing account again and complete risk-confirmed Recovery from a third fresh scope.",
       "exactOracles": [
         "Account-first UI requires invitation before contact verification; the real scoped OTP and Core registration complete.",
         "Each three- and four-character account enters from a new isolated scope without invitation, shows Join/Recovery choices and completes notification-driven member Join into its original account.",
         "Each short account completes operation-bound OTP Recovery, replaces the previous DID, activates the recovered account, and has an active management-ready admin device."
       ],
       "negativeChecks": [
-        "Only the reviewed awiki.info test tenant and exact owned invitation/account selectors are used; no fake registration port or shared App state is used."
+        "The fixture domain and HTTPS origin match the explicitly configured tenant, with exact owned invitation/account selectors; no fake registration port or shared App state is used."
       ],
-      "environment": "awiki_info_remote",
+      "environment": "configured_remote",
       "cleanupPolicy": "exact_scope_remote_database_cleanup",
       "requiredFor": [
         "release"

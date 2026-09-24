@@ -6,6 +6,39 @@ import '../../e2e/runner/manifest.dart';
 import '../../e2e/remote_target.dart';
 
 void main() {
+  test('registration fixture uses any configured exact HTTPS origin', () {
+    for (final domain in ['qa.example.org', 'stage.example.net']) {
+      expect(
+        () => validateRegistrationFixtureTarget(
+          didDomain: domain,
+          userServiceUrl: 'https://$domain',
+        ),
+        returnsNormally,
+      );
+    }
+    for (final url in [
+      'http://qa.example.org',
+      'https://other.example.org',
+      'https://qa.example.org.evil.example',
+      'https://qa.example.org/path',
+      'https://qa.example.org/',
+    ]) {
+      expect(
+        () => validateRegistrationFixtureTarget(
+          didDomain: 'qa.example.org',
+          userServiceUrl: url,
+        ),
+        throwsFormatException,
+      );
+    }
+    expect(
+      () => validateRegistrationFixtureTarget(
+        didDomain: 'localhost',
+        userServiceUrl: 'https://localhost',
+      ),
+      throwsFormatException,
+    );
+  });
   test('configured target preserves HTTPS, exact domain and origin guards', () {
     for (final url in <String>[
       'http://qa.example.org',
@@ -52,6 +85,7 @@ void main() {
     'handle-recovery-local-data',
     'multi-device-app-pair-recovery-retirement-ordinary-rejoin',
     'identity-deletion-recovery-guard',
+    'registration-account-first',
   ]) {
     test('$suite checks the configured secure WebSocket origin', () {
       final definition = DesktopE2eSuiteManifest.load(
