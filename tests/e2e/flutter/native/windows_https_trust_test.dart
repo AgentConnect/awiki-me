@@ -38,7 +38,8 @@ void main() {
       );
       addTearDown(() => server.close(force: true));
 
-      // Represents a system/private root. Adding the public bundle must retain it.
+      // Explicit private-root test seam: adding the public bundle retains it.
+      // This does not test the Windows OS certificate store.
       final roots = SecurityContext();
       if (scenario != 'unknown-ca') {
         roots.setTrustedCertificates('$fixtures/ca.pem');
