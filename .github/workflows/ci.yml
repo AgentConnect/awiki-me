@@ -689,6 +689,13 @@ jobs:
           flutter build windows --release --no-pub --target tests/e2e/flutter/native/windows_https_probe.dart --dart-define=AWIKI_APP_SOURCE_REF=${{ github.sha }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Remove installer-only manifests from the separate field probe
+        if: github.event_name == 'workflow_dispatch' && inputs.verification_version != ''
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: |
+          Remove-Item build/windows/x64/runner/Release/awiki-runtime-manifest.json, build/windows/x64/runner/Release/awiki-runtime-files.txt -ErrorAction SilentlyContinue
+
       - name: Upload HTTPS field probe
         if: github.event_name == 'workflow_dispatch' && inputs.verification_version != ''
         uses: actions/upload-artifact@v7
