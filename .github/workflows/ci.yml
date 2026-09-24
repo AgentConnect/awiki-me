@@ -287,7 +287,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/dsh-awiki
-          ref: f4b181f22c58bcc1a76f8099882ddc5191823eab
+          # Includes the reviewed await-before-ready Device Join driver fix.
+          ref: 6c9cd866b217641ab78fc34cb31db1ce64754c25
           path: dsh-awiki
           persist-credentials: false
 

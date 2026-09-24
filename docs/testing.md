@@ -1510,6 +1510,8 @@ Linux Core/CLI、原生 guard rebuild 和 Windows Rust host test/native build �
 coordinator a191665c8173dbcb6434d9484fa533f5de3321a4 将 Flutter 工具链限制在 native
 Flutter 产物；固定 Core consumer 通过原隔离 source/registry 入口编译 ACP 测试。
 对应依赖 PR 为 awiki-system-test #39、awiki-cli-rs2 #49，先审查合入依赖，再合入消费者。
+DSH 合同源码固定 6c9cd866b217641ab78fc34cb31db1ce64754c25，包含已合入 Release 的
+Device Join driver 等待 provider 初始化后才报告 ready 的修复；保留原初始化顺序断言。
 
 缓存仅保存 Cargo 下载/编译目录及 coordinator 的不可变产物目录，不保存测试现场或账号。
 缓存 key 包含平台、精确 Core/coordinator 提交、实际 Python/Rust 工具链及依赖来源模式；
