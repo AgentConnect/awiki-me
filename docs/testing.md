@@ -14,6 +14,13 @@ Root files under `integration_test/` are Flutter-tooling shims. Each shim import
 the real implementation under `tests/e2e/flutter/`. Do not add durable test logic
 to root shims.
 
+## CI workflow triggers
+
+By the user's 2026-09-24 decision, creating, updating, or merging a PR does not
+automatically start `ci.yml`. Run it through `workflow_dispatch` only when the
+user explicitly requests it. The existing nightly schedule remains enabled.
+Checks that have not run are not passing evidence; release gates remain separate.
+
 ## Choosing The Right Test
 
 Use the smallest deterministic test that answers the question:
