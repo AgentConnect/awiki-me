@@ -1,6 +1,7 @@
 import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../core/app_error_classifier.dart';
+import '../core/app_transport_failure.dart';
 
 class AppMessage {
   const AppMessage._(this.id, {this.path, this.value, this.detail});
@@ -52,6 +53,12 @@ class AppMessage {
 
   factory AppMessage.updatePolicyUnavailable() =>
       const AppMessage._('updatePolicyUnavailable');
+
+  factory AppMessage.secureConnectionFailed() =>
+      const AppMessage._('secureConnectionFailed');
+
+  factory AppMessage.trustResourcesInvalid() =>
+      const AppMessage._('trustResourcesInvalid');
 
   factory AppMessage.updateCheckFailed() =>
       const AppMessage._('updateCheckFailed');
@@ -271,6 +278,10 @@ class AppMessage {
 
   factory AppMessage.fromError(Object error) {
     switch (structuredAppErrorCode(error)) {
+      case tlsHandshakeFailureCode:
+        return AppMessage.secureConnectionFailed();
+      case trustBundleFailureCode:
+        return AppMessage.trustResourcesInvalid();
       case 'identity.registration_verification_invalid':
         return AppMessage.registrationVerificationInvalid();
       case 'identity.registration_verification_unavailable':
@@ -470,6 +481,10 @@ class AppMessage {
         return l10n.updateAlreadyLatest;
       case 'updatePolicyUnavailable':
         return l10n.updatePolicyUnavailable;
+      case 'secureConnectionFailed':
+        return l10n.secureConnectionFailed;
+      case 'trustResourcesInvalid':
+        return l10n.trustResourcesInvalid;
       case 'updateCheckFailed':
         return l10n.updateCheckFailed;
       case 'updateOpenReleaseNotesFailed':
@@ -647,6 +662,10 @@ class AppMessage {
         return 'The request timed out. Please check your network and try again.';
       case 'daemonUpgradeStarted':
         return 'Daemon upgrade started.';
+      case 'secureConnectionFailed':
+        return 'Unable to establish a secure connection. Check your system date and time, or contact support.';
+      case 'trustResourcesInvalid':
+        return 'The app’s secure connection resources are missing or damaged. Update or reinstall the app.';
       case 'networkUnavailableRetry':
         return 'Network connection is temporarily unavailable. Please check your network and try again.';
       case 'operationFailedRetry':

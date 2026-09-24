@@ -7119,6 +7119,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'返回处理其他恢复'**
   String get handleRecoveryOtherPending;
+
+  /// No description provided for @secureConnectionFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法建立安全连接。请检查系统日期和时间，或联系支持人员。'**
+  String get secureConnectionFailed;
+
+  /// No description provided for @trustResourcesInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'应用的安全连接资源缺失或损坏。请更新或重新安装应用。'**
+  String get trustResourcesInvalid;
+
+  /// No description provided for @onboardingAccountCheckUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前服务器暂不支持账号检查。已有账号可继续登录。'**
+  String get onboardingAccountCheckUnsupported;
 }
 
 class _AppLocalizationsDelegate

@@ -4074,4 +4074,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryOtherPending => 'Back to other recoveries';
+
+  @override
+  String get secureConnectionFailed =>
+      'Unable to establish a secure connection. Check your system date and time, or contact support.';
+
+  @override
+  String get trustResourcesInvalid =>
+      'The app’s secure connection resources are missing or damaged. Update or reinstall the app.';
+
+  @override
+  String get onboardingAccountCheckUnsupported =>
+      'This server does not support account checks yet. Existing accounts can continue to sign in.';
 }

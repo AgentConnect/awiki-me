@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'app_http_client.dart';
+
 const String awikiClientVersionHeaderName = 'X-AWiki-Client-Version';
 
 class AwikiOnboardingUtilityError implements Exception {
@@ -35,7 +37,7 @@ class AwikiOnboardingUtilityHttpClient {
     http.Client? httpClient,
     this.timeout = const Duration(seconds: 20),
     this.clientVersionHeader,
-  }) : _httpClient = httpClient ?? http.Client(),
+  }) : _httpClient = httpClient ?? createAppHttpClient(),
        _ownsHttpClient = httpClient == null,
        _baseUri = Uri.parse(baseUrl);
 

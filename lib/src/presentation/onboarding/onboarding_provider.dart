@@ -11,6 +11,7 @@ import '../../application/onboarding_support_service.dart';
 import '../../application/ports/identity_core_port.dart';
 import '../../application/ports/legacy_identity_upgrade_port.dart';
 import '../../core/app_error_classifier.dart';
+import '../../core/app_transport_failure.dart';
 import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../l10n/app_message.dart';
@@ -993,7 +994,10 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       }
       ref
           .read(uiFeedbackProvider.notifier)
-          .showError(AppMessage.fromError(error));
+          .showError(
+            AppMessage.fromError(error),
+            detail: appTransportDiagnostic(error),
+          );
     } finally {
       if (identical(_activeSessionTransition, sessionTransition)) {
         _activeSessionTransition = null;

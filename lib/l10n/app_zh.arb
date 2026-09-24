@@ -1674,5 +1674,8 @@
   "deviceJoinManagementRejoinRequired": "管理权限配置已失效，请由管理设备撤销此设备，再在此设备上退出本地身份（保留数据）后重新加入。",
   "deviceJoinManagementFailed": "设备已加入，管理权限配置失败",
   "handleRecoveryErrorLocalRegistryConflict": "本机还有其他身份冲突，恢复任务已保留。请返回处理其他 Handle 的待完成恢复，再继续本次恢复。若没有其他待恢复任务，请保留数据并联系支持。",
-  "handleRecoveryOtherPending": "返回处理其他恢复"
+  "handleRecoveryOtherPending": "返回处理其他恢复",
+  "secureConnectionFailed": "无法建立安全连接。请检查系统日期和时间，或联系支持人员。",
+  "trustResourcesInvalid": "应用的安全连接资源缺失或损坏。请更新或重新安装应用。",
+  "onboardingAccountCheckUnsupported": "当前服务器暂不支持账号检查。已有账号可继续登录。"
 }
