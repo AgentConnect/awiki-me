@@ -35,6 +35,7 @@ enum HandleRecoveryUiError {
   unknownEpoch,
   factorRetryRequired,
   localTransitionPending,
+  localRegistryConflict,
   localTransitionSuperseded,
   riskConfirmationRequired,
   notPrepared,
@@ -70,6 +71,8 @@ extension HandleRecoveryUiErrorDetails on HandleRecoveryUiError {
       HandleRecoveryFailureCode.factorRetryRequired,
     HandleRecoveryUiError.localTransitionPending =>
       HandleRecoveryFailureCode.localTransitionPending,
+    HandleRecoveryUiError.localRegistryConflict =>
+      HandleRecoveryFailureCode.localRegistryConflict,
     HandleRecoveryUiError.notPrepared => HandleRecoveryFailureCode.notPrepared,
     HandleRecoveryUiError.userPresenceRequired =>
       HandleRecoveryFailureCode.userPresenceRequired,
@@ -108,6 +111,7 @@ extension HandleRecoveryUiErrorDetails on HandleRecoveryUiError {
     HandleRecoveryUiError.resultAbsent ||
     HandleRecoveryUiError.outcomeUnknown => HandleRecoveryUiAction.exactResume,
     HandleRecoveryUiError.activationRequired ||
+    HandleRecoveryUiError.localRegistryConflict ||
     HandleRecoveryUiError.factorRetryRequired ||
     HandleRecoveryUiError.riskConfirmationRequired ||
     HandleRecoveryUiError.userPresenceRequired ||
@@ -163,6 +167,8 @@ HandleRecoveryUiError handleRecoveryUiErrorFrom(Object error) {
       HandleRecoveryUiError.localTransitionSuperseded,
     HandleRecoveryFailureCode.localTransitionPending =>
       HandleRecoveryUiError.localTransitionPending,
+    HandleRecoveryFailureCode.localRegistryConflict =>
+      HandleRecoveryUiError.localRegistryConflict,
     HandleRecoveryFailureCode.unknownEpoch =>
       HandleRecoveryUiError.unknownEpoch,
     HandleRecoveryFailureCode.blocked => HandleRecoveryUiError.blocked,

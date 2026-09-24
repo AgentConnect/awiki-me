@@ -761,7 +761,7 @@ abstract class AppLocalizations {
   /// No description provided for @registrationLocalStateNeedsAttention.
   ///
   /// In zh, this message translates to:
-  /// **'本机存在无法安全自动收敛的身份状态。请先处理本地状态，然后重新发送验证码。'**
+  /// **'本机身份状态存在冲突。请保留本机数据，在上方输入原来的 Handle，使用出现的“继续上次恢复”完成操作；如果没有该入口，请联系支持。重复注册无法解决此问题。'**
   String get registrationLocalStateNeedsAttention;
 
   /// No description provided for @registrationContinuityChanged.
@@ -6613,7 +6613,7 @@ abstract class AppLocalizations {
   /// No description provided for @handleRecoveryMigrationUnsupported.
   ///
   /// In zh, this message translates to:
-  /// **'V4.0 无法安全迁移当前本地身份。尚未发起远端提交，请选择 fresh start 或普通设备加入。'**
+  /// **'本机已有身份无法安全接续；尚未发起远端提交。请保留本机数据并处理身份状态，不要改用新的本机身份覆盖旧数据。'**
   String get handleRecoveryMigrationUnsupported;
 
   /// No description provided for @handleRecoveryErrorNotPrepared.
@@ -6655,7 +6655,7 @@ abstract class AppLocalizations {
   /// No description provided for @handleRecoveryErrorLocalStateUnavailable.
   ///
   /// In zh, this message translates to:
-  /// **'本机恢复引用不可用；已在本机阻止继续操作。'**
+  /// **'本机身份或恢复记录不一致，暂时无法安全继续。请保留本机数据并重新检查；若仍失败，请联系支持。重复注册无法修复。'**
   String get handleRecoveryErrorLocalStateUnavailable;
 
   /// No description provided for @handleRecoveryErrorBlocked.
@@ -6751,7 +6751,7 @@ abstract class AppLocalizations {
   /// No description provided for @handleRecoveryFreshDataNotice.
   ///
   /// In zh, this message translates to:
-  /// **'本机没有可迁移的原身份数据，恢复后不会自动找回此前的私聊历史。'**
+  /// **'此次恢复将建立新的本机身份，不会自动接续旧身份的私聊历史；本机已有的旧数据会保留。'**
   String get handleRecoveryFreshDataNotice;
 
   /// No description provided for @handleRecoveryAwaitingResult.
@@ -7107,6 +7107,18 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'设备已加入，管理权限配置失败'**
   String get deviceJoinManagementFailed;
+
+  /// No description provided for @handleRecoveryErrorLocalRegistryConflict.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机还有其他身份冲突，恢复任务已保留。请返回处理其他 Handle 的待完成恢复，再继续本次恢复。若没有其他待恢复任务，请保留数据并联系支持。'**
+  String get handleRecoveryErrorLocalRegistryConflict;
+
+  /// No description provided for @handleRecoveryOtherPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回处理其他恢复'**
+  String get handleRecoveryOtherPending;
 }
 
 class _AppLocalizationsDelegate

@@ -115,6 +115,18 @@ class RegistrationEntryForm extends ConsumerWidget {
           handleController: handleController,
           phoneController: phoneController,
         ),
+        if (const <String>{
+          'identity.local_registry_conflict',
+          'handle_recovery.local_state_conflict',
+        }.contains(onboarding.phoneRegistrationFailureCode))
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              l10n.registrationLocalStateNeedsAttention,
+              key: const Key('registration-local-state-guidance'),
+              style: const TextStyle(color: CupertinoColors.systemRed),
+            ),
+          ),
         if (state.busy) const CupertinoActivityIndicator(),
         if (error != null)
           Padding(

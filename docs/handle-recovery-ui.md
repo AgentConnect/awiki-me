@@ -40,6 +40,15 @@ Dart。验证码区只随 Core factor 动作出现，风险开关和首次提交
 提交后等待本机收尾不显示“正在迁移”，只有实际忙碌时显示操作进度。重新读取失败时提供
 明确重试入口，但不自动请求 OTP。
 
+旧版多个 Handle 同时遗留重复身份时，Core 可先保存当前目标的局部修复，再因其他冲突
+返回稳定的 `service_error / identity.local_registry_conflict`。App 将其映射为本地
+`localRegistryConflict` 提示，并提供“返回处理其他恢复”；原任务、Resume 动作和用户数据
+保留，不自动重试、不重新发 OTP、不以删除身份解围。其他 Handle 处理完成后，重新进入
+原任务继续认证及会话激活；没有其他可续办任务时提示保留数据并联系支持。
+该 App 错误映射不新增公共 Recovery wire 错误码，也不放宽普通身份读取或 custody 校验。
+对应回归位于 Core 的 `identity_store_recovery_tests.rs`、`multi_handle.rs`，以及 App 的
+`handle_recovery_flow_test.dart` 和 `awiki_im_core_handle_recovery_adapter_test.dart`。
+
 `HandleRecoverySession` 只负责 App 会话副作用。首次推进在新鲜状态与用户认证通过后暂停
 旧会话；手动续跑同样先暂停旧会话。只有重新读取到**同一 operation 的权威未提交状态**，
 才允许恢复原会话，不能使用状态读取失败后保留的旧 prepared 投影。暂停、Core 推进和原会话
