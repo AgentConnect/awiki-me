@@ -29,7 +29,8 @@ Future<Uint8List> _readBundle(AssetBundle bundle) async {
   return bytes;
 }
 
-/// Test seams are process-local; production always retains the system roots.
+/// Test seams are process-local; production retains Dart's built-in roots.
+/// On Windows these are Mozilla-derived, not the Windows certificate store.
 @visibleForTesting
 Future<SecurityContext> createWindowsTrustContext({
   AssetBundle? bundle,

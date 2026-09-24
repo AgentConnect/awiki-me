@@ -3,14 +3,17 @@
 The App-owned User Service utility client and update service use one HTTP client
 factory. Windows uses a private `SecurityContext(withTrustedRoots: true)` with
 the fixed Mozilla public CA extract documented in `assets/security/README.md`.
+Dart seeds this context from its built-in Mozilla roots on Windows, not from
+the Windows certificate store.
 Other platforms retain their existing `http.Client()` behavior. Core transports,
 identity, signing and backend contracts are unchanged.
 
-This handles valid public HTTPS chains on Windows installations whose root stores
-load successfully but lack a public root and cannot populate it online. It does
-not repair Windows or change its certificate store. The public bundle supplements
-system trust, including private roots; this is not a corporate CA allowlist or a
-replica of browser revocation/distrust policy. Normal hostname, expiry and chain
+This handles valid public HTTPS chains that the Dart built-in roots on a Windows
+installation cannot validate. It does not read, repair, or change the Windows
+certificate store. A private CA installed only in that store is not automatically
+trusted; corporate/private CA support is outside this fix. The public bundle
+supplements Dart's built-in trust and is not a replica of browser
+revocation/distrust policy. Normal hostname, expiry and chain
 checks remain enabled. No `badCertificateCallback`, TLS downgrade, request replay
 or certificate-prompt bypass is permitted.
 
@@ -27,7 +30,9 @@ use `transport.trust_bundle_invalid`. Copyable diagnostics contain only a stable
 code, host, App version and CA version. They never include the URI path/query,
 request body, phone, OTP, authorization header or original exception. TLS failures
 do not establish that a root is missing: clock, hostname, interception or server
-configuration can also cause them. Input and explicit retry remain available.
+configuration can also cause them. A failed default Dart `HttpClient()` request
+does not establish the contents of the Windows OS store. Input and explicit
+retry remain available.
 Silent update checks stay silent; cached minimum-version policy is retained.
 
 ## Verification
@@ -39,14 +44,16 @@ Silent update checks stay silent; cached minimum-version policy is retained.
 
 The controlled TLS suite uses public test-only certificates and process-local
 contexts. It must pass on Windows CI and never imports OS certificates. Manual
-acceptance on a machine with the original root gap includes read-only account and
-update checks, then an operator login using the verification installer. Read-only
+acceptance on a machine with the observed Dart default trust gap includes
+read-only account and update checks, then an operator login using the verification
+installer. Read-only
 transport checks are not evidence of an actual account login.
 
 ## Review and release boundary (2026-09-24)
 
-Security review covered the trust-store union, asset-integrity failure, strict
-hostname/expiry/chain rejection, connection ownership, single-send semantics,
+Security review covered the union of Dart's built-in roots and the fixed bundle,
+asset-integrity failure, strict hostname/expiry/chain rejection, connection
+ownership, single-send semantics,
 tenant stale-result fences and diagnostic redaction. The fixed bundle adds public
 trust anchors; it does not bypass validation or add a trust-on-first-use decision.
 The controlled TLS fixtures pass on macOS as a non-Windows transport regression;
@@ -82,7 +89,7 @@ prove successful App bootstrap: the startup error screen keeps a process alive.
 
 The separately built `windows_https_probe.dart` uses the production factory and
 adapters, process-memory update storage, synthetic account input and public
-read-only endpoints. It records default trust before/after, account-check and
+read-only endpoints. It records Dart default trust before/after, account-check and
 update-check success. It does not start the App session, read its account files,
 request OTP or log in. Run with `AWIKI_HTTPS_PROBE_REPORT` pointing to a test-owned
 file and remove the extracted probe after saving that report. Keep actual login

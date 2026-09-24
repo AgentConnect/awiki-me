@@ -21,7 +21,9 @@ class _MemoryStore implements AppKeyValueStore {
   Future<void> delete({required String key}) async => values.remove(key);
 }
 
-Future<String> _systemTrustOnly() async {
+// Dart's default Windows roots come from its built-in Mozilla list.
+// This does not inspect the Windows OS certificate store.
+Future<String> _dartDefaultTrustOnly() async {
   final client = HttpClient();
   try {
     final request = await client.getUrl(
@@ -58,7 +60,7 @@ Future<void> main() async {
   );
   var status = 1;
   try {
-    report['system_before'] = await _systemTrustOnly().timeout(
+    report['dart_default_before'] = await _dartDefaultTrustOnly().timeout(
       const Duration(seconds: 20),
     );
     final result = await AwikiOnboardingUtilityClient(
@@ -79,7 +81,7 @@ Future<void> main() async {
     }
     report['update_check'] = 'passed';
     report['policy_revision'] = policy.latestManifest!.policyRevision;
-    report['system_after'] = await _systemTrustOnly().timeout(
+    report['dart_default_after'] = await _dartDefaultTrustOnly().timeout(
       const Duration(seconds: 20),
     );
     status = 0;
