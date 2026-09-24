@@ -43,11 +43,14 @@ void main() {
           'smoke_failure_reporting_',
         );
         addTearDown(() => root.deleteSync(recursive: true));
+        const exclusionsPath = 'tests/e2e/user_test_exclusions.json';
+        File('${root.path}/$exclusionsPath')
+          ..createSync(recursive: true)
+          ..writeAsStringSync(File(exclusionsPath).readAsStringSync());
         final commands = _SmokeFixtureCommands(
           root,
           missingCount: missingCount,
         );
-        _copyUserExclusionPolicy(root);
         final runner = DesktopE2eRunner(
           root: root,
           options: DesktopE2eOptions.parse([
@@ -219,12 +222,4 @@ sleep 30
       }),
     );
   }
-}
-
-// Temporary runner roots need the same checked-in user policy as the real root.
-void _copyUserExclusionPolicy(Directory root) {
-  const path = 'tests/e2e/user_test_exclusions.json';
-  final destination = File('${root.path}/$path');
-  destination.parent.createSync(recursive: true);
-  File(path).copySync(destination.path);
 }

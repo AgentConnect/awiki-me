@@ -2739,6 +2739,7 @@ cliHandle: legacy-cli
       final root = await Directory.systemTemp.createTemp(
         'awiki_desktop_cli_peer_file_runner_test_',
       );
+      _writeUserExclusions(root);
       addTearDown(() async {
         if (await root.exists()) {
           await root.delete(recursive: true);
@@ -2763,7 +2764,6 @@ cliPeer:
   binary: /tmp/file-awiki-cli
 ''');
       final lines = <String>[];
-      _copyUserExclusionPolicy(root);
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
@@ -2826,13 +2826,13 @@ cliPeer:
       final root = await Directory.systemTemp.createTemp(
         'awiki_desktop_smoke_runner_test_',
       );
+      _writeUserExclusions(root);
       addTearDown(() async {
         if (await root.exists()) {
           await root.delete(recursive: true);
         }
       });
       final lines = <String>[];
-      _copyUserExclusionPolicy(root);
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
@@ -2912,13 +2912,13 @@ cliPeer:
       final root = await Directory.systemTemp.createTemp(
         'awiki_multi_device_capability_runner_test_',
       );
+      _writeUserExclusions(root);
       addTearDown(() async {
         if (await root.exists()) {
           await root.delete(recursive: true);
         }
       });
       final lines = <String>[];
-      _copyUserExclusionPolicy(root);
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
@@ -2970,7 +2970,6 @@ cliPeer:
         cliHandle: 'e2e-cli',
       );
       final lines = <String>[];
-      _copyUserExclusionPolicy(root);
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
@@ -3047,7 +3046,6 @@ cliPeer:
         '--run-id',
         'run123',
       ]);
-      _copyUserExclusionPolicy(root);
       final runner = DesktopE2eRunner(
         root: root,
         options: options,
@@ -3202,7 +3200,6 @@ cliPeer:
           messageServiceUrl: 'https://messages.example.test',
         );
         final lines = <String>[];
-        _copyUserExclusionPolicy(root);
         final runner = DesktopE2eRunner(
           root: root,
           options: DesktopE2eOptions.parse(const <String>[
@@ -3283,7 +3280,6 @@ cliPeer:
           }
         });
         _writeLocalConfig(root, platform: 'macos');
-        _copyUserExclusionPolicy(root);
         final runner = DesktopE2eRunner(
           root: root,
           options: DesktopE2eOptions.parse(const <String>[
@@ -3344,7 +3340,6 @@ cliPeer:
       });
       _writeLocalConfig(root, platform: 'macos');
       final lines = <String>[];
-      _copyUserExclusionPolicy(root);
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
@@ -3404,7 +3399,6 @@ cliPeer:
       });
       _writeLocalConfig(root, platform: 'linux');
       final lines = <String>[];
-      _copyUserExclusionPolicy(root);
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
@@ -3483,7 +3477,6 @@ performance:
 ''',
         );
         final lines = <String>[];
-        _copyUserExclusionPolicy(root);
         final runner = DesktopE2eRunner(
           root: root,
           options: DesktopE2eOptions.parse(const <String>[
@@ -3586,7 +3579,6 @@ performance:
       });
       _writeLocalConfig(root, platform: 'macos');
       final lines = <String>[];
-      _copyUserExclusionPolicy(root);
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
@@ -3641,7 +3633,6 @@ performance:
       });
       _writeLocalConfig(root, platform: 'linux');
       final lines = <String>[];
-      _copyUserExclusionPolicy(root);
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
@@ -3698,7 +3689,6 @@ performance:
       });
       _writeLocalConfig(root, platform: 'linux');
       final lines = <String>[];
-      _copyUserExclusionPolicy(root);
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
@@ -3764,7 +3754,6 @@ performance:
         personalAgentRealBackend: true,
       );
       final lines = <String>[];
-      _copyUserExclusionPolicy(root);
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
@@ -3883,7 +3872,6 @@ performance:
           includePersonalAgent: false,
         );
         final lines = <String>[];
-        _copyUserExclusionPolicy(root);
         final runner = DesktopE2eRunner(
           root: root,
           options: DesktopE2eOptions.parse(const <String>[
@@ -3965,7 +3953,6 @@ performance:
           personalAgentEnabled: true,
           personalAgentRealBackend: true,
         );
-        _copyUserExclusionPolicy(root);
         final runner = DesktopE2eRunner(
           root: root,
           options: DesktopE2eOptions.parse(const <String>[
@@ -4016,7 +4003,6 @@ performance:
       });
       _writeLocalConfig(root, platform: 'macos');
       final lines = <String>[];
-      _copyUserExclusionPolicy(root);
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
@@ -4065,7 +4051,6 @@ performance:
         otpCode: '123456',
       );
       final lines = <String>[];
-      _copyUserExclusionPolicy(root);
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
@@ -4690,6 +4675,7 @@ void _writeLocalConfig(
   bool includePersonalAgent = true,
   String performanceBlock = '',
 }) {
+  _writeUserExclusions(root);
   final messageService = messageServiceUrl == null
       ? ''
       : '  messageServiceUrl: $messageServiceUrl\n';
@@ -4742,10 +4728,9 @@ cliPeer:
 ''');
 }
 
-// Temporary runner roots need the same checked-in user policy as the real root.
-void _copyUserExclusionPolicy(Directory root) {
+void _writeUserExclusions(Directory root) {
   const path = 'tests/e2e/user_test_exclusions.json';
-  final destination = File('${root.path}/$path');
-  destination.parent.createSync(recursive: true);
-  File(path).copySync(destination.path);
+  File('${root.path}/$path')
+    ..createSync(recursive: true)
+    ..writeAsStringSync(File(path).readAsStringSync());
 }
