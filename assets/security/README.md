@@ -8,6 +8,8 @@ Mozilla CA extract dated 2026-08-13, distributed by curl. 121 certificates,
 
 License: Mozilla Public License 2.0, reproduced in `LICENSE-MPL-2.0.txt`.
 The extract's original header and certificate labels are retained.
+`.gitattributes` disables newline conversion for the PEM so Windows checkouts
+retain the exact upstream bytes and digest.
 
 Update only through a reviewed App release: obtain the dated extract and digest
 from https://curl.se/docs/caextract.html, review certificate additions/removals,

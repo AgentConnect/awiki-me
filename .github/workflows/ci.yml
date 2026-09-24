@@ -543,6 +543,18 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Install AWiki Me dependencies
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: flutter pub get
+
+      - name: Verify Windows HTTPS trust and failure paths
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: |
+          flutter test --no-pub tests/unit/app_http_client_test.dart tests/unit/registration_entry_test.dart tests/unit/registration_entry_widget_test.dart tests/unit/app_update_provider_test.dart tests/unit/data/services/app_update_service_test.dart tests/e2e/flutter/native/windows_https_trust_test.dart
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Setup Rust 1.88.0
         uses: dtolnay/rust-toolchain@1.88.0
         with:
@@ -575,18 +587,6 @@ jobs:
         run: |
           flutter pub get
           flutter test --no-pub test/native_library_loader_test.dart
-
-      - name: Install AWiki Me dependencies
-        working-directory: test-awiki-me
-        shell: pwsh
-        run: flutter pub get
-
-      - name: Verify Windows HTTPS trust and failure paths
-        working-directory: test-awiki-me
-        shell: pwsh
-        run: |
-          flutter test --no-pub tests/unit/app_http_client_test.dart tests/unit/registration_entry_test.dart tests/unit/registration_entry_widget_test.dart tests/unit/app_update_provider_test.dart tests/unit/data/services/app_update_service_test.dart tests/e2e/flutter/native/windows_https_trust_test.dart
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run Windows runner and package contract tests
         working-directory: test-awiki-me
