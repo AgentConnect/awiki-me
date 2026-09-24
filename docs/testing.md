@@ -1526,3 +1526,11 @@ Registration discovery failure does not authorize OTP, email activation or final
 registration through the existing-account shortcut. A successful existing decision
 is required for that path; purpose-bound Recovery remains directly accessible
 without starting OTP on navigation, including existing local recovery continuation.
+
+### Windows HTTPS trust regression
+
+The Windows CI native job runs the process-local TLS fixture suite and the
+account/update error-path tests. Use [Windows HTTPS trust](windows-https-trust.md)
+for the fixed public CA asset, maintenance, field-probe and explicit source
+verification installer procedure. These checks do not mutate system certificate
+stores or substitute for manual account login.
