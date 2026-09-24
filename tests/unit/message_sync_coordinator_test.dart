@@ -2720,7 +2720,7 @@ ProviderContainer _container(
   Duration minInterval = Duration.zero,
   Duration failureBackoff = Duration.zero,
   Duration failureSurfaceDelay = Duration.zero,
-  Duration syncWatchdog = const Duration(seconds: 30),
+  Duration syncWatchdog = const Duration(seconds: 90),
   FakeDeviceManagementCore? devices,
   FakeNotificationFacade? notifications,
   AppPresentationService? appPresentationService,
