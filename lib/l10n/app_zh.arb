@@ -1672,5 +1672,7 @@
   "deviceJoinManagementWaiting": "根密钥发送已接受，等待新设备完成管理权限配置。",
   "deviceJoinManagementConfiguring": "设备已加入，正在配置管理权限。可安全离开此页面。",
   "deviceJoinManagementRejoinRequired": "管理权限配置已失效，请由管理设备撤销此设备，再在此设备上退出本地身份（保留数据）后重新加入。",
-  "deviceJoinManagementFailed": "设备已加入，管理权限配置失败"
+  "deviceJoinManagementFailed": "设备已加入，管理权限配置失败",
+  "handleRecoveryErrorLocalRegistryConflict": "本机还有其他身份冲突，恢复任务已保留。请返回处理其他 Handle 的待完成恢复，再继续本次恢复。若没有其他待恢复任务，请保留数据并联系支持。",
+  "handleRecoveryOtherPending": "返回处理其他恢复"
 }

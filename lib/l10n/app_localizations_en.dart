@@ -4067,4 +4067,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get deviceJoinManagementFailed =>
       'Device joined; management configuration failed';
+
+  @override
+  String get handleRecoveryErrorLocalRegistryConflict =>
+      'Other local identities still conflict. Your recovery is preserved. Go back to resolve the other pending Handle recoveries, then continue this one. If none are available, keep your data and contact support.';
+
+  @override
+  String get handleRecoveryOtherPending => 'Back to other recoveries';
 }

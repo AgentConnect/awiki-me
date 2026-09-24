@@ -3787,4 +3787,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get deviceJoinManagementFailed => '设备已加入，管理权限配置失败';
+
+  @override
+  String get handleRecoveryErrorLocalRegistryConflict =>
+      '本机还有其他身份冲突，恢复任务已保留。请返回处理其他 Handle 的待完成恢复，再继续本次恢复。若没有其他待恢复任务，请保留数据并联系支持。';
+
+  @override
+  String get handleRecoveryOtherPending => '返回处理其他恢复';
 }

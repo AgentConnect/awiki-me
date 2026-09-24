@@ -1672,5 +1672,7 @@
   "deviceJoinManagementWaiting": "Root key delivery accepted. Waiting for the new device to finish setup.",
   "deviceJoinManagementConfiguring": "Device joined. Configuring management access. You can safely leave this page.",
   "deviceJoinManagementRejoinRequired": "Management setup is no longer valid. Have an administrator revoke this device, then sign out locally on this device while keeping its data and join again.",
-  "deviceJoinManagementFailed": "Device joined; management configuration failed"
+  "deviceJoinManagementFailed": "Device joined; management configuration failed",
+  "handleRecoveryErrorLocalRegistryConflict": "Other local identities still conflict. Your recovery is preserved. Go back to resolve the other pending Handle recoveries, then continue this one. If none are available, keep your data and contact support.",
+  "handleRecoveryOtherPending": "Back to other recoveries"
 }

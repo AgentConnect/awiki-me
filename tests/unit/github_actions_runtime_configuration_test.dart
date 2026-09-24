@@ -91,14 +91,14 @@ void main() {
     final pins = source
         .split('\n')
         .where(
-          (line) => line.contains('a2985649deab402a11c6085417138f4e53214acf'),
+          (line) => line.contains('948f562f777ac779c59172b0182cb2a94d49bcb2'),
         );
     expect(pins, hasLength(10));
     for (final line in pins) {
       expect(
         line,
         contains(
-          "github.base_ref == 'release/0910' && 'a2985649deab402a11c6085417138f4e53214acf'",
+          "github.base_ref == 'release/0910' && '948f562f777ac779c59172b0182cb2a94d49bcb2'",
         ),
       );
       expect(line, contains('d3289db6732f6028fa7e54909b768bd48838f7fb'));
@@ -189,7 +189,7 @@ void main() {
             as YamlMap;
     final jobs = workflow['jobs'] as YamlMap;
     const pin =
-        "(github.base_ref == 'release/0910' && 'a2985649deab402a11c6085417138f4e53214acf')";
+        "(github.base_ref == 'release/0910' && '948f562f777ac779c59172b0182cb2a94d49bcb2')";
     for (final name in [
       'validate',
       'cross-repository-contracts',
