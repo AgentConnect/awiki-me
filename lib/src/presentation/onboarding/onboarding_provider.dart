@@ -597,6 +597,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         }
         if (const <String>{
           'identity.registration_verification_unavailable',
+          'identity.local_registry_conflict',
           'handle_recovery.local_state_conflict',
           'handle_recovery.transition_missing',
           'handle_recovery.join_terminal_wait',

@@ -463,6 +463,81 @@ void main() {
     },
   );
 
+  test(
+    'cold start keeps recovery available for a conflicting registry',
+    () async {
+      const conflict = core.AwikiImCoreException(
+        code: 'service_error',
+        serviceCode: 'identity.local_registry_conflict',
+        message: 'local identity registry contains a duplicate Handle',
+      );
+      final opened = _StartupCore(listError: conflict);
+      final runtime = await _startupRuntime(opened);
+
+      await runtime.openAndValidate();
+
+      expect(runtime.isOpen, isTrue);
+      expect(await runtime.coreInstance(), same(opened));
+      expect(opened.disposes, 0);
+      expect(opened.validations, 1);
+      expect(opened.custodyChecks, 0);
+      // The host must not turn the conflicting native registry into an empty
+      // identity list, select an identity, or repair it during bootstrap.
+      await expectLater(opened.listIdentities(), throwsA(same(conflict)));
+      await expectLater(runtime.currentClient(), throwsStateError);
+    },
+  );
+
+  for (final error in <core.AwikiImCoreException>[
+    const core.AwikiImCoreException(
+      code: 'service_error',
+      serviceCode: 'identity.local_deletion_conflict',
+      message: 'another identity error',
+    ),
+    const core.AwikiImCoreException(
+      code: 'identity_vault_unavailable',
+      message: 'vault unavailable',
+    ),
+    const core.AwikiImCoreException(
+      code: 'invalid_input',
+      serviceCode: 'identity.local_registry_conflict',
+      message: 'wrong error category',
+    ),
+  ]) {
+    test(
+      'cold start rejects other enumeration errors: ${error.code}/${error.serviceCode}',
+      () async {
+        final opened = _StartupCore(listError: error);
+        final runtime = await _startupRuntime(opened);
+
+        await expectLater(runtime.open(), throwsA(same(error)));
+
+        expect(runtime.isOpen, isFalse);
+        expect(opened.disposes, 1);
+        expect(opened.validations, 0);
+      },
+    );
+  }
+
+  test(
+    'custody failure is fatal even when it reports a registry conflict',
+    () async {
+      const conflict = core.AwikiImCoreException(
+        code: 'service_error',
+        serviceCode: 'identity.local_registry_conflict',
+        message: 'custody validation failed',
+      );
+      final opened = _StartupCore(custodyError: conflict);
+      final runtime = await _startupRuntime(opened);
+
+      await expectLater(runtime.open(), throwsA(same(conflict)));
+
+      expect(runtime.isOpen, isFalse);
+      expect(opened.custodyChecks, 1);
+      expect(opened.disposes, 1);
+    },
+  );
+
   test('currentClient fails clearly before an identity is selected', () async {
     final root = await Directory.systemTemp.createTemp(
       'awiki_me_runtime_test_',
@@ -491,6 +566,96 @@ void main() {
 
     await expectLater(runtime.currentClient(), throwsA(isA<StateError>()));
   });
+}
+
+Future<AwikiImCoreRuntime> _startupRuntime(core.AwikiImCore opened) async {
+  final root = await Directory.systemTemp.createTemp('awiki_startup_recovery_');
+  addTearDown(() => root.delete(recursive: true));
+  final scopeId = StorageScopeId.parse(scopeValue);
+  final layout = AwikiImCorePathLayout.fromRoots(
+    appSupportRoot: '${root.path}/support',
+    cacheRoot: '${root.path}/cache',
+    tempRoot: '${root.path}/tmp',
+    scopeId: scopeId,
+  );
+  await layout.scopeLayout.createScopeRootExclusive();
+  final runtime = AwikiImCoreRuntime(
+    config: const AwikiImCoreEnvironmentConfig(
+      serviceBaseUrl: 'https://example.test',
+      didDomain: 'example.test',
+    ),
+    paths: layout,
+    scopeId: scopeId,
+    vaultSecretProvider: _FakeVaultSecretProvider(),
+    multiDeviceAudience: 'awiki-user-service',
+    inspectLocalStateUpgrade: (_) async =>
+        const core.LocalStateUpgradeInspection(
+          eligibility: core.LocalStateUpgradeEligibility.notRequired,
+          sourceSchemaVersion: 41,
+          targetSchemaVersion: 41,
+        ),
+    upgradeLocalState: (_) async => const core.LocalStateUpgradeResult(
+      status: core.LocalStateUpgradeStatus.notRequired,
+      migratedPersonas: 0,
+      migratedConversations: 0,
+      unresolvedMessages: 0,
+      aliasCount: 0,
+      backupAvailable: false,
+      sourceSchemaVersion: 41,
+      targetSchemaVersion: 41,
+    ),
+    openCore: ({required config, required paths, openOptions}) async => opened,
+  );
+  addTearDown(runtime.dispose);
+  return runtime;
+}
+
+class _StartupCore implements core.AwikiImCore {
+  _StartupCore({this.listError, this.custodyError});
+  final Object? listError;
+  final Object? custodyError;
+  int disposes = 0;
+  int validations = 0;
+  int custodyChecks = 0;
+
+  @override
+  Future<List<core.IdentitySummary>> listIdentities() async {
+    final error = listError;
+    if (error != null) throw error;
+    return const [
+      core.IdentitySummary(
+        id: 'test-owner',
+        did: 'did:wba:example.test:user:test',
+        isDefault: true,
+        readyForAuth: true,
+        readyForMessaging: true,
+      ),
+    ];
+  }
+
+  @override
+  Future<core.IdentityCustodyStatus> identityCustodyStatus(
+    core.IdentitySelector selector,
+  ) async {
+    custodyChecks++;
+    throw custodyError ?? StateError('unexpected custody check');
+  }
+
+  @override
+  Future<List<String>> validatePaths() async {
+    validations++;
+    return const [];
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposes++;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnsupportedError(
+    'unexpected startup operation: ${invocation.memberName}',
+  );
 }
 
 class _FakeVaultSecretProvider implements AwikiImCoreVaultSecretProvider {

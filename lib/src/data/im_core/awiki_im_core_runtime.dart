@@ -151,12 +151,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
       ),
     );
     try {
-      for (final identity in await opened.listIdentities()) {
-        await _ensureIdentityCustodyReady(
-          opened,
-          core.IdentitySelector.id(identity.id),
-        );
-      }
+      await _verifyStartupIdentityCustody(opened);
     } on Object {
       await opened.dispose();
       rethrow;
@@ -333,6 +328,31 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     }
     final idle = _clientOperationsIdle ??= Completer<void>();
     await idle.future;
+  }
+}
+
+Future<void> _verifyStartupIdentityCustody(core.AwikiImCore instance) async {
+  final List<core.IdentitySummary> identities;
+  try {
+    identities = await instance.listIdentities();
+  } on core.AwikiImCoreException catch (error) {
+    if (error.code == 'service_error' &&
+        error.serviceCode == 'identity.local_registry_conflict') {
+      // Keep the already-open, vault-validated Core available for its scoped
+      // Recovery inspect/resume APIs. Ordinary identity reads and activation
+      // still fail closed in Core until it resolves the conflicting registry.
+      // Do not make a recoverable old-client index block the onboarding route.
+      return;
+    }
+    rethrow;
+  }
+  for (final identity in identities) {
+    // Custody failures remain fatal, including errors with the same service
+    // code. Only registry enumeration above may defer this startup check.
+    await _ensureIdentityCustodyReady(
+      instance,
+      core.IdentitySelector.id(identity.id),
+    );
   }
 }
 

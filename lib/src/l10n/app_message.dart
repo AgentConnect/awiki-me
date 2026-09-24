@@ -279,6 +279,7 @@ class AppMessage {
         return AppMessage.registrationCommittedActivationPending();
       case 'identity.registration_recovery_state_invalid':
         return AppMessage.registrationRecoveryStateInvalid();
+      case 'identity.local_registry_conflict':
       case 'handle_recovery.local_state_conflict':
         return AppMessage.registrationLocalStateNeedsAttention();
       case 'handle_recovery.transition_missing':
@@ -663,7 +664,7 @@ class AppMessage {
       case 'registrationRecoveryStateInvalid':
         return "This Handle's identity state needs server-side attention. Contact support before trying again.";
       case 'registrationLocalStateNeedsAttention':
-        return 'This device has identity state that cannot be reconciled safely. Resolve the local state, then send a new verification code.';
+        return 'This device has conflicting identity state. Keep its local data, enter the original Handle, and continue the previous recovery. Contact support if that option does not appear. Registering again will not resolve it.';
       case 'registrationContinuityChanged':
         return 'Identity continuity changed. Send a new verification code and try again.';
       case 'registrationJoinTerminalWait':

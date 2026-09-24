@@ -606,6 +606,42 @@ void main() {
     );
   });
 
+  testWidgets(
+    'committed recovery offers exact local resume without asking for another code',
+    (tester) async {
+      final core = _FakeHandleRecoveryCore(
+        operation: _operation(
+          lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+          commitAttempted: true,
+        ),
+      );
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          locale: const Locale('en'),
+          home: const HandleRecoveryPage(
+            initialHandle: 'alice.awiki.info',
+            initialPhone: '+8613800138000',
+          ),
+          providerOverrides: <Override>[
+            handleRecoveryCorePortProvider.overrideWithValue(core),
+            userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Account recovery has taken effect'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('handle-recovery-resume')), findsOneWidget);
+      expect(find.byKey(const Key('handle-recovery-send-otp')), findsNothing);
+      expect(
+        find.byKey(const Key('handle-recovery-retry-lookup')),
+        findsNothing,
+      );
+    },
+  );
+
   for (final otpFails in <bool>[false, true]) {
     testWidgets(
       'reopening Recovery drops a deleted owner result when OTP ${otpFails ? 'fails' : 'starts a new operation'}',

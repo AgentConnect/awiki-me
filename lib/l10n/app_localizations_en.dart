@@ -380,7 +380,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get registrationLocalStateNeedsAttention =>
-      'This device has identity state that cannot be reconciled safely. Resolve the local state, then send a new verification code.';
+      'This device has conflicting identity state. Keep its local data, enter the original Handle above, and use Continue previous recovery. Contact support if that option does not appear. Registering again will not resolve it.';
 
   @override
   String get registrationContinuityChanged =>
@@ -3756,7 +3756,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryMigrationUnsupported =>
-      'This local identity cannot be migrated safely in V4.0. No remote commit was attempted; use a fresh start or ordinary Device Join.';
+      'The existing local identity cannot be continued safely. No remote commit was attempted. Keep the local data and resolve the identity state; do not replace it with a new local identity.';
 
   @override
   String get handleRecoveryErrorNotPrepared =>
@@ -3784,7 +3784,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryErrorLocalStateUnavailable =>
-      'The local recovery reference is unavailable. Continuing is blocked on this device.';
+      'The local identity or recovery record is inconsistent. Keep this device\'s data and check again; contact support if the problem persists. Registering again will not fix it.';
 
   @override
   String get handleRecoveryErrorBlocked =>
@@ -3847,7 +3847,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryFreshDataNotice =>
-      'No previous identity data is available on this device. Earlier direct messages will not be restored automatically.';
+      'This recovery creates a new local identity and will not automatically carry over the old identity\'s direct messages. Existing local data is preserved.';
 
   @override
   String get handleRecoveryAwaitingResult =>
