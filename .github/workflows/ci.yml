@@ -1,9 +1,6 @@
 name: CI
 
 on:
-  pull_request:
-  push:
-    branches: [main]
   schedule:
     - cron: "40 18 * * *"
   workflow_dispatch:
@@ -50,11 +47,11 @@ concurrency:
 env:
   PUB_HOSTED_URL: https://pub.dev
   FLUTTER_STORAGE_BASE_URL: https://storage.googleapis.com
-  AWIKI_SOURCE_INTEGRATION: ${{ (github.event.inputs.sdk_dependencies == 'source' || (github.event_name == 'pull_request' && github.base_ref == 'release/0910')) && '1' || '0' }}
-  AWIKI_RELEASE_REGISTRY: ${{ (github.event.inputs.sdk_dependencies == 'source' || (github.event_name == 'pull_request' && github.base_ref == 'release/0910')) && '0' || '1' }}
+  AWIKI_SOURCE_INTEGRATION: ${{ inputs.sdk_dependencies == 'source' && '1' || '0' }}
+  AWIKI_RELEASE_REGISTRY: ${{ inputs.sdk_dependencies == 'source' && '0' || '1' }}
 
 # release/0910 App code already requires the Core processing-session API.
-# Pin release/0910 development PRs to the reviewed recovery candidate; retain registry builds elsewhere.
+# Manual source runs supply an exact cli_ref; scheduled runs retain registry defaults.
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -547,7 +544,6 @@ jobs:
 
   windows-pr:
     name: Windows x64 build and native smoke
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: windows-2022
     timeout-minutes: 75
     env:
