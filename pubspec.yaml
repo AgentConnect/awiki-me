@@ -64,6 +64,7 @@ flutter:
     - assets/branding/
     - assets/branding/agents/
     - assets/config/
+    - assets/security/
     - assets/icons/
   fonts:
     - family: AwikiGoldenCjk

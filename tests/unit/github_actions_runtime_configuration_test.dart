@@ -91,14 +91,14 @@ void main() {
     final pins = source
         .split('\n')
         .where(
-          (line) => line.contains('948f562f777ac779c59172b0182cb2a94d49bcb2'),
+          (line) => line.contains('950487d61a7dee0ad5cb4910a86e73e5f91a8893'),
         );
     expect(pins, hasLength(10));
     for (final line in pins) {
       expect(
         line,
         contains(
-          "github.base_ref == 'release/0910' && '948f562f777ac779c59172b0182cb2a94d49bcb2'",
+          "github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893'",
         ),
       );
       expect(line, contains('d3289db6732f6028fa7e54909b768bd48838f7fb'));
@@ -189,7 +189,7 @@ void main() {
             as YamlMap;
     final jobs = workflow['jobs'] as YamlMap;
     const pin =
-        "(github.base_ref == 'release/0910' && '948f562f777ac779c59172b0182cb2a94d49bcb2')";
+        "(github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893')";
     for (final name in [
       'validate',
       'cross-repository-contracts',
@@ -287,7 +287,9 @@ void main() {
         isFalse,
       );
       final profile = steps.singleWhere(
-        (step) => (step['run']?.toString() ?? '').contains('--profile pr'),
+        (step) =>
+            (step['run']?.toString() ?? '').contains('--profile pr') &&
+            !(step['run']?.toString() ?? '').contains('--prepare-only'),
       );
       expect(
         profile['run'],
@@ -321,6 +323,39 @@ void main() {
         );
       }
     }
+  });
+
+  test('contract cache reuse cannot bypass tests or require Flutter', () {
+    final workflow =
+        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+            as YamlMap;
+    final job = workflow['jobs']['cross-repository-contracts'] as YamlMap;
+    final steps = (job['steps'] as YamlList).cast<YamlMap>().toList();
+    expect(job.toString(), isNot(contains('subosito/flutter-action')));
+    final cache = steps.singleWhere(
+      (step) => step['uses'] == 'actions/cache@v5',
+    );
+    expect(cache['with'].containsKey('restore-keys'), isFalse);
+    final paths = cache['with']['path'].toString().trim().split('\n');
+    expect(
+      paths,
+      contains('test-awiki-system-test/.artifacts/awiki-test-cache'),
+    );
+    expect(paths, isNot(contains('test-awiki-system-test/.artifacts')));
+    final prepare = steps.singleWhere(
+      (step) => (step['run']?.toString() ?? '').contains('--prepare-only'),
+    );
+    final execute = steps.singleWhere(
+      (step) => step['name'] == 'Run cross-repository System PR contracts',
+    );
+    expect(prepare['env']['AWIKI_CLI_RUST_CARGO_OFFLINE'], '0');
+    expect(job['env'].containsKey('AWIKI_CLI_RUST_CARGO_OFFLINE'), isFalse);
+    expect(steps.indexOf(cache), lessThan(steps.indexOf(prepare)));
+    expect(steps.indexOf(prepare), lessThan(steps.indexOf(execute)));
+    expect(prepare.containsKey('if'), isFalse);
+    expect(execute.containsKey('if'), isFalse);
+    expect(execute['run'], contains('--profile pr --component system'));
+    expect(execute['run'], isNot(contains('--exclude-suite')));
   });
 
   test('registry branches retain the published SDK build entrypoint', () {

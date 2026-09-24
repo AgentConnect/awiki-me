@@ -3794,4 +3794,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get handleRecoveryOtherPending => '返回处理其他恢复';
+
+  @override
+  String get secureConnectionFailed => '无法建立安全连接。请检查系统日期和时间，或联系支持人员。';
+
+  @override
+  String get trustResourcesInvalid => '应用的安全连接资源缺失或损坏。请更新或重新安装应用。';
+
+  @override
+  String get onboardingAccountCheckUnsupported => '当前服务器暂不支持账号检查。已有账号可继续登录。';
 }

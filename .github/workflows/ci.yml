@@ -23,6 +23,16 @@ on:
         required: false
         default: false
         type: boolean
+      verification_version:
+        description: Optional numeric x.y.z Windows verification version (no suffix, no publication)
+        required: false
+        default: ''
+        type: string
+      verification_build:
+        description: Windows verification installer build number
+        required: false
+        default: '44'
+        type: string
       e2e_case:
         description: Audited remote product suite
         required: true
@@ -51,7 +61,7 @@ jobs:
     steps:
       - name: Require exact CLI / SDK source ref and private repository read token
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '948f562f777ac779c59172b0182cb2a94d49bcb2') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
           SYSTEM_TEST_READ_TOKEN: ${{ secrets.AWIKI_CI_READ_TOKEN }}
         run: |
           [[ "$CLI_REF" =~ ^[0-9a-fA-F]{40}$ ]] || {
@@ -72,7 +82,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
-          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '948f562f777ac779c59172b0182cb2a94d49bcb2') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
           token: ${{ github.token }}
           path: awiki-cli-rs2
           persist-credentials: false
@@ -141,14 +151,14 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-system-test
-          ref: a3c0a550a82ec27263db367759e812ab6b160723
+          ref: a191665c8173dbcb6434d9484fa533f5de3321a4
           token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
           path: test-awiki-system-test
           persist-credentials: false
 
       - name: Record exact CLI / SDK source ref
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '948f562f777ac779c59172b0182cb2a94d49bcb2') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
         run: |
           test "$(git -C awiki-cli-rs2 rev-parse HEAD)" = "$CLI_REF"
           git -C awiki-cli-rs2 rev-parse HEAD | tee /tmp/awiki-cli-ref
@@ -222,10 +232,16 @@ jobs:
   cross-repository-contracts:
     name: Cross-repository System contracts
     runs-on: ubuntu-latest
+    env:
+      AWIKI_CLI_RUST_CARGO_TOOLCHAIN: '1.88.0'
+      # Share the CLI/ACP development build profile; avoid large debug caches.
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_INCREMENTAL: '0'
     steps:
       - name: Require exact CLI / SDK source ref and private repository read token
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '948f562f777ac779c59172b0182cb2a94d49bcb2') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
           SYSTEM_TEST_READ_TOKEN: ${{ secrets.AWIKI_CI_READ_TOKEN }}
         run: |
           [[ "$CLI_REF" =~ ^[0-9a-fA-F]{40}$ ]] || {
@@ -246,7 +262,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
-          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '948f562f777ac779c59172b0182cb2a94d49bcb2') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
           token: ${{ github.token }}
           path: awiki-cli-rs2
           persist-credentials: false
@@ -255,7 +271,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-system-test
-          ref: a3c0a550a82ec27263db367759e812ab6b160723
+          ref: a191665c8173dbcb6434d9484fa533f5de3321a4
           token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
           path: test-awiki-system-test
           persist-credentials: false
@@ -271,7 +287,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/dsh-awiki
-          ref: f4b181f22c58bcc1a76f8099882ddc5191823eab
+          # Includes the reviewed await-before-ready Device Join driver fix.
+          ref: 6c9cd866b217641ab78fc34cb31db1ce64754c25
           path: dsh-awiki
           persist-credentials: false
 
@@ -324,12 +341,57 @@ jobs:
       - name: Prepare canonical App source path for contracts
         run: ln -s test-awiki-me awiki-me
 
-      - name: Run cross-repository System PR contracts
+      - name: Install locked System Test dependencies
+        working-directory: test-awiki-system-test
+        run: uv sync --locked
+
+      - name: Identify contract build cache inputs
+        id: contract-cache
+        working-directory: test-awiki-system-test
+        run: |
+          uv run --no-sync python - <<'PY'
+          import hashlib, json, os, platform, subprocess
+          inputs = {
+              "core": subprocess.check_output(["git", "-C", "../awiki-cli-rs2", "rev-parse", "HEAD"], text=True).strip(),
+              "coordinator": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "python": platform.python_version(),
+              "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
+              "cargo": subprocess.check_output(["cargo", "--version"], text=True).strip(),
+              "source": os.environ["AWIKI_SOURCE_INTEGRATION"],
+              "registry": os.environ["AWIKI_RELEASE_REGISTRY"],
+          }
+          digest = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"fingerprint={digest}\n")
+          PY
+
+      - name: Restore contract dependencies and verified artifact cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            awiki-cli-rs2/.artifacts/dependencies/source/target
+            awiki-cli-rs2/target
+            test-awiki-system-test/.artifacts/awiki-test-cache
+          key: contracts-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.contract-cache.outputs.fingerprint }}
+
+      - name: Prepare source-matched CLI contract artifact
         working-directory: test-awiki-system-test
         env:
-          AWIKI_CLI_RUST_CARGO_TOOLCHAIN: '1.88.0'
+          # A cold hosted runner may download locked dependencies during prepare.
+          AWIKI_CLI_RUST_CARGO_OFFLINE: '0'
         run: |
-          uv sync --locked
+          export AWIKI_CLI_SOURCE_REF="$(git -C ../awiki-cli-rs2 rev-parse HEAD)"
+          uv run --no-sync awiki-test \
+            --profile pr --component system \
+            --app-root ../test-awiki-me --cli-root ../awiki-cli-rs2 \
+            --prepare-only \
+            --run-id gha-contracts-prepare-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Run cross-repository System PR contracts
+        working-directory: test-awiki-system-test
+        run: |
           export AWIKI_CLI_SOURCE_REF="$(git -C ../awiki-cli-rs2 rev-parse HEAD)"
           uv run --no-sync awiki-test \
             --profile pr --component system \
@@ -354,7 +416,7 @@ jobs:
     steps:
       - name: Require exact ref and remote account pool secrets
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '948f562f777ac779c59172b0182cb2a94d49bcb2') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
           E2E_PHONE: ${{ secrets.AWIKI_E2E_OTP_PHONE }}
           E2E_OTP: ${{ secrets.AWIKI_E2E_OTP_CODE }}
           APP_HANDLE: ${{ secrets.AWIKI_E2E_APP_HANDLE }}
@@ -371,7 +433,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
-          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '948f562f777ac779c59172b0182cb2a94d49bcb2') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          ref: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
           token: ${{ github.token }}
           path: awiki-cli-rs2
           persist-credentials: false
@@ -425,7 +487,7 @@ jobs:
       - name: Write secret-backed awiki.info config
         working-directory: test-awiki-me
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '948f562f777ac779c59172b0182cb2a94d49bcb2') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
           E2E_PHONE: ${{ secrets.AWIKI_E2E_OTP_PHONE }}
           E2E_OTP: ${{ secrets.AWIKI_E2E_OTP_CODE }}
           APP_HANDLE: ${{ secrets.AWIKI_E2E_APP_HANDLE }}
@@ -465,7 +527,7 @@ jobs:
           AWIKI_SQLITE3_SOURCE_DIR: /tmp/awiki-sqlite3
         run: |
           test "$(git -C ../awiki-cli-rs2 rev-parse HEAD)" = \
-            "${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '948f562f777ac779c59172b0182cb2a94d49bcb2') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}"
+            "${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}"
           dart run tests/e2e/runner.dart \
             --case "${{ github.event.inputs.e2e_case || 'full' }}" \
             --config .e2e/ci/remote.json \
@@ -489,7 +551,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 75
     env:
-      WINDOWS_CORE_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '948f562f777ac779c59172b0182cb2a94d49bcb2') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
+      WINDOWS_CORE_REF: ${{ github.event.inputs.cli_ref || (github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893') || 'd3289db6732f6028fa7e54909b768bd48838f7fb' }}
     steps:
       - name: Require exact Core source ref
         shell: bash
@@ -533,6 +595,29 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Install AWiki Me dependencies
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: flutter pub get
+
+      - name: Verify Windows HTTPS trust and failure paths
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: |
+          flutter test --no-pub tests/unit/windows_verification_version_test.dart tests/unit/app_http_client_test.dart tests/unit/registration_entry_test.dart tests/unit/registration_entry_widget_test.dart tests/unit/app_update_provider_test.dart tests/unit/data/services/app_update_service_test.dart tests/e2e/flutter/native/windows_https_trust_test.dart
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate verification metadata before native builds
+        if: github.event_name == 'workflow_dispatch' && inputs.verification_version != ''
+        working-directory: test-awiki-me
+        shell: pwsh
+        env:
+          VERIFY_VERSION: ${{ inputs.verification_version }}
+          VERIFY_BUILD: ${{ inputs.verification_build }}
+        run: |
+          dart tool/validate_windows_verification_version.dart $env:VERIFY_VERSION $env:VERIFY_BUILD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Setup Rust 1.88.0
         uses: dtolnay/rust-toolchain@1.88.0
         with:
@@ -566,11 +651,6 @@ jobs:
           flutter pub get
           flutter test --no-pub test/native_library_loader_test.dart
 
-      - name: Install AWiki Me dependencies
-        working-directory: test-awiki-me
-        shell: pwsh
-        run: flutter pub get
-
       - name: Run Windows runner and package contract tests
         working-directory: test-awiki-me
         shell: pwsh
@@ -593,8 +673,19 @@ jobs:
       - name: Build Windows Release
         working-directory: test-awiki-me
         shell: pwsh
+        env:
+          VERIFY_VERSION: ${{ inputs.verification_version }}
+          VERIFY_BUILD: ${{ inputs.verification_build }}
         run: |
-          flutter build windows `
+          $extra = @()
+          if ($env:VERIFY_VERSION) {
+            if ($env:AWIKI_SOURCE_INTEGRATION -ne '1') { throw 'Verification package requires explicit source dependencies' }
+            $bytes = [IO.File]::ReadAllBytes((Resolve-Path 'tests/e2e/configs/windows-https-tenants.json'))
+            $b64 = [Convert]::ToBase64String($bytes)
+            $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+            $extra = @("--build-name=$env:VERIFY_VERSION", "--build-number=$env:VERIFY_BUILD", "--dart-define=AWIKI_BUILTIN_TENANTS_BASE64=$b64", "--dart-define=AWIKI_BUILTIN_TENANTS_SHA256=$digest")
+          }
+          flutter build windows @extra `
             --release `
             --no-pub `
             --dart-define=AWIKI_APP_SOURCE_REF=${{ github.sha }} `
@@ -604,11 +695,19 @@ jobs:
         working-directory: test-awiki-me
         shell: pwsh
         run: |
+          # flutter test does not accept --build-name/--build-number. Supply the
+          # actual Release executable metadata to this test's PackageInfo seam.
+          $version = (Get-Item build/windows/x64/runner/Release/AWikiMe.exe).VersionInfo.ProductVersion
+          $parts = $version -split '\+'
+          if ($parts.Count -ne 2) { throw 'Release executable package metadata is invalid' }
           flutter test `
             --no-pub `
             --dart-define=AWIKI_E2E=true `
+            "--dart-define=AWIKI_TEST_PACKAGE_VERSION=$($parts[0])" `
+            "--dart-define=AWIKI_TEST_PACKAGE_BUILD=$($parts[1])" `
             integration_test/im_core_open_smoke_test.dart `
             -d windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run app, single-instance, shutdown, and Credential smoke
         working-directory: test-awiki-me
@@ -616,6 +715,24 @@ jobs:
         run: |
           ./scripts/windows/run_pr_smoke.ps1 `
             -ReleaseDir build/windows/x64/runner/Release
+
+      - name: Package explicit Windows verification installer
+        if: github.event_name == 'workflow_dispatch' && inputs.verification_version != ''
+        working-directory: test-awiki-me
+        shell: pwsh
+        env:
+          VERIFY_VERSION: ${{ inputs.verification_version }}
+          VERIFY_BUILD: ${{ inputs.verification_build }}
+        run: ./scripts/windows/package_verification.ps1 -Version $env:VERIFY_VERSION -BuildNumber ([int]$env:VERIFY_BUILD) -CoreRef $env:WINDOWS_CORE_REF
+
+      - name: Upload Windows verification installer
+        if: github.event_name == 'workflow_dispatch' && inputs.verification_version != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-https-verification-installer
+          path: test-awiki-me/build/windows-verification/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Build production scope-secret MethodChannel probe
         working-directory: test-awiki-me
@@ -634,3 +751,27 @@ jobs:
         run: |
           ./scripts/windows/run_scope_secret_integration.ps1 `
             -ReleaseDir build/windows/x64/runner/Release
+
+      - name: Build read-only HTTPS field probe
+        if: github.event_name == 'workflow_dispatch' && inputs.verification_version != ''
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: |
+          flutter build windows --release --no-pub --target tests/e2e/flutter/native/windows_https_probe.dart --dart-define=AWIKI_APP_SOURCE_REF=${{ github.sha }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Remove installer-only manifests from the separate field probe
+        if: github.event_name == 'workflow_dispatch' && inputs.verification_version != ''
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: |
+          Remove-Item build/windows/x64/runner/Release/awiki-runtime-manifest.json, build/windows/x64/runner/Release/awiki-runtime-files.txt -ErrorAction SilentlyContinue
+
+      - name: Upload HTTPS field probe
+        if: github.event_name == 'workflow_dispatch' && inputs.verification_version != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-https-field-probe
+          path: test-awiki-me/build/windows/x64/runner/Release/
+          if-no-files-found: error
+          retention-days: 14

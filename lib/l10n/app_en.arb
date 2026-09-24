@@ -1674,5 +1674,8 @@
   "deviceJoinManagementRejoinRequired": "Management setup is no longer valid. Have an administrator revoke this device, then sign out locally on this device while keeping its data and join again.",
   "deviceJoinManagementFailed": "Device joined; management configuration failed",
   "handleRecoveryErrorLocalRegistryConflict": "Other local identities still conflict. Your recovery is preserved. Go back to resolve the other pending Handle recoveries, then continue this one. If none are available, keep your data and contact support.",
-  "handleRecoveryOtherPending": "Back to other recoveries"
+  "handleRecoveryOtherPending": "Back to other recoveries",
+  "secureConnectionFailed": "Unable to establish a secure connection. Check your system date and time, or contact support.",
+  "trustResourcesInvalid": "The app’s secure connection resources are missing or damaged. Update or reinstall the app.",
+  "onboardingAccountCheckUnsupported": "This server does not support account checks yet. Existing accounts can continue to sign in."
 }
