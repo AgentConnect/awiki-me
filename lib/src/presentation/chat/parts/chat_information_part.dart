@@ -264,6 +264,7 @@ class _ChatInformationPageState extends ConsumerState<_ChatInformationPage> {
                     displayName: primaryDisplayName,
                     handle: handle,
                     avatarUri: widget.target.avatarUri,
+                    userId: widget.target.targetDid,
                     onTap: () => unawaited(_openPeerInfo()),
                   ),
                   SizedBox(height: responsive.spacing(12)),
@@ -381,12 +382,14 @@ class _ChatInformationIdentityRow extends StatelessWidget {
     required this.displayName,
     required this.handle,
     required this.avatarUri,
+    required this.userId,
     required this.onTap,
   });
 
   final String displayName;
   final String handle;
   final String? avatarUri;
+  final String userId;
   final VoidCallback onTap;
 
   @override
@@ -412,6 +415,7 @@ class _ChatInformationIdentityRow extends StatelessWidget {
               seed: displayName,
               size: responsive.displayScaled(76),
               avatarUri: avatarUri,
+              userId: userId,
             ),
             SizedBox(width: responsive.spacing(16)),
             Expanded(
@@ -709,6 +713,7 @@ class _ChatHistorySearchPageState
                             children: <Widget>[
                               AvatarBadge(
                                 seed: sender,
+                                userId: message.senderDid,
                                 size: responsive.displayScaled(40),
                               ),
                               SizedBox(width: responsive.spacing(12)),

@@ -6219,6 +6219,52 @@
           ]
         ]
       }
+    },
+    {
+      "caseId": "AVATAR-E2E-001",
+      "feature": "Custom avatar lifecycle",
+      "layer": "remote_product_ui",
+      "preconditions": "Reviewed remote target with avatar writes enabled; a fresh human account and independent CLI peer. Only the native file chooser is replaced by a deterministic synthetic image fixture.",
+      "action": "Use the visible profile editor to choose, crop, save, replace and clear an avatar; inspect authoritative profile and anonymous image bytes.",
+      "exactOracles": [
+        "Crop and upload show a decoded image; replacement changes the immutable URI and clear restores the character fallback.",
+        "The public JPEG is 512 square within 256 KiB; previous immutable images remain readable."
+      ],
+      "negativeChecks": [
+        "Missing image, stale avatar after clear, incorrect dimensions or oversized public JPEG fail. Native picker, camera and HEIC require separate device evidence."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-profile",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "AVATAR-E2E-001:crop_upload_and_visible_image",
+          "AVATAR-E2E-001:replacement_immutable_url_and_clear_fallback",
+          "AVATAR-E2E-001:bounded_public_jpeg_and_old_url_retained"
+        ],
+        "exactOracleAssertions": [
+          [
+            "AVATAR-E2E-001:crop_upload_and_visible_image",
+            "AVATAR-E2E-001:replacement_immutable_url_and_clear_fallback"
+          ],
+          [
+            "AVATAR-E2E-001:bounded_public_jpeg_and_old_url_retained"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "AVATAR-E2E-001:replacement_immutable_url_and_clear_fallback",
+            "AVATAR-E2E-001:bounded_public_jpeg_and_old_url_retained"
+          ]
+        ]
+      }
     }
   ]
 }

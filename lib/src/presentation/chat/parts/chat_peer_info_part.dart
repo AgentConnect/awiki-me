@@ -269,6 +269,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                 displayNameKey: const Key('peer-info-dialog-handle-value'),
                 avatarSeed: displayName,
                 avatarUri: avatarUri,
+                avatarUserId: profileDid,
                 avatarKey: const Key('peer-info-avatar'),
                 handle: secondaryIdentity,
                 handleKey: const Key('peer-info-dialog-display-name'),
@@ -459,6 +460,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                       seed: displayName,
                       size: 72,
                       avatarUri: avatarUri,
+                      userId: profileDid,
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -643,6 +645,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
               seed: displayName,
               size: 80,
               avatarUri: avatarUri,
+              userId: profileDid,
             ),
           ),
           const SizedBox(height: 14),
@@ -1293,6 +1296,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                               seed: _group.displayName,
                               size: responsive.isPhone ? 56 : 64,
                               avatarUri: _group.avatarUri,
+                              groupId: _group.groupId,
                             ),
                             SizedBox(width: responsive.spacing(14)),
                             Expanded(

@@ -1364,6 +1364,7 @@ class _MentionCandidateTile extends StatelessWidget {
                       ? responsive.displayScaled(28)
                       : responsive.displayScaled(32),
                   avatarUri: candidate.avatarUri,
+                  userId: candidate.target.did,
                 ),
                 SizedBox(
                   width: macStyle

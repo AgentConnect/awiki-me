@@ -1248,6 +1248,7 @@
         "ATTACH-E2E-002",
         "ATTACH-REG-001",
         "AUTH-E2E-001",
+        "AVATAR-E2E-001",
         "CONTACT-E2E-001",
         "CONTACT-E2E-002",
         "CONTACT-FIRST-CONV-E2E-001",
@@ -1377,7 +1378,8 @@
         "identity-switch",
         "restart",
         "display-name-fallback",
-        "production-keychain"
+        "production-keychain",
+        "avatars"
       ]
     },
     "registration-account-first": {
@@ -1406,6 +1408,41 @@
       ],
       "caseIds": [
         "REGISTRATION-ACCOUNT-FIRST-E2E-001"
+      ]
+    },
+    "avatars": {
+      "tier": "remote_product_ui",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "requiredTools": [
+        "flutter",
+        "awiki-cli"
+      ],
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-profile",
+      "estimatedMinutes": 6,
+      "timeoutMinutes": 12,
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "allowedHosts": [
+        "awiki.info",
+        "agentwiki.info",
+        "anpclaw.com"
+      ],
+      "allowedDidDomains": [
+        "awiki.info",
+        "agentwiki.info",
+        "anpclaw.com"
+      ],
+      "resourceCategories": [
+        "profiles"
+      ],
+      "caseIds": [
+        "AVATAR-E2E-001"
       ]
     }
   }

@@ -43,6 +43,7 @@ dependencies:
   local_auth: ^3.0.2
 
 dev_dependencies:
+  file_selector_platform_interface: ^2.7.0
   flutter_test:
     sdk: flutter
   integration_test:
