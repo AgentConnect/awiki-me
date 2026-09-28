@@ -1496,13 +1496,14 @@ Do not compile phone numbers, OTPs, invitation codes or fixture JSON into the Ap
 用户于 2026-09-24 决定：提交、更新或合并 PR 不自动运行本仓 `ci.yml` 与
 `notify-source-ci.yml`。两者保留 `workflow_dispatch` 显式入口；本次改动仍保留
 `ci.yml` 原有夜间 schedule。手动运行需选择目标 ref 并提供精确 `cli_ref`，可选
-`sdk_dependencies=source/registry`（默认 source）。source 模式固定 Core consumer
-950487d61a7dee0ad5cb4910a86e73e5f91a8893；其 source manifest 保留已验收的 Core
-d3ad7075、ANP 4208d1ca、Identity 0b6369fe 和配套锁。
+`sdk_dependencies=source/registry`（默认 registry）。默认 Core checkout 固定到
+`c483b51500058ffc6dac2e9db5517a5df0ce1262`，其正式依赖锁解析已发布的 Core
+`0.1.6`、ANP `1.0.5` 和 Identity `0.2.4`。旧 Core source manifest 在 SDK 发布后
+撤销；将来需要源码联调时，必须重新提交精确 source manifest 和配套锁，再显式选择 source。
 `validation_only=true` 保持禁止远端账号/OTP job。未显式执行的 CI 不能记为通过；
-正式 package workflow 与发布门禁不变，开发不提前发布 SDK。
+正式 package workflow 与发布门禁不变。
 
-Linux Core/CLI、原生 guard rebuild 和 Windows Rust host test/native build 复用隔离 source builder；读取 .artifacts/dependencies/source/target，不混入 registry 的 target。Linux 来源摘要覆盖模式、source manifest/lock 和构建脚本，切换输入使旧 provenance 失效。Windows 保留 PE x64/FRB 实际 DLL 校验。私有合同源读取仍使用现有最小权限 token，403 不以跳过测试代替。
+显式 source 模式的 Linux Core/CLI、原生 guard rebuild 和 Windows Rust host test/native build 复用隔离 source builder；读取 .artifacts/dependencies/source/target，不混入 registry 的 target。默认 registry 模式使用已发布 SDK 和固定 registry lock。Linux 来源摘要覆盖模式、选中的 manifest/lock 和构建脚本，切换输入使旧 provenance 失效。Windows 保留 PE x64/FRB 实际 DLL 校验。私有合同源读取仍使用现有最小权限 token，403 不以跳过测试代替。
 
 
 ### App 与跨仓契约 CI 隔离
@@ -1511,13 +1512,14 @@ Linux Core/CLI、原生 guard rebuild 和 Windows Rust host test/native build �
 
 独立的 `cross-repository-contracts` job 使用同一 coordinator 的 `--profile pr --component system`，保留原 PR profile 的全部 System contract/acp-contract 用例以及精确源码 pin。两个 job 没有 `needs` 依赖，也不使用 `continue-on-error`；Web 403 仅使跨仓 job 失败，App 验证继续并单独报告。完整 CI 通过仍要求两边通过，不能用 App 通过替代跨仓契约通过。源码集成模式与正式发布边界不变。
 
-源码模式由手动 `sdk_dependencies=source` 显式选择并提供精确 `cli_ref`；schedule
-使用原 registry 默认。`pull_request` 与 `push` 触发器已移除。
+源码模式由手动 `sdk_dependencies=source` 显式选择，并须先提交新的精确来源清单；
+手动默认和 schedule 均使用 registry。`pull_request` 与 `push` 触发器已移除。
 
 跨仓契约 job 按实际需求使用 Python、Rust、Node，不安装 Flutter。固定 System Test
 coordinator a191665c8173dbcb6434d9484fa533f5de3321a4 将 Flutter 工具链限制在 native
 Flutter 产物；固定 Core consumer 通过原隔离 source/registry 入口编译 ACP 测试。
-对应依赖 PR 为 awiki-system-test #39、awiki-cli-rs2 #49，先审查合入依赖，再合入消费者。
+对应依赖修复已合入 awiki-system-test #44、awiki-cli-rs2 #52；Core `0.1.6` 发布后
+消费者固定到上述新源码和 registry 锁。
 DSH 合同源码固定 6c9cd866b217641ab78fc34cb31db1ce64754c25，包含已合入 Release 的
 Device Join driver 等待 provider 初始化后才报告 ready 的修复；保留原初始化顺序断言。
 
