@@ -7137,6 +7137,96 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'当前服务器暂不支持账号检查。已有账号可继续登录。'**
   String get onboardingAccountCheckUnsupported;
+
+  /// No description provided for @avatarChoose.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择照片'**
+  String get avatarChoose;
+
+  /// No description provided for @avatarCamera.
+  ///
+  /// In zh, this message translates to:
+  /// **'拍照'**
+  String get avatarCamera;
+
+  /// No description provided for @avatarReset.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复默认头像'**
+  String get avatarReset;
+
+  /// No description provided for @avatarRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试保存'**
+  String get avatarRetry;
+
+  /// No description provided for @avatarImageHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择 JPEG、PNG 或静态 WebP 图片，最大 20 MB。'**
+  String get avatarImageHint;
+
+  /// No description provided for @avatarCropHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'拖动或缩放图片，调整头像的位置。'**
+  String get avatarCropHint;
+
+  /// No description provided for @avatarImageRejected.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法使用这张图片。请选择 20 MB 内的静态图片，或换一张照片。'**
+  String get avatarImageRejected;
+
+  /// No description provided for @avatarSaveFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未确认保存结果。请检查网络后重试。'**
+  String get avatarSaveFailed;
+
+  /// No description provided for @avatarReconciled.
+  ///
+  /// In zh, this message translates to:
+  /// **'已读取最新头像。请确认当前结果后再操作。'**
+  String get avatarReconciled;
+
+  /// No description provided for @avatarLoadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法读取头像设置，请稍后重试。'**
+  String get avatarLoadFailed;
+
+  /// No description provided for @avatarUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前账号或服务暂不支持修改头像。'**
+  String get avatarUnavailable;
+
+  /// No description provided for @groupAvatarLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'群成员头像'**
+  String get groupAvatarLabel;
+
+  /// No description provided for @avatarRecoverTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续设置头像？'**
+  String get avatarRecoverTitle;
+
+  /// No description provided for @avatarRecoverHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'上次选择的照片已恢复。确认后可继续裁剪，保存前不会上传。'**
+  String get avatarRecoverHint;
+
+  /// No description provided for @avatarRecoverContinue.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续裁剪'**
+  String get avatarRecoverContinue;
 }
 
 class _AppLocalizationsDelegate

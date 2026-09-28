@@ -160,6 +160,7 @@ class PeerDisplayProfileController
       displayName: nickname,
       handle: profile.fullHandle ?? profile.handle,
       avatarUri: profile.avatarUri,
+        avatarThumbnailUri: profile.avatarThumbnailUri,
       profileUri: profile.profileUri,
       subjectType: profile.subjectType,
     );
@@ -399,6 +400,7 @@ class PeerDisplayProfileController
             displayName: unresolved.displayName,
             handle: unresolved.handle,
             avatarUri: unresolved.avatarUri,
+            avatarThumbnailUri: unresolved.avatarThumbnailUri,
             profileUri: unresolved.profileUri,
             subjectType: unresolved.subjectType,
             isStale: unresolved.isStale,
@@ -444,6 +446,7 @@ class PeerDisplayProfileController
           displayName: profile.displayName,
           handle: profile.handle,
           avatarUri: profile.avatarUri,
+        avatarThumbnailUri: profile.avatarThumbnailUri,
           profileUri: profile.profileUri,
           subjectType: profile.subjectType,
           isStale: profile.isStale,

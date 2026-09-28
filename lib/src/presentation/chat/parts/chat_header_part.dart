@@ -77,6 +77,8 @@ class _ChatHeader extends StatelessWidget {
                     seed: compactName,
                     size: avatarSize,
                     avatarUri: conversation.avatarUri,
+                    userId: conversation.isGroup ? null : conversation.targetDid,
+                    groupId: conversation.isGroup ? conversation.conversationId : null,
                   ),
                 ),
                 SizedBox(width: responsive.displayScaled(8)),

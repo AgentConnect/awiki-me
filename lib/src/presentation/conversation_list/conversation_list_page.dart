@@ -407,6 +407,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                             ref,
                             item,
                           ),
+                          avatarUserId: item.isGroup ? null : item.targetDid,
                           preview: preview,
                           unreadCount: item.unreadCount,
                           timeLabel: item.lastMessagePreview.trim().isEmpty
@@ -695,6 +696,7 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
                     context.l10n,
                   ),
                   avatarUri: _conversationPresentationAvatarUri(ref, item),
+                  avatarUserId: item.isGroup ? null : item.targetDid,
                   preview: preview,
                   unreadCount: item.unreadCount,
                   timeLabel: item.lastMessagePreview.trim().isEmpty
@@ -977,6 +979,7 @@ class _MacConversationRow extends StatelessWidget {
     required this.conversationId,
     required this.title,
     required this.avatarUri,
+    this.avatarUserId,
     required this.preview,
     required this.unreadCount,
     required this.timeLabel,
@@ -991,6 +994,7 @@ class _MacConversationRow extends StatelessWidget {
   final String conversationId;
   final String title;
   final String? avatarUri;
+  final String? avatarUserId;
   final _ConversationPreviewPresentation preview;
   final int unreadCount;
   final String timeLabel;
@@ -1043,6 +1047,8 @@ class _MacConversationRow extends StatelessWidget {
                     seed: title,
                     size: responsive.displayScaled(38),
                     avatarUri: avatarUri,
+                    userId: avatarUserId,
+                    groupId: classification.isGroup ? conversationId : null,
                   ),
                   if (unreadCount > 0)
                     Positioned(
@@ -1176,6 +1182,7 @@ class _ConversationRow extends StatelessWidget {
     required this.conversationId,
     required this.title,
     required this.avatarUri,
+    this.avatarUserId,
     required this.preview,
     required this.unreadCount,
     required this.timeLabel,
@@ -1190,6 +1197,7 @@ class _ConversationRow extends StatelessWidget {
   final String conversationId;
   final String title;
   final String? avatarUri;
+  final String? avatarUserId;
   final _ConversationPreviewPresentation preview;
   final int unreadCount;
   final String timeLabel;
@@ -1241,6 +1249,8 @@ class _ConversationRow extends StatelessWidget {
                       seed: title,
                       size: responsive.displayScaled(48),
                       avatarUri: avatarUri,
+                    userId: avatarUserId,
+                    groupId: classification.isGroup ? conversationId : null,
                     ),
                     if (unreadCount > 0)
                       Positioned(

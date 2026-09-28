@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'src/data/avatar/avatar_picker_recovery.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -9,6 +11,7 @@ import 'src/app/tenant_aware_awiki_me_app.dart';
 Future<void> main() async {
   final startupWatch = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
+  unawaited(AvatarPickerRecovery.instance.initialize());
   await initializeBuiltinTenantCatalog();
   AwikiPerformanceLogger.registerFrameTimings();
   AwikiPerformanceLogger.log(

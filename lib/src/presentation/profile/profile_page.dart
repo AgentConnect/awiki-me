@@ -1,3 +1,4 @@
+import 'avatar_edit_dialog.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -368,6 +369,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         context,
         (_) => ProfileEditPage(
           profile: profile,
+          onChangeAvatar: () => showAvatarEditor(context),
           onSave: (patch) =>
               ref.read(profileProvider.notifier).updateProfile(patch),
         ),
@@ -386,6 +388,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           nickController: nickController,
           bioController: bioController,
           tagsController: tagsController,
+          onChangeAvatar: () => showAvatarEditor(context),
           onSave: () async {
             final patch = ProfilePatch(
               displayName: nickController.text.trim(),
@@ -999,12 +1002,14 @@ class _ProfileEditDialog extends StatelessWidget {
     required this.bioController,
     required this.tagsController,
     required this.onSave,
+    required this.onChangeAvatar,
   });
 
   final TextEditingController nickController;
   final TextEditingController bioController;
   final TextEditingController tagsController;
   final Future<void> Function() onSave;
+  final VoidCallback onChangeAvatar;
 
   @override
   Widget build(BuildContext context) {
@@ -1024,6 +1029,7 @@ class _ProfileEditDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
+            CupertinoButton(key: const Key('profile-edit-change-avatar-button'), onPressed: onChangeAvatar, child: Text(context.l10n.profileAvatarChange)),
             AppDialogHeader(
               title: context.l10n.profileEditTitle,
               onClose: () => Navigator.of(context).pop(),

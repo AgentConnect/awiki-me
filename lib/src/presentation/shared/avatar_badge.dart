@@ -1,50 +1,169 @@
+import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../data/avatar/avatar_image_cache.dart';
+import '../app_shell/providers/session_provider.dart';
+import '../profile/peer_display_profile_provider.dart';
+import '../profile/profile_provider.dart';
 
+import '../group/group_provider.dart';
+import '../../domain/entities/group_summary.dart';
+import '../../l10n/l10n.dart';
 import 'awiki_me_design.dart';
 import 'default_avatar_generator.dart';
 
-class AvatarBadge extends StatelessWidget {
+final avatarImageCacheProvider = Provider<AvatarImageCache>((ref) {
+  final epoch = ref.watch(sessionProvider.select((state) => state.activeEpoch));
+  final cache = AvatarImageCache('${epoch?.ownerDid}|${epoch?.identityKey}');
+  ref.onDispose(cache.dispose);
+  return cache;
+});
+
+class AvatarBadge extends ConsumerStatefulWidget {
   const AvatarBadge({
     super.key,
     required this.seed,
     this.size = 48,
     this.labelOverride,
     this.avatarUri,
+    this.avatarThumbnailUri,
     this.userId,
+    this.groupId,
   });
-
   final String seed;
   final double size;
   final String? labelOverride;
   final String? avatarUri;
+  final String? avatarThumbnailUri;
   final String? userId;
+  final String? groupId;
+  @override
+  ConsumerState<AvatarBadge> createState() => _AvatarBadgeState();
+}
+
+class _AvatarBadgeState extends ConsumerState<AvatarBadge> {
+  ui.Image? _image;
+  String? _key;
+  int _generation = 0;
+  AvatarImageCache? _cache;
+  Timer? _refreshTimer;
+  String? _profileDemand;
+  void _refreshProfiles(List<String> dids) {
+    final session = ref.read(sessionProvider);
+    if (!mounted ||
+        session.session == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.paused) {
+      return;
+    }
+    unawaited(
+      ref
+          .read(peerDisplayProfileProvider.notifier)
+          .refreshDisplayProfiles(
+            ownerDid: session.session!.did,
+            dids: dids,
+            expectedEpoch: session.activeEpoch,
+          ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _generation++;
+    _image?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final fallback = _FallbackAvatarBadge(
-      seed: seed,
-      size: size,
-      labelOverride: labelOverride,
-      userId: userId,
+    final group = ref.watch(
+      groupAvatarSummariesProvider.select((groups) => groups[widget.groupId]),
     );
-    final uri = _safeAvatarUri(avatarUri);
-    if (uri == null) {
-      return fallback;
+    final members = group?.avatarMembers ?? const <GroupAvatarMember>[];
+    final demand = members.isNotEmpty
+        ? members.map((m) => m.did).toList()
+        : widget.userId == null
+        ? <String>[]
+        : [widget.userId!];
+    final demandKey =
+        '${ref.watch(sessionProvider.select((s) => s.activeEpoch))?.hashCode}:${demand.join('|')}';
+    if (_profileDemand != demandKey) {
+      _profileDemand = demandKey;
+      _refreshTimer?.cancel();
+      if (demand.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _refreshProfiles(demand);
+        });
+        _refreshTimer = Timer.periodic(
+          const Duration(minutes: 5),
+          (_) => _refreshProfiles(demand),
+        );
+      }
     }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(size / 2),
-      child: Image.network(
-        uri.toString(),
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => fallback,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) {
-            return child;
+    if ((group?.avatarUri ?? widget.avatarUri) == null &&
+        members.isNotEmpty &&
+        members.length <= 4) {
+      return _GroupAvatarTiles(members: members, size: widget.size);
+    }
+    final own = ref.watch(
+      profileProvider.select(
+        (state) => state.profile?.did == widget.userId ? state.profile : null,
+      ),
+    );
+    final peer = ref.watch(
+      peerDisplayProfileProvider.select((state) => state.forDid(widget.userId)),
+    );
+    final main = own != null
+        ? own.avatarUri
+        : peer != null
+        ? peer.avatarUri
+        : group?.avatarUri ?? widget.avatarUri;
+    final thumbnail = own != null
+        ? own.avatarThumbnailUri
+        : peer != null
+        ? peer.avatarThumbnailUri
+        : widget.avatarThumbnailUri;
+    final raw = main == null
+        ? null
+        : widget.size <= 64
+        ? thumbnail ?? main
+        : main;
+    final uri = safeAvatarUri(raw)?.toString();
+    final cache = ref.watch(avatarImageCacheProvider);
+    final key = '$uri@${widget.size <= 64 ? 128 : 512}';
+    if (_key != key || _cache != cache) {
+      _key = key;
+      _cache = cache;
+      final generation = ++_generation;
+      _image?.dispose();
+      _image = null;
+      if (uri != null) {
+        cache.load(uri, edge: widget.size <= 64 ? 128 : 512).then((image) {
+          if (!mounted || generation != _generation) {
+            image?.dispose();
+            return;
           }
-          return fallback;
-        },
+          setState(() {
+            _image = image;
+          });
+        });
+      }
+    }
+    if (_image == null) {
+      return _FallbackAvatarBadge(
+        seed: widget.seed,
+        size: widget.size,
+        labelOverride: widget.labelOverride,
+        userId: widget.userId,
+      );
+    }
+    return ClipOval(
+      child: RawImage(
+        image: _image,
+        width: widget.size,
+        height: widget.size,
+        fit: BoxFit.cover,
       ),
     );
   }
@@ -95,20 +214,62 @@ class _FallbackAvatarBadge extends StatelessWidget {
   }
 }
 
-Uri? _safeAvatarUri(String? raw) {
-  final trimmed = raw?.trim();
-  if (trimmed == null || trimmed.isEmpty) {
-    return null;
+class _GroupAvatarTiles extends StatelessWidget {
+  const _GroupAvatarTiles({required this.members, required this.size});
+  final List<GroupAvatarMember> members;
+  final double size;
+  @override
+  Widget build(BuildContext context) {
+    if (members.length == 1) {
+      return AvatarBadge(
+        seed: members.first.handle ?? members.first.did,
+        userId: members.first.did,
+        size: size,
+      );
+    }
+    Widget tile(GroupAvatarMember member) => AvatarBadge(
+      key: ValueKey(member.memberKey),
+      seed: member.handle ?? member.did,
+      userId: member.did,
+      size: (size - 6) / 2,
+    );
+    return Semantics(
+      label: context.l10n.groupAvatarLabel,
+      child: Container(
+        width: size,
+        height: size,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: context.awikiTheme.avatarBackground,
+          borderRadius: BorderRadius.circular(size / 4),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                tile(members[0]),
+                if (members.length != 3) ...[
+                  const SizedBox(width: 2),
+                  tile(members[1]),
+                ],
+              ],
+            ),
+            if (members.length > 2) ...[
+              const SizedBox(height: 2),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  tile(members[members.length == 3 ? 1 : 2]),
+                  const SizedBox(width: 2),
+                  tile(members.last),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
-  final uri = Uri.tryParse(trimmed);
-  if (uri == null || !uri.isAbsolute || uri.scheme != 'https') {
-    return null;
-  }
-  final path = uri.path.toLowerCase();
-  if (path.endsWith('.svg') ||
-      path.endsWith('.html') ||
-      path.endsWith('.htm')) {
-    return null;
-  }
-  return uri;
 }

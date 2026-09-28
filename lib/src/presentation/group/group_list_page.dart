@@ -360,6 +360,7 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                             seed: _group.displayName,
                             size: 56,
                             avatarUri: _group.avatarUri,
+                            groupId: _group.groupId,
                           ),
                           const SizedBox(width: 16),
                           Expanded(
@@ -711,6 +712,7 @@ class _GroupCard extends StatelessWidget {
               seed: group.displayName,
               size: 52,
               avatarUri: group.avatarUri,
+              groupId: group.groupId,
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -786,7 +788,7 @@ class GroupMemberRow extends ConsumerWidget {
     final responsive = context.awikiResponsive;
     return Row(
       children: <Widget>[
-        AvatarBadge(seed: title, size: 36, avatarUri: avatarUri),
+        AvatarBadge(seed: title, size: 36, avatarUri: avatarUri, userId: item.did),
         const SizedBox(width: 12),
         Expanded(
           child: Column(

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import '../../application/ports/profile_core_port.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -113,6 +115,69 @@ class ProfileController extends StateNotifier<ProfileState> {
       epoch: epoch,
       sessionBefore: sessionBefore,
     );
+  }
+
+  /// Capability discovery and reconciliation always read the current owner.
+  Future<UserProfile> loadAvatarProfile() async {
+    final generation = _stateGeneration;
+    final before = ref.read(sessionProvider);
+    final profile = await ref
+        .read(profileApplicationServiceProvider)
+        .loadMyProfile();
+    if (!_isOperationCurrent(generation, before.activeEpoch) ||
+        !_sameProfileProviderSession(before, ref.read(sessionProvider)) ||
+        profile.did != before.session?.did)
+      throw sessionEpochChangedError();
+    state = _profileStateAfterRefresh(profile);
+    return state.profile!;
+  }
+
+  Future<void> mutateAvatar({
+    required String requestId,
+    required String expectedVersion,
+    Uint8List? jpeg,
+  }) async {
+    final generation = _stateGeneration;
+    final before = ref.read(sessionProvider);
+    final service = ref.read(profileApplicationServiceProvider);
+    if (service is! AvatarCorePort ||
+        state.profile?.avatarUploadEnabled != true ||
+        state.isSaving)
+      throw StateError('avatar.unavailable');
+    state = state.copyWith(isSaving: true);
+    try {
+      final avatars = service as AvatarCorePort;
+      final profile = jpeg == null
+          ? await avatars.clearAvatar(
+              requestId: requestId,
+              expectedProfileVersion: expectedVersion,
+            )
+          : await avatars.setAvatar(
+              requestId: requestId,
+              expectedProfileVersion: expectedVersion,
+              jpeg: jpeg,
+            );
+      if (!_isOperationCurrent(generation, before.activeEpoch) ||
+          !_sameProfileProviderSession(before, ref.read(sessionProvider)))
+        throw sessionEpochChangedError();
+      state = _profileStateAfterRefresh(profile, isSaving: false);
+      final version = profile.profileVersion;
+      if (version != null && isCanonicalProductDecimal(version)) {
+        await ref
+            .read(accountStateSyncRequestBusProvider)
+            .request(
+              'avatar_updated',
+              force: true,
+              minimumVersion: AccountStateVersionFloor(
+                domain: ProductAccountDomain.profile,
+                version: version,
+              ),
+            );
+      }
+    } finally {
+      if (_isOperationCurrent(generation, before.activeEpoch))
+        state = state.copyWith(isSaving: false);
+    }
   }
 
   Future<void> refreshWithHomepage(String url) async {
@@ -245,6 +310,11 @@ class ProfileController extends StateNotifier<ProfileState> {
       profileMarkdown: _optionalString(payload['profile_md']) ?? '',
       handle: session.handle,
       avatarUri: _optionalString(payload['avatar_url']),
+      avatarThumbnailUri:
+          state.profile?.avatarUri == _optionalString(payload['avatar_url'])
+          ? state.profile?.avatarThumbnailUri
+          : null,
+      avatarUploadEnabled: state.profile?.avatarUploadEnabled ?? false,
       profileVersion: snapshot.domainVersion,
     );
     await _synchronizeCurrentIdentityDisplayName(
@@ -284,6 +354,15 @@ class ProfileController extends StateNotifier<ProfileState> {
     bool? isLoading,
     bool? isSaving,
   }) {
+    final currentVersion = state.profile?.profileVersion;
+    final incomingVersion = profile.profileVersion;
+    if (currentVersion != null &&
+        incomingVersion != null &&
+        isCanonicalProductDecimal(currentVersion) &&
+        isCanonicalProductDecimal(incomingVersion) &&
+        BigInt.parse(incomingVersion) < BigInt.parse(currentVersion)) {
+      return state.copyWith(isLoading: isLoading, isSaving: isSaving);
+    }
     final homepageUrl = ref
         .read(profileHomepageResolverProvider)
         .homepageUrl(profile);
