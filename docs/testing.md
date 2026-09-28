@@ -1558,6 +1558,31 @@ for the fixed public CA asset, maintenance, field-probe and explicit source
 verification installer procedure. These checks do not mutate system certificate
 stores or substitute for manual account login.
 
+### Android secure-storage upgrade regression
+
+For the 9.2.4 → 10.3.1 namespace fix, run the owning migrator, platform Scope,
+App-state and session unit tests. The isolated Android fixtures and exact
+healthy-upgrade / existing-damage / cold-restart oracles live in
+[android_storage_upgrade](../tests/e2e/flutter/android_storage_upgrade/README.md).
+This is a targeted native reproduction, not a new remote `full` runner case.
+Keep APK hashes, original ciphertext/key digests and result booleans in the
+verification run. A signed product APK must also preserve the official package
+and signing certificate and pass an in-place installation/startup check.
+Real-account login and original message/image access on the affected phone remain
+manual acceptance; do not replace those checks with the synthetic storage probe.
+
 ### 注册 E2E 远程目标（2026-09-24）
 
 `registration-account-first` 使用 runner 显式配置的 DID 域名和 HTTPS origin；fixture 必须与该配置精确匹配。目标域名不写入测试清单。邀请码由所选环境的受管 fixture 创建，按精确账号、Handle、DID、邀请范围清理，不能使用其他环境账号。目标校验测试：`tests/unit/e2e_harness/recovery_remote_target_test.dart`。
+
+
+### 2026-09-28 对方身份展示回归
+
+`tests/unit/identity_flow_test.dart` 覆盖目录 DID/Handle 与嵌套资料冲突、缺失资料、
+合法重名、无昵称匹配后进入会话，以及资料 Handle 不能重定向聊天对象。
+与 `peer_display_profile_provider_test.dart` 的账号切换、刷新及空昵称覆盖一起执行。
+`tests/e2e/flutter/app/app_smoke_test.dart` 的 `AwikiMeApp start conversation stays in
+recents before first send` 同时核对匹配卡的完整 Handle、昵称和聊天标题；该用例使用
+fake 服务。以 Flutter tester 执行只证明产品交互编排，不替代真实平台或跨域投递验收。
+完整修复还需要 `awiki-cli-rs2` 的公共 Profile 解析修复进入实际 native SDK；仅更新 Dart
+源码或复用旧原生库不能宣称解决底层问题。正式构建仍使用发布后的 SDK 和精确 registry pin。

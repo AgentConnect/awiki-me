@@ -964,6 +964,22 @@ void main() {
           find.byKey(const Key('identity-lookup-search-button')),
         );
         await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<Text>(
+                find.byKey(const Key('identity-preview-display-name')),
+              )
+              .data,
+          'Smoke Peer Nickname',
+        );
+        expect(
+          tester
+              .widget<Text>(
+                find.byKey(const Key('identity-preview-handle-value')),
+              )
+              .data,
+          '@smoke-peer.awiki.ai',
+        );
         await tester.tap(find.byKey(const Key('identity-start-chat-button')));
         await tester.pumpAndSettle();
 
