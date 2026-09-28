@@ -15,7 +15,7 @@ import 'default_avatar_generator.dart';
 
 final avatarImageCacheProvider = Provider<AvatarImageCache>((ref) {
   final epoch = ref.watch(sessionProvider.select((state) => state.activeEpoch));
-  final cache = AvatarImageCache('${epoch?.ownerDid}|${epoch?.identityKey}');
+  final cache = AvatarImageCache(epoch?.ownerDid ?? '');
   ref.onDispose(cache.dispose);
   return cache;
 });

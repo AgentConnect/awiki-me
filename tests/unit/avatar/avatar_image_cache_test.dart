@@ -250,4 +250,44 @@ void main() {
       });
     },
   );
+  testWidgets(
+    'deleting one owner clears its disk data and fences late downloads',
+    (tester) async {
+      await tester.runAsync(() async {
+        final client = Client((_) async => Response(jpeg));
+        final alice = PlatformAvatarImageCache(
+          'clear-alice',
+          client: client,
+          directory: root,
+        );
+        final bob = PlatformAvatarImageCache(
+          'clear-bob',
+          client: client,
+          directory: root,
+        );
+        (await alice.load('https://example.com/a.jpg'))?.dispose();
+        (await bob.load('https://example.com/b.jpg'))?.dispose();
+        await bob.flush();
+        expect(await root.list().length, 4);
+        final late = Completer<HttpClientResponse>();
+        final pendingCache = PlatformAvatarImageCache(
+          'clear-alice',
+          client: Client((_) => late.future),
+          directory: root,
+        );
+        final pending = pendingCache.load('https://example.com/late.jpg');
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await clearAvatarImageCache('clear-alice', directory: root);
+        late.complete(Response(jpeg));
+        expect(await pending, isNull);
+        await pendingCache.flush();
+        expect(await root.list().length, 2);
+        expect(await alice.load('https://example.com/a.jpg'), isNull);
+        (await bob.load('https://example.com/b.jpg'))?.dispose();
+        alice.dispose();
+        bob.dispose();
+        pendingCache.dispose();
+      });
+    },
+  );
 }

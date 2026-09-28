@@ -9,3 +9,5 @@ class PlatformAvatarImageCache implements AvatarImageCache {
   @override
   void dispose() {}
 }
+
+Future<void> clearAvatarImageCache(String owner) async {}

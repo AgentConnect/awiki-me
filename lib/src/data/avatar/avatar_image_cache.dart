@@ -27,3 +27,6 @@ Uri? safeAvatarUri(String? value) {
   }
   return uri;
 }
+
+Future<void> clearAvatarImageCache(String owner) =>
+    platform.clearAvatarImageCache(owner);
