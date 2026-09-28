@@ -826,8 +826,9 @@ GroupSummary _mergeGroupSummary({
   }
   final oldVersion = BigInt.tryParse(local.groupStateVersion ?? '');
   final newVersion = BigInt.tryParse(incoming.groupStateVersion ?? '');
-  if (oldVersion != null && newVersion != null && newVersion < oldVersion)
+  if (oldVersion != null && newVersion != null && newVersion < oldVersion) {
     return local;
+  }
   return GroupSummary(
     avatarUri: incoming.avatarUri ?? local.avatarUri,
     avatarMembers: incoming.avatarMembers,

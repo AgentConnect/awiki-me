@@ -104,8 +104,9 @@ class _AvatarBadgeState extends ConsumerState<AvatarBadge> {
           if (WidgetsBinding.instance.lifecycleState ==
               AppLifecycleState.paused) {
             _imageTimer = Timer(const Duration(seconds: 30), () {
-              if (mounted && generation == _generation)
+              if (mounted && generation == _generation) {
                 _loadImage(cache, uri, edge, generation);
+              }
             });
             return;
           }

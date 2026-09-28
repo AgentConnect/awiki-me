@@ -126,8 +126,9 @@ class ProfileController extends StateNotifier<ProfileState> {
         .loadMyProfile();
     if (!_isOperationCurrent(generation, before.activeEpoch) ||
         !_sameProfileProviderSession(before, ref.read(sessionProvider)) ||
-        profile.did != before.session?.did)
+        profile.did != before.session?.did) {
       throw sessionEpochChangedError();
+    }
     state = _profileStateAfterRefresh(profile);
     return state.profile!;
   }
@@ -142,8 +143,9 @@ class ProfileController extends StateNotifier<ProfileState> {
     final service = ref.read(profileApplicationServiceProvider);
     if (service is! AvatarCorePort ||
         state.profile?.avatarUploadEnabled != true ||
-        state.isSaving)
+        state.isSaving) {
       throw StateError('avatar.unavailable');
+    }
     state = state.copyWith(isSaving: true);
     try {
       final avatars = service as AvatarCorePort;
@@ -158,8 +160,9 @@ class ProfileController extends StateNotifier<ProfileState> {
               jpeg: jpeg,
             );
       if (!_isOperationCurrent(generation, before.activeEpoch) ||
-          !_sameProfileProviderSession(before, ref.read(sessionProvider)))
+          !_sameProfileProviderSession(before, ref.read(sessionProvider))) {
         throw sessionEpochChangedError();
+      }
       state = _profileStateAfterRefresh(profile, isSaving: false);
       final version = profile.profileVersion;
       if (version != null && isCanonicalProductDecimal(version)) {
@@ -175,8 +178,9 @@ class ProfileController extends StateNotifier<ProfileState> {
             );
       }
     } finally {
-      if (_isOperationCurrent(generation, before.activeEpoch))
+      if (_isOperationCurrent(generation, before.activeEpoch)) {
         state = state.copyWith(isSaving: false);
+      }
     }
   }
 

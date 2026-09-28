@@ -92,12 +92,14 @@ class AccountStateProfileApplicationService
     Future<UserProfile> Function(AvatarCorePort) operation,
   ) async {
     final before = _sessionProvider();
-    if (before == null || _delegate is! AvatarCorePort)
+    if (before == null || _delegate is! AvatarCorePort) {
       throw StateError('avatar.unavailable');
+    }
     final profile = await operation(_delegate as AvatarCorePort);
     if (!_sameProfileMutationSession(before, _sessionProvider()) ||
-        profile.did != before.did)
+        profile.did != before.did) {
       throw StateError('profile_mutation_session_changed');
+    }
     return profile;
   }
 
