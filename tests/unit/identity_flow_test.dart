@@ -14,6 +14,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_workspa
 import 'package:awiki_me/src/presentation/friends/friends_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
+import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/shared/identity_flow.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
@@ -40,6 +41,139 @@ void main() {
     profileMarkdown: '',
     handle: 'cgw.awiki.ai',
   );
+
+  test('目录身份优先于缺失或冲突的展示资料', () {
+    const peerDid = 'did:test:peer';
+    const peerHandle = 'cgw.awiki.ai';
+    for (final profile in <UserProfile?>[
+      null,
+      peerProfile.copyWith(handle: 'me.awiki.me'),
+      const UserProfile(
+        did: 'did:test:me',
+        displayName: 'Me',
+        bio: '',
+        tags: [],
+        profileMarkdown: '',
+        handle: peerHandle,
+      ),
+    ]) {
+      final resolved = identityProfileFromResolution(
+        DirectoryPeerResolution(
+          input: peerHandle,
+          did: peerDid,
+          handle: peerHandle,
+          profile: profile,
+        ),
+      );
+      expect(resolved.did, peerDid);
+      expect(resolved.fullHandle, peerHandle);
+      expect(resolved.displayName, isEmpty);
+    }
+    final missingHandle = identityProfileFromResolution(
+      const DirectoryPeerResolution(
+        input: peerHandle,
+        did: peerDid,
+        handle: peerHandle,
+        profile: UserProfile(
+          did: peerDid,
+          displayName: 'Me', // Different people can legitimately share a name.
+          bio: '',
+          tags: [],
+          profileMarkdown: '',
+        ),
+      ),
+    );
+    expect(missingHandle.fullHandle, peerHandle);
+    expect(missingHandle.displayName, 'Me');
+  });
+
+  testWidgets('无昵称的查找结果进入会话后不将短 Handle 写成昵称', (tester) async {
+    const handle = 'cgw.awiki.ai';
+    const did = 'did:test:peer';
+    const profile = UserProfile(
+      did: did,
+      displayName: '',
+      bio: '',
+      tags: [],
+      profileMarkdown: '',
+      handle: handle,
+      fullHandle: handle,
+    );
+    final gateway = FakeAwikiGateway()
+      ..publicProfilesByQuery = {handle: profile, did: profile}
+      ..directoryConversationIdsByQuery = {
+        handle: 'dm:peer-scope:v1:canonical-peer',
+      };
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const _StartIdentityFlowHarness(),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('发起新消息'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      handle,
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('identity-preview-display-name')))
+          .data,
+      'cgw',
+    );
+    await tester.tap(find.byKey(const Key('identity-start-chat-button')));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatPage)),
+    );
+    final conversation = tester
+        .widget<ChatPage>(find.byType(ChatPage))
+        .conversation;
+    expect(conversation.conversationId, 'dm:peer-scope:v1:canonical-peer');
+    final display = container.read(peerDisplayProfileProvider).forDid(did);
+    expect(display, isNotNull);
+    expect(display!.handle, handle);
+    expect(display.displayName, isNull);
+    expect(find.text('Me'), findsNothing);
+  });
+
+  testWidgets('资料的错误 Handle 不能重定向到另一个账号', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..publicProfilesByQuery = {'did:test:peer': peerProfile}
+      ..directoryConversationIdsByQuery = {
+        'did:test:peer': 'dm:peer-scope:v1:canonical-peer',
+      };
+    String? result;
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: Consumer(
+          builder: (context, ref, _) => CupertinoButton(
+            child: const Text('Resolve profile'),
+            onPressed: () async {
+              result = await resolveCanonicalConversationIdForProfile(
+                ref,
+                peerProfile.copyWith(
+                  handle: 'me.awiki.me',
+                  fullHandle: 'me.awiki.me',
+                ),
+              );
+            },
+          ),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.tap(find.text('Resolve profile'));
+    await tester.pumpAndSettle();
+    expect(result, 'dm:peer-scope:v1:canonical-peer');
+    expect(gateway.loadPublicProfileQueries, isNot(contains('me.awiki.me')));
+  });
 
   testWidgets('通过 handle 发起新消息后打开空单聊', (tester) async {
     final gateway = FakeAwikiGateway()
@@ -221,7 +355,7 @@ void main() {
         'cgw.awiki.ai': peerProfile,
       }
       ..directoryConversationIdsByQuery = <String, String>{
-        'cgw.awiki.ai': 'dm:peer-scope:v1:canonical-peer',
+        'did:test:peer': 'dm:peer-scope:v1:canonical-peer',
       };
 
     await tester.pumpWidget(

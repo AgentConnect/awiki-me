@@ -578,6 +578,14 @@ Peer 名称只由纯 `PeerDisplayNameResolver` 和 `peerDisplayNameProvider`
 `Unknown/Handle -> 昵称` 闪烁。
 身份查找结果使用短主名称并在第二身份行保留完整 Handle；群系统事件等单行公共身份场景使用“当前昵称 > 完整 Handle > DID”。DID 在 UI 中可紧凑显示，但只能作为最后 fallback。
 
+公开资料只能装饰 Core 已返回的身份：Lookup 的 DID/Handle 与嵌套 Profile 不一致时，
+丢弃该展示资料，使用目录身份回退；缺少昵称保持为空，由统一 formatter 展示 Handle/DID。
+发起会话只将原始 Profile 合入展示 Store，不能把已经格式化的标题、短 Handle 或联系人
+标签当作远端昵称。已有 canonical conversation ID 继续直接使用；资料页只有 DID 时，
+由 Core 按该 DID 重新确定 canonical route，不能用展示 Profile 的 Handle 改换聊天对象。
+刷新后的资料必须仍属于同一 DID，且提交受 SessionEpoch 围栏保护。
+
+
 如果 DID-only profile 先于 verified Persona route 到达，后续 Core
 conversation/profile bundle 必须在发布会话行前把该投影迁入 Persona-keyed store。
 若 App 已记录的 DID→Persona route 与后到 route 冲突，App 不移动展示资料也不覆盖
