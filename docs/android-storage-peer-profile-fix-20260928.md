@@ -50,3 +50,14 @@ Core 的固定源码清单与联调锁随配套 PR 提供，用于可复现 revi
 账号匹配、刷新与投递验收。本次没有重新打包、发布、修改生产服务或已安装 App 数据，
 也没有触发 hosted CI。原生 Android 的生物识别迁移分支随 namespace 一致修正，但当前
 产品不使用该分支，未宣称已进行生物识别设备验收。
+
+## 统一 review 整合
+
+原 App #46 的两个修复提交完整合入发布 PR #45；此前上海版本配置继续保留，Android
+存储实现、身份展示实现、测试及 vendor 文件均与原修复 PR 一致。Core 对应最终入口为
+https://github.com/AgentConnect/awiki-cli-rs2/pull/52；按其中提交的 `dependencies.source.json`
+与锁做源码联调，不再以旧 #53 作为独立待合并入口。
+
+本次只整合待审源码，不重发 0.1.35 安装包。后续正式构建应递增产品版本，并先发布修复
+Core、更新 registry pin 和原生 SDK；未完成的真机覆盖安装与真实跨域消息验收继续保留。
+合并后重新验证的命令、结果与最终 SHA 记录在 awiki-plan 的统一审查清单。
