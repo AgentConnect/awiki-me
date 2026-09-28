@@ -42,13 +42,24 @@ class AndroidSecureStorageValueMigrator {
   Future<String?> readAndMigrate({
     required String key,
     void Function(String value)? validateLegacyValue,
+    bool Function(Object error)? isRecoverableLegacyReadError,
   }) => AndroidSecureStorageMigrationCoordinator.run(() async {
     final target = await _storage.read(key: key, aOptions: _targetOptions);
     if (target != null) {
       return target;
     }
 
-    final legacy = await _storage.read(key: key, aOptions: _legacyOptions);
+    final String? legacy;
+    try {
+      legacy = await _storage.read(key: key, aOptions: _legacyOptions);
+    } on Object catch (error) {
+      // Only a caller owning replaceable App state may opt in. Target reads,
+      // validation, writes and Scope-secret reads continue to fail closed.
+      // Preserve the source ciphertext; a successful explicit action will
+      // establish a verified value in the target namespace.
+      if (isRecoverableLegacyReadError?.call(error) ?? false) return null;
+      rethrow;
+    }
     if (legacy == null) {
       return null;
     }
