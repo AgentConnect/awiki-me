@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../storage/awiki_storage_roots.dart';
 import '../storage/android_secure_storage_value_migrator.dart';
+import 'android_legacy_app_state_recovery.dart';
 
 abstract class AppKeyValueStore {
   Future<String?> read({required String key});
@@ -79,7 +80,11 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
   @override
   Future<String?> read({required String key}) async {
     if (_isAndroid) {
-      return _androidMigrator.readAndMigrate(key: key);
+      return _androidMigrator.readAndMigrate(
+        key: key,
+        isRecoverableLegacyReadError: (error) =>
+            canRecoverAndroidLegacyAppState(key, error),
+      );
     }
     if (Platform.isMacOS) {
       final nativeValue = await _readMacOsNativeValue(key);

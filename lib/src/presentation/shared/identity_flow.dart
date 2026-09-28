@@ -174,8 +174,7 @@ Future<_ResolvedIdentity> _resolveIdentityProfile(
           .resolvePeer(query);
       _requireSessionEpochCurrent(ref, expectedEpoch);
       return _ResolvedIdentity(
-        profile:
-            resolution.profile ?? identityProfileFromResolution(resolution),
+        profile: identityProfileFromResolution(resolution),
         conversationId: resolution.conversationId,
       );
     } catch (error) {
@@ -211,12 +210,22 @@ UserProfile identityProfileFromResolution(DirectoryPeerResolution resolution) {
     throw StateError('identity_missing_did');
   }
   final handle = resolution.handle?.trim();
-  final displayName = handle == null || handle.isEmpty
-      ? DidDisplayFormatter.compactDid(did)
-      : handle;
+  final profile = resolution.profile;
+  final profileHandle = _normalizedOptionalHandle(
+    profile?.fullHandle ?? profile?.handle,
+  );
+  // A display DTO cannot replace the identity returned by Core's directory.
+  // Discard inconsistent display data rather than relabeling it as this peer.
+  if (profile != null &&
+      profile.did.trim() == did &&
+      (profileHandle == null ||
+          handle == null ||
+          profileHandle == _normalizedOptionalHandle(handle))) {
+    return profile.copyWith(handle: handle, fullHandle: handle);
+  }
   return UserProfile(
     did: did,
-    displayName: displayName,
+    displayName: '',
     bio: '',
     tags: const <String>[],
     profileMarkdown: '',
@@ -260,6 +269,7 @@ Future<DirectConversationOpenResult> openDirectConversationForProfileWithResult(
     peerDid: profile.did,
     peerHandle: profile.fullHandle ?? profile.handle,
     peerName: DidDisplayFormatter.profileName(profile),
+    peerProfile: profile,
     avatarUri: profile.avatarUri,
     avatarSeed: profile.handle ?? profile.did,
     conversationId: conversationId,
@@ -318,6 +328,7 @@ Future<DirectConversationOpenResult> openDirectConversationForDidWithResult(
   WidgetRef ref, {
   required String peerDid,
   required String peerName,
+  UserProfile? peerProfile,
   String? peerHandle,
   String? avatarUri,
   String? avatarSeed,
@@ -382,22 +393,27 @@ Future<DirectConversationOpenResult> openDirectConversationForDidWithResult(
     if (!_isSessionEpochCurrent(ref, operationEpoch)) {
       return DirectConversationOpenResult.notOpened;
     }
-    ref
-        .read(peerDisplayProfileProvider.notifier)
-        .updateFromRemote(
-          ownerDid: operationEpoch.ownerDid,
-          peerPersonaId: conversation.peerPersonaId,
-          profile: UserProfile(
-            did: resolvedPeer.did,
-            displayName: peerName,
-            bio: '',
-            tags: const <String>[],
-            profileMarkdown: '',
-            handle: resolvedPeer.handle,
-            fullHandle: resolvedPeer.handle,
-            avatarUri: avatarUri,
-          ),
-        );
+    final displayProfile = resolvedPeer.profile ?? peerProfile;
+    if (displayProfile != null &&
+        displayProfile.did == resolvedPeer.did &&
+        (conversation.targetDid == null ||
+            conversation.targetDid == displayProfile.did)) {
+      ref
+          .read(peerDisplayProfileProvider.notifier)
+          .updateFromRemote(
+            ownerDid: operationEpoch.ownerDid,
+            peerPersonaId: conversation.peerPersonaId,
+            expectedEpoch: operationEpoch,
+            profile: identityProfileFromResolution(
+              DirectoryPeerResolution(
+                input: resolvedPeer.did,
+                did: resolvedPeer.did,
+                handle: resolvedPeer.handle,
+                profile: displayProfile,
+              ),
+            ),
+          );
+    }
     await ref.read(chatThreadsProvider.notifier).openConversation(conversation);
   } catch (error) {
     if (isSessionEpochChangedError(error) ||
@@ -467,18 +483,17 @@ Future<_ResolvedDirectPeer> _resolveDirectPeer(
     );
   }
 
-  final selector = _isDomainQualifiedHandle(providedHandle)
-      ? providedHandle!
-      : peerDid;
+  // A profile's Handle is presentation data. Resolve its DID through Core;
+  // only Core may establish the canonical Handle/Persona route for that DID.
   final resolution = await ref
       .read(directoryApplicationServiceProvider)
-      .resolvePeer(selector);
+      .resolvePeer(peerDid);
   _requireSessionEpochCurrent(ref, expectedEpoch);
   final resolvedDid = resolution.did.trim();
   if (!resolvedDid.startsWith('did:')) {
     throw StateError('identity_invalid_contact');
   }
-  if (selector.startsWith('did:') && resolvedDid != peerDid) {
+  if (resolvedDid != peerDid) {
     throw StateError('identity_resolution_did_mismatch');
   }
   final resolvedHandle = _normalizedOptionalHandle(resolution.handle);
@@ -486,8 +501,11 @@ Future<_ResolvedDirectPeer> _resolveDirectPeer(
   _validateResolvedDirectConversation(conversationId: canonicalConversationId);
   return _ResolvedDirectPeer(
     did: resolvedDid,
-    handle: resolvedHandle ?? providedHandle,
+    handle: resolvedHandle,
     conversationId: canonicalConversationId,
+    profile: resolution.profile == null
+        ? null
+        : identityProfileFromResolution(resolution),
   );
 }
 
@@ -506,12 +524,6 @@ String? _normalizedOptionalHandle(String? value) {
     handle = handle.substring(1).trimLeft();
   }
   return handle.isEmpty ? null : handle.toLowerCase();
-}
-
-bool _isDomainQualifiedHandle(String? value) {
-  final handle = value?.trim() ?? '';
-  final separator = handle.indexOf('.');
-  return separator > 0 && separator < handle.length - 1;
 }
 
 SessionEpoch _requireActiveSessionEpoch(WidgetRef ref) {
@@ -874,11 +886,13 @@ class _ResolvedDirectPeer {
     required this.did,
     required this.handle,
     required this.conversationId,
+    this.profile,
   });
 
   final String did;
   final String? handle;
   final String conversationId;
+  final UserProfile? profile;
 }
 
 class _IdentitySearchInput extends StatelessWidget {
