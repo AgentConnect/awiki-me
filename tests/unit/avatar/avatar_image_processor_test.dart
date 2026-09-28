@@ -5,6 +5,32 @@ import 'package:awiki_me/src/data/avatar/avatar_image_processor.dart';
 import 'package:awiki_me/src/data/avatar/avatar_image_cache.dart';
 
 void main() {
+  test('static HEIC reaches only the opted-in native header decoder', () {
+    Uint8List header(String brand) => Uint8List.fromList([
+      0,
+      0,
+      0,
+      24,
+      ...'ftyp'.codeUnits,
+      ...brand.codeUnits,
+      0,
+      0,
+      0,
+      0,
+    ]);
+    expect(() => validateAvatarSource(header('heic')), throwsFormatException);
+    expect(
+      () => validateAvatarSource(header('heic'), allowNativeHeic: true),
+      returnsNormally,
+    );
+    for (final brand in ['hevc', 'hevx', 'avif', 'xxxx']) {
+      expect(
+        () => validateAvatarSource(header(brand), allowNativeHeic: true),
+        throwsFormatException,
+      );
+    }
+  });
+
   test(
     'avatar inputs are bounded before decode and animated formats are rejected',
     () {

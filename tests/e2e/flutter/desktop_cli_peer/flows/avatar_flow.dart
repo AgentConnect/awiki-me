@@ -81,7 +81,8 @@ Future<void> _verifyAvatarEditing(
       await tap('avatar-pick');
       await editorReady('avatar-save');
       await tester.drag(
-        find.byKey(const Key('avatar-crop')),
+        // Crop forwards its key to its internal editor; target the public widget.
+        find.byKey(const Key('avatar-crop')).first,
         const Offset(24, 0),
       );
       await tester.pump();
@@ -119,6 +120,14 @@ Future<void> _verifyAvatarEditing(
     await tap('profile-edit-change-avatar-button');
     await editorReady('avatar-clear');
     await tap('avatar-clear');
+    await tap('avatar-clear-cancel');
+    expect(
+      (await robot.container.read(profileProvider.notifier).loadAvatarProfile())
+          .avatarUri,
+      previous,
+    );
+    await tap('avatar-clear');
+    await tap('avatar-clear-confirm');
     await robot.pumpUntil(
       description: 'clear commits and dismisses editor',
       condition: () => find.byType(AvatarEditDialog).evaluate().isEmpty,

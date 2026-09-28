@@ -1683,7 +1683,7 @@
   "avatarReset": "Use default avatar",
   "avatarRetry": "Retry save",
   "avatarImageHint": "Choose a JPEG, PNG or static WebP image, up to 20 MB.",
-  "avatarCropHint": "Drag or zoom to frame your avatar.",
+  "avatarCropHint": "Drag or zoom to frame your avatar. Images of at least 512×512 are recommended; smaller images may look blurry.",
   "avatarImageRejected": "This image cannot be used. Choose a static image under 20 MB or try another photo.",
   "avatarSaveFailed": "The save could not be confirmed. Check your connection and retry.",
   "avatarReconciled": "Your latest avatar is now shown. Check it before making another change.",

@@ -7171,7 +7171,7 @@ abstract class AppLocalizations {
   /// No description provided for @avatarCropHint.
   ///
   /// In zh, this message translates to:
-  /// **'拖动或缩放图片，调整头像的位置。'**
+  /// **'拖动或缩放图片，调整头像的位置。建议使用至少 512×512 的图片；小图片可能模糊。'**
   String get avatarCropHint;
 
   /// No description provided for @avatarImageRejected.

@@ -3,6 +3,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'avatar_picker_marker.dart';
+import 'avatar_picker_files.dart';
 
 /// Android's picker may outlive the process. Only an explicit owner marker can
 /// reconnect the result to this feature; recovery never uploads automatically.
@@ -32,6 +33,9 @@ class AvatarPickerRecovery {
           DateTime.now().millisecondsSinceEpoch - created >
               const Duration(days: 1).inMilliseconds ||
           result.files?.length != 1) {
+        for (final file in result.files ?? <XFile>[]) {
+          await discardAvatarPickerFile(file.path);
+        }
         return;
       }
       _owner = owner;
@@ -60,6 +64,9 @@ class AvatarPickerRecovery {
   Future<XFile?> takeForOwner(String owner) async {
     await initialize();
     final file = _owner == _hash(owner) ? _recovered : null;
+    if (file == null && _recovered != null) {
+      await discardAvatarPickerFile(_recovered!.path);
+    }
     _owner = null;
     _recovered = null;
     return file;

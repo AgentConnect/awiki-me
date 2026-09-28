@@ -4104,7 +4104,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'Choose a JPEG, PNG or static WebP image, up to 20 MB.';
 
   @override
-  String get avatarCropHint => 'Drag or zoom to frame your avatar.';
+  String get avatarCropHint =>
+      'Drag or zoom to frame your avatar. Images of at least 512×512 are recommended; smaller images may look blurry.';
 
   @override
   String get avatarImageRejected =>

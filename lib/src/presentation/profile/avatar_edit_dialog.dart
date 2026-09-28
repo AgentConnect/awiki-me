@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../data/avatar/avatar_image_processor.dart';
 import '../../data/avatar/avatar_picker_recovery.dart';
+import '../../data/avatar/avatar_picker_files.dart';
 import '../../l10n/l10n.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../shared/avatar_badge.dart';
@@ -87,6 +88,7 @@ class _AvatarEditDialogState extends ConsumerState<AvatarEditDialog> {
           if (_current) setState(() => _busy = false);
         }
       }
+      await discardAvatarPickerFile(file.path);
     });
   }
 
@@ -120,8 +122,8 @@ class _AvatarEditDialogState extends ConsumerState<AvatarEditDialog> {
       _error = null;
     });
     String? pickerToken;
+    XFile? file;
     try {
-      final XFile? file;
       if (_mobile) {
         pickerToken = await AvatarPickerRecovery.instance.begin(_pickerOwner);
         if (!_current) return;
@@ -150,6 +152,7 @@ class _AvatarEditDialogState extends ConsumerState<AvatarEditDialog> {
     } catch (_) {
       if (_current) setState(() => _error = context.l10n.avatarImageRejected);
     } finally {
+      if (_mobile && file != null) await discardAvatarPickerFile(file.path);
       await AvatarPickerRecovery.instance.finish(pickerToken);
       if (_current) setState(() => _busy = false);
     }
@@ -170,6 +173,30 @@ class _AvatarEditDialogState extends ConsumerState<AvatarEditDialog> {
         });
       }
     }
+  }
+
+  Future<void> _confirmClear() async {
+    final l10n = context.l10n;
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: Text(l10n.avatarReset),
+        actions: [
+          CupertinoDialogAction(
+            key: const Key('avatar-clear-cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.commonCancel),
+          ),
+          CupertinoDialogAction(
+            key: const Key('avatar-clear-confirm'),
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.commonConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && _current) await _save();
   }
 
   Future<void> _save() async {
@@ -343,7 +370,7 @@ class _AvatarEditDialogState extends ConsumerState<AvatarEditDialog> {
                   if (profile?.avatarUri != null)
                     CupertinoButton(
                       key: const Key('avatar-clear'),
-                      onPressed: enabled ? _save : null,
+                      onPressed: enabled ? _confirmClear : null,
                       child: Text(
                         l10n.avatarReset,
                         style: const TextStyle(

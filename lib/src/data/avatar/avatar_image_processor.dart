@@ -5,9 +5,17 @@ import 'package:image/image.dart' as img;
 const avatarSourceByteLimit = 20 * 1024 * 1024;
 
 /// Parses headers before allowing any full image allocation.
-void validateAvatarSource(Uint8List bytes) {
+void validateAvatarSource(Uint8List bytes, {bool allowNativeHeic = false}) {
   if (bytes.isEmpty || bytes.length > avatarSourceByteLimit) {
     throw const FormatException('avatar.source_size');
+  }
+  // Static HEIC is handed to the mobile platform decoder. Sequence brands are
+  // deliberately excluded; dimensions are checked on ImageDescriptor below.
+  if (allowNativeHeic &&
+      bytes.length >= 16 &&
+      String.fromCharCodes(bytes.sublist(4, 8)) == 'ftyp' &&
+      {'heic', 'heix'}.contains(String.fromCharCodes(bytes.sublist(8, 12)))) {
+    return;
   }
   final decoder = img.findDecoderForData(bytes);
   if (decoder == null ||
@@ -35,7 +43,11 @@ void validateAvatarSource(Uint8List bytes) {
 /// The platform decoder applies orientation/color conversion. Render an opaque
 /// preview to detach all source metadata before the crop UI receives pixels.
 Future<Uint8List> prepareAvatarPreview(Uint8List bytes) async {
-  await compute(validateAvatarSource, bytes);
+  final nativeHeic =
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+  await compute(_validatePreviewSource, (bytes, nativeHeic));
   final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
   ui.ImageDescriptor? descriptor;
   ui.Codec? codec;
@@ -44,6 +56,13 @@ Future<Uint8List> prepareAvatarPreview(Uint8List bytes) async {
   ui.Picture? picture;
   try {
     descriptor = await ui.ImageDescriptor.encoded(buffer);
+    if (descriptor.width < 1 ||
+        descriptor.height < 1 ||
+        descriptor.width > 16384 ||
+        descriptor.height > 16384 ||
+        descriptor.width * descriptor.height > 50000000) {
+      throw const FormatException('avatar.source_dimensions');
+    }
     final scale =
         2048 /
         (descriptor.width > descriptor.height
@@ -57,6 +76,9 @@ Future<Uint8List> prepareAvatarPreview(Uint8List bytes) async {
           ? (descriptor.height * scale).round()
           : descriptor.height,
     );
+    if (codec.frameCount != 1) {
+      throw const FormatException('avatar.source_animation');
+    }
     decoded = (await codec.getNextFrame()).image;
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(recorder);
@@ -76,6 +98,9 @@ Future<Uint8List> prepareAvatarPreview(Uint8List bytes) async {
     buffer.dispose();
   }
 }
+
+void _validatePreviewSource((Uint8List, bool) input) =>
+    validateAvatarSource(input.$1, allowNativeHeic: input.$2);
 
 Uint8List encodeAvatarJpeg(Uint8List squarePng) {
   final source = img.decodePng(squarePng);

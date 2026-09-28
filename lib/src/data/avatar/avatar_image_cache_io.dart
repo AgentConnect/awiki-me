@@ -11,6 +11,7 @@ import 'avatar_image_cache.dart';
 
 final _ownerEpochs = <String, int>{};
 Future<void> _diskOperations = Future.value();
+final _diskWriteWindows = <String, (int, int)>{};
 
 Future<Directory> _avatarDirectory() async => Directory(
   "${(await getApplicationCacheDirectory()).path}/public-avatars-v1",
@@ -68,6 +69,9 @@ class PlatformAvatarImageCache implements AvatarImageCache {
   bool get _inactive => _disposed || _epoch != (_ownerEpochs[_owner] ?? 0);
   Future<Directory>? _root;
   Future<void> _diskWrites = Future.value();
+  // Reserve a small write window so maintenance is amortized without crossing
+  // the hard disk/count limits. Disk hits never rewrite or rescan the cache.
+  static const _writeWindow = 4 * 1024 * 1024;
 
   Future<void> flush() => _diskWrites;
 
@@ -115,6 +119,7 @@ class PlatformAvatarImageCache implements AvatarImageCache {
       DateTime until = DateTime.now();
       String? etag;
       var canStore = true;
+      var downloaded = false;
       try {
         final meta = jsonDecode(await metaFile.readAsString()) as Map;
         until = DateTime.fromMillisecondsSinceEpoch(meta['expires'] as int);
@@ -127,6 +132,7 @@ class PlatformAvatarImageCache implements AvatarImageCache {
         /* An interrupted cache write is a miss. */
       }
       if (data == null || !until.isAfter(DateTime.now())) {
+        downloaded = true;
         final byteKey = uri.toString();
         final response = await (_bytePending[byteKey] ??=
             _download(uri, previous: data, etag: etag).whenComplete(() {
@@ -172,6 +178,7 @@ class PlatformAvatarImageCache implements AvatarImageCache {
         _memory.remove(_memory.keys.first)?.image.dispose();
       }
       // Cache failures must never turn a successfully decoded avatar into an error.
+      if (!downloaded) return image;
       final bytes = data;
       _diskWrites = _diskOperations
           .then((_) async {
@@ -181,19 +188,32 @@ class PlatformAvatarImageCache implements AvatarImageCache {
               if (await metaFile.exists()) await metaFile.delete();
               return;
             }
-            final temporary = File('${dataFile.path}.part');
-            await temporary.writeAsBytes(bytes, flush: true);
-            await temporary.rename(dataFile.path);
-            await metaFile.writeAsString(
+            final metadata = utf8.encode(
               jsonEncode({
                 'expires': until.millisecondsSinceEpoch,
                 'etag': etag,
               }),
             );
-            await _trim(root);
+            final size = bytes.length + metadata.length;
+            var window = _diskWriteWindows[root.path] ?? (_writeWindow, 64);
+            if (window.$1 + size > _writeWindow || window.$2 >= 64) {
+              await _trim(root);
+              window = (0, 0);
+            }
+            final temporary = File('${dataFile.path}.part');
+            await temporary.writeAsBytes(bytes, flush: true);
+            await temporary.rename(dataFile.path);
+            await metaFile.writeAsBytes(metadata);
+            _diskWriteWindows[root.path] = (window.$1 + size, window.$2 + 1);
+            if (_diskWriteWindows.length > 8) {
+              _diskWriteWindows.remove(_diskWriteWindows.keys.first);
+            }
           })
           .catchError((Object _) {});
       _diskOperations = _diskWrites;
+      // Keep pending encoded buffers inside the same four-slot budget. A slow
+      // disk must not turn fast downloads into an unbounded write queue.
+      await _diskWrites;
       return image;
     } catch (_) {
       _retryAfter[key] = DateTime.now().add(const Duration(seconds: 30));
@@ -308,7 +328,7 @@ class PlatformAvatarImageCache implements AvatarImageCache {
     entries.sort((a, b) => a.$2.modified.compareTo(b.$2.modified));
     var count = entries.length;
     for (final entry in entries) {
-      if (total <= _diskLimit && count <= 4096) break;
+      if (total <= _diskLimit - _writeWindow && count <= 4096 - 64) break;
       count--;
       total -= entry.$2.size;
       await entry.$1.delete();

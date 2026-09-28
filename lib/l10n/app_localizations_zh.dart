@@ -3820,7 +3820,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get avatarImageHint => '选择 JPEG、PNG 或静态 WebP 图片，最大 20 MB。';
 
   @override
-  String get avatarCropHint => '拖动或缩放图片，调整头像的位置。';
+  String get avatarCropHint => '拖动或缩放图片，调整头像的位置。建议使用至少 512×512 的图片；小图片可能模糊。';
 
   @override
   String get avatarImageRejected => '无法使用这张图片。请选择 20 MB 内的静态图片，或换一张照片。';

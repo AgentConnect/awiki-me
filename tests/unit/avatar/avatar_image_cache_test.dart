@@ -104,6 +104,39 @@ void main() {
   });
 
   testWidgets(
+    'full disk cache evicts oldest bytes including metadata before new writes',
+    (tester) async {
+      await tester.runAsync(() async {
+        for (var i = 0; i < 4; i++) {
+          final file = File('${root.path}/old-$i.bin');
+          final handle = await file.open(mode: FileMode.write);
+          await handle.truncate(16 * 1024 * 1024);
+          await handle.close();
+          await file.setLastModified(DateTime.utc(2020, 1, i + 1));
+          await File('${root.path}/old-$i.json').writeAsString('{}');
+        }
+        final cache = PlatformAvatarImageCache(
+          'bounded',
+          directory: root,
+          client: Client((_) async => Response(jpeg)),
+        );
+        final image = await cache.load('https://example.com/new.jpg');
+        expect(image, isNotNull);
+        image?.dispose();
+        await cache.flush();
+        cache.dispose();
+        var size = 0;
+        await for (final file in root.list()) {
+          if (file is File) size += await file.length();
+        }
+        expect(size, lessThanOrEqualTo(64 * 1024 * 1024));
+        expect(await File('${root.path}/old-0.bin').exists(), isFalse);
+        expect(await File('${root.path}/old-0.json').exists(), isFalse);
+      });
+    },
+  );
+
+  testWidgets(
     'deduplicates URI downloads across sizes, caches bytes and isolates owners',
     (tester) async {
       await tester.runAsync(() async {
@@ -125,6 +158,11 @@ void main() {
         (await second)?.dispose();
         await cache.flush();
         cache.dispose();
+        final metadata = (await root.list().toList())
+            .whereType<File>()
+            .singleWhere((file) => file.path.endsWith('.json'));
+        final savedAt = DateTime.utc(2026, 1, 1);
+        await metadata.setLastModified(savedAt);
         final offline = Client((_) async => throw StateError('offline'));
         final reopened = PlatformAvatarImageCache(
           'alice',
@@ -135,6 +173,11 @@ void main() {
         expect(warm, isNotNull);
         warm?.dispose();
         await reopened.flush();
+        expect(
+          (await metadata.stat()).modified.toUtc(),
+          savedAt,
+          reason: 'A fresh disk hit must not rewrite the cached entry',
+        );
         reopened.dispose();
         expect(offline.requests, isEmpty);
         final other = PlatformAvatarImageCache(
