@@ -48,6 +48,7 @@ class _AvatarBadgeState extends ConsumerState<AvatarBadge> {
   int _generation = 0;
   AvatarImageCache? _cache;
   Timer? _refreshTimer;
+  Timer? _imageTimer;
   String? _profileDemand;
   void _refreshProfiles(List<String> dids) {
     final session = ref.read(sessionProvider);
@@ -67,9 +68,57 @@ class _AvatarBadgeState extends ConsumerState<AvatarBadge> {
     );
   }
 
+  void _loadImage(
+    AvatarImageCache cache,
+    String uri,
+    int edge,
+    int generation,
+  ) {
+    if (!mounted || generation != _generation) return;
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
+      _imageTimer = Timer(
+        const Duration(seconds: 30),
+        () => _loadImage(cache, uri, edge, generation),
+      );
+      return;
+    }
+    cache.load(uri, edge: edge).then((image) {
+      if (!mounted || generation != _generation) {
+        image?.dispose();
+        return;
+      }
+      if (image != null) {
+        setState(() {
+          _image?.dispose();
+          _image = image;
+        });
+      }
+      _imageTimer?.cancel();
+      _imageTimer = Timer(
+        image == null
+            ? const Duration(seconds: 30)
+            : const Duration(minutes: 5),
+        () {
+          if (!mounted || generation != _generation) return;
+          if (WidgetsBinding.instance.lifecycleState ==
+              AppLifecycleState.paused) {
+            _imageTimer = Timer(const Duration(seconds: 30), () {
+              if (mounted && generation == _generation)
+                _loadImage(cache, uri, edge, generation);
+            });
+            return;
+          }
+          _loadImage(cache, uri, edge, generation);
+        },
+      );
+    });
+  }
+
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _imageTimer?.cancel();
     _generation++;
     _image?.dispose();
     super.dispose();
@@ -104,6 +153,13 @@ class _AvatarBadgeState extends ConsumerState<AvatarBadge> {
     if ((group?.avatarUri ?? widget.avatarUri) == null &&
         members.isNotEmpty &&
         members.length <= 4) {
+      _imageTimer?.cancel();
+      if (_key != null) {
+        _generation++;
+        _key = null;
+        _image?.dispose();
+        _image = null;
+      }
       return _GroupAvatarTiles(members: members, size: widget.size);
     }
     final own = ref.watch(
@@ -136,18 +192,12 @@ class _AvatarBadgeState extends ConsumerState<AvatarBadge> {
       _key = key;
       _cache = cache;
       final generation = ++_generation;
+      _imageTimer?.cancel();
       _image?.dispose();
       _image = null;
       if (uri != null) {
-        cache.load(uri, edge: widget.size <= 64 ? 128 : 512).then((image) {
-          if (!mounted || generation != _generation) {
-            image?.dispose();
-            return;
-          }
-          setState(() {
-            _image = image;
-          });
-        });
+        _imageTimer?.cancel();
+        _loadImage(cache, uri, widget.size <= 64 ? 128 : 512, generation);
       }
     }
     if (_image == null) {
