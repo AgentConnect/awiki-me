@@ -1,7 +1,15 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-09-11.messaging-artifact-v1",
+  "sourceRevision": "2026-09-28.avatar-artifact-v1",
   "artifacts": [
+    {
+      "name": "avatars",
+      "target": "integration_test/desktop_avatar_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.avatars",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["avatars"]
+    },
     {
       "name": "smoke-app",
       "target": "integration_test/app_smoke_test.dart",
