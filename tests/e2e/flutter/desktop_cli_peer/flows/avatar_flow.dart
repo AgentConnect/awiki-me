@@ -168,7 +168,14 @@ Future<void> _verifyAvatarEditing(
     // The independent CLI identity gets its image through the source-matched,
     // test-only Rust probe; no keys or tokens cross into Flutter test code.
     await _uploadPeerAvatarFixture(config);
-    await tap('profile-back-button');
+    await tap('desktop-current-identity-close');
+    await robot.pumpUntil(
+      description: 'own profile card dismissed',
+      condition: () => find
+          .byKey(const Key('desktop-current-identity-dialog'))
+          .evaluate()
+          .isEmpty,
+    );
     await robot.startDirectConversation(config.cliHandle);
     await robot.openSelectedPeerInfo();
     await robot.pumpUntil(
@@ -190,7 +197,10 @@ Future<void> _verifyAvatarEditing(
       description: 'large peer avatar',
     );
     await tap('avatar-preview-close');
-    expect(find.byType(AvatarPreviewDialog), findsNothing);
+    await robot.pumpUntil(
+      description: 'peer avatar preview dismissed',
+      condition: () => find.byType(AvatarPreviewDialog).evaluate().isEmpty,
+    );
     await _attestPassedCases(<String, List<String>>{
       'AVATAR-E2E-001': const <String>[
         'crop_upload_and_visible_image',
