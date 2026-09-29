@@ -1683,7 +1683,7 @@
   "avatarReset": "Use default avatar",
   "avatarRetry": "Retry save",
   "avatarImageHint": "Choose a JPEG, PNG or static WebP image, up to 20 MB.",
-  "avatarCropHint": "Drag or zoom to frame your avatar. Images of at least 512×512 are recommended; smaller images may look blurry.",
+  "avatarCropHint": "Move the square to frame your photo. Drag a corner to resize it.",
   "avatarImageRejected": "This image cannot be used. Choose a static image under 20 MB or try another photo.",
   "avatarSaveFailed": "The save could not be confirmed. Check your connection and retry.",
   "avatarReconciled": "Your latest avatar is now shown. Check it before making another change.",
@@ -1692,5 +1692,11 @@
   "groupAvatarLabel": "Group member avatars",
   "avatarRecoverTitle": "Continue setting your avatar?",
   "avatarRecoverHint": "Your previous photo selection was recovered. Continue to crop it; it will only upload when you save.",
-  "avatarRecoverContinue": "Continue cropping"
+  "avatarRecoverContinue": "Continue cropping",
+  "avatarView": "View avatar",
+  "avatarNoImage": "No profile photo",
+  "avatarPreviewFailed": "Unable to load this photo. Please retry.",
+  "avatarCurrent": "Current",
+  "avatarNewPreview": "New avatar",
+  "avatarSmallSelection": "The selected area is small and may look blurry."
 }

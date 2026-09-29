@@ -3,6 +3,7 @@ library desktop_cli_peer_e2e;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:awiki_me/src/app/awiki_me_app.dart';
@@ -59,11 +60,22 @@ import 'package:crypto/crypto.dart';
 import 'package:file_selector_platform_interface/file_selector_platform_interface.dart';
 import 'package:image/image.dart' as img;
 import 'package:awiki_me/src/presentation/profile/avatar_edit_dialog.dart';
+import 'package:awiki_me/src/presentation/profile/avatar_crop_editor.dart';
+import 'package:awiki_me/src/presentation/shared/profile_avatar.dart';
+import 'package:crop_your_image/crop_your_image.dart';
 import 'package:flutter/cupertino.dart'
     show CupertinoActivityIndicator, CupertinoTextField, CupertinoButton;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart'
-    show AppLifecycleState, Key, SizedBox, Text, ValueKey, RawImage, Offset;
+    show
+        AppLifecycleState,
+        Key,
+        SizedBox,
+        Text,
+        ValueKey,
+        RawImage,
+        Offset,
+        CustomPaint;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
@@ -325,7 +337,7 @@ void runDesktopCliPeerE2e({
       }
 
       if (selectedCase == DesktopCliPeerIntegrationCase.avatars) {
-        await _verifyAvatarEditing(robot, tester);
+        await _verifyAvatarEditing(robot, tester, config);
         return;
       }
 

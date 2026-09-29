@@ -3820,7 +3820,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get avatarImageHint => '选择 JPEG、PNG 或静态 WebP 图片，最大 20 MB。';
 
   @override
-  String get avatarCropHint => '拖动或缩放图片，调整头像的位置。建议使用至少 512×512 的图片；小图片可能模糊。';
+  String get avatarCropHint => '拖动正方形调整位置，拖动四角调整选框大小。';
 
   @override
   String get avatarImageRejected => '无法使用这张图片。请选择 20 MB 内的静态图片，或换一张照片。';
@@ -3848,4 +3848,22 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get avatarRecoverContinue => '继续裁剪';
+
+  @override
+  String get avatarView => '查看头像';
+
+  @override
+  String get avatarNoImage => '尚未设置头像';
+
+  @override
+  String get avatarPreviewFailed => '头像加载失败，请重试。';
+
+  @override
+  String get avatarCurrent => '当前头像';
+
+  @override
+  String get avatarNewPreview => '新头像预览';
+
+  @override
+  String get avatarSmallSelection => '所选区域较小，头像可能模糊。';
 }

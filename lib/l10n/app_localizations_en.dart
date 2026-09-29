@@ -4105,7 +4105,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get avatarCropHint =>
-      'Drag or zoom to frame your avatar. Images of at least 512×512 are recommended; smaller images may look blurry.';
+      'Move the square to frame your photo. Drag a corner to resize it.';
 
   @override
   String get avatarImageRejected =>
@@ -4139,4 +4139,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get avatarRecoverContinue => 'Continue cropping';
+
+  @override
+  String get avatarView => 'View avatar';
+
+  @override
+  String get avatarNoImage => 'No profile photo';
+
+  @override
+  String get avatarPreviewFailed => 'Unable to load this photo. Please retry.';
+
+  @override
+  String get avatarCurrent => 'Current';
+
+  @override
+  String get avatarNewPreview => 'New avatar';
+
+  @override
+  String get avatarSmallSelection =>
+      'The selected area is small and may look blurry.';
 }

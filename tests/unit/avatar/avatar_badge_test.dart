@@ -10,7 +10,7 @@ class Cache implements AvatarImageCache {
   final ui.Image image;
   int calls = 0;
   @override
-  Future<ui.Image?> load(String uri, {int edge = 128}) async =>
+  Future<ui.Image?> load(String uri, {int edge = 128, bool force = false}) async =>
       ++calls == 1 ? null : image.clone();
   @override
   void dispose() {}

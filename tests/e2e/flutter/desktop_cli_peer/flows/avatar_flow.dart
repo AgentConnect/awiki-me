@@ -21,6 +21,7 @@ class _AvatarFixtureChooser extends FileSelectorPlatform {
 Future<void> _verifyAvatarEditing(
   _DesktopAppRobot robot,
   WidgetTester tester,
+  _DesktopCliPeerSmokeConfig config,
 ) async {
   robot.failureCaseId = 'AVATAR-E2E-001';
   final originalChooser = FileSelectorPlatform.instance;
@@ -60,7 +61,6 @@ Future<void> _verifyAvatarEditing(
       find.bySemanticsIdentifier('e2e-profile-dialog-button'),
       description: 'own profile',
     );
-    await tap('profile-edit-button');
     String? previous;
     for (final index in [0, 1]) {
       final source = img.Image(width: 1200, height: 800);
@@ -76,14 +76,31 @@ Future<void> _verifyAvatarEditing(
       final file = File('${fixtures.path}/source-$index.png');
       await file.writeAsBytes(img.encodePng(source));
       chooser.next = XFile(file.path);
-      await tap('profile-edit-change-avatar-button');
+      await tap('profile-avatar');
       await editorReady('avatar-pick');
       await tap('avatar-pick');
       await editorReady('avatar-save');
-      await tester.drag(
-        // Crop forwards its key to its internal editor; target the public widget.
-        find.byKey(const Key('avatar-crop')).first,
-        const Offset(24, 0),
+      final crop = tester.getRect(find.byType(Crop));
+      final preview = find.byKey(const Key('avatar-new-preview'));
+      final before =
+          (tester.widget<CustomPaint>(preview).painter!
+                  as AvatarCropPreviewPainter)
+              .area;
+      // The landscape fixture fills the crop viewport vertically.
+      await tester.dragFrom(
+        crop.center + Offset(crop.height / 2 - 1, crop.height / 2 - 1),
+        const Offset(-48, -48),
+      );
+      await tester.pump();
+      final resized =
+          (tester.widget<CustomPaint>(preview).painter!
+                  as AvatarCropPreviewPainter)
+              .area;
+      expect(resized.width, lessThan(before.width));
+      expect(resized.width, closeTo(resized.height, .01));
+      await tester.dragFrom(
+        crop.center - const Offset(24, 24),
+        const Offset(16, 0),
       );
       await tester.pump();
       await tap('avatar-save');
@@ -117,7 +134,7 @@ Future<void> _verifyAvatarEditing(
             .isNotEmpty,
       );
     }
-    await tap('profile-edit-change-avatar-button');
+    await tap('profile-avatar');
     await editorReady('avatar-clear');
     await tap('avatar-clear');
     await tap('avatar-clear-cancel');
@@ -148,16 +165,96 @@ Future<void> _verifyAvatarEditing(
           .isEmpty,
     );
     await verifyPublicImage(previous!);
+    // The independent CLI identity gets its image through the source-matched,
+    // test-only Rust probe; no keys or tokens cross into Flutter test code.
+    await _uploadPeerAvatarFixture(config);
+    await tap('profile-back-button');
+    await robot.startDirectConversation(config.cliHandle);
+    await robot.openSelectedPeerInfo();
+    await robot.pumpUntil(
+      description: 'peer profile has a decoded avatar',
+      condition: () => find
+          .descendant(
+            of: find.byType(ProfileAvatar),
+            matching: find.byType(RawImage),
+          )
+          .evaluate()
+          .isNotEmpty,
+    );
+    await robot.tapOne(
+      find.byType(ProfileAvatar),
+      description: 'peer avatar preview',
+    );
+    await robot.pumpUntilFinder(
+      find.byKey(const Key('avatar-preview-image')),
+      description: 'large peer avatar',
+    );
+    await tap('avatar-preview-close');
+    expect(find.byType(AvatarPreviewDialog), findsNothing);
     await _attestPassedCases(<String, List<String>>{
       'AVATAR-E2E-001': const <String>[
         'crop_upload_and_visible_image',
         'replacement_immutable_url_and_clear_fallback',
         'bounded_public_jpeg_and_old_url_retained',
+        'peer_profile_main_image_preview',
       ],
     });
   } finally {
     FileSelectorPlatform.instance = originalChooser;
     client.close(force: true);
     await fixtures.delete(recursive: true);
+  }
+}
+
+Future<void> _uploadPeerAvatarFixture(_DesktopCliPeerSmokeConfig config) async {
+  final bytes = List<int>.generate(
+    16,
+    (_) => math.Random.secure().nextInt(256),
+  );
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  final hex = bytes.map((v) => v.toRadixString(16).padLeft(2, '0')).join();
+  final requestId =
+      '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  final source = img.Image(width: 512, height: 512);
+  img.fill(source, color: img.ColorRgb8(80, 140, 220));
+  final binary = '${File(config.cliBin).parent.path}/awiki-system-test-probe';
+  final process = await Process.start(
+    binary,
+    const [],
+    environment: {
+      'HOME': config.cliHome,
+      'AWIKI_CLI_WORKSPACE_HOME_DIR': config.cliWorkspace,
+      'AWIKI_CLI_UPDATE_CACHE_ONLY': '1',
+    },
+    includeParentEnvironment: false,
+  );
+  unawaited(process.stderr.drain<void>());
+  try {
+    process.stdin.writeln(
+      jsonEncode({
+        'id': 1,
+        'action': 'avatar_fixture_set',
+        'params': {
+          'request_id': requestId,
+          'image_base64': base64Encode(img.encodeJpg(source)),
+        },
+      }),
+    );
+    await process.stdin.close();
+    final output = await process.stdout
+        .transform(utf8.decoder)
+        .join()
+        .timeout(const Duration(seconds: 60));
+    final code = await process.exitCode;
+    if (code != 0 || output.length > 8192) {
+      throw StateError('Avatar fixture failed');
+    }
+    final receipt = jsonDecode(output);
+    if (receipt is! Map || receipt['ok'] != true || receipt['id'] != 1) {
+      throw StateError('Avatar fixture receipt invalid');
+    }
+  } finally {
+    process.kill();
   }
 }

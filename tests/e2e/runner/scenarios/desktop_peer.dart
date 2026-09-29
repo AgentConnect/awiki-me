@@ -64,6 +64,7 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
               rustRepoPath: fileConfig.daemonRustRepo ?? '../awiki-cli-rs2',
               expectedSourceRef: fileConfig.cliSourceRef,
               commands: commands,
+              includeAvatarProbe: options.e2eCase == DesktopE2eCase.avatars,
             );
           })
         : null;

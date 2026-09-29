@@ -3,7 +3,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../../domain/entities/identity_type.dart';
 import '../../l10n/l10n.dart';
-import 'avatar_badge.dart';
+import 'profile_avatar.dart';
 import 'awiki_me_design.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
@@ -78,6 +78,7 @@ class IdentityProfileHeader extends StatelessWidget {
     this.titleTrailing,
     this.trailing,
     this.avatarKey,
+    this.onAvatarEdit,
     this.displayNameKey,
     this.handleKey,
     this.supportingTextKey,
@@ -94,6 +95,7 @@ class IdentityProfileHeader extends StatelessWidget {
   final Widget? titleTrailing;
   final Widget? trailing;
   final Key? avatarKey;
+  final VoidCallback? onAvatarEdit;
   final Key? displayNameKey;
   final Key? handleKey;
   final Key? supportingTextKey;
@@ -113,8 +115,9 @@ class IdentityProfileHeader extends StatelessWidget {
         final identity = Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            AvatarBadge(
+            ProfileAvatar(
               key: avatarKey,
+              onEdit: onAvatarEdit,
               seed: avatarSeed,
               size: resolvedAvatarSize,
               avatarUri: avatarUri,

@@ -15,6 +15,7 @@ import '../app_shell/providers/session_provider.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_design.dart';
 import 'profile_provider.dart';
+import 'avatar_crop_editor.dart';
 
 Future<void> showAvatarEditor(BuildContext context) =>
     showCupertinoDialog<void>(
@@ -256,130 +257,137 @@ class _AvatarEditDialogState extends ConsumerState<AvatarEditDialog> {
     final enabled = !_busy && profile?.avatarUploadEnabled == true;
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460, maxHeight: 620),
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 760),
         child: CupertinoPopupSurface(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        l10n.profileAvatarLabel,
-                        style: TextStyle(
-                          color: theme.title,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          l10n.profileAvatarLabel,
+                          style: TextStyle(
+                            color: theme.title,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
-                    CupertinoButton(
-                      key: const Key('avatar-close'),
-                      padding: const EdgeInsets.all(8),
-                      onPressed: _busy
-                          ? null
-                          : () => Navigator.of(context).pop(),
-                      child: Text(l10n.commonCancel),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                if (_preview != null)
-                  SizedBox(
-                    height: 300,
-                    child: Crop(
-                      key: const Key('avatar-crop'),
-                      image: _preview!,
+                      CupertinoButton(
+                        key: const Key('avatar-close'),
+                        padding: const EdgeInsets.all(8),
+                        onPressed: _busy
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: Text(l10n.commonCancel),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (_preview != null)
+                    AvatarCropEditor(
+                      key: ValueKey(_preview),
+                      bytes: _preview!,
                       controller: _crop,
-                      aspectRatio: 1,
-                      withCircleUi: true,
-                      interactive: true,
-                      fixCropRect: true,
-                      onStatusChanged: (status) {
-                        if (mounted) {
-                          setState(() => _ready = status == CropStatus.ready);
-                        }
+                      enabled: enabled && _requestId == null,
+                      onReady: (ready) {
+                        if (mounted) setState(() => _ready = ready);
                       },
                       onCropped: _cropped,
-                    ),
-                  )
-                else
-                  AvatarBadge(
-                    seed: profile?.displayName ?? '',
-                    userId: profile?.did,
-                    avatarUri: profile?.avatarUri,
-                    size: 112,
-                  ),
-                const SizedBox(height: 16),
-                Text(
-                  _preview == null ? l10n.avatarImageHint : l10n.avatarCropHint,
-                  style: TextStyle(color: theme.secondaryText, fontSize: 14),
-                  textAlign: TextAlign.center,
-                ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Semantics(
-                      liveRegion: true,
-                      child: Text(
-                        _error!,
-                        key: const Key('avatar-error'),
-                        style: TextStyle(color: theme.secondaryText),
-                        textAlign: TextAlign.center,
+                      currentAvatar: AvatarBadge(
+                        seed: profile?.displayName ?? '',
+                        userId: profile?.did,
+                        avatarUri: profile?.avatarUri,
+                        size: 72,
                       ),
+                    )
+                  else
+                    AvatarBadge(
+                      seed: profile?.displayName ?? '',
+                      userId: profile?.did,
+                      avatarUri: profile?.avatarUri,
+                      size: 112,
                     ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _preview == null
+                        ? l10n.avatarImageHint
+                        : l10n.avatarCropHint,
+                    style: TextStyle(color: theme.secondaryText, fontSize: 14),
+                    textAlign: TextAlign.center,
                   ),
-                if (_busy)
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: CupertinoActivityIndicator(),
-                  ),
-                if (!_busy && profile?.avatarUploadEnabled != true)
-                  Text(l10n.avatarUnavailable),
-                if (_requestId != null)
-                  CupertinoButton.filled(
-                    key: const Key('avatar-retry'),
-                    onPressed: enabled ? _save : null,
-                    child: Text(l10n.avatarRetry),
-                  )
-                else if (_preview != null)
-                  CupertinoButton.filled(
-                    key: const Key('avatar-save'),
-                    onPressed: enabled && _ready
-                        ? () {
-                            setState(() => _busy = true);
-                            _crop.crop();
-                          }
-                        : null,
-                    child: Text(l10n.commonSave),
-                  )
-                else ...[
-                  CupertinoButton(
-                    key: const Key('avatar-pick'),
-                    onPressed: enabled ? _pick : null,
-                    child: Text(l10n.avatarChoose),
-                  ),
-                  if (_mobile)
-                    CupertinoButton(
-                      key: const Key('avatar-camera'),
-                      onPressed: enabled ? () => _pick(camera: true) : null,
-                      child: Text(l10n.avatarCamera),
-                    ),
-                  if (profile?.avatarUri != null)
-                    CupertinoButton(
-                      key: const Key('avatar-clear'),
-                      onPressed: enabled ? _confirmClear : null,
-                      child: Text(
-                        l10n.avatarReset,
-                        style: const TextStyle(
-                          color: CupertinoColors.destructiveRed,
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          _error!,
+                          key: const Key('avatar-error'),
+                          style: TextStyle(color: theme.secondaryText),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     ),
+                  if (_busy)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: CupertinoActivityIndicator(),
+                    ),
+                  if (!_busy && profile?.avatarUploadEnabled != true)
+                    Text(l10n.avatarUnavailable),
+                  if (_requestId != null)
+                    CupertinoButton.filled(
+                      key: const Key('avatar-retry'),
+                      onPressed: enabled ? _save : null,
+                      child: Text(l10n.avatarRetry),
+                    )
+                  else if (_preview != null) ...[
+                    CupertinoButton(
+                      key: const Key('avatar-pick'),
+                      onPressed: enabled ? _pick : null,
+                      child: Text(l10n.avatarChoose),
+                    ),
+                    CupertinoButton.filled(
+                      key: const Key('avatar-save'),
+                      onPressed: enabled && _ready
+                          ? () {
+                              setState(() => _busy = true);
+                              _crop.crop();
+                            }
+                          : null,
+                      child: Text(l10n.commonSave),
+                    ),
+                  ] else ...[
+                    CupertinoButton(
+                      key: const Key('avatar-pick'),
+                      onPressed: enabled ? _pick : null,
+                      child: Text(l10n.avatarChoose),
+                    ),
+                    if (_mobile)
+                      CupertinoButton(
+                        key: const Key('avatar-camera'),
+                        onPressed: enabled ? () => _pick(camera: true) : null,
+                        child: Text(l10n.avatarCamera),
+                      ),
+                    if (profile?.avatarUri != null)
+                      CupertinoButton(
+                        key: const Key('avatar-clear'),
+                        onPressed: enabled ? _confirmClear : null,
+                        child: Text(
+                          l10n.avatarReset,
+                          style: const TextStyle(
+                            color: CupertinoColors.destructiveRed,
+                          ),
+                        ),
+                      ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

@@ -6,7 +6,7 @@ import 'avatar_image_cache_stub.dart'
 
 abstract class AvatarImageCache {
   factory AvatarImageCache(String owner) = platform.PlatformAvatarImageCache;
-  Future<ui.Image?> load(String uri, {int edge = 128});
+  Future<ui.Image?> load(String uri, {int edge = 128, bool force = false});
   void dispose();
 }
 

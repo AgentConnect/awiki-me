@@ -455,7 +455,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    AvatarBadge(
+                    ProfileAvatar(
                       key: const Key('peer-info-avatar'),
                       seed: displayName,
                       size: 72,
@@ -640,7 +640,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         children: <Widget>[
           const SizedBox(height: 28),
           Align(
-            child: AvatarBadge(
+            child: ProfileAvatar(
               key: const Key('peer-info-avatar'),
               seed: displayName,
               size: 80,

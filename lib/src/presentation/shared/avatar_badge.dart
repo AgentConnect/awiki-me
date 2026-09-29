@@ -20,6 +20,31 @@ final avatarImageCacheProvider = Provider<AvatarImageCache>((ref) {
   return cache;
 });
 
+typedef AvatarReferenceInput = ({String? did, String? uri, String? thumbnail});
+typedef AvatarReference = ({String? uri, String? thumbnail});
+
+/// An authoritative null must not fall back to an older widget snapshot.
+final avatarReferenceProvider =
+    Provider.family<AvatarReference, AvatarReferenceInput>((ref, input) {
+      final own = ref.watch(
+        profileProvider.select(
+          (state) => input.did != null && state.profile?.did == input.did
+              ? state.profile
+              : null,
+        ),
+      );
+      final peer = ref.watch(
+        peerDisplayProfileProvider.select((state) => state.forDid(input.did)),
+      );
+      if (own != null) {
+        return (uri: own.avatarUri, thumbnail: own.avatarThumbnailUri);
+      }
+      if (peer != null) {
+        return (uri: peer.avatarUri, thumbnail: peer.avatarThumbnailUri);
+      }
+      return (uri: input.uri, thumbnail: input.thumbnail);
+    });
+
 class AvatarBadge extends ConsumerStatefulWidget {
   const AvatarBadge({
     super.key,
@@ -163,24 +188,15 @@ class _AvatarBadgeState extends ConsumerState<AvatarBadge> {
       }
       return _GroupAvatarTiles(members: members, size: widget.size);
     }
-    final own = ref.watch(
-      profileProvider.select(
-        (state) => state.profile?.did == widget.userId ? state.profile : null,
-      ),
+    final reference = ref.watch(
+      avatarReferenceProvider((
+        did: widget.userId,
+        uri: group?.avatarUri ?? widget.avatarUri,
+        thumbnail: widget.avatarThumbnailUri,
+      )),
     );
-    final peer = ref.watch(
-      peerDisplayProfileProvider.select((state) => state.forDid(widget.userId)),
-    );
-    final main = own != null
-        ? own.avatarUri
-        : peer != null
-        ? peer.avatarUri
-        : group?.avatarUri ?? widget.avatarUri;
-    final thumbnail = own != null
-        ? own.avatarThumbnailUri
-        : peer != null
-        ? peer.avatarThumbnailUri
-        : widget.avatarThumbnailUri;
+    final main = reference.uri;
+    final thumbnail = reference.thumbnail;
     final raw = main == null
         ? null
         : widget.size <= 64

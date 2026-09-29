@@ -78,7 +78,11 @@ class PlatformAvatarImageCache implements AvatarImageCache {
   Future<Directory> _directory() => _root ??= _avatarDirectory();
 
   @override
-  Future<ui.Image?> load(String raw, {int edge = 128}) async {
+  Future<ui.Image?> load(
+    String raw, {
+    int edge = 128,
+    bool force = false,
+  }) async {
     final uri = safeAvatarUri(raw);
     if (_inactive || uri == null) return null;
     edge = edge <= 128 ? 128 : 512;
@@ -91,7 +95,9 @@ class PlatformAvatarImageCache implements AvatarImageCache {
       }
       cached.image.dispose();
     }
-    if (_retryAfter[key]?.isAfter(DateTime.now()) == true) return null;
+    if (!force && _retryAfter[key]?.isAfter(DateTime.now()) == true) {
+      return null;
+    }
     // Callers receive independent handles to one shared decoded allocation.
     final result = await (_pending[key] ??= _load(uri, edge, key).whenComplete(
       () {

@@ -7171,7 +7171,7 @@ abstract class AppLocalizations {
   /// No description provided for @avatarCropHint.
   ///
   /// In zh, this message translates to:
-  /// **'拖动或缩放图片，调整头像的位置。建议使用至少 512×512 的图片；小图片可能模糊。'**
+  /// **'拖动正方形调整位置，拖动四角调整选框大小。'**
   String get avatarCropHint;
 
   /// No description provided for @avatarImageRejected.
@@ -7227,6 +7227,42 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'继续裁剪'**
   String get avatarRecoverContinue;
+
+  /// No description provided for @avatarView.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看头像'**
+  String get avatarView;
+
+  /// No description provided for @avatarNoImage.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未设置头像'**
+  String get avatarNoImage;
+
+  /// No description provided for @avatarPreviewFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'头像加载失败，请重试。'**
+  String get avatarPreviewFailed;
+
+  /// No description provided for @avatarCurrent.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前头像'**
+  String get avatarCurrent;
+
+  /// No description provided for @avatarNewPreview.
+  ///
+  /// In zh, this message translates to:
+  /// **'新头像预览'**
+  String get avatarNewPreview;
+
+  /// No description provided for @avatarSmallSelection.
+  ///
+  /// In zh, this message translates to:
+  /// **'所选区域较小，头像可能模糊。'**
+  String get avatarSmallSelection;
 }
 
 class _AppLocalizationsDelegate

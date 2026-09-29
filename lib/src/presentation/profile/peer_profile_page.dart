@@ -21,7 +21,7 @@ import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/app_dialog.dart';
-import '../shared/avatar_badge.dart';
+import '../shared/profile_avatar.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/identity_flow.dart';
@@ -583,7 +583,7 @@ class _PeerProfileCompactSummary extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
                 child: Row(
                   children: <Widget>[
-                    AvatarBadge(
+                    ProfileAvatar(
                       key: const Key('peer-profile-avatar'),
                       seed: displayName,
                       avatarUri: avatarUri,
@@ -1025,7 +1025,7 @@ class _PeerProfileHero extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                AvatarBadge(
+                ProfileAvatar(
                   key: const Key('peer-profile-avatar'),
                   seed: displayName,
                   avatarUri: avatarUri,

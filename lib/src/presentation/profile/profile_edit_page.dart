@@ -3,7 +3,6 @@ import 'package:flutter/cupertino.dart';
 import '../../domain/entities/profile_patch.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../l10n/l10n.dart';
-import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/responsive_layout.dart';
@@ -14,12 +13,10 @@ class ProfileEditPage extends StatefulWidget {
     super.key,
     required this.profile,
     required this.onSave,
-    this.onChangeAvatar,
   });
 
   final UserProfile profile;
   final Future<void> Function(ProfilePatch patch) onSave;
-  final VoidCallback? onChangeAvatar;
 
   @override
   State<ProfileEditPage> createState() => _ProfileEditPageState();
@@ -194,11 +191,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                     ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: EdgeInsets.zero,
                 children: <Widget>[
-                  _AvatarEditRow(
-                    profile: widget.profile,
-                    onChangeAvatar: widget.onChangeAvatar,
-                  ),
-                  const _ProfileEditDivider(inset: 0),
                   _CompactInlineFieldRow(
                     key: const Key('profile-edit-nickname-row'),
                     label: l10n.onboardingNickname,
@@ -237,72 +229,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AvatarEditRow extends StatelessWidget {
-  const _AvatarEditRow({required this.profile, this.onChangeAvatar});
-
-  final UserProfile profile;
-  final VoidCallback? onChangeAvatar;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final l10n = context.l10n;
-    return ColoredBox(
-      color: theme.background,
-      child: SizedBox(
-        height: 152,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Row(
-            children: <Widget>[
-              SizedBox(
-                width: 72,
-                child: Text(
-                  l10n.profileAvatarLabel,
-                  style: TextStyle(
-                    color: theme.title,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Center(
-                  child: AvatarBadge(
-                    seed: profile.displayName,
-                    avatarUri: profile.avatarUri,
-                    userId: profile.did,
-                    size: 88,
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: 72,
-                child: CupertinoButton(
-                  key: const Key('profile-edit-change-avatar-button'),
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(72, 48),
-                  onPressed: onChangeAvatar,
-                  child: Text(
-                    l10n.profileAvatarChange,
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      color: onChangeAvatar == null
-                          ? theme.tertiaryText
-                          : AwikiMePalette.actionBlue,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -650,16 +576,14 @@ class _ProfileTagsEditor extends StatelessWidget {
 }
 
 class _ProfileEditDivider extends StatelessWidget {
-  const _ProfileEditDivider({this.inset = 24});
-
-  final double inset;
+  const _ProfileEditDivider();
 
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
       color: context.awikiTheme.background,
       child: Padding(
-        padding: EdgeInsets.only(left: inset, right: inset),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         child: ColoredBox(
           color: context.awikiTheme.border,
           child: const SizedBox(height: 1, width: double.infinity),

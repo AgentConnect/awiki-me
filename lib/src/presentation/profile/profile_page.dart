@@ -14,7 +14,7 @@ import '../../l10n/l10n.dart';
 import '../friends/friends_provider.dart';
 import '../app_shell/providers/navigation_provider.dart';
 import '../shared/app_dialog.dart';
-import '../shared/avatar_badge.dart';
+import '../shared/profile_avatar.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_semantic_icon.dart';
 import '../shared/awiki_me_top_bar.dart';
@@ -136,6 +136,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                       userId: profile.did,
                       isSaving: state.isSaving,
                       onEdit: () => _showEditProfileDialog(context, profile),
+                      onAvatarEdit: () => showAvatarEditor(context),
                       followersCount: friendsState.followers.length,
                       followingCount: friendsState.following.length,
                       onFollowingTap: widget.onFollowingTap,
@@ -178,6 +179,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                         avatarUri: profile.avatarUri,
                         avatarUserId: profile.did,
                         avatarKey: const Key('profile-avatar'),
+                        onAvatarEdit: () => showAvatarEditor(context),
                         avatarSize: responsive.displayScaled(64),
                         handle: handleLabel,
                         handleKey: const Key('profile-handle-value'),
@@ -369,7 +371,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         context,
         (_) => ProfileEditPage(
           profile: profile,
-          onChangeAvatar: () => showAvatarEditor(context),
           onSave: (patch) =>
               ref.read(profileProvider.notifier).updateProfile(patch),
         ),
@@ -388,7 +389,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           nickController: nickController,
           bioController: bioController,
           tagsController: tagsController,
-          onChangeAvatar: () => showAvatarEditor(context),
           onSave: () async {
             final patch = ProfilePatch(
               displayName: nickController.text.trim(),
@@ -475,6 +475,7 @@ class _CompactProfileSummary extends StatelessWidget {
     required this.userId,
     required this.isSaving,
     required this.onEdit,
+    required this.onAvatarEdit,
     required this.followersCount,
     required this.followingCount,
     required this.onFollowingTap,
@@ -488,6 +489,7 @@ class _CompactProfileSummary extends StatelessWidget {
   final String userId;
   final bool isSaving;
   final VoidCallback onEdit;
+  final VoidCallback onAvatarEdit;
   final int followersCount;
   final int followingCount;
   final VoidCallback? onFollowingTap;
@@ -507,82 +509,91 @@ class _CompactProfileSummary extends StatelessWidget {
       child: Column(
         children: <Widget>[
           SelectionContainer.disabled(
-            child: AppPressable(
-              key: const Key('profile-edit-button'),
-              onTap: isSaving ? null : onEdit,
-              semanticLabel: context.l10n.profileEditTitle,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(32, 16, 16, 16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: <Widget>[
-                    AvatarBadge(
-                      key: const Key('profile-avatar'),
-                      seed: displayName,
-                      size: 72,
-                      avatarUri: avatarUri,
-                      userId: userId,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            displayName,
-                            key: const Key('profile-display-name'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: theme.title,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w400,
-                              height: 1.25,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(32, 16, 16, 16),
+              child: Row(
+                children: [
+                  ProfileAvatar(
+                    key: const Key('profile-avatar'),
+                    onEdit: onAvatarEdit,
+                    seed: displayName,
+                    size: 72,
+                    avatarUri: avatarUri,
+                    userId: userId,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: AppPressable(
+                      key: const Key('profile-edit-button'),
+                      onTap: isSaving ? null : onEdit,
+                      semanticLabel: context.l10n.profileEditTitle,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  displayName,
+                                  key: const Key('profile-display-name'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: theme.title,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w400,
+                                    height: 1.25,
+                                  ),
+                                ),
+                                if (bio.trim().isNotEmpty) ...<Widget>[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    bio.trim(),
+                                    key: const Key('profile-bio'),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: theme.secondaryText,
+                                      fontSize: 14,
+                                      height: 1.45,
+                                    ),
+                                  ),
+                                ],
+                                if (visibleTags.isNotEmpty) ...<Widget>[
+                                  const SizedBox(height: 10),
+                                  Wrap(
+                                    key: const Key('profile-tags'),
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: visibleTags
+                                        .map(
+                                          (tag) =>
+                                              _CompactProfileTag(label: tag),
+                                        )
+                                        .toList(growable: false),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
-                          if (bio.trim().isNotEmpty) ...<Widget>[
-                            const SizedBox(height: 6),
-                            Text(
-                              bio.trim(),
-                              key: const Key('profile-bio'),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
+                          const SizedBox(width: 4),
+                          SizedBox(
+                            width: 44,
+                            height: 44,
+                            child: Center(
+                              child: Icon(
+                                CupertinoIcons.chevron_right,
+                                key: const Key('profile-edit-chevron'),
+                                size: 20,
                                 color: theme.secondaryText,
-                                fontSize: 14,
-                                height: 1.45,
                               ),
                             ),
-                          ],
-                          if (visibleTags.isNotEmpty) ...<Widget>[
-                            const SizedBox(height: 10),
-                            Wrap(
-                              key: const Key('profile-tags'),
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: visibleTags
-                                  .map((tag) => _CompactProfileTag(label: tag))
-                                  .toList(growable: false),
-                            ),
-                          ],
+                          ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    SizedBox(
-                      width: 44,
-                      height: 44,
-                      child: Center(
-                        child: Icon(
-                          CupertinoIcons.chevron_right,
-                          key: const Key('profile-edit-chevron'),
-                          size: 20,
-                          color: theme.secondaryText,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1002,14 +1013,12 @@ class _ProfileEditDialog extends StatelessWidget {
     required this.bioController,
     required this.tagsController,
     required this.onSave,
-    required this.onChangeAvatar,
   });
 
   final TextEditingController nickController;
   final TextEditingController bioController;
   final TextEditingController tagsController;
   final Future<void> Function() onSave;
-  final VoidCallback onChangeAvatar;
 
   @override
   Widget build(BuildContext context) {
@@ -1029,7 +1038,6 @@ class _ProfileEditDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            CupertinoButton(key: const Key('profile-edit-change-avatar-button'), onPressed: onChangeAvatar, child: Text(context.l10n.profileAvatarChange)),
             AppDialogHeader(
               title: context.l10n.profileEditTitle,
               onClose: () => Navigator.of(context).pop(),

@@ -5,7 +5,11 @@ import 'avatar_image_cache.dart';
 class PlatformAvatarImageCache implements AvatarImageCache {
   PlatformAvatarImageCache(String owner);
   @override
-  Future<ui.Image?> load(String uri, {int edge = 128}) async => null;
+  Future<ui.Image?> load(
+    String uri, {
+    int edge = 128,
+    bool force = false,
+  }) async => null;
   @override
   void dispose() {}
 }

@@ -39,6 +39,7 @@ Future<VersionedCliArtifact> prepareVersionedCliArtifact({
   required String rustRepoPath,
   required String? expectedSourceRef,
   required DesktopCommandRunner commands,
+  bool includeAvatarProbe = false,
 }) async {
   final repo = Directory(_resolvePath(root, rustRepoPath));
   final cargoManifest = File('${repo.path}/Cargo.toml');
@@ -83,11 +84,17 @@ Future<VersionedCliArtifact> prepareVersionedCliArtifact({
   };
   await commands.run(
     'cargo',
-    const <String>[
+    <String>[
       'build',
       '--locked',
       '-p',
       'awiki-cli',
+      if (includeAvatarProbe) ...[
+        '--features',
+        'system-test-probe',
+        '--bin',
+        'awiki-system-test-probe',
+      ],
       '--bin',
       'awiki-cli',
     ],
