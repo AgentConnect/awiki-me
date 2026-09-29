@@ -742,74 +742,101 @@ class _DeviceJoinRequestBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final phone = context.awikiResponsive.isPhone;
     return Positioned(
-      left: 20,
-      right: 20,
-      top: 12,
+      left: 16,
+      right: 16,
+      // Phones keep the floating title bar and its actions reachable.
+      top: phone ? 60 : 12,
       child: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,
-          child: Semantics(
-            identifier: 'device-join-request-entry',
-            button: true,
-            child: CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: onReview,
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 520),
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                decoration: BoxDecoration(
-                  color: theme.surface,
-                  borderRadius: BorderRadius.circular(AwikiMeRadii.lg),
-                  border: Border.all(
-                    color: context.awikiTheme.primary.withValues(alpha: 0.2),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Semantics(
+              identifier: 'device-join-request-entry',
+              button: true,
+              child: AppPressable(
+                onTap: onReview,
+                semanticLabel: context.l10n.deviceJoinApprovalTitle,
+                borderRadius: BorderRadius.circular(18),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: theme.overlayShadow,
                   ),
-                  boxShadow: theme.overlayShadow,
-                ),
-                child: Row(
-                  children: <Widget>[
-                    Icon(
-                      CupertinoIcons.device_phone_portrait,
-                      color: context.awikiTheme.primary,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Text(
-                            context.l10n.deviceJoinApprovalTitle,
-                            style: TextStyle(
+                  child: AwikiGlassSurface(
+                    key: const Key('device-join-request-banner'),
+                    borderRadius: BorderRadius.circular(18),
+                    child: ColoredBox(
+                      color: theme.surface.withValues(alpha: 0.55),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+                        child: Row(
+                          children: <Widget>[
+                            Icon(
+                              CupertinoIcons.device_laptop,
                               color: theme.title,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w400,
+                              size: 20,
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            deviceId,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: theme.secondaryText,
-                              fontSize: 12,
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Text(
+                                    context.l10n.deviceJoinApprovalTitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: theme.title,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    deviceId,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: theme.secondaryText,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 10),
+                            Container(
+                              height: 32,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                              ),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: theme.primarySoft,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: theme.primary.withValues(alpha: 0.22),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Text(
+                                context.l10n.deviceReviewAction,
+                                style: TextStyle(
+                                  color: theme.primaryDeep,
+                                  fontSize: 13,
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Text(
-                      context.l10n.deviceReviewAction,
-                      style: TextStyle(
-                        color: context.awikiTheme.primary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),

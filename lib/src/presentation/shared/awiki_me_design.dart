@@ -508,6 +508,11 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
   Color get glowPrimary => semanticColors.glowPrimary;
   Color get glowSecondary => semanticColors.glowSecondary;
   bool get isDark => colorScheme.brightness == Brightness.dark;
+
+  /// Reference `--accent-deep`: text on [primarySoft] fills such as the
+  /// follow and review pills.
+  Color get primaryDeep =>
+      isDark ? const Color(0xFF76C0F8) : const Color(0xFF005CA1);
   Color get alert => AwikiMePalette.alert;
   Color get warningContainer => colorScheme.brightness == Brightness.dark
       ? const Color(0xFF493B22)

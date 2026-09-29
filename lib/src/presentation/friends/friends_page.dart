@@ -1187,11 +1187,7 @@ class _RelationshipActionButtonInnerState
     final background = widget.destructive
         ? theme.dangerContainer
         : theme.primarySoft;
-    final foreground = widget.destructive
-        ? theme.danger
-        : theme.isDark
-        ? const Color(0xFF76C0F8)
-        : const Color(0xFF005CA1);
+    final foreground = widget.destructive ? theme.danger : theme.primaryDeep;
     return AppPressable(
       onTap: _isBusy
           ? null

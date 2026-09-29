@@ -66,7 +66,6 @@ class PeerProfilePage extends ConsumerStatefulWidget {
 }
 
 class _PeerProfilePageState extends ConsumerState<PeerProfilePage> {
-
   @override
   void initState() {
     super.initState();
@@ -1208,13 +1207,7 @@ class _PeerProfileFollowPill extends StatelessWidget {
           label,
           maxLines: 1,
           textAlign: TextAlign.center,
-          style: TextStyle(
-            color: theme.isDark
-                ? const Color(0xFF76C0F8)
-                : const Color(0xFF005CA1),
-            fontSize: 13,
-            height: 1,
-          ),
+          style: TextStyle(color: theme.primaryDeep, fontSize: 13, height: 1),
         ),
       ),
     );
