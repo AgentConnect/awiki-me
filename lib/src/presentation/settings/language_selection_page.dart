@@ -7,7 +7,7 @@ import '../shared/app_language_menu.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/responsive_layout.dart';
-import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass.dart';
 
 class LanguageSelectionPage extends ConsumerWidget {
   const LanguageSelectionPage({super.key, this.onBack});
@@ -23,89 +23,92 @@ class LanguageSelectionPage extends ConsumerWidget {
     return CupertinoPageScaffold(
       key: const Key('language-selection-page'),
       backgroundColor: theme.background,
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: <Widget>[
-            Padding(
-              key: const Key('language-selection-header'),
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: AwikiMeTopBar(
-                title: l10n.settingsLanguage,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                titleFontSize: awikiMeCompactTopBarTitleFontSize,
-                titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
-                titleHeight: awikiMeCompactTopBarTitleHeight,
-                leading: TopBarActionButton(
-                  key: const Key('language-selection-back-button'),
-                  onTap: onBack ?? () => Navigator.of(context).pop(),
-                  semanticsLabel: l10n.commonBack,
-                  child: Icon(
-                    CupertinoIcons.chevron_left,
-                    size: context.awikiResponsive.iconMd,
-                    color: context.awikiTheme.title,
+      child: AwikiPageCanvas(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: <Widget>[
+              Padding(
+                key: const Key('language-selection-header'),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: AwikiMeTopBar(
+                  title: l10n.settingsLanguage,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  titleFontSize: awikiMeCompactTopBarTitleFontSize,
+                  titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
+                  titleHeight: awikiMeCompactTopBarTitleHeight,
+                  leading: AwikiBackButton(
+                    key: const Key('language-selection-back-button'),
+                    onTap: onBack ?? () => Navigator.of(context).pop(),
+                    semanticsLabel: l10n.commonBack,
                   ),
                 ),
               ),
-            ),
-            Expanded(
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-                    children: <Widget>[
-                      DecoratedBox(
-                        key: const Key('language-selection-options'),
-                        decoration: BoxDecoration(
-                          color: theme.surface,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              _LanguageOptionRow(
-                                key: const Key('language-option-system'),
-                                title: l10n.settingsLanguageSystem,
-                                subtitle: l10n.settingsLanguageSystemSubtitle,
-                                selected: selectedMode == AppLocaleMode.system,
-                                height: 78,
-                                onTap: () =>
-                                    setAppLocaleMode(ref, AppLocaleMode.system),
-                              ),
-                              const _LanguageDivider(),
-                              _LanguageOptionRow(
-                                key: const Key('language-option-zh-hans'),
-                                title: l10n.settingsLanguageZhHans,
-                                selected: selectedMode == AppLocaleMode.zhHans,
-                                height: 64,
-                                onTap: () =>
-                                    setAppLocaleMode(ref, AppLocaleMode.zhHans),
-                              ),
-                              const _LanguageDivider(),
-                              _LanguageOptionRow(
-                                key: const Key('language-option-english'),
-                                title: l10n.settingsLanguageEnglish,
-                                selected: selectedMode == AppLocaleMode.english,
-                                height: 64,
-                                onTap: () => setAppLocaleMode(
-                                  ref,
-                                  AppLocaleMode.english,
+              Expanded(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+                      children: <Widget>[
+                        DecoratedBox(
+                          key: const Key('language-selection-options'),
+                          decoration: awikiGroupDecoration(context),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              context.awikiResponsive.isPhone ? 24 : 12,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                _LanguageOptionRow(
+                                  key: const Key('language-option-system'),
+                                  title: l10n.settingsLanguageSystem,
+                                  subtitle: l10n.settingsLanguageSystemSubtitle,
+                                  selected:
+                                      selectedMode == AppLocaleMode.system,
+                                  height: 78,
+                                  onTap: () => setAppLocaleMode(
+                                    ref,
+                                    AppLocaleMode.system,
+                                  ),
                                 ),
-                              ),
-                            ],
+                                const _LanguageDivider(),
+                                _LanguageOptionRow(
+                                  key: const Key('language-option-zh-hans'),
+                                  title: l10n.settingsLanguageZhHans,
+                                  selected:
+                                      selectedMode == AppLocaleMode.zhHans,
+                                  height: 64,
+                                  onTap: () => setAppLocaleMode(
+                                    ref,
+                                    AppLocaleMode.zhHans,
+                                  ),
+                                ),
+                                const _LanguageDivider(),
+                                _LanguageOptionRow(
+                                  key: const Key('language-option-english'),
+                                  title: l10n.settingsLanguageEnglish,
+                                  selected:
+                                      selectedMode == AppLocaleMode.english,
+                                  height: 64,
+                                  onTap: () => setAppLocaleMode(
+                                    ref,
+                                    AppLocaleMode.english,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -160,9 +163,7 @@ class _LanguageOptionRow extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: selected
-                                ? context.awikiTheme.primary
-                                : theme.title,
+                            color: theme.title,
                             fontSize: 17,
                             fontWeight: selected
                                 ? FontWeight.w400
@@ -194,7 +195,7 @@ class _LanguageOptionRow extends StatelessWidget {
                             CupertinoIcons.check_mark,
                             key: const Key('language-option-selected-check'),
                             size: 23,
-                            color: context.awikiTheme.primary,
+                            color: theme.title,
                           )
                         : null,
                   ),
@@ -216,8 +217,11 @@ class _LanguageDivider extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(left: 20, right: 16),
       child: ColoredBox(
-        color: context.awikiTheme.border,
-        child: const SizedBox(height: 1, width: double.infinity),
+        color: awikiGroupDividerColor(context),
+        child: SizedBox(
+          height: context.awikiResponsive.isPhone ? 0.5 : 1,
+          width: double.infinity,
+        ),
       ),
     );
   }

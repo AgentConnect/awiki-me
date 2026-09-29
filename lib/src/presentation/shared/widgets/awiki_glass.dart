@@ -288,3 +288,47 @@ class AwikiNameTag extends StatelessWidget {
     );
   }
 }
+
+/// Background for pushed secondary pages: the glow canvas on phones and the
+/// plain page background elsewhere.
+class AwikiPageCanvas extends StatelessWidget {
+  const AwikiPageCanvas({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (context.awikiResponsive.isPhone) {
+      return AwikiGlassBackdrop(
+        color: awikiCompactListBackground(context),
+        child: child,
+      );
+    }
+    return ColoredBox(color: context.awikiTheme.background, child: child);
+  }
+}
+
+/// Grouped-rows card: glass on phones, the themed surface elsewhere.
+BoxDecoration awikiGroupDecoration(
+  BuildContext context, {
+  double desktopRadius = 12,
+}) {
+  final theme = context.awikiTheme;
+  if (context.awikiResponsive.isPhone) {
+    return BoxDecoration(
+      color: theme.glass,
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: theme.glassEdge, width: 0.5),
+    );
+  }
+  return BoxDecoration(
+    color: theme.surface,
+    borderRadius: BorderRadius.circular(desktopRadius),
+  );
+}
+
+/// Hairline divider colour inside grouped rows.
+Color awikiGroupDividerColor(BuildContext context) =>
+    context.awikiResponsive.isPhone
+    ? context.awikiTheme.glassEdgeActive
+    : context.awikiTheme.border;

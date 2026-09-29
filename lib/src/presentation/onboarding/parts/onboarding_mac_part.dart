@@ -60,12 +60,14 @@ class _MacOnboardingScaffold extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final compact = constraints.maxWidth <= 700;
-              final tenantButton = _MacFooterButton(
-                key: const Key('onboarding-tenant-switcher-button'),
-                icon: CupertinoIcons.globe,
-                label: activeTenant.name,
-                tooltip: context.l10n.tenantSwitcherLabel,
-                onTap: onTenantPressed,
+              final tenantButton = Builder(
+                builder: (anchorContext) => _MacFooterButton(
+                  key: const Key('onboarding-tenant-switcher-button'),
+                  icon: CupertinoIcons.globe,
+                  label: activeTenant.name,
+                  tooltip: context.l10n.tenantSwitcherLabel,
+                  onTap: () => showTenantSwitcherMenu(anchorContext),
+                ),
               );
               final languageButton = _MacFooterButton(
                 key: const Key('onboarding-language-switcher-button'),
@@ -135,12 +137,15 @@ class _MacOnboardingScaffold extends StatelessWidget {
                           const Expanded(flex: 3, child: _MacCompactBrand()),
                           const SizedBox(width: 12),
                           if (phone)
-                            _PhoneTenantPill(
-                              key: const Key(
-                                'onboarding-tenant-switcher-button',
+                            Builder(
+                              builder: (anchorContext) => _PhoneTenantPill(
+                                key: const Key(
+                                  'onboarding-tenant-switcher-button',
+                                ),
+                                name: activeTenant.name,
+                                onTap: () =>
+                                    showTenantSwitcherMenu(anchorContext),
                               ),
-                              name: activeTenant.name,
-                              onTap: onTenantPressed,
                             )
                           else
                             Expanded(flex: 2, child: tenantButton),

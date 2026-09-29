@@ -1241,7 +1241,7 @@ void main() {
     );
     expect(
       tester.getRect(find.byKey(const Key('language-selection-options'))),
-      const Rect.fromLTWH(16, 88, 358, 208),
+      const Rect.fromLTWH(16, 88, 358, 207),
     );
     expect(
       tester.getSize(find.byKey(const Key('language-option-system'))).height,

@@ -1692,5 +1692,24 @@
       }
     }
   },
-  "peerProfileDetailsSection": "Details"
+  "peerProfileDetailsSection": "Details",
+  "deviceJoinIssuedAtLabel": "Requested",
+  "deviceJoinExpiresAtLabel": "Expires",
+  "deviceJoinFingerprintLabel": "Key fingerprint",
+  "deviceJoinRequestAsMember": "Requests to join as a regular device",
+  "deviceJoinOpenHint": "Opening a request does not authorize it. After you start verification, both devices show a 6-digit code.",
+  "deviceJoinCompareTitle": "Compare codes",
+  "deviceJoinLocalSasLabel": "Shown on this device",
+  "commonLater": "Later",
+  "deviceJoinNoticeTitle": "{device} wants to join your account",
+  "@deviceJoinNoticeTitle": {"placeholders": {"device": {"type": "String"}}},
+  "deviceJoinNoticeExpiry": "Valid until {time}",
+  "@deviceJoinNoticeExpiry": {"placeholders": {"time": {"type": "String"}}},
+  "deviceJoinStepRequest": "Send join request",
+  "deviceJoinStepRequestSub": "Sent to your managing device",
+  "deviceJoinStepVerify": "Managing device verifies",
+  "deviceJoinStepVerifyWaiting": "Waiting for “Start verification”",
+  "deviceJoinStepVerifySas": "Confirm both 6-digit codes match",
+  "deviceJoinStepJoin": "Join the account",
+  "deviceJoinStepJoinSub": "Joins as a regular device; a managing device can grant management later"
 }

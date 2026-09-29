@@ -111,8 +111,9 @@ void main() {
                       as BoxDecoration)
                   .color!;
           final theme = tester.element(danger).awikiTheme;
-          expect(foreground, theme.colorScheme.onError);
-          expect(background, theme.colorScheme.error);
+          // Filled destructive pills keep white text on the deeper red.
+          expect(foreground, const Color(0xFFFFFFFF));
+          expect(background, theme.dangerFill);
           if (brightness == Brightness.light) {
             // Preserve the existing light button's exact foreground and surface.
             expect(foreground, const Color(0xFFFFFFFF));

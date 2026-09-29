@@ -25,6 +25,7 @@ import '../agents/agent_status_indicator.dart';
 import '../agents/agent_visual_status.dart';
 import '../agents/acp_session_provider.dart';
 import '../group/group_provider.dart';
+import '../devices/device_join_request_notice.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/app_dialog.dart';
@@ -775,6 +776,21 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
             onChanged: onQueryChanged,
           ),
         ),
+        if (responsive.isPhone && ref.watch(pendingJoinRequestProvider) != null)
+          SliverToBoxAdapter(
+            child: Padding(
+              key: const Key('conversation-list-join-notice'),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: DeviceJoinRequestNoticeCard(
+                request: ref.watch(pendingJoinRequestProvider)!,
+                onReview: () => reviewDeviceJoinRequest(
+                  context,
+                  ref,
+                  ref.read(pendingJoinRequestProvider)!,
+                ),
+              ),
+            ),
+          ),
         SliverToBoxAdapter(child: filterControls),
         if (conversations.isEmpty &&
             loadState == ConversationListLoadState.error)

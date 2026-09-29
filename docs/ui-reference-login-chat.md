@@ -144,6 +144,28 @@ the title bar.
   not a presence claim to peers. The workbench destination remains routable but
   has no rail entry.
 
+## Shared glass surfaces
+
+- **Tenant menu:** the login tenant control opens a thick glass menu anchored
+  to it (tenants with the default tag and a check on the active one, then
+  "add tenant" and "manage tenants"); full editing stays in the management
+  dialog.
+- **Join requests:** a pending request is a glass notice ("{device} 请求加入你的
+  账户 · valid until") inline under the phone message search, and floating on
+  every other surface so review stays globally reachable. Review opens as a
+  glass bottom sheet on phones and a glass dialog elsewhere: request details,
+  then 核对验证码 with six digit tiles, an explicit check and pill actions.
+- **New-device join and Handle recovery:** glow canvas, glass fields, a step
+  list and digit tiles while waiting for the managing device, and a glass
+  impact list with a check to confirm recovery.
+- **Controls:** on phones `AppTextField` is a glass field with an outward
+  accent focus ring; primary, secondary and destructive buttons are pills;
+  dialogs and bottom sheets are floating thick-glass panels; the quick-actions
+  menu is a glass panel without a pointer. Destructive fills use the deeper
+  `dangerFill` red in dark mode.
+- Language, appearance (a glass segmented track), profile edit and chat
+  information pages use the glow canvas with glass group cards.
+
 ## Appearance
 
 Display & window settings offers Follow system, Light and Dark. Android and iOS

@@ -714,6 +714,18 @@ class AppCardSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (color == null && context.awikiResponsive.isPhone) {
+      final theme = context.awikiTheme;
+      return Container(
+        decoration: BoxDecoration(
+          color: theme.glass,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: theme.glassEdge, width: 0.5),
+        ),
+        padding: padding,
+        child: child,
+      );
+    }
     return Container(
       decoration: AwikiMeDecorations.card(
         context: context,
@@ -1023,6 +1035,7 @@ class AppTextField extends StatefulWidget {
 
 class _AppTextFieldState extends State<AppTextField> {
   FocusNode? _internalFocusNode;
+  bool _focused = false;
 
   FocusNode get _effectiveFocusNode =>
       widget.focusNode ??
@@ -1069,58 +1082,110 @@ class _AppTextFieldState extends State<AppTextField> {
             textField: true,
             child: rawTextField,
           );
-    return TextFieldTapRegion(
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: widget.enabled ? _effectiveFocusNode.requestFocus : null,
-        child: AppSurface(
-          color: widget.backgroundColor ?? theme.subtleSurface,
-          padding: responsive.scaledInsets(
-            EdgeInsets.fromLTRB(16, 12, 16, widget.bottomPadding),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              if (widget.showLabel) ...<Widget>[
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: <Widget>[
-                    Text(
-                      widget.label,
-                      style: context.awikiTheme.fieldLabel.copyWith(
-                        fontSize: responsive.metaSm,
-                        color: theme.secondaryText,
-                      ),
-                    ),
-                    if (widget.labelTrailing != null)
-                      Flexible(child: widget.labelTrailing!),
-                  ],
-                ),
-                SizedBox(height: responsive.spacing(6)),
-              ],
-              if (widget.multiline)
-                textField
-              else
-                SizedBox(
-                  height: responsive.compactControlHeight,
-                  child: Row(
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (value) {
+        if (mounted && value != _focused) setState(() => _focused = value);
+      },
+      child: TextFieldTapRegion(
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: widget.enabled ? _effectiveFocusNode.requestFocus : null,
+          child: _AppTextFieldSurface(
+            glass: responsive.isPhone && widget.backgroundColor == null,
+            focused: _focused,
+            color: widget.backgroundColor ?? theme.subtleSurface,
+            padding: responsive.scaledInsets(
+              EdgeInsets.fromLTRB(16, 12, 16, widget.bottomPadding),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                if (widget.showLabel) ...<Widget>[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: <Widget>[
-                      if (widget.prefix != null) ...<Widget>[
-                        widget.prefix!,
-                        SizedBox(width: responsive.spacing(10)),
-                      ],
-                      Expanded(child: Center(child: textField)),
-                      if (widget.suffix != null) ...<Widget>[
-                        SizedBox(width: responsive.spacing(8)),
-                        widget.suffix!,
-                      ],
+                      Text(
+                        widget.label,
+                        style: context.awikiTheme.fieldLabel.copyWith(
+                          fontSize: responsive.metaSm,
+                          color: theme.secondaryText,
+                        ),
+                      ),
+                      if (widget.labelTrailing != null)
+                        Flexible(child: widget.labelTrailing!),
                     ],
                   ),
-                ),
-            ],
+                  SizedBox(height: responsive.spacing(6)),
+                ],
+                if (widget.multiline)
+                  textField
+                else
+                  SizedBox(
+                    height: responsive.compactControlHeight,
+                    child: Row(
+                      children: <Widget>[
+                        if (widget.prefix != null) ...<Widget>[
+                          widget.prefix!,
+                          SizedBox(width: responsive.spacing(10)),
+                        ],
+                        Expanded(child: Center(child: textField)),
+                        if (widget.suffix != null) ...<Widget>[
+                          SizedBox(width: responsive.spacing(8)),
+                          widget.suffix!,
+                        ],
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Field container: glass with an accent focus ring on phones, the quiet
+/// filled surface elsewhere.
+class _AppTextFieldSurface extends StatelessWidget {
+  const _AppTextFieldSurface({
+    required this.glass,
+    required this.focused,
+    required this.color,
+    required this.padding,
+    required this.child,
+  });
+
+  final bool glass;
+  final bool focused;
+  final Color color;
+  final EdgeInsets padding;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!glass) {
+      return AppSurface(color: color, padding: padding, child: child);
+    }
+    final theme = context.awikiTheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      padding: padding,
+      decoration: BoxDecoration(
+        color: focused ? theme.glassLens : theme.glass,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: focused ? theme.primary : theme.glassEdge,
+          width: 0.5,
+        ),
+        // The ring grows outward so focusing never shifts the field's text.
+        boxShadow: focused
+            ? <BoxShadow>[BoxShadow(color: theme.primary, spreadRadius: 1.5)]
+            : null,
+      ),
+      child: child,
     );
   }
 }
@@ -1172,11 +1237,22 @@ class AppInlineActionButton extends StatelessWidget {
           minHeight: responsive.compactControlHeight,
         ),
         padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
-        decoration: BoxDecoration(
-          color: context.awikiTheme.primarySoft,
-          borderRadius: BorderRadius.circular(responsive.radius(8)),
-          border: Border.all(color: context.awikiTheme.border),
-        ),
+        // Phones show the reference's glass lens pill; wider layouts keep
+        // the soft brand chip.
+        decoration: responsive.isPhone
+            ? BoxDecoration(
+                color: context.awikiTheme.glassLens,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: context.awikiTheme.glassEdgeActive,
+                  width: 0.5,
+                ),
+              )
+            : BoxDecoration(
+                color: context.awikiTheme.primarySoft,
+                borderRadius: BorderRadius.circular(responsive.radius(8)),
+                border: Border.all(color: context.awikiTheme.border),
+              ),
         alignment: Alignment.center,
         child: isLoading
             ? CupertinoActivityIndicator(radius: responsive.scaled(8))
@@ -1192,7 +1268,9 @@ class AppInlineActionButton extends StatelessWidget {
                     forceStrutHeight: true,
                   ),
                   style: context.awikiTheme.buttonLabel.copyWith(
-                    color: context.awikiTheme.primary,
+                    color: responsive.isPhone
+                        ? context.awikiTheme.title
+                        : context.awikiTheme.primary,
                     fontSize: responsive.bodySm,
                     height: 1,
                   ),
@@ -1219,6 +1297,10 @@ class AppPrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    // Phones use the reference's flat pill; wider layouts keep 9-unit corners.
+    final radius = responsive.isPhone
+        ? BorderRadius.circular(999)
+        : BorderRadius.circular(responsive.radius(9));
     return AppPressable(
       onTap: onPressed,
       semanticLabel: label,
@@ -1226,7 +1308,7 @@ class AppPrimaryButton extends StatelessWidget {
       enabled: onPressed != null,
       scaleOnPress: true,
       pressedScale: responsive.isPhone ? 0.97 : 0.985,
-      borderRadius: BorderRadius.circular(responsive.radius(9)),
+      borderRadius: radius,
       builder: (context, state, child) {
         final opacity = !state.enabled
             ? 0.5
@@ -1249,8 +1331,8 @@ class AppPrimaryButton extends StatelessWidget {
           vertical: responsive.spacing(10),
         ),
         decoration: BoxDecoration(
-          color: theme.primary,
-          borderRadius: BorderRadius.circular(responsive.radius(9)),
+          color: responsive.isPhone ? theme.primaryDark : theme.primary,
+          borderRadius: radius,
         ),
         child: Center(
           child: Text(
@@ -1289,6 +1371,9 @@ class AppSecondaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    final radius = responsive.isPhone
+        ? BorderRadius.circular(999)
+        : BorderRadius.circular(responsive.radius(9));
     return AppPressable(
       onTap: onPressed,
       semanticLabel: label,
@@ -1297,7 +1382,7 @@ class AppSecondaryButton extends StatelessWidget {
       scaleOnPress: true,
       pressedScale: responsive.isPhone ? 0.97 : 0.985,
       selected: false,
-      borderRadius: BorderRadius.circular(responsive.radius(9)),
+      borderRadius: radius,
       builder: (context, state, child) {
         final overlay = state.pressed
             ? theme.primary.withValues(alpha: 0.10)
@@ -1308,10 +1393,7 @@ class AppSecondaryButton extends StatelessWidget {
           opacity: state.enabled ? 1 : 0.5,
           duration: const Duration(milliseconds: 120),
           child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: overlay,
-              borderRadius: BorderRadius.circular(responsive.radius(9)),
-            ),
+            decoration: BoxDecoration(color: overlay, borderRadius: radius),
             child: child,
           ),
         );
@@ -1322,11 +1404,17 @@ class AppSecondaryButton extends StatelessWidget {
           horizontal: responsive.spacing(16),
           vertical: responsive.spacing(10),
         ),
-        decoration: BoxDecoration(
-          color: theme.surface,
-          borderRadius: BorderRadius.circular(responsive.radius(9)),
-          border: Border.all(color: context.awikiTheme.border),
-        ),
+        decoration: responsive.isPhone
+            ? BoxDecoration(
+                color: theme.glassLens,
+                borderRadius: radius,
+                border: Border.all(color: theme.glassEdgeActive, width: 0.5),
+              )
+            : BoxDecoration(
+                color: theme.surface,
+                borderRadius: radius,
+                border: Border.all(color: context.awikiTheme.border),
+              ),
         child: Center(
           child: Text(
             label,
@@ -1370,7 +1458,9 @@ class AppDangerButton extends StatelessWidget {
       enabled: onPressed != null,
       scaleOnPress: true,
       pressedScale: responsive.isPhone ? 0.97 : 0.985,
-      borderRadius: BorderRadius.circular(AwikiMeRadii.sm),
+      borderRadius: BorderRadius.circular(
+        responsive.isPhone ? 999 : AwikiMeRadii.sm,
+      ),
       builder: (context, state, child) {
         final opacity = !state.enabled
             ? 0.5
@@ -1388,8 +1478,8 @@ class AppDangerButton extends StatelessWidget {
       },
       child: AppSurface(
         padding: EdgeInsets.symmetric(vertical: responsive.spacing(10)),
-        color: filled ? theme.danger : theme.dangerContainer,
-        radius: AwikiMeRadii.sm,
+        color: filled ? theme.dangerFill : theme.dangerContainer,
+        radius: responsive.isPhone ? 999 : AwikiMeRadii.sm,
         constraints: BoxConstraints(minHeight: responsive.controlHeight),
         child: Center(
           child: Text(
@@ -1401,7 +1491,7 @@ class AppDangerButton extends StatelessWidget {
               forceStrutHeight: true,
             ),
             style: context.awikiTheme.buttonLabel.copyWith(
-              color: filled ? theme.colorScheme.onError : theme.danger,
+              color: filled ? CupertinoColors.white : theme.danger,
               fontSize: responsive.bodyMd,
               height: 1,
             ),

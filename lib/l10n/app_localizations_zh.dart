@@ -3829,4 +3829,59 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get peerProfileDetailsSection => '资料';
+
+  @override
+  String get deviceJoinIssuedAtLabel => '发起时间';
+
+  @override
+  String get deviceJoinExpiresAtLabel => '过期时间';
+
+  @override
+  String get deviceJoinFingerprintLabel => '密钥指纹';
+
+  @override
+  String get deviceJoinRequestAsMember => '请求以普通设备加入';
+
+  @override
+  String get deviceJoinOpenHint => '打开请求不会授权。点击「开始验证」后，两台设备会各自显示 6 位验证码。';
+
+  @override
+  String get deviceJoinCompareTitle => '核对验证码';
+
+  @override
+  String get deviceJoinLocalSasLabel => '本机显示';
+
+  @override
+  String get commonLater => '稍后';
+
+  @override
+  String deviceJoinNoticeTitle(String device) {
+    return '$device 请求加入你的账户';
+  }
+
+  @override
+  String deviceJoinNoticeExpiry(String time) {
+    return '$time 前有效';
+  }
+
+  @override
+  String get deviceJoinStepRequest => '发起关联请求';
+
+  @override
+  String get deviceJoinStepRequestSub => '已发送给你的管理设备';
+
+  @override
+  String get deviceJoinStepVerify => '管理设备验证';
+
+  @override
+  String get deviceJoinStepVerifyWaiting => '等待对方点击「开始验证」';
+
+  @override
+  String get deviceJoinStepVerifySas => '确认两端 6 位验证码一致';
+
+  @override
+  String get deviceJoinStepJoin => '加入账户';
+
+  @override
+  String get deviceJoinStepJoinSub => '作为普通设备加入，之后可由管理设备授予管理权限';
 }

@@ -1084,13 +1084,12 @@ void main() {
     await tester.pump();
 
     await _scrollToOnboardingUtilityBar(tester);
+    // The tenant control opens the glass tenant menu; creating a tenant is
+    // one of its entries.
     await _tapVisible(tester, find.byTooltip('管理租户'));
     await _settleVerificationStep(tester);
-    expect(find.byType(TenantManagementDialog), findsOneWidget);
-    await _tapVisible(
-      tester,
-      find.byKey(const Key('tenant-management-create-button')),
-    );
+    expect(find.byKey(const Key('tenant-switcher-menu')), findsOneWidget);
+    await _tapVisible(tester, find.byKey(const Key('tenant-menu-create')));
     await _settleVerificationStep(tester);
 
     await tester.enterText(
@@ -1123,9 +1122,12 @@ void main() {
     expect(tenantActions.createTenantCalls, 1);
     expect(tenantActions.useTenantCalls, 0);
     expect(tenantActions.registry.activeTenant.isPrimaryTenant, isTrue);
-    expect(find.text('杭州测试'), findsOneWidget);
 
-    await _tapVisible(tester, find.byTooltip('使用').last);
+    // The new tenant appears in the menu and is only used once chosen.
+    await _tapVisible(tester, find.byTooltip('管理租户'));
+    await _settleVerificationStep(tester);
+    expect(find.text('杭州测试'), findsOneWidget);
+    await _tapVisible(tester, find.text('杭州测试'));
     await _settleVerificationStep(tester);
 
     expect(tenantActions.useTenantCalls, 1);
@@ -1147,10 +1149,7 @@ void main() {
     await _scrollToOnboardingUtilityBar(tester);
     await _tapVisible(tester, find.byTooltip('管理租户'));
     await _settleVerificationStep(tester);
-    await _tapVisible(
-      tester,
-      find.byKey(const Key('tenant-management-create-button')),
-    );
+    await _tapVisible(tester, find.byKey(const Key('tenant-menu-create')));
     await _settleVerificationStep(tester);
     await tester.enterText(
       find.descendant(
@@ -1187,7 +1186,8 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.byType(TenantManagementDialog), findsOneWidget);
+    // The form stays open so the address can be corrected.
+    expect(find.byKey(const Key('tenant-name-field')), findsOneWidget);
   });
 
   testWidgets('租户错误提示可选中并展示未知错误详情', (tester) async {
@@ -1206,10 +1206,7 @@ void main() {
     await _scrollToOnboardingUtilityBar(tester);
     await _tapVisible(tester, find.byTooltip('管理租户'));
     await _settleVerificationStep(tester);
-    await _tapVisible(
-      tester,
-      find.byKey(const Key('tenant-management-create-button')),
-    );
+    await _tapVisible(tester, find.byKey(const Key('tenant-menu-create')));
     await _settleVerificationStep(tester);
 
     await tester.enterText(

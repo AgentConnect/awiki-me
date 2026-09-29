@@ -7185,6 +7185,108 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'资料'**
   String get peerProfileDetailsSection;
+
+  /// No description provided for @deviceJoinIssuedAtLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'发起时间'**
+  String get deviceJoinIssuedAtLabel;
+
+  /// No description provided for @deviceJoinExpiresAtLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'过期时间'**
+  String get deviceJoinExpiresAtLabel;
+
+  /// No description provided for @deviceJoinFingerprintLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'密钥指纹'**
+  String get deviceJoinFingerprintLabel;
+
+  /// No description provided for @deviceJoinRequestAsMember.
+  ///
+  /// In zh, this message translates to:
+  /// **'请求以普通设备加入'**
+  String get deviceJoinRequestAsMember;
+
+  /// No description provided for @deviceJoinOpenHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开请求不会授权。点击「开始验证」后，两台设备会各自显示 6 位验证码。'**
+  String get deviceJoinOpenHint;
+
+  /// No description provided for @deviceJoinCompareTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'核对验证码'**
+  String get deviceJoinCompareTitle;
+
+  /// No description provided for @deviceJoinLocalSasLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机显示'**
+  String get deviceJoinLocalSasLabel;
+
+  /// No description provided for @commonLater.
+  ///
+  /// In zh, this message translates to:
+  /// **'稍后'**
+  String get commonLater;
+
+  /// No description provided for @deviceJoinNoticeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'{device} 请求加入你的账户'**
+  String deviceJoinNoticeTitle(String device);
+
+  /// No description provided for @deviceJoinNoticeExpiry.
+  ///
+  /// In zh, this message translates to:
+  /// **'{time} 前有效'**
+  String deviceJoinNoticeExpiry(String time);
+
+  /// No description provided for @deviceJoinStepRequest.
+  ///
+  /// In zh, this message translates to:
+  /// **'发起关联请求'**
+  String get deviceJoinStepRequest;
+
+  /// No description provided for @deviceJoinStepRequestSub.
+  ///
+  /// In zh, this message translates to:
+  /// **'已发送给你的管理设备'**
+  String get deviceJoinStepRequestSub;
+
+  /// No description provided for @deviceJoinStepVerify.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理设备验证'**
+  String get deviceJoinStepVerify;
+
+  /// No description provided for @deviceJoinStepVerifyWaiting.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待对方点击「开始验证」'**
+  String get deviceJoinStepVerifyWaiting;
+
+  /// No description provided for @deviceJoinStepVerifySas.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认两端 6 位验证码一致'**
+  String get deviceJoinStepVerifySas;
+
+  /// No description provided for @deviceJoinStepJoin.
+  ///
+  /// In zh, this message translates to:
+  /// **'加入账户'**
+  String get deviceJoinStepJoin;
+
+  /// No description provided for @deviceJoinStepJoinSub.
+  ///
+  /// In zh, this message translates to:
+  /// **'作为普通设备加入，之后可由管理设备授予管理权限'**
+  String get deviceJoinStepJoinSub;
 }
 
 class _AppLocalizationsDelegate

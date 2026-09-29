@@ -410,10 +410,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
   }
 
   Future<void> _openPending(DeviceJoinRequestNotice request) async {
-    await AppNavigator.push<void>(
-      context,
-      (_) => DeviceJoinApprovalSheet(request: request),
-    );
+    await showDeviceJoinApproval(context, request);
     if (mounted) {
       await ref.read(devicesProvider.notifier).loadManagement();
     }

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 
 import 'awiki_me_design.dart';
+import 'widgets/awiki_glass_controls.dart';
 
 class CompactActionSheet extends StatelessWidget {
   const CompactActionSheet({
@@ -70,7 +71,9 @@ class CompactBottomSheet extends StatelessWidget {
       0,
       media.size.height - media.padding.top - keyboardInset - 12,
     );
-    const radius = BorderRadius.vertical(top: Radius.circular(16));
+    // Floating thick-glass panel, 8 units from the screen edges, as in the
+    // reference's phone sheets.
+    const radius = BorderRadius.all(Radius.circular(32));
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
@@ -78,7 +81,12 @@ class CompactBottomSheet extends StatelessWidget {
       child: SafeArea(
         top: false,
         bottom: keyboardInset == 0,
-        minimum: EdgeInsets.symmetric(horizontal: horizontalMargin),
+        minimum: EdgeInsets.fromLTRB(
+          math.min(horizontalMargin, 8),
+          0,
+          math.min(horizontalMargin, 8),
+          8,
+        ),
         child: Align(
           alignment: Alignment.bottomCenter,
           child: ConstrainedBox(
@@ -87,10 +95,10 @@ class CompactBottomSheet extends StatelessWidget {
               maxHeight: safeHeight * maxHeightFraction,
             ),
             child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: surfaceColor ?? theme.surface,
+              decoration: awikiThickGlassDecoration(
+                context,
                 borderRadius: radius,
-                boxShadow: theme.overlayShadow,
+                fill: surfaceColor,
               ),
               child: ClipRRect(
                 borderRadius: radius,
@@ -105,7 +113,7 @@ class CompactBottomSheet extends StatelessWidget {
                           width: 36,
                           height: 4,
                           decoration: BoxDecoration(
-                            color: theme.border,
+                            color: theme.glassLens,
                             borderRadius: BorderRadius.circular(99),
                           ),
                         ),

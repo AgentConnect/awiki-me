@@ -20,6 +20,7 @@ import 'awiki_me_design.dart';
 import 'identity_flow.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
+import 'widgets/awiki_glass_controls.dart';
 
 Future<void> showCommonQuickActionsMenu(
   BuildContext context,
@@ -176,15 +177,12 @@ class _CompactAnchoredQuickActionsMenu extends StatelessWidget {
   static const double _horizontalMargin = 8;
   static const double _targetMenuWidth = 196;
   static const double _rowHeight = 52;
-  static const double _pointerWidth = 20;
-  static const double _pointerHeight = 10;
   static const double _menuGap = 10;
 
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.sizeOf(context);
     final safePadding = MediaQuery.paddingOf(context);
-    final theme = context.awikiTheme;
     final menuWidth = math
         .min(
           _targetMenuWidth,
@@ -203,9 +201,6 @@ class _CompactAnchoredQuickActionsMenu extends StatelessWidget {
     final menuTop = (anchorRect.bottom + _menuGap)
         .clamp(safePadding.top + _horizontalMargin, maxMenuTop)
         .toDouble();
-    final pointerCenter = (anchorRect.center.dx - menuLeft)
-        .clamp(18.0, menuWidth - 18)
-        .toDouble();
 
     return Semantics(
       role: SemanticsRole.menu,
@@ -216,41 +211,26 @@ class _CompactAnchoredQuickActionsMenu extends StatelessWidget {
         key: const Key('compact-quick-actions-overlay'),
         children: <Widget>[
           Positioned(
-            left: menuLeft + pointerCenter - (_pointerWidth / 2),
-            top: menuTop - _pointerHeight + 1,
-            child: IgnorePointer(
-              child: CustomPaint(
-                key: const Key('compact-quick-actions-pointer'),
-                size: const Size(_pointerWidth, _pointerHeight),
-                painter: _QuickActionsPointerPainter(
-                  fillColor: theme.surface,
-                  borderColor: theme.border,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
             left: menuLeft,
             top: menuTop,
             width: menuWidth,
             height: menuHeight,
+            // Thick glass menu without a pointer, as in the reference.
             child: DecoratedBox(
               key: const Key('compact-quick-actions-menu'),
-              decoration: BoxDecoration(
-                color: theme.surface,
-                borderRadius: BorderRadius.circular(AwikiMeRadii.sm),
-                border: Border.all(color: theme.border),
-                boxShadow: AwikiMeShadows.overlay,
+              decoration: awikiThickGlassDecoration(
+                context,
+                borderRadius: BorderRadius.circular(20),
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(AwikiMeRadii.sm - 1),
+                borderRadius: BorderRadius.circular(20),
                 child: Column(
                   children: <Widget>[
                     for (var index = 0; index < items.length; index++)
                       _CompactQuickActionRow(
                         item: items[index],
                         value: index,
-                        showDivider: index < items.length - 1,
+                        showDivider: false,
                       ),
                   ],
                 ),
@@ -297,10 +277,8 @@ class _CompactQuickActionRow extends StatelessWidget {
                 semanticLabel: item.label,
                 semanticsIdentifier: item.semanticsIdentifier,
                 borderRadius: BorderRadius.circular(AwikiMeRadii.xs),
-                hoverColor: theme.title.withValues(alpha: 0.05),
-                pressedColor: context.awikiTheme.primarySoft.withValues(
-                  alpha: 0.72,
-                ),
+                hoverColor: theme.glassLens,
+                pressedColor: theme.glassLens,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
@@ -309,7 +287,7 @@ class _CompactQuickActionRow extends StatelessWidget {
                         child: Icon(
                           item.icon,
                           size: 20,
-                          color: context.awikiTheme.primary,
+                          color: context.awikiTheme.title,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -345,40 +323,6 @@ class _CompactQuickActionRow extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class _QuickActionsPointerPainter extends CustomPainter {
-  const _QuickActionsPointerPainter({
-    required this.fillColor,
-    required this.borderColor,
-  });
-
-  final Color fillColor;
-  final Color borderColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(0, size.height)
-      ..lineTo(size.width / 2, 0)
-      ..lineTo(size.width, size.height)
-      ..close();
-    canvas.drawPath(path, Paint()..color = fillColor);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = borderColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..strokeJoin = StrokeJoin.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _QuickActionsPointerPainter oldDelegate) {
-    return fillColor != oldDelegate.fillColor ||
-        borderColor != oldDelegate.borderColor;
   }
 }
 

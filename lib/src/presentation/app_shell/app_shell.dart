@@ -9,19 +9,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/e2e_semantics.dart';
-import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../application/tenant/app_tenant.dart';
-import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/services/realtime_gateway.dart';
 import '../../l10n/l10n.dart';
 import '../conversation_list/conversation_workspace_page.dart';
 import '../conversation_list/conversation_provider.dart';
-import '../devices/device_join_approval_sheet.dart';
-import '../devices/devices_provider.dart';
+import '../devices/device_join_request_notice.dart';
 import '../agents/agents_page.dart';
 import '../agents/agents_provider.dart';
 import '../agents/personal_agent_feature_visibility.dart';
@@ -164,15 +161,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       0,
       (sum, conversation) => sum + conversation.unreadCount,
     );
-    final pendingJoinRequest = ref.watch(
-      devicesProvider.select((state) {
-        if (!state.currentDeviceCanManage) {
-          return null;
-        }
-        final requests = state.visibleJoinRequests;
-        return requests.isEmpty ? null : requests.first;
-      }),
-    );
+    final pendingJoinRequest = ref.watch(pendingJoinRequestProvider);
 
     if (!session.isLoggedIn) {
       return DesktopStartupReadyBoundary(
@@ -319,10 +308,33 @@ class _AppShellState extends ConsumerState<AppShell> {
                       ),
                     ),
             ),
-            if (pendingJoinRequest != null)
-              _DeviceJoinRequestBanner(
-                deviceId: pendingJoinRequest.protocolDeviceId,
-                onReview: () => _openDeviceJoinRequest(pendingJoinRequest),
+            // Phones show the notice inline at the top of the messages list;
+            // every other surface keeps it floating so review stays reachable.
+            if (pendingJoinRequest != null &&
+                !(!expanded &&
+                    destination == ShellDestination.messages &&
+                    !compactDetailVisible))
+              Positioned(
+                left: 16,
+                right: 16,
+                top: expanded ? 12 : 60,
+                child: SafeArea(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 520),
+                      child: DeviceJoinRequestNoticeCard(
+                        request: pendingJoinRequest,
+                        floating: true,
+                        onReview: () => reviewDeviceJoinRequest(
+                          context,
+                          ref,
+                          pendingJoinRequest,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             if (update.hasUpdate &&
                 !update.recommendationDismissed &&
@@ -420,16 +432,6 @@ class _AppShellState extends ConsumerState<AppShell> {
         _authRevokedDialogAcknowledged = true;
       });
     });
-  }
-
-  Future<void> _openDeviceJoinRequest(DeviceJoinRequestNotice request) async {
-    await AppNavigator.push<void>(
-      context,
-      (_) => DeviceJoinApprovalSheet(request: request),
-    );
-    if (mounted) {
-      await ref.read(devicesProvider.notifier).refreshJoinInbox();
-    }
   }
 
   bool _shouldShowRealtimeToast(RealtimeConnectionStatus status) {
@@ -725,123 +727,6 @@ class _RetainedDestinationPage extends StatelessWidget {
         child: ExcludeSemantics(
           excluding: !active,
           child: IgnorePointer(ignoring: !active, child: child),
-        ),
-      ),
-    );
-  }
-}
-
-class _DeviceJoinRequestBanner extends StatelessWidget {
-  const _DeviceJoinRequestBanner({
-    required this.deviceId,
-    required this.onReview,
-  });
-
-  final String deviceId;
-  final VoidCallback onReview;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final phone = context.awikiResponsive.isPhone;
-    return Positioned(
-      left: 16,
-      right: 16,
-      // Phones keep the floating title bar and its actions reachable.
-      top: phone ? 60 : 12,
-      child: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Semantics(
-              identifier: 'device-join-request-entry',
-              button: true,
-              child: AppPressable(
-                onTap: onReview,
-                semanticLabel: context.l10n.deviceJoinApprovalTitle,
-                borderRadius: BorderRadius.circular(18),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: theme.overlayShadow,
-                  ),
-                  child: AwikiGlassSurface(
-                    key: const Key('device-join-request-banner'),
-                    borderRadius: BorderRadius.circular(18),
-                    child: ColoredBox(
-                      color: theme.surface.withValues(alpha: 0.55),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
-                        child: Row(
-                          children: <Widget>[
-                            Icon(
-                              CupertinoIcons.device_laptop,
-                              color: theme.title,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: <Widget>[
-                                  Text(
-                                    context.l10n.deviceJoinApprovalTitle,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: theme.title,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w400,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    deviceId,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: theme.secondaryText,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Container(
-                              height: 32,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                              ),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: theme.primarySoft,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: theme.primary.withValues(alpha: 0.22),
-                                  width: 0.5,
-                                ),
-                              ),
-                              child: Text(
-                                context.l10n.deviceReviewAction,
-                                style: TextStyle(
-                                  color: theme.primaryDeep,
-                                  fontSize: 13,
-                                  height: 1,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
         ),
       ),
     );

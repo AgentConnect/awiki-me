@@ -14,6 +14,7 @@ import '../shared/awiki_me_top_bar.dart';
 import '../shared/display_scale.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass.dart';
 
 class DisplaySettingsPage extends ConsumerWidget {
   const DisplaySettingsPage({super.key, this.onBack});
@@ -36,180 +37,202 @@ class DisplaySettingsPage extends ConsumerWidget {
     return CupertinoPageScaffold(
       key: const Key('display-settings-page'),
       backgroundColor: theme.background,
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: <Widget>[
-            Padding(
-              key: const Key('display-settings-header'),
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: AwikiMeTopBar(
-                title: isDesktopPlatform
-                    ? l10n.settingsDisplayAndWindow
-                    : l10n.settingsAppearance,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                titleFontSize: awikiMeCompactTopBarTitleFontSize,
-                titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
-                titleHeight: awikiMeCompactTopBarTitleHeight,
-                leading: TopBarActionButton(
-                  key: const Key('display-settings-back-button'),
-                  onTap: onBack ?? () => Navigator.of(context).pop(),
-                  semanticsLabel: l10n.commonBack,
-                  child: Icon(
-                    CupertinoIcons.chevron_left,
-                    size: context.awikiResponsive.iconMd,
-                    color: context.awikiTheme.title,
+      child: AwikiPageCanvas(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: <Widget>[
+              Padding(
+                key: const Key('display-settings-header'),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: AwikiMeTopBar(
+                  title: isDesktopPlatform
+                      ? l10n.settingsDisplayAndWindow
+                      : l10n.settingsAppearance,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  titleFontSize: awikiMeCompactTopBarTitleFontSize,
+                  titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
+                  titleHeight: awikiMeCompactTopBarTitleHeight,
+                  leading: AwikiBackButton(
+                    key: const Key('display-settings-back-button'),
+                    onTap: onBack ?? () => Navigator.of(context).pop(),
+                    semanticsLabel: l10n.commonBack,
                   ),
                 ),
               ),
-            ),
-            Expanded(
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-                    children: <Widget>[
-                      Text(l10n.settingsAppearance, style: theme.sectionTitle),
-                      const SizedBox(height: 12),
-                      for (final choice in AppAppearance.values)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: AppPressable(
-                            key: Key('appearance-${choice.name}'),
-                            selected: appearance == choice,
-                            semanticLabel: _appearanceLabel(context, choice),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+                      children: <Widget>[
+                        Text(
+                          l10n.settingsAppearance,
+                          style: theme.sectionTitle,
+                        ),
+                        const SizedBox(height: 12),
+                        // Flat glass segmented track; the chosen appearance is
+                        // a lens tint, as in the reference settings.
+                        Container(
+                          key: const Key('appearance-segmented-control'),
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: theme.glass,
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(
+                              color: theme.glassEdge,
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Row(
+                            children: <Widget>[
+                              for (final choice in AppAppearance.values)
+                                Expanded(
+                                  child: AppPressable(
+                                    key: Key('appearance-${choice.name}'),
+                                    selected: appearance == choice,
+                                    semanticLabel: _appearanceLabel(
+                                      context,
+                                      choice,
+                                    ),
+                                    borderRadius: BorderRadius.circular(18),
+                                    onTap: () async {
+                                      try {
+                                        await ref
+                                            .read(
+                                              appAppearanceProvider.notifier,
+                                            )
+                                            .setAppearance(choice);
+                                      } on Object {
+                                        ref
+                                            .read(uiFeedbackProvider.notifier)
+                                            .showError(
+                                              AppMessage.operationFailedRetry(),
+                                            );
+                                      }
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                        milliseconds: 150,
+                                      ),
+                                      height: 38,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: appearance == choice
+                                            ? theme.glassLens
+                                            : null,
+                                        borderRadius: BorderRadius.circular(18),
+                                        border: appearance == choice
+                                            ? Border.all(
+                                                color: theme.glassEdgeActive,
+                                                width: 0.5,
+                                              )
+                                            : null,
+                                      ),
+                                      child: Text(
+                                        _appearanceLabel(context, choice),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: appearance == choice
+                                              ? theme.title
+                                              : theme.secondaryText,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        DecoratedBox(
+                          key: const Key('display-scale-control'),
+                          decoration: awikiGroupDecoration(context),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: <Widget>[
+                                Row(
+                                  children: <Widget>[
+                                    Expanded(
+                                      child: Text(
+                                        l10n.settingsDisplayScale,
+                                        style: TextStyle(
+                                          color: theme.title,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      '$percent%',
+                                      key: const Key('display-scale-value'),
+                                      style: TextStyle(
+                                        color: theme.primary,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                _DiscreteDisplayScaleSlider(
+                                  levelIndex: levelIndex,
+                                  onSelected: ref
+                                      .read(displayScaleProvider.notifier)
+                                      .setScale,
+                                ),
+                                _DisplayScaleTicks(
+                                  selectedScale: scale,
+                                  onSelected: ref
+                                      .read(displayScaleProvider.notifier)
+                                      .setScale,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _DisplayActionRow(
+                          key: const Key('display-scale-reset-row'),
+                          icon: CupertinoIcons.arrow_counterclockwise,
+                          title: l10n.settingsDisplayScaleReset,
+                          onTap: () =>
+                              ref.read(displayScaleProvider.notifier).reset(),
+                        ),
+                        const SizedBox(height: 12),
+                        if (isDesktopPlatform)
+                          _DisplayActionRow(
+                            key: const Key('window-placement-reset-row'),
+                            icon: CupertinoIcons.rectangle_expand_vertical,
+                            title: l10n.settingsWindowPlacementReset,
                             onTap: () async {
                               try {
                                 await ref
-                                    .read(appAppearanceProvider.notifier)
-                                    .setAppearance(choice);
-                              } on Object {
+                                    .read(desktopWindowPlacementServiceProvider)
+                                    .resetPlacement();
+                              } on Object catch (error) {
                                 ref
                                     .read(uiFeedbackProvider.notifier)
                                     .showError(
                                       AppMessage.operationFailedRetry(),
+                                      detail: error.toString(),
                                     );
                               }
                             },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                              decoration: BoxDecoration(
-                                color: appearance == choice
-                                    ? theme.primarySoft
-                                    : theme.surface,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      _appearanceLabel(context, choice),
-                                      style: theme.inputText,
-                                    ),
-                                  ),
-                                  if (appearance == choice)
-                                    Icon(
-                                      CupertinoIcons.check_mark,
-                                      color: theme.primary,
-                                      size: 18,
-                                    ),
-                                ],
-                              ),
-                            ),
                           ),
-                        ),
-                      const SizedBox(height: 16),
-                      DecoratedBox(
-                        key: const Key('display-scale-control'),
-                        decoration: BoxDecoration(
-                          color: theme.surface,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: <Widget>[
-                              Row(
-                                children: <Widget>[
-                                  Expanded(
-                                    child: Text(
-                                      l10n.settingsDisplayScale,
-                                      style: TextStyle(
-                                        color: theme.title,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w400,
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    '$percent%',
-                                    key: const Key('display-scale-value'),
-                                    style: TextStyle(
-                                      color: theme.primary,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w400,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 14),
-                              _DiscreteDisplayScaleSlider(
-                                levelIndex: levelIndex,
-                                onSelected: ref
-                                    .read(displayScaleProvider.notifier)
-                                    .setScale,
-                              ),
-                              _DisplayScaleTicks(
-                                selectedScale: scale,
-                                onSelected: ref
-                                    .read(displayScaleProvider.notifier)
-                                    .setScale,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _DisplayActionRow(
-                        key: const Key('display-scale-reset-row'),
-                        icon: CupertinoIcons.arrow_counterclockwise,
-                        title: l10n.settingsDisplayScaleReset,
-                        onTap: () =>
-                            ref.read(displayScaleProvider.notifier).reset(),
-                      ),
-                      const SizedBox(height: 12),
-                      if (isDesktopPlatform)
-                        _DisplayActionRow(
-                          key: const Key('window-placement-reset-row'),
-                          icon: CupertinoIcons.rectangle_expand_vertical,
-                          title: l10n.settingsWindowPlacementReset,
-                          onTap: () async {
-                            try {
-                              await ref
-                                  .read(desktopWindowPlacementServiceProvider)
-                                  .resetPlacement();
-                            } on Object catch (error) {
-                              ref
-                                  .read(uiFeedbackProvider.notifier)
-                                  .showError(
-                                    AppMessage.operationFailedRetry(),
-                                    detail: error.toString(),
-                                  );
-                            }
-                          },
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -371,12 +394,11 @@ class _DisplayActionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.surface,
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: awikiGroupDecoration(context),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(
+          context.awikiResponsive.isPhone ? 24 : 12,
+        ),
         child: AppPressable(
           onTap: onTap,
           semanticLabel: title,
@@ -387,7 +409,7 @@ class _DisplayActionRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: <Widget>[
-                  Icon(icon, size: 22, color: theme.primary),
+                  Icon(icon, size: 22, color: theme.title),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Text(

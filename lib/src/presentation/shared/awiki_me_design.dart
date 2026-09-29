@@ -509,6 +509,10 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
   Color get glowSecondary => semanticColors.glowSecondary;
   bool get isDark => colorScheme.brightness == Brightness.dark;
 
+  /// Reference `--danger` fill for destructive buttons; dark mode keeps the
+  /// deeper red while [danger] carries the lighter text tone.
+  Color get dangerFill => isDark ? const Color(0xFFCC3336) : danger;
+
   /// Reference `--accent-deep`: text on [primarySoft] fills such as the
   /// follow and review pills.
   Color get primaryDeep =>

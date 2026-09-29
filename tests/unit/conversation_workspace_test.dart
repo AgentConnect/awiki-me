@@ -751,14 +751,14 @@ void main() {
     final menu = find.byKey(const Key('compact-quick-actions-menu'));
     final pointer = find.byKey(const Key('compact-quick-actions-pointer'));
     expect(menu, findsOneWidget);
-    expect(pointer, findsOneWidget);
+    // The glass menu floats without a pointer.
+    expect(pointer, findsNothing);
     final menuRect = tester.getRect(menu);
     final triggerRect = tester.getRect(trigger);
     expect(menuRect.right, 385);
     expect(menuRect.width, 196);
     expect(menuRect.height, 208);
     expect(menuRect.top, greaterThan(triggerRect.bottom));
-    expect(tester.getSize(pointer), const Size(20, 10));
     const expectedIcons = <(String, IconData)>[
       ('quick-action-start-conversation', CupertinoIcons.chat_bubble),
       ('quick-action-create-group', CupertinoIcons.person_2),
@@ -773,7 +773,7 @@ void main() {
         ),
       );
       expect(icon.icon, entry.$2);
-      expect(icon.color, AwikiMePalette.actionBlue);
+      expect(icon.color, AwikiMePalette.inkNeutral);
       expect(tester.getSize(find.byKey(Key(entry.$1))).height, 52);
     }
 

@@ -11,6 +11,7 @@ import 'app_dialog.dart';
 import 'awiki_me_design.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
+import 'widgets/awiki_glass_controls.dart';
 
 /// Opens the complete tenant-management surface using the app's adaptive
 /// dialog route on both compact and expanded layouts.
@@ -958,6 +959,322 @@ class _TenantInlineMessage extends StatelessWidget {
             fontWeight: FontWeight.w400,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Opens the reference's compact tenant menu anchored to [anchorContext]:
+/// a thick glass panel listing tenants, with create and full management
+/// entries below. It flips above the anchor when there is no room below.
+Future<void> showTenantSwitcherMenu(BuildContext anchorContext) async {
+  final box = anchorContext.findRenderObject() as RenderBox?;
+  final overlay =
+      Navigator.of(
+            anchorContext,
+            rootNavigator: true,
+          ).overlay?.context.findRenderObject()
+          as RenderBox?;
+  if (box == null || overlay == null) {
+    return showTenantManagementDialog(anchorContext);
+  }
+  final anchor = Rect.fromPoints(
+    box.localToGlobal(Offset.zero, ancestor: overlay),
+    box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay),
+  );
+  final action = await showGeneralDialog<_TenantMenuAction>(
+    context: anchorContext,
+    useRootNavigator: true,
+    barrierDismissible: true,
+    barrierLabel: anchorContext.l10n.commonClose,
+    barrierColor: const Color(0x00000000),
+    transitionDuration: const Duration(milliseconds: 140),
+    pageBuilder: (menuContext, _, __) =>
+        _TenantMenuLayout(anchor: anchor, child: const _TenantSwitcherMenu()),
+    transitionBuilder: (_, animation, __, child) => FadeTransition(
+      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+      child: child,
+    ),
+  );
+  if (!anchorContext.mounted) {
+    return;
+  }
+  switch (action) {
+    case _TenantMenuAction.create:
+      await AppNavigator.showDialog<String>(
+        anchorContext,
+        (_) => const _TenantFormDialog(),
+      );
+    case _TenantMenuAction.manage:
+      await showTenantManagementDialog(anchorContext);
+    case null:
+      break;
+  }
+}
+
+enum _TenantMenuAction { create, manage }
+
+class _TenantMenuLayout extends StatelessWidget {
+  const _TenantMenuLayout({required this.anchor, required this.child});
+
+  final Rect anchor;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    final padding = MediaQuery.paddingOf(context);
+    final width = (screen.width - 16).clamp(0.0, 300.0);
+    final left = (anchor.right - width).clamp(8.0, screen.width - width - 8);
+    final below = screen.height - padding.bottom - anchor.bottom - 16;
+    final above = anchor.top - padding.top - 16;
+    final openBelow = below >= 240 || below >= above;
+    return Stack(
+      children: <Widget>[
+        Positioned(
+          left: left,
+          width: width,
+          top: openBelow ? anchor.bottom + 8 : null,
+          bottom: openBelow ? null : screen.height - anchor.top + 8,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: (openBelow ? below : above).clamp(160.0, 520.0),
+            ),
+            child: child,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TenantSwitcherMenu extends ConsumerStatefulWidget {
+  const _TenantSwitcherMenu();
+
+  @override
+  ConsumerState<_TenantSwitcherMenu> createState() =>
+      _TenantSwitcherMenuState();
+}
+
+class _TenantSwitcherMenuState extends ConsumerState<_TenantSwitcherMenu> {
+  String? _busyTenantId;
+  _TenantUiError? _error;
+
+  Future<void> _use(AppTenantProfile tenant) async {
+    if (tenant.id == ref.read(activeAppTenantProvider).id) {
+      Navigator.of(context).pop();
+      return;
+    }
+    if (_busyTenantId != null) {
+      return;
+    }
+    setState(() {
+      _busyTenantId = tenant.id;
+      _error = null;
+    });
+    try {
+      await ref.read(appTenantActionsProvider).useTenant(tenant.id);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _busyTenantId = null;
+          _error = _tenantUiError(error);
+        });
+      }
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    try {
+      Navigator.of(context).pop();
+    } catch (_) {
+      // Switching tenants rebuilds the scoped app and can dispose this route.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final l10n = context.l10n;
+    final registry = ref.watch(appTenantRegistryProvider);
+    final activeId = registry.activeTenant.id;
+    Widget menuRow({
+      required Key key,
+      required String label,
+      required IconData icon,
+      required _TenantMenuAction action,
+    }) {
+      return AppPressable(
+        key: key,
+        onTap: () => Navigator.of(context).pop(action),
+        semanticLabel: label,
+        borderRadius: BorderRadius.circular(14),
+        child: SizedBox(
+          height: 44,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: <Widget>[
+                Icon(icon, size: 16, color: theme.title),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(color: theme.title, fontSize: 14),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return AwikiGlassPanel(
+      key: const Key('tenant-switcher-menu'),
+      radius: 22,
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+            child: Text(
+              l10n.tenantManagementSubtitle,
+              style: TextStyle(
+                color: theme.secondaryText,
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                children: <Widget>[
+                  for (final tenant in registry.visibleTenants)
+                    AppPressable(
+                      key: Key('tenant-menu-option:${tenant.id}'),
+                      onTap: _busyTenantId == null ? () => _use(tenant) : null,
+                      selected: tenant.id == activeId,
+                      semanticLabel: tenant.id == activeId
+                          ? '${tenant.name}, ${l10n.tenantCurrent}'
+                          : '${l10n.tenantUse}: ${tenant.name}',
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+                        decoration: BoxDecoration(
+                          color: tenant.id == activeId ? theme.glassLens : null,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Row(
+                                    children: <Widget>[
+                                      Flexible(
+                                        child: Text(
+                                          tenant.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: theme.title,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                      if (tenant.isOfficialTenant) ...<Widget>[
+                                        const SizedBox(width: 6),
+                                        _TenantMenuTag(
+                                          label: l10n.tenantDefaultBadge,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  Text(
+                                    tenant.didHost,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: theme.secondaryText,
+                                      fontSize: 12,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (_busyTenantId == tenant.id)
+                              const CupertinoActivityIndicator(radius: 7)
+                            else if (tenant.id == activeId)
+                              Icon(
+                                CupertinoIcons.checkmark,
+                                size: 15,
+                                color: theme.title,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
+              child: Text(
+                _tenantErrorMessage(l10n, _error!),
+                style: TextStyle(color: theme.danger, fontSize: 12),
+              ),
+            ),
+          Container(
+            height: 0.5,
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            color: theme.glassEdgeActive,
+          ),
+          menuRow(
+            key: const Key('tenant-menu-create'),
+            label: l10n.tenantCreate,
+            icon: CupertinoIcons.plus,
+            action: _TenantMenuAction.create,
+          ),
+          menuRow(
+            key: const Key('tenant-menu-manage'),
+            label: l10n.tenantSwitcherLabel,
+            icon: CupertinoIcons.slider_horizontal_3,
+            action: _TenantMenuAction.manage,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TenantMenuTag extends StatelessWidget {
+  const _TenantMenuTag({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: theme.glassEdgeActive),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: theme.secondaryText, fontSize: 10, height: 1.3),
       ),
     );
   }

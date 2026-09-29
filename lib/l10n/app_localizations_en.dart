@@ -4112,4 +4112,62 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get peerProfileDetailsSection => 'Details';
+
+  @override
+  String get deviceJoinIssuedAtLabel => 'Requested';
+
+  @override
+  String get deviceJoinExpiresAtLabel => 'Expires';
+
+  @override
+  String get deviceJoinFingerprintLabel => 'Key fingerprint';
+
+  @override
+  String get deviceJoinRequestAsMember =>
+      'Requests to join as a regular device';
+
+  @override
+  String get deviceJoinOpenHint =>
+      'Opening a request does not authorize it. After you start verification, both devices show a 6-digit code.';
+
+  @override
+  String get deviceJoinCompareTitle => 'Compare codes';
+
+  @override
+  String get deviceJoinLocalSasLabel => 'Shown on this device';
+
+  @override
+  String get commonLater => 'Later';
+
+  @override
+  String deviceJoinNoticeTitle(String device) {
+    return '$device wants to join your account';
+  }
+
+  @override
+  String deviceJoinNoticeExpiry(String time) {
+    return 'Valid until $time';
+  }
+
+  @override
+  String get deviceJoinStepRequest => 'Send join request';
+
+  @override
+  String get deviceJoinStepRequestSub => 'Sent to your managing device';
+
+  @override
+  String get deviceJoinStepVerify => 'Managing device verifies';
+
+  @override
+  String get deviceJoinStepVerifyWaiting => 'Waiting for “Start verification”';
+
+  @override
+  String get deviceJoinStepVerifySas => 'Confirm both 6-digit codes match';
+
+  @override
+  String get deviceJoinStepJoin => 'Join the account';
+
+  @override
+  String get deviceJoinStepJoinSub =>
+      'Joins as a regular device; a managing device can grant management later';
 }

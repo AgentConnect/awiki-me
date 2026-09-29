@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:awiki_me/src/app/awiki_me_app.dart';
+import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/app/app_appearance.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -21,7 +23,7 @@ import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
 import 'package:flutter/cupertino.dart'
-    show CupertinoIcons, CupertinoPageScaffold;
+    show CupertinoIcons, CupertinoPageRoute, CupertinoPageScaffold;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 import 'package:flutter/rendering.dart';
@@ -32,6 +34,9 @@ import 'package:flutter/widgets.dart'
         EditableText,
         FontWeight,
         Key,
+        Navigator,
+        NavigatorState,
+        Offset,
         RepaintBoundary,
         Size,
         SizedBox,
@@ -273,6 +278,94 @@ void main() {
           await tapKey('settings-devices-row');
           await capture('$desk-devices');
         }
+      }
+    } finally {
+      await _resetEnvironment(tester);
+    }
+  });
+
+  testWidgets('glass audit renders secondary phone surfaces', (tester) async {
+    Future<void> capture(String name) async {
+      expect(tester.takeException(), isNull, reason: name);
+      await _captureScreenshot(tester, name);
+    }
+
+    Future<void> tapKey(String key) async {
+      final finder = find.byKey(Key(key)).first;
+      await tester.ensureVisible(finder);
+      await _pumpVisualFrames(tester);
+      await tester.tap(finder);
+      await _pumpVisualFrames(tester);
+    }
+
+    Future<void> popTop() async {
+      final navigator = tester.state<NavigatorState>(
+        find.byType(Navigator).last,
+      );
+      navigator.pop();
+      await _pumpVisualFrames(tester);
+    }
+
+    try {
+      for (final appearance in [AppAppearance.light, AppAppearance.dark]) {
+        final name = 'audit-${appearance.name}';
+        await _prepareEnvironment(
+          tester,
+          size: const Size(390, 844),
+          platform: TargetPlatform.iOS,
+        );
+        await _pumpOnboarding(tester, appearance: appearance);
+        await tapKey('onboarding-tenant-switcher-button');
+        await capture('$name-tenant-menu');
+        await tester.tapAt(const Offset(40, 700));
+        await _pumpVisualFrames(tester);
+        final loginNavigator = Navigator.of(
+          tester.element(find.byKey(const Key('onboarding-mac-auth-card'))),
+        );
+        unawaited(
+          loginNavigator.push(
+            CupertinoPageRoute<void>(builder: (_) => const DeviceJoinPage()),
+          ),
+        );
+        await _pumpVisualFrames(tester);
+        await capture('$name-device-join');
+
+
+        await _prepareEnvironment(
+          tester,
+          size: const Size(390, 844),
+          platform: TargetPlatform.iOS,
+        );
+        await _pumpVisualApp(
+          tester,
+          _createVisualHarness(),
+          appearance: appearance,
+        );
+        await tapKey('shell-quick-actions-button');
+        await capture('$name-quick-actions');
+        await tester.tapAt(const Offset(40, 700));
+        await _pumpVisualFrames(tester);
+        await tapKey('conversation-row:dm:peer-scope:v1:hermes-ui');
+        await tapKey('chat-information-button');
+        await capture('$name-chat-information');
+        await tapKey('chat-information-back-button');
+        await tapKey('chat-back-button');
+        await tapKey('compact-nav-contacts');
+        await tapKey('friends-category-tab-groups');
+        await capture('$name-groups');
+        await tapKey('compact-nav-profile');
+        await tapKey('profile-edit-button');
+        await capture('$name-profile-edit');
+        await popTop();
+        await tapKey('profile-settings-row');
+        await tapKey('settings-language-row');
+        await capture('$name-language');
+        await popTop();
+        await tapKey('settings-display-row');
+        await capture('$name-display');
+        await popTop();
+        await tapKey('settings-logout-row');
+        await capture('$name-logout-dialog');
       }
     } finally {
       await _resetEnvironment(tester);

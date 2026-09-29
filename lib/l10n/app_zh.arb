@@ -1692,5 +1692,24 @@
       }
     }
   },
-  "peerProfileDetailsSection": "资料"
+  "peerProfileDetailsSection": "资料",
+  "deviceJoinIssuedAtLabel": "发起时间",
+  "deviceJoinExpiresAtLabel": "过期时间",
+  "deviceJoinFingerprintLabel": "密钥指纹",
+  "deviceJoinRequestAsMember": "请求以普通设备加入",
+  "deviceJoinOpenHint": "打开请求不会授权。点击「开始验证」后，两台设备会各自显示 6 位验证码。",
+  "deviceJoinCompareTitle": "核对验证码",
+  "deviceJoinLocalSasLabel": "本机显示",
+  "commonLater": "稍后",
+  "deviceJoinNoticeTitle": "{device} 请求加入你的账户",
+  "@deviceJoinNoticeTitle": {"placeholders": {"device": {"type": "String"}}},
+  "deviceJoinNoticeExpiry": "{time} 前有效",
+  "@deviceJoinNoticeExpiry": {"placeholders": {"time": {"type": "String"}}},
+  "deviceJoinStepRequest": "发起关联请求",
+  "deviceJoinStepRequestSub": "已发送给你的管理设备",
+  "deviceJoinStepVerify": "管理设备验证",
+  "deviceJoinStepVerifyWaiting": "等待对方点击「开始验证」",
+  "deviceJoinStepVerifySas": "确认两端 6 位验证码一致",
+  "deviceJoinStepJoin": "加入账户",
+  "deviceJoinStepJoinSub": "作为普通设备加入，之后可由管理设备授予管理权限"
 }
