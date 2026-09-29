@@ -23,53 +23,32 @@ class _MessageBubbleSurface extends StatelessWidget {
     const shadows = [
       BoxShadow(color: Color(0x0D000000), blurRadius: 2, offset: Offset(0, 1)),
     ];
-    final padding = responsive.displayScaled(13);
-    final tail = macStyle ? 0.0 : responsive.displayScaled(6);
+    final color = hasAttachment
+        ? theme.surface
+        : isMine
+        ? theme.outgoingMessage
+        : theme.incomingMessage;
+    // Desktop follows the reference's flat 6-unit bubble; phone uses the
+    // rounder bubble whose sender-side top corner tightens toward the avatar.
+    final large = responsive.displayScaled(macStyle ? 6 : 20);
+    final small = responsive.displayScaled(macStyle ? 6 : 8);
     return Container(
       constraints: BoxConstraints(maxWidth: maxWidth),
-      padding: EdgeInsets.fromLTRB(
-        padding + (isMine ? 0 : tail),
-        responsive.displayScaled(9),
-        padding + (isMine ? tail : 0),
-        responsive.displayScaled(9),
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.displayScaled(macStyle ? 12 : 14),
+        vertical: responsive.displayScaled(macStyle ? 8 : 9),
       ),
-      decoration: macStyle
-          ? BoxDecoration(
-              color: hasAttachment
-                  ? theme.surface
-                  : isMine
-                  ? theme.outgoingMessage
-                  : theme.incomingMessage,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(
-                  responsive.displayScaled(isMine ? 13 : 4),
-                ),
-                topRight: Radius.circular(
-                  responsive.displayScaled(isMine ? 4 : 13),
-                ),
-                bottomLeft: Radius.circular(responsive.displayScaled(13)),
-                bottomRight: Radius.circular(responsive.displayScaled(13)),
-              ),
-              boxShadow: hasAttachment ? shadows : null,
-            )
-          : ShapeDecoration(
-              color: hasAttachment
-                  ? theme.surface
-                  : isMine
-                  ? theme.outgoingMessage
-                  : theme.surface,
-              shape: _ChatBubbleShapeBorder(
-                isMine: isMine,
-                radius: responsive.displayScaled(16),
-                tailExtent: tail,
-                side: BorderSide(
-                  color: isMine
-                      ? AwikiMePalette.brandAccent.withValues(alpha: 0.28)
-                      : theme.border,
-                ),
-              ),
-              shadows: hasAttachment ? shadows : null,
-            ),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(isMine ? large : small),
+          topRight: Radius.circular(isMine ? small : large),
+          bottomLeft: Radius.circular(large),
+          bottomRight: Radius.circular(large),
+        ),
+        border: hasAttachment ? Border.all(color: theme.border) : null,
+        boxShadow: hasAttachment ? shadows : null,
+      ),
       child: child,
     );
   }

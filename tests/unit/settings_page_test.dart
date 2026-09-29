@@ -18,6 +18,7 @@ import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/app/app_appearance.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -44,6 +45,56 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(notifyChannel, null);
   });
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    testWidgets('$platform settings opens appearance and switches every mode', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = platform;
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = const Size(390, 844);
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      await tester.pumpWidget(
+        buildLocalizedTestApp(home: const SettingsPage()),
+      );
+      await tester.pumpAndSettle();
+      final entry = find.byKey(const Key('settings-display-row'));
+      await tester.ensureVisible(entry);
+      expect(
+        find.descendant(of: entry, matching: find.text('外观')),
+        findsOneWidget,
+      );
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('display-settings-page')), findsOneWidget);
+      expect(find.byKey(const Key('window-placement-reset-row')), findsNothing);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(DisplaySettingsPage)),
+      );
+      for (final appearance in [
+        AppAppearance.dark,
+        AppAppearance.light,
+        AppAppearance.system,
+      ]) {
+        final option = find.byKey(Key('appearance-${appearance.name}'));
+        await tester.tap(option);
+        await tester.pumpAndSettle();
+        expect(container.read(appAppearanceProvider), appearance);
+        expect(tester.widget<AppPressable>(option).selected, isTrue);
+      }
+      await tester.tap(find.byKey(const Key('display-settings-back-button')));
+      await tester.pumpAndSettle();
+      expect(find.byType(DisplaySettingsPage), findsNothing);
+      expect(entry, findsOneWidget);
+      expect(tester.takeException(), isNull);
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
+
   testWidgets(
     'desktop display settings remain usable at the minimum compact width',
     (tester) async {

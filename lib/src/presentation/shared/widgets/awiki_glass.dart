@@ -258,3 +258,33 @@ class AwikiFloatingTabBarInset extends InheritedWidget {
   bool updateShouldNotify(AwikiFloatingTabBarInset oldWidget) =>
       oldWidget.inset != inset;
 }
+
+/// The reference's small outlined kind tag (`AI`, `群`, `社区`) that sits
+/// beside a display name.
+class AwikiNameTag extends StatelessWidget {
+  const AwikiNameTag({super.key, required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: theme.border),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        style: TextStyle(
+          fontSize: 10,
+          height: 1.3,
+          color: theme.secondaryText,
+          fontWeight: FontWeight.w400,
+        ),
+      ),
+    );
+  }
+}

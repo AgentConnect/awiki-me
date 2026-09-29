@@ -103,70 +103,124 @@ class _ChatHeader extends StatelessWidget {
         ),
       );
     }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final sideWidth = responsive.displayScaled(44);
-        return Container(
-          key: const Key('chat-header'),
-          height: responsive.displayScaled(64),
-          padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
-          decoration: BoxDecoration(
-            color: theme.surface,
-            border: Border(bottom: BorderSide(color: theme.border)),
+    // Phone: bare chevron, centered tappable identity, and a single
+    // trailing control. The bar carries no divider so the stream reads as
+    // continuing underneath it.
+    final trailing = showAddGroupMemberButton
+        ? SizedBox.square(
+            dimension: 44,
+            child: AppPressable(
+              key: const Key('chat-header-add-group-member-button'),
+              onTap: isAddGroupMemberLoading ? null : onAddGroupMemberTap,
+              enabled: !isAddGroupMemberLoading,
+              semanticLabel: context.l10n.groupAddMembers,
+              semanticsIdentifier: 'e2e-chat-header-add-group-member-button',
+              tooltip: context.l10n.groupAddMembers,
+              button: true,
+              scaleOnPress: true,
+              pressedScale: 0.9,
+              borderRadius: BorderRadius.circular(22),
+              child: AwikiGlassSurface(
+                borderRadius: BorderRadius.circular(22),
+                child: Center(
+                  child: isAddGroupMemberLoading
+                      ? const CupertinoActivityIndicator(radius: 8)
+                      : Icon(
+                          CupertinoIcons.person_add,
+                          size: 20,
+                          color: theme.title,
+                        ),
+                ),
+              ),
+            ),
+          )
+        : TopBarActionButton(
+            key: const Key('chat-information-button'),
+            onTap: onChatInformationTap,
+            semanticsIdentifier: 'e2e-chat-information-button',
+            semanticsLabel: context.l10n.chatOpenInformation,
+            borderRadius: BorderRadius.circular(22),
+            child: AwikiMeSemanticIcon(
+              role: AwikiMeIconRole.moreHorizontal,
+              color: theme.title,
+              size: 22,
+            ),
+          );
+    final phoneBadgeLabel = isDeletedAgentConversation
+        ? null
+        : localizeConversationCompactBadge(context.l10n, classification);
+    return Container(
+      key: const Key('chat-header'),
+      height: responsive.displayScaled(64),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      color: theme.chatSurface,
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: 44,
+            child: TopBarActionButton(
+              key: const Key('chat-back-button'),
+              onTap: onBack,
+              semanticsIdentifier: 'e2e-chat-back-button',
+              semanticsLabel: context.l10n.commonBack,
+              borderRadius: BorderRadius.circular(22),
+              child: Icon(
+                CupertinoIcons.chevron_left,
+                color: theme.title,
+                size: 22,
+              ),
+            ),
           ),
-          child: Row(
-            children: <Widget>[
-              SizedBox(
-                width: sideWidth,
-                child: TopBarActionButton(
-                  key: const Key('chat-back-button'),
-                  onTap: onBack,
-                  semanticsIdentifier: 'e2e-chat-back-button',
-                  semanticsLabel: context.l10n.commonBack,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Center(
+              child: _ChatHeaderIdentityTapTarget(
+                key: const Key('chat-header-identity'),
+                semanticLabel: conversation.isGroup
+                    ? context.l10n.chatOpenInformation
+                    : openInfoLabel,
+                onTap: conversation.isGroup
+                    ? onChatInformationTap
+                    : onPeerInfoTap,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 10,
+                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      AwikiMeSemanticIcon(
-                        role: AwikiMeIconRole.back,
-                        color: theme.primaryDark,
-                        size: responsive.iconMd,
+                      Flexible(
+                        child: Text(
+                          compactName,
+                          key: const Key('chat-header-title'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w400,
+                            color: theme.title,
+                          ),
+                        ),
                       ),
+                      if (phoneBadgeLabel != null) ...<Widget>[
+                        const SizedBox(width: 6),
+                        AwikiNameTag(
+                          key: const Key('chat-header-agent-badge'),
+                          label: phoneBadgeLabel,
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ),
-              Expanded(
-                child: Text(
-                  compactName,
-                  key: const Key('chat-header-title'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w400,
-                    color: theme.title,
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: sideWidth,
-                child: TopBarActionButton(
-                  key: const Key('chat-information-button'),
-                  onTap: onChatInformationTap,
-                  semanticsIdentifier: 'e2e-chat-information-button',
-                  semanticsLabel: context.l10n.chatOpenInformation,
-                  child: AwikiMeSemanticIcon(
-                    role: AwikiMeIconRole.moreHorizontal,
-                    color: theme.secondaryText,
-                    size: responsive.iconMd,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        );
-      },
+          const SizedBox(width: 8),
+          SizedBox(width: 44, child: Center(child: trailing)),
+        ],
+      ),
     );
   }
 }

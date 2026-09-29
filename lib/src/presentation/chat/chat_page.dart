@@ -113,6 +113,7 @@ import '../shared/identity_profile_surface.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass.dart';
 import 'chat_mention_presentation.dart';
 import 'chat_provider.dart';
 import 'message_actions.dart';
