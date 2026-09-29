@@ -91,9 +91,9 @@ class _PersonalAgentSettingsPageState
                     onTap: () => Navigator.of(context).maybePop(),
                     semanticsLabel: l10n.commonBack,
                     tooltip: l10n.commonBack,
-                    child: const AwikiAssetIcon(
+                    child: AwikiAssetIcon(
                       assetName: 'assets/icons/icon_left.svg',
-                      color: AwikiMeColors.primaryDark,
+                      color: context.awikiTheme.title,
                       size: 22,
                     ),
                   ),

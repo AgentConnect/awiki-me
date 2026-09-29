@@ -163,7 +163,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                     child: Icon(
                       CupertinoIcons.chevron_left,
                       size: responsive.iconMd,
-                      color: AwikiMePalette.actionBlue,
+                      color: context.awikiTheme.title,
                     ),
                   ),
                   trailingWidth: 56,

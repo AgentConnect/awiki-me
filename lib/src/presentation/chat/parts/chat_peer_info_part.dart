@@ -973,7 +973,7 @@ class _PeerInfoHeader extends StatelessWidget {
               semanticsLabel: context.l10n.commonBack,
               child: AwikiMeSemanticIcon(
                 role: AwikiMeIconRole.back,
-                color: context.awikiTheme.primaryDark,
+                color: context.awikiTheme.title,
                 size: compactAgentLayout ? 20 : responsive.iconSm,
               ),
             ),

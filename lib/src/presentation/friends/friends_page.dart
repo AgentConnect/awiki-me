@@ -1348,7 +1348,7 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
                             semanticsLabel: context.l10n.commonBack,
                             child: AwikiAssetIcon(
                               assetName: 'assets/icons/icon_left.svg',
-                              color: theme.primaryDark,
+                              color: context.awikiTheme.title,
                               size: 22,
                             ),
                           ),

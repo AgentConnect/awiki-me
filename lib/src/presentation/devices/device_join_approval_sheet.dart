@@ -85,9 +85,9 @@ class _DeviceJoinApprovalSheetState
               padding: EdgeInsets.zero,
               leading: TopBarActionButton(
                 onTap: () => Navigator.of(context).maybePop(),
-                child: const AwikiAssetIcon(
+                child: AwikiAssetIcon(
                   assetName: 'assets/icons/icon_left.svg',
-                  color: AwikiMeColors.primaryDark,
+                  color: context.awikiTheme.title,
                   size: 22,
                 ),
               ),

@@ -80,7 +80,7 @@ class GroupListPage extends ConsumerWidget {
                       onTap: () => Navigator.of(context).pop(),
                       child: AwikiAssetIcon(
                         assetName: 'assets/icons/icon_left.svg',
-                        color: theme.primaryDark,
+                        color: context.awikiTheme.title,
                         size: 22,
                       ),
                     ),
@@ -333,7 +333,7 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                         padding: const EdgeInsets.all(8),
                         child: AwikiAssetIcon(
                           assetName: 'assets/icons/icon_left.svg',
-                          color: theme.primaryDark,
+                          color: context.awikiTheme.title,
                           size: 22,
                         ),
                       ),

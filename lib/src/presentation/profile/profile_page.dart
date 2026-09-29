@@ -284,7 +284,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                           child: Icon(
                             CupertinoIcons.chevron_left,
                             size: responsive.iconMd,
-                            color: theme.secondaryText,
+                            color: context.awikiTheme.title,
                           ),
                         ),
                       ),

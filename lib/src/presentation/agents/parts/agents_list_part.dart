@@ -36,53 +36,69 @@ class _AgentListPane extends StatelessWidget {
           (agent) => personalAgentVisible || !isPersonalAgentRuntime(agent),
         )
         .toList(growable: false);
-    return ColoredBox(
-      key: const Key('agents-list-pane'),
-      color: responsive.isCompact ? theme.background : theme.surface,
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: <Widget>[
-            _AgentListHeader(
-              isLoading: state.isLoading,
-              isCreatingSkill: isCreatingSkill,
-              isInstalling: state.isActionPending(
-                AgentActionKeys.installCommand,
-              ),
-              onCreateSkill: onCreateSkill,
-              onRefresh: onSyncInventory,
-              onInstall: onCreateDaemon,
-            ),
-            Expanded(
-              child: ListView(
-                key: const Key('agents-hierarchy-scroll'),
-                padding: responsive.isCompact
-                    ? EdgeInsets.only(bottom: responsive.spacing(16))
-                    : EdgeInsets.fromLTRB(
-                        responsive.spacing(8),
-                        responsive.spacing(8),
-                        responsive.spacing(8),
-                        responsive.spacing(16),
-                      ),
-                children: <Widget>[
-                  if (responsive.isCompact)
-                    _AgentListSectionHeader(
-                      count: visibleAgents
-                          .where((agent) => agent.isRuntime)
-                          .length,
+    final phone = responsive.isPhone;
+    final pane = SafeArea(
+      bottom: false,
+      child: Column(
+        children: <Widget>[
+          _AgentListHeader(
+            isLoading: state.isLoading,
+            isCreatingSkill: isCreatingSkill,
+            isInstalling: state.isActionPending(AgentActionKeys.installCommand),
+            onCreateSkill: onCreateSkill,
+            onRefresh: onSyncInventory,
+            onInstall: onCreateDaemon,
+          ),
+          Expanded(
+            child: ListView(
+              key: const Key('agents-hierarchy-scroll'),
+              padding: phone
+                  ? EdgeInsets.fromLTRB(
+                      16,
+                      4,
+                      16,
+                      16 + AwikiFloatingTabBarInset.of(context),
+                    )
+                  : responsive.isCompact
+                  ? EdgeInsets.only(bottom: responsive.spacing(16))
+                  : EdgeInsets.fromLTRB(
+                      responsive.spacing(8),
+                      responsive.spacing(8),
+                      responsive.spacing(8),
+                      responsive.spacing(16),
                     ),
-                  if (state.error != null) ...<Widget>[
-                    _AgentErrorBanner(
-                      message: state.error!,
-                      onRetry: onSyncInventory,
+              children: <Widget>[
+                if (responsive.isCompact)
+                  _AgentListSectionHeader(
+                    count: visibleAgents
+                        .where((agent) => agent.isRuntime)
+                        .length,
+                  ),
+                if (state.error != null) ...<Widget>[
+                  _AgentErrorBanner(
+                    message: state.error!,
+                    onRetry: onSyncInventory,
+                  ),
+                  SizedBox(height: responsive.spacing(10)),
+                ],
+                if (visibleAgents.isEmpty)
+                  _AgentEmptyState(
+                    isWaitingForDaemonInstall: state.isWaitingForDaemonInstall,
+                  ),
+                if (phone && visibleAgents.isNotEmpty)
+                  AwikiGlassSurface(
+                    key: const Key('agents-hierarchy-card'),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: _AgentHierarchyList(
+                      state: state,
+                      personalAgentVisible: personalAgentVisible,
+                      pendingAgentDids: pendingAgentDids,
+                      selectedAgentDid: selectedAgentDid,
+                      onSelect: onSelect,
+                      onRefreshDaemon: onRefreshDaemon,
                     ),
-                    SizedBox(height: responsive.spacing(10)),
-                  ],
-                  if (visibleAgents.isEmpty)
-                    _AgentEmptyState(
-                      isWaitingForDaemonInstall:
-                          state.isWaitingForDaemonInstall,
-                    ),
+                  )
+                else
                   _AgentHierarchyList(
                     state: state,
                     personalAgentVisible: personalAgentVisible,
@@ -91,20 +107,32 @@ class _AgentListPane extends StatelessWidget {
                     onSelect: onSelect,
                     onRefreshDaemon: onRefreshDaemon,
                   ),
-                  if (responsive.isCompact)
-                    _AgentInstallDaemonRow(
-                      onTap: onCreateDaemon,
-                      disabled: state.isActionPending(
-                        AgentActionKeys.installCommand,
-                      ),
+                if (phone) const SizedBox(height: 14),
+                if (responsive.isCompact)
+                  _AgentInstallDaemonRow(
+                    onTap: onCreateDaemon,
+                    disabled: state.isActionPending(
+                      AgentActionKeys.installCommand,
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
-            if (footer != null) footer!,
-          ],
-        ),
+          ),
+          if (footer != null) footer!,
+        ],
       ),
+    );
+    if (phone) {
+      return AwikiGlassBackdrop(
+        key: const Key('agents-list-pane'),
+        color: awikiCompactListBackground(context),
+        child: pane,
+      );
+    }
+    return ColoredBox(
+      key: const Key('agents-list-pane'),
+      color: responsive.isCompact ? theme.background : theme.surface,
+      child: pane,
     );
   }
 }
@@ -137,12 +165,15 @@ class _AgentListHeader extends StatelessWidget {
     );
 
     if (responsive.isCompact) {
+      final phone = responsive.isPhone;
       return Container(
         key: const Key('agents-compact-list-header'),
-        decoration: BoxDecoration(
-          color: theme.surface,
-          border: Border(bottom: BorderSide(color: theme.border)),
-        ),
+        decoration: phone
+            ? null
+            : BoxDecoration(
+                color: theme.surface,
+                border: Border(bottom: BorderSide(color: theme.border)),
+              ),
         child: AwikiMeTopBar(
           title: context.l10n.agentPageTitle,
           leadingWidth: 0,
@@ -174,18 +205,25 @@ class _AgentListHeader extends StatelessWidget {
                         )
                       : Icon(
                           CupertinoIcons.ellipsis,
-                          color: theme.secondaryText,
+                          color: phone ? theme.title : theme.secondaryText,
                           size: responsive.iconMd,
                         ),
                 ),
-                const SizedBox(width: 12),
-                TopBarActionButton(
-                  key: const Key('agents-install-daemon-button'),
-                  onTap: isInstalling ? null : onInstall,
-                  semanticsLabel: context.l10n.agentInstallTitle,
-                  tooltip: context.l10n.agentInstallTitle,
-                  child: installIcon,
-                ),
+                SizedBox(width: phone ? 4 : 12),
+                if (phone)
+                  AwikiCircledPlusButton(
+                    key: const Key('agents-install-daemon-button'),
+                    onTap: isInstalling ? null : onInstall,
+                    semanticsLabel: context.l10n.agentInstallTitle,
+                  )
+                else
+                  TopBarActionButton(
+                    key: const Key('agents-install-daemon-button'),
+                    onTap: isInstalling ? null : onInstall,
+                    semanticsLabel: context.l10n.agentInstallTitle,
+                    tooltip: context.l10n.agentInstallTitle,
+                    child: installIcon,
+                  ),
               ],
             ),
           ),
@@ -313,14 +351,18 @@ class _AgentListSectionHeader extends StatelessWidget {
     final theme = context.awikiTheme;
     return SizedBox(
       key: const Key('agents-compact-section-header'),
-      height: 60,
+      height: responsive.isPhone ? 36 : 60,
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: theme.surface,
-          border: Border(bottom: BorderSide(color: theme.border)),
-        ),
+        decoration: responsive.isPhone
+            ? const BoxDecoration()
+            : BoxDecoration(
+                color: theme.surface,
+                border: Border(bottom: BorderSide(color: theme.border)),
+              ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.isPhone ? 4 : 20,
+          ),
           child: Row(
             children: <Widget>[
               Expanded(
@@ -361,6 +403,39 @@ class _AgentInstallDaemonRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
+    if (responsive.isPhone) {
+      return AwikiGlassSurface(
+        child: AppPressable(
+          key: const Key('agents-install-daemon-row'),
+          onTap: disabled ? null : onTap,
+          semanticLabel: context.l10n.agentInstallDaemonAction,
+          enabled: !disabled,
+          borderRadius: BorderRadius.circular(24),
+          child: SizedBox(
+            height: 52,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    CupertinoIcons.arrow_down_to_line,
+                    color: theme.primary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      context.l10n.agentInstallDaemonAction,
+                      style: TextStyle(color: theme.primary, fontSize: 16),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return AppPressable(
       key: const Key('agents-install-daemon-row'),
       onTap: disabled ? null : onTap,
@@ -691,7 +766,7 @@ class _CompactAgentChildrenTree extends StatelessWidget {
           child: Container(
             key: ValueKey<String>('agent-tree-vertical-$daemonAgentDid'),
             width: responsive.displayScaled(1),
-            color: AwikiMePalette.navigationBorder,
+            color: context.awikiTheme.navigationBorder,
           ),
         ),
       ],
@@ -1065,11 +1140,11 @@ class _AgentListTile extends ConsumerWidget {
         borderRadius: responsive.isCompact
             ? BorderRadius.zero
             : BorderRadius.circular(responsive.radius(10)),
-        backgroundColor: responsive.isCompact
+        backgroundColor: responsive.isCompact && !responsive.isPhone
             ? theme.surface
             : CupertinoColors.transparent,
         selectedBackgroundColor: theme.body.withValues(alpha: 0.07),
-        border: responsive.isCompact
+        border: responsive.isCompact && !responsive.isPhone
             ? Border(bottom: BorderSide(color: theme.border))
             : null,
         child: ConstrainedBox(

@@ -703,17 +703,22 @@ class AppCardSection extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(20),
-    this.color = AwikiMeColors.surface,
+    this.color,
   });
 
   final Widget child;
   final EdgeInsets padding;
-  final Color color;
+
+  /// Defaults to the active theme's surface so cards follow dark mode.
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: AwikiMeDecorations.card(context: context, color: color),
+      decoration: AwikiMeDecorations.card(
+        context: context,
+        color: color ?? context.awikiTheme.surface,
+      ),
       padding: padding,
       child: child,
     );

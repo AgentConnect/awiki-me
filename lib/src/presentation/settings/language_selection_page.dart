@@ -43,7 +43,7 @@ class LanguageSelectionPage extends ConsumerWidget {
                   child: Icon(
                     CupertinoIcons.chevron_left,
                     size: context.awikiResponsive.iconMd,
-                    color: context.awikiTheme.primary,
+                    color: context.awikiTheme.title,
                   ),
                 ),
               ),

@@ -353,7 +353,7 @@ class _ChatInformationHeader extends StatelessWidget {
               semanticsLabel: context.l10n.commonBack,
               child: AwikiMeSemanticIcon(
                 role: AwikiMeIconRole.back,
-                color: theme.primaryDark,
+                color: context.awikiTheme.title,
                 size: responsive.iconMd,
               ),
             ),

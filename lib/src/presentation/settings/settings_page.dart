@@ -24,6 +24,7 @@ import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass.dart';
 import 'language_selection_page.dart';
 import 'display_settings_page.dart';
 import '../shared/display_scale.dart';
@@ -305,36 +306,38 @@ class SettingsPage extends ConsumerWidget {
                 AppNavigator.push<void>(context, (_) => const DevicesPage()),
           ),
       ];
+      final profileRow = session == null
+          ? null
+          : _QuietSettingsProfileRow(
+              session: session,
+              height: profileHeight,
+              avatarSize: profileAvatarSize,
+              onTap:
+                  onProfileTap ??
+                  () => AppNavigator.push(
+                    context,
+                    (_) =>
+                        ProfilePage(onBack: () => Navigator.of(context).pop()),
+                  ),
+            );
       final compactRows = <Widget>[
-        if (session != null) ...<Widget>[
-          _QuietSettingsProfileRow(
-            session: session,
-            height: profileHeight,
-            avatarSize: profileAvatarSize,
-            onTap:
-                onProfileTap ??
-                () => AppNavigator.push(
-                  context,
-                  (_) => ProfilePage(onBack: () => Navigator.of(context).pop()),
-                ),
-          ),
-        ],
-        _QuietSettingsSectionTitle(
-          l10n.settingsAccountDevicesSection,
-          key: const Key('settings-account-section-title'),
-          height: sectionTitleHeight,
-        ),
         _FlatSettingsGroup(
           key: const Key('settings-account-group'),
+          title: _QuietSettingsSectionTitle(
+            l10n.settingsAccountDevicesSection,
+            key: const Key('settings-account-section-title'),
+            height: sectionTitleHeight,
+          ),
+          leading: profileRow,
           children: accountRows,
-        ),
-        _QuietSettingsSectionTitle(
-          l10n.settingsAppSection,
-          key: const Key('settings-app-section-title'),
-          height: sectionTitleHeight,
         ),
         _FlatSettingsGroup(
           key: const Key('settings-app-group'),
+          title: _QuietSettingsSectionTitle(
+            l10n.settingsAppSection,
+            key: const Key('settings-app-section-title'),
+            height: sectionTitleHeight,
+          ),
           children: <Widget>[
             _QuietSettingsRow(
               key: const Key('settings-current-version-row'),
@@ -413,13 +416,13 @@ class SettingsPage extends ConsumerWidget {
             ),
           ],
         ),
-        _QuietSettingsSectionTitle(
-          l10n.settingsSecuritySection,
-          key: const Key('settings-security-section-title'),
-          height: sectionTitleHeight,
-        ),
         _FlatSettingsGroup(
           key: const Key('settings-security-group'),
+          title: _QuietSettingsSectionTitle(
+            l10n.settingsSecuritySection,
+            key: const Key('settings-security-section-title'),
+            height: sectionTitleHeight,
+          ),
           children: <Widget>[
             _QuietSettingsRow(
               key: const Key('settings-recover-handle-did-row'),
@@ -468,41 +471,43 @@ class SettingsPage extends ConsumerWidget {
         ),
       ];
       return CupertinoPageScaffold(
-        backgroundColor: theme.background,
-        child: Column(
-          children: <Widget>[
-            Padding(
-              key: const Key('settings-compact-header'),
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: AwikiMeTopBar(
-                title: l10n.settingsTitle,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                titleFontSize: 16,
-                titleFontWeight: FontWeight.w400,
-                leading: TopBarActionButton(
-                  key: const Key('settings-back-button'),
-                  onTap: onBack ?? () => Navigator.of(context).pop(),
-                  semanticsLabel: l10n.commonBack,
-                  child: Icon(
-                    CupertinoIcons.chevron_left,
-                    size: responsive.iconMd,
-                    color: context.awikiTheme.primary,
+        backgroundColor: awikiCompactListBackground(context),
+        child: AwikiGlassBackdrop(
+          color: awikiCompactListBackground(context),
+          child: Column(
+            children: <Widget>[
+              Padding(
+                key: const Key('settings-compact-header'),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: AwikiMeTopBar(
+                  title: l10n.settingsTitle,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  titleFontSize: 16,
+                  titleFontWeight: FontWeight.w400,
+                  leading: AwikiBackButton(
+                    key: const Key('settings-back-button'),
+                    onTap: onBack ?? () => Navigator.of(context).pop(),
+                    semanticsLabel: l10n.commonBack,
                   ),
                 ),
               ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                  0,
-                  0,
-                  0,
-                  useShortViewportMetrics ? 0 : 4,
+              Expanded(
+                child: ListView.separated(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    4,
+                    16,
+                    (useShortViewportMetrics ? 0 : 4) +
+                        20 +
+                        MediaQuery.paddingOf(context).bottom,
+                  ),
+                  itemCount: compactRows.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 14),
+                  itemBuilder: (_, index) => compactRows[index],
                 ),
-                children: compactRows,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }
@@ -531,9 +536,9 @@ class SettingsPage extends ConsumerWidget {
                     : TopBarActionButton(
                         key: const Key('settings-back-button'),
                         onTap: onBack ?? () => Navigator.of(context).pop(),
-                        child: const AwikiAssetIcon(
+                        child: AwikiAssetIcon(
                           assetName: 'assets/icons/icon_left.svg',
-                          color: AwikiMeColors.primaryDark,
+                          color: context.awikiTheme.title,
                           size: 22,
                         ),
                       ),
@@ -671,13 +676,13 @@ class _QuietSettingsProfileRow extends StatelessWidget {
       key: const Key('settings-profile-row'),
       onTap: onTap,
       semanticLabel: title,
-      borderRadius: BorderRadius.zero,
+      borderRadius: BorderRadius.circular(18),
       child: SizedBox(
         height: height,
         child: Stack(
           children: <Widget>[
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Row(
                 children: <Widget>[
                   AvatarBadge(
@@ -722,12 +727,6 @@ class _QuietSettingsProfileRow extends StatelessWidget {
                 ],
               ),
             ),
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: 0,
-              child: Container(height: 1, color: theme.border),
-            ),
           ],
         ),
       ),
@@ -746,9 +745,9 @@ class _QuietSettingsSectionTitle extends StatelessWidget {
     return SizedBox(
       height: height,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         child: Align(
-          alignment: Alignment.centerLeft,
+          alignment: Alignment.bottomLeft,
           child: Text(
             label,
             maxLines: 1,
@@ -765,34 +764,41 @@ class _QuietSettingsSectionTitle extends StatelessWidget {
   }
 }
 
+/// Phone settings group: one glass card carrying its own section label, an
+/// optional lead row (the account identity) and hairline-separated rows.
 class _FlatSettingsGroup extends StatelessWidget {
-  const _FlatSettingsGroup({super.key, required this.children});
+  const _FlatSettingsGroup({
+    super.key,
+    required this.children,
+    this.title,
+    this.leading,
+  });
 
+  final Widget? title;
+  final Widget? leading;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final items = <Widget>[?leading, ...children];
     final rows = <Widget>[];
-    for (var index = 0; index < children.length; index += 1) {
-      rows.add(children[index]);
-      rows.add(
-        Container(
-          key: index == children.length - 1
-              ? null
-              : ValueKey<String>('settings-row-divider-$index'),
-          height: 1,
-          margin: EdgeInsets.only(
-            left: index == children.length - 1 ? 20 : 68,
-            right: 20,
+    for (var index = 0; index < items.length; index += 1) {
+      rows.add(items[index]);
+      if (index != items.length - 1) {
+        rows.add(
+          Container(
+            key: ValueKey<String>('settings-row-divider-$index'),
+            height: 0.5,
+            margin: const EdgeInsets.symmetric(horizontal: 14),
+            color: theme.glassEdgeActive,
           ),
-          color: theme.border,
-        ),
-      );
+        );
+      }
     }
-    return ColoredBox(
-      color: theme.surface,
-      child: Column(children: rows),
+    return AwikiGlassSurface(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
+      child: Column(children: <Widget>[?title, ...rows]),
     );
   }
 }
@@ -822,23 +828,22 @@ class _QuietSettingsRow extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final trailingValue = trailingText?.trim() ?? '';
-    final foreground = destructive ? theme.danger : context.awikiTheme.primary;
+    final foreground = destructive ? theme.danger : theme.title;
     return AppPressable(
       onTap: onTap,
       semanticLabel: title,
-      borderRadius: BorderRadius.zero,
+      borderRadius: BorderRadius.circular(18),
       child: Container(
         height: height,
-        padding: const EdgeInsets.symmetric(horizontal: 28),
-        color: theme.surface,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
             SizedBox.square(
               dimension: 24,
-              child: Icon(icon, key: iconKey, size: 24, color: foreground),
+              child: Icon(icon, key: iconKey, size: 20, color: foreground),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 title,
@@ -846,7 +851,7 @@ class _QuietSettingsRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: destructive ? theme.danger : theme.title,
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.w400,
                 ),
               ),
@@ -862,7 +867,7 @@ class _QuietSettingsRow extends StatelessWidget {
                   maxLines: 1,
                   softWrap: false,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: theme.secondaryText, fontSize: 12),
+                  style: TextStyle(color: theme.secondaryText, fontSize: 13),
                 ),
               ),
             if (onTap != null) ...<Widget>[

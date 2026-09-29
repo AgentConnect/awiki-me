@@ -58,7 +58,7 @@ class DisplaySettingsPage extends ConsumerWidget {
                   child: Icon(
                     CupertinoIcons.chevron_left,
                     size: context.awikiResponsive.iconMd,
-                    color: theme.primary,
+                    color: context.awikiTheme.title,
                   ),
                 ),
               ),
