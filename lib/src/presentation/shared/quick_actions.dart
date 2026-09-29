@@ -298,7 +298,7 @@ class _CompactQuickActionRow extends StatelessWidget {
                 semanticsIdentifier: item.semanticsIdentifier,
                 borderRadius: BorderRadius.circular(AwikiMeRadii.xs),
                 hoverColor: theme.title.withValues(alpha: 0.05),
-                pressedColor: AwikiMePalette.actionBlueSoft.withValues(
+                pressedColor: context.awikiTheme.primarySoft.withValues(
                   alpha: 0.72,
                 ),
                 child: Padding(
@@ -309,7 +309,7 @@ class _CompactQuickActionRow extends StatelessWidget {
                         child: Icon(
                           item.icon,
                           size: 20,
-                          color: AwikiMePalette.actionBlue,
+                          color: context.awikiTheme.primary,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -319,8 +319,8 @@ class _CompactQuickActionRow extends StatelessWidget {
                             item.label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AwikiMePalette.inkNeutral,
+                            style: TextStyle(
+                              color: context.awikiTheme.title,
                               fontSize: 15,
                               fontWeight: FontWeight.w400,
                               letterSpacing: 0,
@@ -334,12 +334,12 @@ class _CompactQuickActionRow extends StatelessWidget {
               ),
             ),
             if (showDivider)
-              const Positioned(
+              Positioned(
                 left: 48,
                 right: 16,
                 bottom: 0,
                 height: 1,
-                child: ColoredBox(color: AwikiMePalette.hairline),
+                child: ColoredBox(color: context.awikiTheme.border),
               ),
           ],
         ),

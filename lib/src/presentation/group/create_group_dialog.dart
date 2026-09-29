@@ -220,12 +220,12 @@ class _GroupNameInput extends StatelessWidget {
               vertical: responsive.spacing(12),
             ),
             decoration: BoxDecoration(
-              color: enabled ? AwikiMePalette.content : theme.subtleSurface,
+              color: enabled ? context.awikiTheme.surface : theme.subtleSurface,
               borderRadius: BorderRadius.circular(responsive.radius(12)),
               border: Border.all(
                 color: focusNode.hasFocus
                     ? theme.primary.withValues(alpha: 0.56)
-                    : AwikiMePalette.hairline,
+                    : context.awikiTheme.border,
                 width: focusNode.hasFocus ? 1.2 : 1,
               ),
             ),

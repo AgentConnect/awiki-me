@@ -675,11 +675,11 @@ class _GroupDetailIconButton extends StatelessWidget {
       isLoading: isLoading,
       size: responsive.scaled(34),
       backgroundColor: theme.surface,
-      borderColor: AwikiMePalette.hairline,
+      borderColor: context.awikiTheme.border,
       borderRadius: BorderRadius.circular(responsive.radius(8)),
       child: Icon(
         icon,
-        color: enabled ? AwikiMePalette.mutedNeutral : theme.tertiaryText,
+        color: enabled ? context.awikiTheme.secondaryText : theme.tertiaryText,
         size: responsive.iconSm,
       ),
     );
@@ -839,7 +839,7 @@ class GroupMemberRow extends ConsumerWidget {
             tooltip: context.l10n.groupRemoveMember,
             size: responsive.scaled(32),
             backgroundColor: theme.subtleSurface,
-            borderColor: AwikiMePalette.hairline,
+            borderColor: context.awikiTheme.border,
             borderRadius: BorderRadius.circular(responsive.radius(8)),
             child: Icon(
               CupertinoIcons.minus_circle,

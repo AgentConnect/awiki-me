@@ -1131,8 +1131,8 @@ class _IdentityMetaLine extends StatelessWidget {
             width: 52,
             child: Text(
               '$label:',
-              style: const TextStyle(
-                color: AwikiMePalette.mutedNeutral,
+              style: TextStyle(
+                color: context.awikiTheme.secondaryText,
                 fontSize: 12,
                 fontWeight: FontWeight.w400,
               ),
@@ -1143,8 +1143,8 @@ class _IdentityMetaLine extends StatelessWidget {
               value,
               maxLines: label == 'DID' ? 2 : 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AwikiMePalette.inkNeutral,
+              style: TextStyle(
+                color: context.awikiTheme.title,
                 fontSize: 12,
                 height: 1.35,
               ),
@@ -1171,13 +1171,13 @@ class _InlineNotice extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AwikiMePalette.brandAccentSoft,
+        color: context.awikiTheme.primarySoft,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          color: AwikiMePalette.brandAccent,
+        style: TextStyle(
+          color: context.awikiTheme.primary,
           fontSize: 12,
           height: 1.35,
         ),
