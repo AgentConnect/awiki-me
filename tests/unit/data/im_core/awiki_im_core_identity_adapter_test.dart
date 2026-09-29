@@ -1,12 +1,151 @@
+import 'dart:async';
+
 import '../../identity_method_test_support.dart';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/core/app_error_classifier.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_identity_adapter.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
+import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
+import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('prepared Join keeps the real adapter result beyond UI timeout', (
+    tester,
+  ) async {
+    final pending = Completer<void>();
+    final native = _IdentityErrorCore()..pendingJoin = pending;
+    final adapter = AwikiImCoreIdentityAdapter.withCoreInstance(
+      coreInstance: () async => native,
+    );
+    final registration = await adapter.registerHandleWithPhone(
+      phone: 'fixture-contact',
+      otp: 'fixture-code',
+      handle: 'alice',
+    );
+    final continuation = registration.existingHandleContinuationId!;
+    final container = ProviderContainer(
+      overrides: [
+        identityCorePortProvider.overrideWithValue(adapter),
+        onboardingProvider.overrideWith(
+          (ref) => _PreparedJoinController(ref, continuation),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(onboardingProvider.notifier);
+    var completed = false;
+    final first = controller
+        .beginExistingHandleDeviceJoin(presenceReason: 'fixture')
+        .then((value) {
+          completed = true;
+          return value;
+        });
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 21));
+    expect(completed, isFalse);
+    expect(container.read(onboardingProvider).isExistingHandleJoinBusy, isTrue);
+    expect(container.read(uiFeedbackProvider), isNull);
+    expect(
+      await controller.beginExistingHandleDeviceJoin(
+        presenceReason: 'duplicate',
+      ),
+      isFalse,
+    );
+    expect(native.joinCalls, 1);
+
+    pending.complete();
+    await tester.pump();
+    expect(await first, isTrue);
+    expect(
+      container.read(onboardingProvider).isExistingHandleJoinBusy,
+      isFalse,
+    );
+    expect(
+      container.read(onboardingProvider).existingHandleContinuationId,
+      isNull,
+    );
+    expect(
+      container.read(devicesProvider).activeJoin?.joinSessionId,
+      'join-registration-recovery',
+    );
+    // The production adapter actually consumed the continuation. No second
+    // Core invocation is needed to recover the result of the first call.
+    await expectLater(
+      adapter.beginExistingHandleDeviceJoin(
+        continuation,
+        userPresenceConfirmed: false,
+      ),
+      throwsStateError,
+    );
+    expect(native.joinCalls, 1);
+  });
+
+  testWidgets(
+    'prepared Join failure retries the same real adapter preparation and operation',
+    (tester) async {
+      final native = _IdentityErrorCore()
+        ..joinError = TimeoutException('fixture transport timeout');
+      final adapter = AwikiImCoreIdentityAdapter.withCoreInstance(
+        coreInstance: () async => native,
+      );
+      final registration = await adapter.registerHandleWithPhone(
+        phone: 'fixture-contact',
+        otp: 'fixture-code',
+        handle: 'alice',
+      );
+      final continuation = registration.existingHandleContinuationId!;
+      final container = ProviderContainer(
+        overrides: [
+          identityCorePortProvider.overrideWithValue(adapter),
+          onboardingProvider.overrideWith(
+            (ref) => _PreparedJoinController(ref, continuation),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(onboardingProvider.notifier);
+      expect(
+        await controller.beginExistingHandleDeviceJoin(
+          presenceReason: 'fixture',
+        ),
+        isFalse,
+      );
+      expect(
+        container.read(onboardingProvider).existingHandleContinuationId,
+        continuation,
+      );
+      expect(
+        container.read(uiFeedbackProvider)?.message.id,
+        'requestTimeoutRetry',
+      );
+      final operationId = native.lastJoinOperationId;
+      final preparationId = native.lastJoinPreparationId;
+      native.joinError = null;
+      expect(
+        await controller.beginExistingHandleDeviceJoin(
+          presenceReason: 'explicit retry',
+        ),
+        isTrue,
+      );
+      expect(native.joinCalls, 2);
+      expect(native.lastJoinOperationId, operationId);
+      expect(native.lastJoinPreparationId, preparationId);
+      expect(
+        container.read(devicesProvider).activeJoin?.joinSessionId,
+        'join-registration-recovery',
+      );
+      expect(
+        container.read(onboardingProvider).existingHandleContinuationId,
+        isNull,
+      );
+    },
+  );
+
   test(
     'Web selection is forwarded while existing Handle capability comes from Core',
     () async {
@@ -202,6 +341,62 @@ void main() {
     },
   );
 
+  test(
+    'prepared Join reserves clock skew without extending server TTL',
+    () async {
+      final sdk = _IdentityErrorCore();
+      final adapter = AwikiImCoreIdentityAdapter.withCoreInstance(
+        coreInstance: () async => sdk,
+      );
+      final registration = await adapter.registerHandleWithPhone(
+        phone: 'test-contact',
+        otp: 'test-code',
+        handle: 'alice',
+      );
+      final progress = await adapter.beginExistingHandleDeviceJoin(
+        registration.existingHandleContinuationId!,
+        userPresenceConfirmed: false,
+      );
+
+      expect(sdk.lastJoinTtlSeconds, 570);
+      expect(sdk.lastJoinPreparationId, 'prepared-join-1');
+      expect(sdk.lastJoinOperationId, 'awiki-me-register-join-prepared-join-1');
+      expect(sdk.lastJoinUserPresenceConfirmed, isFalse);
+      expect(progress.joinSessionId, 'join-registration-recovery');
+      final issuedAt = DateTime.utc(2026, 9, 29, 13, 32, 29, 184, 671);
+      final expiresAt = issuedAt.add(
+        Duration(seconds: sdk.lastJoinTtlSeconds!),
+      );
+      for (final skew in <Duration>[
+        Duration.zero,
+        const Duration(microseconds: 5719),
+        const Duration(seconds: 30),
+      ]) {
+        final serverNow = issuedAt.subtract(skew);
+        expect(expiresAt.isAfter(serverNow), isTrue);
+        expect(
+          expiresAt.difference(issuedAt),
+          lessThanOrEqualTo(const Duration(seconds: 600)),
+        );
+        expect(
+          expiresAt.difference(serverNow),
+          lessThanOrEqualTo(const Duration(seconds: 600)),
+        );
+        expect(
+          issuedAt.isAfter(serverNow.add(const Duration(seconds: 30))),
+          isFalse,
+        );
+      }
+      await expectLater(
+        adapter.beginExistingHandleDeviceJoin(
+          registration.existingHandleContinuationId!,
+          userPresenceConfirmed: false,
+        ),
+        throwsStateError,
+      );
+    },
+  );
+
   test('adapter preserves structured errors through prepared Join', () async {
     final sdk = _IdentityErrorCore();
     final adapter = AwikiImCoreIdentityAdapter.withCoreInstance(
@@ -381,6 +576,12 @@ class _IdentityErrorCore implements core.AwikiImCore {
 
   Object? registrationError;
   Object? joinError;
+  Completer<void>? pendingJoin;
+  int joinCalls = 0;
+  int? lastJoinTtlSeconds;
+  String? lastJoinPreparationId;
+  String? lastJoinOperationId;
+  bool? lastJoinUserPresenceConfirmed;
   Object? upgradeError;
   Object? deletionError;
 
@@ -451,6 +652,12 @@ class _IdentityErrorCore implements core.AwikiImCore {
     int ttlSeconds = 600,
     required bool userPresenceConfirmed,
   }) async {
+    lastJoinTtlSeconds = ttlSeconds;
+    lastJoinPreparationId = preparationId;
+    lastJoinOperationId = operationId;
+    lastJoinUserPresenceConfirmed = userPresenceConfirmed;
+    joinCalls++;
+    if (pendingJoin != null) await pendingJoin!.future;
     final error = joinError;
     if (error != null) throw error;
     return _authorizedRegistrationJoin();
@@ -500,6 +707,15 @@ class _IdentityErrorCore implements core.AwikiImCore {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _PreparedJoinController extends OnboardingController {
+  _PreparedJoinController(super.ref, String continuation) {
+    state = state.copyWith(
+      existingHandleContinuationId: continuation,
+      existingHandleJoinMode: ExistingHandleJoinMode.ordinary,
+    );
+  }
 }
 
 core.AuthorizedJoinActivationProgress _authorizedRegistrationJoin({

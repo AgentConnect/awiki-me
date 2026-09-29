@@ -46,6 +46,7 @@ class OnboardingState {
     this.emailVerified = false,
     this.emailResendCountdown = 0,
     this.isBusy = false,
+    this.isExistingHandleJoinBusy = false,
     this.deletingLocalIdentitySelector,
     this.legacyUpgradeStatus = const LegacyIdentityUpgradeStatus.idle(),
     this.otpTargetFullHandle,
@@ -71,6 +72,7 @@ class OnboardingState {
   final bool emailVerified;
   final int emailResendCountdown;
   final bool isBusy;
+  final bool isExistingHandleJoinBusy;
   final String? deletingLocalIdentitySelector;
   final LegacyIdentityUpgradeStatus legacyUpgradeStatus;
   final String? otpTargetFullHandle;
@@ -157,6 +159,7 @@ class OnboardingState {
     bool? emailVerified,
     int? emailResendCountdown,
     bool? isBusy,
+    bool? isExistingHandleJoinBusy,
     Object? deletingLocalIdentitySelector = _unset,
     LegacyIdentityUpgradeStatus? legacyUpgradeStatus,
     Object? otpTargetFullHandle = _unset,
@@ -188,6 +191,8 @@ class OnboardingState {
       emailVerified: emailVerified ?? this.emailVerified,
       emailResendCountdown: emailResendCountdown ?? this.emailResendCountdown,
       isBusy: isBusy ?? this.isBusy,
+      isExistingHandleJoinBusy:
+          isExistingHandleJoinBusy ?? this.isExistingHandleJoinBusy,
       deletingLocalIdentitySelector:
           identical(deletingLocalIdentitySelector, _unset)
           ? this.deletingLocalIdentitySelector
@@ -806,32 +811,51 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }) async {
     final continuationId = state.existingHandleContinuationId;
     final mode = state.existingHandleJoinMode;
-    if (continuationId == null || mode == null) {
-      throw StateError('existing_handle_continuation_unavailable');
-    }
-    final port = ref.read(identityCorePortProvider);
-    if (port is! ExistingHandleContinuationPort) {
-      throw StateError('existing_handle_continuation_unavailable');
-    }
-    final continuationPort = port as ExistingHandleContinuationPort;
-    var userPresenceConfirmed = false;
-    if (state.existingHandleJoinRequiresUserPresence) {
-      userPresenceConfirmed = await ref
-          .read(userPresencePortProvider)
-          .confirm(reason: presenceReason);
-      if (!userPresenceConfirmed) {
-        return false;
-      }
-    }
-    final progress = await continuationPort.beginExistingHandleDeviceJoin(
-      continuationId,
-      userPresenceConfirmed: userPresenceConfirmed,
+    final generation = _busyGeneration + 1;
+    final progress = await _runBusy<DeviceJoinProgress?>(
+      () async {
+        if (continuationId == null || mode == null) {
+          throw StateError('existing_handle_continuation_unavailable');
+        }
+        final port = ref.read(identityCorePortProvider);
+        if (port is! ExistingHandleContinuationPort) {
+          throw StateError('existing_handle_continuation_unavailable');
+        }
+        final continuationPort = port as ExistingHandleContinuationPort;
+        var userPresenceConfirmed = false;
+        if (state.existingHandleJoinRequiresUserPresence) {
+          userPresenceConfirmed = await ref
+              .read(userPresencePortProvider)
+              .confirm(reason: presenceReason);
+          if (!userPresenceConfirmed ||
+              !mounted ||
+              generation != _busyGeneration ||
+              !state.isBusy) {
+            return null;
+          }
+        }
+        final progress = await continuationPort.beginExistingHandleDeviceJoin(
+          continuationId,
+          userPresenceConfirmed: userPresenceConfirmed,
+        );
+        final expectedCause =
+            mode == ExistingHandleJoinMode.handleRecoveryRebind
+            ? DeviceJoinCause.handleRecovery
+            : DeviceJoinCause.ordinary;
+        if (progress.cause != expectedCause) {
+          throw StateError('registration_join_mode_mismatch');
+        }
+        return progress;
+      },
+      failureMessage: AppMessage.operationFailedRetry(),
+      isExistingHandleJoin: true,
     );
-    final expectedCause = mode == ExistingHandleJoinMode.handleRecoveryRebind
-        ? DeviceJoinCause.handleRecovery
-        : DeviceJoinCause.ordinary;
-    if (progress.cause != expectedCause) {
-      throw StateError('registration_join_mode_mismatch');
+    // Only a superseded context may discard a completed Core Join.
+    if (!mounted ||
+        generation != _busyGeneration ||
+        state.existingHandleContinuationId != continuationId ||
+        progress == null) {
+      return false;
     }
     ref.read(devicesProvider.notifier).resumeNewDevice(progress);
     state = state.copyWith(
@@ -951,6 +975,8 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   Future<T?> _runBusy<T>(
     Future<T> Function() action, {
     AppSessionTransition? sessionTransition,
+    AppMessage? failureMessage,
+    bool isExistingHandleJoin = false,
   }) async {
     if (state.isBusy) {
       return null;
@@ -961,9 +987,18 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     if (sessionTransition != null) {
       _activeSessionTransition = sessionTransition;
     }
-    state = state.copyWith(isBusy: true);
+    state = state.copyWith(
+      isBusy: true,
+      isExistingHandleJoinBusy: isExistingHandleJoin,
+    );
     try {
-      return await action().timeout(_requestTimeout);
+      final operation = action();
+      // Future.timeout does not cancel Core. A prepared Join consumes its
+      // continuation on success, so keep awaiting that same operation instead
+      // of losing its result. Core owns transport timeouts and durable recovery.
+      return await (isExistingHandleJoin
+          ? operation
+          : operation.timeout(_requestTimeout));
     } on TimeoutException {
       _lastBusyFailureOutcome = OnboardingPhoneRegistrationOutcome.timedOut;
       _lastBusyFailureCode = 'request_timeout';
@@ -995,7 +1030,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(
-            AppMessage.fromError(error),
+            failureMessage ?? AppMessage.fromError(error),
             detail: appTransportDiagnostic(error),
           );
     } finally {
@@ -1003,7 +1038,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         _activeSessionTransition = null;
       }
       if (generation == _busyGeneration) {
-        state = state.copyWith(isBusy: false);
+        state = state.copyWith(isBusy: false, isExistingHandleJoinBusy: false);
       }
     }
     return null;

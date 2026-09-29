@@ -1910,6 +1910,233 @@ void main() {
     );
   });
 
+  testWidgets('Join 等待期间显示加载遮罩并阻止重复请求，成功后打开进度页', (tester) async {
+    final pending = Completer<void>();
+    final port = _ExistingHandleIdentityCorePort()..pending = pending;
+    final container = await _prepareJoinCaptureTest(tester, port);
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('existing-handle-join-action')),
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(container.read(onboardingProvider).isBusy, isTrue);
+    expect(
+      find.byKey(const Key('existing-handle-join-loading')),
+      findsOneWidget,
+    );
+    expect(find.text('加载中...'), findsOneWidget);
+    expect(find.byType(DeviceJoinPage), findsNothing);
+    expect(
+      await container
+          .read(onboardingProvider.notifier)
+          .beginExistingHandleDeviceJoin(presenceReason: 'test'),
+      isFalse,
+    );
+    expect(port.joinCalls, 1);
+
+    pending.complete();
+    await _settleVerificationStep(tester);
+    expect(container.read(onboardingProvider).isBusy, isFalse);
+    expect(find.byKey(const Key('existing-handle-join-loading')), findsNothing);
+    expect(find.byType(DeviceJoinPage), findsOneWidget);
+    expect(
+      container.read(devicesProvider).activeJoin?.joinSessionId,
+      'registration-join-1',
+    );
+  });
+
+  testWidgets('Join 服务端拒绝显示安全提示且保留 continuation，不抛出未处理异常', (tester) async {
+    final pending = Completer<void>();
+    final port = _ExistingHandleIdentityCorePort()
+      ..pending = pending
+      ..joinError = const core.AwikiImCoreException(
+        code: 'service_error',
+        statusCode: 200,
+        serviceCode: 'device.join.permission_denied',
+        message: 'private-grant-must-not-appear',
+      );
+    final container = await _prepareJoinCaptureTest(tester, port);
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('existing-handle-join-action')),
+    );
+    await tester.pump();
+    pending.complete();
+    await _settleVerificationStep(tester);
+
+    expect(tester.takeException(), isNull);
+    expect(container.read(onboardingProvider).isBusy, isFalse);
+    expect(
+      container.read(onboardingProvider).existingHandleContinuationId,
+      'existing-handle-test',
+    );
+    expect(container.read(uiFeedbackProvider)?.danger, isTrue);
+    expect(
+      container.read(uiFeedbackProvider)?.message.id,
+      'operationFailedRetry',
+    );
+    expect(
+      container.read(uiFeedbackProvider)?.detail,
+      isNot(contains('private-grant')),
+    );
+    expect(find.byKey(const Key('existing-handle-join-loading')), findsNothing);
+    expect(find.byType(DeviceJoinPage), findsNothing);
+    expect(container.read(devicesProvider).activeJoin, isNull);
+    expect(port.joinCalls, 1);
+    expect(
+      find.byKey(const Key('existing-handle-join-action')),
+      findsOneWidget,
+    );
+
+    // Retry is a new explicit click, with the same OTP-verified continuation.
+    port.joinError = null;
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('existing-handle-join-action')),
+    );
+    await _settleVerificationStep(tester);
+    expect(port.joinCalls, 2);
+    expect(port.lastContinuationId, 'existing-handle-test');
+    expect(find.byType(DeviceJoinPage), findsOneWidget);
+    expect(
+      container.read(onboardingProvider).existingHandleContinuationId,
+      isNull,
+    );
+  });
+
+  testWidgets('Join 超过通用 UI 超时仍等待同一请求并在成功后打开进度页', (tester) async {
+    final pending = Completer<void>();
+    final port = _ExistingHandleIdentityCorePort()..pending = pending;
+    final container = await _prepareJoinCaptureTest(tester, port);
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('existing-handle-join-action')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 21));
+    await tester.pump();
+    expect(
+      container.read(uiFeedbackProvider)?.message.id,
+      isNot('requestTimeoutRetry'),
+    );
+    expect(container.read(onboardingProvider).isBusy, isTrue);
+    expect(
+      find.byKey(const Key('existing-handle-join-loading')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('existing-handle-join-action')), findsNothing);
+
+    pending.complete();
+    await _settleVerificationStep(tester);
+    expect(tester.takeException(), isNull);
+    expect(
+      container.read(devicesProvider).activeJoin?.joinSessionId,
+      'registration-join-1',
+    );
+    expect(find.byType(DeviceJoinPage), findsOneWidget);
+    expect(container.read(onboardingProvider).isBusy, isFalse);
+    expect(
+      container.read(onboardingProvider).existingHandleContinuationId,
+      isNull,
+    );
+    expect(port.joinCalls, 1);
+  });
+
+  testWidgets('Join 系统验证取消后恢复交互且不创建请求', (tester) async {
+    final port = _ExistingHandleIdentityCorePort();
+    final presence = _RecordingUserPresence()..confirmed = false;
+    final container = await _prepareJoinCaptureTest(
+      tester,
+      port,
+      userPresence: presence,
+    );
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('existing-handle-join-action')),
+    );
+    await _settleVerificationStep(tester);
+    expect(presence.reasons, hasLength(1));
+    expect(port.joinCalls, 0);
+    expect(container.read(onboardingProvider).isBusy, isFalse);
+    expect(
+      container.read(onboardingProvider).existingHandleContinuationId,
+      'existing-handle-test',
+    );
+    expect(container.read(devicesProvider).activeJoin, isNull);
+    expect(find.byType(DeviceJoinPage), findsNothing);
+    expect(find.byKey(const Key('existing-handle-join-loading')), findsNothing);
+    expect(tester.takeException(), isNull);
+    expect(
+      find.byKey(const Key('existing-handle-join-action')),
+      findsOneWidget,
+    );
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('existing-handle-cancel-action')),
+    );
+    await _settleVerificationStep(tester);
+    expect(port.discardedContinuationId, 'existing-handle-test');
+    expect(
+      container.read(onboardingProvider).existingHandleContinuationId,
+      isNull,
+    );
+    expect(port.joinCalls, 0);
+  });
+
+  testWidgets('Join Core 超时后提供重试入口且不自动重试', (tester) async {
+    final port = _ExistingHandleIdentityCorePort()
+      ..joinError = TimeoutException('fixture transport timeout');
+    final container = await _prepareJoinCaptureTest(tester, port);
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('existing-handle-join-action')),
+    );
+    await _settleVerificationStep(tester);
+    expect(
+      container.read(uiFeedbackProvider)?.message.id,
+      'requestTimeoutRetry',
+    );
+    expect(
+      container.read(onboardingProvider).isExistingHandleJoinBusy,
+      isFalse,
+    );
+    expect(
+      find.byKey(const Key('existing-handle-join-action')),
+      findsOneWidget,
+    );
+    expect(port.joinCalls, 1);
+    await tester.pump(const Duration(seconds: 30));
+    expect(port.joinCalls, 1);
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('existing-handle-cancel-action')),
+    );
+    await _settleVerificationStep(tester);
+    expect(port.discardedContinuationId, 'existing-handle-test');
+  });
+
+  testWidgets('Join 等待中上下文替换后迟到结果不导航也不重开选择', (tester) async {
+    final pending = Completer<void>();
+    final port = _ExistingHandleIdentityCorePort()..pending = pending;
+    final container = await _prepareJoinCaptureTest(tester, port);
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('existing-handle-join-action')),
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+    container.invalidate(onboardingProvider);
+    await container.read(onboardingProvider.notifier).loadServerInfo();
+    await tester.pump();
+    pending.complete();
+    await _settleVerificationStep(tester);
+    expect(tester.takeException(), isNull);
+    expect(container.read(devicesProvider).activeJoin, isNull);
+    expect(find.byType(DeviceJoinPage), findsNothing);
+    expect(find.byKey(const Key('existing-handle-join-action')), findsNothing);
+    expect(find.byKey(const Key('existing-handle-join-loading')), findsNothing);
+  });
+
   testWidgets('join_required 取消后旧验证码不会被再次提交', (tester) async {
     final gateway = FakeAwikiGateway()
       ..registrationStatus = IdentityRegistrationStatus.joinRequired;
@@ -2621,6 +2848,41 @@ class _RecordingOnboardingSupportService extends FakeOnboardingSupportService {
   }
 }
 
+Future<ProviderContainer> _prepareJoinCaptureTest(
+  WidgetTester tester,
+  _ExistingHandleIdentityCorePort port, {
+  _RecordingUserPresence? userPresence,
+}) async {
+  final gateway = FakeAwikiGateway()
+    ..registrationStatus = IdentityRegistrationStatus.joinRequired
+    ..existingHandleJoinMode = userPresence == null
+        ? ExistingHandleJoinMode.ordinary
+        : ExistingHandleJoinMode.handleRecoveryRebind
+    ..existingHandleJoinRequiresUserPresence = userPresence != null;
+  await tester.pumpWidget(
+    buildLocalizedTestApp(
+      home: const OnboardingPage(),
+      gateway: gateway,
+      providerOverrides: <Override>[
+        identityCorePortProvider.overrideWithValue(port),
+        if (userPresence != null)
+          userPresencePortProvider.overrideWithValue(userPresence),
+      ],
+    ),
+  );
+  await _settleVerificationStep(tester);
+  final fields = find.byType(CupertinoTextField);
+  await tester.enterText(fields.at(0), '13800138000');
+  await tester.enterText(fields.at(1), 'alice');
+  await tester.enterText(fields.at(2), '123456');
+  await _tapVisible(tester, find.text('发送验证码'));
+  await tester.pump();
+  await _tapVisible(tester, find.text('登录/注册'));
+  await _settleVerificationStep(tester);
+  expect(find.byKey(const Key('existing-handle-join-action')), findsOneWidget);
+  return ProviderScope.containerOf(tester.element(find.byType(OnboardingPage)));
+}
+
 class _ExistingHandleIdentityCorePort extends FakeIdentityCorePort
     implements ExistingHandleContinuationPort {
   _ExistingHandleIdentityCorePort({this.cause = DeviceJoinCause.ordinary});
@@ -2629,6 +2891,9 @@ class _ExistingHandleIdentityCorePort extends FakeIdentityCorePort
   String? lastContinuationId;
   String? discardedContinuationId;
   bool? lastUserPresenceConfirmed;
+  int joinCalls = 0;
+  Completer<void>? pending;
+  Object? joinError;
 
   @override
   Future<DeviceJoinProgress> beginExistingHandleDeviceJoin(
@@ -2637,6 +2902,9 @@ class _ExistingHandleIdentityCorePort extends FakeIdentityCorePort
   }) async {
     lastContinuationId = continuationId;
     lastUserPresenceConfirmed = userPresenceConfirmed;
+    joinCalls++;
+    if (pending != null) await pending!.future;
+    if (joinError != null) throw joinError!;
     return DeviceJoinProgress(
       joinSessionId: 'registration-join-1',
       did: 'did:wba:awiki.ai:alice:e1_registration',
@@ -2663,11 +2931,12 @@ class _ExistingHandleIdentityCorePort extends FakeIdentityCorePort
 
 class _RecordingUserPresence implements UserPresencePort {
   final List<String> reasons = <String>[];
+  bool confirmed = true;
 
   @override
   Future<bool> confirm({required String reason}) async {
     reasons.add(reason);
-    return true;
+    return confirmed;
   }
 }
 

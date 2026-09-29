@@ -513,6 +513,8 @@ class AwikiImCoreIdentityAdapter
       () => pending.coreInstance.beginPreparedRegistrationDeviceJoin(
         preparationId: pending.preparationId,
         operationId: 'awiki-me-register-join-${pending.preparationId}',
+        // Leave 30 seconds below the server's 600-second limit for clock skew.
+        ttlSeconds: 570,
         userPresenceConfirmed: userPresenceConfirmed,
       ),
     );
