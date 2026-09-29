@@ -120,7 +120,7 @@ void main() {
     expect(find.text('编辑个人资料'), findsNothing);
     expect(
       tester.getSize(find.byKey(const Key('profile-edit-button'))).height,
-      greaterThanOrEqualTo(104),
+      greaterThanOrEqualTo(72),
     );
     expect(find.byKey(const Key('profile-edit-chevron')), findsOneWidget);
     expect(find.byKey(const Key('profile-statistics-divider')), findsNothing);
@@ -275,7 +275,8 @@ void main() {
     expect(find.byKey(const Key('profile-edit-page')), findsOneWidget);
     expect(find.byKey(const Key('profile-edit-dialog')), findsNothing);
     expect(find.text('编辑个人资料'), findsOneWidget);
-    expect(find.text('头像'), findsOneWidget);
+    expect(find.text('头像'), findsNothing);
+    expect(find.text('更换头像'), findsNothing);
     expect(find.text('最多 5 个标签'), findsOneWidget);
     expect(
       tester

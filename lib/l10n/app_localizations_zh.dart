@@ -3803,4 +3803,67 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get onboardingAccountCheckUnsupported => '当前服务器暂不支持账号检查。已有账号可继续登录。';
+
+  @override
+  String get avatarChoose => '选择照片';
+
+  @override
+  String get avatarCamera => '拍照';
+
+  @override
+  String get avatarReset => '恢复默认头像';
+
+  @override
+  String get avatarRetry => '重试保存';
+
+  @override
+  String get avatarImageHint => '选择 JPEG、PNG 或静态 WebP 图片，最大 20 MB。';
+
+  @override
+  String get avatarCropHint => '拖动正方形调整位置，拖动四角调整选框大小。';
+
+  @override
+  String get avatarImageRejected => '无法使用这张图片。请选择 20 MB 内的静态图片，或换一张照片。';
+
+  @override
+  String get avatarSaveFailed => '尚未确认保存结果。请检查网络后重试。';
+
+  @override
+  String get avatarReconciled => '已读取最新头像。请确认当前结果后再操作。';
+
+  @override
+  String get avatarLoadFailed => '无法读取头像设置，请稍后重试。';
+
+  @override
+  String get avatarUnavailable => '当前账号或服务暂不支持修改头像。';
+
+  @override
+  String get groupAvatarLabel => '群成员头像';
+
+  @override
+  String get avatarRecoverTitle => '继续设置头像？';
+
+  @override
+  String get avatarRecoverHint => '上次选择的照片已恢复。确认后可继续裁剪，保存前不会上传。';
+
+  @override
+  String get avatarRecoverContinue => '继续裁剪';
+
+  @override
+  String get avatarView => '查看头像';
+
+  @override
+  String get avatarNoImage => '尚未设置头像';
+
+  @override
+  String get avatarPreviewFailed => '头像加载失败，请重试。';
+
+  @override
+  String get avatarCurrent => '当前头像';
+
+  @override
+  String get avatarNewPreview => '新头像预览';
+
+  @override
+  String get avatarSmallSelection => '所选区域较小，头像可能模糊。';
 }

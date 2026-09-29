@@ -10,6 +10,8 @@ class UserProfile {
     required this.profileMarkdown,
     this.handle,
     this.avatarUri,
+    this.avatarThumbnailUri,
+    this.avatarUploadEnabled = false,
     this.profileUri,
     this.subjectType,
     this.agentKind,
@@ -26,6 +28,8 @@ class UserProfile {
   final String profileMarkdown;
   final String? handle;
   final String? avatarUri;
+  final String? avatarThumbnailUri;
+  final bool avatarUploadEnabled;
   final String? profileUri;
   final String? subjectType;
   final IdentityAgentKind? agentKind;
@@ -57,6 +61,9 @@ class UserProfile {
     String? profileMarkdown,
     String? handle,
     String? avatarUri,
+    String? avatarThumbnailUri,
+    bool? avatarUploadEnabled,
+    bool clearAvatar = false,
     String? profileUri,
     String? subjectType,
     IdentityAgentKind? agentKind,
@@ -72,7 +79,11 @@ class UserProfile {
       tags: tags ?? this.tags,
       profileMarkdown: profileMarkdown ?? this.profileMarkdown,
       handle: handle ?? this.handle,
-      avatarUri: avatarUri ?? this.avatarUri,
+      avatarUri: clearAvatar ? null : avatarUri ?? this.avatarUri,
+      avatarThumbnailUri: clearAvatar
+          ? null
+          : avatarThumbnailUri ?? this.avatarThumbnailUri,
+      avatarUploadEnabled: avatarUploadEnabled ?? this.avatarUploadEnabled,
       profileUri: profileUri ?? this.profileUri,
       subjectType: subjectType ?? this.subjectType,
       agentKind: agentKind ?? this.agentKind,

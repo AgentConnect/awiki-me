@@ -824,7 +824,15 @@ GroupSummary _mergeGroupSummary({
   if (local == null) {
     return incoming;
   }
+  final oldVersion = BigInt.tryParse(local.groupStateVersion ?? '');
+  final newVersion = BigInt.tryParse(incoming.groupStateVersion ?? '');
+  if (oldVersion != null && newVersion != null && newVersion < oldVersion) {
+    return local;
+  }
   return GroupSummary(
+    avatarUri: incoming.avatarUri ?? local.avatarUri,
+    avatarMembers: incoming.avatarMembers,
+    groupStateVersion: incoming.groupStateVersion,
     conversationId: incoming.conversationId,
     groupId: incoming.groupId,
     name: _mergeGroupName(local: local, incoming: incoming),
@@ -899,3 +907,13 @@ String? _trimToNull(String? value) {
 bool _isKnownGroupRole(String? role) {
   return role == 'owner' || role == 'admin' || role == 'member';
 }
+
+final groupAvatarSummariesProvider = Provider<Map<String, GroupSummary>>((ref) {
+  final groups = ref.watch(groupProvider.select((state) => state.groups));
+  return {
+    for (final group in groups) ...{
+      group.groupId: group,
+      group.conversationId: group,
+    },
+  };
+});

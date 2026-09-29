@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 
+import '../../../data/avatar/avatar_image_cache.dart';
 import '../../../app/app_locale.dart';
 import '../../../app/app_services.dart';
 import '../../../app/ui_feedback.dart';
@@ -721,6 +722,10 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     required String currentDid,
   }) async {
     try {
+      // Public image cache failure must not strand an identity deletion ticket.
+      try {
+        await clearAvatarImageCache(currentDid);
+      } catch (_) {}
       await ref
           .read(productLocalStoreProvider)
           .deleteOwnerData(

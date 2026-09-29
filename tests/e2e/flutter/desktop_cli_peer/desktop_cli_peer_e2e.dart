@@ -3,6 +3,7 @@ library desktop_cli_peer_e2e;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:awiki_me/src/app/awiki_me_app.dart';
@@ -56,11 +57,25 @@ import 'package:awiki_me/src/presentation/shared/identity_flow.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:crypto/crypto.dart';
+import 'package:file_selector_platform_interface/file_selector_platform_interface.dart';
+import 'package:image/image.dart' as img;
+import 'package:awiki_me/src/presentation/profile/avatar_edit_dialog.dart';
+import 'package:awiki_me/src/presentation/profile/avatar_crop_editor.dart';
+import 'package:awiki_me/src/presentation/shared/profile_avatar.dart';
+import 'package:crop_your_image/crop_your_image.dart';
 import 'package:flutter/cupertino.dart'
-    show CupertinoActivityIndicator, CupertinoTextField;
+    show CupertinoActivityIndicator, CupertinoTextField, CupertinoButton;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart'
-    show AppLifecycleState, Key, SizedBox, Text, ValueKey;
+    show
+        AppLifecycleState,
+        Key,
+        SizedBox,
+        Text,
+        ValueKey,
+        RawImage,
+        Offset,
+        CustomPaint;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
@@ -72,6 +87,7 @@ import '../support/desktop_lifecycle.dart';
 import 'support/ui_oracles.dart';
 
 part 'flows/attachment_flow.dart';
+part 'flows/avatar_flow.dart';
 part 'flows/contact_flow.dart';
 part 'flows/conversation_correctness_flow.dart';
 part 'flows/direct_message_flow.dart';
@@ -101,6 +117,7 @@ enum DesktopCliPeerIntegrationCase {
   identitySwitch,
   processRestart,
   displayNameFallback,
+  avatars,
   performance;
 
   static DesktopCliPeerIntegrationCase parse(String value) {
@@ -140,6 +157,7 @@ enum DesktopCliPeerIntegrationCase {
       'process_restart' ||
       'cold-restart' ||
       'cold_restart' => DesktopCliPeerIntegrationCase.processRestart,
+      'avatars' => DesktopCliPeerIntegrationCase.avatars,
       'display-name-fallback' ||
       'display_name_fallback' ||
       'handle-fallback' ||
@@ -192,7 +210,8 @@ enum DesktopCliPeerIntegrationCase {
   bool get ownsAuthenticationCase =>
       this != DesktopCliPeerIntegrationCase.contactFirst &&
       this != DesktopCliPeerIntegrationCase.inboundFirst &&
-      this != DesktopCliPeerIntegrationCase.displayNameFallback;
+      this != DesktopCliPeerIntegrationCase.displayNameFallback &&
+      this != DesktopCliPeerIntegrationCase.avatars;
 }
 
 DesktopCliPeerIntegrationCase desktopCliPeerCaseFromRunConfig() =>
@@ -315,6 +334,11 @@ void runDesktopCliPeerE2e({
             'authenticated_app_shell_visible',
           ],
         );
+      }
+
+      if (selectedCase == DesktopCliPeerIntegrationCase.avatars) {
+        await _verifyAvatarEditing(robot, tester, config);
+        return;
       }
 
       final messaging = bootstrap.messagingService!;

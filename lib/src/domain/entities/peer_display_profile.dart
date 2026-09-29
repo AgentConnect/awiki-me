@@ -5,6 +5,7 @@ class PeerDisplayProfile {
     this.displayName,
     this.handle,
     this.avatarUri,
+    this.avatarThumbnailUri,
     this.profileUri,
     this.subjectType,
     this.isStale = false,
@@ -16,6 +17,7 @@ class PeerDisplayProfile {
   final String? displayName;
   final String? handle;
   final String? avatarUri;
+  final String? avatarThumbnailUri;
   final String? profileUri;
   final String? subjectType;
   final bool isStale;

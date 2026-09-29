@@ -479,6 +479,8 @@ class AwikiImCoreMappers {
       memberCount: group.memberCount ?? 0,
       lastMessageAt: _tryParseDateTime(group.lastMessageAt),
       avatarUri: _nonEmpty(group.avatarUri),
+      avatarMembers: group.avatarMembers?.map((member) => GroupAvatarMember(memberKey: member.memberKey, did: member.memberDid, handle: member.memberHandle)).toList(growable: false),
+      groupStateVersion: group.groupStateVersion,
       myRole: group.myRole,
       membershipStatus: group.membershipStatus,
     );
@@ -494,6 +496,8 @@ class AwikiImCoreMappers {
       memberCount: group.memberCount ?? 0,
       lastMessageAt: _tryParseDateTime(group.lastMessageAt),
       avatarUri: _nonEmpty(group.avatarUri),
+      avatarMembers: group.avatarMembers?.map((member) => GroupAvatarMember(memberKey: member.memberKey, did: member.memberDid, handle: member.memberHandle)).toList(growable: false),
+      groupStateVersion: group.groupStateVersion,
       myRole: group.myRole ?? group.membershipStatus,
       membershipStatus: group.membershipStatus,
     );
@@ -531,6 +535,8 @@ class AwikiImCoreMappers {
       profileMarkdown: profile.markdown ?? '',
       handle: profile.handle,
       avatarUri: _nonEmpty(profile.avatarUri) ?? _nonEmpty(profile.avatarUrl),
+      avatarThumbnailUri: profile.avatarThumbnailUri,
+      avatarUploadEnabled: profile.avatarUploadEnabled,
       profileUri: _nonEmpty(profile.profileUri),
       subjectType: _nonEmpty(profile.subjectType),
       agentKind: parseIdentityAgentKind(profile.agentKind),

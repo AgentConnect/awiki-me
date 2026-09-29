@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/ports/profile_core_port.dart';
@@ -6,7 +8,7 @@ import '../../domain/entities/user_profile.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_runtime.dart';
 
-class AwikiImCoreProfileAdapter implements ProfileCorePort {
+class AwikiImCoreProfileAdapter implements ProfileCorePort, AvatarCorePort {
   AwikiImCoreProfileAdapter({
     required AwikiImCoreRuntime runtime,
     AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
@@ -15,6 +17,34 @@ class AwikiImCoreProfileAdapter implements ProfileCorePort {
 
   final AwikiImCoreRuntime _runtime;
   final AwikiImCoreMappers _mappers;
+
+  @override
+  Future<UserProfile> setAvatar({
+    required String requestId,
+    required String expectedProfileVersion,
+    required Uint8List jpeg,
+  }) async => _mappers.userProfileFromCore(
+    await _runtime.withCurrentClient(
+      (client) => client.profile.setAvatar(
+        requestId: requestId,
+        expectedProfileVersion: expectedProfileVersion,
+        imageJpeg: jpeg,
+      ),
+    ),
+  );
+
+  @override
+  Future<UserProfile> clearAvatar({
+    required String requestId,
+    required String expectedProfileVersion,
+  }) async => _mappers.userProfileFromCore(
+    await _runtime.withCurrentClient(
+      (client) => client.profile.clearAvatar(
+        requestId: requestId,
+        expectedProfileVersion: expectedProfileVersion,
+      ),
+    ),
+  );
 
   @override
   Future<UserProfile> loadMyProfile() async {

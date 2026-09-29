@@ -4086,4 +4086,76 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get onboardingAccountCheckUnsupported =>
       'This server does not support account checks yet. Existing accounts can continue to sign in.';
+
+  @override
+  String get avatarChoose => 'Choose photo';
+
+  @override
+  String get avatarCamera => 'Take photo';
+
+  @override
+  String get avatarReset => 'Use default avatar';
+
+  @override
+  String get avatarRetry => 'Retry save';
+
+  @override
+  String get avatarImageHint =>
+      'Choose a JPEG, PNG or static WebP image, up to 20 MB.';
+
+  @override
+  String get avatarCropHint =>
+      'Move the square to frame your photo. Drag a corner to resize it.';
+
+  @override
+  String get avatarImageRejected =>
+      'This image cannot be used. Choose a static image under 20 MB or try another photo.';
+
+  @override
+  String get avatarSaveFailed =>
+      'The save could not be confirmed. Check your connection and retry.';
+
+  @override
+  String get avatarReconciled =>
+      'Your latest avatar is now shown. Check it before making another change.';
+
+  @override
+  String get avatarLoadFailed =>
+      'Avatar settings could not be loaded. Try again shortly.';
+
+  @override
+  String get avatarUnavailable =>
+      'Avatar editing is unavailable for this account or service.';
+
+  @override
+  String get groupAvatarLabel => 'Group member avatars';
+
+  @override
+  String get avatarRecoverTitle => 'Continue setting your avatar?';
+
+  @override
+  String get avatarRecoverHint =>
+      'Your previous photo selection was recovered. Continue to crop it; it will only upload when you save.';
+
+  @override
+  String get avatarRecoverContinue => 'Continue cropping';
+
+  @override
+  String get avatarView => 'View avatar';
+
+  @override
+  String get avatarNoImage => 'No profile photo';
+
+  @override
+  String get avatarPreviewFailed => 'Unable to load this photo. Please retry.';
+
+  @override
+  String get avatarCurrent => 'Current';
+
+  @override
+  String get avatarNewPreview => 'New avatar';
+
+  @override
+  String get avatarSmallSelection =>
+      'The selected area is small and may look blurry.';
 }

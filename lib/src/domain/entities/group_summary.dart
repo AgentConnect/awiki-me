@@ -8,6 +8,8 @@ class GroupSummary {
     required this.memberCount,
     required this.lastMessageAt,
     this.avatarUri,
+    this.avatarMembers,
+    this.groupStateVersion,
     this.myRole,
     this.membershipStatus,
   }) : displayName = displayName ?? name ?? groupId;
@@ -19,8 +21,21 @@ class GroupSummary {
   final int memberCount;
   final DateTime? lastMessageAt;
   final String? avatarUri;
+  final List<GroupAvatarMember>? avatarMembers;
+  final String? groupStateVersion;
   final String? myRole;
   final String? membershipStatus;
 
   String get name => displayName;
+}
+
+class GroupAvatarMember {
+  const GroupAvatarMember({
+    required this.memberKey,
+    required this.did,
+    this.handle,
+  });
+  final String memberKey;
+  final String did;
+  final String? handle;
 }

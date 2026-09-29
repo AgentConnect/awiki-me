@@ -21,7 +21,7 @@ import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/app_dialog.dart';
-import '../shared/avatar_badge.dart';
+import '../shared/profile_avatar.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/identity_flow.dart';
@@ -299,8 +299,9 @@ class _PeerProfilePageState extends ConsumerState<PeerProfilePage> {
                             displayName: displayName,
                             bio: profile.bio,
                             tags: profile.tags,
-                            avatarUri:
-                                displayProfile?.avatarUri ?? profile.avatarUri,
+                            avatarUri: displayProfile == null
+                                ? profile.avatarUri
+                                : displayProfile.avatarUri,
                             following: isFollowing,
                             did: profile.did,
                             homepageUrl: homepageUrl,
@@ -350,12 +351,13 @@ class _PeerProfilePageState extends ConsumerState<PeerProfilePage> {
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(maxWidth: 640),
                               child: _PeerProfileHero(
+                                did: profile.did,
                                 displayName: displayName,
                                 bio: profile.bio,
                                 tags: profile.tags,
-                                avatarUri:
-                                    displayProfile?.avatarUri ??
-                                    profile.avatarUri,
+                                avatarUri: displayProfile == null
+                                    ? profile.avatarUri
+                                    : displayProfile.avatarUri,
                                 following: isFollowing,
                                 onSendMessage: sendMessage,
                                 onToggleRelationship: toggleRelationship,
@@ -486,6 +488,7 @@ class _PeerProfileCompactContent extends StatelessWidget {
       key: const Key('peer-profile-compact-content'),
       children: <Widget>[
         _PeerProfileCompactSummary(
+          did: did,
           displayName: displayName,
           bio: bio,
           tags: tags,
@@ -535,6 +538,7 @@ class _PeerProfileCompactContent extends StatelessWidget {
 
 class _PeerProfileCompactSummary extends StatelessWidget {
   const _PeerProfileCompactSummary({
+    required this.did,
     required this.displayName,
     required this.bio,
     required this.tags,
@@ -545,6 +549,7 @@ class _PeerProfileCompactSummary extends StatelessWidget {
     this.avatarUri,
   });
 
+  final String did;
   final String displayName;
   final String bio;
   final List<String> tags;
@@ -578,10 +583,11 @@ class _PeerProfileCompactSummary extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
                 child: Row(
                   children: <Widget>[
-                    AvatarBadge(
+                    ProfileAvatar(
                       key: const Key('peer-profile-avatar'),
                       seed: displayName,
                       avatarUri: avatarUri,
+                      userId: did,
                       size: 64,
                     ),
                     const SizedBox(width: 12),
@@ -970,6 +976,7 @@ class _PeerProfileFullWidthActionRow extends StatelessWidget {
 
 class _PeerProfileHero extends StatelessWidget {
   const _PeerProfileHero({
+    required this.did,
     required this.displayName,
     required this.bio,
     required this.tags,
@@ -979,6 +986,7 @@ class _PeerProfileHero extends StatelessWidget {
     this.avatarUri,
   });
 
+  final String did;
   final String displayName;
   final String bio;
   final List<String> tags;
@@ -1017,10 +1025,11 @@ class _PeerProfileHero extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                AvatarBadge(
+                ProfileAvatar(
                   key: const Key('peer-profile-avatar'),
                   seed: displayName,
                   avatarUri: avatarUri,
+                  userId: did,
                   size: responsive.isCompact
                       ? 72
                       : responsive.displayScaled(64),
