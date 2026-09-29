@@ -290,10 +290,12 @@ class SettingsPage extends ConsumerWidget {
           MediaQuery.sizeOf(context).height -
           MediaQuery.paddingOf(context).vertical;
       final useShortViewportMetrics = compactContentHeight < 820;
-      final profileHeight = useShortViewportMetrics ? 88.0 : 104.0;
-      final profileAvatarSize = useShortViewportMetrics ? 52.0 : 58.0;
-      final sectionTitleHeight = useShortViewportMetrics ? 32.0 : 40.0;
-      final optionRowHeight = useShortViewportMetrics ? 52.0 : 60.0;
+      // Glass groups add their own insets, so rows follow the reference's
+      // tighter 48-52 unit settings rhythm to keep every action on screen.
+      final profileHeight = useShortViewportMetrics ? 76.0 : 84.0;
+      final profileAvatarSize = useShortViewportMetrics ? 48.0 : 52.0;
+      final sectionTitleHeight = useShortViewportMetrics ? 30.0 : 34.0;
+      final optionRowHeight = useShortViewportMetrics ? 48.0 : 52.0;
       final accountRows = <Widget>[
         if (session != null)
           _QuietSettingsRow(

@@ -74,8 +74,12 @@ void main() {
       await tester.pumpAndSettle();
       final send = find.byKey(const Key('chat-send-button'));
       expect(tester.widget<AppIconButton>(send).onPressed, isNull);
+      expect(tester.widget<AppIconButton>(send).semanticLabel, '发送');
       expect(
-        find.descendant(of: send, matching: find.text('发送')),
+        find.descendant(
+          of: send,
+          matching: find.byIcon(CupertinoIcons.arrow_up),
+        ),
         findsOneWidget,
       );
       final input = find.byKey(const Key('chat-composer-input'));

@@ -26,6 +26,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
 
 import '../test_support.dart';
 
@@ -278,7 +279,7 @@ void main() {
     final installRow = find.byKey(const Key('agents-install-daemon-row'));
     final header = find.byKey(const Key('agents-compact-list-header'));
     final section = find.byKey(const Key('agents-compact-section-header'));
-    final listPane = tester.widget<ColoredBox>(
+    final listPane = tester.widget<AwikiGlassBackdrop>(
       find.byKey(const Key('agents-list-pane')),
     );
 
@@ -288,8 +289,10 @@ void main() {
       find.descendant(of: daemonIcon, matching: find.byType(DecoratedBox)),
       findsNothing,
     );
-    expect(tester.getSize(daemonTile).height, closeTo(65, 0.1));
-    expect(tester.getSize(installRow).height, closeTo(56, 0.1));
+    // Phone: glass canvas, a divider-less header, and the Daemon tree
+    // inside one glass card above the install row.
+    expect(tester.getSize(daemonTile).height, closeTo(64, 0.1));
+    expect(tester.getSize(installRow).height, closeTo(52, 0.1));
     expect(tester.getRect(header), const Rect.fromLTWH(0, 0, 390, 64));
     final compactTitle = tester.widget<Text>(
       find.descendant(of: header, matching: find.text('智能体')),
@@ -297,20 +300,19 @@ void main() {
     expect(compactTitle.style?.fontSize, 16);
     expect(compactTitle.style?.fontWeight, FontWeight.w400);
     expect(compactTitle.style?.height, 1.25);
-    expect(tester.getRect(section), const Rect.fromLTWH(0, 64, 390, 60));
-    expect(listPane.color, AwikiMeColors.background);
-    final sectionSurface = tester.widget<DecoratedBox>(
-      find.descendant(of: section, matching: find.byType(DecoratedBox)),
-    );
-    final sectionDecoration = sectionSurface.decoration as BoxDecoration;
-    expect(sectionDecoration.color, AwikiMeColors.surface);
+    expect(tester.getRect(section), const Rect.fromLTWH(16, 68, 358, 36));
+    expect(listPane.color, AwikiMeColors.surface);
     expect(
-      (sectionDecoration.border! as Border).bottom.color,
-      AwikiMeColors.border,
+      tester.getRect(find.byKey(const Key('agents-hierarchy-card'))),
+      const Rect.fromLTRB(16, 104, 374, 325),
+    );
+    expect(
+      tester.widget(find.byKey(const Key('agents-install-daemon-button'))),
+      isA<AwikiCircledPlusButton>(),
     );
     expect(
       tester.getCenter(find.byKey(const Key('agents-more-actions-button'))).dx,
-      closeTo(300, 1.5),
+      closeTo(308, 1.5),
     );
     expect(
       tester
@@ -318,7 +320,7 @@ void main() {
           .dx,
       closeTo(356, 1.5),
     );
-    expect(tester.getRect(daemonTile).top, closeTo(124, 0.1));
+    expect(tester.getRect(daemonTile).top, closeTo(108, 0.1));
     expect(tester.getTopLeft(find.text('我的智能体')).dx, closeTo(20, 0.1));
     expect(find.byKey(const Key('awiki-me-brand-mark')), findsNothing);
     expect(
@@ -344,7 +346,7 @@ void main() {
             .color,
         AwikiMePalette.navigationBorder,
       );
-      expect(tester.getSize(tile).height, closeTo(75.5, 0.1));
+      expect(tester.getSize(tile).height, closeTo(74.5, 0.1));
       expect(branchRect.left, closeTo(verticalRect.center.dx, 0.6));
       expect(branchRect.right, closeTo(iconRect.left, 0.6));
       expect(branchRect.center.dy, closeTo(iconRect.center.dy, 0.6));
@@ -352,21 +354,18 @@ void main() {
     }
     expect(
       tester.getRect(find.byKey(const Key('agent-list-tile-$codexDid'))).top,
-      closeTo(189, 0.1),
+      closeTo(172, 0.1),
     );
     expect(
       tester.getRect(find.byKey(const Key('agent-list-tile-$hermesDid'))).top,
-      closeTo(264.5, 0.1),
+      closeTo(246.5, 0.1),
     );
-    expect(tester.getRect(installRow).top, closeTo(340, 0.1));
+    expect(tester.getRect(installRow).top, closeTo(339, 0.1));
     final daemonChevron = find.descendant(
       of: daemonTile,
       matching: find.byIcon(CupertinoIcons.chevron_right),
     );
-    expect(
-      390 - tester.getRect(daemonChevron).right,
-      closeTo(24.7 * AwikiDisplayScale.layoutBaseline, 1),
-    );
+    expect(374 - tester.getRect(daemonChevron).right, closeTo(23.5, 1));
     expect(verticalRect.top, lessThan(runtimeCenters.first));
     expect(verticalRect.bottom, greaterThan(runtimeCenters.last));
   });

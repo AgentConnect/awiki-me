@@ -178,7 +178,10 @@ class _AgentListHeader extends StatelessWidget {
           title: context.l10n.agentPageTitle,
           leadingWidth: 0,
           trailingWidth: 108,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5.5),
+          padding: EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: phone ? 6 : 5.5,
+          ),
           titleFontSize: awikiMeCompactTopBarTitleFontSize,
           titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
           titleHeight: awikiMeCompactTopBarTitleHeight,

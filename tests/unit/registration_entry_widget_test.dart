@@ -61,9 +61,13 @@ class InviteSupport extends FakeOnboardingSupportService {
   }
 }
 
+// The unified onboarding form uses its own outlined field, so fields are
+// located by their stable semantics identifier rather than widget type.
 Finder field(String id) => find.descendant(
   of: find.byWidgetPredicate(
-    (w) => w is AppTextField && w.semanticsIdentifier == id,
+    (w) =>
+        (w is AppTextField && w.semanticsIdentifier == id) ||
+        (w is Semantics && w.properties.identifier == id),
   ),
   matching: find.byType(CupertinoTextField),
 );

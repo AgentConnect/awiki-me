@@ -860,14 +860,14 @@ class _ComposerState extends ConsumerState<_Composer> {
                           mainAxisSize: MainAxisSize.min,
                           children: <Widget>[
                             _CompactComposerTool(
-                              key: const Key('chat-attachment-button'),
+                              toolKey: const Key('chat-attachment-button'),
                               onPressed: _attachIfNeeded,
                               label: context.l10n.chatAddAttachment,
                               icon: CupertinoIcons.paperclip,
                             ),
                             if (_mentionEnabled)
                               _CompactComposerTool(
-                                key: const Key('chat-mention-button'),
+                                toolKey: const Key('chat-mention-button'),
                                 onPressed: _isComposingInput
                                     ? null
                                     : _insertMentionTrigger,
@@ -876,7 +876,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                               ),
                             _emojiTapRegion(
                               child: _CompactComposerTool(
-                                key: const Key('chat-emoji-button'),
+                                toolKey: const Key('chat-emoji-button'),
                                 onPressed: _toggleEmojiPicker,
                                 label: context.l10n.chatAddEmoji,
                                 icon: CupertinoIcons.smiley,
@@ -909,7 +909,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                           ),
                           child: ConstrainedBox(
                             constraints: BoxConstraints(
-                              minHeight: responsive.displayScaled(40),
+                              minHeight: responsive.displayScaled(44),
                             ),
                             child: _ComposerTextField(
                               onPaste: _pasteFromClipboard,
@@ -977,13 +977,15 @@ class _ComposerState extends ConsumerState<_Composer> {
 /// Round icon control inside the phone composer's glass tool capsule.
 class _CompactComposerTool extends StatelessWidget {
   const _CompactComposerTool({
-    super.key,
+    required this.toolKey,
     required this.onPressed,
     required this.label,
     required this.icon,
     this.active = false,
   });
 
+  /// Stable key kept on the button itself for tests and platform drivers.
+  final Key toolKey;
   final VoidCallback? onPressed;
   final String label;
   final IconData icon;
@@ -994,6 +996,7 @@ class _CompactComposerTool extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     return AppIconButton(
+      key: toolKey,
       onPressed: onPressed,
       semanticLabel: label,
       tooltip: label,

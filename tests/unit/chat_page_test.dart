@@ -68,6 +68,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph, SelectedContent;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
 
 import 'test_support.dart';
 import 'acp_runtime_test.dart' show RecordingControl;
@@ -1308,9 +1309,8 @@ void main() {
     );
 
     for (final key in const <String>[
-      'chat-emoji-button',
+      'chat-compact-composer-tools',
       'chat-compact-composer-input-shell',
-      'chat-attachment-button',
       'chat-send-button',
     ]) {
       expect(
@@ -1319,23 +1319,36 @@ void main() {
         reason: key,
       );
     }
+    // Tools sit as 40-unit round targets inside the 44-unit glass capsule.
+    for (final key in const <String>[
+      'chat-emoji-button',
+      'chat-attachment-button',
+    ]) {
+      expect(
+        tester.getSize(find.byKey(Key(key))).height,
+        closeTo(40 * AwikiDisplayScale.layoutBaseline, 0.01),
+        reason: key,
+      );
+    }
     final send = find.byKey(const Key('chat-send-button'));
     expect(tester.widget<AppIconButton>(send).onPressed, isNull);
+    // Disabled send is a round glass control with a muted arrow.
     expect(
       tester.widget<AppIconButton>(send).backgroundColor,
-      tester.element(send).awikiTheme.mutedSurface,
+      tester.element(send).awikiTheme.glass,
     );
     expect(
       tester
-          .widget<Text>(find.descendant(of: send, matching: find.text('发送')))
-          .style
-          ?.color,
+          .widget<Icon>(
+            find.descendant(
+              of: send,
+              matching: find.byIcon(CupertinoIcons.arrow_up),
+            ),
+          )
+          .color,
       tester.element(send).awikiTheme.secondaryText,
     );
-    expect(
-      find.descendant(of: send, matching: find.text('发送')),
-      findsOneWidget,
-    );
+    expect(tester.widget<AppIconButton>(send).semanticLabel, '发送');
     expect(
       tester.getRect(find.byKey(const Key('chat-attachment-button'))).right,
       lessThan(
@@ -1351,14 +1364,25 @@ void main() {
 
     final shell = find.byKey(const Key('chat-compact-composer-input-shell'));
     final singleLineHeight = tester.getSize(shell).height;
-    final decoration =
-        tester.widget<Container>(shell).decoration! as BoxDecoration;
     expect(
-      decoration.borderRadius,
+      tester.widget<AwikiGlassSurface>(shell).borderRadius,
       BorderRadius.circular(22 * AwikiDisplayScale.layoutBaseline),
     );
+    // Focus draws the accent ring inside the glass capsule.
+    final focusRing =
+        tester
+                .widget<DecoratedBox>(
+                  find
+                      .descendant(
+                        of: shell,
+                        matching: find.byType(DecoratedBox),
+                      )
+                      .last,
+                )
+                .decoration
+            as BoxDecoration;
     expect(
-      (decoration.border! as Border).top.color,
+      (focusRing.border! as Border).top.color,
       tester.element(shell).awikiTheme.primary,
     );
     await tester.enterText(
@@ -1368,25 +1392,21 @@ void main() {
     await tester.pump();
     expect(tester.getSize(shell).height, greaterThan(singleLineHeight));
     expect(tester.getSize(shell).height, lessThan(130));
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('chat-send-button')),
-        matching: find.text('发送'),
-      ),
-      findsOneWidget,
-    );
-
     expect(tester.widget<AppIconButton>(send).onPressed, isNotNull);
     expect(
       tester.widget<AppIconButton>(send).backgroundColor,
-      tester.element(send).awikiTheme.title,
+      tester.element(send).awikiTheme.primaryDark,
     );
     expect(
       tester
-          .widget<Text>(find.descendant(of: send, matching: find.text('发送')))
-          .style
-          ?.color,
-      tester.element(send).awikiTheme.surface,
+          .widget<Icon>(
+            find.descendant(
+              of: send,
+              matching: find.byIcon(CupertinoIcons.arrow_up),
+            ),
+          )
+          .color,
+      tester.element(send).awikiTheme.primaryForeground,
     );
     expect(
       tester
@@ -1508,10 +1528,10 @@ void main() {
       find.byKey(const Key('chat-message-avatar:chat-info-incoming:peer')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('用户信息'), findsOneWidget);
+    expect(find.text('个人资料'), findsOneWidget);
     final userInfoTopBar = tester.widget<AwikiMeTopBar>(
       find.ancestor(
-        of: find.text('用户信息'),
+        of: find.text('个人资料'),
         matching: find.byType(AwikiMeTopBar),
       ),
     );
@@ -1523,9 +1543,6 @@ void main() {
           .data,
       'Alice',
     );
-    expect(find.text('连接人与 Agent，保持简单而高效'), findsNothing);
-    await tester.tap(find.byKey(const Key('peer-profile-summary-toggle')));
-    await tester.pumpAndSettle();
     expect(find.text('连接人与 Agent，保持简单而高效'), findsOneWidget);
     expect(find.text('开发者'), findsOneWidget);
     expect(find.text('AI 协作'), findsOneWidget);
@@ -1533,7 +1550,7 @@ void main() {
     expect(find.byKey(const Key('peer-info-identity-document')), findsNothing);
     expect(
       tester.getSize(find.byKey(const Key('peer-profile-avatar'))),
-      const Size.square(64),
+      const Size.square(56),
     );
     expect(find.byKey(const Key('peer-profile-back-button')), findsOneWidget);
   });
@@ -1704,7 +1721,8 @@ void main() {
       expect(tester.widget<Text>(find.text('我的信息')).style?.fontSize, 16);
       expect(find.byKey(const Key('profile-compact-summary')), findsOneWidget);
       expect(find.byKey(const Key('profile-display-name')), findsOneWidget);
-      expect(find.byKey(const Key('profile-handle-value')), findsNothing);
+      // The glass identity card shows the handle beneath the name.
+      expect(find.byKey(const Key('profile-handle-value')), findsOneWidget);
       expect(find.byKey(const Key('peer-info-identity-card')), findsNothing);
 
       await tester.binding.handlePopRoute();
@@ -9467,18 +9485,18 @@ void main() {
     await tester.tap(find.byType(CupertinoTextField));
     await tester.enterText(find.byType(CupertinoTextField), 'ni');
     await tester.pump();
-    var sendLabel = tester.widget<Text>(
+    var sendLabel = tester.widget<Icon>(
       find.descendant(
         of: find.byKey(const Key('chat-send-button')),
-        matching: find.byType(Text),
+        matching: find.byType(Icon),
       ),
     );
     expect(
-      sendLabel.style?.color,
+      sendLabel.color,
       tester
           .element(find.byKey(const Key('chat-send-button')))
           .awikiTheme
-          .surface,
+          .primaryForeground,
     );
     expect(
       tester
@@ -9487,7 +9505,7 @@ void main() {
       tester
           .element(find.byKey(const Key('chat-send-button')))
           .awikiTheme
-          .title,
+          .primaryDark,
     );
 
     final input = tester.widget<CupertinoTextField>(
@@ -9498,18 +9516,18 @@ void main() {
     );
     await tester.pump();
 
-    sendLabel = tester.widget<Text>(
+    sendLabel = tester.widget<Icon>(
       find.descendant(
         of: find.byKey(const Key('chat-send-button')),
-        matching: find.byType(Text),
+        matching: find.byType(Icon),
       ),
     );
     expect(
-      sendLabel.style?.color,
+      sendLabel.color,
       tester
           .element(find.byKey(const Key('chat-send-button')))
           .awikiTheme
-          .surface,
+          .primaryForeground,
     );
     expect(
       tester
@@ -9518,7 +9536,7 @@ void main() {
       tester
           .element(find.byKey(const Key('chat-send-button')))
           .awikiTheme
-          .title,
+          .primaryDark,
     );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);

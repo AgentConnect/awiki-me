@@ -47,6 +47,7 @@ import 'package:awiki_me/src/presentation/shared/compact_nested_navigator_back_s
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -671,7 +672,7 @@ void main() {
     tester.view.resetDevicePixelRatio();
   });
 
-  testWidgets('移动消息搜索使用白色表层且快捷操作锚定右上角', (tester) async {
+  testWidgets('移动消息搜索使用玻璃胶囊且快捷操作锚定右上角', (tester) async {
     final gateway = FakeAwikiGateway()..conversations = <ConversationSummary>[];
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
@@ -695,20 +696,25 @@ void main() {
       const Size(393, 852),
     );
 
-    final searchSurface = tester.widget<DecoratedBox>(
-      find.byKey(const Key('compact-conversation-search-surface')),
+    final searchSurface = find.byKey(
+      const Key('compact-conversation-search-surface'),
     );
-    final searchDecoration = searchSurface.decoration as BoxDecoration;
-    expect(searchDecoration.color, AwikiMeColors.surface);
-    expect(searchDecoration.border, isNull);
+    final searchGlass = tester.widget<AwikiGlassSurface>(
+      find.descendant(
+        of: searchSurface,
+        matching: find.byType(AwikiGlassSurface),
+      ),
+    );
+    expect(searchGlass.borderRadius, BorderRadius.circular(22));
+    expect(
+      tester.getSize(find.byKey(const Key('conversation-search-field'))).height,
+      44,
+    );
     final searchField = tester.widget<CupertinoSearchTextField>(
       find.byKey(const Key('conversation-search-field')),
     );
-    expect(
-      (searchField.decoration as BoxDecoration).color,
-      AwikiMeColors.subtleSurface,
-    );
-    final pageSurface = tester.widget<ColoredBox>(
+    expect((searchField.decoration as BoxDecoration).color, isNull);
+    final pageSurface = tester.widget<AwikiGlassBackdrop>(
       find.byKey(const Key('shell-tab-page-surface')),
     );
     expect(pageSurface.color, AwikiMeColors.surface);
@@ -722,11 +728,13 @@ void main() {
     expect(title.style?.height, 1.25);
     expect(find.byKey(const Key('awiki-me-brand-mark')), findsNothing);
     expect(
-      find.descendant(
-        of: find.byKey(const Key('shell-quick-actions-button')),
-        matching: find.byIcon(CupertinoIcons.add_circled),
-      ),
-      findsOneWidget,
+      tester.widget(find.byKey(const Key('shell-quick-actions-button'))),
+      isA<AwikiCircledPlusButton>(),
+    );
+    // The thin circle matches the 16px title: 16 * 1.125.
+    expect(
+      tester.getSize(find.byKey(const Key('awiki-circled-plus'))).width,
+      18,
     );
     expect(
       find.byKey(const Key('compact-conversation-inline-empty-state')),
@@ -776,7 +784,7 @@ void main() {
     tester.view.resetDevicePixelRatio();
   });
 
-  testWidgets('窄屏消息分隔线从文字列开始', (tester) async {
+  testWidgets('窄屏消息行使用无分隔线的圆角轻触面', (tester) async {
     tester.view
       ..devicePixelRatio = 1
       ..physicalSize = const Size(390, 844);
@@ -809,12 +817,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final separator = tester.getRect(
+    expect(
       find.byKey(const Key('conversation-row-separator:dm:separator')),
+      findsNothing,
     );
-    expect(separator.left, 80);
-    expect(separator.right, 390);
-    expect(separator.height, 1);
+    final tile = tester.widget<AppPressableTile>(
+      find.ancestor(
+        of: find.text('Separator'),
+        matching: find.byType(AppPressableTile),
+      ),
+    );
+    expect(tile.borderRadius, BorderRadius.circular(16));
+    final rowRect = tester.getRect(
+      find.ancestor(
+        of: find.text('Separator'),
+        matching: find.byType(AppPressableTile),
+      ),
+    );
+    expect(rowRect.left, 6);
+    expect(rowRect.right, 384);
   });
 
   testWidgets('macOS 最近会话点击不等待恢复最近列表完成', (tester) async {
@@ -3059,9 +3080,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('任务视图即将接入'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('desktop-rail-workbench')));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('工作台模块即将接入'), findsOneWidget);
+    // The reference rail has no workbench entry.
+    expect(find.byKey(const Key('desktop-rail-workbench')), findsNothing);
 
     await tester.tap(find.byKey(const Key('desktop-rail-messages')));
     await tester.pumpAndSettle();
@@ -3344,7 +3364,6 @@ void main() {
       AwikiMeIconRole.agents,
       AwikiMeIconRole.contacts,
       AwikiMeIconRole.tasks,
-      AwikiMeIconRole.workbench,
       AwikiMeIconRole.settings,
     ]) {
       expect(railIcon(role).selected, isFalse);
@@ -3367,7 +3386,7 @@ void main() {
     expect(
       tester.getCenter(find.byKey(const Key('desktop-rail-settings'))).dy,
       greaterThan(
-        tester.getCenter(find.byKey(const Key('desktop-rail-workbench'))).dy,
+        tester.getCenter(find.byKey(const Key('desktop-rail-tasks'))).dy,
       ),
     );
 
@@ -4111,11 +4130,11 @@ void main() {
 
     await tester.tap(find.byKey(const Key('chat-information-peer-row')));
     await tester.pumpAndSettle();
-    expect(find.text('用户信息'), findsOneWidget);
+    expect(find.text('个人资料'), findsOneWidget);
 
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('用户信息'), findsNothing);
+    expect(find.text('个人资料'), findsNothing);
     expect(find.text('聊天信息'), findsOneWidget);
     expect(
       container.read(selectedConversationProvider),
@@ -4401,7 +4420,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('联系人'), findsOneWidget);
-    expect(find.text('我'), findsOneWidget);
+    expect(find.text('我的'), findsOneWidget);
     expect(find.byKey(const Key('compact-bottom-navigation')), findsOneWidget);
     expect(
       find.descendant(
@@ -4410,13 +4429,10 @@ void main() {
       ),
       findsNothing,
     );
-    final shellBackground = tester.widget<DecoratedBox>(
+    final shellBackground = tester.widget<AwikiGlassBackdrop>(
       find.byKey(const Key('app-shell-page-background')),
     );
-    expect(
-      (shellBackground.decoration as BoxDecoration).color,
-      AwikiMeColors.surface,
-    );
+    expect(shellBackground.color, AwikiMeColors.surface);
     final navRow = find
         .descendant(
           of: find.byKey(const Key('compact-bottom-navigation')),
@@ -4457,8 +4473,14 @@ void main() {
     for (final size in iconSlotSizes) {
       expect(size, const Size.square(22 * AwikiDisplayScale.layoutBaseline));
     }
+    // Floating glass capsule: 62 tall with a 5-unit inner inset.
+    expect(
+      tester.getSize(find.byKey(const Key('compact-bottom-navigation'))).height,
+      62,
+    );
+    expect(find.byKey(const Key('compact-nav-lens')), findsOneWidget);
     final bottomNavHeight = tester.getSize(navRow).height;
-    expect(bottomNavHeight, closeTo(62, 0.1));
+    expect(bottomNavHeight, closeTo(52, 0.1));
     final navRowCenterY = tester.getCenter(navRow).dy;
     final messageLabelCenterY = tester.getCenter(find.text('消息').last).dy;
     expect(messageLabelCenterY, lessThan(navRowCenterY + 22));
@@ -4474,9 +4496,9 @@ void main() {
         .evaluate()
         .map((element) => (element.widget as Text).data)
         .whereType<String>()
-        .where((label) => <String>{'消息', '智能体', '联系人', '我'}.contains(label))
+        .where((label) => <String>{'消息', '智能体', '联系人', '我的'}.contains(label))
         .toList();
-    expect(navLabels, ['消息', '联系人', '智能体', '我']);
+    expect(navLabels, ['消息', '智能体', '联系人', '我的']);
 
     await tester.tap(
       find.descendant(
@@ -4682,7 +4704,10 @@ void main() {
     final metaRect = tester.getRect(
       find.byKey(const Key('conversation-row-right-meta')),
     );
-    expect(rowRect.height, closeTo(74 * AwikiDisplayScale.layoutBaseline, 0.1));
+    expect(
+      rowRect.height,
+      closeTo(24 + 44 * AwikiDisplayScale.layoutBaseline, 0.1),
+    );
     final unreadBadge = find.byKey(const Key('conversation-row-unread-badge'));
     expect(unreadBadge, findsOneWidget);
     final unreadBadgeRect = tester.getRect(unreadBadge);

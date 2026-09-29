@@ -13,6 +13,7 @@ import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Theme;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
 
 import 'test_support.dart';
 
@@ -146,10 +147,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final surface = tester.widget<DecoratedBox>(
-      find.byKey(const Key('friends-list-surface')),
+    final surface = tester.widget<AwikiGlassBackdrop>(
+      find.byKey(const Key('shell-tab-page-surface')),
     );
-    expect((surface.decoration as BoxDecoration).color, dark.tokens.background);
+    expect(surface.color, dark.tokens.background);
     expect(
       tester.widget<Text>(find.text('联系人').first).style!.color,
       dark.tokens.title,

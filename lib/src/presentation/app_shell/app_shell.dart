@@ -1544,7 +1544,7 @@ class _BottomNavItem extends StatelessWidget {
                       role: role,
                       selected: active,
                       color: foreground,
-                      size: 22,
+                      size: context.awikiResponsive.scaled(22),
                     ),
                     if (badgeLabel != null)
                       Positioned(

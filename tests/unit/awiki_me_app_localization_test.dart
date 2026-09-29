@@ -358,10 +358,12 @@ void main() {
         await tester.tap(find.text('+86'));
         await tester.pump();
 
-        Finder phoneEditable() => find.descendant(
-          of: find.byType(AppTextField).first,
-          matching: find.byType(EditableText),
-        );
+        Finder phoneEditable() => find
+            .descendant(
+              of: find.byKey(const Key('onboarding-mac-auth-card')),
+              matching: find.byType(EditableText),
+            )
+            .first;
         final focusNode = tester
             .widget<EditableText>(phoneEditable())
             .focusNode;
@@ -377,10 +379,12 @@ void main() {
         expect(resizedFocusNode.hasFocus, isTrue);
 
         await tester.enterText(
-          find.descendant(
-            of: find.byType(AppTextField).first,
-            matching: find.byType(CupertinoTextField),
-          ),
+          find
+              .descendant(
+                of: find.byKey(const Key('onboarding-mac-auth-card')),
+                matching: find.byType(CupertinoTextField),
+              )
+              .first,
           '13800138000',
         );
         await tester.pump();
