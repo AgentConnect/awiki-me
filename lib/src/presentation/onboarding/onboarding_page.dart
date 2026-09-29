@@ -292,6 +292,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     required AwikiResponsiveInfo responsive,
     required AwikiMeThemeTokens theme,
   }) {
+    final registrationCheckBusy = ref.watch(
+      registrationEntryProvider.select((entry) => entry.busy),
+    );
     if (onboarding.isServerInfoLoading) {
       return <Widget>[
         _OnboardingCapabilityPanel(
@@ -416,7 +419,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     otpCooldown.remainingSeconds,
                   )
                 : context.l10n.onboardingSendOtp,
-            onPressed: onboarding.isBusy || !otpCooldown.canSend
+            isLoading: registrationCheckBusy,
+            onPressed:
+                onboarding.isBusy ||
+                    registrationCheckBusy ||
+                    !otpCooldown.canSend
                 ? null
                 : _requestOtp,
           ),
@@ -461,7 +468,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     onboarding.emailResendCountdown,
                   )
                 : context.l10n.onboardingSendActivationEmail,
-            onPressed: onboarding.isBusy || onboarding.isEmailResendCoolingDown
+            isLoading: registrationCheckBusy,
+            onPressed:
+                onboarding.isBusy ||
+                    registrationCheckBusy ||
+                    onboarding.isEmailResendCoolingDown
                 ? null
                 : _requestEmailActivation,
           ),
@@ -736,10 +747,15 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
   }
 
-  Widget _registrationEntryForm() => RegistrationEntryForm(
-    handleController: handleController,
-    inviteController: inviteController,
-    phoneController: phoneController,
+  Widget _registrationEntryForm() => AnimatedSize(
+    duration: const Duration(milliseconds: 180),
+    curve: Curves.easeOutCubic,
+    alignment: Alignment.topCenter,
+    child: RegistrationEntryForm(
+      handleController: handleController,
+      inviteController: inviteController,
+      phoneController: phoneController,
+    ),
   );
 
   void _onHandleChanged() {

@@ -922,7 +922,7 @@ class _DesktopCredentialTooltip extends StatelessWidget {
   }
 }
 
-class _MacRegisterForm extends StatelessWidget {
+class _MacRegisterForm extends ConsumerWidget {
   const _MacRegisterForm({
     super.key,
     required this.onboarding,
@@ -951,7 +951,10 @@ class _MacRegisterForm extends StatelessWidget {
   final VoidCallback onSubmitRegister;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final registrationCheckBusy = ref.watch(
+      registrationEntryProvider.select((entry) => entry.busy),
+    );
     if (onboarding.isServerInfoLoading) {
       return _OnboardingCapabilityPanel(
         loading: true,
@@ -1049,7 +1052,11 @@ class _MacRegisterForm extends StatelessWidget {
                       otpCooldown.remainingSeconds,
                     )
                   : context.l10n.onboardingSendOtp,
-              onPressed: onboarding.isBusy || !otpCooldown.canSend
+              isLoading: registrationCheckBusy,
+              onPressed:
+                  onboarding.isBusy ||
+                      registrationCheckBusy ||
+                      !otpCooldown.canSend
                   ? null
                   : onRequestOtp,
             ),
@@ -1097,7 +1104,11 @@ class _MacRegisterForm extends StatelessWidget {
                     onboarding.emailResendCountdown,
                   )
                 : context.l10n.onboardingSendActivationEmail,
-            onPressed: onboarding.isBusy || onboarding.isEmailResendCoolingDown
+            isLoading: registrationCheckBusy,
+            onPressed:
+                onboarding.isBusy ||
+                    registrationCheckBusy ||
+                    onboarding.isEmailResendCoolingDown
                 ? null
                 : onRequestEmailActivation,
           ),
@@ -1261,11 +1272,13 @@ class _MacInlineAction extends StatelessWidget {
     required this.label,
     this.semanticsIdentifier,
     this.onPressed,
+    this.isLoading = false,
   });
 
   final String label;
   final String? semanticsIdentifier;
   final VoidCallback? onPressed;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -1291,15 +1304,24 @@ class _MacInlineAction extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 150),
         child: FittedBox(
           fit: BoxFit.scaleDown,
-          child: Text(
-            label,
-            maxLines: 1,
-            style: const TextStyle(
-              color: AwikiMePalette.brandAccent,
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              height: 1,
-            ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Opacity(
+                opacity: isLoading ? 0 : 1,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    color: AwikiMePalette.brandAccent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    height: 1,
+                  ),
+                ),
+              ),
+              if (isLoading) const CupertinoActivityIndicator(radius: 7),
+            ],
           ),
         ),
       ),

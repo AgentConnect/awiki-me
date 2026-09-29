@@ -115,7 +115,6 @@ class RegistrationEntryForm extends ConsumerWidget {
               detail: state.errorDetail!,
             ),
           ),
-        if (state.busy) const CupertinoActivityIndicator(),
         if (error != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
