@@ -179,6 +179,25 @@
       "tenantName": {}
     }
   },
+  "tenantMenuHint": "切换这个 App 使用的后端和 DID Host",
+  "tenantBuiltinTag": "默认配置",
+  "tenantCreateAndUse": "添加并使用",
+  "tenantDidHostCreateHint": "DID Host 与租户的本地身份和存储作用域绑定，保存后不能修改。",
+  "tenantDeleteConfirmTitle": "删除租户配置？",
+  "tenantDeleteConfirmMessage": "确定要删除 {tenantName}（{didHost}）吗？本机数据会保留，但这个租户不会再出现在切换列表中。",
+  "@tenantDeleteConfirmMessage": {
+    "placeholders": {
+      "tenantName": {},
+      "didHost": {}
+    }
+  },
+  "tenantDeleteAction": "删除租户",
+  "tenantDeleteSemantic": "删除租户 {tenantName}",
+  "@tenantDeleteSemantic": {
+    "placeholders": {
+      "tenantName": {}
+    }
+  },
   "tenantCannotEditDefault": "默认 AWiki 租户不能编辑。接入其他后端请添加租户配置。",
   "tenantCannotEditWithData": "这个租户已经有本地数据，只能修改名称，不能修改后端地址或 DID Host。",
   "tenantDidHostImmutable": "DID Host 与租户的本地身份和存储作用域绑定，已有租户不能修改；如需更换，请添加新的租户配置。",

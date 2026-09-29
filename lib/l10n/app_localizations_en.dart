@@ -492,6 +492,35 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get tenantMenuHint => 'Switch the backend and DID host this app uses';
+
+  @override
+  String get tenantBuiltinTag => 'Default';
+
+  @override
+  String get tenantCreateAndUse => 'Add and use';
+
+  @override
+  String get tenantDidHostCreateHint =>
+      'The DID host is bound to this tenant\'s local identities and storage scope and can\'t be changed after saving.';
+
+  @override
+  String get tenantDeleteConfirmTitle => 'Delete tenant configuration?';
+
+  @override
+  String tenantDeleteConfirmMessage(Object tenantName, Object didHost) {
+    return 'Delete $tenantName ($didHost)? Local data stays on this device, but this tenant will no longer appear in the switcher.';
+  }
+
+  @override
+  String get tenantDeleteAction => 'Delete tenant';
+
+  @override
+  String tenantDeleteSemantic(Object tenantName) {
+    return 'Delete tenant $tenantName';
+  }
+
+  @override
   String get tenantCannotEditDefault =>
       'The default AWiki tenant cannot be edited. Add a tenant configuration for another backend.';
 

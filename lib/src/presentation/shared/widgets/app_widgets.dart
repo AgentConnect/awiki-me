@@ -1406,9 +1406,11 @@ class AppSecondaryButton extends StatelessWidget {
         ),
         decoration: responsive.isPhone
             ? BoxDecoration(
-                color: theme.glassLens,
+                // The reference's secondary pill shares the fields' frosted
+                // fill rather than the grey selection lens.
+                color: theme.glass,
                 borderRadius: radius,
-                border: Border.all(color: theme.glassEdgeActive, width: 0.5),
+                border: Border.all(color: theme.glassEdge, width: 0.5),
               )
             : BoxDecoration(
                 color: theme.surface,

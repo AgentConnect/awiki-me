@@ -206,8 +206,8 @@ class _MacOnboardingScaffold extends StatelessWidget {
   }
 }
 
-/// Phone tenant switcher: a glass pill carrying the "租户" label above the
-/// active tenant name, beside the brand in the divider-free header.
+/// Phone tenant switcher: a glass pill carrying the "租户" label, a hairline
+/// and the active tenant name, beside the brand in the divider-free header.
 class _PhoneTenantPill extends StatelessWidget {
   const _PhoneTenantPill({super.key, required this.name, required this.onTap});
 
@@ -225,7 +225,7 @@ class _PhoneTenantPill extends StatelessWidget {
       pressedScale: 0.96,
       borderRadius: BorderRadius.circular(22),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44, maxWidth: 176),
+        constraints: const BoxConstraints(minHeight: 44, maxWidth: 220),
         child: DecoratedBox(
           decoration: _phoneGlassDecoration(context, radius: 22),
           child: Padding(
@@ -233,32 +233,32 @@ class _PhoneTenantPill extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
+                Text(
+                  context.l10n.tenantManagementTitle,
+                  style: TextStyle(
+                    color: theme.secondaryText,
+                    fontSize: 12,
+                    height: 1.2,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 12,
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  color: theme.glassEdgeActive,
+                ),
                 Flexible(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        context.l10n.tenantManagementTitle,
-                        style: TextStyle(
-                          color: theme.secondaryText,
-                          fontSize: 11,
-                          height: 1.2,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: theme.title,
-                          fontSize: 14,
-                          height: 1.3,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: theme.title,
+                      fontSize: 14,
+                      height: 1.3,
+                      fontWeight: FontWeight.w400,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),

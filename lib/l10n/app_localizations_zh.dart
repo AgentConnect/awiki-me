@@ -469,6 +469,34 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get tenantMenuHint => '切换这个 App 使用的后端和 DID Host';
+
+  @override
+  String get tenantBuiltinTag => '默认配置';
+
+  @override
+  String get tenantCreateAndUse => '添加并使用';
+
+  @override
+  String get tenantDidHostCreateHint => 'DID Host 与租户的本地身份和存储作用域绑定，保存后不能修改。';
+
+  @override
+  String get tenantDeleteConfirmTitle => '删除租户配置？';
+
+  @override
+  String tenantDeleteConfirmMessage(Object tenantName, Object didHost) {
+    return '确定要删除 $tenantName（$didHost）吗？本机数据会保留，但这个租户不会再出现在切换列表中。';
+  }
+
+  @override
+  String get tenantDeleteAction => '删除租户';
+
+  @override
+  String tenantDeleteSemantic(Object tenantName) {
+    return '删除租户 $tenantName';
+  }
+
+  @override
   String get tenantCannotEditDefault => '默认 AWiki 租户不能编辑。接入其他后端请添加租户配置。';
 
   @override

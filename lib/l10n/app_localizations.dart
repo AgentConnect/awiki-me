@@ -962,6 +962,54 @@ abstract class AppLocalizations {
   /// **'删除 {tenantName}？本机数据会保留，但这个租户不会再出现在切换列表中。'**
   String tenantDeleteContent(Object tenantName);
 
+  /// No description provided for @tenantMenuHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'切换这个 App 使用的后端和 DID Host'**
+  String get tenantMenuHint;
+
+  /// No description provided for @tenantBuiltinTag.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认配置'**
+  String get tenantBuiltinTag;
+
+  /// No description provided for @tenantCreateAndUse.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加并使用'**
+  String get tenantCreateAndUse;
+
+  /// No description provided for @tenantDidHostCreateHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'DID Host 与租户的本地身份和存储作用域绑定，保存后不能修改。'**
+  String get tenantDidHostCreateHint;
+
+  /// No description provided for @tenantDeleteConfirmTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除租户配置？'**
+  String get tenantDeleteConfirmTitle;
+
+  /// No description provided for @tenantDeleteConfirmMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定要删除 {tenantName}（{didHost}）吗？本机数据会保留，但这个租户不会再出现在切换列表中。'**
+  String tenantDeleteConfirmMessage(Object tenantName, Object didHost);
+
+  /// No description provided for @tenantDeleteAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除租户'**
+  String get tenantDeleteAction;
+
+  /// No description provided for @tenantDeleteSemantic.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除租户 {tenantName}'**
+  String tenantDeleteSemantic(Object tenantName);
+
   /// No description provided for @tenantCannotEditDefault.
   ///
   /// In zh, this message translates to:

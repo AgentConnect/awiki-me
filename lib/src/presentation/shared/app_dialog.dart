@@ -1,3 +1,4 @@
+import 'dart:ui' show ImageFilter;
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
@@ -110,10 +111,19 @@ class AppDialogScaffold extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: effectiveBorderRadius,
                 clipBehavior: clipBehavior,
-                child: Padding(
-                  padding: padding ?? EdgeInsets.zero,
-                  child: child,
-                ),
+                child: responsive.isPhone
+                    // Thick glass blurs whatever sits behind the card.
+                    ? BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                        child: Padding(
+                          padding: padding ?? EdgeInsets.zero,
+                          child: child,
+                        ),
+                      )
+                    : Padding(
+                        padding: padding ?? EdgeInsets.zero,
+                        child: child,
+                      ),
               ),
             ),
           ),

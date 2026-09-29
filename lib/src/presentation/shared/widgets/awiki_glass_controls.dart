@@ -45,23 +45,30 @@ class AwikiGlassPanel extends StatelessWidget {
         borderRadius: borderRadius,
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          // A gradient replaces a BoxDecoration's color, so the fill and
+          // the top highlight are painted as separate layers.
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: theme.surface.withValues(alpha: theme.isDark ? 0.9 : 0.86),
               borderRadius: borderRadius,
-              border: Border.all(color: theme.glassEdgeActive, width: 0.5),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.center,
-                colors: <Color>[
-                  CupertinoColors.white.withValues(
-                    alpha: theme.isDark ? 0.06 : 0.5,
-                  ),
-                  CupertinoColors.white.withValues(alpha: 0),
-                ],
-              ),
             ),
-            child: Padding(padding: padding, child: child),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: borderRadius,
+                border: Border.all(color: theme.glassEdgeActive, width: 0.5),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.center,
+                  colors: <Color>[
+                    CupertinoColors.white.withValues(
+                      alpha: theme.isDark ? 0.06 : 0.5,
+                    ),
+                    CupertinoColors.white.withValues(alpha: 0),
+                  ],
+                ),
+              ),
+              child: Padding(padding: padding, child: child),
+            ),
           ),
         ),
       ),

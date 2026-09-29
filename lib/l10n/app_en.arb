@@ -174,6 +174,25 @@
       "tenantName": {}
     }
   },
+  "tenantMenuHint": "Switch the backend and DID host this app uses",
+  "tenantBuiltinTag": "Default",
+  "tenantCreateAndUse": "Add and use",
+  "tenantDidHostCreateHint": "The DID host is bound to this tenant's local identities and storage scope and can't be changed after saving.",
+  "tenantDeleteConfirmTitle": "Delete tenant configuration?",
+  "tenantDeleteConfirmMessage": "Delete {tenantName} ({didHost})? Local data stays on this device, but this tenant will no longer appear in the switcher.",
+  "@tenantDeleteConfirmMessage": {
+    "placeholders": {
+      "tenantName": {},
+      "didHost": {}
+    }
+  },
+  "tenantDeleteAction": "Delete tenant",
+  "tenantDeleteSemantic": "Delete tenant {tenantName}",
+  "@tenantDeleteSemantic": {
+    "placeholders": {
+      "tenantName": {}
+    }
+  },
   "tenantCannotEditDefault": "The default AWiki tenant cannot be edited. Add a tenant configuration for another backend.",
   "tenantCannotEditWithData": "This tenant already has local data. You can rename it, but the backend URL and DID host cannot be changed.",
   "tenantDidHostImmutable": "The DID host is bound to this tenant's local identities and storage scope. It cannot be changed for an existing tenant; add a new tenant configuration instead.",

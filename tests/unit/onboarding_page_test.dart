@@ -1058,7 +1058,7 @@ void main() {
     expect(footerAfter.bottom, greaterThan(790));
   });
 
-  testWidgets('登录页租户弹窗可添加租户配置且不自动切换', (tester) async {
+  testWidgets('登录页租户菜单添加租户配置后立即使用', (tester) async {
     late StateSetter refreshTenants;
     final tenantActions = FakeAppTenantActions();
     tenantActions.onChanged = () => refreshTenants(() {});
@@ -1120,18 +1120,94 @@ void main() {
     await _settleVerificationStep(tester);
 
     expect(tenantActions.createTenantCalls, 1);
-    expect(tenantActions.useTenantCalls, 0);
-    expect(tenantActions.registry.activeTenant.isPrimaryTenant, isTrue);
-
-    // The new tenant appears in the menu and is only used once chosen.
-    await _tapVisible(tester, find.byTooltip('管理租户'));
-    await _settleVerificationStep(tester);
-    expect(find.text('杭州测试'), findsOneWidget);
-    await _tapVisible(tester, find.text('杭州测试'));
-    await _settleVerificationStep(tester);
-
     expect(tenantActions.useTenantCalls, 1);
     expect(tenantActions.registry.activeTenant.name, '杭州测试');
+    expect(find.byKey(const Key('tenant-name-field')), findsNothing);
+  });
+
+  testWidgets('登录页租户菜单仅允许删除非当前自定义租户并可长按编辑', (tester) async {
+    late StateSetter refreshTenants;
+    final tenantActions = FakeAppTenantActions();
+    await tenantActions.createTenant(
+      const AppTenantCreateInput(
+        name: '示例科技私有部署',
+        backendBaseUrl: 'https://im.example.org',
+        didHost: 'im.example.org',
+      ),
+    );
+    await tenantActions.createTenant(
+      const AppTenantCreateInput(
+        name: '杭州测试',
+        backendBaseUrl: 'https://dev.example.com',
+        didHost: 'dev.example.com',
+      ),
+    );
+    final custom = tenantActions.registry.visibleTenants.firstWhere(
+      (tenant) => tenant.name == '示例科技私有部署',
+    );
+    final other = tenantActions.registry.visibleTenants.firstWhere(
+      (tenant) => tenant.name == '杭州测试',
+    );
+    final primary = tenantActions.registry.activeTenant;
+    await tenantActions.useTenant(custom.id);
+    tenantActions.useTenantCalls = 0;
+    tenantActions.onChanged = () => refreshTenants(() {});
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) {
+          refreshTenants = setState;
+          return buildLocalizedTestApp(
+            home: const OnboardingPage(),
+            providerOverrides: <Override>[
+              appTenantRegistryProvider.overrideWithValue(
+                tenantActions.registry,
+              ),
+              activeAppTenantProvider.overrideWithValue(
+                tenantActions.registry.activeTenant,
+              ),
+              appTenantActionsProvider.overrideWithValue(tenantActions),
+            ],
+          );
+        },
+      ),
+    );
+    await tester.pump();
+
+    await _scrollToOnboardingUtilityBar(tester);
+    await _tapVisible(tester, find.byTooltip('管理租户'));
+    await _settleVerificationStep(tester);
+
+    expect(find.text('切换这个 App 使用的后端和 DID Host'), findsOneWidget);
+    expect(find.text('默认配置'), findsOneWidget);
+    expect(find.byKey(const Key('tenant-menu-manage')), findsNothing);
+    // The built-in and the active tenant cannot be deleted from the menu.
+    expect(find.byKey(Key('tenant-menu-delete:${primary.id}')), findsNothing);
+    expect(find.byKey(Key('tenant-menu-delete:${custom.id}')), findsNothing);
+    expect(find.byKey(Key('tenant-menu-delete:${other.id}')), findsOneWidget);
+
+    await _tapVisible(
+      tester,
+      find.byKey(Key('tenant-menu-delete:${other.id}')),
+    );
+    await _settleVerificationStep(tester);
+    expect(find.text('删除租户配置？'), findsOneWidget);
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('tenant-menu-delete-confirm')),
+    );
+    await _settleVerificationStep(tester);
+    expect(tenantActions.deleteTenantCalls, 1);
+    expect(
+      tenantActions.registry.visibleTenants.map((tenant) => tenant.id),
+      isNot(contains(other.id)),
+    );
+    expect(tenantActions.useTenantCalls, 0);
+
+    await _tapVisible(tester, find.byTooltip('管理租户'));
+    await _settleVerificationStep(tester);
+    await tester.longPress(find.byKey(Key('tenant-menu-option:${custom.id}')));
+    await _settleVerificationStep(tester);
+    expect(find.byKey(const Key('tenant-did-host-readonly')), findsOneWidget);
   });
 
   testWidgets('登录页添加公网 HTTP 租户时立即提示使用 HTTPS', (tester) async {
