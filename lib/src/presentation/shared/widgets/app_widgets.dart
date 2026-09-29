@@ -1174,9 +1174,12 @@ class AppInlineActionButton extends StatelessWidget {
           border: Border.all(color: AwikiMePalette.actionBlueBorder),
         ),
         alignment: Alignment.center,
-        child: isLoading
-            ? CupertinoActivityIndicator(radius: responsive.scaled(8))
-            : FittedBox(
+        child: Stack(
+          alignment: Alignment.center,
+          children: <Widget>[
+            Opacity(
+              opacity: isLoading ? 0 : 1,
+              child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
                   label,
@@ -1194,6 +1197,11 @@ class AppInlineActionButton extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
+            if (isLoading)
+              CupertinoActivityIndicator(radius: responsive.scaled(8)),
+          ],
+        ),
       ),
     );
   }
@@ -1205,21 +1213,23 @@ class AppPrimaryButton extends StatelessWidget {
     required this.label,
     this.onPressed,
     this.semanticsIdentifier,
+    this.isLoading = false,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final String? semanticsIdentifier;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     return AppPressable(
-      onTap: onPressed,
+      onTap: isLoading ? null : onPressed,
       semanticLabel: label,
       semanticsIdentifier: semanticsIdentifier,
-      enabled: onPressed != null,
+      enabled: onPressed != null && !isLoading,
       scaleOnPress: true,
       pressedScale: responsive.isPhone ? 0.97 : 0.985,
       borderRadius: BorderRadius.circular(responsive.radius(9)),
@@ -1249,19 +1259,32 @@ class AppPrimaryButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(responsive.radius(9)),
         ),
         child: Center(
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            strutStyle: StrutStyle(
-              fontSize: responsive.bodyMd,
-              height: 1,
-              forceStrutHeight: true,
-            ),
-            style: AwikiMeTextStyles.buttonLabel.copyWith(
-              color: theme.primaryForeground,
-              fontSize: responsive.bodyMd,
-              height: 1,
-            ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: <Widget>[
+              Opacity(
+                opacity: isLoading ? 0 : 1,
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  strutStyle: StrutStyle(
+                    fontSize: responsive.bodyMd,
+                    height: 1,
+                    forceStrutHeight: true,
+                  ),
+                  style: AwikiMeTextStyles.buttonLabel.copyWith(
+                    color: theme.primaryForeground,
+                    fontSize: responsive.bodyMd,
+                    height: 1,
+                  ),
+                ),
+              ),
+              if (isLoading)
+                CupertinoActivityIndicator(
+                  radius: responsive.displayScaled(9),
+                  color: theme.primaryForeground,
+                ),
+            ],
           ),
         ),
       ),

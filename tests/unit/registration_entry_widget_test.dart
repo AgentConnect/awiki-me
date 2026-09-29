@@ -1,8 +1,9 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/registration_entry_provider.dart';
-import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:awiki_me/src/core/app_error_classifier.dart';
@@ -16,6 +17,7 @@ import 'test_support.dart';
 class InviteSupport extends FakeOnboardingSupportService {
   InviteSupport(super.gateway);
   int checks = 0;
+  Completer<RegistrationCheck>? pendingCheck;
   String? lastInvite;
   String? lastEmail;
   bool? lastCheckInvite;
@@ -34,6 +36,7 @@ class InviteSupport extends FakeOnboardingSupportService {
     bool checkInvite = false,
   }) async {
     checks++;
+    if (pendingCheck case final pending?) return pending.future;
     if (failure != null) throw failure!;
     if (fail) throw StateError('network');
     lastInvite = inviteCode;
@@ -68,6 +71,20 @@ Finder field(String id) => find.descendant(
   matching: find.byType(CupertinoTextField),
 );
 
+Finder authField(TargetPlatform platform, String id) =>
+    platform == TargetPlatform.android
+    ? field(id)
+    : find.descendant(
+        of: find.bySemanticsIdentifier(id),
+        matching: find.byType(CupertinoTextField),
+      );
+
+Finder sendOtpAction() => find.byWidgetPredicate(
+  (widget) =>
+      widget is AppPressable &&
+      widget.semanticsIdentifier == 'e2e-send-otp-button',
+);
+
 Future<void> tapVisible(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
   await tester.tap(finder);
@@ -75,6 +92,174 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  for (final platform in <TargetPlatform>[
+    TargetPlatform.android,
+    TargetPlatform.macOS,
+  ]) {
+    testWidgets('send check keeps the form still on ${platform.name}', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = platform;
+      tester.view.physicalSize = platform == TargetPlatform.android
+          ? const Size(390, 1000)
+          : const Size(1200, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final gateway = FakeAwikiGateway();
+      final support = InviteSupport(gateway)
+        ..pendingCheck = Completer<RegistrationCheck>();
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const OnboardingPage(),
+          gateway: gateway,
+          providerOverrides: [
+            onboardingSupportServiceProvider.overrideWithValue(support),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(authField(platform, 'e2e-handle-input'), 'alpha');
+      await tester.enterText(
+        authField(platform, 'e2e-phone-input'),
+        '13800138000',
+      );
+      final send = sendOtpAction();
+      final submit = find.byKey(
+        Key(
+          platform == TargetPlatform.android
+              ? 'onboarding-phone-submit-action'
+              : 'onboarding-mac-phone-submit-action',
+        ),
+      );
+      await tester.ensureVisible(send);
+      await tester.pumpAndSettle();
+      final sendBefore = tester.getRect(send);
+      final otpBefore = tester.getRect(authField(platform, 'e2e-otp-input'));
+      final submitBefore = tester.getRect(submit);
+
+      await tester.tap(send);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 150));
+
+      expect(support.checks, 1);
+      expect(gateway.sendOtpCalls, 0);
+      expect(
+        find.descendant(
+          of: send,
+          matching: find.byType(CupertinoActivityIndicator),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.getRect(send), sendBefore);
+      expect(tester.getRect(authField(platform, 'e2e-otp-input')), otpBefore);
+      expect(tester.getRect(submit), submitBefore);
+      support.pendingCheck!.complete(
+        const RegistrationCheck(
+          fullHandle: 'alpha.awiki.ai',
+          decision: 'register',
+          inviteRequired: false,
+          inviteStatus: 'not_required',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(gateway.sendOtpCalls, 1);
+      expect(tester.takeException(), isNull);
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets(
+      'submit check loads only the submit action on ${platform.name}',
+      (tester) async {
+        debugDefaultTargetPlatformOverride = platform;
+        tester.view.physicalSize = platform == TargetPlatform.android
+            ? const Size(390, 1000)
+            : const Size(1200, 1000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(() {
+          debugDefaultTargetPlatformOverride = null;
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+        final gateway = FakeAwikiGateway();
+        final support = InviteSupport(gateway);
+        await tester.pumpWidget(
+          buildLocalizedTestApp(
+            home: const OnboardingPage(),
+            gateway: gateway,
+            providerOverrides: [
+              onboardingSupportServiceProvider.overrideWithValue(support),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          authField(platform, 'e2e-handle-input'),
+          'alpha',
+        );
+        await tester.enterText(
+          authField(platform, 'e2e-phone-input'),
+          '13800138000',
+        );
+        await tapVisible(tester, find.text('发送验证码'));
+        await tester.enterText(authField(platform, 'e2e-otp-input'), '123456');
+        support.pendingCheck = Completer<RegistrationCheck>();
+        final send = sendOtpAction();
+        final submit = find.byKey(
+          Key(
+            platform == TargetPlatform.android
+                ? 'onboarding-phone-submit-action'
+                : 'onboarding-mac-phone-submit-action',
+          ),
+        );
+        await tester.ensureVisible(submit);
+        await tester.pumpAndSettle();
+        final submitBefore = tester.getRect(submit);
+
+        await tester.tap(submit);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 150));
+
+        expect(support.checks, 2);
+        expect(gateway.registerHandleCalls, 0);
+        expect(
+          find.descendant(
+            of: submit,
+            matching: find.byType(CupertinoActivityIndicator),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: send,
+            matching: find.byType(CupertinoActivityIndicator),
+          ),
+          findsNothing,
+        );
+        expect(tester.getRect(submit), submitBefore);
+        await tester.tap(submit);
+        await tester.pump();
+        expect(support.checks, 2);
+        support.pendingCheck!.complete(
+          const RegistrationCheck(
+            fullHandle: 'alpha.awiki.ai',
+            decision: 'unavailable',
+            inviteRequired: false,
+            inviteStatus: 'not_required',
+            reason: 'handle_unavailable',
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(gateway.registerHandleCalls, 0);
+        expect(tester.takeException(), isNull);
+        debugDefaultTargetPlatformOverride = null;
+      },
+    );
+  }
+
   testWidgets('TLS guidance retains form input and opens redacted details', (
     tester,
   ) async {
@@ -339,7 +524,7 @@ void main() {
     },
   );
   testWidgets(
-    'existing account keeps recovery available inside the fixed form',
+    'existing account does not offer recovery before OTP verification',
     (tester) async {
       tester.view.physicalSize = const Size(390, 1000);
       tester.view.devicePixelRatio = 1;
@@ -367,8 +552,7 @@ void main() {
             w is AppSecondaryButton &&
             w.semanticsIdentifier == 'e2e-existing-recovery',
       );
-      await tapVisible(tester, recovery);
-      expect(find.byType(HandleRecoveryPage), findsOneWidget);
+      expect(recovery, findsNothing);
       expect(gateway.sendOtpCalls, 1);
       expect(gateway.registerHandleCalls, 0);
     },

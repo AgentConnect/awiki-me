@@ -292,6 +292,18 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     required AwikiResponsiveInfo responsive,
     required AwikiMeThemeTokens theme,
   }) {
+    final registrationCheck = ref.watch(
+      registrationEntryProvider.select(
+        (entry) => (entry.busy, entry.busyAction),
+      ),
+    );
+    final registrationCheckBusy = registrationCheck.$1;
+    final sendCheckBusy =
+        registrationCheckBusy &&
+        registrationCheck.$2 == RegistrationEntryBusyAction.sendVerification;
+    final submitCheckBusy =
+        registrationCheckBusy &&
+        registrationCheck.$2 == RegistrationEntryBusyAction.submitRegistration;
     if (onboarding.isServerInfoLoading) {
       return <Widget>[
         _OnboardingCapabilityPanel(
@@ -362,7 +374,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           child: AppPrimaryButton(
             label: context.l10n.onboardingCompleteRegister,
             semanticsIdentifier: 'e2e-complete-login-button',
-            onPressed: onboarding.isBusy
+            isLoading: submitCheckBusy,
+            onPressed: onboarding.isBusy || registrationCheckBusy
                 ? null
                 : () => _submitRegister(context),
           ),
@@ -416,7 +429,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     otpCooldown.remainingSeconds,
                   )
                 : context.l10n.onboardingSendOtp,
-            onPressed: onboarding.isBusy || !otpCooldown.canSend
+            isLoading: sendCheckBusy,
+            onPressed:
+                onboarding.isBusy ||
+                    registrationCheckBusy ||
+                    !otpCooldown.canSend
                 ? null
                 : _requestOtp,
           ),
@@ -433,7 +450,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           child: AppPrimaryButton(
             label: context.l10n.onboardingPhoneLoginOrRegisterAction,
             semanticsIdentifier: 'e2e-complete-login-button',
-            onPressed: onboarding.isBusy || !onboarding.canSubmitPhoneOtp
+            isLoading: submitCheckBusy,
+            onPressed:
+                onboarding.isBusy ||
+                    registrationCheckBusy ||
+                    !onboarding.canSubmitPhoneOtp
                 ? null
                 : () => _submitRegister(context),
           ),
@@ -461,7 +482,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     onboarding.emailResendCountdown,
                   )
                 : context.l10n.onboardingSendActivationEmail,
-            onPressed: onboarding.isBusy || onboarding.isEmailResendCoolingDown
+            isLoading: sendCheckBusy,
+            onPressed:
+                onboarding.isBusy ||
+                    registrationCheckBusy ||
+                    onboarding.isEmailResendCoolingDown
                 ? null
                 : _requestEmailActivation,
           ),
@@ -479,13 +504,16 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               ? AppPrimaryButton(
                   label: context.l10n.onboardingCompleteEmailRegister,
                   semanticsIdentifier: 'e2e-complete-login-button',
-                  onPressed: onboarding.isBusy
+                  isLoading: submitCheckBusy,
+                  onPressed: onboarding.isBusy || registrationCheckBusy
                       ? null
                       : () => _submitRegister(context),
                 )
               : AppSecondaryButton(
                   label: context.l10n.onboardingCheckActivationStatus,
-                  onPressed: onboarding.isBusy ? null : _checkEmailActivation,
+                  onPressed: onboarding.isBusy || registrationCheckBusy
+                      ? null
+                      : _checkEmailActivation,
                 ),
         ),
       ],
@@ -736,10 +764,15 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
   }
 
-  Widget _registrationEntryForm() => RegistrationEntryForm(
-    handleController: handleController,
-    inviteController: inviteController,
-    phoneController: phoneController,
+  Widget _registrationEntryForm() => AnimatedSize(
+    duration: const Duration(milliseconds: 180),
+    curve: Curves.easeOutCubic,
+    alignment: Alignment.topCenter,
+    child: RegistrationEntryForm(
+      handleController: handleController,
+      inviteController: inviteController,
+      phoneController: phoneController,
+    ),
   );
 
   void _onHandleChanged() {
