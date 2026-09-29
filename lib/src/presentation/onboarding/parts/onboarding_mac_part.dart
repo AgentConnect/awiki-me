@@ -1333,6 +1333,11 @@ class _MacInlineAction extends StatelessWidget {
                 child: Text(
                   label,
                   maxLines: 1,
+                  strutStyle: const StrutStyle(
+                    fontSize: 14,
+                    height: 1,
+                    forceStrutHeight: true,
+                  ),
                   style: const TextStyle(
                     color: AwikiMePalette.brandAccent,
                     fontSize: 13,
