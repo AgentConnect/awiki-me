@@ -11,19 +11,26 @@ const Map<String, int> _minimumNode24ActionMajors = <String, int>{
 };
 
 void main() {
-  test('development CI explicitly selects locked source integration', () {
+  test('development CI defaults to registry', () {
     final workflow =
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
             as YamlMap;
-    final inputs = workflow['on']['workflow_dispatch']['inputs'] as YamlMap;
+    final triggers = workflow['on'] as YamlMap;
+    expect(triggers.containsKey('pull_request'), isFalse);
+    expect(triggers.containsKey('push'), isFalse);
+    expect(triggers.containsKey('schedule'), isTrue);
+    final inputs = triggers['workflow_dispatch']['inputs'] as YamlMap;
     expect(inputs['sdk_dependencies']['options'], ['source', 'registry']);
-    expect(inputs['sdk_dependencies']['default'], 'source');
+    expect(inputs['sdk_dependencies']['default'], 'registry');
     final environment = workflow['env'] as YamlMap;
     expect(
       environment['AWIKI_SOURCE_INTEGRATION'],
-      contains("github.event.inputs.sdk_dependencies == 'source'"),
+      r"${{ inputs.sdk_dependencies == 'source' && '1' || '0' }}",
     );
-    expect(environment['AWIKI_RELEASE_REGISTRY'], contains("&& '0' || '1'"));
+    expect(
+      environment['AWIKI_RELEASE_REGISTRY'],
+      r"${{ inputs.sdk_dependencies == 'source' && '0' || '1' }}",
+    );
     final jobs = workflow['jobs'] as YamlMap;
     for (final name in ['validate', 'remote-product']) {
       final builds = (jobs[name]['steps'] as YamlList).cast<YamlMap>().where(
@@ -71,39 +78,36 @@ void main() {
     );
   });
 
-  test('release/0910 pull requests use the locked Core source', () {
-    final workflow =
-        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
-            as YamlMap;
-    const selection =
-        "github.event.inputs.sdk_dependencies == 'source' || (github.event_name == 'pull_request' && github.base_ref == 'release/0910')";
-    expect(
-      workflow['env']['AWIKI_SOURCE_INTEGRATION'],
-      '\u0024{{ ($selection) && \'1\' || \'0\' }}',
-    );
-    expect(
-      workflow['env']['AWIKI_RELEASE_REGISTRY'],
-      '\u0024{{ ($selection) && \'0\' || \'1\' }}',
-    );
-    final source = File('.github/workflows/ci.yml').readAsStringSync();
-    // Every fixed consumer pin (including shell/report refs) must be scoped to
-    // the release baseline; unrelated branches retain the registry fallback.
-    final pins = source
-        .split('\n')
-        .where(
-          (line) => line.contains('950487d61a7dee0ad5cb4910a86e73e5f91a8893'),
+  test(
+    'manual CI uses an exact CLI ref and scheduled CI uses registry defaults',
+    () {
+      final workflow =
+          loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
+              as YamlMap;
+      final inputs = workflow['on']['workflow_dispatch']['inputs'] as YamlMap;
+      expect(inputs['cli_ref']['required'], isTrue);
+      expect(inputs['sdk_dependencies']['default'], 'registry');
+      final source = File('.github/workflows/ci.yml').readAsStringSync();
+      // The reviewed release fallback remains pinned, while manual dispatch can
+      // supply an exact CLI ref and nightly runs use the registry dependency mode.
+      final pins = source
+          .split('\n')
+          .where(
+            (line) => line.contains('c483b51500058ffc6dac2e9db5517a5df0ce1262'),
+          );
+      expect(pins, hasLength(10));
+      for (final line in pins) {
+        expect(line, contains('github.event.inputs.cli_ref ||'));
+        expect(
+          line,
+          contains(
+            "github.event.inputs.cli_ref || 'c483b51500058ffc6dac2e9db5517a5df0ce1262'",
+          ),
         );
-    expect(pins, hasLength(10));
-    for (final line in pins) {
-      expect(
-        line,
-        contains(
-          "github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893'",
-        ),
-      );
-      expect(line, contains('d3289db6732f6028fa7e54909b768bd48838f7fb'));
-    }
-  });
+        expect(line, isNot(contains('github.base_ref')));
+      }
+    },
+  );
 
   test('validation-only dispatch cannot start remote account and OTP jobs', () {
     final workflow =
@@ -183,13 +187,12 @@ void main() {
     }
   });
 
-  test('release/0910 consumers select the compatible Core baseline', () {
+  test('consumers select the published Core source baseline', () {
     final workflow =
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
             as YamlMap;
     final jobs = workflow['jobs'] as YamlMap;
-    const pin =
-        "(github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893')";
+    const pin = 'c483b51500058ffc6dac2e9db5517a5df0ce1262';
     for (final name in [
       'validate',
       'cross-repository-contracts',
@@ -204,12 +207,12 @@ void main() {
           );
       expect(
         checkout['with']['ref'],
-        '\u0024{{ github.event.inputs.cli_ref || $pin || \'d3289db6732f6028fa7e54909b768bd48838f7fb\' }}',
+        '\u0024{{ github.event.inputs.cli_ref || \'$pin\' }}',
       );
     }
     expect(
       jobs['windows-pr']['env']['WINDOWS_CORE_REF'],
-      '\u0024{{ github.event.inputs.cli_ref || $pin || \'d3289db6732f6028fa7e54909b768bd48838f7fb\' }}',
+      '\u0024{{ github.event.inputs.cli_ref || \'$pin\' }}',
     );
   });
 

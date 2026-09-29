@@ -421,7 +421,7 @@ void main() {
         'alice.awiki.info': profile,
       }
       ..directoryConversationIdsByQuery = <String, String>{
-        'alice.awiki.info': 'dm:peer-scope:v1:alice',
+        did: 'dm:peer-scope:v1:alice',
       };
 
     await tester.pumpWidget(
@@ -468,7 +468,7 @@ void main() {
         'alice.awiki.info': profile,
       }
       ..directoryConversationIdsByQuery = <String, String>{
-        'alice.awiki.info': 'dm:peer-scope:v1:alice',
+        did: 'dm:peer-scope:v1:alice',
       };
     final chatThreads = _RecordingChatThreadsControllerPlaceholder();
 
@@ -516,7 +516,7 @@ void main() {
         'alice.awiki.info': profile,
       }
       ..directoryConversationIdsByQuery = <String, String>{
-        'alice.awiki.info': conversationId,
+        did: conversationId,
       };
     final chatThreads = _RecordingChatThreadsControllerPlaceholder();
     final conversation = ConversationSummary(

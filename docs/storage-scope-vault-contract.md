@@ -500,6 +500,20 @@ orphan_scope_detected
 
 ## 11. Production 升级与未来演进
 
+Android secure storage 的 9.2.4 → 10.3.1 升级使用串行、逐值校验迁移：先读新的
+namespace，缺失时读取旧值，校验后写入并读回；普通读和覆盖安装保留旧密文。当前使用
+仓内 `third_party/flutter_secure_storage` 的 10.3.1 最小补丁，所有备份迁移分支按
+`storageNamespace` 定位 wrapped-key preferences，不能删除另一个 namespace 的旧 AES
+包装密钥。补丁来源和退出条件见该目录的 `AWIKI_PATCH.md`。
+
+已受旧迁移缺陷影响时，仅 `SecureAppKeyValueStore` 中明确列举的可重建辅助状态允许把
+旧区域的 `BAD_DECRYPT`/`BadPaddingException` 当作缺失：scope 下的上次登录身份、语言、
+显示缩放、更新缓存/选择和本地 OTP 倒计时。允许列表由
+`android_legacy_app_state_recovery.dart` 维护；这不是全局 reset-on-error。用户重新选择
+本机已有身份后仍须正常通过 Core vault/认证检查，再将选择写入新区域并验证。旧密文不
+被清理；新区域损坏、其他存储错误、未知 key 和所有 Scope secret 错误继续 fail closed。
+根密钥缺失不能通过这个路径生成替代密钥，也不能把“可重新选择账号”视为已完成登录。
+
 已有 `tenant-registry.json` 是启动时的唯一租户与 scope authority。编译期默认租户配置只
 允许在 registry 不存在时参与首次 provision；已有 registry 存在时不得比较、覆盖或重建
 其中的 profile/scope。覆盖安装新 App 只能替换应用 bundle，必须继续使用相同 production
