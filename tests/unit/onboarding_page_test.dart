@@ -37,6 +37,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
 
 import 'test_support.dart';
 
@@ -681,7 +682,7 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('紧凑登录页使用全屏白底且不再包裹阴影卡片', (tester) async {
+  testWidgets('手机登录页使用玻璃画布且不再包裹阴影卡片', (tester) async {
     _setTestViewSize(tester, const Size(390, 844));
 
     await tester.pumpWidget(
@@ -700,11 +701,19 @@ void main() {
       find.byKey(const Key('onboarding-mac-auth-card')),
     );
     expect(authSurface.decoration, isNull);
+    // The scaffold is transparent over the glow canvas, which carries the
+    // list background colour.
     expect(
       tester
-          .widget<CupertinoPageScaffold>(find.byType(CupertinoPageScaffold))
-          .backgroundColor,
+          .widget<AwikiGlassBackdrop>(
+            find.byKey(const Key('onboarding-glass-backdrop')),
+          )
+          .color,
       AwikiMePalette.content,
+    );
+    expect(
+      find.byKey(const Key('onboarding-tenant-switcher-button')),
+      findsOneWidget,
     );
 
     final logoSize = tester.getSize(
@@ -1356,11 +1365,13 @@ void main() {
     final identityTileRect = tester.getRect(identityTile);
     final identitySelectRect = tester.getRect(identitySelectArea);
     final deleteButtonRect = tester.getRect(deleteButton);
-    expect(identitySelectRect.height, identityTileRect.height - 2);
-    expect(deleteButtonRect.height, identityTileRect.height - 2);
-    expect(identitySelectRect.left, identityTileRect.left + 1);
-    expect(deleteButtonRect.right, identityTileRect.right - 1);
-    expect(deleteButtonRect.left - identitySelectRect.right, 1);
+    // Actions fill the tile inside its hairline edge (0.5 on phone glass).
+    expect(identitySelectRect.height, identityTileRect.height - 1);
+    expect(deleteButtonRect.height, identityTileRect.height - 1);
+    expect(identitySelectRect.left, identityTileRect.left + 0.5);
+    expect(deleteButtonRect.right, identityTileRect.right - 0.5);
+    // Phone glass rows drop the divider between select and delete.
+    expect(deleteButtonRect.left - identitySelectRect.right, 0);
 
     await tester.ensureVisible(deleteButton);
     await _tapVisible(tester, deleteButton);

@@ -21,6 +21,14 @@ scrolls independently when height, the keyboard or enlarged text requires it.
 The language action remains outside that scroll area. Platform safe areas and
 the existing Android system-navigation clearance remain applied.
 
+On phones the login page uses the same flat liquid glass as the app shell
+(reference revision of 2026-09-29, 20:37): the glow canvas, a divider-free
+header with the brand and a glass tenant pill (租户 above the active name),
+a glass entry track whose chosen segment is a lens, 50-unit glass fields with
+a 2-unit accent focus ring, a glass "send code" pill inside the OTP field,
+glass local-identity rows without the inner divider, and 50-unit pill buttons.
+Narrow desktop windows keep the flat compact layout.
+
 The two entry segments show either the capability-driven registration form or
 the local identity list. They use `OnboardingState.entryMode` and the existing
 `setEntryMode` transition, including its OTP/email target invalidation rules.

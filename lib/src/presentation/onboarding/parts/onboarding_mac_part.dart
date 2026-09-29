@@ -52,8 +52,9 @@ class _MacOnboardingScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
-    return CupertinoPageScaffold(
-      backgroundColor: theme.surface,
+    final phone = context.awikiResponsive.isPhone;
+    final scaffold = CupertinoPageScaffold(
+      backgroundColor: phone ? const Color(0x00000000) : theme.surface,
       child: SafeArea(
         child: AwikiSystemNavigationClearance(
           child: LayoutBuilder(
@@ -75,11 +76,11 @@ class _MacOnboardingScaffold extends StatelessWidget {
               );
               final form = Expanded(
                 child: ColoredBox(
-                  color: theme.surface,
+                  color: phone ? const Color(0x00000000) : theme.surface,
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(
                       compact ? 20 : 40,
-                      compact ? 24 : 44,
+                      phone ? 16 : (compact ? 24 : 44),
                       compact ? 20 : 40,
                       24,
                     ),
@@ -118,16 +119,31 @@ class _MacOnboardingScaffold extends StatelessWidget {
                   key: const Key('onboarding-desktop-compact-layout'),
                   children: <Widget>[
                     Container(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
-                      decoration: BoxDecoration(
-                        color: theme.background,
-                        border: Border(bottom: BorderSide(color: theme.border)),
-                      ),
+                      padding: phone
+                          ? const EdgeInsets.fromLTRB(20, 14, 16, 6)
+                          : const EdgeInsets.fromLTRB(20, 16, 12, 12),
+                      decoration: phone
+                          ? null
+                          : BoxDecoration(
+                              color: theme.background,
+                              border: Border(
+                                bottom: BorderSide(color: theme.border),
+                              ),
+                            ),
                       child: Row(
                         children: <Widget>[
                           const Expanded(flex: 3, child: _MacCompactBrand()),
                           const SizedBox(width: 12),
-                          Expanded(flex: 2, child: tenantButton),
+                          if (phone)
+                            _PhoneTenantPill(
+                              key: const Key(
+                                'onboarding-tenant-switcher-button',
+                              ),
+                              name: activeTenant.name,
+                              onTap: onTenantPressed,
+                            )
+                          else
+                            Expanded(flex: 2, child: tenantButton),
                         ],
                       ),
                     ),
@@ -174,7 +190,104 @@ class _MacOnboardingScaffold extends StatelessWidget {
         ),
       ),
     );
+    if (!phone) {
+      return scaffold;
+    }
+    return AwikiGlassBackdrop(
+      key: const Key('onboarding-glass-backdrop'),
+      color: awikiCompactListBackground(context),
+      child: scaffold,
+    );
   }
+}
+
+/// Phone tenant switcher: a glass pill carrying the "租户" label above the
+/// active tenant name, beside the brand in the divider-free header.
+class _PhoneTenantPill extends StatelessWidget {
+  const _PhoneTenantPill({super.key, required this.name, required this.onTap});
+
+  final String name;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return AppPressable(
+      onTap: onTap,
+      semanticLabel: context.l10n.tenantSwitcherLabel,
+      tooltip: context.l10n.tenantSwitcherLabel,
+      scaleOnPress: true,
+      pressedScale: 0.96,
+      borderRadius: BorderRadius.circular(22),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44, maxWidth: 176),
+        child: DecoratedBox(
+          decoration: _phoneGlassDecoration(context, radius: 22),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 5, 12, 5),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Flexible(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        context.l10n.tenantManagementTitle,
+                        style: TextStyle(
+                          color: theme.secondaryText,
+                          fontSize: 11,
+                          height: 1.2,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: theme.title,
+                          fontSize: 14,
+                          height: 1.3,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  CupertinoIcons.chevron_up_chevron_down,
+                  size: 14,
+                  color: theme.secondaryText,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The login page's flat glass material on phones: an even frosted fill and a
+/// hairline edge, tinted with the lens when selected or focused.
+BoxDecoration _phoneGlassDecoration(
+  BuildContext context, {
+  double radius = 16,
+  bool selected = false,
+  Color? ring,
+}) {
+  final theme = context.awikiTheme;
+  return BoxDecoration(
+    color: selected ? theme.glassLens : theme.glass,
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(
+      color: ring ?? (selected ? theme.glassEdgeActive : theme.glassEdge),
+      width: ring == null ? 0.5 : 2,
+    ),
+  );
 }
 
 class _MacOnboardingHero extends StatelessWidget {
@@ -267,48 +380,59 @@ class _MacAuthCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            CupertinoSlidingSegmentedControl<bool>(
-              key: const Key('onboarding-entry-tabs'),
-              groupValue: showIdentities,
-              backgroundColor: theme.subtleSurface,
-              thumbColor: theme.surface,
-              disabledChildren: onboarding.isBusy
-                  ? const <bool>{false, true}
-                  : const <bool>{},
-              onValueChanged: (value) {
-                if (value != null && !onboarding.isBusy) {
-                  ref
-                      .read(onboardingProvider.notifier)
-                      .setEntryMode(value ? 'login' : 'register');
-                }
-              },
-              children: <bool, Widget>{
-                false: Padding(
-                  key: const Key('onboarding-register-entry'),
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Text(
-                    context.l10n.onboardingRegister,
-                    style: TextStyle(
-                      color: theme.title,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
+            if (context.awikiResponsive.isPhone)
+              _PhoneEntryTabs(
+                showIdentities: showIdentities,
+                enabled: !onboarding.isBusy,
+                registerLabel: context.l10n.onboardingRegister,
+                identityLabel: context.l10n.onboardingLogin,
+                onChanged: (value) => ref
+                    .read(onboardingProvider.notifier)
+                    .setEntryMode(value ? 'login' : 'register'),
+              )
+            else
+              CupertinoSlidingSegmentedControl<bool>(
+                key: const Key('onboarding-entry-tabs'),
+                groupValue: showIdentities,
+                backgroundColor: theme.subtleSurface,
+                thumbColor: theme.surface,
+                disabledChildren: onboarding.isBusy
+                    ? const <bool>{false, true}
+                    : const <bool>{},
+                onValueChanged: (value) {
+                  if (value != null && !onboarding.isBusy) {
+                    ref
+                        .read(onboardingProvider.notifier)
+                        .setEntryMode(value ? 'login' : 'register');
+                  }
+                },
+                children: <bool, Widget>{
+                  false: Padding(
+                    key: const Key('onboarding-register-entry'),
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Text(
+                      context.l10n.onboardingRegister,
+                      style: TextStyle(
+                        color: theme.title,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ),
-                ),
-                true: Padding(
-                  key: const Key('onboarding-identity-entry'),
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Text(
-                    context.l10n.onboardingLogin,
-                    style: TextStyle(
-                      color: theme.title,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
+                  true: Padding(
+                    key: const Key('onboarding-identity-entry'),
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Text(
+                      context.l10n.onboardingLogin,
+                      style: TextStyle(
+                        color: theme.title,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ),
-                ),
-              },
-            ),
+                },
+              ),
             const SizedBox(height: 16),
             if (showIdentities)
               if (credentials.isEmpty)
@@ -357,6 +481,74 @@ class _MacAuthCard extends ConsumerWidget {
   }
 }
 
+/// Phone entry switch: a glass track whose chosen segment is a flat lens.
+class _PhoneEntryTabs extends StatelessWidget {
+  const _PhoneEntryTabs({
+    required this.showIdentities,
+    required this.enabled,
+    required this.registerLabel,
+    required this.identityLabel,
+    required this.onChanged,
+  });
+
+  final bool showIdentities;
+  final bool enabled;
+  final String registerLabel;
+  final String identityLabel;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    Widget segment(bool value, String label, Key key) {
+      final selected = value == showIdentities;
+      return Expanded(
+        child: AppPressable(
+          key: key,
+          onTap: enabled && !selected ? () => onChanged(value) : null,
+          enabled: enabled,
+          selected: selected,
+          semanticLabel: label,
+          scaleOnPress: true,
+          pressedScale: 0.96,
+          borderRadius: BorderRadius.circular(18),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            height: 36,
+            alignment: Alignment.center,
+            decoration: selected
+                ? _phoneGlassDecoration(context, radius: 18, selected: true)
+                : BoxDecoration(borderRadius: BorderRadius.circular(18)),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected ? theme.title : theme.secondaryText,
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      key: const Key('onboarding-entry-tabs'),
+      padding: const EdgeInsets.all(4),
+      decoration: _phoneGlassDecoration(context, radius: 22),
+      child: Row(
+        children: <Widget>[
+          segment(false, registerLabel, const Key('onboarding-register-entry')),
+          const SizedBox(width: 4),
+          segment(true, identityLabel, const Key('onboarding-identity-entry')),
+        ],
+      ),
+    );
+  }
+}
+
 class _MacCompactBrand extends StatelessWidget {
   const _MacCompactBrand();
 
@@ -369,8 +561,8 @@ class _MacCompactBrand extends StatelessWidget {
         SvgPicture.asset(
           'assets/branding/awiki-me-mark.svg',
           key: const Key('onboarding-brand-logo'),
-          width: 34,
-          height: 34,
+          width: context.awikiResponsive.isPhone ? 30 : 34,
+          height: context.awikiResponsive.isPhone ? 30 : 34,
           fit: BoxFit.contain,
         ),
         const SizedBox(width: 10),
@@ -379,7 +571,7 @@ class _MacCompactBrand extends StatelessWidget {
             'AWiki Me',
             style: TextStyle(
               color: context.awikiTheme.title,
-              fontSize: 15,
+              fontSize: context.awikiResponsive.isPhone ? 16 : 15,
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -586,11 +778,12 @@ class _OnboardingCredentialTile extends StatelessWidget {
                 ),
               ),
             ),
-            Container(
-              width: 1,
-              margin: const EdgeInsets.symmetric(vertical: 11),
-              color: theme.navigationBorder,
-            ),
+            if (!context.awikiResponsive.isPhone)
+              Container(
+                width: 1,
+                margin: const EdgeInsets.symmetric(vertical: 11),
+                color: theme.navigationBorder,
+              ),
             AppPressable(
               key: Key(
                 'onboarding-local-credential-delete:${identity.credentialName}',
@@ -908,6 +1101,8 @@ class _MacOutlinedFieldState extends State<_MacOutlinedField> {
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final phone = context.awikiResponsive.isPhone;
+    final fontSize = phone ? 16.0 : 14.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -919,21 +1114,33 @@ class _MacOutlinedFieldState extends State<_MacOutlinedField> {
             behavior: HitTestBehavior.opaque,
             onTap: _focusNode.requestFocus,
             child: Container(
-              constraints: const BoxConstraints(minHeight: 38),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: _focused ? theme.surface : theme.background,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: _focused ? theme.primary : theme.border,
-                ),
-              ),
+              constraints: BoxConstraints(minHeight: phone ? 50 : 38),
+              padding: phone
+                  ? const EdgeInsets.fromLTRB(14, 7, 7, 7)
+                  : const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: phone
+                  ? _phoneGlassDecoration(
+                      context,
+                      selected: _focused,
+                      ring: _focused ? theme.primary : null,
+                    )
+                  : BoxDecoration(
+                      color: _focused ? theme.surface : theme.background,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: _focused ? theme.primary : theme.border,
+                      ),
+                    ),
               child: Row(
                 children: <Widget>[
                   if (widget.prefix != null) ...<Widget>[
                     widget.prefix!,
                     const SizedBox(width: 8),
-                    Container(width: 1, height: 16, color: theme.border),
+                    Container(
+                      width: phone ? 0.5 : 1,
+                      height: 16,
+                      color: phone ? theme.glassEdgeActive : theme.border,
+                    ),
                     const SizedBox(width: 8),
                   ] else if (widget.icon != null) ...<Widget>[
                     Icon(widget.icon, size: 18, color: theme.secondaryText),
@@ -952,12 +1159,12 @@ class _MacOutlinedFieldState extends State<_MacOutlinedField> {
                         textAlignVertical: TextAlignVertical.center,
                         style: TextStyle(
                           color: theme.title,
-                          fontSize: 14,
+                          fontSize: fontSize,
                           height: 1.2,
                         ),
                         placeholderStyle: TextStyle(
                           color: theme.secondaryText,
-                          fontSize: 14,
+                          fontSize: fontSize,
                           height: 1.2,
                         ),
                       ),
@@ -965,8 +1172,10 @@ class _MacOutlinedFieldState extends State<_MacOutlinedField> {
                   ),
                   if (widget.suffix != null) ...<Widget>[
                     const SizedBox(width: 6),
-                    Container(width: 1, height: 16, color: theme.border),
-                    const SizedBox(width: 6),
+                    if (!phone) ...<Widget>[
+                      Container(width: 1, height: 16, color: theme.border),
+                      const SizedBox(width: 6),
+                    ],
                     widget.suffix!,
                   ],
                 ],
@@ -1046,19 +1255,45 @@ class _MacInlineAction extends StatelessWidget {
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 150),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            label,
-            maxLines: 1,
-            style: TextStyle(
-              color: context.awikiTheme.primary,
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              height: 1,
-            ),
-          ),
-        ),
+        child: context.awikiResponsive.isPhone
+            ? Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                alignment: Alignment.center,
+                decoration: onPressed == null
+                    ? null
+                    : _phoneGlassDecoration(
+                        context,
+                        radius: 18,
+                        selected: true,
+                      ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: context.awikiTheme.title,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              )
+            : FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: context.awikiTheme.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    height: 1,
+                  ),
+                ),
+              ),
       ),
     );
   }
@@ -1090,10 +1325,12 @@ class _MacPrimaryAction extends StatelessWidget {
         child: child,
       ),
       child: Container(
-        height: 40,
+        height: context.awikiResponsive.isPhone ? 50 : 40,
         decoration: BoxDecoration(
           color: context.awikiTheme.primaryDark,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(
+            context.awikiResponsive.isPhone ? 25 : 6,
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1146,13 +1383,15 @@ class _MacSecondaryAction extends StatelessWidget {
         child: child,
       ),
       child: Container(
-        height: 40,
+        height: context.awikiResponsive.isPhone ? 50 : 40,
         padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: context.awikiTheme.surface,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: context.awikiTheme.border),
-        ),
+        decoration: context.awikiResponsive.isPhone
+            ? _phoneGlassDecoration(context, radius: 25)
+            : BoxDecoration(
+                color: context.awikiTheme.surface,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: context.awikiTheme.border),
+              ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
@@ -1179,6 +1418,9 @@ class _MacSecondaryAction extends StatelessWidget {
 }
 
 BoxDecoration _macFieldDecoration(BuildContext context) {
+  if (context.awikiResponsive.isPhone) {
+    return _phoneGlassDecoration(context, radius: 18);
+  }
   return BoxDecoration(
     color: context.awikiTheme.surface,
     borderRadius: BorderRadius.circular(6),
