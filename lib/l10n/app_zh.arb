@@ -1691,5 +1691,6 @@
         "type": "int"
       }
     }
-  }
+  },
+  "peerProfileDetailsSection": "资料"
 }

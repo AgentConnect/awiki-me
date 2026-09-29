@@ -3826,4 +3826,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String profileDevicePendingCount(int count) {
     return '$count 个待审批';
   }
+
+  @override
+  String get peerProfileDetailsSection => '资料';
 }

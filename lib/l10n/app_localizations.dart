@@ -7179,6 +7179,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'{count} 个待审批'**
   String profileDevicePendingCount(int count);
+
+  /// No description provided for @peerProfileDetailsSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'资料'**
+  String get peerProfileDetailsSection;
 }
 
 class _AppLocalizationsDelegate

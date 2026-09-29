@@ -4109,4 +4109,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String profileDevicePendingCount(int count) {
     return '$count pending';
   }
+
+  @override
+  String get peerProfileDetailsSection => 'Details';
 }
