@@ -659,6 +659,15 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     required String fullHandle,
     required String phone,
   }) async {
+    final controller = ref.read(onboardingProvider.notifier);
+    final continuationId = ref
+        .read(onboardingProvider)
+        .existingHandleContinuationId;
+    final tenantId = ref.read(activeAppTenantProvider).id;
+    bool isCurrentContext() =>
+        context.mounted &&
+        identical(ref.read(onboardingProvider.notifier), controller) &&
+        ref.read(activeAppTenantProvider).id == tenantId;
     final rebindContinuation =
         ref.read(onboardingProvider).existingHandleJoinMode ==
         ExistingHandleJoinMode.handleRecoveryRebind;
@@ -672,67 +681,87 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             true &&
         (ref.read(onboardingProvider).serverInfo?.supportsPhoneHandleRecovery ??
             false);
-    final action = await showCupertinoDialog<_ExistingHandleAction>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => CupertinoAlertDialog(
-        title: Text(context.l10n.onboardingExistingHandleTitle),
-        content: Text(
-          recoveryAvailable
-              ? context.l10n.onboardingExistingHandleMessage
-              : context.l10n.onboardingExistingHandleJoinOnlyMessage,
-        ),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            key: const Key('existing-handle-join-action'),
-            onPressed: () => Navigator.of(
-              dialogContext,
-            ).pop(_ExistingHandleAction.joinDevice),
-            child: Text(context.l10n.deviceJoinEntry),
+    while (isCurrentContext() &&
+        continuationId != null &&
+        ref.read(onboardingProvider).existingHandleContinuationId ==
+            continuationId) {
+      if (!context.mounted) return;
+      final action = await showCupertinoDialog<_ExistingHandleAction>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => CupertinoAlertDialog(
+          title: Text(context.l10n.onboardingExistingHandleTitle),
+          content: Text(
+            recoveryAvailable
+                ? context.l10n.onboardingExistingHandleMessage
+                : context.l10n.onboardingExistingHandleJoinOnlyMessage,
           ),
-          if (recoveryAvailable)
+          actions: <Widget>[
             CupertinoDialogAction(
-              key: const Key('existing-handle-recovery-action'),
+              key: const Key('existing-handle-join-action'),
               onPressed: () => Navigator.of(
                 dialogContext,
-              ).pop(_ExistingHandleAction.recoverHandle),
-              child: Text(context.l10n.handleRecoveryTitle),
+              ).pop(_ExistingHandleAction.joinDevice),
+              child: Text(context.l10n.deviceJoinEntry),
             ),
-          CupertinoDialogAction(
-            key: const Key('existing-handle-cancel-action'),
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(_ExistingHandleAction.cancel),
-            child: Text(context.l10n.commonCancel),
-          ),
-        ],
-      ),
-    );
-    if (!context.mounted) return;
-    final controller = ref.read(onboardingProvider.notifier);
-    switch (action ?? _ExistingHandleAction.cancel) {
-      case _ExistingHandleAction.joinDevice:
-        final started = await controller.beginExistingHandleDeviceJoin(
-          presenceReason: context.l10n.handleRecoveryPresenceReason,
-        );
-        if (started && context.mounted) await openDeviceJoinPage(context);
-      case _ExistingHandleAction.recoverHandle:
-        if (rebindContinuation) {
-          throw StateError('rebind_join_recovery_action_forbidden');
-        }
-        await controller.discardExistingHandleContinuation();
-        if (context.mounted) {
-          await AppNavigator.push<void>(
-            context,
-            (_) => HandleRecoveryPage(
-              startNew: true,
-              initialHandle: fullHandle,
-              initialPhone: phone,
+            if (recoveryAvailable)
+              CupertinoDialogAction(
+                key: const Key('existing-handle-recovery-action'),
+                onPressed: () => Navigator.of(
+                  dialogContext,
+                ).pop(_ExistingHandleAction.recoverHandle),
+                child: Text(context.l10n.handleRecoveryTitle),
+              ),
+            CupertinoDialogAction(
+              key: const Key('existing-handle-cancel-action'),
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(_ExistingHandleAction.cancel),
+              child: Text(context.l10n.commonCancel),
             ),
+          ],
+        ),
+      );
+      if (!context.mounted ||
+          !isCurrentContext() ||
+          ref.read(onboardingProvider).existingHandleContinuationId !=
+              continuationId) {
+        return;
+      }
+      switch (action ?? _ExistingHandleAction.cancel) {
+        case _ExistingHandleAction.joinDevice:
+          final started = await controller.beginExistingHandleDeviceJoin(
+            presenceReason: context.l10n.handleRecoveryPresenceReason,
           );
-          if (mounted) ref.invalidate(pendingHandleRecoveryProvider);
-        }
-      case _ExistingHandleAction.cancel:
-        await controller.discardExistingHandleContinuation();
+          if (started) {
+            if (context.mounted && isCurrentContext()) {
+              await openDeviceJoinPage(context);
+            }
+            return;
+          }
+          // Re-present the same verified continuation. Only an explicit click
+          // starts another attempt; do not resubmit the consumed registration OTP.
+          continue;
+        case _ExistingHandleAction.recoverHandle:
+          if (rebindContinuation) {
+            throw StateError('rebind_join_recovery_action_forbidden');
+          }
+          await controller.discardExistingHandleContinuation();
+          if (context.mounted && isCurrentContext()) {
+            await AppNavigator.push<void>(
+              context,
+              (_) => HandleRecoveryPage(
+                startNew: true,
+                initialHandle: fullHandle,
+                initialPhone: phone,
+              ),
+            );
+            if (mounted) ref.invalidate(pendingHandleRecoveryProvider);
+          }
+          return;
+        case _ExistingHandleAction.cancel:
+          await controller.discardExistingHandleContinuation();
+          return;
+      }
     }
   }
 
@@ -864,9 +893,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     return Stack(
       children: <Widget>[
         child,
-        if (onboarding.isBusy &&
-            onboarding.existingHandleContinuationId != null &&
-            !onboarding.isLegacyUpgradeRunning)
+        if (onboarding.isExistingHandleJoinBusy)
           AwikiMeLoadingMask(
             key: const Key('existing-handle-join-loading'),
             label: context.l10n.commonLoading,
