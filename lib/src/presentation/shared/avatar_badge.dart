@@ -101,7 +101,11 @@ class _AvatarBadgeState extends ConsumerState<AvatarBadge> {
   ) {
     if (!mounted || generation != _generation) return;
     final lifecycle = WidgetsBinding.instance.lifecycleState;
-    if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
+    // An inactive desktop window is still visible (for example beside DSH).
+    // Defer image work only while the application is actually hidden.
+    if (lifecycle == AppLifecycleState.hidden ||
+        lifecycle == AppLifecycleState.paused ||
+        lifecycle == AppLifecycleState.detached) {
       _imageTimer = Timer(
         const Duration(seconds: 30),
         () => _loadImage(cache, uri, edge, generation),

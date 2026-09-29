@@ -10,16 +10,25 @@ class Cache implements AvatarImageCache {
   final ui.Image image;
   int calls = 0;
   @override
-  Future<ui.Image?> load(String uri, {int edge = 128, bool force = false}) async =>
-      ++calls == 1 ? null : image.clone();
+  Future<ui.Image?> load(
+    String uri, {
+    int edge = 128,
+    bool force = false,
+  }) async => ++calls == 1 ? null : image.clone();
   @override
   void dispose() {}
 }
 
 void main() {
   testWidgets(
-    'a transient failure retries while visible and clear cancels pending retries',
+    'visible inactive windows load and retry avatars; clear cancels retries',
     (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
       final image = await tester.runAsync(() async {
         final recorder = ui.PictureRecorder();
         ui.Canvas(
