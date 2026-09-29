@@ -4,6 +4,18 @@ import 'package:crypto/crypto.dart';
 
 import 'sync_recovery_operator_contract.dart';
 
+// User Service authorizes fresh App-pair handles with this prefix followed by
+// the fixture's ten-character random suffix. Run digests must not be appended.
+const appPairCleanupHandlePrefix = 'appmd';
+
+void validateAppPairCleanupHandlePrefix(String prefix) {
+  if (prefix != appPairCleanupHandlePrefix) {
+    throw const FormatException(
+      'App-pair Message cleanup requires the appmd handle prefix.',
+    );
+  }
+}
+
 void validateAppPairCleanupPreflight(String output) {
   final Object? receipt = jsonDecode(output);
   if (receipt is! Map ||

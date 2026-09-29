@@ -378,6 +378,8 @@ System Test 现有 exact ID、唯一字段、严格数字递增和 stability-win
 
 报告不能只记录非空 phase 字符串。每个 catalog 声明的 Oracle 都应对应一个已执行 assertion ID 和结构化证据；validator 要拒绝缺失、重复、未执行或次序错误的 assertion。
 
+恢复和设备管理用例的有序 phase 声明通过 `tests/unit/e2e_harness/assertion_registration_contract_test.dart` 与目录交叉校验，防止只在目录构造的样例报告中自洽。共同测试入口只能证明当前选择的用例实际执行过的检查；独立 Fresh Recovery 群聊连续性用例的证据不能附加到基础身份恢复用例。
+
 ## 11. 落地顺序
 
 ### 阶段 1：先使测试不再假绿

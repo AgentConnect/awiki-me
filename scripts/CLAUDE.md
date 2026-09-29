@@ -13,7 +13,7 @@
 - `run_macos_production_scope_restart_gate.sh`: Runs the signed production-scope restart gate.
 - `pre_release_storage_cleanup.dart`: Executes the reviewed pre-release storage cleanup workflow.
 - `android_emas_release_config.py`: Writes and validates the ignored, owner-only Android Release EMAS configuration.
-- `package_app.sh`, `package_unix_worker.sh`, `package_windows.ps1`, `package_app.config`: Package and publish platform artifacts. Release workers set `AWIKI_RELEASE_REGISTRY=1` so Core native builds consume the pinned crates.io SDK set in an isolated source worktree.
+- `package_app.sh`, `package_unix_worker.sh`, `package_windows.ps1`, `package_app.config`: Package and publish platform artifacts. Release workers set `AWIKI_RELEASE_REGISTRY=1` so Core native builds consume the pinned crates.io SDK set in an isolated source worktree. Debug native/CLI/Daemon builds default to the same published pins via `awiki-cli-rs2/scripts/dependencies/build.py`; ANP can be switched to source with `--deps local` and `dependencies.local.json`.
 - `run_android_emulator.sh`: Starts the configured Android emulator workflow.
 - `lib/`, `windows/`: Shared signing and Windows verification helpers.
 

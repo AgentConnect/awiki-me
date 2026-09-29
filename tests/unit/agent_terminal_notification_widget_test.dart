@@ -54,7 +54,7 @@ FakeAgentControlService _runtimeAgentControl() {
         kind: AgentKind.daemon,
         displayName: 'Daemon',
         activeState: 'active',
-        latest: readyDaemonStatusWithGenericCliCapability,
+        latest: readyDaemonStatusWithAcpCapability,
       ),
       AgentSummary(
         agentDid: 'did:agent:runtime',

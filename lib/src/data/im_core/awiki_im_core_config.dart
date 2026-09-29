@@ -13,6 +13,7 @@ class AwikiImCoreEnvironmentConfig {
     this.mailServiceEndpoint,
     this.anpServiceEndpoint,
     this.anpServiceDid,
+    this.caBundle,
     this.transportPolicy = core.MessageTransportPolicy.auto,
   });
 
@@ -34,6 +35,7 @@ class AwikiImCoreEnvironmentConfig {
       didDomain: environment.didDomain,
       anpServiceEndpoint: environment.anpServiceUrl,
       anpServiceDid: environment.anpServiceDid,
+      caBundle: environment.caBundle,
     );
   }
 
@@ -45,6 +47,7 @@ class AwikiImCoreEnvironmentConfig {
   final String? mailServiceEndpoint;
   final String? anpServiceEndpoint;
   final String? anpServiceDid;
+  final String? caBundle;
   final core.MessageTransportPolicy transportPolicy;
 
   core.AwikiImCoreConfig toCoreConfig() {
@@ -65,6 +68,7 @@ class AwikiImCoreEnvironmentConfig {
       mailServiceEndpoint: mailServiceEndpoint,
       anpServiceEndpoint: anpServiceEndpoint,
       anpServiceDid: anpServiceDid,
+      caBundle: caBundle,
       transportPolicy: transportPolicy,
     );
   }

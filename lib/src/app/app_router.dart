@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show DialogRoute;
 import 'package:flutter/services.dart';
 
@@ -7,6 +8,26 @@ import '../presentation/shared/responsive_layout.dart';
 
 class AppNavigator {
   const AppNavigator._();
+
+  // Full-window macOS routes extend behind the native traffic lights.
+  static const double macWindowChromeTopInset = 52;
+
+  static Widget _pageBelowMacWindowChrome(
+    BuildContext context,
+    WidgetBuilder builder,
+  ) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) {
+      return builder(context);
+    }
+    final media = MediaQuery.of(context);
+    final top = media.padding.top < macWindowChromeTopInset
+        ? macWindowChromeTopInset
+        : media.padding.top;
+    return MediaQuery(
+      data: media.copyWith(padding: media.padding.copyWith(top: top)),
+      child: Builder(builder: builder),
+    );
+  }
 
   static SystemUiOverlayStyle _overlayStyle(
     BuildContext context, {
@@ -34,10 +55,12 @@ class AppNavigator {
     WidgetBuilder builder, {
     bool rootNavigator = false,
   }) {
-    return Navigator.of(
-      context,
-      rootNavigator: rootNavigator,
-    ).push<T>(CupertinoPageRoute<T>(builder: builder));
+    return Navigator.of(context, rootNavigator: rootNavigator).push<T>(
+      CupertinoPageRoute<T>(
+        builder: (routeContext) =>
+            _pageBelowMacWindowChrome(routeContext, builder),
+      ),
+    );
   }
 
   static Future<T?> pushWithoutAnimation<T>(
@@ -47,7 +70,8 @@ class AppNavigator {
   }) {
     return Navigator.of(context, rootNavigator: rootNavigator).push<T>(
       PageRouteBuilder<T>(
-        pageBuilder: (context, _, __) => builder(context),
+        pageBuilder: (routeContext, _, __) =>
+            _pageBelowMacWindowChrome(routeContext, builder),
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
       ),
@@ -58,9 +82,12 @@ class AppNavigator {
     BuildContext context,
     WidgetBuilder builder,
   ) {
-    return Navigator.of(
-      context,
-    ).pushReplacement<T, TO>(CupertinoPageRoute<T>(builder: builder));
+    return Navigator.of(context).pushReplacement<T, TO>(
+      CupertinoPageRoute<T>(
+        builder: (routeContext) =>
+            _pageBelowMacWindowChrome(routeContext, builder),
+      ),
+    );
   }
 
   static Future<T?> showDialog<T>(

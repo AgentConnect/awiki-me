@@ -140,7 +140,11 @@ class _RunningIsolatedApp {
     required this.process,
     required this.stdoutSubscription,
     required this.stderrSubscription,
+    required this.diagnosticLines,
   });
+
+  final List<String> diagnosticLines;
+  String get diagnosticTail => diagnosticLines.join('\n');
 
   final String role;
   final Uri vmServiceUri;
@@ -153,6 +157,7 @@ class _RunningIsolatedApp {
     required _IsolatedAppArtifact artifact,
     required Map<String, String> environment,
     required DesktopE2ePlatform platform,
+    required DesktopSecretRedactor redactor,
   }) async {
     if (artifact.role != role) {
       throw E2eFailure('The isolated App role does not match its artifact.');
@@ -176,8 +181,14 @@ class _RunningIsolatedApp {
       runInShell: false,
     );
     final service = Completer<Uri>();
+    final diagnosticLines = <String>[];
 
     void inspect(String line) {
+      final safe = sanitizeAppPairDriverDiagnostic(line, redactor).trim();
+      if (safe.isNotEmpty) {
+        diagnosticLines.add(safe);
+        if (diagnosticLines.length > 80) diagnosticLines.removeAt(0);
+      }
       if (service.isCompleted) {
         return;
       }
@@ -222,6 +233,7 @@ class _RunningIsolatedApp {
         process: process,
         stdoutSubscription: stdoutSubscription,
         stderrSubscription: stderrSubscription,
+        diagnosticLines: diagnosticLines,
       );
     } on Object {
       process.kill(ProcessSignal.sigkill);

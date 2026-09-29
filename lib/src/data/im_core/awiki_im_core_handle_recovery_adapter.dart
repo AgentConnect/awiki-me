@@ -591,6 +591,7 @@ bool _isRetryableFailure(HandleRecoveryFailureCode? value) => switch (value) {
   HandleRecoveryFailureCode.transitionChainUnsupported ||
   HandleRecoveryFailureCode.remoteStateChanged ||
   HandleRecoveryFailureCode.localStateUnavailable ||
+  HandleRecoveryFailureCode.localRegistryConflict ||
   HandleRecoveryFailureCode.localKeyUnavailable ||
   HandleRecoveryFailureCode.localMigrationUnsupported ||
   HandleRecoveryFailureCode.unknownEpoch ||
@@ -627,6 +628,12 @@ Future<T> _runRecovery<T>(Future<T> Function() action) async {
   try {
     return await action();
   } on core.AwikiImCoreException catch (error) {
+    if (error.code == 'service_error' &&
+        error.serviceCode == 'identity.local_registry_conflict') {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.localRegistryConflict,
+      );
+    }
     final rateLimit = handleRecoveryOtpRateLimitFromCore(error);
     if (rateLimit != null) throw rateLimit;
     final failureCode = error.handleRecoveryFailureCode;

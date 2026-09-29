@@ -107,6 +107,7 @@ enum HandleRecoveryFailureCode {
   localStateUnavailable,
   localKeyUnavailable,
   localTransitionPending,
+  localRegistryConflict,
   localTransitionSuperseded,
   localMigrationUnsupported,
   unknownEpoch,

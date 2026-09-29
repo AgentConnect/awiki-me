@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_secret_storage.dart';
@@ -9,6 +10,7 @@ import 'package:awiki_me/src/data/storage/scope_secret_repository_factory.dart';
 import 'package:awiki_me/src/data/tenant/app_tenant_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 
 import '../../case_attestation.dart';
@@ -19,6 +21,58 @@ void main() {
     () => E2eInvocationCompletionWriter.markFinished(
       failedTestCount: binding.failureMethodsDetails.length,
     ),
+  );
+
+  setUp(() async {
+    const version = String.fromEnvironment('AWIKI_TEST_PACKAGE_VERSION');
+    const build = String.fromEnvironment('AWIKI_TEST_PACKAGE_BUILD');
+    if (version.isEmpty && build.isEmpty) return;
+    expect(version, isNotEmpty);
+    expect(build, isNotEmpty);
+    final original = await PackageInfo.fromPlatform();
+    _setPackageMetadata(original, version, build);
+    addTearDown(
+      () =>
+          _setPackageMetadata(original, original.version, original.buildNumber),
+    );
+  });
+
+  testWidgets(
+    'prerelease package version reproduces invalid_input at bootstrap',
+    (_) async {
+      final original = await PackageInfo.fromPlatform();
+      _setPackageMetadata(original, '0.1.34-test.1', '44');
+      addTearDown(
+        () => _setPackageMetadata(
+          original,
+          original.version,
+          original.buildNumber,
+        ),
+      );
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_me_version_rejection_',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      await expectLater(
+        AppBootstrap.create(
+          environment: AwikiEnvironmentConfig(
+            baseUrl: 'https://awiki.info',
+            didDomain: 'awiki.info',
+          ),
+          appStateRoot: root.path,
+        ),
+        throwsA(
+          isA<core.AwikiImCoreException>()
+              .having((error) => error.code, 'code', 'invalid_input')
+              .having(
+                (error) => error.field,
+                'field',
+                'client_version_info.version',
+              ),
+        ),
+      );
+    },
+    skip: !(Platform.isMacOS || Platform.isLinux || Platform.isWindows),
   );
 
   testWidgets(
@@ -130,5 +184,17 @@ void main() {
       );
     },
     skip: !(Platform.isMacOS || Platform.isLinux || Platform.isWindows),
+  );
+}
+
+void _setPackageMetadata(PackageInfo original, String version, String build) {
+  // Native tests live in tests/e2e, outside the analyzer's test/ convention.
+  // ignore: invalid_use_of_visible_for_testing_member
+  PackageInfo.setMockInitialValues(
+    appName: original.appName,
+    packageName: original.packageName,
+    version: version,
+    buildNumber: build,
+    buildSignature: original.buildSignature,
   );
 }

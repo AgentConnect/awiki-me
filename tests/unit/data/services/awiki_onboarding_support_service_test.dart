@@ -5,6 +5,44 @@ import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'registration check normalizes target and carries invitation and contact',
+    () async {
+      final rpc = _RecordingRpcClient()
+        ..result = {
+          'full_handle': 'abc.awiki.ai',
+          'decision': 'register',
+          'invite_required': true,
+          'invite_status': 'valid',
+        };
+      final service = AwikiOnboardingSupportService(
+        userServiceUrl: 'https://example.test',
+        userClient: AwikiOnboardingUtilityClient(serviceClient: rpc),
+      );
+      final result = await service.checkRegistration(
+        handle: ' ABC ',
+        domain: ' AWIKI.AI ',
+        inviteCode: ' fixture ',
+        phone: '13800138000',
+        checkInvite: true,
+      );
+      expect(result.canVerify, isTrue);
+      expect(rpc.method, 'registration_check');
+      expect(rpc.params, {
+        'handle': 'abc',
+        'domain': 'awiki.ai',
+        'invite_code': 'fixture',
+        'phone': '+8613800138000',
+        'check_invite': true,
+      });
+      rpc.result = {...rpc.result, 'full_handle': 'other.awiki.ai'};
+      await expectLater(
+        service.checkRegistration(handle: 'abc', domain: 'awiki.ai'),
+        throwsFormatException,
+      );
+    },
+  );
+
   test('sends the closed Manifest registration OTP RPC payload', () async {
     final rpc = _RecordingRpcClient();
     final client = AwikiOnboardingUtilityClient(serviceClient: rpc);
@@ -406,6 +444,7 @@ Map<String, Object?> _recoveryMethod(String id, String verificationType) {
 class _RecordingRpcClient extends AwikiOnboardingUtilityHttpClient {
   _RecordingRpcClient() : super(baseUrl: 'https://example.test');
 
+  Map<String, Object?> result = const {'ok': true};
   String? path;
   String? method;
   Map<String, Object?>? params;
@@ -421,7 +460,7 @@ class _RecordingRpcClient extends AwikiOnboardingUtilityHttpClient {
     this.path = path;
     this.method = method;
     this.params = params;
-    return const <String, Object?>{'ok': true};
+    return result;
   }
 }
 

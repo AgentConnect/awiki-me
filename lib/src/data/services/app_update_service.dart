@@ -14,6 +14,8 @@ import '../../domain/entities/app_update_manifest.dart';
 import '../../domain/services/update_service.dart';
 import 'app_key_value_store.dart';
 import 'platform_update_bridge.dart';
+import 'app_http_client.dart';
+import '../../core/app_error_classifier.dart';
 
 final AwikiEnvironmentConfig _defaultUpdateEnvironment =
     AwikiEnvironmentConfig.fromEnvironment();
@@ -39,7 +41,7 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
     this.requestTimeout = const Duration(seconds: 15),
   }) : _storage = storage,
        _ownsHttpClient = httpClient == null,
-       _httpClient = httpClient ?? http.Client(),
+       _httpClient = httpClient ?? createAppHttpClient(),
        _platformBridge = platformBridge ?? MethodChannelPlatformUpdateBridge(),
        _packageInfoLoader = packageInfoLoader ?? PackageInfo.fromPlatform,
        _urlLauncher = urlLauncher ?? launchUrl,
@@ -220,6 +222,7 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
           usedCache: true,
           policyUnavailable: cached.unavailable,
           failureReason: error.toString(),
+          failureCode: structuredAppErrorCode(error),
         );
       }
       rethrow;
@@ -331,6 +334,7 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
       usedCache: result.usedCache,
       policyUnavailable: result.policyUnavailable,
       failureReason: result.failureReason,
+      failureCode: result.failureCode,
       cachedAt: result.cachedAt,
       versionUnsupported: false,
     );
@@ -374,6 +378,7 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
     bool usedCache = false,
     bool policyUnavailable = false,
     String? failureReason,
+    String? failureCode,
   }) {
     return AppUpdateCheckResult(
       currentVersion: currentVersion,
@@ -383,6 +388,7 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
       usedCache: usedCache,
       policyUnavailable: policyUnavailable,
       failureReason: failureReason,
+      failureCode: failureCode,
       versionUnsupported:
           manifest != null && _isUnsupported(currentVersion, manifest),
     );

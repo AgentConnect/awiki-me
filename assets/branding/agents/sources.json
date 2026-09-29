@@ -1,0 +1,49 @@
+{
+  "retrieved_at": "2026-09-17",
+  "assets": [
+    {
+      "file": "hermes.png",
+      "source": "https://hermes-agent.nousresearch.com/icon.png",
+      "sha256": "5fbced606189c9bfc2925a16f8903333041cabbf1f8699fe9fe9b3e24504048f",
+      "bytes": 4100
+    },
+    {
+      "file": "opencode.png",
+      "source": "https://opencode.ai/favicon-96x96-v3.png",
+      "sha256": "aa34092540de60c889610edfa3c25316e215f12d88af29cfba530d09aee7265c",
+      "bytes": 536
+    },
+    {
+      "file": "gemini.png",
+      "source": "https://geminicli.com/icon.png",
+      "sha256": "351e9f5b1bf863d738cd7be4ed040a625a1419450ae7fc490143e4042b7c2438",
+      "bytes": 46696
+    },
+    {
+      "file": "kimi.png",
+      "source": "https://kimi.com/pwa-192.png",
+      "sha256": "6c14f9c3062e953b3ed57ae3e19db931c1c1bba38d4d8d55550544f31d55e469",
+      "bytes": 21645
+    },
+    {
+      "file": "claude-code.png",
+      "source": "https://assets.claude.com/95a868946ac8a31e5ff832e2899f294aa368b836.png?w=128&h=128",
+      "sha256": "4004381309500f25e49a1ae639912ce307ea81da74cc383954a1ac8b9d343fe6",
+      "bytes": 1198
+    },
+    {
+      "file": "deepseek-harness.svg",
+      "source": "https://raw.githubusercontent.com/deepseek-ai/deepseek-harness/master/website/public/favicon.svg",
+      "sha256": "035b68e57ac4490f6880e25f4e7f534d7b50b249308ccea77af34cc5d9e840c3",
+      "bytes": 3546
+    },
+    {
+      "file": "codex.png",
+      "source": "OpenAI Codex.app/Contents/Resources/icon.icns (icon_128x128.png)",
+      "official_page": "https://developers.openai.com/codex/app/",
+      "app_version": "26.623.101652",
+      "sha256": "605861f74bb8e9327d1fbf0a2c54b3d3fa62e952b81528464c206bc1452263e4",
+      "bytes": 12974
+    }
+  ]
+}

@@ -3,6 +3,9 @@ import '../models/daemon_subkey_authorization_revoke_result.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
+import '../../domain/entities/identity_method.dart';
+
+export '../../domain/entities/identity_method.dart';
 
 enum IdentityRegistrationStatus { registered, joinRequired, recoveryRequired }
 
@@ -15,6 +18,7 @@ class IdentityRegistrationResult {
     this.existingHandleContinuationId,
     this.existingHandleJoinMode,
     this.existingHandleJoinRequiresUserPresence = false,
+    this.existingHandleMethodCapabilities,
     this.warnings = const <String>[],
   });
 
@@ -23,10 +27,17 @@ class IdentityRegistrationResult {
   final String? existingHandleContinuationId;
   final ExistingHandleJoinMode? existingHandleJoinMode;
   final bool existingHandleJoinRequiresUserPresence;
+  final IdentityMethodCapabilities? existingHandleMethodCapabilities;
   final List<String> warnings;
 }
 
 abstract interface class IdentityCorePort {
+  Future<IdentityMethodCapabilities> identityMethodCapabilities(String did);
+
+  Future<List<IdentityDidMethod>> identityCreationMethods();
+
+  Future<List<PendingIdentityRegistration>> pendingIdentityRegistrations();
+
   Future<List<AppSession>> listLocalIdentities();
 
   Future<AppSession?> defaultIdentity();
@@ -49,6 +60,7 @@ abstract interface class IdentityCorePort {
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias);
 
   Future<IdentityRegistrationResult> registerHandleWithPhone({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String otp,
     required String handle,
@@ -57,6 +69,7 @@ abstract interface class IdentityCorePort {
   });
 
   Future<IdentityRegistrationResult> registerHandleWithEmail({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String email,
     required String handle,
     String? inviteCode,
@@ -64,10 +77,22 @@ abstract interface class IdentityCorePort {
   });
 
   Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String handle,
     String? inviteCode,
     String? displayName,
   });
+}
+
+abstract interface class IdentityDocumentCorePort {
+  Future<IdentityServicesSnapshot> identityServices(String selector);
+
+  Future<void> updateIdentityServices(
+    String selector,
+    List<IdentityDocumentService> services,
+  );
+
+  Future<void> resumeIdentityServicesUpdate(String selector);
 }
 
 abstract interface class DaemonSubkeyAuthorizationCorePort {

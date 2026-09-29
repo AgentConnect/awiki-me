@@ -1,3 +1,4 @@
+import 'remote_target.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -7,6 +8,7 @@ import 'package:yaml/yaml.dart';
 import 'package:crypto/crypto.dart' show sha256;
 
 import 'test_catalog.dart';
+import 'user_test_exclusions.dart';
 
 import 'account_state_operator_contract.dart';
 import 'app_artifact_spec.dart';
@@ -58,10 +60,6 @@ const String _desktopCliPeerProductTimingsFileName = 'product_timings.json';
 const String _caseAttestationFileName = 'case_attestation.json';
 const String _personalAgentRunConfigPath =
     '.e2e/personal-agent/current/run_config.json';
-const String _codexAgentRunConfigPath =
-    '.e2e/codex-agent/current/run_config.json';
-const String _claudeCodeAgentRunConfigPath =
-    '.e2e/claude-code-agent/current/run_config.json';
 const String _desktopCliPeerScenario = 'desktop-app-cli-peer';
 const String _desktopCliPeerPerformanceScenario =
     'desktop-app-cli-peer-performance';
@@ -157,8 +155,6 @@ const Set<String> _accountStateRequiredTargetCapabilities = <String>{
 };
 const String _desktopCliPeerDisplayName = 'AWiki E2E CLI Peer';
 const String _personalAgentScenario = 'personal-agent-full-ui';
-const String _codexAgentScenario = 'codex-agent-full-ui';
-const String _claudeCodeAgentScenario = 'claude-code-agent-full-ui';
 const List<String> _desktopCliPeerCaseIds = <String>[
   'AUTH-E2E-001',
   'CONV-CANON-E2E-001',
@@ -388,18 +384,6 @@ const List<String> _personalAgentCaseIds = <String>[
   'PERSONALAGENT-E2E-002', // CLI peer message is recovered into App UI.
   'PERSONALAGENT-E2E-004', // UI revoke converges in User Service and daemon state.
 ];
-const List<String> _codexAgentCaseIds = <String>[
-  'CODEXAGENT-E2E-001', // App creates/selects a Codex runtime Agent.
-  'CODEXAGENT-E2E-002', // App UI sends a deterministic prompt to Codex.
-  'CODEXAGENT-E2E-003', // daemon records runtime_run + runtime_final_outbox sent.
-  'CODEXAGENT-E2E-004', // App local history and visible UI show the Codex reply.
-];
-const List<String> _claudeCodeAgentCaseIds = <String>[
-  'CLAUDECODEAGENT-E2E-001', // App creates/selects a Claude Code runtime Agent.
-  'CLAUDECODEAGENT-E2E-002', // App UI sends a deterministic prompt to Claude Code.
-  'CLAUDECODEAGENT-E2E-003', // daemon records runtime_run + runtime_final_outbox sent.
-  'CLAUDECODEAGENT-E2E-004', // App local history and visible UI show the Claude Code reply.
-];
 
 Future<void> main(List<String> args) async {
   try {
@@ -497,6 +481,9 @@ class DesktopE2eRunner {
     suiteManifest = DesktopE2eSuiteManifest.load(root);
     suiteDefinition = suiteManifest.definitionFor(options.e2eCase);
     suiteDefinition.validateCodeCaseIds(options.e2eCase.caseIds);
+    final userExclusions = DesktopE2eUserExclusions.load(root);
+    userExclusions.validateAgainst(suiteManifest);
+    userExclusions.requireAllowed(suiteDefinition.name);
     fileConfig = DesktopE2eFileConfig.load(
       root: root,
       path: options.configPath,
@@ -720,6 +707,8 @@ class DesktopE2eRunner {
           await _runLocalSmoke();
         case DesktopE2eCase.multiDevice:
           await _runLocalMultiDeviceCapabilityGate();
+        case DesktopE2eCase.registrationAccountFirst:
+          await _runRemoteRegistrationAccountFirst();
         case DesktopE2eCase.multiDeviceRemoteJoin:
           await _runRemoteMultiDeviceJoin();
         case DesktopE2eCase.multiDeviceRemoteRecovery:
@@ -739,6 +728,7 @@ class DesktopE2eRunner {
         case DesktopE2eCase.identityDeletionRecoveryGuard:
           await _runRemoteHandleRecovery();
         case DesktopE2eCase.multiDeviceAppPair:
+        case DesktopE2eCase.didMethodWeb:
           await _runRemoteMultiDeviceAppPair();
         case DesktopE2eCase.multiDeviceAppPairFunctional:
           await _runRemoteMultiDeviceAppPair();
@@ -1082,6 +1072,71 @@ class DesktopE2eRunner {
         );
       });
     }
+  }
+
+  Future<void> _runRemoteRegistrationAccountFirst() async {
+    final fixturePath = Platform.environment['AWIKI_REGISTRATION_FIXTURE']
+        ?.trim();
+    if (!options.dryRun && !commands.dryRun && !options.prepareOnly) {
+      if (fixturePath == null || fixturePath.isEmpty) {
+        throw E2eFailure(
+          'AWIKI_REGISTRATION_FIXTURE must name a provisioned reviewed test fixture.',
+        );
+      }
+      final fixture =
+          jsonDecode(await File(fixturePath).readAsString())
+              as Map<String, dynamic>;
+      validateRegistrationFixtureTarget(
+        didDomain: fixture['domain'] as String,
+        userServiceUrl: fixture['userServiceUrl'] as String,
+      );
+      if (fixture['userServiceUrl'] != fileConfig.userServiceUrl ||
+          fixture['domain'] != fileConfig.didDomain) {
+        throw E2eFailure(
+          'Registration fixture must match the explicitly configured test tenant.',
+        );
+      }
+      for (final secret in registrationFixtureSecrets(fixture)) {
+        _addRuntimeSecret(secret);
+      }
+      _addRuntimeSecret(fixturePath);
+    }
+    await commands.requireExecutable('flutter');
+    if (options.prepareOnly ||
+        (!options.dryRun &&
+            !commands.dryRun &&
+            Platform.environment['AWIKI_E2E_USE_FLUTTER_TEST']?.trim() !=
+                '1')) {
+      final artifact = await _prepareIntegrationExecutable(
+        name: 'registration-account-first',
+        stateRoot: appStateRootDir,
+      );
+      if (options.prepareOnly) return;
+      // The provisioner owns database cleanup; never report no side effects
+      // after launching a case that can consume an invitation and create a DID.
+      _resourceSideEffectsPossible = true;
+      await _executePreparedIntegration(
+        artifact: artifact,
+        caseIds: options.e2eCase.caseIds,
+        stateRoot: appStateRootDir,
+        environment: {'AWIKI_REGISTRATION_FIXTURE': fixturePath!},
+      );
+      return;
+    }
+    _resourceSideEffectsPossible = !options.dryRun && !commands.dryRun;
+    await _runFlutterArgs(
+      <String>[
+        'test',
+        '--dart-define=AWIKI_E2E=true',
+        '--dart-define=AWIKI_REGISTRATION_FIXTURE=${fixturePath ?? "local-fixture.json"}',
+        options.e2eCase.testFile,
+        '-d',
+        platform.name,
+      ],
+      platform: platform,
+      timeout: suiteDefinition.timeout,
+      runtimeCaseIds: options.e2eCase.caseIds,
+    );
   }
 
   Future<void> _runFlutterTest(

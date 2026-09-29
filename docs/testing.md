@@ -55,6 +55,118 @@ the same change:
 Code-only feature changes without corresponding tests are not acceptable unless
 the exception and follow-up are explicitly documented.
 
+## Account-first registration
+
+The mobile and desktop onboarding entry first asks for a Handle in the selected
+tenant. `registration_check` decides whether to show the invitation step or the
+contact verification step. Three-character new names require a database invitation;
+four-character names retain the existing algorithm-invitation policy. The App does
+not infer account ownership or admission from length or availability.
+
+The invitation stays in transient form state and is passed to the existing Core
+registration facade. Contact-bound invitation validation happens before OTP/email
+activation. Existing-account and pending local Recovery entrances remain usable
+when public discovery fails. Editing the Handle, tenant or contact discards stale
+results; an already accepted SMS receipt still sets the shared cooldown.
+
+Focused coverage:
+
+```bash
+flutter test tests/unit/registration_entry_test.dart \
+  tests/unit/registration_entry_widget_test.dart \
+  tests/unit/onboarding_page_test.dart \
+  tests/unit/onboarding_recovery_lookup_test.dart \
+  tests/unit/onboarding_otp_lifecycle_test.dart \
+  tests/unit/data/services/awiki_onboarding_support_service_test.dart
+```
+
+`SMOKE-E2E-001` checks the visible account-first transition in a native App with
+fake service ports. It does not prove real invitation consumption or completed
+registration. Real service and product registration acceptance must separately
+record the service source, Core artifact source, target tenant and cleanup.
+
+`registration-account-first` / `REGISTRATION-ACCOUNT-FIRST-E2E-001` uses real
+native Core against the reviewed `awiki.info` test tenant. Set
+`AWIKI_REGISTRATION_FIXTURE` to an ignored, permission-restricted JSON file with
+`userServiceUrl`, `domain`, `handle`, `inviteCode`, `fourCharHandle`,
+`fourCharInviteCode`, `phone`, and `otp`. The URL and DID domain must be exactly
+`https://awiki.info` and `awiki.info`; an optional `caBundle` preserves normal
+TLS trust. Provision unused three- and four-character names, a one-use database
+invitation for the three-character name, a valid algorithm invitation for the
+four-character name, and the protected test OTP before running the case.
+The ANP service DID is `did:wba:awiki.info`. The provisioner checks exact
+selector absence, records the account/DID/invitation scope, and cleans both
+User and Message rows from the same-host test databases afterward. Email
+sending and activation are outside this case by user decision.
+
+```bash
+dart run tests/e2e/runner.dart --case registration-account-first
+```
+
+For each name length, the case follows the visible account/invitation/phone
+steps, registers through Core, then uses a second fresh App scope to verify
+that the existing short name reaches authenticated Join/Recovery choices without
+an invitation and completes real notification-driven member Join. A third fresh
+scope for each name completes Recovery through operation-bound OTP, risk
+confirmation, and user presence. The old DID changes to the successor, the App
+activates that successor, and its Registry has an active management-ready admin.
+The nine-phase attestation covers these phone and Recovery flows; ordinary
+messaging is outside this case. The fixture owns database readback for two
+accounts and one database invitation used once, plus exact remote-row cleanup.
+The algorithm invitation keeps its existing stateless policy; the App case
+deletes its temporary local scopes before attesting success.
+
+The registration case also completes member Join: the original admin Core
+receives the real Join notification, verifies challenge/response and matching
+SAS, then approves through the existing user-presence boundary. The joining
+App activates the same account and appears as one active member device. The
+provisioner cleans both User and Message Service rows for the exact test account,
+including Recovery transition edges before removing the owning account. The
+user-presence adapter is E2E-only.
+
+The runner conservatively records possible service resources as `residual` after
+launch; the provisioner must attach its own database cleanup readback. A successful
+case attestation alone is not evidence that the external fixture was removed.
+Existing Join/Recovery product cases use the explicit existing-account entrance
+before their unchanged authentication and continuation assertions.
+
+E2E OTP retries stop after an accepted receipt even when its cooldown is shorter
+than the retry interval. Verify this with
+`flutter test tests/unit/onboarding_page_test.dart --dart-define=AWIKI_E2E=true --plain-name 'accepted OTP with no cooldown does not trigger automatic resend'`.
+
+For a manual CI comparison against an exact compatible Core source, set the
+`cli_ref` input and `validation_only=true` on `ci.yml`. This runs deterministic
+and native build checks while excluding `remote-product`, so it does not use
+remote account/OTP scenarios. Scheduled runs and ordinary manual product runs
+retain their existing behavior. Record the explicit ref; do not treat a run
+against the repository's older default ref as evidence for the new baseline.
+The registration feature PR targeting `release/0910` pins Core consumer
+`eccadfa05a03410f405fc7760ce45ed8cd9ff533`, whose source manifest pins SDK
+`4023161ea76a39f80da67512345eafafb12b0e6a` in both native lanes, including
+the optional CA configuration bridge and iOS keyring build support. Explicit manual refs still
+take precedence; other target branches retain repository-managed defaults.
+
+## 智能体运行时专项
+
+桌面后台消息测试通过 `runInHiddenDesktopLifecycle` 执行真实后台操作：进入 `hidden` 后不等待绘制帧，操作结束或失败时均经过 `inactive` 恢复 `resumed`，随后再校验 UI。`hidden` 会关闭 Live test binding 的帧调度，在此状态等待 `tester.pump()` 会使测试无法推进。
+
+2026-09-18：Agent 自动测试只使用模拟协议、状态和服务。已移除 ACP、Codex、Claude Code、Hermes 的真实模型 E2E，以及它们的专用准备配置／报告工具；不保留按需模型调用入口。
+
+日常入口：`dart run tests/unit/runner.dart --suite acp`，覆盖 ACP 状态、问答、回复布局、模型目录与相邻聊天／群聊／创建界面回归，不需要 API Key、Agent CLI、OTP 或后端。
+Daemon 通过模拟 stdio 子进程验证协议与恢复，见 [ACP 无模型测试](../../awiki-system-test/docs/acp-testing.md)。
+
+ACP 界面专项使用以下命令。`acp_presentation_test` 验证问答校验、独立输入、滚动保留、提交锁定、原命令重试及失效；`acp_responsive_test` 覆盖 320–1440px、横屏、1–3 倍字号、长题目／选项、模型搜索与键盘。聊天页测试测量实际气泡与状态的位置，创建页测试覆盖小屏四种 ACP 类型及键盘。
+
+```sh
+flutter test --no-pub tests/unit/acp_runtime_test.dart tests/unit/acp_presentation_test.dart tests/unit/acp_responsive_test.dart tests/unit/chat_page_test.dart tests/unit/agents/agents_page_layout_test.dart
+# 可选：导出当前渲染供人工检查；完整中文字体仅供本机验证，不加入产品资源。
+AWIKI_ACP_UI_ARTIFACTS=<输出目录> AWIKI_ACP_REVIEW_FONT=<本机完整中文字体> flutter test --no-pub tests/unit/acp_responsive_test.dart
+# 在隔离 iOS / Android 模拟器执行原生渲染与交互 smoke。
+flutter test --no-pub integration_test/acp_ui_layout_test.dart -d <隔离模拟器ID>
+```
+
+原生 UI smoke 注入 ACP 快照并记录控制请求，检查真实平台上的选项、文本补充、模型搜索与选择，以及格式被 Daemon 拒绝后保留输入、继续编辑并重交；它不访问模型、账号或 Daemon，不证明真实模型兼容性。截图写入测试 APP 的临时目录，需在 runner 卸载 APP 前保存。UI 本地校验不替代 Daemon 的权威答案校验，尤其不执行智能体提供的正则。macOS 可用 `-d macos --plain-name 'native question format rejection retains editable input'` 定向运行该问答用例。
+
 ## Unit Gate
 
 Run the full local unit/widget/provider suite:
@@ -279,7 +391,9 @@ Linux 用例独立报告真实通过或失败。
 tail-only（补 Group 和 Attachment，普通 Direct 复用既有专项）、普通群聊同步、附件元数据与
 SHA-256、以及 Direct/Group 精确 `0→1→0` 未读隔离。该入口不启动
 Daemon、Agent、Profile、Recovery 或 Registry 流程；业务能力不满足时测试失败并保留报告，
-不由 E2E 用例修改业务实现。
+不由 E2E 用例修改业务实现。 两端完成 Join 后必须先通过实时连接就绪门禁，
+再发布内容场景的 ready checkpoint；Join UI 完成不等于新的认证 listener 已建立。
+失败时保留两端有界、脱敏的 App/driver 日志，避免只报告先超时一端而丢失另一端原因。
 
 `multi-device-app-pair-paging-recovery` 是本计划唯一真实分页 App case。它只建立一次账号、
 双 App member Join 和一个 CLI peer；joining App 在已有普通 Direct 基线后离线，operator 只准备
@@ -409,6 +523,19 @@ App/Core, peer, and daemon roots. It runs only
 to run onboarding Recovery or old-peer re-Join to attest Local Data business
 continuity.
 
+Recovery's isolated Hermes ACP fixture reads the final `[User request]` block:
+controller prompts remain plain text, while `awiki.runtime.user_message_task.v1`
+delegated prompts use `content_text`. It must not echo the host's background
+context. Both `session/new` and `session/load` return the same confirmed offline
+model catalog; a restored native session must remain usable for the next turn.
+Session persistence and the exact-one reply assertions remain active
+across the crash A/B lifecycle; a successful fixture setup does not attest
+post-Recovery Agent continuity.
+The Fresh Recovery UI case waits for the current chat's ACP model configuration
+to be confirmed before submitting its prompt. A visible or hit-testable send
+button alone does not attest model readiness; the product may retain the draft
+and show its existing preparation guard dialog.
+
 `cliPeer.binary`, `daemon.rustRepo`, and `daemon.binary` may be omitted from the
 local YAML. The runner then uses the sibling `../awiki-cli-rs2` checkout and its
 `target/debug/awiki-cli` and `target/debug/awiki-deamon` artifacts. Set
@@ -522,13 +649,13 @@ When dedicated test-account, OTP, operator, or platform prerequisites are
 unavailable, the suite fails closed before claiming success. Those prerequisites
 protect the test execution and do not imply a product account rollout.
 
-### Full aggregate (all active cases)
+### Full aggregate (active remote-product cases)
 
-Since 2026-09-11, `--case full` is the all-active-case aggregate, not the old
+Since 2026-09-11, `--case full` is the active remote-product aggregate, not the old
 24-case message flow. Use `--case messaging` for that narrower flow.
 The checked-in [suite manifest](../tests/e2e/suite_manifest.json) owns the
-`full.includes` execution order and exact case union: currently 27 disjoint
-leaf suites / 114 active cases. This includes all App-pair multi-device suites,
+`full.includes` execution order and exact case union: currently 26 disjoint
+leaf suites / 107 active cases. This includes all App-pair multi-device suites,
 Handle Recovery variants, Root Key Transfer, restart, performance, supported
 Agent providers, and the macOS production-Keychain gate. The 13 planned and
 4 unsupported catalog entries are reported as non-executable, not passes.
@@ -754,12 +881,15 @@ the remote attachment lookup. A raw `dm:peer-scope:*` storage thread must never
 be sent to the core `thread-attachment-download` capability.
 
 All live product cases are constrained by `tests/e2e/suite_manifest.json` to an
-explicit per-suite allowlist. The selected YAML configuration remains the
+explicit per-suite allowlist or the audited `configured_same_origin` policy.
+The selected YAML configuration remains the
 source of the actual target: remote compatibility runs use `awiki.info`, local
 server runs use `agentwiki.info`, and approved Singapore staging runs use
 `anpclaw.com`. They reject localhost, `awiki.test`, insecure schemes, and other
-domains before starting Flutter. Adding a generic staging target does not
-authorize operator-bound security suites on that target.
+domains before starting Flutter. A `configured_same_origin` suite still requires
+an explicit protected target config, matching HTTPS/DID origin, its capability
+and OTP gates, and exact-scope cleanup; it does not authorize an allowlisted
+operator-bound suite on a new target.
 The smoke case has no service dependency. Dry-run only validates orchestration
 and never counts as a real gate.
 
@@ -781,7 +911,7 @@ Supported E2E cases:
 - `contacts`: App and CLI peer follow/contact flow，包含从可见联系人行打开 canonical Direct 的发送、restart 和 unread/read 闭环。
 - `restart`: release-only two-Flutter-process cold restart using one isolated App state root; the second process must restore the active identity, canonical Direct/Group rows, exact messages, unread state, and cached display names without in-memory Provider reuse.
 - `messaging`: the 24-case Direct/Group/Contacts/Attachment flow.
-- `full`: all active audited leaf cases; see the aggregate contract above.
+- `full`: active audited remote-product leaf cases; see the aggregate contract above.
 
 群组 E2E 使用协议级身份规则：有 Handle 时必须发送完整 `local-part.provider-domain`，bare Handle 只能从当前已认证 `did:wba` 的 provider domain 补全；无法可信补全时只允许用户显式选择 DID-only。App 和测试不得把内部 User ID 放入 ANP group body，也不得先把 Handle 解析成 DID 后丢失 Handle-backed membership 语义。
 
@@ -1139,13 +1269,13 @@ do not require the packaging environment's `AWIKI_CI_READ_TOKEN`.
 
 The private System Test coordinator is pinned to a reviewed exact commit in
 `ci.yml`. Its checkout requires repository secret `AWIKI_CI_READ_TOKEN` with
-Contents read-only access to `AgentConnect/awiki-system-test` and
-`AgentConnect/user-service`. The portable parallel-tenant contract also reads
-the pinned User Service source. Use a separate
+Contents read-only access to `AgentConnect/awiki-system-test`. The independent
+System contract job additionally needs `AgentConnect/user-service` and
+`AgentConnect/awiki-web`; the App validation job does not read those repositories. Use a separate
 credential from the packaging environment; ordinary PR jobs must not receive
 release credentials or repository-write permissions. Checkout removes the
 credential before test code executes (`persist-credentials: false`). Missing
-private-source access fails before builds; fork PRs do not receive this secret.
+private-source access fails its owning job; fork PRs do not receive this secret.
 The current System Test repository disables deploy keys, so an SSH deploy key
 cannot supply this checkout credential.
 
@@ -1278,7 +1408,9 @@ execution profile or release denominator.
 所有写入 invocation completion 的 Flutter 入口（包括 App/Core Smoke、桌面 peer、
 Agent、Recovery 和 remote Join）必须从 binding.failureMethodsDetails 记录
 `failedTestCount`（框架失败数量，不含敏感异常内容）。`test_process_finished`
-只表示进程达到结束边界；执行器必须在存在 Flutter 失败时抛出受控的 E2E failure，
+只表示进程达到结束边界；`addTearDown` 的异步失败可能晚于零失败计数写入，
+因此执行器还必须等待 Flutter 最终的 `All tests passed!` / `Some tests failed.`
+终态行。缺少终态行或终态失败均不可标记成功；执行器必须抛出受控的 E2E failure，
 不能把该步骤标为成功后仅报告缺少 case attestation。其他未执行分支仍保持 not-run，
 不批量伪造失败或通过证据。写入器要求显式提供失败数量，读取器拒绝缺少计数的旧 completion，
 不能把未知结果视为成功；旧制品需要重新构建，逐用例 attestation gate 保留。
@@ -1291,3 +1423,168 @@ Fresh Recovery 主流程失败后不执行冷启动阶段，保留主流程错�
 DSH remote Join 使用 active-only Host 快照：撤销后要求精确成员消失、唯一原 current
 ready-admin 保留，并再次刷新确认；不能在该过滤快照中要求出现 revoked 条目。
 Core 原始 Registry 的设备状态及授权围栏由其对应测试保持验证。
+
+
+For local registration acceptance with Xcode 27, the simulator App can require
+an ignored `XCODE_XCCONFIG_FILE` setting `IPHONEOS_DEPLOYMENT_TARGET = 15.0`,
+`ONLY_ACTIVE_ARCH = YES`, and the actual host architecture. This is a local
+verification override; the repository's iOS minimum remains 13.0 and a successful
+build on the override does not prove iOS 13 compatibility or simulator runtime
+acceptance. Build with `flutter build ios --simulator --debug --target
+integration_test/registration_account_first_test.dart --dart-define=AWIKI_E2E=true`
+after building and verifying the iOS Core XCFramework. Provision the restricted
+fixture before launching; compilation alone does not execute the registration case.
+
+
+For the prepared macOS runner path on newer Xcode, set
+`AWIKI_E2E_MACOS_DEPLOYMENT_TARGET=12.0` explicitly when the local toolchain no
+longer accepts the project's older target. The isolated builder validates this
+numeric version, writes it beside its own bundle identity settings, and includes
+it in the compile key and artifact provenance. It does not inherit arbitrary
+external xcconfig contents, and Linux builds ignore this macOS-only setting.
+The default keeps the project target. This local override is not evidence for
+older macOS compatibility.
+
+### 2026-09-17 ACP 修复专项
+
+首条消息前的模型可见性、停止后状态回到空闲、问答补充文字和历史消息归属由组件／状态测试覆盖；群上下文读取由 Daemon 的模拟分页测试覆盖。
+
+原生输入框粘贴 smoke：
+
+```sh
+flutter test --no-pub integration_test/chat_composer_clipboard_test.dart -d macos
+```
+
+该 smoke 使用实际系统剪贴板、生产附件适配器和输入区域焦点处理；鼠标按下／抬起完成右键菜单粘贴，覆盖选区替换、撤销、PNG 和 macOS 文件 URL。测试前保存所有 macOS pasteboard item 类型，结束恢复并删除受限临时备份，不记录剪贴板内容。Linux 的该 smoke 需在独立 Xvfb 桌面运行，文件 URL 分支只验证 macOS。消息服务为 fake，本用例不证明真实消息投递。
+
+Linux 还需安装 `xclip`，以独立 X11 剪贴板所有者准备 PNG，结束后清理该进程；当前 pasteboard 0.5.0 支持 Linux 读取图片，但其 `writeImage` 不执行写入，不能用它准备 Linux 粘贴测试素材。
+
+```sh
+xvfb-run -a flutter test --no-pub integration_test/chat_composer_clipboard_test.dart -d linux
+```
+
+
+### CI private contract source access
+
+The independent `cross-repository-contracts` job uses `AWIKI_CI_READ_TOKEN` for the exact pinned checkouts of
+`awiki-system-test`, `user-service`, and `awiki-web`. A missing secret fails
+before checkout. A 403 during checkout requires checking the credential's selected
+repositories, Contents: read access, expiry, organization approval/SSO where
+applicable, and availability for the triggering event. Secret metadata only proves
+that a named secret exists; it does not prove the underlying token is valid or
+authorized. Do not print tokens or authentication headers for diagnosis.
+
+After the administrator repairs access, rerun the failed job for the same source
+commit (or run the updated commit if code changed) and verify the actual checkout
+SHA and downstream checks. Do not skip a private contract source, substitute a
+personal session credential, or use `pull_request_target` to work around access.
+All dependent checkouts keep `persist-credentials: false`.
+
+
+For isolated iOS registration acceptance, compile only a relative fixture path
+(`AWIKI_REGISTRATION_FIXTURE=registration-acceptance/fixture.json`) and relative
+`AWIKI_E2E_ATTESTATION_PATH=registration-acceptance/case_attestation.json`, plus the
+non-secret scenario/run/case identifiers. Copy the protected fixture and optional
+local CA into the installed App container's temporary directory before launch.
+Mobile E2E file resolution uses the current App temporary directory, so reinstalling
+the App does not bind the build to an obsolete container UUID. Relative traversal
+outside that directory is rejected; desktop absolute paths retain their meaning.
+Do not compile phone numbers, OTPs, invitation codes or fixture JSON into the App.
+
+### 按需运行的 source CI
+
+用户于 2026-09-24 决定：提交、更新或合并 PR 不自动运行本仓 `ci.yml` 与
+`notify-source-ci.yml`。两者保留 `workflow_dispatch` 显式入口；本次改动仍保留
+`ci.yml` 原有夜间 schedule。手动运行需选择目标 ref 并提供精确 `cli_ref`，可选
+`sdk_dependencies=source/registry`（默认 registry）。默认 Core checkout 固定到
+`c483b51500058ffc6dac2e9db5517a5df0ce1262`，其正式依赖锁解析已发布的 Core
+`0.1.6`、ANP `1.0.5` 和 Identity `0.2.4`。旧 Core source manifest 在 SDK 发布后
+撤销；将来需要源码联调时，必须重新提交精确 source manifest 和配套锁，再显式选择 source。
+`validation_only=true` 保持禁止远端账号/OTP job。未显式执行的 CI 不能记为通过；
+正式 package workflow 与发布门禁不变。
+
+显式 source 模式的 Linux Core/CLI、原生 guard rebuild 和 Windows Rust host test/native build 复用隔离 source builder；读取 .artifacts/dependencies/source/target，不混入 registry 的 target。默认 registry 模式使用已发布 SDK 和固定 registry lock。Linux 来源摘要覆盖模式、选中的 manifest/lock 和构建脚本，切换输入使旧 provenance 失效。Windows 保留 PE x64/FRB 实际 DLL 校验。私有合同源读取仍使用现有最小权限 token，403 不以跳过测试代替。
+
+
+### App 与跨仓契约 CI 隔离
+
+`validate` 保留 App analyze、unit/widget/provider、catalog、Linux native provenance、desktop smoke 与编排检查，统一入口使用 `--profile pr --component app`。它只需 Core 与 System Test coordinator 源码，不检出 Web、User Service、DSH 或 Desktop 合同源。
+
+独立的 `cross-repository-contracts` job 使用同一 coordinator 的 `--profile pr --component system`，保留原 PR profile 的全部 System contract/acp-contract 用例以及精确源码 pin。两个 job 没有 `needs` 依赖，也不使用 `continue-on-error`；Web 403 仅使跨仓 job 失败，App 验证继续并单独报告。完整 CI 通过仍要求两边通过，不能用 App 通过替代跨仓契约通过。源码集成模式与正式发布边界不变。
+
+源码模式由手动 `sdk_dependencies=source` 显式选择，并须先提交新的精确来源清单；
+手动默认和 schedule 均使用 registry。`pull_request` 与 `push` 触发器已移除。
+
+跨仓契约 job 按实际需求使用 Python、Rust、Node，不安装 Flutter。固定 System Test
+coordinator a191665c8173dbcb6434d9484fa533f5de3321a4 将 Flutter 工具链限制在 native
+Flutter 产物；固定 Core consumer 通过原隔离 source/registry 入口编译 ACP 测试。
+对应依赖修复已合入 awiki-system-test #44、awiki-cli-rs2 #52；Core `0.1.6` 发布后
+消费者固定到上述新源码和 registry 锁。
+DSH 合同源码固定 6c9cd866b217641ab78fc34cb31db1ce64754c25，包含已合入 Release 的
+Device Join driver 等待 provider 初始化后才报告 ready 的修复；保留原初始化顺序断言。
+
+缓存仅保存 Cargo 下载/编译目录及 coordinator 的不可变产物目录，不保存测试现场或账号。
+缓存 key 包含平台、精确 Core/coordinator 提交、实际 Python/Rust 工具链及依赖来源模式；
+固定提交同时锁住 source manifest/lock。CLI 导入仍核验来源指纹与 SHA-256，缓存命中
+不跳过测试。冷机只在独立 prepare 步骤允许 CLI 下载锁定依赖，随后执行原 PR 范围。
+ACP 保持既有 owner 编译及隔离执行，不把该流程描述为全量 release 的零构建 execute。
+缓存缺失可重建，损坏制品仍失败；各 job 保持并行，不为共享产物增加串行依赖。
+
+Invitation follow-up coverage: `registration_entry_widget_test.dart` checks mobile
+and desktop invitation rejection before contact entry, then bound-invitation rejection
+for a different phone and for email without invoking either delivery API. Matching
+phone and unbound email success remain covered. Pre-contact errors do not mention
+a phone mismatch; the contact step retains binding-specific errors.
+
+CI regression repair: macOS keeps DID method selection and pending registration
+continuation visible before the contact step, matching the compact layout. Full
+runner contract tests compare exact active catalog IDs rather than stale totals.
+
+
+The `registration-account-first` acceptance is included in the remote `full`
+gate. Its disposable fixture must use the exact DID domain and HTTPS origin in
+the explicit runner configuration; neither the suite manifest nor App tests
+fix a domain. Missing configuration fails closed; no local-only success
+substitutes for this remote case. Never convert missing fixtures to skips.
+
+Registration discovery failure does not authorize OTP, email activation or final
+registration through the existing-account shortcut. A successful existing decision
+is required for that path; purpose-bound Recovery remains directly accessible
+without starting OTP on navigation, including existing local recovery continuation.
+
+### Windows HTTPS trust regression
+
+The Windows CI native job runs the process-local TLS fixture suite and the
+account/update error-path tests. Use [Windows HTTPS trust](windows-https-trust.md)
+for the fixed public CA asset, maintenance, field-probe and explicit source
+verification installer procedure. These checks do not mutate system certificate
+stores or substitute for manual account login.
+
+### Android secure-storage upgrade regression
+
+For the 9.2.4 → 10.3.1 namespace fix, run the owning migrator, platform Scope,
+App-state and session unit tests. The isolated Android fixtures and exact
+healthy-upgrade / existing-damage / cold-restart oracles live in
+[android_storage_upgrade](../tests/e2e/flutter/android_storage_upgrade/README.md).
+This is a targeted native reproduction, not a new remote `full` runner case.
+Keep APK hashes, original ciphertext/key digests and result booleans in the
+verification run. A signed product APK must also preserve the official package
+and signing certificate and pass an in-place installation/startup check.
+Real-account login and original message/image access on the affected phone remain
+manual acceptance; do not replace those checks with the synthetic storage probe.
+
+### 注册 E2E 远程目标（2026-09-24）
+
+`registration-account-first` 使用 runner 显式配置的 DID 域名和 HTTPS origin；fixture 必须与该配置精确匹配。目标域名不写入测试清单。邀请码由所选环境的受管 fixture 创建，按精确账号、Handle、DID、邀请范围清理，不能使用其他环境账号。目标校验测试：`tests/unit/e2e_harness/recovery_remote_target_test.dart`。
+
+
+### 2026-09-28 对方身份展示回归
+
+`tests/unit/identity_flow_test.dart` 覆盖目录 DID/Handle 与嵌套资料冲突、缺失资料、
+合法重名、无昵称匹配后进入会话，以及资料 Handle 不能重定向聊天对象。
+与 `peer_display_profile_provider_test.dart` 的账号切换、刷新及空昵称覆盖一起执行。
+`tests/e2e/flutter/app/app_smoke_test.dart` 的 `AwikiMeApp start conversation stays in
+recents before first send` 同时核对匹配卡的完整 Handle、昵称和聊天标题；该用例使用
+fake 服务。以 Flutter tester 执行只证明产品交互编排，不替代真实平台或跨域投递验收。
+完整修复还需要 `awiki-cli-rs2` 的公共 Profile 解析修复进入实际 native SDK；仅更新 Dart
+源码或复用旧原生库不能宣称解决底层问题。正式构建仍使用发布后的 SDK 和精确 registry pin。

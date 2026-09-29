@@ -54,7 +54,11 @@ runtime consumer取得 copy 后应尽快交给 im-core并覆盖可写 buffer，�
 - iOS 使用 `first_unlock_this_device`、`synchronizable=false`，Debug/Profile 与 Release bundle
   identity 分离。
 - Android 使用 Keystore-backed encrypted shared preferences，`resetOnError=false`，Debug/
-  Profile 使用 `.dev` application ID suffix。
+  Profile 使用 `.dev` application ID suffix。目标 namespace 为
+  `awiki_me_scope_secrets_v1`；旧 ESP `awiki_me_scope_secrets` 只通过串行的逐值校验迁移读取，
+  不在普通读取时删除旧值。仓内 flutter_secure_storage 10.3.1 补丁修正备份迁移的密钥
+  preferences 定位，避免创建新 namespace 时破坏旧 App 状态密钥。Scope adapter 不使用
+  App 辅助状态的解密错误恢复策略；根密钥读取或 envelope 校验失败始终阻止 vault 打开。
 - Web 和未支持平台返回 `scope_secret_platform_unsupported`，不降级到明文文件。
 
 Flutter secure storage 在 iOS/Android 未提供系统级原子 CAS。当前实现使用进程级共享串行器，

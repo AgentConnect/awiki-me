@@ -18,6 +18,7 @@ import '../shared/widgets/app_widgets.dart';
 import 'device_join_approval_sheet.dart';
 import 'device_labels.dart';
 import 'devices_provider.dart';
+import 'identity_services_page.dart';
 
 class DevicesPage extends ConsumerStatefulWidget {
   const DevicesPage({super.key});
@@ -29,15 +30,30 @@ class DevicesPage extends ConsumerStatefulWidget {
 class _DevicesPageState extends ConsumerState<DevicesPage> {
   bool _isRefreshing = false;
   String? _grantingDeviceId;
+  Timer? _managementTimer;
 
   @override
   void initState() {
     super.initState();
+    _managementTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (mounted &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        unawaited(
+          ref.read(devicesProvider.notifier).refreshManagementProgress(),
+        );
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(_refresh());
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _managementTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -111,6 +127,23 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
               ),
               const SizedBox(height: 12),
             ],
+            if (registry?.methodCapabilities?.servicesUpdate ==
+                true) ...<Widget>[
+              Text(
+                context.l10n.identityWebAdminLimitation,
+                key: const Key('devices-web-admin-limitation'),
+              ),
+              const SizedBox(height: 12),
+              if (canManage)
+                CupertinoButton(
+                  key: const Key('identity-services-open'),
+                  onPressed: () => AppNavigator.push<void>(
+                    context,
+                    (_) => IdentityServicesPage(selector: registry!.did),
+                  ),
+                  child: Text(context.l10n.identityServicesTitle),
+                ),
+            ],
             _SectionLabel(context.l10n.devicesAuthorizedTitle),
             const SizedBox(height: 8),
             AppCardSection(
@@ -129,6 +162,11 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                         ) ...<Widget>[
                           _DeviceTile(
                             device: registry.devices[index],
+                            requiresRejoin:
+                                state
+                                    .managementFor(registry.devices[index])
+                                    ?.requiresRejoin ==
+                                true,
                             readiness: state.readinessFor(
                               registry.devices[index],
                             ),
@@ -257,6 +295,16 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
   }
 
   Future<void> _grantManagement(DeviceSummary device) async {
+    final automatic = ref.read(devicesProvider).managementFor(device);
+    if (automatic != null) {
+      if (automatic.canRetry) {
+        await ref
+            .read(devicesProvider.notifier)
+            .retryJoinManagement(automatic.joinSessionId);
+      }
+      return;
+    }
+
     if (_grantingDeviceId != null) return;
     setState(() => _grantingDeviceId = device.protocolDeviceId);
     try {
@@ -404,6 +452,7 @@ class _SectionLabel extends StatelessWidget {
 class _DeviceTile extends StatelessWidget {
   const _DeviceTile({
     required this.device,
+    required this.requiresRejoin,
     required this.readiness,
     required this.revokeEnabled,
     required this.canRevoke,
@@ -417,6 +466,7 @@ class _DeviceTile extends StatelessWidget {
   });
 
   final DeviceSummary device;
+  final bool requiresRejoin;
   final DeviceManagementReadiness? readiness;
   final bool revokeEnabled;
   final bool canRevoke;
@@ -443,6 +493,7 @@ class _DeviceTile extends StatelessWidget {
         role,
         status,
         if (readinessLabel != null) readinessLabel,
+        if (requiresRejoin) context.l10n.deviceJoinManagementRejoinRequired,
       ].join(' · '),
       trailing: canGrantManagement || (revokeEnabled && canRevoke)
           ? Row(

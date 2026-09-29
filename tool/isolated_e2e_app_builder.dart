@@ -33,7 +33,7 @@ enum IsolatedE2eAppPlatform {
 }
 
 class IsolatedE2eAppBuildRequest {
-  const IsolatedE2eAppBuildRequest({
+  IsolatedE2eAppBuildRequest({
     required this.projectRoot,
     required this.name,
     required this.target,
@@ -48,7 +48,12 @@ class IsolatedE2eAppBuildRequest {
     this.consumerSuites = const <String>[],
     this.pinnedCompileKeys = const <String>{},
     this.preserveScratch = false,
-  });
+    String? macosDeploymentTarget,
+  }) : macosDeploymentTarget = _validatedMacosDeploymentTarget(
+         platform,
+         macosDeploymentTarget ??
+             Platform.environment['AWIKI_E2E_MACOS_DEPLOYMENT_TARGET'],
+       );
 
   final Directory projectRoot;
   final String name;
@@ -64,6 +69,12 @@ class IsolatedE2eAppBuildRequest {
   final List<String> consumerSuites;
   final Set<String> pinnedCompileKeys;
   final bool preserveScratch;
+  final String? macosDeploymentTarget;
+
+  String get macosOverrideConfiguration =>
+      'AWIKI_MACOS_DEV_BUNDLE_ID = $bundleId\n'
+      'AWIKI_APP_DISPLAY_NAME = AWikiMe E2E $name\n'
+      '${macosDeploymentTarget == null ? "" : "MACOSX_DEPLOYMENT_TARGET = $macosDeploymentTarget\n"}';
 
   factory IsolatedE2eAppBuildRequest.parse(
     List<String> args, {
@@ -434,8 +445,7 @@ class IsolatedE2eAppBuilder {
     );
     if (request.platform == IsolatedE2eAppPlatform.macos) {
       plan.overrideConfig.writeAsStringSync(
-        'AWIKI_MACOS_DEV_BUNDLE_ID = ${request.bundleId}\n'
-        'AWIKI_APP_DISPLAY_NAME = AWikiMe E2E ${request.name}\n',
+        request.macosOverrideConfiguration,
         flush: true,
       );
     }
@@ -965,6 +975,8 @@ Map<String, Object?> isolatedCompileKeyPayload({
   'target': request.target,
   'bundleId': request.bundleId,
   'platform': request.platform.name,
+  if (request.macosDeploymentTarget != null)
+    'macosDeploymentTarget': request.macosDeploymentTarget,
   'dartDefines': request.dartDefines,
   'sourceDigest': sourceDigest,
   'pubspecLockSha256': pubspecLockSha256,
@@ -1608,4 +1620,21 @@ String _commandFailureTail(ProcessResult result) {
 
 extension<T> on List<T> {
   T? get singleOrNull => length == 1 ? single : null;
+}
+
+String? _validatedMacosDeploymentTarget(
+  IsolatedE2eAppPlatform platform,
+  String? value,
+) {
+  if (platform != IsolatedE2eAppPlatform.macos ||
+      value == null ||
+      value.isEmpty) {
+    return null;
+  }
+  if (!RegExp(r'^[0-9]+\.[0-9]+(?:\.[0-9]+)?$').hasMatch(value)) {
+    throw const IsolatedE2eAppBuildException(
+      'AWIKI_E2E_MACOS_DEPLOYMENT_TARGET must be a numeric OS version.',
+    );
+  }
+  return value;
 }

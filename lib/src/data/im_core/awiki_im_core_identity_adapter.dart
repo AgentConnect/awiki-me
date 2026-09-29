@@ -11,10 +11,12 @@ import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_device_management_adapter.dart';
 import 'awiki_im_core_error_mapper.dart';
 import 'awiki_im_core_runtime.dart';
+import 'identity_method_mapper.dart';
 
 class AwikiImCoreIdentityAdapter
     implements
         IdentityCorePort,
+        IdentityDocumentCorePort,
         DaemonSubkeyAuthorizationCorePort,
         LocalIdentityDataDeletionPort,
         ExistingHandleContinuationPort,
@@ -39,6 +41,97 @@ class AwikiImCoreIdentityAdapter
   final Map<String, _PendingExistingHandleRegistration>
   _existingHandleContinuations = <String, _PendingExistingHandleRegistration>{};
   int _continuationSequence = 0;
+
+  @override
+  Future<List<PendingIdentityRegistration>>
+  pendingIdentityRegistrations() async {
+    final instance = await _coreInstance();
+    final pending = await instance.pendingIdentityRegistrations();
+    return pending
+        .map(
+          (item) => PendingIdentityRegistration(
+            did: item.did,
+            fullHandle: item.fullHandle,
+            method: IdentityDidMethod.values.byName(item.method.name),
+            displayName: item.displayName,
+            verificationKind: item.verificationKind,
+            phase: item.phase,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<IdentityMethodCapabilities> identityMethodCapabilities(
+    String did,
+  ) async {
+    final instance = await _coreInstance();
+    return identityMethodCapabilitiesFromCore(
+      await instance.identityMethodCapabilities(did),
+    );
+  }
+
+  @override
+  Future<List<IdentityDidMethod>> identityCreationMethods() async {
+    final instance = await _coreInstance();
+    final methods = await instance.identityCreationMethods();
+    return methods
+        .map((method) => IdentityDidMethod.values.byName(method.name))
+        .toList(growable: false);
+  }
+
+  @override
+  Future<IdentityServicesSnapshot> identityServices(String selector) async {
+    final instance = await _coreInstance();
+    final identity = _selectorFromString(selector);
+    final document = await instance.identityDocument(identity);
+    final pending = await instance.identityServicesUpdatePending(identity);
+    final services = (document['service'] as List? ?? const [])
+        .map((raw) {
+          final item = core.DidDocumentService.fromJson(
+            Map<String, Object?>.from(raw as Map),
+          );
+          return IdentityDocumentService(
+            id: item.id,
+            type: item.type,
+            endpoint: item.serviceEndpoint,
+            serviceDid: item.serviceDid,
+            profiles: item.profiles,
+            securityProfiles: item.securityProfiles,
+          );
+        })
+        .toList(growable: false);
+    return IdentityServicesSnapshot(services: services, pending: pending);
+  }
+
+  @override
+  Future<void> updateIdentityServices(
+    String selector,
+    List<IdentityDocumentService> services,
+  ) async {
+    final instance = await _coreInstance();
+    await instance.updateIdentityServices(
+      _selectorFromString(selector),
+      services
+          .map(
+            (item) => core.DidDocumentService(
+              id: item.id,
+              type: item.type,
+              serviceEndpoint: item.endpoint,
+              serviceDid: item.serviceDid,
+              profiles: item.profiles,
+              securityProfiles: item.securityProfiles,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  @override
+  Future<void> resumeIdentityServicesUpdate(String selector) async {
+    final instance = await _coreInstance();
+    await instance.resumeIdentityServicesUpdate(_selectorFromString(selector));
+  }
 
   @override
   Future<List<AppSession>> listLocalIdentities() async {
@@ -249,6 +342,7 @@ class AwikiImCoreIdentityAdapter
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithPhone({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String otp,
     required String handle,
@@ -259,6 +353,7 @@ class AwikiImCoreIdentityAdapter
     return _registerWithRecoveryAdmission(
       coreInstance,
       () => coreInstance.registerHandleWithPhone(
+        didMethod: core.DidMethod.values.byName(didMethod.name),
         localAlias: handle,
         requestedHandle: handle,
         phone: phone,
@@ -272,6 +367,7 @@ class AwikiImCoreIdentityAdapter
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithEmail({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String email,
     required String handle,
     String? inviteCode,
@@ -281,6 +377,7 @@ class AwikiImCoreIdentityAdapter
     return _registerWithRecoveryAdmission(
       coreInstance,
       () => coreInstance.registerHandleWithEmail(
+        didMethod: core.DidMethod.values.byName(didMethod.name),
         localAlias: handle,
         requestedHandle: handle,
         email: email,
@@ -293,6 +390,7 @@ class AwikiImCoreIdentityAdapter
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String handle,
     String? inviteCode,
     String? displayName,
@@ -301,6 +399,7 @@ class AwikiImCoreIdentityAdapter
     return _registerWithRecoveryAdmission(
       coreInstance,
       () => coreInstance.registerHandleWithoutContactVerification(
+        didMethod: core.DidMethod.values.byName(didMethod.name),
         localAlias: handle,
         requestedHandle: handle,
         inviteCode: inviteCode,
@@ -374,6 +473,11 @@ class AwikiImCoreIdentityAdapter
         existingHandleJoinMode: mode,
         existingHandleJoinRequiresUserPresence:
             continuation.requiresUserPresence,
+        existingHandleMethodCapabilities: identityMethodCapabilitiesFromCore(
+          await coreInstance.identityMethodCapabilities(
+            continuation.expectedDid,
+          ),
+        ),
         warnings: List<String>.unmodifiable(result.warnings),
       );
     }

@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:awiki_me/src/core/app_error_classifier.dart';
+import 'package:awiki_me/src/core/app_transport_failure.dart';
+import 'package:http/testing.dart';
 
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/data/services/app_key_value_store.dart';
@@ -13,6 +16,43 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'cached minimum survives TLS failure with typed redacted diagnostics',
+    () async {
+      var fail = false;
+      const failure = AppStructuredError(
+        code: tlsHandshakeFailureCode,
+        cause: AppTransportDiagnostic(
+          code: tlsHandshakeFailureCode,
+          host: 'updates.example',
+          appVersion: 'test',
+          caVersion: 'test',
+        ),
+      );
+      final client = MockClient((_) async {
+        if (fail) throw failure;
+        return http.Response(
+          jsonEncode(_manifestJson(minimumVersion: '2.0.0')),
+          200,
+        );
+      });
+      final service = _service(
+        storage: _MemoryKeyValueStore(),
+        httpClient: client,
+      );
+      addTearDown(service.dispose);
+      expect(
+        (await service.checkForUpdates(force: true)).versionUnsupported,
+        isTrue,
+      );
+      fail = true;
+      final result = await service.checkForUpdates(force: true);
+      expect(result.versionUnsupported, isTrue);
+      expect(result.usedCache, isTrue);
+      expect(result.failureCode, tlsHandshakeFailureCode);
+      expect(result.failureReason, failure.toString());
+    },
+  );
 
   test(
     'null version policy preserves a verified minimum across restart',

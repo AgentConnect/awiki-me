@@ -28,6 +28,12 @@ void main() {
         'awiki-me/tests/e2e/suite_manifest.json',
         File('${repo.path}/tests/e2e/suite_manifest.json').readAsStringSync(),
       );
+      write(
+        'awiki-me/tests/e2e/user_test_exclusions.json',
+        File(
+          '${repo.path}/tests/e2e/user_test_exclusions.json',
+        ).readAsStringSync(),
+      );
       write('awiki-me/tests/e2e/configs/e2e.local.yaml', '''
 platform: linux
 service:

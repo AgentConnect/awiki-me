@@ -4,7 +4,8 @@
 //          an E2E-only user-presence decision.
 // [OUTPUT]: Secret-free proof that Recovery replaces the DID once, exactly
 //           resumes post-commit local transition, preserves Direct/transport
-//           Group/Agent continuity, attributes fixture failure to the active
+//           Group/Agent continuity plus historical sent/received Group PNG
+//           download and preview, attributes fixture failure to the active
 //           identity/Direct/Group/Daemon/Runtime/Agent/checkpoint stage,
 //           converges Root-promotion authorization without logging out the
 //           promoted device, and fences an old App principal.
@@ -12,9 +13,13 @@
 //        while the tested onboarding or Settings Recovery is UI-driven.
 
 import 'dart:async';
+import '../../delete_isolated_directory.dart';
+
+import '../support/enter_existing_account.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/awiki_me_app.dart';
@@ -32,6 +37,7 @@ import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
@@ -60,6 +66,8 @@ import 'package:awiki_me/src/presentation/app_shell/providers/account_state_sync
 import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/acp_model_controller.dart';
+import 'package:awiki_me/src/presentation/agents/acp_task_status.dart';
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
@@ -74,6 +82,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:crypto/crypto.dart';
+import 'package:image/image.dart' as image;
 import 'package:integration_test/integration_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -325,7 +335,11 @@ void main() {
                 runtime.activatedDid == oldDid &&
                 session?.did == oldDid &&
                 session?.localIdentityId == oldSession.identityId &&
-                find.byKey(const Key('app-shell-page-background')).evaluate().length == 1;
+                find
+                        .byKey(const Key('app-shell-page-background'))
+                        .evaluate()
+                        .length ==
+                    1;
           },
           timeout: const Duration(seconds: 45),
           failure: 'Fresh Recovery setup did not open the authenticated App.',
@@ -499,6 +513,11 @@ void main() {
         final recoveryRow = find.byKey(
           const Key('settings-recover-handle-did-row'),
         );
+        await _pumpUntil(
+          tester,
+          () => recoveryRow.evaluate().length == 1,
+          failure: 'Settings did not load Handle DID Recovery capability.',
+        );
         await tester.ensureVisible(recoveryRow);
         await _tapOne(
           tester,
@@ -564,6 +583,7 @@ void main() {
         container = ProviderScope.containerOf(
           tester.element(find.byType(OnboardingPage)),
         );
+        await enterExistingAccount(tester, bareHandle);
         final onboardingFields = find.byType(CupertinoTextField);
         await _pumpUntil(
           tester,
@@ -947,7 +967,7 @@ void main() {
               freshDaemon ??= await _RunningContinuityDaemon.start(
                 config: config,
                 daemonConfig: _requireContinuityDaemonConfig(config),
-                gatewayScript: await _writeContinuityHermesGateway(
+                gatewayScript: await _writeContinuityHermesAcp(
                   _requireContinuityDaemonConfig(config),
                 ),
               );
@@ -1342,6 +1362,8 @@ void main() {
       }
 
       if (_invocationExpects(_caseId)) {
+        // Group continuity has separate fresh-Recovery case IDs and fixtures;
+        // this basic lifecycle must only attest checks executed in this flow.
         await E2eCaseAttestationWriter.markPassed(
           _caseId,
           startedAt: startedAt,
@@ -1357,9 +1379,6 @@ void main() {
             'recovery_navigation_followed_confirmed_session_activation',
             'new_local_owner_handle_and_replacement_did_verified',
             'old_did_absent_from_fresh_local_projection',
-            'old_transport_group_rebound_to_recovered_did',
-            'old_group_message_recognized_as_account_owned',
-            'recovered_identity_sent_in_old_group',
           ],
         );
       }
@@ -1542,6 +1561,8 @@ class _HandleRecoveryBusinessFixture {
     required this.groupPeer,
     required this.groupOutgoing,
     required this.groupIncoming,
+    required this.groupOutgoingImage,
+    required this.groupIncomingImage,
     required this.daemonDid,
     required this.runtimeDid,
     required this.runtimeHandle,
@@ -1570,6 +1591,8 @@ class _HandleRecoveryBusinessFixture {
   final GroupMemberSummary groupPeer;
   final ChatMessage groupOutgoing;
   final ChatMessage groupIncoming;
+  final ChatMessage? groupOutgoingImage;
+  final ChatMessage? groupIncomingImage;
   final String daemonDid;
   final String runtimeDid;
   final String runtimeHandle;
@@ -1636,7 +1659,19 @@ class _HandleRecoveryBusinessFixture {
               'group_outgoing_semantic': groupOutgoing.content,
               'group_incoming_message': _requiredMessageId(groupIncoming),
               'group_incoming_semantic': groupIncoming.content,
-              'group_read_message': _requiredMessageId(groupIncoming),
+              'group_read_message': _requiredMessageId(groupIncomingImage!),
+              'group_outgoing_image_message': _requiredMessageId(
+                groupOutgoingImage!,
+              ),
+              'group_outgoing_image_attachment':
+                  groupOutgoingImage!.attachment!.attachmentId,
+              'group_outgoing_image_semantic': groupOutgoingImage!.content,
+              'group_incoming_image_message': _requiredMessageId(
+                groupIncomingImage!,
+              ),
+              'group_incoming_image_attachment':
+                  groupIncomingImage!.attachment!.attachmentId,
+              'group_incoming_image_semantic': groupIncomingImage!.content,
               'agent_conversation': agentConversationId,
               'agent_prompt_message': _requiredMessageId(agentPrompt),
               'agent_prompt_semantic': agentPrompt.content,
@@ -1919,10 +1954,115 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
       isMine: false,
       conversationId: group.conversationId,
     );
+    ChatMessage? groupOutgoingImage;
+    ChatMessage? groupIncomingImage;
+    var groupReadMessage = ownerGroupIncomingProjection;
+    if (kind == HandleRecoveryFixtureKind.localData) {
+      final groupConversation = AppConversationReadRef.fromConversationId(
+        group.conversationId,
+      );
+      final outgoingBytes = _continuityImageBytes(incoming: false);
+      final outgoingCaption =
+          'group-image-before-out ${config.runId} ${_nonce(8)}';
+      groupOutgoingImage = await messaging.sendConversationAttachment(
+        conversation: groupConversation,
+        attachment: AttachmentDraft(
+          filename: 'recovery-outgoing.png',
+          mimeType: 'image/png',
+          bytes: outgoingBytes,
+          sizeBytes: outgoingBytes.length,
+        ),
+        caption: outgoingCaption,
+      );
+      _requireCommittedGroup(
+        groupOutgoingImage,
+        groupDid: group.groupId,
+        senderDid: ownerDid,
+        isMine: true,
+        conversationId: group.conversationId,
+      );
+      _requireContinuityImage(
+        groupOutgoingImage,
+        filename: 'recovery-outgoing.png',
+        caption: outgoingCaption,
+        expectedBytes: outgoingBytes,
+      );
+      final peerOutgoingImage = await _waitForGroupMessageExactOne(
+        tester: tester,
+        bootstrap: peerBootstrap,
+        groupDid: group.groupId,
+        messageId: _requiredMessageId(groupOutgoingImage),
+        content: outgoingCaption,
+        senderDid: ownerDid,
+        isMine: false,
+        conversationId: group.conversationId,
+      );
+      _requireContinuityImage(
+        peerOutgoingImage,
+        filename: 'recovery-outgoing.png',
+        caption: outgoingCaption,
+        expectedBytes: outgoingBytes,
+      );
+      final peerDownloaded = await peerBootstrap.messagingService!
+          .downloadAttachment(
+            thread: AppThreadRef.group(group.groupId),
+            messageId: _requiredMessageId(peerOutgoingImage),
+            attachmentId: peerOutgoingImage.attachment!.attachmentId,
+          );
+      if (peerDownloaded.bytes == null ||
+          sha256.convert(peerDownloaded.bytes!) !=
+              sha256.convert(outgoingBytes)) {
+        fail('The pre-Recovery peer did not receive the sent PNG bytes.');
+      }
+
+      final incomingBytes = _continuityImageBytes(incoming: true);
+      final incomingCaption =
+          'group-image-before-in ${config.runId} ${_nonce(8)}';
+      groupIncomingImage = await peerBootstrap.messagingService!
+          .sendConversationAttachment(
+            conversation: groupConversation,
+            attachment: AttachmentDraft(
+              filename: 'recovery-incoming.png',
+              mimeType: 'image/png',
+              bytes: incomingBytes,
+              sizeBytes: incomingBytes.length,
+            ),
+            caption: incomingCaption,
+          );
+      _requireCommittedGroup(
+        groupIncomingImage,
+        groupDid: group.groupId,
+        senderDid: peerSession.did,
+        isMine: true,
+        conversationId: group.conversationId,
+      );
+      _requireContinuityImage(
+        groupIncomingImage,
+        filename: 'recovery-incoming.png',
+        caption: incomingCaption,
+        expectedBytes: incomingBytes,
+      );
+      groupReadMessage = await _waitForGroupMessageExactOne(
+        tester: tester,
+        bootstrap: bootstrap,
+        groupDid: group.groupId,
+        messageId: _requiredMessageId(groupIncomingImage),
+        content: incomingCaption,
+        senderDid: peerSession.did,
+        isMine: false,
+        conversationId: group.conversationId,
+      );
+      _requireContinuityImage(
+        groupReadMessage,
+        filename: 'recovery-incoming.png',
+        caption: incomingCaption,
+        expectedBytes: incomingBytes,
+      );
+    }
     await _markRecoveryFixtureRead(
       conversations: conversations,
       conversationId: group.conversationId,
-      message: ownerGroupIncomingProjection,
+      message: groupReadMessage,
     );
     final groupBeforeRecovery = await groups.getGroup(group.groupId);
     final groupMembers = await groups.listMembers(group.groupId, limit: 100);
@@ -1955,7 +2095,7 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
       controllerDid: ownerDid,
       controllerHandle: ownerHandle,
     );
-    final gatewayScript = await _writeContinuityHermesGateway(daemonConfig);
+    final gatewayScript = await _writeContinuityHermesAcp(daemonConfig);
     final daemon = await _RunningContinuityDaemon.start(
       config: config,
       daemonConfig: daemonConfig,
@@ -2072,6 +2212,20 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         isMine: false,
         conversationId: group.conversationId,
       );
+      if (kind == HandleRecoveryFixtureKind.localData) {
+        _requireExactMessage(
+          groupHistory,
+          expected: groupOutgoingImage!,
+          isMine: true,
+          conversationId: group.conversationId,
+        );
+        _requireExactMessage(
+          groupHistory,
+          expected: groupIncomingImage!,
+          isMine: false,
+          conversationId: group.conversationId,
+        );
+      }
       _requireExactMessage(
         agentHistory,
         expected: prompt,
@@ -2119,6 +2273,8 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         groupPeer: groupPeer,
         groupOutgoing: groupOutgoing,
         groupIncoming: groupIncoming,
+        groupOutgoingImage: groupOutgoingImage,
+        groupIncomingImage: groupIncomingImage,
         daemonDid: daemonInstall.daemonDid,
         runtimeDid: runtimeAgent.agentDid,
         runtimeHandle: runtimeAgent.handle!,
@@ -2221,6 +2377,81 @@ void _requireCommittedGroup(
       message.isMine != isMine ||
       message.sendState != MessageSendState.sent) {
     fail('A continuity Group message was not committed exactly.');
+  }
+}
+
+Uint8List _continuityImageBytes({required bool incoming}) => Uint8List.fromList(
+  image.encodePng(
+    image.Image(width: incoming ? 3 : 2, height: incoming ? 2 : 3),
+  ),
+);
+
+void _requireContinuityImage(
+  ChatMessage message, {
+  required String filename,
+  required String caption,
+  required Uint8List expectedBytes,
+}) {
+  final attachment = message.attachment;
+  if (message.content != caption ||
+      attachment == null ||
+      attachment.attachmentId.trim().isEmpty ||
+      attachment.filename != filename ||
+      attachment.mimeType != 'image/png' ||
+      attachment.sizeBytes != expectedBytes.length) {
+    fail('A Recovery Group PNG projection lost its exact attachment metadata.');
+  }
+}
+
+Future<void> _assertHistoricalGroupImageAvailable({
+  required ProviderContainer container,
+  required AppBootstrap bootstrap,
+  required ChatMessage message,
+  required String groupDid,
+  required bool incoming,
+}) async {
+  final expectedBytes = _continuityImageBytes(incoming: incoming);
+  _requireContinuityImage(
+    message,
+    filename: incoming ? 'recovery-incoming.png' : 'recovery-outgoing.png',
+    caption: message.content,
+    expectedBytes: expectedBytes,
+  );
+  final attachmentId = message.attachment!.attachmentId;
+  final messageId = _requiredMessageId(message);
+  final messaging = bootstrap.messagingService!;
+  final downloaded = await messaging.downloadAttachment(
+    thread: AppThreadRef.group(groupDid),
+    messageId: messageId,
+    attachmentId: attachmentId,
+  );
+  if (downloaded.bytes == null ||
+      sha256.convert(downloaded.bytes!) != sha256.convert(expectedBytes)) {
+    fail(
+      'A pre-Recovery sent/received PNG could not be downloaded after Recovery.',
+    );
+  }
+  final preview = container.read(attachmentPreviewServiceProvider);
+  final previewPath = await preview.previewPathFor(
+    message: message,
+    download: () => messaging.downloadAttachment(
+      thread: AppThreadRef.group(groupDid),
+      messageId: messageId,
+      attachmentId: attachmentId,
+    ),
+    downloadToPath: (path) => messaging.downloadAttachment(
+      thread: AppThreadRef.group(groupDid),
+      messageId: messageId,
+      attachmentId: attachmentId,
+      localPath: path,
+    ),
+  );
+  final previewBytes = await preview.readPreviewBytes(previewPath);
+  final decoded = image.decodePng(previewBytes);
+  if (sha256.convert(previewBytes) != sha256.convert(expectedBytes) ||
+      decoded?.width != (incoming ? 3 : 2) ||
+      decoded?.height != (incoming ? 2 : 3)) {
+    fail('A pre-Recovery sent/received PNG preview changed after Recovery.');
   }
 }
 
@@ -2927,11 +3158,11 @@ Future<void> _waitForRuntimeMessageSyncReady({
       observation['coreBootstrapReady'] = coreReady;
       var publicReady = false;
       if (ownerIdentityId != null && completedSyncCount > 0 && coreReady) {
-        final status = await Process.run(
-          daemonBinary,
-          <String>['status', '--state-root', daemonStateRoot],
-          environment: daemonEnvironment,
-        );
+        final status = await Process.run(daemonBinary, <String>[
+          'status',
+          '--state-root',
+          daemonStateRoot,
+        ], environment: daemonEnvironment);
         observation['publicStatusExitCode'] = status.exitCode;
         if (status.exitCode == 0) {
           try {
@@ -2952,7 +3183,10 @@ Future<void> _waitForRuntimeMessageSyncReady({
         debugPrint('Runtime message sync readiness: $diagnostic');
         lastDiagnostic = diagnostic;
       }
-      if (ownerIdentityId != null && completedSyncCount > 0 && coreReady && publicReady) {
+      if (ownerIdentityId != null &&
+          completedSyncCount > 0 &&
+          coreReady &&
+          publicReady) {
         await Future<void>.delayed(const Duration(seconds: 2));
         return;
       }
@@ -3004,31 +3238,93 @@ PlainDirectMessagingService _plainDirectMessaging(MessagingService messaging) {
   return messaging as PlainDirectMessagingService;
 }
 
-Future<File> _writeContinuityHermesGateway(
-  _ContinuityDaemonConfig config,
-) async {
-  final script = File('${config.stateRoot}/recovery_fake_hermes_gateway.py');
+Future<File> _writeContinuityHermesAcp(_ContinuityDaemonConfig config) async {
+  final script = File('${config.stateRoot}/acp-home/.local/bin/hermes');
   await script.parent.create(recursive: true);
-  await script.writeAsString('''import json
+  await script.writeAsString('''#!/usr/bin/env python3
+"""Offline native Hermes ACP peer; session state lives only in the test home."""
+import json
+import os
+from pathlib import Path
 import sys
+import uuid
 
-print(json.dumps({"jsonrpc": "2.0", "method": "event", "params": {"type": "gateway.ready", "payload": {"version": "recovery-e2e"}}}), flush=True)
+if '--version' in sys.argv:
+    print('Hermes ACP 0.15.1')
+    raise SystemExit(0)
+if '--check' in sys.argv:
+    raise SystemExit(0)
+root = Path(os.environ['HERMES_HOME'])
+root.mkdir(parents=True, exist_ok=True)
+models = {'currentModelId': 'offline', 'availableModels': [{'modelId': 'offline', 'name': 'Offline fixture'}]}
+
+def emit(value):
+    print(json.dumps(value), flush=True)
+
+def stored(session_id):
+    # Only internally generated opaque UUIDs become filenames.
+    return root / (str(uuid.UUID(session_id)) + '.json')
+
+def user_text(blocks):
+    # The ACP host's final block is either a plain controller prompt or its
+    # canonical delegated-message envelope. Never echo background context.
+    prefix = '[User request]\\n'
+    for block in reversed(blocks):
+        body = block.get('text', '')
+        if not body.startswith(prefix):
+            continue
+        text = body[len(prefix):]
+        try:
+            payload = json.loads(text)
+        except ValueError:
+            return text
+        if isinstance(payload, dict) and payload.get('schema') == 'awiki.runtime.user_message_task.v1':
+            return payload['content_text']
+        return text
+    raise ValueError('ACP fixture prompt omitted the user request block')
+
 for line in sys.stdin:
     request = json.loads(line)
-    method = request.get("method")
-    if method == "session.create":
-        print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": {"session_id": "recovery_e2e", "stored_session_id": "recovery_e2e"}}), flush=True)
-    elif method == "session.resume":
-        print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": {"session_id": "recovery_e2e", "stored_session_id": "recovery_e2e"}}), flush=True)
-    elif method == "prompt.submit":
-        params = request.get("params", {})
-        prompt = str(params.get("text", ""))
-        marker = "\\nuser_message:\\n"
-        user_message = prompt.rsplit(marker, 1)[-1] if marker in prompt else prompt
-        print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": {"final_text": "$_agentReplyPrefix" + user_message}}), flush=True)
+    method, params = request.get('method'), request.get('params', {})
+    result = {}
+    if method == 'initialize':
+        result = {'protocolVersion': 1, 'agentInfo': {'name': 'hermes-offline-fixture', 'version': '0.15.1'},
+                  'agentCapabilities': {'loadSession': True, 'sessionCapabilities': {'list': {}}, 'promptCapabilities': {'embeddedContext': True}}}
+    elif method == 'session/new':
+        session_id = str(uuid.uuid4())
+        stored(session_id).write_text('[]')
+        result = {'sessionId': session_id, 'models': models}
+    elif method == 'session/load':
+        session_id = params['sessionId']
+        if not stored(session_id).is_file():
+            emit({'jsonrpc': '2.0', 'id': request['id'], 'error': {'code': -32000, 'message': 'Session not found'}})
+            continue
+        # Restoring the native session must also restore its model catalog.
+        # The host reapplies the last confirmed model before the next prompt.
+        result = {'models': models, '_meta': {'hermes': {'sessionProvenance': {'acpSessionId': session_id}}}}
+    elif method == 'session/list':
+        result = {'sessions': [{'sessionId': path.stem, 'cwd': os.getcwd()} for path in root.glob('*.json')]}
+    elif method == 'session/prompt':
+        session_id = params['sessionId']
+        history = json.loads(stored(session_id).read_text())
+        history.append(params['prompt'])
+        stored(session_id).write_text(json.dumps(history))
+        emit({'jsonrpc': '2.0', 'method': 'session/update', 'params': {'sessionId': session_id,
+              'update': {'sessionUpdate': 'agent_message_chunk', 'content': {'type': 'text', 'text': '$_agentReplyPrefix' + user_text(params['prompt'])}}}})
+        result = {'stopReason': 'end_turn'}
+    elif method == 'session/cancel':
+        continue
     else:
-        print(json.dumps({"jsonrpc": "2.0", "id": request.get("id"), "error": {"message": "unknown method"}}), flush=True)
+        if 'id' in request:
+            emit({'jsonrpc': '2.0', 'id': request['id'], 'error': {'code': -32601, 'message': 'Unknown method'}})
+        continue
+    if 'id' in request:
+        emit({'jsonrpc': '2.0', 'id': request['id'], 'result': result})
 ''', flush: true);
+  final chmod = await Process.run('chmod', ['700', script.path]);
+  if (chmod.exitCode != 0) {
+    throw StateError('Cannot prepare offline ACP fixture');
+  }
   return script;
 }
 
@@ -3041,8 +3337,16 @@ Map<String, String> _continuityDaemonEnvironment(
   'AWIKI_DAEMON_MESSAGE_SERVICE_BASE_URL': config.messageServiceUrl,
   'AWIKI_DAEMON_DID_DOMAIN': config.didDomain,
   'AWIKI_DAEMON_ALLOW_PLAIN_CONTROL': '1',
-  if (gatewayScript != null)
-    'AWIKI_HERMES_GATEWAY_CMD': '/usr/bin/env python3 ${gatewayScript.path}',
+  if (gatewayScript != null) 'HOME': gatewayScript.parent.parent.parent.path,
+  'AWIKI_DAEMON_AGENT_PROXY_MODE': 'inherit',
+  for (final key in [
+    'PATH',
+    'TMPDIR',
+    'LANG',
+    'NO_PROXY',
+    'AWIKI_IM_CORE_VAULT_ROOT_KEY_B64',
+  ])
+    if (Platform.environment[key] != null) key: Platform.environment[key]!,
 };
 
 class _RunningContinuityDaemon {
@@ -3080,7 +3384,7 @@ class _RunningContinuityDaemon {
         config,
         gatewayScript: gatewayScript,
       ),
-      includeParentEnvironment: true,
+      includeParentEnvironment: false,
       runInShell: false,
     );
     final stdoutSubscription = process.stdout
@@ -3425,19 +3729,29 @@ Future<void> _runIdentityDeletionPhaseA(WidgetTester tester) async {
     phone: account.phone,
     localIdentityId: identity.identityId,
   );
-  if (!await sessionService.hasPendingLocalIdentityRecovery(identity.identityId)) {
+  if (!await sessionService.hasPendingLocalIdentityRecovery(
+    identity.identityId,
+  )) {
     fail('Pending recovery was missing from the deletion impact query.');
   }
   // One explicit deletion decision ends the recovery; no separate discard or
   // resume is required. The deliberate Product/Core cut remains unchanged.
   await container.read(appRuntimeProvider.notifier).deleteCurrentData();
-  final operations = await recovery.listOperations(HandleRecoveryOwner(
-    localIdentityId: identity.identityId, handle: identity.handle!,
-  ));
-  final deletedOperation = operations.singleWhere((item) => item.operationId == otp.operationId);
-  if (deletedOperation.lifecycleClass != HandleRecoveryLifecycleClass.locallyDeleted ||
+  final operations = await recovery.listOperations(
+    HandleRecoveryOwner(
+      localIdentityId: identity.identityId,
+      handle: identity.handle!,
+    ),
+  );
+  final deletedOperation = operations.singleWhere(
+    (item) => item.operationId == otp.operationId,
+  );
+  if (deletedOperation.lifecycleClass !=
+          HandleRecoveryLifecycleClass.locallyDeleted ||
       deletedOperation.commitAttempted ||
-      await sessionService.hasPendingLocalIdentityRecovery(identity.identityId)) {
+      await sessionService.hasPendingLocalIdentityRecovery(
+        identity.identityId,
+      )) {
     fail('Explicit deletion did not end the pending recovery.');
   }
   final pending = await deletionSessions.pendingLocalIdentityDataDeletions();
@@ -3812,6 +4126,11 @@ Future<void> _runRecoveryCrashCutPhaseA(WidgetTester tester) async {
     failure: 'Crash-cut setup did not open Settings.',
   );
   final recoveryRow = find.byKey(const Key('settings-recover-handle-did-row'));
+  await _pumpUntil(
+    tester,
+    () => recoveryRow.evaluate().length == 1,
+    failure: 'Settings did not load Handle DID Recovery capability.',
+  );
   await tester.ensureVisible(recoveryRow);
   await _tapOne(
     tester,
@@ -4169,7 +4488,7 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   }
   final peerDid = peerIdentity.did;
 
-  final gatewayScript = await _writeContinuityHermesGateway(daemonConfig!);
+  final gatewayScript = await _writeContinuityHermesAcp(daemonConfig!);
   daemon = await _RunningContinuityDaemon.start(
     config: config,
     daemonConfig: daemonConfig,
@@ -4350,6 +4669,32 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     isMine: false,
     conversationId: groupConversationId,
   );
+  final groupOutgoingImageBefore = _requireExactStoredMessageByReference(
+    groupHistory,
+    checkpoint: checkpoint,
+    messageReferenceName: 'group_outgoing_image_message',
+    semanticReferenceName: 'group_outgoing_image_semantic',
+    senderDid: oldDid,
+    isMine: true,
+    conversationId: groupConversationId,
+  );
+  final groupIncomingImageBefore = _requireExactStoredMessageByReference(
+    groupHistory,
+    checkpoint: checkpoint,
+    messageReferenceName: 'group_incoming_image_message',
+    semanticReferenceName: 'group_incoming_image_semantic',
+    senderDid: peerDid,
+    isMine: false,
+    conversationId: groupConversationId,
+  );
+  checkpoint.requireReference(
+    'group_outgoing_image_attachment',
+    groupOutgoingImageBefore.attachment?.attachmentId ?? '',
+  );
+  checkpoint.requireReference(
+    'group_incoming_image_attachment',
+    groupIncomingImageBefore.attachment?.attachmentId ?? '',
+  );
   final agentPromptBefore = _requireExactStoredMessageByReference(
     agentHistory,
     checkpoint: checkpoint,
@@ -4404,7 +4749,19 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       'group_outgoing_semantic': groupOutgoingBefore.content,
       'group_incoming_message': _requiredMessageId(groupIncomingBefore),
       'group_incoming_semantic': groupIncomingBefore.content,
-      'group_read_message': _requiredMessageId(groupIncomingBefore),
+      'group_read_message': _requiredMessageId(groupIncomingImageBefore),
+      'group_outgoing_image_message': _requiredMessageId(
+        groupOutgoingImageBefore,
+      ),
+      'group_outgoing_image_attachment':
+          groupOutgoingImageBefore.attachment!.attachmentId,
+      'group_outgoing_image_semantic': groupOutgoingImageBefore.content,
+      'group_incoming_image_message': _requiredMessageId(
+        groupIncomingImageBefore,
+      ),
+      'group_incoming_image_attachment':
+          groupIncomingImageBefore.attachment!.attachmentId,
+      'group_incoming_image_semantic': groupIncomingImageBefore.content,
       'agent_conversation': agentConversationId,
       'agent_prompt_message': _requiredMessageId(agentPromptBefore),
       'agent_prompt_semantic': agentPromptBefore.content,
@@ -4441,6 +4798,21 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       agentHistory.length != agentMessageCount) {
     fail('Recovery changed a continuity thread message count.');
   }
+
+  await _assertHistoricalGroupImageAvailable(
+    container: appContainer,
+    bootstrap: bootstrap,
+    message: groupOutgoingImageBefore,
+    groupDid: groupDid,
+    incoming: false,
+  );
+  await _assertHistoricalGroupImageAvailable(
+    container: appContainer,
+    bootstrap: bootstrap,
+    message: groupIncomingImageBefore,
+    groupDid: groupDid,
+    incoming: true,
+  );
 
   final directOutgoingAfter = await messaging.sendText(
     thread: AppThreadRef.direct(peerDid),
@@ -4608,6 +4980,18 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     conversationId: groupConversationId,
   );
   _requireExactMessage(
+    finalGroupHistory,
+    expected: groupOutgoingImageBefore,
+    isMine: true,
+    conversationId: groupConversationId,
+  );
+  _requireExactMessage(
+    finalGroupHistory,
+    expected: groupIncomingImageBefore,
+    isMine: false,
+    conversationId: groupConversationId,
+  );
+  _requireExactMessage(
     finalAgentHistory,
     expected: agentPromptAfter,
     isMine: true,
@@ -4634,6 +5018,8 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
     _requiredMessageId(directIncomingBefore),
     _requiredMessageId(groupOutgoingBefore),
     _requiredMessageId(groupIncomingBefore),
+    _requiredMessageId(groupOutgoingImageBefore),
+    _requiredMessageId(groupIncomingImageBefore),
     _requiredMessageId(agentPromptBefore),
     _requiredMessageId(agentReplyBefore),
     _requiredMessageId(directOutgoingAfter),
@@ -4662,6 +5048,9 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       'direct_and_group_read_state_preserved_after_restart',
       'direct_id_history_ownership_and_bidirectional_send_preserved',
       'handle_backed_transport_group_id_history_and_send_preserved',
+      'pre_recovery_group_png_sent_and_peer_received_exact_bytes',
+      'historical_sent_group_png_download_and_preview_preserved',
+      'historical_received_group_png_download_and_preview_preserved',
       'group_profile_role_status_count_and_members_preserved',
       'agent_inventory_conversation_history_and_reply_preserved',
       'conversation_message_and_agent_counts_remained_exact',
@@ -5135,6 +5524,28 @@ Future<void> _runFreshFocusedGates({
           tester,
           () => input.evaluate().length == 1,
           failure: 'Fresh Recovery Runtime Agent composer was unavailable.',
+        );
+        // A hit-testable send action can still show the model-preparation
+        // guard dialog. Wait for the current chat's confirmed ACP projection,
+        // just as the user must, before entering and submitting this prompt.
+        await _pumpUntil(
+          tester,
+          () {
+            final bars = tester
+                .widgetList<AcpModelBar>(find.byType(AcpModelBar))
+                .where((bar) => bar.scope.agentDid == runtime.agentDid)
+                .toList(growable: false);
+            if (bars.length != 1) return false;
+            final bar = bars.single;
+            final operation = container.read(
+              acpModelControllerProvider(bar.scope),
+            );
+            return !operation.blocksSending &&
+                (bar.session?.data['model_configuration_ready'] == true ||
+                    bar.session?.data['model_id'] is String);
+          },
+          timeout: const Duration(seconds: 60),
+          failure: 'Fresh Recovery ACP model configuration was not ready.',
         );
         await tester.enterText(input, promptText);
         final send = find.bySemanticsIdentifier('e2e-chat-send-button');
@@ -6377,6 +6788,7 @@ _startAppPeerRegistrationJoin({
     timeout: const Duration(seconds: 45),
     failure: 'Registration onboarding did not expose phone verification.',
   );
+  await enterExistingAccount(tester, handle, scope: peerRoot);
   final phoneField = find.descendant(
     of: peerRoot,
     matching: find.bySemanticsIdentifier('e2e-phone-input'),
@@ -7590,7 +8002,8 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
   var idMatches = 0;
   var contentMatches = 0;
   final statuses = <String, int>{};
-  String diagnostic() => 'attempts=$attempts successes=$successes '
+  String diagnostic() =>
+      'attempts=$attempts successes=$successes '
       'local_state_errors=$localStateErrors transport_errors=$transportErrors '
       'events=$eventsApplied pages=$pagesFetched statuses=$statuses '
       'candidates=$candidateCount id_matches=$idMatches content_matches=$contentMatches';
@@ -7598,11 +8011,18 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
   while (DateTime.now().isBefore(deadline)) {
     try {
       attempts++;
-      final outcome = await sync.syncNow(reason: 'handle-recovery-rejoin-e2e', limit: 100);
+      final outcome = await sync.syncNow(
+        reason: 'handle-recovery-rejoin-e2e',
+        limit: 100,
+      );
       successes++;
       eventsApplied += outcome.eventsApplied;
       pagesFetched += outcome.pagesFetched;
-      statuses.update(outcome.status.name, (count) => count + 1, ifAbsent: () => 1);
+      statuses.update(
+        outcome.status.name,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
     } on MessageSyncCoreFailure catch (error) {
       if (!const <String>{
         'local_state_unavailable',
@@ -7622,8 +8042,12 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
       messageId: messageId,
     );
     candidateCount = messages.length;
-    idMatches = messages.where((message) => message.remoteId == messageId).length;
-    contentMatches = messages.where((message) => message.content == content).length;
+    idMatches = messages
+        .where((message) => message.remoteId == messageId)
+        .length;
+    contentMatches = messages
+        .where((message) => message.content == content)
+        .length;
     final matches = messages
         .where(
           (message) =>
@@ -7671,9 +8095,11 @@ Future<ChatMessage> _syncAndWaitForAppThreadExactOne({
   }
   final session = await appBootstrap.appSessionService!.currentSession();
   final expectedOwner = isMine ? senderDid : receiverDid;
-  fail('An App did not converge the exact thread message. '
-      '${diagnostic()} session_present=${session != null} '
-      'session_owner_matches=${session?.did == expectedOwner}');
+  fail(
+    'An App did not converge the exact thread message. '
+    '${diagnostic()} session_present=${session != null} '
+    'session_owner_matches=${session?.did == expectedOwner}',
+  );
 }
 
 Future<void> _syncHandleRecoveryFixtureWithRetry({
@@ -7684,11 +8110,16 @@ Future<void> _syncHandleRecoveryFixtureWithRetry({
   final deadline = DateTime.now().add(const Duration(seconds: 30));
   while (DateTime.now().isBefore(deadline)) {
     try {
-      final outcome = await bootstrap.messageSyncService!.syncNow(reason: reason, limit: 100);
+      final outcome = await bootstrap.messageSyncService!.syncNow(
+        reason: reason,
+        limit: 100,
+      );
       if (outcome.status != MessageSyncStatus.idle &&
           outcome.status != MessageSyncStatus.changed) {
-        fail('Handle Recovery fixture sync did not become ready '
-            '(status=${outcome.status.name}).');
+        fail(
+          'Handle Recovery fixture sync did not become ready '
+          '(status=${outcome.status.name}).',
+        );
       }
       return;
     } on MessageSyncCoreFailure catch (error) {
@@ -8051,10 +8482,8 @@ void _requireFreshRoot(String path) {
   }
 }
 
-Future<void> _deleteDirectory(String path) async {
-  final directory = Directory(path);
-  if (await directory.exists()) await directory.delete(recursive: true);
-}
+Future<void> _deleteDirectory(String path) =>
+    deleteIsolatedDirectory(Directory(path));
 
 Future<void> _pumpUntil(
   WidgetTester tester,

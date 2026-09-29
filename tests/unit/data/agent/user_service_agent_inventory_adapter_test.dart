@@ -8,6 +8,71 @@ import 'package:http/http.dart' as http;
 
 void main() {
   test(
+    'availability batches use authenticated facade and preserve large string versions',
+    () async {
+      final httpClient = _CapturingHttpClient(
+        result: {
+          'agents': [
+            {
+              'agent_did': 'did:agent:other',
+              'state': 'unavailable',
+              'reason': 'agent_retired',
+              'version': '9007199254740993',
+            },
+          ],
+        },
+      );
+      final adapter = UserServiceAgentInventoryAdapter(
+        userServiceUrl: 'https://example.test',
+        client: AwikiOnboardingUtilityHttpClient(
+          baseUrl: 'https://example.test',
+          httpClient: httpClient,
+        ),
+        bearerTokenProvider: () => 'fake-token',
+      );
+      final values = await adapter.getAgentAvailability([
+        'did:agent:other',
+        'did:agent:other',
+      ]);
+      expect(values.single.version, '9007199254740993');
+      expect(values.single.terminal, isTrue);
+      final request = jsonDecode(httpClient.requests.single.body) as Map;
+      expect(request['method'], 'get_agent_availability');
+      expect((request['params'] as Map)['agent_dids'], ['did:agent:other']);
+    },
+  );
+
+  test(
+    'availability rejects response injection and incomplete batches',
+    () async {
+      for (final rows in [
+        [],
+        [
+          {
+            'agent_did': 'did:agent:unrequested',
+            'state': 'unavailable',
+            'reason': 'agent_deleted',
+            'version': '1',
+          },
+        ],
+      ]) {
+        final httpClient = _CapturingHttpClient(result: {'agents': rows});
+        final adapter = UserServiceAgentInventoryAdapter(
+          userServiceUrl: 'https://example.test',
+          client: AwikiOnboardingUtilityHttpClient(
+            baseUrl: 'https://example.test',
+            httpClient: httpClient,
+          ),
+          bearerTokenProvider: () => 'fake-token',
+        );
+        await expectLater(
+          adapter.getAgentAvailability(['did:agent:expected']),
+          throwsFormatException,
+        );
+      }
+    },
+  );
+  test(
     'issueDaemonToken delegates the default name and daemon handle to the server',
     () async {
       final httpClient = _CapturingHttpClient();

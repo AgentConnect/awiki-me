@@ -17,9 +17,10 @@ recovery suites:
 - `multi-device-app-pair-paging-recovery`: one Join plus one exact-device
   `messages_501` Schema 3 recovery case.
 
-The management-grant case observes the grant entry immediately after approval,
-previews it without sending, navigates through the UI to Devices, and completes
-one explicit root-transfer confirmation there. The receiving endpoint is a
+The management-grant case authorizes the exact joining device once through SAS
+and local user presence. Core then delivers the root automatically, without a
+second transfer confirmation. It observes accepted delivery, Registry management
+registration and receiving-device local root readiness separately. The receiving endpoint is a
 second App, never a CLI. Both fresh Registry reads must eventually show exactly
 two active, management-ready admins without either App losing its session.
 The read-only completion observer tolerates only the exact missing-Bearer error
@@ -31,8 +32,8 @@ Other errors and final readiness failures remain failures.
 
 The same case then deletes only the joining App's local credential and completes
 another real Join from its fresh form. The server still has two ready admins;
-the original admin must approve the distinct third device, expose management
-grant instead of Done, and successfully grant Root again. Both App views must
+the original admin must approve the distinct third device, automatically provision
+Root again without a second confirmation. Both App views must
 converge to three ready-admin Registry rows. The coordinator clears the first
 SAS round before new submissions; opening the fresh form alone cannot pass this
 checkpoint regression.
@@ -74,6 +75,11 @@ parent shell or the App/backend proxy configuration.
 The runner creates an authenticated loopback-only coordinator for the duration
 of the pair. Product state still advances only through the visible App UI,
 native Core, realtime notification path, and remote services.
+
+Functional 中的 Agent 首次发言必须等待当前聊天会话的 ACP 模型配置投影确认。
+发送按钮可点击并不代表模型准备已经完成；用例先观察匹配 Runtime Agent 的
+`AcpModelBar` 和对应模型操作状态，再通过原 UI 输入、点击发送。仍从公开规范
+时间线校验消息 ID、归属、目标与 sent 状态，并验证另一 App 的 own-sync 投影。
 
 The coordinator may:
 
@@ -302,6 +308,39 @@ disposed. On the App that accepted a runtime-create intent, the pending intent
 also drives a bounded, quiet Inventory reconciliation until the exact runtime
 appears or the intent deadline expires.
 
+## DID Web product case
+
+`dart run tests/e2e/runner.dart --case did-method-web --config <protected-config>`
+selects only `DID-WEB-APP-E2E-001`. The selected configuration must advertise Web
+creation and bind the DID domain and every service URL to the same HTTPS origin.
+It reuses the two isolated App roles and the Content Sync peer configuration,
+with an independently registered WBA CLI. No Daemon or Recovery operator is needed.
+Linux executes both Apps under separate Xvfb displays; macOS uses its native
+desktop runner. CLI sourceRef must match the binary commit; native Core must be
+built from the matching source inputs.
+
+The admin registers through the visible WBA-default picker, explicitly selecting
+Web. The joining App uses the existing Handle choice, closes and reopens its
+AppBootstrap/Core root while Join is pending, and completes the original Join
+with in-memory SAS comparison. This verifies persisted state reopening within
+each App process; it does not attest a cold operating-system process restart.
+The case checks Web Recovery/Root Transfer limitations, member read-only UI,
+ordinary service edits with protected entries preserved, WBA CLI ↔ Web App
+Direct messages, visible member reply, exact member revoke, current-auth fencing,
+and the surviving admin reopening its root and sending again.
+
+The coordinator retains only public resource references. The runner writes
+`web_resources.private.json` with mode 0600 beside the run report for exact
+remote cleanup. Success removes local roots after both processes exit. Failure
+retains both App roots and the CLI root/key for result inspection; do not delete
+pending registration or publication candidates before their outcome is known.
+The case uses the E2E-only user-presence port and does not attest native biometric
+confirmation. Ordinary-service lost-response recovery remains covered by Core
+and focused widget tests; this case does not inject a service response loss.
+
+Adding the case and validating its catalog are not evidence of a real backend pass.
+Record actual runs and cleanup separately.
+
 ## Verification evidence
 
 The `awiki.info` run `20260726150342-hkr9m42wlk` passed
@@ -354,6 +393,12 @@ and CLI peer account IDs in the authenticated loopback coordinator. Each slot is
 immutable. Selectors never enter argv, logs or public reports. The default
 `appmd` prefix is required by the User operator's fresh-test Handle fence.
 
+全量与定向入口共用 `appmd` 前缀，注册时再生成 10 位随机后缀；运行隔离仍由独立状态目录、
+随机账号和已登记的账号 ID 保证。不能给这个前缀追加 run 摘要，否则会越过服务端清理授权边界，
+也可能让 Recovery 的 `external` 派生 handle 超过 32 字符。需要 Message cleanup 的
+functional 和 paging-recovery 入口会在产生测试数据前拒绝其他前缀；清理授权、归属检查及
+零残留回执要求保持不变。
+
 A selector-free read-only cleanup preflight runs before either App is built.
 After both App processes close, the runner sends at most two registered account
 IDs on stdin using `cleanup_test_app_scope`. User Service first checks the
@@ -378,3 +423,13 @@ User accounts, Handles and User-owned inventory remain explicit residuals; this
 is not a User-account deletion API. Historical ledgers without exact account
 selectors cannot authorize deletion, and scope is never inferred from shared
 phone numbers or name-prefix scans.
+
+## 自动管理的 V1 兼容验证边界
+
+新自动 Join 默认使用纯 V1，不发送 completion_contract，原字段、含义和 600 秒信封期限不变。User Service V2 增强不是本功能发送前置。ROOT-TRANSFER-APP-PAIR-E2E-001、ROOT-TRANSFER-E2E-001 和 CLI→App 场景必须核对一次 presence、最多四次发送、接受后不重发、Registry 登记与接收端本机 Root 激活。
+
+历史 V2 与 extensions.v1 仅保留接收/恢复验证；扩展发送在 exact-device/服务端能力协商闭合前保持关闭。延迟导入与证明刷新由 Core/User Service 的独立用例验证，不得把它们写成默认 V1 自动 Join 的依赖或将局部测试等同真机长期离线验收。
+
+Web 创建失败时，driver 只输出闭合阶段/错误码/HTTP 状态；activation 超时还在保留的
+admin root 写入 `web-registration-diagnostic.json`，只含状态、枚举、布尔值及 pending phase，
+不包含手机号、OTP、DID、Token、私钥或消息正文。它用于诊断，不是成功 attestation。

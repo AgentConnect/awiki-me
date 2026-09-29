@@ -93,7 +93,7 @@ void main() {
       final transcript = utf8.encode(
         'Compare this one-time SAS with the new device: 482917\r\n'
         'Type the same 6-digit SAS to continue: '
-        'Type APPROVE to confirm local user presence and authorize this device: ',
+        'Type APPROVE to allow this device to join and become a management device: ',
       );
 
       expect(remoteMultiDeviceCliApprovalSas(transcript), '482917');

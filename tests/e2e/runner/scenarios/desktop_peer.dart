@@ -725,30 +725,13 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
         'readyFile': peerConfig.daemonReadyFile,
         'handle': peerConfig.daemonHandle,
         'envFile': peerConfig.daemonEnvFile,
-        'fakeHermesGatewayCommand': peerConfig.daemonFakeHermesGatewayCommand,
+        'fakeHermesHome': peerConfig.daemonFakeHermesHome,
       },
       'personalAgent': <String, Object?>{
         'enabled': peerConfig.personalAgentEnabled,
         'runtimeProvider': peerConfig.personalAgentRuntimeProvider,
         'processingScope': peerConfig.personalAgentProcessingScope,
         'realBackend': peerConfig.personalAgentRealBackend,
-      },
-      'codexAgent': <String, Object?>{
-        'enabled': peerConfig.codexAgentEnabled,
-        'realBackend': peerConfig.codexAgentRealBackend,
-        'prompt': peerConfig.codexAgentPrompt ?? _defaultCodexPrompt(runId),
-        'expectedReply':
-            peerConfig.codexAgentExpectedReply ??
-            _defaultCodexExpectedReply(runId),
-      },
-      'claudeCodeAgent': <String, Object?>{
-        'enabled': peerConfig.claudeCodeAgentEnabled,
-        'realBackend': peerConfig.claudeCodeAgentRealBackend,
-        'prompt':
-            peerConfig.claudeCodeAgentPrompt ?? _defaultClaudeCodePrompt(runId),
-        'expectedReply':
-            peerConfig.claudeCodeAgentExpectedReply ??
-            _defaultClaudeCodeExpectedReply(runId),
       },
     };
     if (options.dryRun && !options.prepareOnly) {

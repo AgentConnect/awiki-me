@@ -6,6 +6,44 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/handle_recovery_fixture_contract.dart';
 
 void main() {
+  test(
+    'Recovery fake Hermes supports canonical local installation discovery',
+    () {
+      final source = File(
+        'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+      ).readAsStringSync();
+      expect(source, contains('/acp-home/.local/bin/hermes'));
+      expect(
+        source,
+        contains("'HOME': gatewayScript.parent.parent.parent.path"),
+      );
+      expect(source, contains("method == 'initialize'"));
+      expect(source, contains("method == 'session/load'"));
+      expect(source, contains("method == 'session/prompt'"));
+      // The current ACP host forwards awiki.runtime.user_message_task.v1.
+      // Its user payload field is content_text, not the retired gateway shape.
+      expect(source, contains("['content_text']"));
+      expect(source, contains("text = body[len(prefix):]"));
+      expect(source, contains("for block in reversed(blocks):"));
+      expect(source, isNot(contains("['user_message']")));
+      expect(source, isNot(contains('AWIKI_HERMES_GATEWAY_CMD')));
+      expect(source, isNot(contains('tui_gateway.entry')));
+    },
+  );
+
+  test(
+    'Recovery waits for asynchronous Settings capability before scrolling',
+    () {
+      final source = File(
+        'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+      ).readAsStringSync();
+      final readyWait = RegExp(
+        r"await _pumpUntil\(\s*tester,\s*\(\) => recoveryRow.evaluate\(\).length == 1,[\s\S]*?\);\s*await tester.ensureVisible\(recoveryRow\);",
+      );
+      expect(readyWait.allMatches(source), hasLength(2));
+    },
+  );
+
   group('Handle Recovery fixture checkpoint', () {
     test('persists only opaque references, counts, and stage state', () async {
       final checkpoint = _localCheckpoint();
@@ -247,7 +285,12 @@ void main() {
           "'local_state_unavailable',\n        'transport_unavailable',",
         ),
       );
-      expect(source, contains("syncNow(reason: 'handle-recovery-rejoin-e2e'"));
+      expect(
+        RegExp(
+          r"syncNow\(\s*reason: 'handle-recovery-rejoin-e2e'",
+        ).hasMatch(source),
+        isTrue,
+      );
     },
   );
 
@@ -778,7 +821,7 @@ HandleRecoveryFixtureCheckpoint _localCheckpoint({
       'transport_groups': 1,
       'runtime_agents': 1,
       'direct_messages': 2,
-      'group_messages': 2,
+      'group_messages': 4,
       'group_members': 2,
       'agent_messages': 2,
       'agent_inventory_items': 2,
@@ -815,7 +858,13 @@ Map<String, String> _localRawReferences() => <String, String>{
   'group_outgoing_semantic': 'group outgoing message body',
   'group_incoming_message': 'group-incoming-message',
   'group_incoming_semantic': 'group incoming message body',
-  'group_read_message': 'group-incoming-message',
+  'group_read_message': 'group-incoming-image-message',
+  'group_outgoing_image_message': 'group-outgoing-image-message',
+  'group_outgoing_image_attachment': 'group-outgoing-image-attachment',
+  'group_outgoing_image_semantic': 'group outgoing PNG caption',
+  'group_incoming_image_message': 'group-incoming-image-message',
+  'group_incoming_image_attachment': 'group-incoming-image-attachment',
+  'group_incoming_image_semantic': 'group incoming PNG caption',
   'agent_conversation': 'agent-conversation',
   'agent_prompt_message': 'agent-prompt-message',
   'agent_prompt_semantic': 'agent prompt message body',

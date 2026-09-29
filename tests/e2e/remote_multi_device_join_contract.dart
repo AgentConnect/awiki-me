@@ -11,7 +11,7 @@ const String _cliApprovalSasPrefix =
 const String _cliApprovalSasInputPrompt =
     'Type the same 6-digit SAS to continue: ';
 const String _cliApprovalConfirmationPrompt =
-    'Type APPROVE to confirm local user presence and authorize this device: ';
+    'Type APPROVE to allow this device to join and become a management device: ';
 
 Duration remoteMultiDeviceOtpRetryDelay(String? retryAfter) {
   final parsed = int.tryParse(retryAfter?.trim() ?? '');

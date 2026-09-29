@@ -23,6 +23,7 @@ void main() {
         overrides: <Override>[
           appSessionServiceProvider.overrideWithValue(sessions),
           onboardingServiceProvider.overrideWithValue(onboarding),
+          identityCorePortProvider.overrideWithValue(FakeIdentityCorePort()),
           onboardingSupportServiceProvider.overrideWithValue(
             FakeOnboardingSupportService(gateway),
           ),
@@ -83,6 +84,7 @@ void main() {
         overrides: <Override>[
           appSessionServiceProvider.overrideWithValue(sessions),
           onboardingServiceProvider.overrideWithValue(onboarding),
+          identityCorePortProvider.overrideWithValue(FakeIdentityCorePort()),
           onboardingSupportServiceProvider.overrideWithValue(
             FakeOnboardingSupportService(gateway),
           ),
@@ -142,6 +144,7 @@ class _BlockingOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithPhone({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String otp,
     required String handle,
@@ -165,6 +168,7 @@ class _BlockingOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithEmail({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String email,
     required String handle,
     String? inviteCode,
@@ -175,6 +179,7 @@ class _BlockingOnboardingService implements OnboardingService {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String handle,
     String? inviteCode,

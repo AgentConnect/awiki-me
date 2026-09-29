@@ -123,6 +123,11 @@ token、本地路径、附件路径或完整 DID。它们用于判断 UI 层消�
 会话打开、App/CLI 互发可见延迟和 cache counters/budgets；full E2E 验证真实
 backend App + CLI peer 的完整产品互发链路。运行命令分别是：
 
+performance 的长会话数据准备须先让 CLI inbox 观察到本轮最后一条 warmup 消息，
+随后才开始新的 App→CLI 消息硬预算计时。CLI 追上数据集的等待仍计入
+`performance_dataset.prepare_ms`，最多等待 8 分钟；未追上时明确失败，
+不会把未准备好的 CLI backlog 当作新消息延迟，也不调整消息延迟硬预算。
+
 ```bash
 dart run tests/e2e/runner.dart --case performance
 dart run tests/e2e/runner.dart --case full

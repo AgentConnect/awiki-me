@@ -154,7 +154,9 @@ String _coreMessageSyncReason(String reason) {
     'websocket_reconnect' || 'realtime_reconnected' => 'websocket_reconnect',
     'foreground_reconcile' || 'foreground_catch_up' => 'foreground_reconcile',
     'manual_refresh' => 'manual_refresh',
-    'remote_push' => 'remote_push',
+    // The frozen wire contract calls transport wake-up hints websocket_hint.
+    // Keep remote_push in App diagnostics/presentation policy, not on the wire.
+    'remote_push' => 'websocket_hint',
     'after_mutation' => 'after_mutation',
     'websocket_hint' ||
     'realtime_agent_control' ||

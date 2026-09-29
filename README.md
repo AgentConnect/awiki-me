@@ -27,7 +27,7 @@ Ordinary messages, Agent status, authorization requests, task progress, and resu
 
 ### Open protocols and service choice
 
-AWiki Me connects to AWiki services by default and can also use compatible tenants. Clients and servers align identity and message semantics through ANP, DID-WBA, and the shared IM Core instead of binding the product to one private protocol.
+AWiki Me connects to AWiki services by default and can also use compatible tenants. Clients and servers align identity and message semantics through ANP, Core-supported WBA/Web identities, and the shared IM Core. New identities default to WBA; compatible deployments can enable Web creation. Web identities support device Join/revoke and ordinary public service updates, while account recovery and root key transfer remain unavailable for Web.
 
 ## Who it is for
 

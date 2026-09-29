@@ -1,3 +1,4 @@
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -38,8 +39,13 @@ import '../shared/widgets/app_widgets.dart';
 import '../chat/chat_provider.dart';
 import 'agent_rename_dialog.dart';
 import 'agent_runtime_display.dart';
+import 'agent_type_catalog.dart';
+import 'runtime_client_inspection_provider.dart';
+import '../../domain/entities/agent/runtime_client_installation.dart';
+import '../app_shell/providers/session_provider.dart';
 import 'agent_status_indicator.dart';
 import 'agent_visual_status.dart';
+import 'acp_session_provider.dart';
 import 'agent_ui_messages.dart';
 import 'agents_provider.dart';
 import 'personal_agent_feature_visibility.dart';

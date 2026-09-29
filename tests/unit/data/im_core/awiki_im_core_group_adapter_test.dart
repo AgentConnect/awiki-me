@@ -6,6 +6,45 @@ import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final entry in <String, GroupMemberAdmissionDenialReason>{
+    'federated_group_denied':
+        GroupMemberAdmissionDenialReason.federatedGroupDenied,
+    'agent_inactive': GroupMemberAdmissionDenialReason.identityUnavailable,
+    'agent_inventory_not_found':
+        GroupMemberAdmissionDenialReason.identityUnavailable,
+    'unknown_reason': GroupMemberAdmissionDenialReason.unspecified,
+  }.entries) {
+    test('group adapter maps admission reason ${entry.key}', () {
+      final mapped = mapCoreGroupMemberAdmissionError(
+        core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'not used for classification',
+          serviceCode: 'group.admission_not_allowed',
+          serviceDataJson: '{"admission_reason":"${entry.key}"}',
+        ),
+      );
+      expect(mapped?.reason, entry.value);
+    });
+  }
+  for (final data in [
+    null,
+    '{',
+    '[]',
+    '{}',
+    '{"reason":"agent_not_group_invitable"}',
+  ]) {
+    test('unclassified admission $data never becomes an Agent denial', () {
+      final mapped = mapCoreGroupMemberAdmissionError(
+        core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'DID domain is not enabled for message-service',
+          serviceCode: 'group.admission_not_allowed',
+          serviceDataJson: data,
+        ),
+      );
+      expect(mapped?.reason, GroupMemberAdmissionDenialReason.unspecified);
+    });
+  }
   test(
     'group adapter requests E2EE and one-object attachments behind gate',
     () {

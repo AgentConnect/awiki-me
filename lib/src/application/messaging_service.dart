@@ -140,6 +140,17 @@ abstract interface class MessageSyncDiagnosticsService {
   Future<AppMessageSyncDiagnostics> syncDiagnostics();
 }
 
+abstract interface class CommittedControlMessagingService {
+  Stream<ThreadMessagePatch> watchControlThreadPatches(
+    AppThreadRef thread, {
+    int limit = 100,
+  });
+  Future<ThreadMessagePatch> repairControlThreadStore(
+    AppThreadRef thread, {
+    int limit = 100,
+  });
+}
+
 class ImCoreMessagingService
     implements
         MessagingService,
@@ -148,11 +159,38 @@ class ImCoreMessagingService
         LocalHistoryMessagingService,
         ThreadPatchMessagingService,
         ConversationTimelineMessagingService,
+        CommittedControlMessagingService,
         MessageSyncDiagnosticsService {
   const ImCoreMessagingService({required MessageCorePort messages})
     : _messages = messages;
 
   final MessageCorePort _messages;
+
+  @override
+  Stream<ThreadMessagePatch> watchControlThreadPatches(
+    AppThreadRef thread, {
+    int limit = 100,
+  }) {
+    final messages = _messages;
+    if (messages is! ControlThreadPatchMessageCorePort) {
+      throw UnsupportedError('Committed control messages are unavailable.');
+    }
+    return (messages as ControlThreadPatchMessageCorePort)
+        .watchControlThreadPatches(thread, limit: limit);
+  }
+
+  @override
+  Future<ThreadMessagePatch> repairControlThreadStore(
+    AppThreadRef thread, {
+    int limit = 100,
+  }) {
+    final messages = _messages;
+    if (messages is! ControlThreadPatchMessageCorePort) {
+      throw UnsupportedError('Committed control messages are unavailable.');
+    }
+    return (messages as ControlThreadPatchMessageCorePort)
+        .repairControlThreadStore(thread, limit: limit);
+  }
 
   @override
   Future<AppMessageSyncDiagnostics> syncDiagnostics() {

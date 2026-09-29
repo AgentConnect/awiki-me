@@ -134,6 +134,10 @@ class AwikiImCoreMappers {
     return ChatMessage(
       localId: message.id,
       remoteId: message.id,
+      identityAliases: _coreMessageIdentityAliases(
+        message.metadata.attributes,
+        operationId: message.metadata.operationId,
+      ),
       conversationId: message.conversationId,
       threadId: _messageThreadId(
         ownerDid: ownerDid,
@@ -164,6 +168,7 @@ class AwikiImCoreMappers {
       isMine: isMine,
       sendState: _sendStateFromCore(message.metadata, isMine: isMine),
       serverSequence: message.metadata.serverSequence,
+      notifyLevel: _attribute(message.metadata, 'notify_level'),
       isEncrypted: _isEncrypted(message.metadata.contentType),
       attachment: attachment,
       payloadJson: payloadJson,
@@ -205,6 +210,7 @@ class AwikiImCoreMappers {
     return ChatMessage(
       localId: message.id,
       remoteId: message.id,
+      identityAliases: _coreMessageIdentityAliases(message.attributes),
       conversationId: conversationId,
       threadId: _messageThreadId(
         ownerDid: ownerDid,
@@ -218,6 +224,7 @@ class AwikiImCoreMappers {
         message,
         'sender_peer_persona_id',
       ),
+      notifyLevel: _snapshotAttribute(message, 'notify_level'),
       senderDidSnapshot:
           _snapshotAttribute(message, 'sender_did_snapshot') ?? message.sender,
       senderName:
@@ -329,7 +336,10 @@ class AwikiImCoreMappers {
     );
   }
 
-  bool shouldIncludeConversation(core.Conversation conversation) {
+  bool shouldIncludeConversation(
+    core.Conversation conversation, {
+    bool includeControlMessages = false,
+  }) {
     if (!_isDisplayableConversation(
       conversationId: conversation.conversationId,
       resolutionState: conversation.resolutionState,
@@ -339,6 +349,7 @@ class AwikiImCoreMappers {
     )) {
       return false;
     }
+    if (includeControlMessages) return true;
     final lastMessage = conversation.lastMessage;
     if (lastMessage == null) {
       return true;
@@ -1147,6 +1158,21 @@ bool _isEncrypted(String? contentType) {
   final raw = contentType?.toLowerCase() ?? '';
   return raw.contains('encrypted') || raw.contains('e2ee');
 }
+
+Set<String> _coreMessageIdentityAliases(
+  Iterable<core.MessageMetadataAttribute> attributes, {
+  String? operationId,
+}) => Set.unmodifiable({
+  if (operationId?.trim().isNotEmpty == true) operationId!.trim(),
+  for (final attribute in attributes)
+    if (const {
+          'raw_message_id',
+          'client_message_id',
+          'operation_id',
+        }.contains(attribute.key) &&
+        attribute.value.trim().isNotEmpty)
+      attribute.value.trim(),
+});
 
 String? _attribute(core.MessageMetadata metadata, String key) {
   for (final attribute in metadata.attributes) {

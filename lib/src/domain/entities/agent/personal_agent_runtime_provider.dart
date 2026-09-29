@@ -88,11 +88,12 @@ abstract final class PersonalAgentRuntimeProviders {
     handlePrefix: personalAgentProviderHermesHandlePrefix,
     handleAliases: <String>[legacyPersonalAgentProviderHermesHandlePrefix],
     enabled: true,
+    driverId: 'hermes',
   );
 
   static const codex = PersonalAgentRuntimeProvider(
     id: personalAgentProviderCodexId,
-    runtime: 'generic-cli',
+    runtime: 'codex',
     runtimeProfile: personalAgentProviderHermesRuntimeProfile,
     displayLabel: 'Codex',
     runtimeDisplayName: 'Codex Personal Agent',
@@ -106,7 +107,7 @@ abstract final class PersonalAgentRuntimeProviders {
 
   static const claudeCode = PersonalAgentRuntimeProvider(
     id: personalAgentProviderClaudeCodeId,
-    runtime: 'generic-cli',
+    runtime: 'claude-code',
     runtimeProfile: personalAgentProviderHermesRuntimeProfile,
     displayLabel: 'Claude Code',
     runtimeDisplayName: 'Claude Code Personal Agent',

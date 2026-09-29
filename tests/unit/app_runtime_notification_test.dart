@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_locale.dart';
@@ -55,7 +56,6 @@ import 'package:awiki_me/src/presentation/friends/friends_navigation_provider.da
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -4160,6 +4160,77 @@ void main() {
           container.read(selectedConversationProvider),
           conversation.conversationId,
         );
+      },
+    );
+
+    testWidgets(
+      'notification open dismisses settings routes and reveals the matched conversation',
+      (tester) async {
+        final conversation = _remotePushConversation('conversation-covered');
+        final committed = _remotePushCommittedMessage(
+          conversation,
+          logicalId: 'covered-message',
+        );
+        await tester.runAsync(() async {
+          messageSyncService.deltaResult = MessageSyncOutcome(
+            status: MessageSyncStatus.changed,
+            eventsApplied: 1,
+            pagesFetched: 1,
+            committedIncomingMessages: [committed],
+          );
+          enableRemotePushEventRuntime();
+          await activateBound();
+          await pumpEventQueue();
+          gateway.conversations = [conversation];
+        });
+        final navigatorKey = container.read(appNavigatorKeyProvider);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: CupertinoApp(
+              navigatorKey: navigatorKey,
+              home: Consumer(
+                builder: (_, ref, _) => CupertinoPageScaffold(
+                  child: Text(
+                    ref.watch(selectedConversationProvider) ?? 'directory',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        navigatorKey.currentState!.push(
+          CupertinoPageRoute<void>(
+            builder: (_) =>
+                const CupertinoPageScaffold(child: Text('settings-overlay')),
+          ),
+        );
+        await tester.pumpAndSettle();
+        navigatorKey.currentState!.push(
+          CupertinoPageRoute<void>(
+            builder: (_) => const CupertinoPageScaffold(
+              child: Text('notify-settings-overlay'),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('notify-settings-overlay'), findsOneWidget);
+        await tester.runAsync(() async {
+          remotePushClient.emit(
+            _remotePushEvent(
+              'delivery-covered',
+              kind: RemotePushEventKind.notificationOpened,
+              mid: remotePushOpaqueMessageReference('covered-message'),
+            ),
+          );
+          await _pumpUntil(() => remotePushClient.acknowledged.isNotEmpty);
+        });
+        await tester.pumpAndSettle();
+        expect(find.text('settings-overlay'), findsNothing);
+        expect(find.text('notify-settings-overlay'), findsNothing);
+        expect(find.text(conversation.conversationId), findsOneWidget);
+        expect(navigatorKey.currentState!.canPop(), isFalse);
+        await tester.pumpWidget(const SizedBox.shrink());
       },
     );
 

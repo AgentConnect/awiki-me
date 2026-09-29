@@ -581,12 +581,14 @@ void validateProductDeviceRegistrySnapshot(
 
 void validateProductDeviceRegistryEpoch(ProductDeviceRegistryEpoch epoch) {
   _requireExactNonEmpty(epoch.currentDid, 'currentDid');
-  if (!epoch.currentDid.startsWith('did:wba:') ||
+  // Core owns DID method validation; the product cache preserves its exact identity.
+  if (!RegExp(r'^did:[a-z0-9]+:.+$').hasMatch(epoch.currentDid) ||
+      epoch.currentDid.contains(RegExp(r'[#?]')) ||
       RegExp(r'[\s\x00-\x1f\x7f]').hasMatch(epoch.currentDid)) {
     throw ArgumentError.value(
       epoch.currentDid,
       'currentDid',
-      'must be a canonical did:wba identifier',
+      'must be an exact DID identifier supplied by Core',
     );
   }
   _requireCanonicalPositiveDecimal(

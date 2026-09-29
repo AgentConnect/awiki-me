@@ -1,5 +1,25 @@
 {
+  "agentLifecycleUnavailable": "Unavailable",
+  "agentLifecycleDeletedReason": "This agent has been deleted.",
+  "agentLifecycleRetiredReason": "This agent's legacy integration has been retired. Its controller needs to create a new agent.",
+  "agentLifecycleInactiveReason": "This agent has been disabled and cannot receive new instructions.",
+  "agentLifecycleMessageNotice": "{name} is unavailable",
+  "@agentLifecycleMessageNotice": {"placeholders": {"name": {"type": "String"}}},
   "@@locale": "en",
+  "identityMethodLabel": "Identity method",
+  "identityWebAdminLimitation": "Web identities do not support account recovery, root key import, or management transfer. Keep the first administrator device safe; management access cannot be recovered if it is lost.",
+  "identityRegistrationPending": "Continue pending registration",
+  "identityRegistrationResumeHint": "Continue the same identity registration using the original contact details. Request a fresh verification code if needed.",
+  "identityServicesTitle": "Identity services",
+  "identityServicesHint": "Manage other public services for this identity. Handle, messaging, and profile entries use their existing settings.",
+  "identityServicesFailed": "The operation could not be completed. Refresh its progress and resume the pending operation if shown.",
+  "identityServicesPending": "A service update is awaiting confirmation. Resume it before submitting further changes.",
+  "identityServicesResume": "Resume service update",
+  "identityServiceAdd": "Add service",
+  "identityServiceId": "Service ID",
+  "identityServiceType": "Service type",
+  "identityServiceEndpoint": "Service address",
+  "identityServiceEdit": "Edit",
   "appTitle": "AWikiMe",
   "commonCancel": "Cancel",
   "commonConfirm": "Confirm",
@@ -85,6 +105,7 @@
     }
   },
   "onboardingOtp": "Verification code",
+  "onboardingShortHandleInviteHint": "Handles shorter than 5 characters require an invite code to register.",
   "onboardingOtpPlaceholder": "Enter verification code",
   "onboardingEmail": "Email",
   "onboardingEmailPlaceholder": "Enter email address",
@@ -119,7 +140,7 @@
   "registrationVerificationUnavailable": "This verification code has expired or has already been used. Send a new code and try again.",
   "registrationCommittedActivationPending": "Your account was created and saved safely on this device, but sign-in setup did not finish. Select the local account and sign in again; no new verification code is needed.",
   "registrationRecoveryStateInvalid": "This Handle's identity state needs server-side attention. Contact support before trying again.",
-  "registrationLocalStateNeedsAttention": "This device has identity state that cannot be reconciled safely. Resolve the local state, then send a new verification code.",
+  "registrationLocalStateNeedsAttention": "This device has conflicting identity state. Keep its local data, enter the original Handle above, and use Continue previous recovery. Contact support if that option does not appear. Registering again will not resolve it.",
   "registrationContinuityChanged": "Identity continuity changed. Send a new verification code and try again.",
   "registrationJoinTerminalWait": "The previous device Join is ending safely. Wait briefly, then send a new verification code and try again.",
   "identityDeletionCompleteTransitionFirst": "An identity transition is still being applied. Complete it before deleting this identity.",
@@ -357,9 +378,15 @@
   "deviceRootTransferTarget": "Target device: {deviceId}\nSigning key: {signingKeyId}\nEnd-to-end encryption key: {e2eeKeyId}",
   "@deviceRootTransferTarget": {
     "placeholders": {
-      "deviceId": {"type": "String"},
-      "signingKeyId": {"type": "String"},
-      "e2eeKeyId": {"type": "String"}
+      "deviceId": {
+        "type": "String"
+      },
+      "signingKeyId": {
+        "type": "String"
+      },
+      "e2eeKeyId": {
+        "type": "String"
+      }
     }
   },
   "deviceRootTransferSent": "Root key sent",
@@ -377,7 +404,9 @@
   "deviceRevokeConfirmDetail": "Revoke {deviceId} permanently. It will lose future access, but data already obtained cannot be erased. This action cannot be undone.",
   "@deviceRevokeConfirmDetail": {
     "placeholders": {
-      "deviceId": {"type": "String"}
+      "deviceId": {
+        "type": "String"
+      }
     }
   },
   "deviceRevokeConfirmAction": "Revoke permanently",
@@ -398,7 +427,9 @@
   "deviceJoinResendOtpIn": "Resend ({seconds}s)",
   "@deviceJoinResendOtpIn": {
     "placeholders": {
-      "seconds": {"type": "int"}
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "deviceJoinStart": "Start pairing",
@@ -417,17 +448,23 @@
   "deviceJoinFingerprint": "Key fingerprint: {fingerprint}",
   "@deviceJoinFingerprint": {
     "placeholders": {
-      "fingerprint": {"type": "String"}
+      "fingerprint": {
+        "type": "String"
+      }
     }
   },
   "deviceJoinRequestWindow": "Requested {issuedAt}; expires {expiresAt}",
   "@deviceJoinRequestWindow": {
     "placeholders": {
-      "issuedAt": {"type": "String"},
-      "expiresAt": {"type": "String"}
+      "issuedAt": {
+        "type": "String"
+      },
+      "expiresAt": {
+        "type": "String"
+      }
     }
   },
-  "deviceJoinApprove": "Confirm and authorize",
+  "deviceJoinApprove": "Allow join and management access",
   "deviceJoinCancel": "Cancel pairing",
   "deviceJoinAuthorized": "Device added",
   "deviceJoinFinalizing": "Finishing device operation...",
@@ -435,7 +472,7 @@
   "deviceJoinExpired": "Device pairing expired. Start again.",
   "deviceJoinActivating": "Activating this device...",
   "deviceJoinActivationRetry": "Retry device activation",
-  "deviceJoinUserPresenceReason": "Confirm authorization of a new device",
+  "deviceJoinUserPresenceReason": "Allow this device to join and become a management device",
   "deviceJoinErrorUnavailable": "Multi-device support is not available",
   "deviceJoinErrorConflict": "The state changed. Refresh and try again.",
   "deviceJoinErrorSas": "The verification code state did not match. Authorization stopped.",
@@ -444,7 +481,9 @@
   "deviceJoinOtpRateLimited": "Verification codes are being sent too frequently. Try again in {seconds} seconds.",
   "@deviceJoinOtpRateLimited": {
     "placeholders": {
-      "seconds": {"type": "int"}
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "deviceJoinErrorFailed": "Device operation failed. Refresh and try again.",
@@ -608,7 +647,9 @@
   "groupIdentityCurrentHandle": "Handle: {handle}",
   "@groupIdentityCurrentHandle": {
     "placeholders": {
-      "handle": {"type": "String"}
+      "handle": {
+        "type": "String"
+      }
     }
   },
   "groupNoDescription": "No group description yet",
@@ -644,13 +685,17 @@
   "groupRecoveryPending": "Identity restored; {count} group updates are pending",
   "@groupRecoveryPending": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "groupRecoveryBlocked": "Identity restored; {count} group updates need attention",
   "@groupRecoveryBlocked": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "groupRecoveryStatusUnavailable": "Identity restored; group updates will retry later",
@@ -680,6 +725,8 @@
   "groupInviteShowMore": "Show more",
   "groupInviteAdding": "Adding...",
   "groupInviteAddFailed": "Could not add this identity. Try again later.",
+  "groupInviteAdmissionDenied": "The server does not allow this identity to join the group.",
+  "groupInviteFederatedDenied": "Server policy does not allow this external identity to join the group.",
   "groupInviteConfirmCount": "Add ({count})",
   "@groupInviteConfirmCount": {
     "placeholders": {
@@ -978,7 +1025,7 @@
   "agentRemoveDaemonFromAccountMessage": "This daemon is not reachable. This will remove the daemon and its agents from this account only. It will not access or clean up files on the host.",
   "agentRemoveRuntimeFromAccountMessage": "This agent cannot be deleted through its daemon right now. This will remove it from this account only. It will not access or clean up files on the host.",
   "agentInstallTitle": "Install daemon on host",
-  "agentInstallSupportedTypes": "Supported Agent types: Hermes, Codex, Claude Code. After installing the host daemon, you can create Runtime Agents under it.",
+  "agentInstallSupportedTypes": "Supports {types}. After installing Daemon, create an agent here. External clients must be installed and configured on the same device.",
   "agentInstallTokenExpiresAt": "Expires at: {expiresAt}",
   "@agentInstallTokenExpiresAt": {
     "placeholders": {
@@ -1037,38 +1084,38 @@
   },
   "agentCreateHandleInvalidPattern": "Use only lowercase letters, numbers, and hyphens. It must start and end with a letter or number.",
   "agentCreateHandleNoDoubleHyphen": "Handle cannot contain consecutive hyphens",
-  "agentCreateNeedsRouteWorkspace": "{agentType} requires per-conversation working directories.",
+  "agentCreateNeedsRouteWorkspace": "Upgrade Daemon on this device to enable {agentType}.",
   "@agentCreateNeedsRouteWorkspace": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateHermesDescription": "Built-in Hermes Runtime Agent.",
-  "agentCreateNeedsGenericCliCapability": "{agentType} requires generic-cli capability from the daemon.",
+  "agentCreateHermesDescription": "Uses Hermes CLI on the host.",
+  "agentCreateNeedsGenericCliCapability": "Refresh the device status to check support for {agentType}.",
   "@agentCreateNeedsGenericCliCapability": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateUnsupportedDriver": "The current daemon does not support the {agentType} driver.",
+  "agentCreateUnsupportedDriver": "This device’s Daemon does not yet support {agentType}. Upgrade it and try again.",
   "@agentCreateUnsupportedDriver": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateNeedsRouteSession": "{agentType} requires route session and native resume support.",
+  "agentCreateNeedsRouteSession": "Upgrade Daemon on this device to enable {agentType}.",
   "@agentCreateNeedsRouteSession": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateNeedsHostAccess": "{agentType} requires daemon support for full host access.",
+  "agentCreateNeedsHostAccess": "Upgrade Daemon on this device to enable {agentType}.",
   "@agentCreateNeedsHostAccess": {
     "placeholders": {
       "agentType": {}
     }
   },
-  "agentCreateRequiresSignedInCli": "Requires an installed and signed-in {agentType} CLI on the daemon host.",
+  "agentCreateRequiresSignedInCli": "Uses the {agentType} client on the host.",
   "@agentCreateRequiresSignedInCli": {
     "placeholders": {
       "agentType": {}
@@ -1350,7 +1397,13 @@
   "updateInstallFailed": "Update failed. Please install it from the download page.",
   "updateRestrictedTitle": "Update required for this tenant",
   "updateRestrictedMessage": "{tenantName} requires AWiki Me {minimumVersion} or later. You are using {currentVersion}. Update the app to continue, or switch tenants.",
-  "@updateRestrictedMessage": {"placeholders": {"tenantName": {}, "minimumVersion": {}, "currentVersion": {}}},
+  "@updateRestrictedMessage": {
+    "placeholders": {
+      "tenantName": {},
+      "minimumVersion": {},
+      "currentVersion": {}
+    }
+  },
   "updateRestrictedInstall": "Open official download page",
   "updateRestrictedSwitchTenant": "Switch tenant",
   "updateRestrictedSettings": "Settings and local data",
@@ -1410,7 +1463,9 @@
   "attachmentDownloadingProgress": "Downloading · {progress}",
   "@attachmentDownloadingProgress": {
     "placeholders": {
-      "progress": {"type": "String"}
+      "progress": {
+        "type": "String"
+      }
     }
   },
   "attachmentDownloadPaused": "Download paused",
@@ -1522,14 +1577,14 @@
   "handleRecoveryQuarantineReason": "Confirm that this recovery key is permanently unavailable",
   "handleRecoveryQuarantined": "The unavailable operation is quarantined and retained in Core for audit. You may now start a new recovery.",
   "handleRecoveryStartNew": "Start a new recovery",
-  "handleRecoveryMigrationUnsupported": "This local identity cannot be migrated safely in V4.0. No remote commit was attempted; use a fresh start or ordinary Device Join.",
+  "handleRecoveryMigrationUnsupported": "The existing local identity cannot be continued safely. No remote commit was attempted. Keep the local data and resolve the identity state; do not replace it with a new local identity.",
   "handleRecoveryErrorNotPrepared": "Recovery was not prepared. This flow is terminated; start again.",
   "handleRecoveryErrorUserPresenceRequired": "Complete the local system confirmation again before continuing.",
   "handleRecoveryErrorTransitionMismatch": "The recovery context does not match. This flow is terminated for safety.",
   "handleRecoveryErrorTransitionChainUnsupported": "This identity transition chain is unsupported. This flow is terminated.",
   "handleRecoveryErrorRemoteStateChanged": "Remote state changed. Continue status or resume only with the current recovery reference.",
   "handleRecoveryErrorOutcomeUnknown": "The submission outcome is unknown. Continue with the same recovery reference; do not create a new operation.",
-  "handleRecoveryErrorLocalStateUnavailable": "The local recovery reference is unavailable. Continuing is blocked on this device.",
+  "handleRecoveryErrorLocalStateUnavailable": "The local identity or recovery record is inconsistent. Keep this device's data and check again; contact support if the problem persists. Registering again will not fix it.",
   "handleRecoveryErrorBlocked": "Recovery is blocked by a safety policy. Retain the current recovery reference for audit.",
   "handleRecoveryPrepared": "Recovery was verified. Review the effects before continuing.",
   "handleRecoveryRemotePending": "Submitting the remote recovery result.",
@@ -1550,11 +1605,83 @@
   "legacyIdentityUpgradeFailed": "The legacy identity upgrade failed. Please try again.",
   "localCredentialDeleteRecoveryHint": "This also clears the unfinished recovery progress on this device.",
   "localCredentialDeleteInspectFailed": "Unable to check the local identity state. Please retry.",
-  "handleRecoveryFreshDataNotice": "No previous identity data is available on this device. Earlier direct messages will not be restored automatically.",
+  "handleRecoveryFreshDataNotice": "This recovery creates a new local identity and will not automatically carry over the old identity's direct messages. Existing local data is preserved.",
   "handleRecoveryAwaitingResult": "The recovery result is not yet confirmed. Continue checking the existing recovery.",
   "handleRecoveryAwaitingLocal": "Account recovery has taken effect. Continue setup on this device; no new SMS code is needed.",
   "handleRecoveryChecking": "Checking recovery progress…",
   "handleRecoveryRunning": "Processing recovery. Please wait…",
   "handleRecoveryEntering": "Recovery is complete. Opening messages…",
-  "handleRecoveryContinueExisting": "Continue previous recovery"
+  "handleRecoveryContinueExisting": "Continue previous recovery",
+  "@agentInstallSupportedTypes": {
+    "placeholders": {
+      "types": {
+        "type": "String"
+      }
+    }
+  },
+  "agentClientReady": "Detected",
+  "agentClientMissing": "Not found",
+  "agentClientUnavailable": "Cannot start",
+  "agentClientUnknown": "Not confirmed",
+  "agentClientChecking": "Checking…",
+  "agentClientRefresh": "Check again",
+  "agentClientOffline": "Host offline",
+  "agentClientOfflineHint": "Reconnect the Daemon, then check again.",
+  "agentClientRetryHint": "Could not confirm installation. Check again.",
+  "agentClientInstallHint": "Install the client on this Daemon’s host, then check again.",
+  "agentClientPermissionHint": "The client cannot be executed. Fix its permissions on the host.",
+  "agentClientGatewayHint": "Hermes CLI module not found. Check the host installation.",
+  "agentClientCustomHint": "This custom launcher cannot be checked safely. Check its entry point.",
+  "agentClientTimeoutHint": "The check timed out. Try again shortly.",
+  "agentClientLaunchHint": "The client could not start. Check its installation and dependencies.",
+  "agentClientHost": "Checking clients on {host}’s host.",
+  "agentClientLegacy": "This Daemon does not support installation checks yet. Creation uses the existing validation.",
+  "agentClientScope": "Checks installation and startup only. Sign in or configure a model on the host before use.",
+  "@agentClientHost": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "agentClientCreating": "Creating…",
+  "agentClientCreateFailed": "Creation failed. Check the client environment and try again. Your input has been kept.",
+  "agentClientCreatePending": "Creation was submitted and is still pending. You can close this window and check the Agent list.",
+  "agentClientProtocolHint": "Client protocol connection failed. Check sign-in, configuration or client errors on the host.",
+  "agentClientCompatibilityHint": "This client version is not compatible with the integration. Update the client and try again.",
+  "onboardingAccountNext": "Next",
+  "onboardingInviteCode": "Invite code",
+  "onboardingInviteHandleHint": "An invite code is required to register this handle.",
+  "onboardingInviteRequired": "An invite code is required to register this handle.",
+  "onboardingInviteLengthSix": "Enter a 6-character invite code.",
+  "onboardingInviteLengthMax64": "The invite code must be 64 characters or fewer.",
+  "onboardingInviteInvalidBeforeContact": "This invitation code is invalid, expired, or exhausted. Please check and try again.",
+  "onboardingInviteInvalid": "The invite code is invalid, expired, exhausted, or does not match this phone. Check it and retry.",
+  "onboardingAccountUnavailable": "This handle cannot be registered. Choose another handle.",
+  "onboardingAccountCheckFailed": "Unable to check the handle. Retry, or continue with an existing account.",
+  "onboardingExistingAccount": "Continue verification to sign in, join a device, or recover this account.",
+  "onboardingExistingAccountAction": "Continue with an existing account",
+  "onboardingChangeAccount": "Change handle or invite code",
+  "onboardingRegistrationClosed": "Registration is not available for this contact.",
+  "chatRetiredAgentDisabled": "This legacy agent is retired. Create a new agent; your history and draft are kept.",
+  "agentAcpUpgradeRequired": "Upgrade the Daemon to use ACP with this agent.",
+  "agentClientAdapterHint": "The Daemon adapter is missing or damaged. Reinstall the Daemon.",
+  "agentClientPlatformHint": "The agent adapter does not support this platform.",
+  "agentClientHermesAcpHint": "Hermes ACP support is unavailable. Upgrade Hermes CLI on the host.",
+  "agentClientNodeMissing": "Node.js is not installed on this host.",
+  "agentClientNodeIncompatible": "This Node.js version is incompatible. Use Node.js 22 or later.",
+  "agentClientNodeUnavailable": "Node.js could not start. Check the host installation and detect again.",
+  "agentClientNodeSetup": "Codex and Claude Code require Node.js 22 or later on this Daemon host. Node.js 24 LTS is recommended. After installing, detect again.",
+  "agentClientNodeDownload": "Node.js installation guide ↗",
+  "agentClientWaitingConfirmation": "Awaiting confirmation",
+  "deviceJoinManagementRegistered": "Management access registered. Confirm readiness on the new device.",
+  "deviceJoinManagementWaiting": "Root key delivery accepted. Waiting for the new device to finish setup.",
+  "deviceJoinManagementConfiguring": "Device joined. Configuring management access. You can safely leave this page.",
+  "deviceJoinManagementRejoinRequired": "Management setup is no longer valid. Have an administrator revoke this device, then sign out locally on this device while keeping its data and join again.",
+  "deviceJoinManagementFailed": "Device joined; management configuration failed",
+  "handleRecoveryErrorLocalRegistryConflict": "Other local identities still conflict. Your recovery is preserved. Go back to resolve the other pending Handle recoveries, then continue this one. If none are available, keep your data and contact support.",
+  "handleRecoveryOtherPending": "Back to other recoveries",
+  "secureConnectionFailed": "Unable to establish a secure connection. Check your system date and time, or contact support.",
+  "trustResourcesInvalid": "The app’s secure connection resources are missing or damaged. Update or reinstall the app.",
+  "onboardingAccountCheckUnsupported": "This server does not support account checks yet. Existing accounts can continue to sign in."
 }

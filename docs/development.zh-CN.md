@@ -51,6 +51,15 @@ scripts/flutter/build-sdk-native.sh --android-only
 scripts/flutter/build-sdk-native.sh --ios-only
 ```
 
+原生 SDK 依赖来源由 `awiki-cli-rs2` 拥有。从 App checkout 切换到该相邻仓库执行构建入口；Debug 默认使用已发布 registry pin：
+
+```bash
+cd ../awiki-cli-rs2
+python3 scripts/dependencies/build.py --package im-core-dart --check
+```
+
+只要把 ANP 改成源码时，在 `awiki-cli-rs2` 把 `scripts/dependencies/local-anp.example.json` 复制为 `dependencies.local.json`，并加 `--deps local --local-config dependencies.local.json`。App 正式打包仍使用 `AWIKI_RELEASE_REGISTRY=1`，拒绝本地覆盖。
+
 ## 4. 高频开发 Gate
 
 ```bash

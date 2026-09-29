@@ -99,6 +99,22 @@ void main() {
     );
   });
 
+  test('maps a duplicate local identity registry to recovery guidance', () {
+    final message = AppMessage.fromError(
+      const AppStructuredError(
+        code: 'identity.local_registry_conflict',
+        cause: core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'native details are not part of the UI contract',
+          serviceCode: 'identity.local_registry_conflict',
+        ),
+      ),
+    );
+    expect(message, AppMessage.registrationLocalStateNeedsAttention());
+    expect(message.resolve(AppLocalizationsZh()), contains('输入原来的 Handle'));
+    expect(message.resolve(AppLocalizationsEn()), contains('original Handle'));
+  });
+
   test(
     'maps every stable identity deletion guard to dedicated localized copy',
     () {

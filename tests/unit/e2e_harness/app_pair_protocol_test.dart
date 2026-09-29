@@ -444,6 +444,20 @@ void main() {
     expect(results, everyElement(isFalse));
   });
 
+  test('sync failure diagnostics retain codes without exposing raw errors', () {
+    expect(
+      safeMessageSyncFailureDiagnostic('transport_unavailable'),
+      'MessageSyncCoordinatorFailure:transport_unavailable',
+    );
+    for (final unsafe in ['', 'Bearer private-token', 'did:wba:private:user',
+      'https://private.example/error', 'x' * 97]) {
+      expect(
+        safeMessageSyncFailureDiagnostic(unsafe),
+        'MessageSyncCoordinatorFailure:redacted',
+      );
+    }
+  });
+
   test('CLI failure diagnostics expose only allowlisted stable codes', () {
     const secret = 'secret-bearing-service-message';
     final diagnostic = safeCliFailureDiagnostic(

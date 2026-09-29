@@ -213,7 +213,7 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
             'canonical_conversation_id': mapping.canonicalConversationId,
             'completed_at': DateTime.now().toUtc().toIso8601String(),
           },
-          conflictAlgorithm: ConflictAlgorithm.ignore,
+          conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
     });
@@ -236,21 +236,34 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
     }
     final pending = <ProductConversationAliasMigration>[];
     for (final mapping in mappings) {
-      final completed = Sqflite.firstIntValue(
-        await db.rawQuery(
-          '''SELECT COUNT(*) FROM canonical_conversation_overlay_migrations
-WHERE owner_did = ? AND legacy_conversation_id = ?
-  AND canonical_conversation_id = ?''',
-          <Object?>[
-            mapping.ownerDid,
-            mapping.legacyConversationId,
-            mapping.canonicalConversationId,
-          ],
-        ),
+      final completed = await db.query(
+        'canonical_conversation_overlay_migrations',
+        columns: const ['canonical_conversation_id'],
+        where: 'owner_did = ? AND legacy_conversation_id = ?',
+        whereArgs: <Object?>[mapping.ownerDid, mapping.legacyConversationId],
       );
-      if (completed != 1) {
+      if (completed.isEmpty) {
         pending.add(mapping);
+        continue;
       }
+      final previousTarget = completed.single['canonical_conversation_id'];
+      if (previousTarget == mapping.canonicalConversationId) {
+        continue;
+      }
+      // Core exports a flattened alias set after a proof-verified Persona
+      // repair. A changed journal target needs the explicit old-target bridge
+      // from that same owner-scoped export; an arbitrary retarget still fails.
+      final verifiedBridge = mappings.any(
+        (candidate) =>
+            candidate.ownerDid == mapping.ownerDid &&
+            candidate.legacyConversationId == previousTarget &&
+            candidate.canonicalConversationId ==
+                mapping.canonicalConversationId,
+      );
+      if (!verifiedBridge) {
+        throw StateError('conversation_alias_conflict');
+      }
+      pending.add(mapping);
     }
     return pending;
   }

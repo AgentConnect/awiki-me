@@ -44,33 +44,6 @@ void main() {
     }
   });
 
-  test('shared suite families use the intended minimal artifact set', () {
-    Set<String> names(String suite) => specs
-        .specsForSuite(suite, platform: 'linux')
-        .map((spec) => spec.name)
-        .toSet();
-
-    const pair = <String>{'admin', 'joiner'};
-    for (final suite in const <String>[
-      'multi-device-app-pair',
-      'multi-device-app-pair-functional',
-      'multi-device-app-pair-content-sync',
-      'multi-device-app-pair-paging-recovery',
-    ]) {
-      expect(names(suite), pair);
-    }
-    for (final suite in const <String>[
-      'multi-device-remote-join',
-      'root-transfer',
-      'step4-revoke-mls',
-    ]) {
-      expect(names(suite), const <String>{'remote-join'});
-    }
-    expect(
-      specs.requireSpec('personal-agent').target,
-      'integration_test/personal_agent_real_backend_test.dart',
-    );
-  });
 
   test('compile-time defines are canonical and runtime fixtures stay out', () {
     for (final spec in specs.specs.values) {

@@ -98,6 +98,36 @@ abstract class AppLocalizations {
     Locale('zh'),
   ];
 
+  /// No description provided for @agentLifecycleUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'不可用'**
+  String get agentLifecycleUnavailable;
+
+  /// No description provided for @agentLifecycleDeletedReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'该智能体已被删除。'**
+  String get agentLifecycleDeletedReason;
+
+  /// No description provided for @agentLifecycleRetiredReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'该智能体的旧版接入已停用，需要由控制者重新创建。'**
+  String get agentLifecycleRetiredReason;
+
+  /// No description provided for @agentLifecycleInactiveReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'该智能体已停用，暂时无法接收新指令。'**
+  String get agentLifecycleInactiveReason;
+
+  /// No description provided for @agentLifecycleMessageNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'{name}已不可用'**
+  String agentLifecycleMessageNotice(String name);
+
   /// No description provided for @chatMentionMember.
   ///
   /// In zh, this message translates to:
@@ -127,6 +157,90 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'深色'**
   String get appearanceDark;
+
+  /// No description provided for @identityMethodLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份方法'**
+  String get identityMethodLabel;
+
+  /// No description provided for @identityWebAdminLimitation.
+  ///
+  /// In zh, this message translates to:
+  /// **'Web 身份不支持账号恢复、根密钥导入或管理权转移。请保管好首个管理员设备；失去该设备后无法恢复管理权限。'**
+  String get identityWebAdminLimitation;
+
+  /// No description provided for @identityRegistrationPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续未完成的注册'**
+  String get identityRegistrationPending;
+
+  /// No description provided for @identityRegistrationResumeHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'将继续原来的身份注册。请使用原联系方式；如需验证码，请重新获取。'**
+  String get identityRegistrationResumeHint;
+
+  /// No description provided for @identityServicesTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份服务'**
+  String get identityServicesTitle;
+
+  /// No description provided for @identityServicesHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理此身份公开的其他服务。Handle、消息服务和个人资料仍由各自的设置管理。'**
+  String get identityServicesHint;
+
+  /// No description provided for @identityServicesFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'未能完成操作。请刷新查看进度；若仍待确认，请继续原操作。'**
+  String get identityServicesFailed;
+
+  /// No description provided for @identityServicesPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务更新仍待确认。继续原操作后才能提交其他更改。'**
+  String get identityServicesPending;
+
+  /// No description provided for @identityServicesResume.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续服务更新'**
+  String get identityServicesResume;
+
+  /// No description provided for @identityServiceAdd.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加服务'**
+  String get identityServiceAdd;
+
+  /// No description provided for @identityServiceId.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务标识'**
+  String get identityServiceId;
+
+  /// No description provided for @identityServiceType.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务类型'**
+  String get identityServiceType;
+
+  /// No description provided for @identityServiceEndpoint.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务地址'**
+  String get identityServiceEndpoint;
+
+  /// No description provided for @identityServiceEdit.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑'**
+  String get identityServiceEdit;
 
   /// No description provided for @appTitle.
   ///
@@ -494,6 +608,12 @@ abstract class AppLocalizations {
   /// **'验证码'**
   String get onboardingOtp;
 
+  /// No description provided for @onboardingShortHandleInviteHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'注册位数小于5位的handle需要使用邀请码'**
+  String get onboardingShortHandleInviteHint;
+
   /// No description provided for @onboardingOtpPlaceholder.
   ///
   /// In zh, this message translates to:
@@ -671,7 +791,7 @@ abstract class AppLocalizations {
   /// No description provided for @registrationLocalStateNeedsAttention.
   ///
   /// In zh, this message translates to:
-  /// **'本机存在无法安全自动收敛的身份状态。请先处理本地状态，然后重新发送验证码。'**
+  /// **'本机身份状态存在冲突。请保留本机数据，在上方输入原来的 Handle，使用出现的“继续上次恢复”完成操作；如果没有该入口，请联系支持。重复注册无法解决此问题。'**
   String get registrationLocalStateNeedsAttention;
 
   /// No description provided for @registrationContinuityChanged.
@@ -2181,7 +2301,7 @@ abstract class AppLocalizations {
   /// No description provided for @deviceJoinApprove.
   ///
   /// In zh, this message translates to:
-  /// **'确认并授权'**
+  /// **'允许加入并成为管理设备'**
   String get deviceJoinApprove;
 
   /// No description provided for @deviceJoinCancel.
@@ -2229,7 +2349,7 @@ abstract class AppLocalizations {
   /// No description provided for @deviceJoinUserPresenceReason.
   ///
   /// In zh, this message translates to:
-  /// **'确认授权新设备'**
+  /// **'允许该设备加入并成为管理设备'**
   String get deviceJoinUserPresenceReason;
 
   /// No description provided for @deviceJoinErrorUnavailable.
@@ -3197,6 +3317,18 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'添加失败，请稍后重试'**
   String get groupInviteAddFailed;
+
+  /// No description provided for @groupInviteAdmissionDenied.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务器不允许此身份加入群聊'**
+  String get groupInviteAdmissionDenied;
+
+  /// No description provided for @groupInviteFederatedDenied.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务器策略不允许该外域身份加入群聊'**
+  String get groupInviteFederatedDenied;
 
   /// No description provided for @groupInviteConfirmCount.
   ///
@@ -4293,8 +4425,8 @@ abstract class AppLocalizations {
   /// No description provided for @agentInstallSupportedTypes.
   ///
   /// In zh, this message translates to:
-  /// **'支持的 Agent 类型：Hermes、Codex、Claude Code。安装宿主代理后，可在 Daemon 下创建 Runtime Agent。'**
-  String get agentInstallSupportedTypes;
+  /// **'支持 {types}。安装 Daemon 后可创建智能体；外部客户端需在同一设备上安装并完成配置。'**
+  String agentInstallSupportedTypes(String types);
 
   /// No description provided for @agentInstallTokenExpiresAt.
   ///
@@ -4557,43 +4689,43 @@ abstract class AppLocalizations {
   /// No description provided for @agentCreateNeedsRouteWorkspace.
   ///
   /// In zh, this message translates to:
-  /// **'{agentType} 需要按会话目录工作模式。'**
+  /// **'请升级此设备的 Daemon，以启用 {agentType}。'**
   String agentCreateNeedsRouteWorkspace(Object agentType);
 
   /// No description provided for @agentCreateHermesDescription.
   ///
   /// In zh, this message translates to:
-  /// **'内置 Hermes Runtime Agent。'**
+  /// **'使用宿主机上的 Hermes CLI。'**
   String get agentCreateHermesDescription;
 
   /// No description provided for @agentCreateNeedsGenericCliCapability.
   ///
   /// In zh, this message translates to:
-  /// **'{agentType} 需要 Daemon 提供 generic-cli capability。'**
+  /// **'请先刷新设备状态，以确认是否支持 {agentType}。'**
   String agentCreateNeedsGenericCliCapability(Object agentType);
 
   /// No description provided for @agentCreateUnsupportedDriver.
   ///
   /// In zh, this message translates to:
-  /// **'当前 Daemon 不支持 {agentType} driver。'**
+  /// **'当前设备的 Daemon 尚不支持 {agentType}，请升级后重试。'**
   String agentCreateUnsupportedDriver(Object agentType);
 
   /// No description provided for @agentCreateNeedsRouteSession.
   ///
   /// In zh, this message translates to:
-  /// **'{agentType} 需要 route session 和 native resume 支持。'**
+  /// **'请升级此设备的 Daemon，以启用 {agentType}。'**
   String agentCreateNeedsRouteSession(Object agentType);
 
   /// No description provided for @agentCreateNeedsHostAccess.
   ///
   /// In zh, this message translates to:
-  /// **'{agentType} 需要 Daemon 支持宿主机全权限模式。'**
+  /// **'请升级此设备的 Daemon，以启用 {agentType}。'**
   String agentCreateNeedsHostAccess(Object agentType);
 
   /// No description provided for @agentCreateRequiresSignedInCli.
   ///
   /// In zh, this message translates to:
-  /// **'需要 Daemon 上已安装并登录的 {agentType} CLI。'**
+  /// **'使用宿主机上的 {agentType} 客户端。'**
   String agentCreateRequiresSignedInCli(Object agentType);
 
   /// No description provided for @agentCreateHostAccessTitle.
@@ -6517,7 +6649,7 @@ abstract class AppLocalizations {
   /// No description provided for @handleRecoveryMigrationUnsupported.
   ///
   /// In zh, this message translates to:
-  /// **'V4.0 无法安全迁移当前本地身份。尚未发起远端提交，请选择 fresh start 或普通设备加入。'**
+  /// **'本机已有身份无法安全接续；尚未发起远端提交。请保留本机数据并处理身份状态，不要改用新的本机身份覆盖旧数据。'**
   String get handleRecoveryMigrationUnsupported;
 
   /// No description provided for @handleRecoveryErrorNotPrepared.
@@ -6559,7 +6691,7 @@ abstract class AppLocalizations {
   /// No description provided for @handleRecoveryErrorLocalStateUnavailable.
   ///
   /// In zh, this message translates to:
-  /// **'本机恢复引用不可用；已在本机阻止继续操作。'**
+  /// **'本机身份或恢复记录不一致，暂时无法安全继续。请保留本机数据并重新检查；若仍失败，请联系支持。重复注册无法修复。'**
   String get handleRecoveryErrorLocalStateUnavailable;
 
   /// No description provided for @handleRecoveryErrorBlocked.
@@ -6655,7 +6787,7 @@ abstract class AppLocalizations {
   /// No description provided for @handleRecoveryFreshDataNotice.
   ///
   /// In zh, this message translates to:
-  /// **'本机没有可迁移的原身份数据，恢复后不会自动找回此前的私聊历史。'**
+  /// **'此次恢复将建立新的本机身份，不会自动接续旧身份的私聊历史；本机已有的旧数据会保留。'**
   String get handleRecoveryFreshDataNotice;
 
   /// No description provided for @handleRecoveryAwaitingResult.
@@ -6693,6 +6825,354 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'继续上次恢复'**
   String get handleRecoveryContinueExisting;
+
+  /// No description provided for @agentClientReady.
+  ///
+  /// In zh, this message translates to:
+  /// **'已检测到'**
+  String get agentClientReady;
+
+  /// No description provided for @agentClientMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'未检测到'**
+  String get agentClientMissing;
+
+  /// No description provided for @agentClientUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'启动异常'**
+  String get agentClientUnavailable;
+
+  /// No description provided for @agentClientUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未确认'**
+  String get agentClientUnknown;
+
+  /// No description provided for @agentClientChecking.
+  ///
+  /// In zh, this message translates to:
+  /// **'检测中…'**
+  String get agentClientChecking;
+
+  /// No description provided for @agentClientRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新检测'**
+  String get agentClientRefresh;
+
+  /// No description provided for @agentClientOffline.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备离线'**
+  String get agentClientOffline;
+
+  /// No description provided for @agentClientOfflineHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接 Daemon 后重新检测。'**
+  String get agentClientOfflineHint;
+
+  /// No description provided for @agentClientRetryHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法确认，请重新检测。'**
+  String get agentClientRetryHint;
+
+  /// No description provided for @agentClientInstallHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'请在此 Daemon 的宿主机安装客户端，再重新检测。'**
+  String get agentClientInstallHint;
+
+  /// No description provided for @agentClientPermissionHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'客户端没有执行权限，请在宿主机修复后重新检测。'**
+  String get agentClientPermissionHint;
+
+  /// No description provided for @agentClientGatewayHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'未找到 Hermes CLI 模块，请检查宿主机安装。'**
+  String get agentClientGatewayHint;
+
+  /// No description provided for @agentClientCustomHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法轻量检测自定义启动命令，请检查启动入口。'**
+  String get agentClientCustomHint;
+
+  /// No description provided for @agentClientTimeoutHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'检测超时，请稍后重新检测。'**
+  String get agentClientTimeoutHint;
+
+  /// No description provided for @agentClientLaunchHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'客户端启动失败，请检查宿主机的安装与依赖。'**
+  String get agentClientLaunchHint;
+
+  /// No description provided for @agentClientHost.
+  ///
+  /// In zh, this message translates to:
+  /// **'检测 {host} 所在宿主机的客户端。'**
+  String agentClientHost(String host);
+
+  /// No description provided for @agentClientLegacy.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前 Daemon 暂不支持安装检测，创建时将按原流程校验。'**
+  String get agentClientLegacy;
+
+  /// No description provided for @agentClientScope.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅检测客户端安装与启动情况。使用前，请在宿主机完成登录或模型配置。'**
+  String get agentClientScope;
+
+  /// No description provided for @agentClientCreating.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建中…'**
+  String get agentClientCreating;
+
+  /// No description provided for @agentClientCreateFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建失败，请检查客户端环境后重试。已保留填写内容。'**
+  String get agentClientCreateFailed;
+
+  /// No description provided for @agentClientCreatePending.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建已提交，仍在等待结果。可关闭此窗口，在智能体列表查看进度。'**
+  String get agentClientCreatePending;
+
+  /// No description provided for @agentClientProtocolHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'客户端协议连接失败，请检查宿主机上的登录、配置或客户端错误后重试。'**
+  String get agentClientProtocolHint;
+
+  /// No description provided for @agentClientCompatibilityHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'客户端版本与当前接入能力不兼容，请更新客户端后重试。'**
+  String get agentClientCompatibilityHint;
+
+  /// No description provided for @onboardingAccountNext.
+  ///
+  /// In zh, this message translates to:
+  /// **'下一步'**
+  String get onboardingAccountNext;
+
+  /// No description provided for @onboardingInviteCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'邀请码'**
+  String get onboardingInviteCode;
+
+  /// No description provided for @onboardingInviteHandleHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'注册此handle需要使用邀请码'**
+  String get onboardingInviteHandleHint;
+
+  /// No description provided for @onboardingInviteRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'此账号注册需要邀请码，请填写后继续。'**
+  String get onboardingInviteRequired;
+
+  /// No description provided for @onboardingInviteLengthSix.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入6位邀请码。'**
+  String get onboardingInviteLengthSix;
+
+  /// No description provided for @onboardingInviteLengthMax64.
+  ///
+  /// In zh, this message translates to:
+  /// **'邀请码不能超过64位。'**
+  String get onboardingInviteLengthMax64;
+
+  /// No description provided for @onboardingInviteInvalidBeforeContact.
+  ///
+  /// In zh, this message translates to:
+  /// **'邀请码无效、已过期或已用完，请检查后重试。'**
+  String get onboardingInviteInvalidBeforeContact;
+
+  /// No description provided for @onboardingInviteInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'邀请码无效、已过期、已用完或与手机号不匹配，请检查后重试。'**
+  String get onboardingInviteInvalid;
+
+  /// No description provided for @onboardingAccountUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'此账号无法注册，请修改账号后重试。'**
+  String get onboardingAccountUnavailable;
+
+  /// No description provided for @onboardingAccountCheckFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法检查账号，请重试。已有账号可继续登录。'**
+  String get onboardingAccountCheckFailed;
+
+  /// No description provided for @onboardingExistingAccount.
+  ///
+  /// In zh, this message translates to:
+  /// **'已有账号，继续验证后登录、加入设备或恢复。'**
+  String get onboardingExistingAccount;
+
+  /// No description provided for @onboardingExistingAccountAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'已有账号，继续登录'**
+  String get onboardingExistingAccountAction;
+
+  /// No description provided for @onboardingChangeAccount.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回修改账号或邀请码'**
+  String get onboardingChangeAccount;
+
+  /// No description provided for @onboardingRegistrationClosed.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前不允许使用此联系方式注册。'**
+  String get onboardingRegistrationClosed;
+
+  /// No description provided for @chatRetiredAgentDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'旧版接入已停用，请重新创建智能体。聊天记录与草稿已保留。'**
+  String get chatRetiredAgentDisabled;
+
+  /// No description provided for @agentAcpUpgradeRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请升级 Daemon 以使用此智能体的 ACP 接入。'**
+  String get agentAcpUpgradeRequired;
+
+  /// No description provided for @agentClientAdapterHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon 的接入组件缺失或损坏，请重新安装 Daemon。'**
+  String get agentClientAdapterHint;
+
+  /// No description provided for @agentClientPlatformHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前平台不支持此智能体的接入组件。'**
+  String get agentClientPlatformHint;
+
+  /// No description provided for @agentClientHermesAcpHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Hermes 缺少可用的 ACP 支持，请在宿主机升级 Hermes CLI。'**
+  String get agentClientHermesAcpHint;
+
+  /// No description provided for @agentClientNodeMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'宿主机未检测到 Node.js。'**
+  String get agentClientNodeMissing;
+
+  /// No description provided for @agentClientNodeIncompatible.
+  ///
+  /// In zh, this message translates to:
+  /// **'Node.js 版本不兼容，需要 22 或更高版本。'**
+  String get agentClientNodeIncompatible;
+
+  /// No description provided for @agentClientNodeUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'Node.js 无法启动，请检查宿主机安装后重新检测。'**
+  String get agentClientNodeUnavailable;
+
+  /// No description provided for @agentClientNodeSetup.
+  ///
+  /// In zh, this message translates to:
+  /// **'Codex 和 Claude Code 需要在此 Daemon 宿主机安装 Node.js 22 或更高版本，推荐 24 LTS。安装后请重新检测。'**
+  String get agentClientNodeSetup;
+
+  /// No description provided for @agentClientNodeDownload.
+  ///
+  /// In zh, this message translates to:
+  /// **'Node.js 安装指南 ↗'**
+  String get agentClientNodeDownload;
+
+  /// No description provided for @agentClientWaitingConfirmation.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待确认'**
+  String get agentClientWaitingConfirmation;
+
+  /// No description provided for @deviceJoinManagementRegistered.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理权限已登记，请在新设备确认管理能力已就绪。'**
+  String get deviceJoinManagementRegistered;
+
+  /// No description provided for @deviceJoinManagementWaiting.
+  ///
+  /// In zh, this message translates to:
+  /// **'根密钥发送已接受，等待新设备完成管理权限配置。'**
+  String get deviceJoinManagementWaiting;
+
+  /// No description provided for @deviceJoinManagementConfiguring.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备已加入，正在配置管理权限。可安全离开此页面。'**
+  String get deviceJoinManagementConfiguring;
+
+  /// No description provided for @deviceJoinManagementRejoinRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理权限配置已失效，请由管理设备撤销此设备，再在此设备上退出本地身份（保留数据）后重新加入。'**
+  String get deviceJoinManagementRejoinRequired;
+
+  /// No description provided for @deviceJoinManagementFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备已加入，管理权限配置失败'**
+  String get deviceJoinManagementFailed;
+
+  /// No description provided for @handleRecoveryErrorLocalRegistryConflict.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机还有其他身份冲突，恢复任务已保留。请返回处理其他 Handle 的待完成恢复，再继续本次恢复。若没有其他待恢复任务，请保留数据并联系支持。'**
+  String get handleRecoveryErrorLocalRegistryConflict;
+
+  /// No description provided for @handleRecoveryOtherPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回处理其他恢复'**
+  String get handleRecoveryOtherPending;
+
+  /// No description provided for @secureConnectionFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法建立安全连接。请检查系统日期和时间，或联系支持人员。'**
+  String get secureConnectionFailed;
+
+  /// No description provided for @trustResourcesInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'应用的安全连接资源缺失或损坏。请更新或重新安装应用。'**
+  String get trustResourcesInvalid;
+
+  /// No description provided for @onboardingAccountCheckUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前服务器暂不支持账号检查。已有账号可继续登录。'**
+  String get onboardingAccountCheckUnsupported;
 }
 
 class _AppLocalizationsDelegate

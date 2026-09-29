@@ -1,3 +1,5 @@
+import 'package:awiki_me/src/domain/entities/agent/agent_availability.dart';
+import 'package:awiki_me/src/presentation/agents/agent_availability_provider.dart';
 import 'dart:async';
 
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
@@ -11,7 +13,6 @@ import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
-import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -21,101 +22,79 @@ import 'test_support.dart';
 
 void main() {
   testWidgets(
-    'compact group tools retain send and insert a real mention above the keyboard',
+    'unavailable Agent disappears from open mention list and search without editing draft',
     (tester) async {
-      tester.view
-        ..devicePixelRatio = 1
-        ..physicalSize = const Size(360, 800);
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-        tester.view.resetViewInsets();
-      });
+      const oldDid = 'did:test:old';
       final gateway = FakeAwikiGateway()
-        ..groupMembersByGroupId = {
-          'group-mention': const [
+        ..groupMembersByGroupId = const {
+          'lifecycle-group': [
             GroupMemberSummary(
-              userId: 'did:wba:awiki.info:u:alice',
-              did: 'did:wba:awiki.info:u:alice',
-              handle: 'alice',
+              userId: oldDid,
+              did: oldDid,
+              handle: 'old',
               role: 'member',
-              displayName: 'Alice',
-              subjectType: GroupMemberSubjectType.human,
+              displayName: 'Old Agent',
+              subjectType: GroupMemberSubjectType.agent,
             ),
           ],
         };
-      const session = SessionIdentity(
-        did: 'did:wba:awiki.info:u:me',
-        handle: 'me',
-        displayName: 'Me',
-        credentialName: 'me.json',
-      );
       final conversation = ConversationSummary(
-        threadId: 'group:group-mention',
-        conversationId: 'group:group-mention',
-        displayName: 'Mention Group',
+        threadId: 'group:lifecycle-group',
+        conversationId: 'group:lifecycle-group',
+        displayName: 'Lifecycle',
         lastMessagePreview: '',
-        lastMessageAt: DateTime(2026, 9, 28),
+        lastMessageAt: DateTime(2026),
         unreadCount: 0,
         isGroup: true,
-        groupId: 'group-mention',
+        groupId: 'lifecycle-group',
       );
       await tester.pumpWidget(
         buildLocalizedTestApp(
-          home: CupertinoPageScaffold(
-            child: ChatView(conversation: conversation, embedded: false),
-          ),
           gateway: gateway,
-          session: session,
+          session: const SessionIdentity(
+            did: 'did:test:me',
+            credentialName: 'me',
+            displayName: 'Me',
+          ),
+          home: CupertinoPageScaffold(
+            child: ChatView(
+              conversation: conversation,
+              embedded: true,
+              macStyle: true,
+            ),
+          ),
         ),
       );
       await tester.pumpAndSettle();
-      final send = find.byKey(const Key('chat-send-button'));
-      expect(tester.widget<AppIconButton>(send).onPressed, isNull);
-      expect(
-        find.descendant(of: send, matching: find.text('发送')),
-        findsOneWidget,
-      );
-      final input = find.byKey(const Key('chat-composer-input'));
-      await tester.enterText(input, 'first\nsecond\nthird');
-      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      await tester.enterText(find.byType(CupertinoTextField), '@Old');
       await tester.pumpAndSettle();
-      final inputRect = tester.getRect(input);
-      expect(inputRect.height, greaterThan(44));
-      expect(inputRect.height, lessThan(130));
-      expect(tester.getRect(send).bottom, lessThanOrEqualTo(500));
-      for (final key in [
-        'chat-attachment-button',
-        'chat-emoji-button',
-        'chat-mention-button',
-      ]) {
-        final tool = find.byKey(Key(key));
-        expect(tester.getRect(tool).right, lessThan(inputRect.left));
-        expect(tester.widget<AppIconButton>(tool).onPressed, isNotNull);
-      }
-      await tester.tap(find.byKey(const Key('chat-mention-button')));
-      await tester.pumpAndSettle();
-      final field = tester.widget<CupertinoTextField>(input);
-      expect(field.controller!.text, 'first\nsecond\nthird @');
-      expect(
-        find.byKey(const Key('chat-mention-candidate-panel')),
-        findsOneWidget,
-      );
-      await tester.tap(find.text('@Alice'));
-      await tester.pumpAndSettle();
-      expect(field.controller!.text, 'first\nsecond\nthird @Alice ');
+      expect(find.text('@Old Agent'), findsOneWidget);
       final container = ProviderScope.containerOf(
         tester.element(find.byType(ChatView)),
       );
+      await container
+          .read(agentAvailabilityProvider.notifier)
+          .applyFacts(const [
+            AgentAvailability(
+              agentDid: oldDid,
+              state: AgentAvailabilityState.unavailable,
+              reason: 'agent_deleted',
+              version: '2',
+            ),
+          ]);
+      await tester.pumpAndSettle();
+      expect(find.text('@Old Agent'), findsNothing);
       expect(
-        container
-            .read(chatComposerDraftsProvider.notifier)
-            .draftFor(conversation)
-            .validMentions,
-        hasLength(1),
+        tester
+            .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+            .controller!
+            .text,
+        '@Old',
       );
-      expect(gateway.lastSentContent, isNull);
-      expect(tester.takeException(), isNull);
+      await tester.enterText(find.byType(CupertinoTextField), '@');
+      await tester.pumpAndSettle();
+      expect(find.text('@Old Agent'), findsNothing);
+      expect(gateway.listGroupMembersCalls, 1);
     },
   );
 

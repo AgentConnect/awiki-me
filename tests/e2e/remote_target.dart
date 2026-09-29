@@ -1,3 +1,19 @@
+/// Registration uses the explicitly configured remote target and exact HTTPS origin.
+void validateRegistrationFixtureTarget({
+  required String didDomain,
+  required String userServiceUrl,
+}) {
+  validateConfiguredRemoteTarget(
+    didDomain: didDomain,
+    serviceUrls: [userServiceUrl],
+  );
+  if (Uri.parse(userServiceUrl).origin != userServiceUrl) {
+    throw const FormatException(
+      'Registration fixture must use an HTTPS origin.',
+    );
+  }
+}
+
 /// Test target comes from the explicit host config, never from a case's domain.
 /// This checks transport/scope consistency; it does not grant operator access.
 void validateConfiguredRemoteTarget({

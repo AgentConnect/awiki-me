@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "decisionDate": "2026-09-24",
+  "reason": "user_excluded: 用户决定持续跳过 DID Web App E2E；仅在用户明确恢复后移除此排除。",
+  "appSuites": [
+    "did-method-web"
+  ]
+}

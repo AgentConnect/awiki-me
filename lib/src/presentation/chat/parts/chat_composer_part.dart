@@ -52,7 +52,6 @@ class _ComposerState extends ConsumerState<_Composer> {
   void initState() {
     super.initState();
     widget.controller.addListener(_handleTextChanged);
-    _inputFocusNode.addListener(_handleFocusChanged);
     _scheduleInputFocusForRequest(widget.focusRequestId);
     unawaited(_preloadMentionMembers());
   }
@@ -81,13 +80,8 @@ class _ComposerState extends ConsumerState<_Composer> {
   @override
   void dispose() {
     widget.controller.removeListener(_handleTextChanged);
-    _inputFocusNode.removeListener(_handleFocusChanged);
     _inputFocusNode.dispose();
     super.dispose();
-  }
-
-  void _handleFocusChanged() {
-    if (mounted) setState(() {});
   }
 
   void _scheduleInputFocusForRequest(int requestId) {
@@ -201,7 +195,15 @@ class _ComposerState extends ConsumerState<_Composer> {
         groupMembers: members,
       );
       final candidates = ChatMentionCandidate.forGroupMembers(
-        members.map(presentation.projectGroupMember),
+        members
+            .where(
+              (member) =>
+                  ref
+                      .read(effectiveAgentAvailabilityProvider)[member.did]
+                      ?.unavailable !=
+                  true,
+            )
+            .map(presentation.projectGroupMember),
         query: trigger.query,
         currentUserDid: ref.read(sessionProvider).session?.did,
         currentUserHandle: ref.read(sessionProvider).session?.handle,
@@ -376,26 +378,23 @@ class _ComposerState extends ConsumerState<_Composer> {
     _inputFocusNode.requestFocus();
   }
 
-  void _insertMentionTrigger() {
-    if (!_mentionEnabled || _isComposingInput) return;
-    final value = widget.controller.value;
-    final offset = value.selection.isValid
-        ? value.selection.start
-        : value.text.length;
-    final needsSpace =
-        offset > 0 && !RegExp(r'\s').hasMatch(value.text[offset - 1]);
-    _insertTextAtSelection(needsSpace ? ' @' : '@');
-    _inputFocusNode.requestFocus();
-  }
-
-  Future<void> _pasteFromClipboard() async {
+  Future<void> _pasteFromClipboard(SelectionChangedCause cause) async {
     if (!widget.enabled || _isPastingFromClipboard) {
       return;
     }
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    final conversation = widget.conversation;
+    final controller = widget.controller;
+    bool stillCurrent() =>
+        mounted &&
+        widget.enabled &&
+        ref.read(sessionProvider).activeEpoch == epoch &&
+        identical(controller, widget.controller) &&
+        _sameCanonicalConversation(conversation, widget.conversation);
     _isPastingFromClipboard = true;
     try {
       final stagedAttachment = await widget.onPasteAttachment();
-      if (!mounted || !widget.enabled) {
+      if (!stillCurrent()) {
         return;
       }
       if (stagedAttachment) {
@@ -404,10 +403,26 @@ class _ComposerState extends ConsumerState<_Composer> {
       }
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       final text = data?.text;
-      if (text == null || text.isEmpty || !mounted || !widget.enabled) {
+      if (text == null || text.isEmpty || !stillCurrent()) {
         return;
       }
-      _insertTextAtSelection(text);
+      final editor = _inputFocusNode.context
+          ?.findAncestorStateOfType<EditableTextState>();
+      if (editor == null) return;
+      final value = controller.value;
+      final selection = value.selection;
+      final start = selection.isValid ? selection.start : value.text.length;
+      final end = selection.isValid ? selection.end : value.text.length;
+      editor.userUpdateTextEditingValue(
+        value.copyWith(
+          text: value.text.replaceRange(start, end, text),
+          selection: TextSelection.collapsed(offset: start + text.length),
+          composing: TextRange.empty,
+        ),
+        cause,
+      );
+      editor.hideToolbar();
+      editor.bringIntoView(controller.selection.extent);
       _inputFocusNode.requestFocus();
     } finally {
       _isPastingFromClipboard = false;
@@ -426,7 +441,7 @@ class _ComposerState extends ConsumerState<_Composer> {
         key == LogicalKeyboardKey.keyV &&
         (HardwareKeyboard.instance.isMetaPressed ||
             HardwareKeyboard.instance.isControlPressed)) {
-      unawaited(_pasteFromClipboard());
+      unawaited(_pasteFromClipboard(SelectionChangedCause.keyboard));
       return KeyEventResult.handled;
     }
     if (_hasMentionPanel) {
@@ -517,6 +532,12 @@ class _ComposerState extends ConsumerState<_Composer> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(effectiveAgentAvailabilityProvider, (previous, next) {
+      final trigger = _activeMentionTrigger;
+      if (trigger != null) {
+        unawaited(_loadMentionCandidates(trigger));
+      }
+    });
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     final canSubmit = _canSubmit;
@@ -531,21 +552,33 @@ class _ComposerState extends ConsumerState<_Composer> {
           builder: (context, constraints) {
             final showAttachment = constraints.maxWidth >= 280;
             return Padding(
-              padding: EdgeInsets.zero,
+              padding: EdgeInsets.fromLTRB(
+                responsive.displayScaled(12),
+                responsive.displayScaled(4),
+                responsive.displayScaled(12),
+                responsive.displayScaled(12),
+              ),
               child: Container(
                 key: const Key('chat-desktop-composer-shell'),
-                constraints: BoxConstraints(
-                  minHeight: responsive.displayScaled(148),
-                ),
                 padding: EdgeInsets.fromLTRB(
-                  responsive.displayScaled(16),
-                  responsive.displayScaled(6),
-                  responsive.displayScaled(16),
                   responsive.displayScaled(12),
+                  responsive.displayScaled(2),
+                  responsive.displayScaled(12),
+                  responsive.displayScaled(8),
                 ),
                 decoration: BoxDecoration(
                   color: theme.surface,
-                  border: Border(top: BorderSide(color: theme.border)),
+                  borderRadius: BorderRadius.circular(
+                    responsive.displayScaled(14),
+                  ),
+                  border: Border.all(color: theme.border),
+                  boxShadow: const <BoxShadow>[
+                    BoxShadow(
+                      color: Color(0x0D000000),
+                      blurRadius: 3,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -584,6 +617,34 @@ class _ComposerState extends ConsumerState<_Composer> {
                       SizedBox(height: responsive.displayScaled(8)),
                     ],
                     if (widget.enabled) ...<Widget>[
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: responsive.displayScaled(38),
+                        ),
+                        child: _ComposerTextField(
+                          onPaste: _pasteFromClipboard,
+                          controller: widget.controller,
+                          focusNode: _inputFocusNode,
+                          onKeyEvent: _handleInputKeyEvent,
+                          placeholder: context.l10n.chatInputPlaceholder,
+                          textStyle: TextStyle(
+                            color: theme.title,
+                            fontSize: 14,
+                            height: 1.32,
+                          ),
+                          placeholderStyle: TextStyle(
+                            color: theme.tertiaryText,
+                            fontSize: 14,
+                          ),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: responsive.displayScaled(2),
+                            vertical: responsive.displayScaled(8),
+                          ),
+                          maxLines: 5,
+                          onSubmitted: (_) async => _submitIfNeeded(),
+                        ),
+                      ),
+                      SizedBox(height: responsive.displayScaled(2)),
                       Row(
                         key: const Key('chat-composer-tool-row'),
                         children: <Widget>[
@@ -615,7 +676,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                                   responsive.displayScaled(7),
                                 ),
                                 backgroundColor: _showEmojiPicker
-                                    ? context.awikiTheme.primarySoft
+                                    ? AwikiMePalette.brandAccentSoft
                                     : CupertinoColors.transparent,
                                 child: Icon(
                                   CupertinoIcons.smiley,
@@ -644,38 +705,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                               ),
                             ],
                           ],
-                        ],
-                      ),
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: responsive.displayScaled(68),
-                        ),
-                        child: _ComposerTextField(
-                          controller: widget.controller,
-                          focusNode: _inputFocusNode,
-                          onKeyEvent: _handleInputKeyEvent,
-                          placeholder: context.l10n.chatInputPlaceholder,
-                          textStyle: TextStyle(
-                            color: theme.title,
-                            fontSize: 14,
-                            height: 1.6,
-                          ),
-                          placeholderStyle: TextStyle(
-                            color: theme.tertiaryText,
-                            fontSize: 14,
-                          ),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: responsive.displayScaled(2),
-                            vertical: responsive.displayScaled(8),
-                          ),
-                          maxLines: 5,
-                          onSubmitted: (_) async => _submitIfNeeded(),
-                        ),
-                      ),
-                      SizedBox(height: responsive.displayScaled(2)),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: <Widget>[
+                          const Spacer(),
                           AppPressable(
                             key: const Key('chat-send-button'),
                             onTap: canUseSendButton ? _submitIfNeeded : null,
@@ -700,28 +730,22 @@ class _ComposerState extends ConsumerState<_Composer> {
                               );
                             },
                             child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: responsive.displayScaled(16),
-                              ),
-                              height: responsive.displayScaled(30),
+                              width: responsive.displayScaled(36),
+                              height: responsive.displayScaled(36),
                               decoration: BoxDecoration(
                                 color: highlightSendButton
-                                    ? theme.title
-                                    : theme.subtleSurface,
+                                    ? theme.primary
+                                    : theme.primary.withValues(alpha: 0.28),
                                 borderRadius: BorderRadius.circular(
-                                  responsive.displayScaled(6),
+                                  responsive.displayScaled(10),
                                 ),
                               ),
-                              child: Center(
-                                child: Text(
-                                  context.l10n.commonSend,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: highlightSendButton
-                                        ? theme.surface
-                                        : theme.secondaryText,
-                                  ),
-                                ),
+                              child: Icon(
+                                CupertinoIcons.paperplane_fill,
+                                color: highlightSendButton
+                                    ? theme.surface
+                                    : theme.surface.withValues(alpha: 0.82),
+                                size: responsive.displayScaled(17),
                               ),
                             ),
                           ),
@@ -736,6 +760,7 @@ class _ComposerState extends ConsumerState<_Composer> {
         ),
       );
     }
+    final showSendAction = canSubmit || _isSending;
     return SafeArea(
       top: false,
       child: Container(
@@ -747,7 +772,7 @@ class _ComposerState extends ConsumerState<_Composer> {
           responsive.spacing(8),
         ),
         decoration: BoxDecoration(
-          color: theme.background,
+          color: theme.chatSurface,
           border: Border(
             top: BorderSide(color: theme.border.withValues(alpha: 0.62)),
           ),
@@ -786,42 +811,10 @@ class _ComposerState extends ConsumerState<_Composer> {
                 ),
                 SizedBox(height: responsive.spacing(8)),
               ],
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: responsive.displayScaled(44),
-                ),
+              SizedBox(
+                height: responsive.displayScaled(44),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: <Widget>[
-                    AppIconButton(
-                      key: const Key('chat-attachment-button'),
-                      onPressed: _attachIfNeeded,
-                      semanticLabel: context.l10n.chatAddAttachment,
-                      tooltip: context.l10n.chatAddAttachment,
-                      size: responsive.displayScaled(44),
-                      borderRadius: BorderRadius.circular(999),
-                      child: Icon(
-                        CupertinoIcons.paperclip,
-                        color: theme.secondaryText,
-                        size: responsive.displayScaled(22),
-                      ),
-                    ),
-                    if (_mentionEnabled)
-                      AppIconButton(
-                        key: const Key('chat-mention-button'),
-                        onPressed: _isComposingInput
-                            ? null
-                            : _insertMentionTrigger,
-                        semanticLabel: context.l10n.chatMentionMember,
-                        tooltip: context.l10n.chatMentionMember,
-                        size: responsive.displayScaled(44),
-                        borderRadius: BorderRadius.circular(999),
-                        child: Icon(
-                          CupertinoIcons.at,
-                          color: theme.secondaryText,
-                          size: responsive.displayScaled(22),
-                        ),
-                      ),
                     _emojiTapRegion(
                       child: AppIconButton(
                         key: const Key('chat-emoji-button'),
@@ -842,36 +835,34 @@ class _ComposerState extends ConsumerState<_Composer> {
                     Expanded(
                       child: Container(
                         key: const Key('chat-compact-composer-input-shell'),
-                        constraints: BoxConstraints(
-                          minHeight: responsive.displayScaled(44),
-                        ),
+                        height: responsive.displayScaled(44),
+                        alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: theme.surface,
                           borderRadius: BorderRadius.circular(
-                            responsive.displayScaled(22),
+                            responsive.displayScaled(10),
                           ),
                           border: Border.all(
-                            color: _inputFocusNode.hasFocus
-                                ? theme.primary
-                                : theme.border,
+                            color: theme.border.withValues(alpha: 0.78),
                           ),
                         ),
                         child: _ComposerTextField(
+                          onPaste: _pasteFromClipboard,
                           controller: widget.controller,
                           focusNode: _inputFocusNode,
                           onKeyEvent: _handleInputKeyEvent,
                           placeholder: context.l10n.chatInputPlaceholder,
                           textStyle: TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             color: theme.title,
                             height: 1.3,
                           ),
                           placeholderStyle: TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             color: theme.tertiaryText,
                           ),
                           padding: EdgeInsets.symmetric(
-                            horizontal: responsive.spacing(14),
+                            horizontal: responsive.spacing(12),
                             vertical: responsive.spacing(9),
                           ),
                           maxLines: 4,
@@ -880,29 +871,67 @@ class _ComposerState extends ConsumerState<_Composer> {
                       ),
                     ),
                     SizedBox(width: responsive.spacing(6)),
-                    SizedBox(
-                      width: responsive.displayScaled(64),
-                      height: responsive.displayScaled(44),
-                      child: AppIconButton(
-                        key: const Key('chat-send-button'),
-                        semanticsIdentifier: 'e2e-chat-send-button',
-                        onPressed: canUseSendButton ? _submitIfNeeded : null,
-                        semanticLabel: context.l10n.commonSend,
-                        tooltip: context.l10n.commonSend,
-                        size: responsive.displayScaled(44),
-                        backgroundColor: highlightSendButton
-                            ? theme.title
-                            : theme.mutedSurface,
-                        borderRadius: BorderRadius.circular(999),
-                        child: Text(
-                          context.l10n.commonSend,
-                          style: TextStyle(
-                            color: highlightSendButton
-                                ? theme.surface
-                                : theme.secondaryText,
-                            fontSize: 14,
+                    SizedBox.square(
+                      dimension: responsive.displayScaled(44),
+                      child: Stack(
+                        children: <Widget>[
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              ignoring: !showSendAction,
+                              child: AnimatedOpacity(
+                                opacity: showSendAction ? 1 : 0,
+                                duration: const Duration(milliseconds: 120),
+                                child: e2eSemantics(
+                                  identifier: 'e2e-chat-send-button',
+                                  label: context.l10n.commonSend,
+                                  button: true,
+                                  child: AppIconButton(
+                                    key: const Key('chat-send-button'),
+                                    onPressed: canUseSendButton
+                                        ? _submitIfNeeded
+                                        : null,
+                                    semanticLabel: context.l10n.commonSend,
+                                    tooltip: context.l10n.commonSend,
+                                    size: responsive.displayScaled(44),
+                                    backgroundColor: highlightSendButton
+                                        ? theme.primary
+                                        : theme.primary.withValues(alpha: 0.28),
+                                    borderRadius: BorderRadius.circular(999),
+                                    child: AwikiAssetIcon(
+                                      assetName: 'assets/icons/icon_send.svg',
+                                      color: theme.surface,
+                                      size: responsive.displayScaled(20),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              ignoring: showSendAction,
+                              child: AnimatedOpacity(
+                                opacity: showSendAction ? 0 : 1,
+                                duration: const Duration(milliseconds: 120),
+                                child: AppIconButton(
+                                  key: const Key('chat-attachment-button'),
+                                  onPressed: showSendAction
+                                      ? null
+                                      : _attachIfNeeded,
+                                  semanticLabel: context.l10n.chatAddAttachment,
+                                  tooltip: context.l10n.chatAddAttachment,
+                                  size: responsive.displayScaled(44),
+                                  borderRadius: BorderRadius.circular(999),
+                                  child: AwikiAssetIcon(
+                                    assetName: 'assets/icons/icon_plus.svg',
+                                    color: theme.title,
+                                    size: responsive.displayScaled(24),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -970,13 +999,11 @@ class _EmojiPickerPanel extends StatelessWidget {
         macStyle ? responsive.displayScaled(8) : responsive.spacing(8),
       ),
       decoration: BoxDecoration(
-        color: macStyle
-            ? context.awikiTheme.subtleSurface
-            : context.awikiTheme.surface,
+        color: macStyle ? AwikiMePalette.mist : AwikiMePalette.content,
         borderRadius: BorderRadius.circular(
           macStyle ? responsive.displayScaled(9) : responsive.radius(12),
         ),
-        border: Border.all(color: context.awikiTheme.border),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: SingleChildScrollView(
         child: Wrap(
@@ -1015,6 +1042,7 @@ class _EmojiPickerPanel extends StatelessWidget {
 
 class _ComposerTextField extends StatelessWidget {
   const _ComposerTextField({
+    required this.onPaste,
     required this.controller,
     required this.focusNode,
     required this.onKeyEvent,
@@ -1027,6 +1055,7 @@ class _ComposerTextField extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final Future<void> Function(SelectionChangedCause cause) onPaste;
   final FocusNode focusNode;
   final FocusOnKeyEventCallback onKeyEvent;
   final String placeholder;
@@ -1038,26 +1067,60 @@ class _ComposerTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      onKeyEvent: onKeyEvent,
-      child: e2eSemantics(
-        identifier: 'e2e-chat-input',
-        label: placeholder,
-        textField: true,
-        child: CupertinoTextField(
-          key: const Key('chat-composer-input'),
-          controller: controller,
-          focusNode: focusNode,
-          placeholder: placeholder,
-          keyboardType: TextInputType.multiline,
-          textInputAction: TextInputAction.send,
-          minLines: 1,
-          maxLines: maxLines,
-          onSubmitted: onSubmitted,
-          decoration: null,
-          padding: padding,
-          style: textStyle,
-          placeholderStyle: placeholderStyle,
+    return Actions(
+      actions: <Type, Action<Intent>>{
+        PasteTextIntent: CallbackAction<PasteTextIntent>(
+          onInvoke: (intent) {
+            unawaited(onPaste(intent.cause));
+            return null;
+          },
+        ),
+      },
+      child: Focus(
+        onKeyEvent: onKeyEvent,
+        child: e2eSemantics(
+          identifier: 'e2e-chat-input',
+          label: placeholder,
+          textField: true,
+          child: CupertinoTextField(
+            key: const Key('chat-composer-input'),
+            controller: controller,
+            focusNode: focusNode,
+            placeholder: placeholder,
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.send,
+            minLines: 1,
+            maxLines: maxLines,
+            onSubmitted: onSubmitted,
+            decoration: null,
+            padding: padding,
+            style: textStyle,
+            placeholderStyle: placeholderStyle,
+            contextMenuBuilder: (context, editor) {
+              final items = editor.contextMenuButtonItems;
+              final paste = ContextMenuButtonItem(
+                type: ContextMenuButtonType.paste,
+                onPressed: () {
+                  editor.hideToolbar();
+                  unawaited(onPaste(SelectionChangedCause.toolbar));
+                },
+              );
+              return CupertinoAdaptiveTextSelectionToolbar.buttonItems(
+                anchors: editor.contextMenuAnchors,
+                buttonItems: <ContextMenuButtonItem>[
+                  for (final item in items)
+                    if (item.type == ContextMenuButtonType.paste)
+                      paste
+                    else
+                      item,
+                  if (!items.any(
+                    (item) => item.type == ContextMenuButtonType.paste,
+                  ))
+                    paste,
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -1185,9 +1248,9 @@ class _MentionCandidatePanelState extends State<_MentionCandidatePanel> {
             : responsive.displayScaled(260),
       ),
       decoration: BoxDecoration(
-        color: context.awikiTheme.surface,
+        color: CupertinoColors.white,
         borderRadius: borderRadius,
-        border: Border.all(color: context.awikiTheme.border),
+        border: Border.all(color: AwikiMePalette.hairline),
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: CupertinoColors.black.withValues(alpha: 0.08),
@@ -1267,11 +1330,11 @@ class _MentionCandidateTile extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final enabled = candidate.enabled;
     final background = selected
-        ? context.awikiTheme.primarySoft
+        ? AwikiMePalette.brandAccentSoft
         : CupertinoColors.transparent;
     final titleColor = enabled
-        ? context.awikiTheme.title
-        : context.awikiTheme.tertiaryText;
+        ? AwikiMePalette.inkNeutral
+        : AwikiMePalette.messagePreview;
     final presentation = _localizedMentionCandidate(context.l10n, candidate);
     final subtitle = enabled
         ? presentation.subtitle
@@ -1330,7 +1393,7 @@ class _MentionCandidateTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: context.awikiTheme.secondaryText,
+                          color: AwikiMePalette.mutedNeutral,
                           fontSize: macStyle
                               ? responsive.displayScaled(11)
                               : responsive.bodySm,
@@ -1346,7 +1409,7 @@ class _MentionCandidateTile extends StatelessWidget {
                     vertical: responsive.displayScaled(3),
                   ),
                   decoration: BoxDecoration(
-                    color: context.awikiTheme.subtleSurface,
+                    color: AwikiMePalette.mist,
                     borderRadius: BorderRadius.circular(
                       responsive.displayScaled(999),
                     ),
@@ -1354,7 +1417,7 @@ class _MentionCandidateTile extends StatelessWidget {
                   child: Text(
                     presentation.badge,
                     style: TextStyle(
-                      color: context.awikiTheme.secondaryText,
+                      color: AwikiMePalette.mutedNeutral,
                       fontSize: macStyle
                           ? responsive.displayScaled(10)
                           : responsive.displayScaled(11),
@@ -1391,17 +1454,17 @@ class _DisabledComposerNotice extends StatelessWidget {
         vertical: responsive.displayScaled(macStyle ? 8 : 10),
       ),
       decoration: BoxDecoration(
-        color: context.awikiTheme.subtleSurface,
+        color: AwikiMePalette.mist,
         borderRadius: BorderRadius.circular(
           responsive.radius(macStyle ? 8 : 14),
         ),
-        border: Border.all(color: context.awikiTheme.border),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: Text(
         message,
         textAlign: TextAlign.center,
         style: TextStyle(
-          color: context.awikiTheme.secondaryText,
+          color: AwikiMePalette.mutedNeutral,
           fontSize: macStyle ? 12 : 13,
           height: 1.25,
           fontWeight: FontWeight.w400,
@@ -1530,11 +1593,9 @@ class _PendingAttachmentPreview extends ConsumerWidget {
         responsive.spacing(macStyle ? 7 : 8),
       ),
       decoration: BoxDecoration(
-        color: macStyle
-            ? context.awikiTheme.subtleSurface
-            : context.awikiTheme.subtleSurface,
+        color: macStyle ? AwikiMePalette.mist : AwikiMePalette.mist,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: context.awikiTheme.border),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: Row(
         children: <Widget>[
@@ -1552,7 +1613,7 @@ class _PendingAttachmentPreview extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: context.awikiTheme.title,
+                    color: AwikiMePalette.inkNeutral,
                     fontSize: macStyle
                         ? responsive.displayScaled(12.5)
                         : responsive.bodySm,
@@ -1569,7 +1630,7 @@ class _PendingAttachmentPreview extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: context.awikiTheme.secondaryText,
+                    color: AwikiMePalette.mutedNeutral,
                     fontSize: responsive.metaSm,
                   ),
                 ),
@@ -1586,7 +1647,7 @@ class _PendingAttachmentPreview extends ConsumerWidget {
             borderRadius: BorderRadius.circular(responsive.displayScaled(14)),
             child: Icon(
               CupertinoIcons.xmark_circle_fill,
-              color: context.awikiTheme.tertiaryText,
+              color: AwikiMePalette.messagePreview,
               size: responsive.displayScaled(18),
             ),
           ),
@@ -1603,12 +1664,12 @@ class _PendingAttachmentPreview extends ConsumerWidget {
     final radius = BorderRadius.circular(context.awikiResponsive.radius(8));
     final fallback = DecoratedBox(
       decoration: BoxDecoration(
-        color: context.awikiTheme.primarySoft,
+        color: AwikiMePalette.brandAccentSoft,
         borderRadius: radius,
       ),
       child: Icon(
         CupertinoIcons.doc,
-        color: context.awikiTheme.primary,
+        color: AwikiMePalette.brandAccent,
         size: context.awikiResponsive.displayScaled(macStyle ? 16 : 18),
       ),
     );

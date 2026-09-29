@@ -40,8 +40,8 @@ void main() {
           .assertionContract!
           .assertionIds,
       containsAll(<String>[
-        'ROOT-TRANSFER-E2E-001:active_join_missing_prekey_retryable',
-        'ROOT-TRANSFER-E2E-001:active_join_retry_requires_fresh_confirmation',
+        'ROOT-TRANSFER-E2E-001:automatic_prekey_budget_exhausted',
+        'ROOT-TRANSFER-E2E-001:exact_join_retry_without_second_approval',
         'ROOT-TRANSFER-E2E-001:receiver_completion_ready',
       ]),
     );

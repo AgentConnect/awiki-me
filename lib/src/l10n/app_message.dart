@@ -1,6 +1,7 @@
 import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../core/app_error_classifier.dart';
+import '../core/app_transport_failure.dart';
 
 class AppMessage {
   const AppMessage._(this.id, {this.path, this.value, this.detail});
@@ -9,6 +10,8 @@ class AppMessage {
   final String? path;
   final String? value;
   final String? detail;
+
+  factory AppMessage.retiredAgent() => const AppMessage._('retiredAgent');
 
   factory AppMessage.profileUpdated() => const AppMessage._('profileUpdated');
 
@@ -50,6 +53,12 @@ class AppMessage {
 
   factory AppMessage.updatePolicyUnavailable() =>
       const AppMessage._('updatePolicyUnavailable');
+
+  factory AppMessage.secureConnectionFailed() =>
+      const AppMessage._('secureConnectionFailed');
+
+  factory AppMessage.trustResourcesInvalid() =>
+      const AppMessage._('trustResourcesInvalid');
 
   factory AppMessage.updateCheckFailed() =>
       const AppMessage._('updateCheckFailed');
@@ -269,6 +278,10 @@ class AppMessage {
 
   factory AppMessage.fromError(Object error) {
     switch (structuredAppErrorCode(error)) {
+      case tlsHandshakeFailureCode:
+        return AppMessage.secureConnectionFailed();
+      case trustBundleFailureCode:
+        return AppMessage.trustResourcesInvalid();
       case 'identity.registration_verification_invalid':
         return AppMessage.registrationVerificationInvalid();
       case 'identity.registration_verification_unavailable':
@@ -277,6 +290,7 @@ class AppMessage {
         return AppMessage.registrationCommittedActivationPending();
       case 'identity.registration_recovery_state_invalid':
         return AppMessage.registrationRecoveryStateInvalid();
+      case 'identity.local_registry_conflict':
       case 'handle_recovery.local_state_conflict':
         return AppMessage.registrationLocalStateNeedsAttention();
       case 'handle_recovery.transition_missing':
@@ -439,6 +453,8 @@ class AppMessage {
 
   String resolve(AppLocalizations l10n) {
     switch (id) {
+      case 'retiredAgent':
+        return l10n.chatRetiredAgentDisabled;
       case 'profileUpdated':
         return l10n.profileUpdated;
       case 'exportedTo':
@@ -465,6 +481,10 @@ class AppMessage {
         return l10n.updateAlreadyLatest;
       case 'updatePolicyUnavailable':
         return l10n.updatePolicyUnavailable;
+      case 'secureConnectionFailed':
+        return l10n.secureConnectionFailed;
+      case 'trustResourcesInvalid':
+        return l10n.trustResourcesInvalid;
       case 'updateCheckFailed':
         return l10n.updateCheckFailed;
       case 'updateOpenReleaseNotesFailed':
@@ -642,6 +662,10 @@ class AppMessage {
         return 'The request timed out. Please check your network and try again.';
       case 'daemonUpgradeStarted':
         return 'Daemon upgrade started.';
+      case 'secureConnectionFailed':
+        return 'Unable to establish a secure connection. Check your system date and time, or contact support.';
+      case 'trustResourcesInvalid':
+        return 'The app’s secure connection resources are missing or damaged. Update or reinstall the app.';
       case 'networkUnavailableRetry':
         return 'Network connection is temporarily unavailable. Please check your network and try again.';
       case 'operationFailedRetry':
@@ -659,7 +683,7 @@ class AppMessage {
       case 'registrationRecoveryStateInvalid':
         return "This Handle's identity state needs server-side attention. Contact support before trying again.";
       case 'registrationLocalStateNeedsAttention':
-        return 'This device has identity state that cannot be reconciled safely. Resolve the local state, then send a new verification code.';
+        return 'This device has conflicting identity state. Keep its local data, enter the original Handle, and continue the previous recovery. Contact support if that option does not appear. Registering again will not resolve it.';
       case 'registrationContinuityChanged':
         return 'Identity continuity changed. Send a new verification code and try again.';
       case 'registrationJoinTerminalWait':

@@ -28,6 +28,28 @@ class DeviceManagementService {
   final Set<String> _approvalSessionsInFlight = <String>{};
   final Set<String> _revokeDeviceIdsInFlight = <String>{};
 
+  Future<bool> localManagementReady(
+    String selector,
+    String? protocolDeviceId,
+  ) async {
+    if (protocolDeviceId == null) return false;
+    return _core.localManagementReady(
+      selector: _required(selector, 'selector'),
+      protocolDeviceId: _required(protocolDeviceId, 'protocolDeviceId'),
+    );
+  }
+
+  Future<List<DeviceJoinManagementStatus>> managementStatus(String selector) =>
+      _core.deviceJoinManagementStatus(_required(selector, 'selector'));
+
+  Future<void> retryManagement({
+    required String selector,
+    required String joinSessionId,
+  }) => _core.retryDeviceJoinManagement(
+    selector: _required(selector, 'selector'),
+    joinSessionId: _required(joinSessionId, 'joinSessionId'),
+  );
+
   Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
     required String handle,
     required String phone,
@@ -42,7 +64,8 @@ class DeviceManagementService {
     final did = await _core.resolveJoinDid(
       _required(handle, 'handle').toLowerCase(),
     );
-    if (!did.startsWith('did:wba:') || did.trim() != did) {
+    // Method validation belongs to the Core adapter that resolves the Handle.
+    if (did.isEmpty || did.trim() != did) {
       throw const DeviceManagementException('invalid_join_target_did');
     }
     return did;

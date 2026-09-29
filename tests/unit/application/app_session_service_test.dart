@@ -11,13 +11,117 @@ import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/im_core_runtime_port.dart';
 import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/ports/realtime_core_port.dart';
+import 'package:awiki_me/src/application/tenant/app_tenant.dart';
+import 'package:awiki_me/src/data/services/app_key_value_store.dart';
+import 'package:awiki_me/src/data/services/key_value_active_session_store.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 void main() {
   group('ImCoreAppSessionService', () {
+    for (final vaultFails in [false, true]) {
+      test(
+        'Android damaged last selection preserves explicit login vault checks (vaultFails=$vaultFails)',
+        () async {
+          final storage = _DamagedAndroidSelection();
+          final active = KeyValueActiveSessionStore(
+            storage: SecureAppKeyValueStore(
+              secureStorage: storage,
+              isAndroid: true,
+            ),
+            scopeId: StorageScopeId.parse(
+              '55555555-5555-4555-8555-555555555555',
+            ),
+          );
+          final identity = _session('existing-identity');
+          final auth = _FakeAuth();
+          final runtime = _FakeRuntime(
+            vaultError: vaultFails ? StateError('vault unavailable') : null,
+          );
+          ImCoreAppSessionService sessionService() => ImCoreAppSessionService(
+            bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+            runtime: runtime,
+            identities: _FakeIdentities(defaultIdentity: identity),
+            auth: auth,
+            activeSessionStore: active,
+          );
+          final service = sessionService();
+          expect(await service.restoreSession(), isNull);
+          if (vaultFails) {
+            await expectLater(
+              service.loginWithIdentity(identity.identityId),
+              throwsStateError,
+            );
+            expect(storage.target, isNull);
+            expect(auth.ensureCount, 0);
+            expect(runtime.switchedIdentities, isEmpty);
+          } else {
+            final loggedIn = await service.loginWithIdentity(
+              identity.identityId,
+            );
+            expect(loggedIn.authenticated, isTrue);
+            expect(runtime.vaultChecks, contains(identity.identityId));
+            expect(storage.target, identity.identityId);
+            expect(
+              (await sessionService().restoreSession())?.identityId,
+              identity.identityId,
+            );
+          }
+        },
+      );
+    }
+    test(
+      'same tenant Web identity can activate and remain selectable',
+      () async {
+        final identity = _session('web-local').copyWith(
+          did: 'did:web:awiki.ai:awiki:web:0123456789ab4def8123456789abcdef',
+        );
+        final runtime = _FakeRuntime();
+        final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+          runtime: runtime,
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: _FakeAuth(),
+          expectedDidDomain: 'awiki.ai',
+        );
+        final session = await service.loginWithIdentity(identity.identityId);
+        expect(session.did, identity.did);
+        expect(session.authenticated, isTrue);
+        expect(runtime.switchedIdentities, [identity.identityId]);
+        expect((await service.listLocalIdentities()).single.did, identity.did);
+      },
+    );
+
+    for (final did in [
+      'did:web:other.example:awiki:web:0123456789ab4def8123456789abcdef',
+      'did:unknown:awiki.ai:alice',
+    ]) {
+      test(
+        'unsupported or foreign identity is rejected before activation $did',
+        () async {
+          final identity = _session('invalid-local').copyWith(did: did);
+          final runtime = _FakeRuntime();
+          final auth = _FakeAuth();
+          final service = ImCoreAppSessionService(
+            bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+            runtime: runtime,
+            identities: _FakeIdentities(defaultIdentity: identity),
+            auth: auth,
+            expectedDidDomain: 'awiki.ai',
+          );
+          await expectLater(
+            service.loginWithIdentity(identity.identityId),
+            throwsStateError,
+          );
+          expect(runtime.switchedIdentities, isEmpty);
+          expect(auth.ensureCount, 0);
+        },
+      );
+    }
     test(
       'epoch barrier completes after Core binding and before auth/session commit',
       () async {
@@ -1757,6 +1861,42 @@ AppSession _session(String id) {
   );
 }
 
+class _DamagedAndroidSelection extends FlutterSecureStorage {
+  String? target;
+
+  @override
+  Future<String?> read({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    if (aOptions!.toMap()['storageNamespace']!.isNotEmpty) return target;
+    throw PlatformException(
+      code: 'Exception encountered',
+      message: 'BAD_DECRYPT',
+    );
+  }
+
+  @override
+  Future<void> write({
+    required String key,
+    required String? value,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    expect(aOptions!.toMap()['storageNamespace'], 'awiki_me_app_state_v1');
+    target = value;
+  }
+}
+
 class _FakeRuntime implements ImCoreRuntimePort {
   _FakeRuntime({this.vaultError, this.vaultErrorsByIdentity = const {}});
 
@@ -1805,6 +1945,26 @@ class _FakeRuntime implements ImCoreRuntimePort {
 }
 
 class _FakeIdentities implements IdentityCorePort {
+  @override
+  Future<IdentityMethodCapabilities> identityMethodCapabilities(
+    String did,
+  ) async => const IdentityMethodCapabilities(
+    method: IdentityDidMethod.wba,
+    handleRecovery: true,
+    rootImport: true,
+    rootTransfer: true,
+    servicesUpdate: false,
+  );
+
+  @override
+  Future<List<IdentityDidMethod>> identityCreationMethods() async => const [
+    IdentityDidMethod.wba,
+  ];
+
+  @override
+  Future<List<PendingIdentityRegistration>>
+  pendingIdentityRegistrations() async => const [];
+
   Object? deletionError;
   _FakeIdentities({
     AppSession? defaultIdentity,
@@ -1880,6 +2040,7 @@ class _FakeIdentities implements IdentityCorePort {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithEmail({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String email,
     required String handle,
     String? inviteCode,
@@ -1891,6 +2052,7 @@ class _FakeIdentities implements IdentityCorePort {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithPhone({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String otp,
     required String handle,
@@ -1903,6 +2065,7 @@ class _FakeIdentities implements IdentityCorePort {
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String handle,
     String? inviteCode,
     String? displayName,

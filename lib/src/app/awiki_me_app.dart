@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'app_appearance.dart';
+import '../application/ports/agent_availability_port.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -24,12 +26,13 @@ import '../domain/entities/device_management.dart';
 import '../presentation/app_shell/app_shell.dart';
 import '../presentation/app_shell/providers/app_lifecycle_provider.dart';
 import '../presentation/app_shell/providers/session_provider.dart';
+import '../presentation/app_shell/providers/navigation_provider.dart';
 import '../presentation/agents/agents_provider.dart';
 import '../presentation/chat/chat_provider.dart';
 import '../presentation/recovery/handle_recovery_provider.dart';
 import '../presentation/shared/awiki_me_design.dart';
 import '../presentation/shared/display_scale.dart';
-import '../presentation/shared/widgets/app_widgets.dart';
+import '../presentation/shared/widgets/keyboard_dismiss_scope.dart';
 import 'app_orientation.dart';
 import 'app_locale.dart';
 import 'app_services.dart';
@@ -144,6 +147,13 @@ class AwikiMeApp extends StatelessWidget {
           messageSyncServiceProvider.overrideWithValue(
             bootstrap.messageSyncService!,
           ),
+        if (bootstrap.agentInventoryPort != null)
+          agentAvailabilityPortProvider.overrideWith((ref) {
+            final inventory = ref.watch(agentInventoryPortProvider);
+            return inventory is AgentAvailabilityPort
+                ? inventory as AgentAvailabilityPort
+                : null;
+          }),
         if (bootstrap.agentInventoryPort != null)
           agentInventoryPortProvider.overrideWith((ref) {
             final inventory = bootstrap.agentInventoryPort!;
@@ -414,6 +424,7 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
         systemNavigationBarDividerColor: appTheme.tokens.background,
       ),
       child: CupertinoApp(
+        navigatorKey: ref.watch(appNavigatorKeyProvider),
         onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
         debugShowCheckedModeBanner: false,
         localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
@@ -454,7 +465,7 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
                   ref.read(displayScaleProvider.notifier).reset();
                   return ref.read(displayScaleProvider);
                 },
-                child: _KeyboardDismissScope(
+                child: KeyboardDismissScope(
                   child: material.Theme(
                     data: appTheme.materialTheme,
                     child: AppOrientationScope(
@@ -631,49 +642,5 @@ class _DisplayScaleShortcutsState extends State<_DisplayScaleShortcuts> {
         ),
       ],
     );
-  }
-}
-
-class _KeyboardDismissScope extends StatelessWidget {
-  const _KeyboardDismissScope({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (event) {
-        if (_isPointerInsideEditable(context, event.position)) {
-          return;
-        }
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: child,
-    );
-  }
-
-  bool _isPointerInsideEditable(BuildContext context, Offset globalPosition) {
-    var found = false;
-
-    void visit(Element element) {
-      if (found) {
-        return;
-      }
-      if (element.widget is EditableText || element.widget is AppTextField) {
-        final renderObject = element.renderObject;
-        if (renderObject is RenderBox && renderObject.attached) {
-          final localPosition = renderObject.globalToLocal(globalPosition);
-          if (renderObject.size.contains(localPosition)) {
-            found = true;
-            return;
-          }
-        }
-      }
-      element.visitChildren(visit);
-    }
-
-    (context as Element).visitChildren(visit);
-    return found;
   }
 }

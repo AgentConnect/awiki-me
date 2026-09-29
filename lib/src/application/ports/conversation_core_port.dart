@@ -24,6 +24,8 @@ abstract interface class ConversationCorePort {
     int limit = 100,
     String? cursor,
     bool unreadOnly = false,
+    // Mute hydration needs valid registry routes even when the tail is control.
+    bool includeControlMessages = false,
   });
 
   /// Legacy migration adapter. New read paths should prefer

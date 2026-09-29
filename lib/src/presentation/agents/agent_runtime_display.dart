@@ -15,9 +15,15 @@ class AgentRuntimeDisplay {
   final String? driverId;
 }
 
+bool agentUsesAcp(AgentSummary agent) => agent.usesAcp;
+
 AgentRuntimeDisplay agentRuntimeDisplay(AgentSummary agent) {
   final runtime = _normalizeToken(agent.runtime);
-  final driverId = _normalizeToken(agent.latest.runtimeCard?.driverId);
+  final driverId = _normalizeToken(
+    agent.runtimeConfiguration['driver_id']?.toString() ??
+        agent.latest.runtimeCard?.driverId ??
+        agent.latest.diagnosticsSummary['driver_id']?.toString(),
+  );
   return agentRuntimeDisplayFor(runtime: runtime, driverId: driverId);
 }
 
@@ -48,9 +54,7 @@ RuntimeAgentKind? _runtimeKindFor({String? runtime, String? driverId}) {
   for (final kind in RuntimeAgentKind.values) {
     final kindDriverId = kind.driverId;
     if (runtime == kind.runtime ||
-        (driverId != null &&
-            kindDriverId != null &&
-            driverId == kindDriverId)) {
+        (driverId != null && driverId == kindDriverId)) {
       return kind;
     }
   }

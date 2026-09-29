@@ -43,6 +43,10 @@ void main() {
           'smoke_failure_reporting_',
         );
         addTearDown(() => root.deleteSync(recursive: true));
+        const exclusionsPath = 'tests/e2e/user_test_exclusions.json';
+        File('${root.path}/$exclusionsPath')
+          ..createSync(recursive: true)
+          ..writeAsStringSync(File(exclusionsPath).readAsStringSync());
         final commands = _SmokeFixtureCommands(
           root,
           missingCount: missingCount,

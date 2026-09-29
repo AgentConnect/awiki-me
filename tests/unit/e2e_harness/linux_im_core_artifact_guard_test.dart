@@ -20,6 +20,48 @@ void main() {
     ),
   );
 
+  test(
+    'source builds use isolated locked outputs for Debug and optimized SDK',
+    () {
+      for (final debug in [true, false]) {
+        final plan = linuxImCoreBuildPlan(
+          layout,
+          debugBuild: debug,
+          environment: const {
+            'AWIKI_SOURCE_INTEGRATION': '1',
+            'CARGO_TARGET_DIR': '/wrong-cache',
+          },
+        );
+        expect(plan.command.take(7), [
+          'python3',
+          '/workspace/core/scripts/dependencies/build.py',
+          '--deps',
+          'source',
+          '--source-manifest',
+          'dependencies.source.json',
+          '--cargo-command',
+        ]);
+        expect(plan.command, contains('--locked'));
+        expect(plan.command.contains('--release'), !debug);
+        expect(
+          plan.artifactToCopy!.path,
+          '/workspace/core/.artifacts/dependencies/source/target/${debug ? 'debug' : 'release'}/libawiki_im_core.so',
+        );
+      }
+      expect(
+        () => linuxImCoreBuildPlan(
+          layout,
+          debugBuild: true,
+          environment: const {
+            'AWIKI_SOURCE_INTEGRATION': '1',
+            'AWIKI_RELEASE_REGISTRY': '1',
+          },
+        ),
+        throwsA(isA<LinuxImCoreArtifactException>()),
+      );
+    },
+  );
+
   test('Debug CI keeps the published registry build and locked dependencies', () {
     final plan = linuxImCoreBuildPlan(
       layout,

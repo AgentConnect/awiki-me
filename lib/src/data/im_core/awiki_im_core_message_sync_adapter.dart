@@ -66,41 +66,50 @@ class AwikiImCoreMessageSyncAdapter
   @override
   Future<List<LocalIncomingMessage>> findLocalIncoming(
     Set<String> references,
-  ) => _runtime.withCurrentClient((client) async {
-    if (references.isEmpty) return const <LocalIncomingMessage>[];
-    final ownerDid = (await client.identity.current()).did;
-    final matched = <String>{};
-    final found = <LocalIncomingMessage>[];
-    String? cursor;
-    do {
-      final page = await client.messages.localIncomingRecovery(
-        limit: 1000,
-        cursor: cursor,
-      );
-      for (final value in page.items) {
-        final candidates = _pushReferencesFromCore(value);
-        if (!candidates.any(references.contains)) continue;
-        final message = _mappers.chatMessageFromCore(value, ownerDid: ownerDid);
-        if (message.isMine ||
-            value.direction != core.MessageDirection.incoming) {
-          throw StateError('message_sync_recovery_direction_invalid');
-        }
-        matched.addAll(candidates.where(references.contains));
-        found.add(
-          LocalIncomingMessage(
-            message: message,
-            opaqueMessageReferences: candidates,
-          ),
-        );
-      }
-      if (matched.containsAll(references) || !page.hasMore) break;
-      if (page.nextCursor == null || page.nextCursor == cursor) {
-        throw StateError('message_sync_recovery_cursor_invalid');
-      }
-      cursor = page.nextCursor;
-    } while (true);
-    return found;
-  });
+  ) async {
+    try {
+      return await _runtime.withCurrentClient((client) async {
+        if (references.isEmpty) return const <LocalIncomingMessage>[];
+        final ownerDid = (await client.identity.current()).did;
+        final matched = <String>{};
+        final found = <LocalIncomingMessage>[];
+        String? cursor;
+        do {
+          final page = await client.messages.localIncomingRecovery(
+            limit: 1000,
+            cursor: cursor,
+          );
+          for (final value in page.items) {
+            final candidates = _pushReferencesFromCore(value);
+            if (!candidates.any(references.contains)) continue;
+            final message = _mappers.chatMessageFromCore(
+              value,
+              ownerDid: ownerDid,
+            );
+            if (message.isMine ||
+                value.direction != core.MessageDirection.incoming) {
+              throw StateError('message_sync_recovery_direction_invalid');
+            }
+            matched.addAll(candidates.where(references.contains));
+            found.add(
+              LocalIncomingMessage(
+                message: message,
+                opaqueMessageReferences: candidates,
+              ),
+            );
+          }
+          if (matched.containsAll(references) || !page.hasMore) break;
+          if (page.nextCursor == null || page.nextCursor == cursor) {
+            throw StateError('message_sync_recovery_cursor_invalid');
+          }
+          cursor = page.nextCursor;
+        } while (true);
+        return found;
+      });
+    } on core.AwikiImCoreException catch (error) {
+      throw const AwikiImCoreErrorMapper().messageSyncFailure(error);
+    }
+  }
 
   @override
   Future<MessageSyncOutcome> syncNow({

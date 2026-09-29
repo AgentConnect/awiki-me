@@ -36,10 +36,12 @@ class GroupInviteEligibilityPolicy {
     required List<AgentSummary> agents,
     required Set<String> pendingDeletionAgentDids,
     required List<ConversationSummary> conversations,
+    Set<String> unavailableAgentDids = const {},
     SkillGroupMembershipCapability skillGroupMembership =
         const SkillGroupMembershipCapability.disabled(),
   }) {
     final excludedDids = <String>{
+      ...unavailableAgentDids.map(_normalizedDid),
       for (final did in pendingDeletionAgentDids)
         if (_normalizedDid(did).isNotEmpty) _normalizedDid(did),
       for (final conversation in conversations)
@@ -125,7 +127,8 @@ class GroupInviteEligibilityPolicy {
 bool _isArchivedAgent(AgentSummary agent) {
   final activeState = agent.activeState.trim().toLowerCase();
   final latestStatus = agent.latest.status.trim().toLowerCase();
-  return activeState != 'active' ||
+  return agent.isRetiredRuntime ||
+      activeState != 'active' ||
       latestStatus == 'archived' ||
       latestStatus == 'deleted';
 }

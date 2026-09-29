@@ -45,14 +45,12 @@ class _AgentProcessingIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final bubbleColor = macStyle
-        ? context.awikiTheme.subtleSurface
-        : theme.subtleSurface;
+    final bubbleColor = macStyle ? AwikiMePalette.mist : theme.subtleSurface;
     final borderColor = macStyle
-        ? context.awikiTheme.border
+        ? AwikiMePalette.hairline
         : theme.border.withValues(alpha: 0.72);
     final textColor = macStyle
-        ? context.awikiTheme.secondaryText
+        ? AwikiMePalette.mutedNeutral
         : theme.secondaryText;
     return Semantics(
       liveRegion: true,
@@ -172,19 +170,15 @@ class _PersonalAgentProcessingStatus extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final foreground = overdue
-        ? (theme.colorScheme.brightness == Brightness.dark
-              ? theme.warning
-              : macStyle
-              ? const Color(0xFF9A5A00)
-              : const Color(0xFF936300))
-        : (macStyle ? context.awikiTheme.secondaryText : theme.secondaryText);
+        ? (macStyle ? const Color(0xFF9A5A00) : const Color(0xFF936300))
+        : (macStyle ? AwikiMePalette.mutedNeutral : theme.secondaryText);
     final background = overdue
-        ? theme.warningContainer
-        : (macStyle ? context.awikiTheme.subtleSurface : theme.subtleSurface);
+        ? const Color(0xFFFFF5DC)
+        : (macStyle ? AwikiMePalette.mist : theme.subtleSurface);
     final border = overdue
-        ? theme.warning.withValues(alpha: 0.35)
+        ? const Color(0xFFE9D49D)
         : (macStyle
-              ? context.awikiTheme.border
+              ? AwikiMePalette.hairline
               : theme.border.withValues(alpha: 0.68));
     final iconSize = macStyle
         ? responsive.displayScaled(12.5)
@@ -399,21 +393,21 @@ class _PersonalAgentRecoveryCard extends StatelessWidget {
     final accent = isDanger
         ? theme.danger
         : isAttention
-        ? theme.warning
+        ? const Color(0xFF996300)
         : theme.primary;
     final background = macStyle
-        ? theme.surface
+        ? CupertinoColors.white
         : (isDanger
-              ? theme.dangerContainer
+              ? const Color(0xFFFFF3F1)
               : isAttention
-              ? theme.warningContainer
+              ? const Color(0xFFFFF7E6)
               : theme.subtleSurface);
     final border = isDanger
-        ? theme.danger.withValues(alpha: 0.35)
+        ? const Color(0xFFFFD1CA)
         : isAttention
-        ? theme.warning.withValues(alpha: 0.35)
+        ? const Color(0xFFEAD49A)
         : (macStyle
-              ? context.awikiTheme.border
+              ? AwikiMePalette.hairline
               : theme.border.withValues(alpha: 0.76));
     final width = macStyle
         ? responsive.displayScaled(420)
@@ -466,7 +460,7 @@ class _PersonalAgentRecoveryCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: macStyle
-                              ? context.awikiTheme.title
+                              ? AwikiMePalette.inkNeutral
                               : theme.title,
                           fontSize: macStyle
                               ? responsive.displayScaled(13)
@@ -490,7 +484,7 @@ class _PersonalAgentRecoveryCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: macStyle
-                          ? context.awikiTheme.secondaryText
+                          ? AwikiMePalette.mutedNeutral
                           : theme.secondaryText,
                       fontSize: macStyle
                           ? responsive.displayScaled(12)
@@ -518,7 +512,7 @@ class _PersonalAgentRecoveryCard extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: macStyle
-                          ? context.awikiTheme.subtleSurface
+                          ? AwikiMePalette.mist
                           : theme.surface.withValues(alpha: 0.72),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -528,7 +522,7 @@ class _PersonalAgentRecoveryCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: macStyle
-                            ? context.awikiTheme.title
+                            ? AwikiMePalette.inkNeutral
                             : theme.title,
                         fontSize: macStyle
                             ? responsive.displayScaled(12.5)
@@ -878,13 +872,13 @@ class _NewMessagesButton extends StatelessWidget {
               ? responsive.displayScaled(7)
               : responsive.spacing(7),
         ),
-        color: context.awikiTheme.primary,
+        color: AwikiMePalette.brandAccent,
         borderRadius: BorderRadius.circular(999),
         onPressed: onTap,
         child: Text(
           context.l10n.conversationsNewMessages,
           style: TextStyle(
-            color: context.awikiTheme.primaryForeground,
+            color: CupertinoColors.white,
             fontSize: macStyle
                 ? responsive.displayScaled(12)
                 : responsive.metaSm,
@@ -928,6 +922,137 @@ class _MessageAvatar extends StatelessWidget {
   }
 }
 
+class _ChatBubbleShapeBorder extends ShapeBorder {
+  const _ChatBubbleShapeBorder({
+    required this.isMine,
+    required this.radius,
+    required this.tailExtent,
+    required this.side,
+  });
+
+  final bool isMine;
+  final double radius;
+  final double tailExtent;
+  final BorderSide side;
+
+  @override
+  EdgeInsetsGeometry get dimensions => EdgeInsets.zero;
+
+  @override
+  Path getInnerPath(Rect rect, {TextDirection? textDirection}) {
+    return _buildPath(rect.deflate(side.width));
+  }
+
+  @override
+  Path getOuterPath(Rect rect, {TextDirection? textDirection}) {
+    return _buildPath(rect);
+  }
+
+  Path _buildPath(Rect rect) {
+    final width = rect.width;
+    final height = rect.height;
+    final resolvedTail = tailExtent.clamp(0.0, width / 3).toDouble();
+    final bodyWidth = width - resolvedTail;
+    final maxRadiusByHeight = ((height - 9) / 2).clamp(0.0, height / 2);
+    final maxRadius = bodyWidth < height ? bodyWidth / 2 : maxRadiusByHeight;
+    final resolvedRadius = radius.clamp(0.0, maxRadius).toDouble();
+    final joinHalfHeight = (resolvedTail * 0.8).clamp(4.0, 5.0);
+    final minTailCenter = resolvedRadius + joinHalfHeight;
+    final maxTailCenter = height - resolvedRadius - joinHalfHeight;
+    final preferredTailCenter = resolvedRadius + 4;
+    final tailCenter = maxTailCenter >= minTailCenter
+        ? preferredTailCenter.clamp(minTailCenter, maxTailCenter).toDouble()
+        : height / 2;
+    final bodyLeft = resolvedTail;
+    final bodyRight = width;
+    const tipX = 1.0;
+
+    double x(double localX) =>
+        isMine ? rect.right - localX : rect.left + localX;
+    double y(double localY) => rect.top + localY;
+
+    return Path()
+      ..moveTo(x(bodyLeft + resolvedRadius), y(0))
+      ..lineTo(x(bodyRight - resolvedRadius), y(0))
+      ..quadraticBezierTo(x(bodyRight), y(0), x(bodyRight), y(resolvedRadius))
+      ..lineTo(x(bodyRight), y(height - resolvedRadius))
+      ..quadraticBezierTo(
+        x(bodyRight),
+        y(height),
+        x(bodyRight - resolvedRadius),
+        y(height),
+      )
+      ..lineTo(x(bodyLeft + resolvedRadius), y(height))
+      ..quadraticBezierTo(
+        x(bodyLeft),
+        y(height),
+        x(bodyLeft),
+        y(height - resolvedRadius),
+      )
+      ..lineTo(x(bodyLeft), y(tailCenter + joinHalfHeight))
+      ..cubicTo(
+        x(bodyLeft - 0.8),
+        y(tailCenter + joinHalfHeight - 0.3),
+        x(tipX + 2.8),
+        y(tailCenter + 2.8),
+        x(tipX + 1.3),
+        y(tailCenter + 1.3),
+      )
+      ..quadraticBezierTo(
+        x(tipX - 0.2),
+        y(tailCenter),
+        x(tipX + 1.3),
+        y(tailCenter - 1.3),
+      )
+      ..cubicTo(
+        x(tipX + 2.8),
+        y(tailCenter - 2.8),
+        x(bodyLeft - 0.8),
+        y(tailCenter - joinHalfHeight + 0.3),
+        x(bodyLeft),
+        y(tailCenter - joinHalfHeight),
+      )
+      ..lineTo(x(bodyLeft), y(resolvedRadius))
+      ..quadraticBezierTo(x(bodyLeft), y(0), x(bodyLeft + resolvedRadius), y(0))
+      ..close();
+  }
+
+  @override
+  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
+    if (side.style == BorderStyle.none || side.width <= 0) {
+      return;
+    }
+    canvas.drawPath(
+      getOuterPath(rect, textDirection: textDirection),
+      side.toPaint()
+        ..isAntiAlias = true
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  @override
+  ShapeBorder scale(double t) {
+    return _ChatBubbleShapeBorder(
+      isMine: isMine,
+      radius: radius * t,
+      tailExtent: tailExtent * t,
+      side: side.scale(t),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is _ChatBubbleShapeBorder &&
+        other.isMine == isMine &&
+        other.radius == radius &&
+        other.tailExtent == tailExtent &&
+        other.side == side;
+  }
+
+  @override
+  int get hashCode => Object.hash(isMine, radius, tailExtent, side);
+}
+
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
@@ -946,6 +1071,8 @@ class _MessageBubble extends StatelessWidget {
     this.onSaveImage,
     this.isDownloading = false,
     this.onSenderInfoTap,
+    this.footer,
+    this.header,
   });
 
   final ChatMessage message;
@@ -964,6 +1091,10 @@ class _MessageBubble extends StatelessWidget {
   final Future<void> Function(String path)? onSaveImage;
   final bool isDownloading;
   final VoidCallback? onSenderInfoTap;
+  // Task status belongs to the same content lane as its message, inside the
+  // avatar row. Its width must never move the bubble or its trailing edge.
+  final Widget? footer;
+  final Widget? header;
 
   Widget _withE2eMessageSemantics({required Widget child}) {
     return e2eSemantics(
@@ -1019,9 +1150,7 @@ class _MessageBubble extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: macStyle
-              ? context.awikiTheme.secondaryText
-              : theme.secondaryText,
+          color: macStyle ? AwikiMePalette.mutedNeutral : theme.secondaryText,
           fontSize: metrics.fontSize,
           fontWeight: FontWeight.w400,
           height: 1.2,
@@ -1079,7 +1208,7 @@ class _MessageBubble extends StatelessWidget {
       color: isMine ? theme.onOutgoingMessage : theme.title,
       fontSize: 14,
       fontWeight: FontWeight.w400,
-      height: 1.6,
+      height: 1.45,
     );
     final messageContent = message.attachment == null
         ? _MessageTextContent(
@@ -1114,37 +1243,21 @@ class _MessageBubble extends StatelessWidget {
           : CrossAxisAlignment.start,
       children: <Widget>[
         if (showSenderLabel) _buildSenderLabel(context, macStyle: true),
+        if (header != null) header!,
         _withSendingIndicator(
           context,
           isMine: isMine,
           macStyle: true,
-          child: Container(
+          child: _MessageBubbleSurface(
             key: Key('chat-message-bubble:${message.localId}'),
-            constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-            padding: EdgeInsets.symmetric(
-              horizontal: responsive.displayScaled(12),
-              vertical: responsive.displayScaled(8),
-            ),
-            decoration: BoxDecoration(
-              color: attachment != null
-                  ? theme.surface
-                  : isMine
-                  ? theme.outgoingMessage
-                  : theme.incomingMessage,
-              borderRadius: BorderRadius.circular(responsive.displayScaled(6)),
-              boxShadow: attachment != null
-                  ? const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x0D000000),
-                        blurRadius: 2,
-                        offset: Offset(0, 1),
-                      ),
-                    ]
-                  : null,
-            ),
+            maxWidth: maxBubbleWidth,
+            isMine: isMine,
+            hasAttachment: attachment != null,
+            macStyle: true,
             child: child,
           ),
         ),
+        if (footer != null) footer!,
         if (message.sendState == MessageSendState.failed) ...<Widget>[
           SizedBox(height: responsive.displayScaled(8)),
           Row(
@@ -1153,9 +1266,9 @@ class _MessageBubble extends StatelessWidget {
               SelectionArea(
                 child: Text(
                   context.l10n.chatSendFailed,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 12,
-                    color: context.awikiTheme.danger,
+                    color: AwikiMePalette.dangerRed,
                     fontWeight: FontWeight.w400,
                   ),
                 ),
@@ -1168,9 +1281,9 @@ class _MessageBubble extends StatelessWidget {
                   semanticLabel: context.l10n.chatRetrySend,
                   child: Text(
                     context.l10n.commonRetry,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 12,
-                      color: context.awikiTheme.primary,
+                      color: AwikiMePalette.brandAccent,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
@@ -1244,7 +1357,7 @@ class _MessageBubble extends StatelessWidget {
       color: isMine ? theme.onOutgoingMessage : theme.title,
       fontSize: 14,
       fontWeight: FontWeight.w400,
-      height: 1.6,
+      height: 1.45,
     );
     final messageContent = attachment == null
         ? _MessageTextContent(
@@ -1273,50 +1386,27 @@ class _MessageBubble extends StatelessWidget {
       text: _copyableMessageText(context, message),
       child: messageContent,
     );
-    final bubbleColor = attachment != null
-        ? theme.surface
-        : isMine
-        ? theme.outgoingMessage
-        : theme.incomingMessage;
-    final bubbleShape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(responsive.displayScaled(6)),
-    );
-    final horizontalPadding = responsive.displayScaled(12);
     final bubble = Column(
       crossAxisAlignment: isMine
           ? CrossAxisAlignment.end
           : CrossAxisAlignment.start,
       children: <Widget>[
         if (showSenderLabel) _buildSenderLabel(context, macStyle: false),
+        if (header != null) header!,
         _withSendingIndicator(
           context,
           isMine: isMine,
           macStyle: false,
-          child: Container(
+          child: _MessageBubbleSurface(
             key: Key('chat-message-bubble:${message.localId}'),
-            constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-            padding: EdgeInsets.fromLTRB(
-              horizontalPadding,
-              responsive.displayScaled(8),
-              horizontalPadding,
-              responsive.displayScaled(8),
-            ),
-            decoration: ShapeDecoration(
-              color: bubbleColor,
-              shape: bubbleShape,
-              shadows: attachment != null
-                  ? const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x0D000000),
-                        blurRadius: 2,
-                        offset: Offset(0, 1),
-                      ),
-                    ]
-                  : null,
-            ),
+            maxWidth: maxBubbleWidth,
+            isMine: isMine,
+            hasAttachment: attachment != null,
+            macStyle: false,
             child: content,
           ),
         ),
+        if (footer != null) footer!,
         if (message.sendState == MessageSendState.failed) ...<Widget>[
           SizedBox(height: responsive.spacing(6)),
           Row(
@@ -1524,7 +1614,7 @@ class _SendingMessageIndicator extends StatelessWidget {
           child: CupertinoActivityIndicator(
             radius: radius,
             color: macStyle
-                ? context.awikiTheme.tertiaryText
+                ? AwikiMePalette.messagePreview
                 : theme.tertiaryText,
           ),
         ),
@@ -1636,14 +1726,14 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
     final theme = context.awikiTheme;
     final caption = attachment.caption?.trim() ?? '';
     final titleStyle = TextStyle(
-      color: widget.macStyle ? context.awikiTheme.title : theme.title,
+      color: widget.macStyle ? AwikiMePalette.inkNeutral : theme.title,
       fontSize: 13,
       fontWeight: FontWeight.w400,
       height: 1.25,
     );
     final metaStyle = TextStyle(
       color: widget.macStyle
-          ? context.awikiTheme.secondaryText
+          ? AwikiMePalette.mutedNeutral
           : theme.secondaryText,
       fontSize: 11,
       fontWeight: FontWeight.w400,
@@ -1668,7 +1758,9 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
               payloadJson: message.payloadJson,
               mentionPresentation: widget.mentionPresentation,
               style: TextStyle(
-                color: widget.macStyle ? context.awikiTheme.title : theme.title,
+                color: widget.macStyle
+                    ? AwikiMePalette.inkNeutral
+                    : theme.title,
                 fontSize: widget.macStyle
                     ? responsive.displayScaled(14)
                     : responsive.bodyMd,
@@ -2051,10 +2143,7 @@ class _InlineImageEnvelope extends StatelessWidget {
           height: size.height,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(radius),
-            child: ColoredBox(
-              color: context.awikiTheme.subtleSurface,
-              child: child,
-            ),
+            child: ColoredBox(color: AwikiMePalette.mist, child: child),
           ),
         );
       },
@@ -2165,7 +2254,7 @@ class _InlineImageFileFallback extends StatelessWidget {
                 child: Icon(
                   CupertinoIcons.doc_fill,
                   color: macStyle
-                      ? context.awikiTheme.primary
+                      ? AwikiMePalette.brandAccent
                       : context.awikiTheme.primary,
                   size: macStyle
                       ? responsive.displayScaled(20)
@@ -2515,18 +2604,18 @@ class _AttachmentFileCard extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: macStyle
-                ? context.awikiTheme.primarySoft
+                ? AwikiMePalette.brandAccentSoft
                 : theme.surface.withValues(alpha: 0.72),
             borderRadius: BorderRadius.circular(
               macStyle ? responsive.displayScaled(8) : 10,
             ),
             border: Border.all(
-              color: macStyle ? context.awikiTheme.border : theme.border,
+              color: macStyle ? AwikiMePalette.hairline : theme.border,
             ),
           ),
           child: Icon(
             CupertinoIcons.doc_fill,
-            color: macStyle ? context.awikiTheme.primary : theme.primary,
+            color: macStyle ? AwikiMePalette.brandAccent : theme.primary,
             size: macStyle ? responsive.displayScaled(20) : responsive.iconSm,
           ),
         ),
@@ -2736,13 +2825,13 @@ String _copyableMessageText(BuildContext context, ChatMessage message) {
 class _MessageSelectableContent extends ConsumerStatefulWidget {
   const _MessageSelectableContent({
     super.key,
-    required this.message,
+    this.message,
     required this.conversation,
     required this.text,
     required this.child,
   });
 
-  final ChatMessage message;
+  final ChatMessage? message;
   final ConversationSummary conversation;
   final String text;
   final Widget child;
@@ -3360,7 +3449,7 @@ class _AttachmentCaptionDivider extends StatelessWidget {
         key: const Key('chat-attachment-caption-divider'),
         decoration: BoxDecoration(
           color: macStyle
-              ? context.awikiTheme.tertiaryText.withValues(alpha: 0.95)
+              ? AwikiMePalette.messagePreview.withValues(alpha: 0.95)
               : theme.secondaryText.withValues(alpha: 0.24),
           borderRadius: BorderRadius.circular(1),
         ),
@@ -3408,14 +3497,14 @@ class _AttachmentActionButton extends StatelessWidget {
           : context.l10n.commonCancel,
       isLoading: isLoading && cancel == null,
       size: size,
-      backgroundColor: macStyle ? theme.surface : theme.surface,
-      borderColor: macStyle ? context.awikiTheme.border : theme.border,
+      backgroundColor: macStyle ? CupertinoColors.white : theme.surface,
+      borderColor: macStyle ? AwikiMePalette.hairline : theme.border,
       borderRadius: BorderRadius.circular(
         macStyle ? responsive.displayScaled(8) : 10,
       ),
       child: Icon(
         cancel == null ? CupertinoIcons.eye : CupertinoIcons.xmark,
-        color: macStyle ? context.awikiTheme.primary : theme.primary,
+        color: macStyle ? AwikiMePalette.brandAccent : theme.primary,
         size: macStyle ? responsive.displayScaled(17) : responsive.iconSm,
       ),
     );

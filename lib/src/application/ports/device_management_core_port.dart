@@ -31,6 +31,19 @@ class DeviceJoinSmsOtpSendReceipt {
 /// Permanent revoke accepts only an identity selector, opaque target device ID,
 /// and Host user-presence result; versions, hashes and proofs stay below Core.
 abstract interface class DeviceManagementCorePort {
+  Future<bool> localManagementReady({
+    required String selector,
+    required String protocolDeviceId,
+  });
+
+  Future<List<DeviceJoinManagementStatus>> deviceJoinManagementStatus(
+    String selector,
+  );
+  Future<void> retryDeviceJoinManagement({
+    required String selector,
+    required String joinSessionId,
+  });
+
   Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
     required String handle,
     required String phone,

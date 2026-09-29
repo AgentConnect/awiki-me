@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'app_http_client.dart';
+
 const String awikiClientVersionHeaderName = 'X-AWiki-Client-Version';
 
 class AwikiOnboardingUtilityError implements Exception {
@@ -35,7 +37,7 @@ class AwikiOnboardingUtilityHttpClient {
     http.Client? httpClient,
     this.timeout = const Duration(seconds: 20),
     this.clientVersionHeader,
-  }) : _httpClient = httpClient ?? http.Client(),
+  }) : _httpClient = httpClient ?? createAppHttpClient(),
        _ownsHttpClient = httpClient == null,
        _baseUri = Uri.parse(baseUrl);
 
@@ -239,6 +241,26 @@ class AwikiOnboardingUtilityClient {
           : <String, Object?>{'handle': didOrHandle},
     );
   }
+
+  Future<Map<String, Object?>> checkRegistration({
+    required String handle,
+    required String domain,
+    String? inviteCode,
+    String? phone,
+    String? email,
+    bool checkInvite = false,
+  }) => _serviceClient.rpcCall(
+    path: handleRpcEndpoint,
+    method: 'registration_check',
+    params: <String, Object?>{
+      'handle': handle,
+      'domain': domain,
+      'check_invite': checkInvite,
+      if (inviteCode != null) 'invite_code': inviteCode,
+      if (phone != null) 'phone': phone,
+      if (email != null) 'email': email,
+    },
+  );
 
   Future<Map<String, Object?>> validateHandle({
     required String handle,

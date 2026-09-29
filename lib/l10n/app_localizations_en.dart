@@ -9,6 +9,25 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String get agentLifecycleUnavailable => 'Unavailable';
+
+  @override
+  String get agentLifecycleDeletedReason => 'This agent has been deleted.';
+
+  @override
+  String get agentLifecycleRetiredReason =>
+      'This agent\'s legacy integration has been retired. Its controller needs to create a new agent.';
+
+  @override
+  String get agentLifecycleInactiveReason =>
+      'This agent has been disabled and cannot receive new instructions.';
+
+  @override
+  String agentLifecycleMessageNotice(String name) {
+    return '$name is unavailable';
+  }
+
+  @override
   String get chatMentionMember => 'Mention a group member';
 
   @override
@@ -22,6 +41,53 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appearanceDark => 'Dark';
+
+  @override
+  String get identityMethodLabel => 'Identity method';
+
+  @override
+  String get identityWebAdminLimitation =>
+      'Web identities do not support account recovery, root key import, or management transfer. Keep the first administrator device safe; management access cannot be recovered if it is lost.';
+
+  @override
+  String get identityRegistrationPending => 'Continue pending registration';
+
+  @override
+  String get identityRegistrationResumeHint =>
+      'Continue the same identity registration using the original contact details. Request a fresh verification code if needed.';
+
+  @override
+  String get identityServicesTitle => 'Identity services';
+
+  @override
+  String get identityServicesHint =>
+      'Manage other public services for this identity. Handle, messaging, and profile entries use their existing settings.';
+
+  @override
+  String get identityServicesFailed =>
+      'The operation could not be completed. Refresh its progress and resume the pending operation if shown.';
+
+  @override
+  String get identityServicesPending =>
+      'A service update is awaiting confirmation. Resume it before submitting further changes.';
+
+  @override
+  String get identityServicesResume => 'Resume service update';
+
+  @override
+  String get identityServiceAdd => 'Add service';
+
+  @override
+  String get identityServiceId => 'Service ID';
+
+  @override
+  String get identityServiceType => 'Service type';
+
+  @override
+  String get identityServiceEndpoint => 'Service address';
+
+  @override
+  String get identityServiceEdit => 'Edit';
 
   @override
   String get appTitle => 'AWikiMe';
@@ -223,6 +289,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingOtp => 'Verification code';
 
   @override
+  String get onboardingShortHandleInviteHint =>
+      'Handles shorter than 5 characters require an invite code to register.';
+
+  @override
   String get onboardingOtpPlaceholder => 'Enter verification code';
 
   @override
@@ -325,7 +395,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get registrationLocalStateNeedsAttention =>
-      'This device has identity state that cannot be reconciled safely. Resolve the local state, then send a new verification code.';
+      'This device has conflicting identity state. Keep its local data, enter the original Handle above, and use Continue previous recovery. Contact support if that option does not appear. Registering again will not resolve it.';
 
   @override
   String get registrationContinuityChanged =>
@@ -1159,7 +1229,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get deviceJoinApprove => 'Confirm and authorize';
+  String get deviceJoinApprove => 'Allow join and management access';
 
   @override
   String get deviceJoinCancel => 'Cancel pairing';
@@ -1184,7 +1254,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceJoinUserPresenceReason =>
-      'Confirm authorization of a new device';
+      'Allow this device to join and become a management device';
 
   @override
   String get deviceJoinErrorUnavailable =>
@@ -1743,6 +1813,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get groupInviteAddFailed =>
       'Could not add this identity. Try again later.';
+
+  @override
+  String get groupInviteAdmissionDenied =>
+      'The server does not allow this identity to join the group.';
+
+  @override
+  String get groupInviteFederatedDenied =>
+      'Server policy does not allow this external identity to join the group.';
 
   @override
   String groupInviteConfirmCount(int count) {
@@ -2380,8 +2458,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentInstallTitle => 'Install daemon on host';
 
   @override
-  String get agentInstallSupportedTypes =>
-      'Supported Agent types: Hermes, Codex, Claude Code. After installing the host daemon, you can create Runtime Agents under it.';
+  String agentInstallSupportedTypes(String types) {
+    return 'Supports $types. After installing Daemon, create an agent here. External clients must be installed and configured on the same device.';
+  }
 
   @override
   String agentInstallTokenExpiresAt(Object expiresAt) {
@@ -2537,35 +2616,35 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String agentCreateNeedsRouteWorkspace(Object agentType) {
-    return '$agentType requires per-conversation working directories.';
+    return 'Upgrade Daemon on this device to enable $agentType.';
   }
 
   @override
-  String get agentCreateHermesDescription => 'Built-in Hermes Runtime Agent.';
+  String get agentCreateHermesDescription => 'Uses Hermes CLI on the host.';
 
   @override
   String agentCreateNeedsGenericCliCapability(Object agentType) {
-    return '$agentType requires generic-cli capability from the daemon.';
+    return 'Refresh the device status to check support for $agentType.';
   }
 
   @override
   String agentCreateUnsupportedDriver(Object agentType) {
-    return 'The current daemon does not support the $agentType driver.';
+    return 'This device’s Daemon does not yet support $agentType. Upgrade it and try again.';
   }
 
   @override
   String agentCreateNeedsRouteSession(Object agentType) {
-    return '$agentType requires route session and native resume support.';
+    return 'Upgrade Daemon on this device to enable $agentType.';
   }
 
   @override
   String agentCreateNeedsHostAccess(Object agentType) {
-    return '$agentType requires daemon support for full host access.';
+    return 'Upgrade Daemon on this device to enable $agentType.';
   }
 
   @override
   String agentCreateRequiresSignedInCli(Object agentType) {
-    return 'Requires an installed and signed-in $agentType CLI on the daemon host.';
+    return 'Uses the $agentType client on the host.';
   }
 
   @override
@@ -3695,7 +3774,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryMigrationUnsupported =>
-      'This local identity cannot be migrated safely in V4.0. No remote commit was attempted; use a fresh start or ordinary Device Join.';
+      'The existing local identity cannot be continued safely. No remote commit was attempted. Keep the local data and resolve the identity state; do not replace it with a new local identity.';
 
   @override
   String get handleRecoveryErrorNotPrepared =>
@@ -3723,7 +3802,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryErrorLocalStateUnavailable =>
-      'The local recovery reference is unavailable. Continuing is blocked on this device.';
+      'The local identity or recovery record is inconsistent. Keep this device\'s data and check again; contact support if the problem persists. Registering again will not fix it.';
 
   @override
   String get handleRecoveryErrorBlocked =>
@@ -3786,7 +3865,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryFreshDataNotice =>
-      'No previous identity data is available on this device. Earlier direct messages will not be restored automatically.';
+      'This recovery creates a new local identity and will not automatically carry over the old identity\'s direct messages. Existing local data is preserved.';
 
   @override
   String get handleRecoveryAwaitingResult =>
@@ -3808,4 +3887,221 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryContinueExisting => 'Continue previous recovery';
+
+  @override
+  String get agentClientReady => 'Detected';
+
+  @override
+  String get agentClientMissing => 'Not found';
+
+  @override
+  String get agentClientUnavailable => 'Cannot start';
+
+  @override
+  String get agentClientUnknown => 'Not confirmed';
+
+  @override
+  String get agentClientChecking => 'Checking…';
+
+  @override
+  String get agentClientRefresh => 'Check again';
+
+  @override
+  String get agentClientOffline => 'Host offline';
+
+  @override
+  String get agentClientOfflineHint =>
+      'Reconnect the Daemon, then check again.';
+
+  @override
+  String get agentClientRetryHint =>
+      'Could not confirm installation. Check again.';
+
+  @override
+  String get agentClientInstallHint =>
+      'Install the client on this Daemon’s host, then check again.';
+
+  @override
+  String get agentClientPermissionHint =>
+      'The client cannot be executed. Fix its permissions on the host.';
+
+  @override
+  String get agentClientGatewayHint =>
+      'Hermes CLI module not found. Check the host installation.';
+
+  @override
+  String get agentClientCustomHint =>
+      'This custom launcher cannot be checked safely. Check its entry point.';
+
+  @override
+  String get agentClientTimeoutHint =>
+      'The check timed out. Try again shortly.';
+
+  @override
+  String get agentClientLaunchHint =>
+      'The client could not start. Check its installation and dependencies.';
+
+  @override
+  String agentClientHost(String host) {
+    return 'Checking clients on $host’s host.';
+  }
+
+  @override
+  String get agentClientLegacy =>
+      'This Daemon does not support installation checks yet. Creation uses the existing validation.';
+
+  @override
+  String get agentClientScope =>
+      'Checks installation and startup only. Sign in or configure a model on the host before use.';
+
+  @override
+  String get agentClientCreating => 'Creating…';
+
+  @override
+  String get agentClientCreateFailed =>
+      'Creation failed. Check the client environment and try again. Your input has been kept.';
+
+  @override
+  String get agentClientCreatePending =>
+      'Creation was submitted and is still pending. You can close this window and check the Agent list.';
+
+  @override
+  String get agentClientProtocolHint =>
+      'Client protocol connection failed. Check sign-in, configuration or client errors on the host.';
+
+  @override
+  String get agentClientCompatibilityHint =>
+      'This client version is not compatible with the integration. Update the client and try again.';
+
+  @override
+  String get onboardingAccountNext => 'Next';
+
+  @override
+  String get onboardingInviteCode => 'Invite code';
+
+  @override
+  String get onboardingInviteHandleHint =>
+      'An invite code is required to register this handle.';
+
+  @override
+  String get onboardingInviteRequired =>
+      'An invite code is required to register this handle.';
+
+  @override
+  String get onboardingInviteLengthSix => 'Enter a 6-character invite code.';
+
+  @override
+  String get onboardingInviteLengthMax64 =>
+      'The invite code must be 64 characters or fewer.';
+
+  @override
+  String get onboardingInviteInvalidBeforeContact =>
+      'This invitation code is invalid, expired, or exhausted. Please check and try again.';
+
+  @override
+  String get onboardingInviteInvalid =>
+      'The invite code is invalid, expired, exhausted, or does not match this phone. Check it and retry.';
+
+  @override
+  String get onboardingAccountUnavailable =>
+      'This handle cannot be registered. Choose another handle.';
+
+  @override
+  String get onboardingAccountCheckFailed =>
+      'Unable to check the handle. Retry, or continue with an existing account.';
+
+  @override
+  String get onboardingExistingAccount =>
+      'Continue verification to sign in, join a device, or recover this account.';
+
+  @override
+  String get onboardingExistingAccountAction =>
+      'Continue with an existing account';
+
+  @override
+  String get onboardingChangeAccount => 'Change handle or invite code';
+
+  @override
+  String get onboardingRegistrationClosed =>
+      'Registration is not available for this contact.';
+
+  @override
+  String get chatRetiredAgentDisabled =>
+      'This legacy agent is retired. Create a new agent; your history and draft are kept.';
+
+  @override
+  String get agentAcpUpgradeRequired =>
+      'Upgrade the Daemon to use ACP with this agent.';
+
+  @override
+  String get agentClientAdapterHint =>
+      'The Daemon adapter is missing or damaged. Reinstall the Daemon.';
+
+  @override
+  String get agentClientPlatformHint =>
+      'The agent adapter does not support this platform.';
+
+  @override
+  String get agentClientHermesAcpHint =>
+      'Hermes ACP support is unavailable. Upgrade Hermes CLI on the host.';
+
+  @override
+  String get agentClientNodeMissing => 'Node.js is not installed on this host.';
+
+  @override
+  String get agentClientNodeIncompatible =>
+      'This Node.js version is incompatible. Use Node.js 22 or later.';
+
+  @override
+  String get agentClientNodeUnavailable =>
+      'Node.js could not start. Check the host installation and detect again.';
+
+  @override
+  String get agentClientNodeSetup =>
+      'Codex and Claude Code require Node.js 22 or later on this Daemon host. Node.js 24 LTS is recommended. After installing, detect again.';
+
+  @override
+  String get agentClientNodeDownload => 'Node.js installation guide ↗';
+
+  @override
+  String get agentClientWaitingConfirmation => 'Awaiting confirmation';
+
+  @override
+  String get deviceJoinManagementRegistered =>
+      'Management access registered. Confirm readiness on the new device.';
+
+  @override
+  String get deviceJoinManagementWaiting =>
+      'Root key delivery accepted. Waiting for the new device to finish setup.';
+
+  @override
+  String get deviceJoinManagementConfiguring =>
+      'Device joined. Configuring management access. You can safely leave this page.';
+
+  @override
+  String get deviceJoinManagementRejoinRequired =>
+      'Management setup is no longer valid. Have an administrator revoke this device, then sign out locally on this device while keeping its data and join again.';
+
+  @override
+  String get deviceJoinManagementFailed =>
+      'Device joined; management configuration failed';
+
+  @override
+  String get handleRecoveryErrorLocalRegistryConflict =>
+      'Other local identities still conflict. Your recovery is preserved. Go back to resolve the other pending Handle recoveries, then continue this one. If none are available, keep your data and contact support.';
+
+  @override
+  String get handleRecoveryOtherPending => 'Back to other recoveries';
+
+  @override
+  String get secureConnectionFailed =>
+      'Unable to establish a secure connection. Check your system date and time, or contact support.';
+
+  @override
+  String get trustResourcesInvalid =>
+      'The app’s secure connection resources are missing or damaged. Update or reinstall the app.';
+
+  @override
+  String get onboardingAccountCheckUnsupported =>
+      'This server does not support account checks yet. Existing accounts can continue to sign in.';
 }

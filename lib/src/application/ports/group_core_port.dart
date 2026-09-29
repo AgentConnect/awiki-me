@@ -4,7 +4,12 @@ import '../../domain/entities/group_identity.dart';
 import '../../domain/entities/group_summary.dart';
 import '../models/group_collection_page.dart';
 
-enum GroupMemberAdmissionDenialReason { agentNotGroupInvitable, unspecified }
+enum GroupMemberAdmissionDenialReason {
+  agentNotGroupInvitable,
+  federatedGroupDenied,
+  identityUnavailable,
+  unspecified,
+}
 
 class GroupMemberAdmissionException implements Exception {
   const GroupMemberAdmissionException(this.reason);

@@ -22,6 +22,20 @@ void main() {
     expect(coreConfig.didDomain, config.didDomain);
     expect(coreConfig.anpServiceDid, 'did:wba:$domain');
     expect(coreConfig.transportPolicy, core.MessageTransportPolicy.auto);
+    expect(coreConfig.caBundle, isNull);
+  });
+
+  test('explicit private CA reaches Core without changing endpoints', () {
+    final config = AwikiImCoreEnvironmentConfig.fromAwikiEnvironment(
+      AwikiEnvironmentConfig(
+        baseUrl: 'http://127.0.0.1:19891',
+        didDomain: 'registration.test',
+        caBundle: '/isolated/roots.pem',
+      ),
+    ).toCoreConfig();
+    expect(config.caBundle, '/isolated/roots.pem');
+    expect(config.serviceBaseUrl, 'http://127.0.0.1:19891');
+    expect(config.didDomain, 'registration.test');
   });
 
   test('explicit config preserves optional ANP service fields', () {

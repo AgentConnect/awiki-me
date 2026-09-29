@@ -420,6 +420,18 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
                   _errorLabel(context, state.error!, otpCooldown),
                   style: TextStyle(color: context.awikiTheme.danger),
                 ),
+                if (state.error ==
+                        HandleRecoveryUiError.localRegistryConflict &&
+                    Navigator.of(context).canPop()) ...<Widget>[
+                  const SizedBox(height: 10),
+                  AppSecondaryButton(
+                    key: const Key('handle-recovery-other-pending'),
+                    label: context.l10n.handleRecoveryOtherPending,
+                    onPressed: state.isBusy
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                  ),
+                ],
               ],
             ],
           ),
@@ -642,6 +654,8 @@ String _errorLabel(
     context.l10n.handleRecoveryLocalSuperseded,
   HandleRecoveryUiError.localTransitionPending =>
     context.l10n.handleRecoveryAwaitingLocal,
+  HandleRecoveryUiError.localRegistryConflict =>
+    context.l10n.handleRecoveryErrorLocalRegistryConflict,
   HandleRecoveryUiError.riskConfirmationRequired =>
     context.l10n.handleRecoveryRiskRequired,
   HandleRecoveryUiError.notPrepared =>

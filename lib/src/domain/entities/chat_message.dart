@@ -20,6 +20,7 @@ class ChatMessage {
     this.senderDidSnapshot,
     this.senderName,
     this.remoteId,
+    this.identityAliases = const <String>{},
     this.receiverDid,
     this.groupId,
     this.serverSequence,
@@ -27,11 +28,16 @@ class ChatMessage {
     this.originalType = 'text',
     this.attachment,
     this.payloadJson,
+    this.notifyLevel,
     this.mentions = const <ChatMessageMention>[],
   });
 
   final String localId;
   final String? remoteId;
+
+  /// Explicit Core/request identities for presentation reconciliation only.
+  /// These never replace the canonical ID used for reads or attachments.
+  final Set<String> identityAliases;
   final String? conversationId;
   final String? senderPeerPersonaId;
   final String? senderDidSnapshot;
@@ -49,6 +55,7 @@ class ChatMessage {
   final MessageSendState sendState;
   final ChatAttachment? attachment;
   final String? payloadJson;
+  final String? notifyLevel;
   final List<ChatMessageMention> mentions;
 
   bool get hasValidMentions =>
@@ -107,6 +114,7 @@ class ChatMessage {
 
   ChatMessage copyWith({
     String? remoteId,
+    Set<String>? identityAliases,
     Object? conversationId = _chatMessageUnset,
     Object? senderPeerPersonaId = _chatMessageUnset,
     Object? senderDidSnapshot = _chatMessageUnset,
@@ -123,6 +131,7 @@ class ChatMessage {
     return ChatMessage(
       localId: localId,
       remoteId: remoteId ?? this.remoteId,
+      identityAliases: identityAliases ?? this.identityAliases,
       conversationId: _resolveNullableString(
         conversationId,
         this.conversationId,
@@ -149,6 +158,7 @@ class ChatMessage {
       originalType: originalType ?? this.originalType,
       attachment: attachment ?? this.attachment,
       payloadJson: payloadJson ?? this.payloadJson,
+      notifyLevel: notifyLevel,
       mentions: mentions ?? this.mentions,
     );
   }

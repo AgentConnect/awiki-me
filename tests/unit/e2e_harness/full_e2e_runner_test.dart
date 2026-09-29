@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../e2e/runner.dart';
 import '../../e2e/test_catalog.dart';
+import '../../e2e/user_test_exclusions.dart';
 
 void main() {
   final source = Directory.current;
@@ -43,12 +44,36 @@ void main() {
           )
           as Map<String, dynamic>;
 
+  test(
+    'remote full includes reviewed registration acceptance exactly once',
+    () {
+      final manifest = DesktopE2eSuiteManifest.load(source);
+      expect(
+        manifest.fullSuites().map((s) => s.name),
+        contains('registration-account-first'),
+      );
+      final registration = manifest.definitions['registration-account-first']!;
+      expect(registration.catalogStatus, 'active');
+      expect(registration.requiredFor, ['release']);
+      expect(registration.remoteTargetPolicy, 'configured_same_origin');
+      expect(registration.allowedHosts, isEmpty);
+      expect(registration.allowedDidDomains, isEmpty);
+      expect(registration.caseIds, ['REGISTRATION-ACCOUNT-FIRST-E2E-001']);
+      manifest.definitions['full']!.includes.add(registration.name);
+      expect(manifest.fullSuites, throwsA(isA<E2eFailure>()));
+    },
+  );
+
   test('full covers every active case once, including native and recovery', () {
     final manifest = DesktopE2eSuiteManifest.load(source);
     final selected = manifest.fullSuites();
     final ids = selected.expand((s) => s.caseIds).toList();
     final active = AppTestCatalog.load(source).cases
-        .where((c) => c.catalogStatus == 'active')
+        .where(
+          (c) =>
+              c.catalogStatus == 'active' &&
+              !c.requiredFor.contains('local-fixture'),
+        )
         .map((c) => c.caseId)
         .toSet();
     expect(ids.toSet(), active);
@@ -63,8 +88,6 @@ void main() {
         'multi-device-remote-recovery',
         'root-transfer',
         'production-keychain',
-        'codex-agent',
-        'claude-code-agent',
         'performance',
         'restart',
       ]),
@@ -106,7 +129,18 @@ void main() {
       expect(commands.suites, isEmpty);
       expect(result['status'], 'dry_run');
       expect(result['passedCaseIds'], isEmpty);
-      expect(result['caseResults'], hasLength(114));
+      expect(
+        (result['caseResults'] as List).map((c) => c['caseId']),
+        unorderedEquals(
+          AppTestCatalog.load(source).cases
+              .where(
+                (c) =>
+                    c.catalogStatus == 'active' &&
+                    !c.requiredFor.contains('local-fixture'),
+              )
+              .map((c) => c.caseId),
+        ),
+      );
       expect(result['catalogNotExecutable'], hasLength(17));
       AppTestCatalog.load(source).validateReport(result);
       await expectLater(
@@ -142,11 +176,7 @@ void main() {
       expect(result['status'], 'failed');
       expect(
         commands.suites,
-        containsAll([
-          'multi-device-app-pair',
-          'root-transfer',
-          'claude-code-agent',
-        ]),
+        containsAll(['multi-device-app-pair', 'root-transfer']),
       );
       final children = result['children'] as List;
       expect(
@@ -183,7 +213,28 @@ void main() {
       );
       final result = report('success');
       expect(result['status'], 'passed');
-      expect(result['passedCaseIds'], hasLength(Platform.isMacOS ? 114 : 113));
+      final catalog = AppTestCatalog.load(source);
+      final excluded = DesktopE2eUserExclusions.load(source).appSuites;
+      final excludedCaseIds = <String>{
+        for (final suite in excluded) ...catalog.suiteCaseIds[suite]!,
+      };
+      expect(
+        result['passedCaseIds'],
+        unorderedEquals(
+          catalog.cases
+              .where(
+                (c) =>
+                    c.catalogStatus == 'active' &&
+                    !c.requiredFor.contains('local-fixture') &&
+                    (Platform.isMacOS ||
+                        !catalog.suiteCaseIds['production-keychain']!.contains(
+                          c.caseId,
+                        )) &&
+                    !excludedCaseIds.contains(c.caseId),
+              )
+              .map((c) => c.caseId),
+        ),
+      );
       AppTestCatalog.load(source).validateReport(result);
       expect(
         (result['children'] as List).singleWhere(
@@ -191,6 +242,19 @@ void main() {
         )['status'],
         Platform.isMacOS ? 'passed' : 'not_applicable',
       );
+      expect(
+        (result['children'] as List).singleWhere(
+          (r) => r['suite'] == 'did-method-web',
+        )['status'],
+        'user_excluded',
+      );
+      expect(
+        (result['caseResults'] as List).singleWhere(
+          (r) => r['caseId'] == 'DID-WEB-APP-E2E-001',
+        )['status'],
+        'user_excluded',
+      );
+      expect(commands.suites, isNot(contains('did-method-web')));
     },
   );
 
@@ -205,6 +269,57 @@ void main() {
     expect(report('prepare')['status'], 'prepared');
     expect(report('prepare')['passedCaseIds'], isEmpty);
   });
+
+  Future<_LeafCommands> runFixtureEnvironment(String id) async {
+    final commands = _LeafCommands(root);
+    final native = File('${root.path}/native.json')..writeAsStringSync('{}');
+    await runDesktopFull(
+      root: root,
+      options: options(id),
+      commands: commands,
+      environment: {productionKeychainManifestEnv: native.path},
+    );
+    return commands;
+  }
+
+  test('full fixture prefix stays within the Recovery handle limit', () async {
+    final commands = await runFixtureEnvironment('recovery-prefix');
+    for (final suite in <String>[
+      'multi-device-remote-recovery',
+      'multi-device-app-pair-recovery-registration-rejoin-management-transfer',
+      'multi-device-app-pair-recovery-retirement-ordinary-rejoin',
+    ]) {
+      final environment = commands.environments[commands.suites.indexOf(suite)];
+      final prefix = environment['AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX']!;
+      final externalHandle = '${prefix}external0123456789';
+      expect(
+        RegExp(r'^[a-z0-9-]{2,32}$').hasMatch(externalHandle),
+        isTrue,
+        reason:
+            '$suite must leave room for the external fixture suffix and nonce',
+      );
+    }
+  });
+
+  test(
+    'full fixture namespace remains authorized for App-pair cleanup',
+    () async {
+      final commands = await runFixtureEnvironment('cleanup-prefix');
+      for (final suite in <String>[
+        'multi-device-app-pair-functional',
+        'multi-device-app-pair-paging-recovery',
+      ]) {
+        final environment =
+            commands.environments[commands.suites.indexOf(suite)];
+        final prefix = environment['AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX']!;
+        expect(
+          RegExp(r'^appmd[a-z0-9]{10}$').hasMatch('${prefix}0123456789'),
+          isTrue,
+          reason: '$suite must satisfy the existing User Service cleanup fence',
+        );
+      }
+    },
+  );
 
   test(
     'missing native prerequisite is blocked, not a fabricated pass',
@@ -247,7 +362,7 @@ void main() {
         throwsA(isA<E2eFailure>()),
       );
       expect(report('missing')['status'], 'failed');
-      expect(commands.suites, contains('claude-code-agent'));
+      expect(commands.suites, contains('performance'));
     },
   );
 }

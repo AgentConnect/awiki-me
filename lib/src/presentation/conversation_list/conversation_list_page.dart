@@ -9,6 +9,7 @@ import 'package:awiki_me/l10n/app_localizations.dart';
 import '../../app/app_router.dart';
 import '../../app/ui_feedback.dart';
 import '../../core/date_time_formatter.dart';
+import '../../core/group_display_name.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_system_event.dart';
@@ -22,6 +23,7 @@ import '../agents/agents_provider.dart';
 import '../agents/personal_agent_feature_visibility.dart';
 import '../agents/agent_status_indicator.dart';
 import '../agents/agent_visual_status.dart';
+import '../agents/acp_session_provider.dart';
 import '../group/group_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../shared/awiki_me_design.dart';
@@ -1537,7 +1539,7 @@ String _conversationPresentationTitle(
   if (conversation.isGroup) {
     final group = _presentationGroup(ref, conversation);
     final groupName = group?.displayName.trim() ?? '';
-    if (groupName.isNotEmpty) {
+    if (!GroupDisplayName.isIdLike(groupName, group?.groupId)) {
       return groupName;
     }
   }
@@ -1623,6 +1625,9 @@ AgentVisualStatus? _conversationAgentStatus(
       pendingInThread.contains(runtimeAgent.agentDid);
   return AgentVisualStatus.fromAgent(
     runtimeAgent,
+    authoritativeBusy: ref
+        .watch(acpSessionsProvider)
+        .busyForAgent(runtimeAgent.agentDid),
     hasPendingTurn: hasPendingTurn,
   );
 }

@@ -971,7 +971,10 @@ String? _normalizeDidDomain(String? value) {
 
 String? _didDomain(String did) {
   final segments = did.trim().split(':');
-  if (segments.length < 4 || segments[0] != 'did' || segments[1] != 'wba') {
+  if (segments.length < 3 ||
+      segments[0] != 'did' ||
+      (segments[1] != 'wba' && segments[1] != 'web') ||
+      (segments[1] == 'wba' && segments.length < 4)) {
     return null;
   }
   final domain = segments[2].trim().toLowerCase();

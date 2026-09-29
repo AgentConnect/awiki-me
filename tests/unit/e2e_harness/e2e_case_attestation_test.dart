@@ -6,6 +6,44 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/case_attestation.dart';
 
 void main() {
+  test('mobile fixture and attestation follow the current data container', () {
+    final root = Directory.systemTemp.createTempSync('mobile-e2e-paths-');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final first = Directory('${root.path}/container-a/tmp')
+      ..createSync(recursive: true);
+    final next = Directory('${root.path}/container-b/tmp')
+      ..createSync(recursive: true);
+    final fixture = e2eRuntimeFile(
+      'registration/fixture.json',
+      mobileTemporaryDirectory: next,
+    );
+    fixture.parent.createSync(recursive: true);
+    fixture.writeAsStringSync('{"handle":"abc"}');
+    expect(fixture.readAsStringSync(), '{"handle":"abc"}');
+    expect(
+      e2eRuntimeFile(
+        'registration/fixture.json',
+        mobileTemporaryDirectory: first,
+      ).existsSync(),
+      isFalse,
+    );
+    final attestation = e2eRuntimeFile(
+      'registration/case_attestation.json',
+      mobileTemporaryDirectory: next,
+    );
+    final completion = e2eInvocationCompletionFileForAttestation(attestation);
+    completion.writeAsStringSync('{"failedTestCount":0}');
+    expect(completion.parent.path, fixture.parent.path);
+    expect(
+      e2eRuntimeFile(fixture.path, mobileTemporaryDirectory: first).path,
+      fixture.path,
+    );
+    expect(
+      () => e2eRuntimeFile('../outside.json', mobileTemporaryDirectory: next),
+      throwsArgumentError,
+    );
+  });
+
   test('invocation values use compile input before runtime environment', () {
     expect(
       e2eInvocationValue(

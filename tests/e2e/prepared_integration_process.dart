@@ -1,6 +1,6 @@
 // [INPUT]: One prepared desktop integration executable plus runtime invocation identity.
-// [OUTPUT]: Bounded supervised execution that stops only after a valid process-finished marker.
-// [POS]: Execute-only lifecycle boundary; never builds artifacts or decides case pass/fail.
+// [OUTPUT]: Bounded execution that requires both a valid completion marker and Flutter's terminal result.
+// [POS]: Execute-only lifecycle boundary; never builds artifacts or replaces case attestation.
 
 import 'dart:async';
 import 'dart:convert';
@@ -70,15 +70,24 @@ Future<PreparedIntegrationExecution> runPreparedIntegrationExecutable({
     environment: <String, String>{...Platform.environment, ...environment},
     runInShell: false,
   );
+  final terminalResult = Completer<bool>();
+  void recordOutput(String line) {
+    final result = _flutterTerminalResult(line);
+    if (result != null && !terminalResult.isCompleted) {
+      terminalResult.complete(result);
+    }
+    outputLine?.call(line);
+  }
+
   final outputSubscriptions = <StreamSubscription<String>>[
     process.stdout
         .transform(utf8.decoder)
         .transform(const LineSplitter())
-        .listen(outputLine ?? (_) {}),
+        .listen(recordOutput),
     process.stderr
         .transform(utf8.decoder)
         .transform(const LineSplitter())
-        .listen(outputLine ?? (_) {}),
+        .listen(recordOutput),
   ];
   final watch = Stopwatch()..start();
   final exitFuture = process.exitCode;
@@ -93,14 +102,33 @@ Future<PreparedIntegrationExecution> runPreparedIntegrationExecutable({
             'Prepared integration completion identity is invalid.',
           );
         }
+        if (completion.failedTestCount > 0) {
+          await _terminatePreparedIntegrationProcess(
+            process,
+            operatingSystem: operatingSystem,
+            exitFuture: exitFuture,
+          );
+          throw PreparedIntegrationProcessException(
+            'Prepared integration reported ${completion.failedTestCount} failed Flutter tests; inspect the captured Flutter log.',
+          );
+        }
+        // tearDownAll can write the marker before Flutter reports a failure in
+        // a per-test addTearDown. Wait for the terminal test result before
+        // accepting a zero failure count or stopping the desktop process.
+        final passed = await terminalResult.future.timeout(
+          timeout - watch.elapsed,
+          onTimeout: () => throw const PreparedIntegrationProcessException(
+            'Prepared integration did not report a terminal Flutter test result.',
+          ),
+        );
         final exitCode = await _terminatePreparedIntegrationProcess(
           process,
           operatingSystem: operatingSystem,
           exitFuture: exitFuture,
         );
-        if (completion.failedTestCount > 0) {
-          throw PreparedIntegrationProcessException(
-            'Prepared integration reported ${completion.failedTestCount} failed Flutter tests; inspect the captured Flutter log.',
+        if (!passed) {
+          throw const PreparedIntegrationProcessException(
+            'Prepared integration Flutter tests failed; inspect the captured Flutter log.',
           );
         }
         return PreparedIntegrationExecution(
@@ -178,4 +206,12 @@ bool _sameStrings(List<String> left, List<String> right) {
     if (left[index] != right[index]) return false;
   }
   return true;
+}
+
+bool? _flutterTerminalResult(String line) {
+  final match = RegExp(
+    r'^(?:flutter: )?\d{2}:\d{2}(?::\d{2})? [0-9+~ -]+: (All tests passed!|Some tests failed\.)$',
+  ).firstMatch(line.trim());
+  if (match == null) return null;
+  return match.group(1) == 'All tests passed!';
 }

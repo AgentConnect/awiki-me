@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:awiki_me/src/core/app_error_classifier.dart';
+import 'package:awiki_me/src/core/app_transport_failure.dart';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
@@ -46,6 +48,42 @@ AppUpdateManifest buildManifest({
 }
 
 void main() {
+  for (final cached in [false, true]) {
+    for (final code in [tlsHandshakeFailureCode, trustBundleFailureCode]) {
+      test(
+        'manual update shows $code with cache=$cached; silent stays silent',
+        () async {
+          final service = _TransportFailureUpdateService(code, cached);
+          final container = ProviderContainer(
+            overrides: [updateServiceProvider.overrideWithValue(service)],
+          );
+          addTearDown(container.dispose);
+          final events = <UiFeedbackEvent>[];
+          container.listen(uiFeedbackProvider, (_, event) {
+            if (event != null) events.add(event);
+          });
+          final controller = container.read(appUpdateProvider.notifier);
+          await controller.checkForUpdates(force: true, silent: true);
+          expect(events, isEmpty);
+          await controller.checkForUpdates(force: true);
+          expect(
+            events.single.message.id,
+            code == tlsHandshakeFailureCode
+                ? 'secureConnectionFailed'
+                : 'trustResourcesInvalid',
+          );
+          expect(events.single.detail, contains('host=example.com'));
+          if (cached) {
+            expect(
+              container.read(appUpdateProvider).versionUnsupported,
+              isTrue,
+            );
+          }
+        },
+      );
+    }
+  }
+
   testWidgets('Windows App Shell initializes local and remote version state', (
     tester,
   ) async {
@@ -225,5 +263,32 @@ class _PendingUpdateService extends FakeUpdateService {
 
   void complete() {
     _result.complete(AppUpdateCheckResult(currentVersion: currentVersion));
+  }
+}
+
+class _TransportFailureUpdateService extends FakeUpdateService {
+  _TransportFailureUpdateService(this.code, this.cached);
+  final String code;
+  final bool cached;
+  @override
+  Future<AppUpdateCheckResult> checkForUpdates({required bool force}) async {
+    final error = AppStructuredError(
+      code: code,
+      cause: AppTransportDiagnostic(
+        code: code,
+        host: 'example.com',
+        appVersion: 'test',
+        caVersion: 'test',
+      ),
+    );
+    if (!cached) throw error;
+    return AppUpdateCheckResult(
+      currentVersion: currentVersion,
+      latestManifest: buildManifest(),
+      failureCode: code,
+      failureReason: error.toString(),
+      usedCache: true,
+      versionUnsupported: true,
+    );
   }
 }

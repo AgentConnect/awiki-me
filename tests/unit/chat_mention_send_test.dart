@@ -1,3 +1,8 @@
+import 'dart:async';
+
+import 'package:awiki_me/src/application/ports/agent_availability_port.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_availability.dart';
+import 'package:awiki_me/src/presentation/agents/agent_availability_provider.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -16,8 +21,10 @@ void main() {
   late FakeMessagingService messagingService;
   late ProviderContainer container;
   late ConversationSummary conversation;
+  late _AvailabilityPort availabilityPort;
 
   setUp(() {
+    availabilityPort = _AvailabilityPort();
     gateway = FakeAwikiGateway();
     messagingService = FakeMessagingService(gateway);
     conversation = ConversationSummary(
@@ -33,6 +40,7 @@ void main() {
     container = ProviderContainer(
       overrides: <Override>[
         notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
+        agentAvailabilityPortProvider.overrideWithValue(availabilityPort),
         ...fakeApplicationServiceOverrides(
           gateway,
           messagingService: messagingService,
@@ -53,6 +61,49 @@ void main() {
     );
     addTearDown(container.dispose);
   });
+
+  test(
+    'group mention is visible before Core returns and preserves mention metadata',
+    () async {
+      final gate = Completer<void>();
+      gateway.sendTextMessageCompleter = gate;
+      const mention = ChatMentionDraft(
+        localId: 'instant-mention',
+        surface: '@alice',
+        start: 0,
+        end: 6,
+        target: ChatMentionTargetDraft.member(
+          kind: ChatMentionTargetKind.human,
+          did: 'did:wba:awiki.info:user:alice',
+          handle: 'alice',
+        ),
+      );
+      final sending = container
+          .read(chatThreadsProvider.notifier)
+          .sendMessage(
+            conversation: conversation,
+            content: '@alice 请看',
+            mentions: [mention],
+          );
+      var thread = container.read(
+        chatThreadProvider(conversation.conversationId),
+      );
+      expect(thread.messages, isEmpty);
+      expect(thread.displayMessages.single.content, '@alice 请看');
+      expect(thread.displayMessages.single.hasValidMentions, isTrue);
+      expect(
+        thread.displayMessages.single.mentions.single.target.did,
+        'did:wba:awiki.info:user:alice',
+      );
+      final id = thread.displayMessages.single.localId;
+      gate.complete();
+      await sending;
+      thread = container.read(chatThreadProvider(conversation.conversationId));
+      expect(thread.displayMessages.single.localId, id);
+      expect(thread.displayMessages.single.hasValidMentions, isTrue);
+      expect(thread.localSendIntents, isEmpty);
+    },
+  );
 
   test('send mention uses P9 payload without sender or proof fields', () async {
     const text = '@alice 请看';
@@ -447,6 +498,115 @@ void main() {
     },
   );
 
+  for (final staleAtSend in [false, true]) {
+    test(
+      'unavailable Agent preserves sent group instruction and releases only its slot (cached=$staleAtSend)',
+      () async {
+        const oldDid = 'did:wba:awiki.info:agent:old:e1';
+        const liveDid = 'did:wba:awiki.info:agent:live:e1';
+        const mentions = [
+          ChatMentionDraft(
+            localId: 'mention_old',
+            surface: '@old',
+            start: 0,
+            end: 4,
+            target: ChatMentionTargetDraft.member(
+              kind: ChatMentionTargetKind.agent,
+              did: oldDid,
+              handle: 'old',
+            ),
+          ),
+          ChatMentionDraft(
+            localId: 'mention_live',
+            surface: '@live',
+            start: 5,
+            end: 10,
+            target: ChatMentionTargetDraft.member(
+              kind: ChatMentionTargetKind.agent,
+              did: liveDid,
+              handle: 'live',
+            ),
+          ),
+        ];
+        final response = Completer<List<AgentAvailability>>();
+        availabilityPort.response = response.future;
+        if (staleAtSend) {
+          await container
+              .read(agentAvailabilityProvider.notifier)
+              .applyFacts(const [
+                AgentAvailability(
+                  agentDid: oldDid,
+                  state: AgentAvailabilityState.unavailable,
+                  reason: 'agent_retired',
+                  version: '2',
+                ),
+              ]);
+        }
+        gateway.nextSentMessageId = 'message_multiple_targets';
+        // The send must complete even while the lifecycle endpoint is pending.
+        await container
+            .read(chatThreadsProvider.notifier)
+            .sendMessage(
+              conversation: conversation,
+              content: '@old @live hello',
+              mentions: mentions,
+            );
+        final sent = _seedProjectedMessage(
+          container,
+          messagingService,
+          conversation,
+          remoteId: 'message_multiple_targets',
+        );
+        expect(sent.sendState, MessageSendState.sent);
+        expect(sent.content, '@old @live hello');
+        expect(sent.mentions.length, 2);
+        expect(
+          container
+              .read(chatThreadProvider(_timelineId(conversation)))
+              .agentPendingTurns
+              .map((e) => e.agentDid),
+          staleAtSend ? [liveDid] : [oldDid, liveDid],
+        );
+        await availabilityPort.called.future;
+        expect(availabilityPort.calls, hasLength(1));
+        response.complete(const [
+          AgentAvailability(
+            agentDid: oldDid,
+            state: AgentAvailabilityState.unavailable,
+            reason: 'agent_retired',
+            version: '2',
+          ),
+          AgentAvailability(
+            agentDid: liveDid,
+            state: AgentAvailabilityState.available,
+            version: '1',
+          ),
+        ]);
+        await container.read(agentAvailabilityProvider.notifier).ensure([
+          oldDid,
+          liveDid,
+        ]);
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          container
+              .read(chatThreadProvider(_timelineId(conversation)))
+              .agentPendingTurns
+              .map((e) => e.agentDid),
+          [liveDid],
+        );
+        expect(availabilityPort.calls, hasLength(1));
+        expect(
+          container
+              .read(chatThreadProvider(_timelineId(conversation)))
+              .messages
+              .single
+              .content,
+          '@old @live hello',
+        );
+      },
+    );
+  }
+
   test('send text without mentions keeps old sendText path', () async {
     await container
         .read(chatThreadsProvider.notifier)
@@ -482,4 +642,27 @@ ChatMessage _seedProjectedMessage(
       .read(chatThreadsProvider.notifier)
       .debugSeedMessageForTesting(message, threadId: _timelineId(conversation));
   return message;
+}
+
+class _AvailabilityPort implements AgentAvailabilityPort {
+  final calls = <List<String>>[];
+  final called = Completer<void>();
+  Future<List<AgentAvailability>>? response;
+
+  @override
+  Future<List<AgentAvailability>> getAgentAvailability(List<String> dids) {
+    calls.add(List.of(dids));
+    if (!called.isCompleted) called.complete();
+    return response ??
+        Future.value(
+          dids
+              .map(
+                (did) => AgentAvailability(
+                  agentDid: did,
+                  state: AgentAvailabilityState.available,
+                ),
+              )
+              .toList(),
+        );
+  }
 }

@@ -13,6 +13,40 @@ const _stateRoot =
 
 void main() {
   test(
+    'local registry conflict retains its structured recovery guidance',
+    () async {
+      final sdk = _FakeRecoveryCore()
+        ..error = const core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'local conflict',
+          serviceCode: 'identity.local_registry_conflict',
+        );
+      final adapter = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+        coreInstance: () async => sdk,
+      );
+      await expectLater(
+        adapter.reconcile('recover-op-1'),
+        throwsA(
+          isA<HandleRecoveryFailure>()
+              .having(
+                (error) => error.code,
+                'code',
+                HandleRecoveryFailureCode.localRegistryConflict,
+              )
+              .having((error) => error.retryable, 'automatic retry', isFalse),
+        ),
+      );
+      sdk.error = const core.AwikiImCoreException(
+        code: 'invalid_input',
+        message: 'identity.local_registry_conflict',
+      );
+      await expectLater(
+        adapter.reconcile('recover-op-1'),
+        throwsA(isA<core.AwikiImCoreException>()),
+      );
+    },
+  );
+  test(
     'context is read once and its Core actions are not inferred from phase',
     () async {
       final sdk = _FakeRecoveryCore();

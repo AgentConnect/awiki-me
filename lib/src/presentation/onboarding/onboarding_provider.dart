@@ -11,6 +11,7 @@ import '../../application/onboarding_support_service.dart';
 import '../../application/ports/identity_core_port.dart';
 import '../../application/ports/legacy_identity_upgrade_port.dart';
 import '../../core/app_error_classifier.dart';
+import '../../core/app_transport_failure.dart';
 import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../l10n/app_message.dart';
@@ -36,6 +37,10 @@ enum OnboardingPhoneRegistrationOutcome {
 
 class OnboardingState {
   const OnboardingState({
+    this.didMethod = IdentityDidMethod.wba,
+    this.availableDidMethods = const [IdentityDidMethod.wba],
+    this.pendingRegistrations = const [],
+    this.selectedPendingRegistration,
     this.entryMode = 'register',
     this.authMode = 'phone',
     this.emailVerified = false,
@@ -49,6 +54,7 @@ class OnboardingState {
     this.existingHandleContinuationId,
     this.existingHandleJoinMode,
     this.existingHandleJoinRequiresUserPresence = false,
+    this.existingHandleMethodCapabilities,
     this.serverInfoStatus = OnboardingServerInfoStatus.loading,
     this.serverInfo,
     this.serverInfoError,
@@ -56,6 +62,10 @@ class OnboardingState {
     this.phoneRegistrationFailureCode,
   });
 
+  final IdentityDidMethod didMethod;
+  final List<IdentityDidMethod> availableDidMethods;
+  final List<PendingIdentityRegistration> pendingRegistrations;
+  final PendingIdentityRegistration? selectedPendingRegistration;
   final String entryMode;
   final String authMode;
   final bool emailVerified;
@@ -69,6 +79,7 @@ class OnboardingState {
   final String? existingHandleContinuationId;
   final ExistingHandleJoinMode? existingHandleJoinMode;
   final bool existingHandleJoinRequiresUserPresence;
+  final IdentityMethodCapabilities? existingHandleMethodCapabilities;
   final OnboardingServerInfoStatus serverInfoStatus;
   final OnboardingServerInfo? serverInfo;
   final String? serverInfoError;
@@ -88,7 +99,12 @@ class OnboardingState {
       legacyUpgradeStatus.phase == LegacyIdentityUpgradePhase.retryRequired;
   bool get isDeletingLocalIdentity =>
       deletingLocalIdentitySelector?.isNotEmpty == true;
-  bool get hasRegistrationMethods => registrationMethods.isNotEmpty;
+  bool get hasRegistrationMethods =>
+      registrationMethods.isNotEmpty &&
+      (availableDidMethods.isNotEmpty || pendingRegistrations.isNotEmpty);
+  bool get canRegisterSelectedDidMethod =>
+      availableDidMethods.contains(didMethod) ||
+      selectedPendingRegistration?.method == didMethod;
   bool get canSubmitPhoneOtp =>
       otpTargetFullHandle != null &&
       otpTargetPhone != null &&
@@ -131,6 +147,11 @@ class OnboardingState {
   }
 
   OnboardingState copyWith({
+    IdentityDidMethod? didMethod,
+    List<IdentityDidMethod>? availableDidMethods,
+    List<PendingIdentityRegistration>? pendingRegistrations,
+    Object? selectedPendingRegistration = _unset,
+    Object? existingHandleMethodCapabilities = _unset,
     String? entryMode,
     String? authMode,
     bool? emailVerified,
@@ -151,6 +172,17 @@ class OnboardingState {
     Object? phoneRegistrationFailureCode = _unset,
   }) {
     return OnboardingState(
+      didMethod: didMethod ?? this.didMethod,
+      availableDidMethods: availableDidMethods ?? this.availableDidMethods,
+      pendingRegistrations: pendingRegistrations ?? this.pendingRegistrations,
+      selectedPendingRegistration:
+          identical(selectedPendingRegistration, _unset)
+          ? this.selectedPendingRegistration
+          : selectedPendingRegistration as PendingIdentityRegistration?,
+      existingHandleMethodCapabilities:
+          identical(existingHandleMethodCapabilities, _unset)
+          ? this.existingHandleMethodCapabilities
+          : existingHandleMethodCapabilities as IdentityMethodCapabilities?,
       entryMode: entryMode ?? this.entryMode,
       authMode: authMode ?? this.authMode,
       emailVerified: emailVerified ?? this.emailVerified,
@@ -210,6 +242,8 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   static const int _emailResendCooldownSeconds = 60;
   Timer? _emailResendTimer;
   int _busyGeneration = 0;
+  int _verificationRevision = 0;
+  String? _otpInputPhone;
   AppSessionTransition? _activeSessionTransition;
   OnboardingPhoneRegistrationOutcome? _lastBusyFailureOutcome;
   String? _lastBusyFailureCode;
@@ -224,6 +258,24 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     _busyGeneration += 1;
     _emailResendTimer?.cancel();
     super.dispose();
+  }
+
+  void setDidMethod(IdentityDidMethod method) {
+    if (state.isBusy || !state.availableDidMethods.contains(method)) return;
+    state = state.copyWith(
+      didMethod: method,
+      selectedPendingRegistration: null,
+    );
+  }
+
+  void selectPendingRegistration(PendingIdentityRegistration pending) {
+    if (state.isBusy || !state.pendingRegistrations.contains(pending)) return;
+    final authMode = pending.verificationKind == 'email' ? 'email' : 'phone';
+    setAuthMode(authMode);
+    state = state.copyWith(
+      didMethod: pending.method,
+      selectedPendingRegistration: pending,
+    );
   }
 
   void setEntryMode(String value) {
@@ -253,6 +305,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }
 
   void setAuthMode(String value) {
+    _verificationRevision++;
     final method = _registrationMethodForAuthMode(value);
     if (state.isServerInfoReady && method == null) {
       return;
@@ -283,7 +336,23 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .read(onboardingSupportServiceProvider)
           .loadServerInfo()
           .timeout(_requestTimeout);
+      final identities = ref.read(identityCorePortProvider);
+      final methods = await identities.identityCreationMethods().timeout(
+        _requestTimeout,
+      );
+      final pending = await identities.pendingIdentityRegistrations().timeout(
+        _requestTimeout,
+      );
       if (!mounted) return;
+      state = state.copyWith(
+        availableDidMethods: methods,
+        pendingRegistrations: pending,
+        didMethod: methods.contains(state.didMethod)
+            ? state.didMethod
+            : methods.contains(IdentityDidMethod.wba)
+            ? IdentityDidMethod.wba
+            : methods.firstOrNull ?? IdentityDidMethod.wba,
+      );
       _applyServerInfo(info);
     } on TimeoutException {
       if (!mounted) return;
@@ -305,15 +374,18 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String handle,
     required String handleDomain,
   }) async {
-    if (!state.supportsPhoneOtpRegistration) {
+    if (!state.supportsPhoneOtpRegistration ||
+        !state.canRegisterSelectedDidMethod) {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.registrationMethodUnavailable());
       return;
     }
+    final revision = _verificationRevision;
     String? fullHandle;
     RegistrationOtpSendReceipt? receipt;
     final normalizedPhone = _normalizePhoneForOtpCooldown(phone);
+    _otpInputPhone = normalizedPhone;
     final cooldown = ref.read(smsOtpCooldownProvider.notifier);
     if (!await cooldown.beginSend()) return;
     var success = false;
@@ -346,7 +418,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         // The server receipt still owns the shared resend boundary when the
         // originating page/controller has gone away. Only UI state is stale.
         await cooldown.completeAcceptedAt(receipt!.retryAt);
-        if (!mounted) return;
+        if (!mounted || revision != _verificationRevision) return;
         state = state.copyWith(
           otpTargetFullHandle: fullHandle!,
           otpTargetPhone: normalizedPhone,
@@ -360,6 +432,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }
 
   void resetPhoneOtpTarget() {
+    _verificationRevision++;
     if (state.otpTargetFullHandle == null &&
         state.otpTargetPhone == null &&
         !state.isPhoneOtpConsumed) {
@@ -374,10 +447,11 @@ class OnboardingController extends StateNotifier<OnboardingState> {
 
   void updateOtpPhone(String phone) {
     final normalizedPhone = _normalizePhoneForOtpCooldown(phone);
-    if (state.otpTargetPhone == null ||
-        state.otpTargetPhone == normalizedPhone) {
+    if (_otpInputPhone == normalizedPhone) {
       return;
     }
+    _otpInputPhone = normalizedPhone;
+    _verificationRevision++;
     state = state.copyWith(
       otpTargetFullHandle: null,
       otpTargetPhone: null,
@@ -389,19 +463,21 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String email,
     required String handle,
   }) async {
-    if (!state.supportsEmailRegistration) {
+    if (!state.supportsEmailRegistration ||
+        !state.canRegisterSelectedDidMethod) {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.registrationMethodUnavailable());
       return;
     }
+    final revision = _verificationRevision;
     var success = false;
     await _runBusy(() async {
       final support = ref.read(onboardingSupportServiceProvider);
       await support.sendEmailVerification(email: email, handle: handle);
       success = true;
     });
-    if (success) {
+    if (success && mounted && revision == _verificationRevision) {
       _startEmailResendCountdown();
       ref
           .read(uiFeedbackProvider.notifier)
@@ -413,12 +489,14 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String email,
     required String handle,
   }) async {
-    if (!state.supportsEmailRegistration) {
+    if (!state.supportsEmailRegistration ||
+        !state.canRegisterSelectedDidMethod) {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.registrationMethodUnavailable());
       return false;
     }
+    final revision = _verificationRevision;
     var verified = false;
     await _runBusy(() async {
       verified = await ref
@@ -430,11 +508,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
             .showError(AppMessage.emailNotActivatedClickLink());
       }
     });
+    if (!mounted || revision != _verificationRevision) return false;
     state = state.copyWith(emailVerified: verified);
     return verified;
   }
 
   void resetEmailActivation() {
+    _verificationRevision++;
     if (!state.emailVerified && state.emailResendCountdown == 0) {
       return;
     }
@@ -449,11 +529,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String handleDomain,
     required String nickName,
     required String profileMarkdown,
+    String? inviteCode,
   }) async {
     if (state.isBusy) {
       return null;
     }
-    if (!state.supportsPhoneOtpRegistration) {
+    if (!state.supportsPhoneOtpRegistration ||
+        !state.canRegisterSelectedDidMethod) {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.registrationMethodUnavailable());
@@ -488,10 +570,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         final result = await ref
             .read(onboardingServiceProvider)
             .registerHandleWithPhone(
+              didMethod: state.didMethod,
               phone: phone,
               otp: otp,
               handle: handle,
-              nickName: nickName,
+              inviteCode: inviteCode,
+              nickName:
+                  state.selectedPendingRegistration?.displayName ?? nickName,
               profileMarkdown: profileMarkdown,
               transition: transition,
             );
@@ -513,6 +598,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         }
         if (const <String>{
           'identity.registration_verification_unavailable',
+          'identity.local_registry_conflict',
           'handle_recovery.local_state_conflict',
           'handle_recovery.transition_missing',
           'handle_recovery.join_terminal_wait',
@@ -595,11 +681,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String handle,
     required String nickName,
     required String profileMarkdown,
+    String? inviteCode,
   }) async {
     if (state.isBusy) {
       return null;
     }
-    if (!state.supportsEmailRegistration) {
+    if (!state.supportsEmailRegistration ||
+        !state.canRegisterSelectedDidMethod) {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.registrationMethodUnavailable());
@@ -618,9 +706,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       final result = await ref
           .read(onboardingServiceProvider)
           .registerHandleWithEmail(
+            didMethod: state.didMethod,
             email: email,
             handle: handle,
-            nickName: nickName,
+            inviteCode: inviteCode,
+            nickName:
+                state.selectedPendingRegistration?.displayName ?? nickName,
             profileMarkdown: profileMarkdown,
             transition: transition,
           );
@@ -633,11 +724,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String handle,
     required String nickName,
     required String profileMarkdown,
+    String? inviteCode,
   }) async {
     if (state.isBusy) {
       return null;
     }
-    if (!state.supportsPhoneNoVerificationRegistration) {
+    if (!state.supportsPhoneNoVerificationRegistration ||
+        !state.canRegisterSelectedDidMethod) {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.registrationMethodUnavailable());
@@ -648,9 +741,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       final result = await ref
           .read(onboardingServiceProvider)
           .registerHandleWithoutContactVerification(
+            didMethod: state.didMethod,
             phone: phone,
             handle: handle,
-            nickName: nickName,
+            inviteCode: inviteCode,
+            nickName:
+                state.selectedPendingRegistration?.displayName ?? nickName,
             profileMarkdown: profileMarkdown,
             transition: transition,
           );
@@ -685,6 +781,8 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       state = state.copyWith(
         existingHandleContinuationId: continuationId,
         existingHandleJoinMode: mode,
+        existingHandleMethodCapabilities:
+            result.existingHandleMethodCapabilities,
         existingHandleJoinRequiresUserPresence:
             result.existingHandleJoinRequiresUserPresence,
       );
@@ -896,7 +994,10 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       }
       ref
           .read(uiFeedbackProvider.notifier)
-          .showError(AppMessage.fromError(error));
+          .showError(
+            AppMessage.fromError(error),
+            detail: appTransportDiagnostic(error),
+          );
     } finally {
       if (identical(_activeSessionTransition, sessionTransition)) {
         _activeSessionTransition = null;

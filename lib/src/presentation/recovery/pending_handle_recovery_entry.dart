@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/app_router.dart';
 import '../../application/tenant/app_tenant.dart';
 import '../../domain/entities/handle_recovery.dart';
 import '../../l10n/l10n.dart';
+import '../../domain/entities/identity_method.dart';
 import '../onboarding/onboarding_provider.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'handle_recovery_page.dart';
@@ -54,7 +56,9 @@ class PendingHandleRecoveryEntry extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final supported = ref.watch(
       onboardingProvider.select(
-        (state) => state.serverInfo?.supportsPhoneHandleRecovery == true,
+        (state) =>
+            state.didMethod == IdentityDidMethod.wba &&
+            state.serverInfo?.supportsPhoneHandleRecovery == true,
       ),
     );
     if (!supported || ref.watch(onboardingProvider).authMode != 'phone') {
@@ -80,10 +84,9 @@ class PendingHandleRecoveryEntry extends ConsumerWidget {
             return ref
                 .watch(provider)
                 .when(
-                  loading: () => Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(context.l10n.handleRecoveryChecking),
-                  ),
+                  // Typing only inspects local state; it has not started a
+                  // recovery. Show an entry only after finding resumable work.
+                  loading: () => const SizedBox.shrink(),
                   error: (_, _) => AppSecondaryButton(
                     key: const Key('onboarding-recovery-lookup-retry'),
                     label:
@@ -103,14 +106,13 @@ class PendingHandleRecoveryEntry extends ConsumerWidget {
                                 ? context.l10n.handleRecoveryEnterMessages
                                 : context.l10n.handleRecoveryContinueExisting,
                             onPressed: () async {
-                              await Navigator.of(context).push<void>(
-                                CupertinoPageRoute(
-                                  builder: (_) => HandleRecoveryPage(
-                                    initialHandle: target.handle,
-                                    initialPhone: phoneController.text.trim(),
-                                    allowPhoneInput: true,
-                                    autoRequestOtp: false,
-                                  ),
+                              await AppNavigator.push<void>(
+                                context,
+                                (_) => HandleRecoveryPage(
+                                  initialHandle: target.handle,
+                                  initialPhone: phoneController.text.trim(),
+                                  allowPhoneInput: true,
+                                  autoRequestOtp: false,
                                 ),
                               );
                               if (context.mounted) ref.invalidate(provider);

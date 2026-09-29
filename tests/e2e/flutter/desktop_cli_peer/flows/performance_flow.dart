@@ -486,7 +486,7 @@ Future<_LongThreadDatasetResult> _ensureLongThreadDataset({
     final number = initialCount + index + 1;
     await messaging.sendText(
       thread: thread,
-      content: 'perf long thread ${config.runId} $nonce $number',
+      content: _longThreadMessageText(config, nonce, number),
     );
   }
   var observedCount = initialCount;
@@ -505,6 +505,12 @@ Future<_LongThreadDatasetResult> _ensureLongThreadDataset({
     observedCount: observedCount,
   );
 }
+
+String _longThreadMessageText(
+  _DesktopCliPeerSmokeConfig config,
+  String nonce,
+  int number,
+) => 'perf long thread ${config.runId} $nonce $number';
 
 class _LongThreadDatasetResult {
   const _LongThreadDatasetResult({

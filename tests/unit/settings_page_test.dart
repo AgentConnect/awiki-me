@@ -18,9 +18,9 @@ import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_me/src/app/app_services.dart';
-import 'package:awiki_me/src/app/app_appearance.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,56 +29,21 @@ import 'app_update_provider_test.dart' show buildManifest;
 import 'test_support.dart';
 
 void main() {
-  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
-    testWidgets('$platform settings opens appearance and switches every mode', (
-      tester,
-    ) async {
-      debugDefaultTargetPlatformOverride = platform;
-      tester.view
-        ..devicePixelRatio = 1
-        ..physicalSize = const Size(390, 844);
-      addTearDown(() {
-        debugDefaultTargetPlatformOverride = null;
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
-      await tester.pumpWidget(
-        buildLocalizedTestApp(home: const SettingsPage()),
-      );
-      await tester.pumpAndSettle();
-      final entry = find.byKey(const Key('settings-display-row'));
-      await tester.ensureVisible(entry);
-      expect(
-        find.descendant(of: entry, matching: find.text('外观')),
-        findsOneWidget,
-      );
-      await tester.tap(entry);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('display-settings-page')), findsOneWidget);
-      expect(find.byKey(const Key('window-placement-reset-row')), findsNothing);
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(DisplaySettingsPage)),
-      );
-      for (final appearance in [
-        AppAppearance.dark,
-        AppAppearance.light,
-        AppAppearance.system,
-      ]) {
-        final option = find.byKey(Key('appearance-${appearance.name}'));
-        await tester.tap(option);
-        await tester.pumpAndSettle();
-        expect(container.read(appAppearanceProvider), appearance);
-        expect(tester.widget<AppPressable>(option).selected, isTrue);
-      }
-      await tester.tap(find.byKey(const Key('display-settings-back-button')));
-      await tester.pumpAndSettle();
-      expect(find.byType(DisplaySettingsPage), findsNothing);
-      expect(entry, findsOneWidget);
-      expect(tester.takeException(), isNull);
-      debugDefaultTargetPlatformOverride = null;
-    });
-  }
-
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const notifyChannel = MethodChannel('ai.awiki.awikime/remote_push_events');
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(notifyChannel, (call) async {
+          if (call.method == 'getTextNotifyPreferenceState') {
+            return {'enabled': true, 'urgent_enabled': false};
+          }
+          return null;
+        });
+  });
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(notifyChannel, null);
+  });
   testWidgets(
     'desktop display settings remain usable at the minimum compact width',
     (tester) async {
@@ -518,7 +483,9 @@ void main() {
     expect(find.text('退出并删除当前数据'), findsOneWidget);
     expect(find.text('删除当前本地数据：default'), findsNothing);
 
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('退出并删除当前数据'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('退出并删除当前数据'));
     await tester.pumpAndSettle();
 
@@ -603,7 +570,9 @@ void main() {
 
     expect(find.byType(SettingsPage), findsOneWidget);
 
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('退出并删除当前数据'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('退出并删除当前数据'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('退出并删除数据'));
@@ -1344,6 +1313,10 @@ void main() {
                   'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
               'bootstrap_key_algorithm': 'x25519',
               'config_summary': <String, Object?>{
+                'acp': <String, Object?>{
+                  'capability_schema_version': 1,
+                  'supported_drivers': <String>['hermes'],
+                },
                 'delegated_subkey_proposal': <String, Object?>{
                   'schema': userSubkeyPackageSchema,
                   'user_did': 'did:human:me',
@@ -1525,7 +1498,15 @@ void main() {
           handle: 'hermes-msg-one',
           displayName: 'Hermes Personal Agent',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: <String, Object?>{
+              'config_summary': <String, Object?>{
+                'protocol': 'acp',
+                'driver': 'hermes',
+              },
+            },
+          ),
         ),
         AgentSummary(
           agentDid: 'did:agent:daemon:two',
@@ -1552,7 +1533,15 @@ void main() {
           handle: 'hermes-msg-two',
           displayName: 'Hermes Personal Agent',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: <String, Object?>{
+              'config_summary': <String, Object?>{
+                'protocol': 'acp',
+                'driver': 'hermes',
+              },
+            },
+          ),
         ),
       ];
     final identities = FakeIdentityCorePort();

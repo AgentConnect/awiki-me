@@ -110,6 +110,11 @@ assertion that genuinely depends on macOS operating-system behavior, such as
 codesigning, Keychain, or LocalAuthentication, and never claim that Linux
 simulates or attests those macOS-specific behaviors.
 
+用户于 2026-09-24 确认 `did-method-web` 持续默认跳过；机器配置为
+`tests/e2e/user_test_exclusions.json`。`full` 保留其 case ID 并标记
+`user_excluded`，不准备或运行该 suite；直接定向选择在设置环境和执行前拒绝。
+只有用户明确恢复后才修改该配置，历史失败仍保留。
+
 The suite platform schema also preserves `windows`; the existing Windows x64
 build/native-smoke CI remains authoritative for that lane. The Mac/Linux E2E
 runner must not silently treat Windows as an unknown platform or delete that
@@ -151,5 +156,11 @@ migrations or old RPC gateway paths.
 
 ## Security & Configuration Tips
 Do not commit real credentials, generated local state, signing keys, or custom
-runtime configuration. Account identities remain e1 DID-only. Credential and key
+runtime configuration. Account identities use Core-supported WBA/Web methods; creation and operation support come from Core. Credential and key
 storage follow the existing Core vault and platform secret-provider contracts.
+
+## 模型无关测试（2026-09-18 用户决定）
+
+自动测试不调用真实大模型 API，不依赖个人 API Key 或已安装 Agent CLI。真实模型验收及其按需入口已移除；优先使用模拟 ACP 子进程、临时配置和 fake 服务。新增用例与统一 profile、catalog 同步；不能把模拟协议／组件通过描述为真实模型兼容性验收。普通服务端、身份、消息和附件测试继续遵循原有环境边界。
+
+`full` covers active remote-product cases. The active `registration-account-first` loopback suite is separately required under `[local-fixture, release]`; exhaustive acceptance includes both, and missing local fixture prerequisites remain blocked/failed, never silently skipped.

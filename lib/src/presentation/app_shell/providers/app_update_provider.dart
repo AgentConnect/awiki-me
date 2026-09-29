@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_services.dart';
 import '../../../app/ui_feedback.dart';
+import '../../../core/app_error_classifier.dart';
+import '../../../core/app_transport_failure.dart';
 import '../../../domain/entities/app_update_manifest.dart';
 import '../../../domain/services/update_service.dart';
 import '../../../l10n/app_message.dart';
@@ -225,7 +227,20 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
       if (!_isCurrent(generation) || silent || !force) return;
       final feedback = ref.read(uiFeedbackProvider.notifier);
       if (result.failureReason != null) {
-        feedback.showError(AppMessage.updateCheckFailed());
+        final isTransport =
+            result.failureCode == tlsHandshakeFailureCode ||
+            result.failureCode == trustBundleFailureCode;
+        feedback.showError(
+          isTransport
+              ? AppMessage.fromError(
+                  AppStructuredError(
+                    code: result.failureCode!,
+                    cause: result.failureReason!,
+                  ),
+                )
+              : AppMessage.updateCheckFailed(),
+          detail: isTransport ? result.failureReason : null,
+        );
       } else if (result.policyUnavailable) {
         feedback.showInfo(AppMessage.updatePolicyUnavailable());
       } else if (manifest != null && !result.hasUpdate) {
@@ -240,7 +255,12 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
       if (!silent) {
         ref
             .read(uiFeedbackProvider.notifier)
-            .showError(AppMessage.updateCheckFailed());
+            .showError(
+              appTransportDiagnostic(error) != null
+                  ? AppMessage.fromError(error)
+                  : AppMessage.updateCheckFailed(),
+              detail: appTransportDiagnostic(error),
+            );
       }
     }
   }

@@ -65,15 +65,24 @@ void main() {
       final scopeStore = File(
         'lib/src/data/storage/platform_scope_secret_repository.dart',
       ).readAsStringSync();
+      final appStore = File(
+        'lib/src/data/services/app_key_value_store.dart',
+      ).readAsStringSync();
 
       expect(manifest, contains('android:allowBackup="false"'));
       expect(
         pubspec,
         contains(
-          RegExp(r'^  flutter_secure_storage: 9\.2\.4$', multiLine: true),
+          RegExp(r'^  flutter_secure_storage: 10\.3\.1$', multiLine: true),
         ),
       );
-      expect(scopeStore, isNot(contains('migrateWithBackup')));
+      expect(
+        scopeStore,
+        contains("storageNamespace: 'awiki_me_scope_secrets_v1'"),
+      );
+      expect(appStore, contains("storageNamespace: 'awiki_me_app_state_v1'"));
+      expect(scopeStore, contains('resetOnError: false'));
+      expect(appStore, contains('resetOnError: false'));
     });
 
     test(

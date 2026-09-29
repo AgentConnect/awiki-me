@@ -28,6 +28,7 @@ import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -61,6 +62,7 @@ void main() {
         notificationFacade: FakeNotificationFacade(),
         localePreferenceService: FakeLocalePreferenceService(),
         updateService: FakeUpdateService(),
+        identityCorePort: FakeIdentityCorePort(),
         appSessionService: FakeAppSessionService(gateway),
         onboardingService: FakeOnboardingService(gateway),
         onboardingSupportService: FakeOnboardingSupportService(gateway),
@@ -352,15 +354,14 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        await _waitForLoginRegisterForm(tester);
         await tester.tap(find.text('+86'));
         await tester.pump();
 
-        Finder phoneEditable() => find
-            .descendant(
-              of: find.byKey(const Key('onboarding-mac-auth-card')),
-              matching: find.byType(EditableText),
-            )
-            .first;
+        Finder phoneEditable() => find.descendant(
+          of: find.byType(AppTextField).first,
+          matching: find.byType(EditableText),
+        );
         final focusNode = tester
             .widget<EditableText>(phoneEditable())
             .focusNode;
@@ -376,12 +377,10 @@ void main() {
         expect(resizedFocusNode.hasFocus, isTrue);
 
         await tester.enterText(
-          find
-              .descendant(
-                of: find.byKey(const Key('onboarding-mac-auth-card')),
-                matching: find.byType(CupertinoTextField),
-              )
-              .first,
+          find.descendant(
+            of: find.byType(AppTextField).first,
+            matching: find.byType(CupertinoTextField),
+          ),
           '13800138000',
         );
         await tester.pump();
@@ -657,6 +656,8 @@ Future<void> _pumpDesktopOnboarding(WidgetTester tester, Widget app) async {
   });
 
   await tester.pumpWidget(app);
+  await tester.pumpAndSettle();
+  await _waitForLoginRegisterForm(tester);
   final phoneMethod = find.byKey(const Key('auth-mode-phone'));
   final emailMethod = find.byKey(const Key('auth-mode-email'));
   final input = find.byType(CupertinoTextField);
@@ -669,6 +670,17 @@ Future<void> _pumpDesktopOnboarding(WidgetTester tester, Widget app) async {
     }
   }
   fail('Desktop onboarding did not become ready within 500 ms.');
+}
+
+Future<void> _waitForLoginRegisterForm(WidgetTester tester) async {
+  for (var attempt = 0; attempt < 50; attempt += 1) {
+    await tester.pump(const Duration(milliseconds: 10));
+    if (find.byKey(const Key('auth-mode-phone')).evaluate().isNotEmpty &&
+        find.byType(CupertinoTextField).evaluate().isNotEmpty) {
+      return;
+    }
+  }
+  fail('Fixed login/register form did not become ready within 500 ms.');
 }
 
 class _StaticConversationCore implements ConversationCorePort {
@@ -718,6 +730,7 @@ class _StaticConversationCore implements ConversationCorePort {
     int limit = 100,
     String? cursor,
     bool unreadOnly = false,
+    bool includeControlMessages = false,
   }) async {
     return CoreConversationPage(
       items: items.take(limit).toList(),

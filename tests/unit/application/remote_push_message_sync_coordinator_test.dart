@@ -13,6 +13,43 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'mute hydration precedes pending sync and failed hydration retries on resume',
+    () async {
+      final client = _FakeRemotePushClient(pending: [_event('pending')]);
+      final sync = _FakeRemotePushSyncPort();
+      final navigation = _FakeRemotePushNavigationPort();
+      var attempts = 0;
+      final coordinator = RemotePushMessageSyncCoordinator(
+        client: client,
+        sync: sync,
+        navigation: navigation,
+        refreshInstallation: (_) async {},
+        preparePresentation: (context) async {
+          expect(context, _alice);
+          attempts++;
+          if (attempts == 1) {
+            expect(sync.callCount, 0);
+            throw StateError('native snapshot unavailable');
+          }
+        },
+        now: () => DateTime.utc(2026, 7, 30),
+      );
+      addTearDown(() async {
+        await coordinator.dispose();
+        await client.dispose();
+      });
+      coordinator.start();
+      await coordinator.activateSession(_alice);
+      expect(
+        sync.callCount,
+        1,
+      ); // Muted/failed presentation never blocks messages.
+      await coordinator.resume();
+      expect(attempts, 2);
+    },
+  );
+
+  test(
     'starts listening only after start and drains pending on activation',
     () async {
       final beforeStart = _event('before-start');

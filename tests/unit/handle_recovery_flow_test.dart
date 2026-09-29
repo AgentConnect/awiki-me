@@ -28,6 +28,103 @@ part 'handle_recovery_state_machine_test.part.dart';
 part 'handle_recovery_session_test.part.dart';
 
 void main() {
+  testWidgets(
+    'registry conflict preserves resume and lets users return to other recoveries',
+    (tester) async {
+      final operation = _operation(
+        lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+        commitAttempted: true,
+      );
+      final core = _FakeHandleRecoveryCore(
+        operation: operation,
+        reconcileError: const HandleRecoveryFailure(
+          HandleRecoveryFailureCode.localRegistryConflict,
+        ),
+      );
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          locale: const Locale('en'),
+          home: const SizedBox(key: Key('recovery-launcher')),
+          gateway: FakeAwikiGateway(),
+          providerOverrides: <Override>[
+            handleRecoveryCorePortProvider.overrideWithValue(core),
+            userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      final context = tester.element(
+        find.byKey(const Key('recovery-launcher')),
+      );
+      unawaited(
+        Navigator.of(context).push<void>(
+          CupertinoPageRoute<void>(
+            builder: (_) => const HandleRecoveryPage(
+              initialHandle: 'alice.awiki.info',
+              initialPhone: '',
+              autoRequestOtp: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('handle-recovery-resume')));
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('handle-recovery-page'))),
+      );
+      final state = container.read(handleRecoveryProvider);
+      expect(state.error, HandleRecoveryUiError.localRegistryConflict);
+      expect(state.progress?.operationId, operation.operationId);
+      expect(state.allows(HandleRecoveryAction.resume), isTrue);
+      expect(state.allows(HandleRecoveryAction.startNew), isFalse);
+      expect(
+        find.textContaining('Other local identities still conflict.'),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(
+        find.byKey(const Key('handle-recovery-other-pending')),
+      );
+      await tester.tap(find.byKey(const Key('handle-recovery-other-pending')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('recovery-launcher')), findsOneWidget);
+      expect(core.discardCalls, 0);
+      expect(core.quarantineCalls, 0);
+      expect(core.lastPhone, isNull);
+      // After resolving the other Handle, the original task can finish without
+      // a fresh OTP, replacement operation or destructive local cleanup.
+      core.reconcileError = null;
+      core.reconcileResult = _operation(
+        lifecycleClass: HandleRecoveryLifecycleClass.applied,
+        commitAttempted: true,
+      );
+      unawaited(
+        Navigator.of(context).push<void>(
+          CupertinoPageRoute<void>(
+            builder: (_) => const HandleRecoveryPage(
+              initialHandle: 'alice.awiki.info',
+              initialPhone: '',
+              autoRequestOtp: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final reopened = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('handle-recovery-page'))),
+      );
+      final controller = reopened.read(handleRecoveryProvider.notifier);
+      await controller.resume();
+      expect(
+        reopened.read(handleRecoveryProvider).progress?.operationId,
+        operation.operationId,
+      );
+      expect(
+        reopened.read(handleRecoveryProvider).progress?.isCompleted,
+        isTrue,
+      );
+    },
+  );
   _registerHandleRecoveryStateMachineTests();
   _registerHandleRecoverySessionTests();
   group('Handle Recovery V4 application boundary', () {
@@ -605,6 +702,42 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'committed recovery offers exact local resume without asking for another code',
+    (tester) async {
+      final core = _FakeHandleRecoveryCore(
+        operation: _operation(
+          lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+          commitAttempted: true,
+        ),
+      );
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          locale: const Locale('en'),
+          home: const HandleRecoveryPage(
+            initialHandle: 'alice.awiki.info',
+            initialPhone: '+8613800138000',
+          ),
+          providerOverrides: <Override>[
+            handleRecoveryCorePortProvider.overrideWithValue(core),
+            userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Account recovery has taken effect'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('handle-recovery-resume')), findsOneWidget);
+      expect(find.byKey(const Key('handle-recovery-send-otp')), findsNothing);
+      expect(
+        find.byKey(const Key('handle-recovery-retry-lookup')),
+        findsNothing,
+      );
+    },
+  );
 
   for (final otpFails in <bool>[false, true]) {
     testWidgets(
@@ -1511,13 +1644,13 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   final Object? activateError;
   final Completer<HandleRecoveryProgress>? activateCompleter;
   final Completer<HandleRecoveryProgress>? prepareCompleter;
-  final HandleRecoveryProgress? reconcileResult;
+  HandleRecoveryProgress? reconcileResult;
   final HandleRecoveryProgress? reconcileProgressOnError;
   bool credentialAvailable = true;
   bool operationDeleted = false;
   final HandleRecoveryRegistryEpochReset? receipt;
   Object? statusError;
-  final Object? reconcileError;
+  Object? reconcileError;
   final FutureOr<void> Function()? beforeActivate;
   HandleRecoveryOwner? lastOwner;
   String? lastHandle;

@@ -96,6 +96,8 @@ Future<void> _waitForCliInbox({
   String? expectedSenderDid,
   String? expectedReceiverDid,
   String? expectedContentType,
+  String? description,
+  Duration timeout = const Duration(seconds: 90),
 }) async {
   Future<E2eObservation> observe() async {
     final result = await _runCli(config, const <String>[
@@ -120,9 +122,11 @@ Future<void> _waitForCliInbox({
   }
 
   await _pollObservation(
-    description: 'CLI inbox contains exact message "$expectedText"',
+    description:
+        description ?? 'CLI inbox contains exact message "$expectedText"',
     observe: observe,
     failureLayer: 'core_canonical',
+    timeout: timeout,
   );
   await _assertStableCliObservation(
     description: 'CLI inbox exact message "$expectedText"',

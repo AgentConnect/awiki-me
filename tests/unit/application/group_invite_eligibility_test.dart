@@ -7,6 +7,29 @@ import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/identity_type.dart';
 
 void main() {
+  test(
+    'other-owner lifecycle denies invitation without requiring personal inventory',
+    () {
+      final policy = GroupInviteEligibilityPolicy.fromSources(
+        agents: const [],
+        pendingDeletionAgentDids: const {},
+        conversations: const [],
+        unavailableAgentDids: const {'did:agent:other-owner'},
+      );
+      expect(
+        policy
+            .evaluateIdentity(
+              did: 'did:agent:other-owner',
+              identityType: const IdentityType.agent(
+                agentKind: IdentityAgentKind.runtime,
+              ),
+            )
+            .denialReason,
+        GroupInviteDenialReason.identityUnavailable,
+      );
+      expect(policy.allowsIdentity(did: 'did:agent:unknown'), isTrue);
+    },
+  );
   const activeRuntime = AgentSummary(
     agentDid: 'did:agent:runtime:active',
     kind: AgentKind.runtime,

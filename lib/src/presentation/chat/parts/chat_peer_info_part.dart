@@ -190,7 +190,15 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         : agentRuntimeDisplay(runtimeAgent);
     final runtimeStatus = runtimeAgent == null
         ? null
-        : AgentVisualStatus.fromAgent(runtimeAgent);
+        : AgentVisualStatus.fromAgent(
+            runtimeAgent,
+            authoritativeBusy: ref
+                .watch(acpSessionsProvider)
+                .busyForAgent(runtimeAgent.agentDid),
+            hasPendingTurn: ref
+                .watch(pendingAgentDidsProvider)
+                .contains(runtimeAgent.agentDid),
+          );
     final looksLikeAgent =
         runtimeAgent != null || conversationTargetDidLooksLikeAgent(targetDid);
     final profileSubjectType = profile?.subjectType?.trim() ?? '';

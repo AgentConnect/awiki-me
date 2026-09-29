@@ -41,6 +41,26 @@ const _session = SessionIdentity(
 );
 
 void main() {
+  test(
+    'Registry registration alone cannot expose current-device management readiness',
+    () {
+      final registry = _rootTransferRegistry();
+      final current = registry.currentDevice!;
+      final waiting = DevicesState(registry: registry);
+      expect(waiting.currentDeviceCanManage, isFalse);
+      expect(
+        waiting.readinessFor(current),
+        DeviceManagementReadiness.adminAwaitingRoot,
+      );
+      final ready = DevicesState(
+        registry: registry,
+        localManagementReady: true,
+      );
+      expect(ready.currentDeviceCanManage, isTrue);
+      expect(ready.readinessFor(current), DeviceManagementReadiness.ready);
+    },
+  );
+
   for (final restoreFromInbox in [false, true]) {
     testWidgets(
       'confirmed Join restores grant after restart (inbox=$restoreFromInbox)',
@@ -70,6 +90,7 @@ void main() {
         );
         final core = FakeDeviceManagementCore()
           ..registry = DeviceRegistrySnapshot(
+            methodCapabilities: wbaMethodCapabilities,
             did: testDid,
             devices: [
               _device(
@@ -115,15 +136,16 @@ void main() {
           DeviceJoinPhase.authorized,
         );
         expect(
-          find.byKey(const Key('root-transfer-grant-management')),
+          find.byKey(const Key('device-join-management-phase')),
           findsOneWidget,
         );
         expect(find.byKey(const Key('device-approval-sas')), findsNothing);
-        expect(find.text('完成'), findsNothing);
+        expect(find.text('完成'), findsOneWidget);
         expect(
           presence.calls,
           0,
-          reason: 'Restoring confirmation must never send Root automatically.',
+          reason:
+              'Restoring the Core task must not ask for another user presence.',
         );
       },
     );
@@ -165,6 +187,7 @@ void main() {
     final recipient = _device(id: 'device-new', role: DeviceRole.member);
     final core = _DelayedApprovalCore()
       ..registry = DeviceRegistrySnapshot(
+        methodCapabilities: wbaMethodCapabilities,
         did: testDid,
         devices: [
           _device(
@@ -206,7 +229,7 @@ void main() {
     await container.read(devicesProvider.notifier).loadManagement();
     await tester.tap(find.byType(CupertinoSwitch).first);
     await tester.pump();
-    await tester.tap(find.text('确认并授权'));
+    await tester.tap(find.text('允许加入并成为管理设备'));
     await tester.pump();
     expect(core.started.isCompleted, isTrue);
     core.joinRequests = [
@@ -232,7 +255,7 @@ void main() {
     core.release.complete();
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const Key('root-transfer-grant-management')),
+      find.byKey(const Key('device-join-management-phase')),
       findsOneWidget,
     );
   });
@@ -248,6 +271,7 @@ void main() {
     final recipient = _device(id: 'device-new', role: DeviceRole.member);
     final core = _DelayedVerificationCore()
       ..registry = DeviceRegistrySnapshot(
+        methodCapabilities: wbaMethodCapabilities,
         did: testDid,
         devices: [
           _device(
@@ -296,14 +320,14 @@ void main() {
     expect(core.started.isCompleted, isTrue);
     await tester.tap(find.byType(CupertinoSwitch).first);
     await tester.pump();
-    await tester.tap(find.text('确认并授权'));
+    await tester.tap(find.text('允许加入并成为管理设备'));
     await tester.pumpAndSettle();
     expect(
       container.read(devicesProvider).activeJoin?.phase,
       DeviceJoinPhase.authorized,
     );
     expect(
-      find.byKey(const Key('root-transfer-grant-management')),
+      find.byKey(const Key('device-join-management-phase')),
       findsOneWidget,
     );
     core.blocked.complete(testJoinProgress());
@@ -316,7 +340,7 @@ void main() {
           'A stale verification refresh must not overwrite successful approval.',
     );
     expect(
-      find.byKey(const Key('root-transfer-grant-management')),
+      find.byKey(const Key('device-join-management-phase')),
       findsOneWidget,
     );
   });
@@ -333,6 +357,7 @@ void main() {
     final recipient = _device(id: 'member-later', role: DeviceRole.member);
     final core = FakeDeviceManagementCore()
       ..registry = DeviceRegistrySnapshot(
+        methodCapabilities: wbaMethodCapabilities,
         did: testDid,
         registryVersion: '4',
         devices: [admin],
@@ -354,6 +379,7 @@ void main() {
         .read(devicesProvider.notifier)
         .applyCachedRegistry(
           DeviceRegistrySnapshot(
+            methodCapabilities: wbaMethodCapabilities,
             did: testDid,
             registryVersion: '5',
             devices: [admin, recipient],
@@ -417,6 +443,7 @@ void main() {
         );
       } else {
         core.registry = DeviceRegistrySnapshot(
+          methodCapabilities: wbaMethodCapabilities,
           did: testDid,
           devices: [
             original.devices.first,
@@ -630,6 +657,7 @@ void main() {
     (tester) async {
       final core = FakeDeviceManagementCore()
         ..registry = const DeviceRegistrySnapshot(
+          methodCapabilities: wbaMethodCapabilities,
           did: testDid,
           devices: <DeviceSummary>[
             DeviceSummary(
@@ -788,6 +816,7 @@ void main() {
     (tester) async {
       final core = FakeDeviceManagementCore()
         ..registry = const DeviceRegistrySnapshot(
+          methodCapabilities: wbaMethodCapabilities,
           did: testDid,
           devices: <DeviceSummary>[
             DeviceSummary(
@@ -893,6 +922,7 @@ void main() {
     (tester) async {
       final core = FakeDeviceManagementCore()
         ..registry = DeviceRegistrySnapshot(
+          methodCapabilities: wbaMethodCapabilities,
           did: testDid,
           devices: <DeviceSummary>[
             _device(
@@ -952,6 +982,7 @@ void main() {
   ) async {
     final core = FakeDeviceManagementCore()
       ..registry = DeviceRegistrySnapshot(
+        methodCapabilities: wbaMethodCapabilities,
         did: testDid,
         devices: <DeviceSummary>[
           _device(
@@ -1966,7 +1997,7 @@ void main() {
 
       await tester.tap(switches.first);
       await tester.pump();
-      await tester.tap(find.text('确认并授权'));
+      await tester.tap(find.text('允许加入并成为管理设备'));
       await tester.pumpAndSettle();
 
       expect(core.lastPreparedSasConfirmed, isTrue);
@@ -1974,7 +2005,7 @@ void main() {
       expect(presence.calls, 1);
       expect(find.text('设备已加入'), findsOneWidget);
       expect(find.text('完成'), findsOneWidget);
-      expect(find.text('确认并授权'), findsNothing);
+      expect(find.text('允许加入并成为管理设备'), findsNothing);
       expect(find.text('验证码不一致'), findsNothing);
       expect(find.text('拒绝设备'), findsNothing);
 
@@ -1994,260 +2025,266 @@ void main() {
     },
   );
 
-  for (final retryable in <bool?>[null, true, false]) {
-    testWidgets(
-      'just-completed Join prepares before confirmation (retryable=$retryable)',
-      (tester) async {
-        final request = _request(
-          state: DeviceJoinRemoteState.responseVerified,
-          claimedByCurrentDevice: true,
-          canStartVerification: false,
-        );
-        final recipient = _device(id: 'device-new', role: DeviceRole.member);
-        final core = FakeDeviceManagementCore()
-          ..registry = DeviceRegistrySnapshot(
-            did: testDid,
-            devices: <DeviceSummary>[
-              _device(
-                id: 'admin-current',
-                role: DeviceRole.admin,
-                managementReady: true,
-                isCurrent: true,
-              ),
-              recipient,
-            ],
-          )
-          ..joinRequests = <DeviceJoinRequestNotice>[request]
-          ..verificationProgress = testJoinProgress()
-          ..confirmResult = DeviceJoinProgress(
+  for (final phase in <String>[
+    'scheduled',
+    'waiting_for_recipient',
+    'management_registered',
+    'failed',
+    'expired',
+    'invalidated',
+  ]) {
+    testWidgets('Join uses one presence and Core management phase $phase', (
+      tester,
+    ) async {
+      final request = _request(
+        state: DeviceJoinRemoteState.responseVerified,
+        claimedByCurrentDevice: true,
+        canStartVerification: false,
+      );
+      final recipient = _device(id: 'device-new', role: DeviceRole.member);
+      final core = FakeDeviceManagementCore()
+        ..registry = _rootTransferRegistry()
+        ..joinRequests = [request]
+        ..verificationProgress = testJoinProgress()
+        ..confirmResult = DeviceJoinProgress(
+          joinSessionId: 'join-1',
+          did: testDid,
+          protocolDeviceId: 'device-new',
+          side: DeviceJoinSide.admin,
+          phase: DeviceJoinPhase.authorized,
+          remoteState: DeviceJoinRemoteState.consumed,
+          expiresAt: DateTime.utc(2030),
+          authorizedDevice: recipient,
+        )
+        ..managementStatuses = [
+          DeviceJoinManagementStatus(
             joinSessionId: 'join-1',
-            did: testDid,
-            protocolDeviceId: 'device-new',
-            side: DeviceJoinSide.admin,
-            phase: DeviceJoinPhase.authorized,
-            remoteState: DeviceJoinRemoteState.consumed,
-            expiresAt: DateTime.utc(2030),
-            authorizedDevice: recipient,
-          );
-        final transfer = FakeRootKeyTransferPort();
-        if (retryable != null) {
-          transfer.error = RootKeyTransferException(
-            retryable
-                ? 'root_transfer.prekey_unavailable'
-                : 'root_transfer.prekey_invalid',
-            retryable: retryable,
-          );
-        }
-        final presence = FakeUserPresence();
-        await tester.pumpWidget(
-          _app(
-            DeviceJoinApprovalSheet(request: request),
-            core,
-            presence: presence,
-            rootTransfer: transfer,
+            recipientDeviceId: 'device-new',
+            phase: ['expired', 'invalidated'].contains(phase)
+                ? 'failed'
+                : phase,
+            failureCode: phase == 'expired'
+                ? 'root_transfer.delivery_expired'
+                : phase == 'invalidated'
+                ? 'root_transfer.delivery_invalidated'
+                : null,
+            attempts: phase == 'failed' ? 3 : 1,
+            nextAttemptAtMs: 0,
           ),
-        );
+        ];
+      final transfer = FakeRootKeyTransferPort();
+      final presence = FakeUserPresence();
+      await tester.pumpWidget(
+        _app(
+          DeviceJoinApprovalSheet(request: request),
+          core,
+          presence: presence,
+          rootTransfer: transfer,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(CupertinoSwitch).first);
+      await tester.pump();
+      await tester.tap(find.text('允许加入并成为管理设备'));
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('device-join-approval-sheet'))),
+      );
+      await container.read(devicesProvider.notifier).refreshManagementStatus();
+      await tester.pumpAndSettle();
+      expect(presence.calls, 1);
+      expect(transfer.prepareCalls, 0);
+      expect(transfer.confirmCalls, 0);
+      expect(
+        find.byKey(const Key('root-transfer-grant-management')),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('root-transfer-confirm-send')), findsNothing);
+      expect(
+        find.byKey(const Key('device-join-management-phase')),
+        findsOneWidget,
+      );
+      if (phase == 'failed') {
+        expect(find.text('设备已加入，管理权限配置失败'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('device-join-management-retry')));
         await tester.pumpAndSettle();
-
-        await tester.tap(find.byType(CupertinoSwitch).first);
-        await tester.pump();
-        await tester.tap(find.text('确认并授权'));
-        await tester.pumpAndSettle();
-
-        expect(
-          find.byKey(const Key('root-transfer-grant-management')),
-          findsOneWidget,
-        );
-        expect(transfer.prepareCalls, 0);
+        expect(core.managementRetries, ['join-1']);
         expect(presence.calls, 1);
-
-        await tester.tap(
-          find.byKey(const Key('root-transfer-grant-management')),
+      } else {
+        expect(
+          find.byKey(const Key('device-join-management-retry')),
+          findsNothing,
         );
-        await tester.pumpAndSettle();
+      }
+      if (phase == 'expired' || phase == 'invalidated') {
+        expect(find.textContaining('退出本地身份（保留数据）后重新加入'), findsOneWidget);
+        await container
+            .read(devicesProvider.notifier)
+            .retryJoinManagement('join-1');
+        expect(core.managementRetries, isEmpty);
+      }
+      if (phase == 'waiting_for_recipient') {
+        expect(find.textContaining('等待新设备完成'), findsOneWidget);
+        expect(find.textContaining('管理权限已登记'), findsNothing);
+      }
+      if (phase == 'management_registered') {
+        expect(find.textContaining('请在新设备确认'), findsOneWidget);
+      }
+      expect(find.textContaining('root_private_key'), findsNothing);
+      expect(find.textContaining('authorization_handle'), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
 
-        if (retryable != null) {
-          expect(find.byKey(const Key('root-transfer-failed')), findsOneWidget);
-          expect(transfer.prepareCalls, 1);
-          expect(transfer.confirmCalls, 0);
-          expect(presence.calls, 1);
-          final retry = find.byKey(const Key('root-transfer-retry'));
-          expect(retry, retryable ? findsOneWidget : findsNothing);
-          if (!retryable) return;
-          transfer.error = null;
-          await tester.tap(retry);
-          await tester.pumpAndSettle();
+  testWidgets('management retry discards an older pending status read', (
+    tester,
+  ) async {
+    const failed = DeviceJoinManagementStatus(
+      joinSessionId: 'join-1',
+      recipientDeviceId: 'device-new',
+      phase: 'failed',
+      attempts: 3,
+      nextAttemptAtMs: 0,
+    );
+    const scheduled = DeviceJoinManagementStatus(
+      joinSessionId: 'join-1',
+      recipientDeviceId: 'device-new',
+      phase: 'scheduled',
+      attempts: 0,
+      nextAttemptAtMs: 0,
+    );
+    final core = FakeDeviceManagementCore()
+      ..registry = _rootTransferRegistry()
+      ..managementStatuses = [failed];
+    await tester.pumpWidget(_app(const DevicesPage(), core));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('devices-page'))),
+    );
+    final controller = container.read(devicesProvider.notifier);
+    final stale = Completer<List<DeviceJoinManagementStatus>>();
+    final started = Completer<void>();
+    core.managementStatusLoader = () {
+      started.complete();
+      return stale.future;
+    };
+    final oldRead = controller.refreshManagementStatus();
+    await started.future;
+    core.managementStatusLoader = () async => [scheduled];
+    await controller.retryJoinManagement('join-1');
+    expect(
+      container.read(devicesProvider).managementStatuses.single.phase,
+      'scheduled',
+    );
+    stale.complete([failed]);
+    await oldRead;
+    expect(
+      container.read(devicesProvider).managementStatuses.single.phase,
+      'scheduled',
+    );
+    expect(core.managementRetries, ['join-1']);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  for (final retry in [false, true]) {
+    testWidgets(
+      'identity read failure preserves new task phase and disables retry ($retry)',
+      (tester) async {
+        const failed = DeviceJoinManagementStatus(
+          joinSessionId: 'join-1',
+          recipientDeviceId: 'device-new',
+          phase: 'failed',
+          attempts: 3,
+          nextAttemptAtMs: 0,
+        );
+        const scheduled = DeviceJoinManagementStatus(
+          joinSessionId: 'join-1',
+          recipientDeviceId: 'device-new',
+          phase: 'scheduled',
+          attempts: 0,
+          nextAttemptAtMs: 0,
+        );
+        final core = FakeDeviceManagementCore()
+          ..registry = _rootTransferRegistry()
+          ..managementStatuses = [failed];
+        await tester.pumpWidget(_app(const DevicesPage(), core));
+        await tester.pumpAndSettle();
+        final container = ProviderScope.containerOf(
+          tester.element(find.byKey(const Key('devices-page'))),
+        );
+        final controller = container.read(devicesProvider.notifier);
+        expect(container.read(devicesProvider).currentDeviceCanManage, isTrue);
+        core.managementStatusLoader = () async => [scheduled];
+        core.localManagementReadyError = StateError('identity_not_found');
+        if (retry) {
+          await controller.retryJoinManagement('join-1');
+        } else {
+          await controller.refreshManagementStatus();
         }
-        expect(transfer.prepareCalls, retryable == true ? 2 : 1);
-        expect(transfer.confirmCalls, 0);
-        expect(presence.calls, 1);
-        expect(
-          find.byKey(const Key('root-transfer-recipient-summary')),
-          findsOneWidget,
-        );
-
-        await tester.tap(find.byKey(const Key('root-transfer-confirm-send')));
-        await tester.pumpAndSettle();
-
-        expect(presence.calls, 2);
-        expect(transfer.confirmCalls, 1);
-        expect(transfer.lastUserPresenceConfirmed, isTrue);
-        expect(find.byKey(const Key('root-transfer-sent')), findsOneWidget);
-        expect(find.textContaining('root_private_key'), findsNothing);
-        expect(find.textContaining('authorization_handle'), findsNothing);
+        final state = container.read(devicesProvider);
+        expect(state.managementStatuses.single.phase, 'scheduled');
+        expect(state.currentDeviceCanManage, isFalse);
+        expect(state.error, isNotNull);
+        core.managementStatusLoader = () async => [failed];
+        await controller.refreshManagementStatus();
+        await controller.retryJoinManagement('join-1');
+        expect(core.managementRetries, retry ? ['join-1'] : isEmpty);
+        await tester.pumpWidget(const SizedBox.shrink());
       },
     );
   }
 
-  testWidgets('slow root preparation cannot return into a closed Join', (
+  testWidgets('management retry denial is not reported as device revocation', (
     tester,
   ) async {
-    final request = _request(
-      state: DeviceJoinRemoteState.responseVerified,
-      claimedByCurrentDevice: true,
-      canStartVerification: false,
-    );
-    final recipient = _device(id: 'device-new', role: DeviceRole.member);
     final core = FakeDeviceManagementCore()
-      ..registry = DeviceRegistrySnapshot(
-        did: testDid,
-        devices: <DeviceSummary>[
-          _device(
-            id: 'admin-current',
-            role: DeviceRole.admin,
-            managementReady: true,
-            isCurrent: true,
-          ),
-          recipient,
-        ],
-      )
-      ..joinRequests = <DeviceJoinRequestNotice>[request]
-      ..verificationProgress = testJoinProgress()
-      ..confirmResult = DeviceJoinProgress(
-        joinSessionId: 'join-1',
-        did: testDid,
-        protocolDeviceId: 'device-new',
-        side: DeviceJoinSide.admin,
-        phase: DeviceJoinPhase.authorized,
-        remoteState: DeviceJoinRemoteState.consumed,
-        expiresAt: DateTime.utc(2030),
-        authorizedDevice: recipient,
-      );
-    final transfer = FakeRootKeyTransferPort()..deferPrepare = true;
-    final presence = FakeUserPresence();
-    await tester.pumpWidget(
-      _app(
-        DeviceJoinApprovalSheet(request: request),
-        core,
-        presence: presence,
-        rootTransfer: transfer,
-      ),
-    );
+      ..registry = _rootTransferRegistry()
+      ..managementRetryError = StateError('permission_denied')
+      ..managementStatuses = [
+        const DeviceJoinManagementStatus(
+          joinSessionId: 'join-1',
+          recipientDeviceId: 'device-new',
+          phase: 'failed',
+          attempts: 3,
+          nextAttemptAtMs: 0,
+        ),
+      ];
+    await tester.pumpWidget(_app(const DevicesPage(), core));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(CupertinoSwitch).first);
-    await tester.pump();
-    await tester.tap(find.text('确认并授权'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('root-transfer-grant-management')));
-    await tester.pump();
-    await transfer.prepareStarted.future;
     final container = ProviderScope.containerOf(
-      tester.element(find.byKey(const Key('device-join-approval-sheet'))),
-    );
-    container.read(devicesProvider.notifier).clearActive();
-    transfer.completeDeferredPrepare();
-    await tester.pumpAndSettle();
-
-    expect(transfer.confirmCalls, 1);
-    expect(transfer.lastUserPresenceConfirmed, isFalse);
-    expect(presence.calls, 1);
-    expect(
-      find.byKey(const Key('root-transfer-recipient-summary')),
-      findsNothing,
-    );
-    expect(find.byKey(const Key('root-transfer-confirm-send')), findsNothing);
-    expect(
-      container.read(devicesProvider).rootTransfer.phase,
-      RootKeyTransferPhase.idle,
-    );
-  });
-
-  testWidgets('switching Join consumes and hides the previous root handle', (
-    tester,
-  ) async {
-    final request = _request(
-      state: DeviceJoinRemoteState.responseVerified,
-      claimedByCurrentDevice: true,
-      canStartVerification: false,
-    );
-    final recipient = _device(id: 'device-new', role: DeviceRole.member);
-    final core = FakeDeviceManagementCore()
-      ..registry = DeviceRegistrySnapshot(
-        did: testDid,
-        devices: <DeviceSummary>[
-          _device(
-            id: 'admin-current',
-            role: DeviceRole.admin,
-            managementReady: true,
-            isCurrent: true,
-          ),
-          recipient,
-        ],
-      )
-      ..joinRequests = <DeviceJoinRequestNotice>[request]
-      ..verificationProgress = testJoinProgress()
-      ..confirmResult = DeviceJoinProgress(
-        joinSessionId: 'join-1',
-        did: testDid,
-        protocolDeviceId: 'device-new',
-        side: DeviceJoinSide.admin,
-        phase: DeviceJoinPhase.authorized,
-        remoteState: DeviceJoinRemoteState.consumed,
-        expiresAt: DateTime.utc(2030),
-        authorizedDevice: recipient,
-      );
-    final transfer = FakeRootKeyTransferPort();
-    final presence = FakeUserPresence();
-    await tester.pumpWidget(
-      _app(
-        DeviceJoinApprovalSheet(request: request),
-        core,
-        presence: presence,
-        rootTransfer: transfer,
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byType(CupertinoSwitch).first);
-    await tester.pump();
-    await tester.tap(find.text('确认并授权'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('root-transfer-grant-management')));
-    await tester.pumpAndSettle();
-
-    final container = ProviderScope.containerOf(
-      tester.element(find.byKey(const Key('device-join-approval-sheet'))),
+      tester.element(find.byKey(const Key('devices-page'))),
     );
     await container
         .read(devicesProvider.notifier)
-        .selectJoinRequest(
-          _request(joinSessionId: 'join-2', protocolDeviceId: 'device-other'),
-        );
-    final sent = await container
-        .read(devicesProvider.notifier)
-        .confirmAndSendRootTransfer(presenceReason: 'Confirm root transfer');
-    await tester.pumpAndSettle();
-
-    expect(sent, isFalse);
-    expect(transfer.confirmCalls, 1);
-    expect(transfer.lastUserPresenceConfirmed, isFalse);
-    expect(presence.calls, 1);
+        .retryJoinManagement('join-1');
     expect(
-      find.byKey(const Key('root-transfer-recipient-summary')),
-      findsNothing,
+      container.read(devicesProvider).error,
+      DeviceManagementErrorKind.failed,
     );
-    expect(find.byKey(const Key('root-transfer-confirm-send')), findsNothing);
+    expect(container.read(devicesProvider).isActionPending, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets(
+    'device page refreshes local readiness after delayed activation',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final core = FakeDeviceManagementCore()
+        ..registry = _rootTransferRegistry()
+        ..localManagementReadyOverride = false;
+      await tester.pumpWidget(_app(const DevicesPage(), core));
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('devices-page'))),
+      );
+      expect(container.read(devicesProvider).currentDeviceCanManage, isFalse);
+      core.localManagementReadyOverride = true;
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(container.read(devicesProvider).currentDeviceCanManage, isTrue);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   testWidgets(
     'device list grants management to an eligible member after fresh presence',
@@ -2344,6 +2381,7 @@ void main() {
     (tester) async {
       final core = FakeDeviceManagementCore()
         ..registry = DeviceRegistrySnapshot(
+          methodCapabilities: wbaMethodCapabilities,
           did: testDid,
           devices: <DeviceSummary>[
             _device(
@@ -2415,7 +2453,7 @@ void main() {
 
     expect(find.text('另一台管理设备正在处理此请求'), findsOneWidget);
     expect(find.text('开始验证'), findsNothing);
-    expect(find.text('确认并授权'), findsNothing);
+    expect(find.text('允许加入并成为管理设备'), findsNothing);
     expect(core.startVerificationCalls, 0);
     expect(core.localVerificationCalls, 0);
   });
@@ -2505,7 +2543,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byType(CupertinoSwitch).first);
     await tester.pump();
-    await tester.tap(find.text('确认并授权'));
+    await tester.tap(find.text('允许加入并成为管理设备'));
     await tester.pumpAndSettle();
 
     expect(core.lastPresenceConfirmed, isFalse);
@@ -2832,6 +2870,7 @@ DeviceJoinProgress _authorizedNewDeviceProgress({
 
 DeviceRegistrySnapshot _currentMemberRegistry(String protocolDeviceId) =>
     DeviceRegistrySnapshot(
+      methodCapabilities: wbaMethodCapabilities,
       did: testDid,
       devices: <DeviceSummary>[
         _device(id: protocolDeviceId, role: DeviceRole.member, isCurrent: true),
@@ -3017,6 +3056,7 @@ DeviceRegistrySnapshot _rootTransferRegistry({
   String registryVersion = '0',
 }) {
   return DeviceRegistrySnapshot(
+    methodCapabilities: wbaMethodCapabilities,
     did: testDid,
     registryVersion: registryVersion,
     devices: <DeviceSummary>[
@@ -3036,6 +3076,7 @@ DeviceRegistrySnapshot _rootTransferRegistry({
 }
 
 DeviceRegistrySnapshot _laterGrantRegistry() => DeviceRegistrySnapshot(
+  methodCapabilities: wbaMethodCapabilities,
   did: testDid,
   devices: <DeviceSummary>[
     _device(
@@ -3067,6 +3108,7 @@ DeviceSummary _device({
 }
 
 DeviceRegistrySnapshot _revokeRegistry() => DeviceRegistrySnapshot(
+  methodCapabilities: wbaMethodCapabilities,
   did: testDid,
   devices: <DeviceSummary>[
     _device(
@@ -3080,6 +3122,7 @@ DeviceRegistrySnapshot _revokeRegistry() => DeviceRegistrySnapshot(
 );
 
 DeviceRegistrySnapshot _revokedRegistry() => DeviceRegistrySnapshot(
+  methodCapabilities: wbaMethodCapabilities,
   did: testDid,
   devices: <DeviceSummary>[
     _device(

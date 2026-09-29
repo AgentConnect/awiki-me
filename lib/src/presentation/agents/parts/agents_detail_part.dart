@@ -1,6 +1,6 @@
 part of '../agents_page.dart';
 
-class _AgentDetailPane extends StatelessWidget {
+class _AgentDetailPane extends ConsumerWidget {
   const _AgentDetailPane({
     required this.state,
     required this.selected,
@@ -45,7 +45,7 @@ class _AgentDetailPane extends StatelessWidget {
   onSaveInvocationPolicy;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final agent = selected;
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
@@ -77,6 +77,9 @@ class _AgentDetailPane extends StatelessWidget {
     final title = localizeAgentTitle(context.l10n, agent);
     final visualStatus = AgentVisualStatus.fromAgent(
       agent,
+      authoritativeBusy: ref
+          .watch(acpSessionsProvider)
+          .busyForAgent(agent.agentDid),
       hasPendingTurn: isDeleting || pendingAgentDids.contains(agent.agentDid),
       isPendingUpgrade: isUpgrading,
       hasUpgradeError: state.daemonUpgradeErrors.containsKey(agent.agentDid),
@@ -525,7 +528,9 @@ class _InstallDaemonPanel extends StatelessWidget {
           ),
           SizedBox(height: responsive.spacing(4)),
           Text(
-            context.l10n.agentInstallSupportedTypes,
+            context.l10n.agentInstallSupportedTypes(
+              AgentTypeCatalog.names(context.l10n),
+            ),
             style: type.cardSubtitle.copyWith(color: theme.secondaryText),
           ),
           SizedBox(height: responsive.spacing(12)),

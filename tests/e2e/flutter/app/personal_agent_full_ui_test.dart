@@ -726,7 +726,7 @@ Future<Process> _startRealDaemon({
       '100',
     ],
     environment: _daemonEnvironment(config),
-    includeParentEnvironment: true,
+    includeParentEnvironment: false,
     runInShell: false,
   );
   process.stdout.transform(utf8.decoder).listen((_) {}, onError: (_) {});
@@ -742,8 +742,20 @@ Map<String, String> _daemonEnvironment(_PersonalAgentRealBackendConfig config) {
         config.environment.messageServiceUrl,
     'AWIKI_DAEMON_DID_DOMAIN': config.environment.didDomain,
     'AWIKI_DAEMON_ALLOW_PLAIN_CONTROL': '1',
-    if (config.fakeHermesGatewayCommand != null)
-      'AWIKI_HERMES_GATEWAY_CMD': config.fakeHermesGatewayCommand!,
+    'HOME':
+        config.fakeHermesHome ??
+        (throw StateError(
+          'An isolated fakeHermesHome is required; real Agent clients are not used in tests.',
+        )),
+    'AWIKI_DAEMON_AGENT_PROXY_MODE': 'inherit',
+    for (final key in [
+      'PATH',
+      'TMPDIR',
+      'LANG',
+      'NO_PROXY',
+      'AWIKI_IM_CORE_VAULT_ROOT_KEY_B64',
+    ])
+      if (Platform.environment[key] != null) key: Platform.environment[key]!,
   };
 }
 
@@ -1465,7 +1477,7 @@ class _PersonalAgentRealBackendConfig {
     required this.daemonReadyFile,
     required this.daemonHandle,
     required this.realBackend,
-    this.fakeHermesGatewayCommand,
+    this.fakeHermesHome,
   });
 
   static _PersonalAgentRealBackendMode selectedMode() {
@@ -1569,10 +1581,7 @@ class _PersonalAgentRealBackendConfig {
       daemonHandle:
           _optionalConfig(daemon, 'handle') ??
           'personal-agent-daemon-${DateTime.now().millisecondsSinceEpoch}',
-      fakeHermesGatewayCommand: _optionalConfig(
-        daemon,
-        'fakeHermesGatewayCommand',
-      ),
+      fakeHermesHome: _optionalConfig(daemon, 'fakeHermesHome'),
       realBackend: realBackend,
     );
   }
@@ -1593,7 +1602,7 @@ class _PersonalAgentRealBackendConfig {
   final String daemonReadyFile;
   final String daemonHandle;
   final bool realBackend;
-  final String? fakeHermesGatewayCommand;
+  final String? fakeHermesHome;
 
   TargetPlatform get targetPlatform {
     return platform == 'linux' ? TargetPlatform.linux : TargetPlatform.macOS;
@@ -1889,6 +1898,26 @@ class _UiPersonalAgentBindingPort implements PersonalAgentBindingPort {
 
 class _UiIdentityCorePort
     implements IdentityCorePort, DaemonSubkeyAuthorizationCorePort {
+  @override
+  Future<IdentityMethodCapabilities> identityMethodCapabilities(
+    String did,
+  ) async => const IdentityMethodCapabilities(
+    method: IdentityDidMethod.wba,
+    handleRecovery: true,
+    rootImport: true,
+    rootTransfer: true,
+    servicesUpdate: false,
+  );
+
+  @override
+  Future<List<IdentityDidMethod>> identityCreationMethods() async => const [
+    IdentityDidMethod.wba,
+  ];
+
+  @override
+  Future<List<PendingIdentityRegistration>>
+  pendingIdentityRegistrations() async => const [];
+
   final List<String> calls = <String>[];
 
   @override
@@ -1949,7 +1978,9 @@ class _UiIdentityCorePort
   ];
 
   @override
-  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+  Future<bool> hasPendingLocalIdentityRecovery(
+    String identityIdOrAlias,
+  ) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {
@@ -1958,6 +1989,7 @@ class _UiIdentityCorePort
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithEmail({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String email,
     required String handle,
     String? inviteCode,
@@ -1968,6 +2000,7 @@ class _UiIdentityCorePort
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithPhone({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String phone,
     required String otp,
     required String handle,
@@ -1979,6 +2012,7 @@ class _UiIdentityCorePort
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    IdentityDidMethod didMethod = IdentityDidMethod.wba,
     required String handle,
     String? inviteCode,
     String? displayName,

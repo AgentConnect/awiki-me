@@ -15,6 +15,7 @@ import 'models/product_local_models.dart';
 import 'ports/agent_inventory_port.dart';
 import 'ports/conversation_core_port.dart';
 import 'product_local_store.dart';
+import 'text_notify_mute_coordinator.dart';
 
 const bool _conversationServiceTraceEnabled = bool.fromEnvironment(
   'AWIKI_CONVERSATION_SERVICE_TRACE',
@@ -115,7 +116,10 @@ abstract interface class ConversationReadService {
 }
 
 class ImCoreConversationService
-    implements ConversationService, ConversationReadService {
+    implements
+        ConversationService,
+        ConversationReadService,
+        NotifyMuteSnapshotSource {
   ImCoreConversationService({
     required ConversationCorePort conversations,
     required ProductLocalStore localStore,
@@ -130,6 +134,47 @@ class ImCoreConversationService
   final ProductLocalStore _localStore;
   final Duration agentProjectionTimeout;
   _AgentConversationProjection? _cachedAgentProjection;
+
+  @override
+  Future<Set<String>> loadMutedNotificationPeerDids({
+    required String ownerDid,
+  }) async {
+    final overlays = await _localStore.loadConversationOverlaysByConversationId(
+      ownerDid: ownerDid,
+    );
+    final remaining = overlays.values
+        .where((value) => value.muted)
+        .map((value) => value.conversationId)
+        .toSet();
+    final peers = <String>{};
+    String? cursor;
+    final cursors = <String>{};
+    // Use the Core registry pages, before recents filtering: hidden conversations
+    // still own mute state. Never derive a peer from a storage/thread identifier.
+    while (remaining.isNotEmpty) {
+      final page = await _conversations.listConversationPage(
+        limit: 100,
+        cursor: cursor,
+        includeControlMessages: true,
+      );
+      for (final conversation in page.items) {
+        if (!remaining.remove(conversation.conversationId)) continue;
+        if (conversation.isGroup) continue;
+        final peer = conversation.targetDid;
+        if (conversation.isLegacyUnresolved || peer == null || peer.isEmpty) {
+          throw StateError('notify_mute_route_unresolved');
+        }
+        peers.add(peer);
+      }
+      if (remaining.isEmpty || !page.hasMore) break;
+      cursor = page.nextCursor;
+      if (cursor == null || !cursors.add(cursor)) {
+        throw StateError('notify_mute_page_incomplete');
+      }
+    }
+    if (remaining.isNotEmpty) throw StateError('notify_mute_route_missing');
+    return peers;
+  }
 
   ImCoreConversationService withAgentInventory(AgentInventoryPort inventory) {
     return ImCoreConversationService(
@@ -235,82 +280,86 @@ class ImCoreConversationService
   @override
   Stream<ConversationListPatch> watchConversationPatches({
     required String ownerDid,
-  }) async* {
-    await for (final patch in _conversations.watchConversationPatches()) {
-      if (patch.ownerDid != ownerDid) {
-        continue;
-      }
-      switch (patch.kind) {
-        case CoreConversationPatchKind.reset:
-          yield await _normalizePatchReset(ownerDid: ownerDid, patch: patch);
-        case CoreConversationPatchKind.upsert:
-          final item = patch.item;
-          if (item == null) {
-            yield _repairPatch(
-              ownerIdentityId: patch.ownerIdentityId,
-              ownerDid: ownerDid,
-              version: patch.version,
-              unreadTotal: patch.unreadTotal,
-              reason: 'missing_upsert_item',
-            );
-            continue;
-          }
-          final normalized = await normalizeConversationForRecents(
-            ownerDid: ownerDid,
-            conversation: item,
-          );
-          if (normalized == null) {
-            yield ConversationListPatch(
-              kind: ConversationListPatchKind.remove,
-              ownerIdentityId: patch.ownerIdentityId,
-              ownerDid: ownerDid,
-              version: patch.version,
-              unreadTotal: patch.unreadTotal,
-              threadId: item.threadId,
-              conversationId: item.conversationId,
-              conversationKey: item.conversationKey,
-            );
-            continue;
-          }
-          yield ConversationListPatch(
-            kind: ConversationListPatchKind.upsert,
+  }) {
+    // asyncMap keeps normalization ordered and forwards cancellation while idle.
+    return _conversations
+        .watchConversationPatches()
+        .where((patch) => patch.ownerDid == ownerDid)
+        .asyncMap((patch) => _normalizePatch(ownerDid: ownerDid, patch: patch));
+  }
+
+  Future<ConversationListPatch> _normalizePatch({
+    required String ownerDid,
+    required CoreConversationPatch patch,
+  }) async {
+    switch (patch.kind) {
+      case CoreConversationPatchKind.reset:
+        return await _normalizePatchReset(ownerDid: ownerDid, patch: patch);
+      case CoreConversationPatchKind.upsert:
+        final item = patch.item;
+        if (item == null) {
+          return _repairPatch(
             ownerIdentityId: patch.ownerIdentityId,
             ownerDid: ownerDid,
             version: patch.version,
             unreadTotal: patch.unreadTotal,
-            item: normalized,
-            conversationId: normalized.conversationId,
+            reason: 'missing_upsert_item',
           );
-        case CoreConversationPatchKind.remove:
-          yield ConversationListPatch(
+        }
+        final normalized = await normalizeConversationForRecents(
+          ownerDid: ownerDid,
+          conversation: item,
+        );
+        if (normalized == null) {
+          return ConversationListPatch(
             kind: ConversationListPatchKind.remove,
             ownerIdentityId: patch.ownerIdentityId,
             ownerDid: ownerDid,
             version: patch.version,
             unreadTotal: patch.unreadTotal,
-            threadId: patch.threadId,
-            conversationId: patch.conversationId,
+            threadId: item.threadId,
+            conversationId: item.conversationId,
+            conversationKey: item.conversationKey,
           );
-        case CoreConversationPatchKind.reorder:
-          yield ConversationListPatch(
-            kind: ConversationListPatchKind.reorder,
-            ownerIdentityId: patch.ownerIdentityId,
-            ownerDid: ownerDid,
-            version: patch.version,
-            unreadTotal: patch.unreadTotal,
-            threadId: patch.threadId,
-            conversationId: patch.conversationId,
-            index: patch.index,
-          );
-        case CoreConversationPatchKind.repairRequired:
-          yield _repairPatch(
-            ownerIdentityId: patch.ownerIdentityId,
-            ownerDid: ownerDid,
-            version: patch.version,
-            unreadTotal: patch.unreadTotal,
-            reason: patch.reason ?? 'repair_required',
-          );
-      }
+        }
+        return ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerIdentityId: patch.ownerIdentityId,
+          ownerDid: ownerDid,
+          version: patch.version,
+          unreadTotal: patch.unreadTotal,
+          item: normalized,
+          conversationId: normalized.conversationId,
+        );
+      case CoreConversationPatchKind.remove:
+        return ConversationListPatch(
+          kind: ConversationListPatchKind.remove,
+          ownerIdentityId: patch.ownerIdentityId,
+          ownerDid: ownerDid,
+          version: patch.version,
+          unreadTotal: patch.unreadTotal,
+          threadId: patch.threadId,
+          conversationId: patch.conversationId,
+        );
+      case CoreConversationPatchKind.reorder:
+        return ConversationListPatch(
+          kind: ConversationListPatchKind.reorder,
+          ownerIdentityId: patch.ownerIdentityId,
+          ownerDid: ownerDid,
+          version: patch.version,
+          unreadTotal: patch.unreadTotal,
+          threadId: patch.threadId,
+          conversationId: patch.conversationId,
+          index: patch.index,
+        );
+      case CoreConversationPatchKind.repairRequired:
+        return _repairPatch(
+          ownerIdentityId: patch.ownerIdentityId,
+          ownerDid: ownerDid,
+          version: patch.version,
+          unreadTotal: patch.unreadTotal,
+          reason: patch.reason ?? 'repair_required',
+        );
     }
   }
 
