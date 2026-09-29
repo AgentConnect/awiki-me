@@ -210,6 +210,78 @@ void main() {
     }
   });
 
+  testWidgets('design tour renders every module in both appearances', (
+    tester,
+  ) async {
+    Future<void> openApp(
+      AppAppearance appearance,
+      Size size,
+      TargetPlatform platform,
+    ) async {
+      await _prepareEnvironment(tester, size: size, platform: platform);
+      await _pumpVisualApp(
+        tester,
+        _createVisualHarness(),
+        appearance: appearance,
+      );
+    }
+
+    Future<void> tapKey(String key) async {
+      await tester.tap(find.byKey(Key(key)).first);
+      await _pumpVisualFrames(tester);
+    }
+
+    Future<void> capture(String name) async {
+      expect(tester.takeException(), isNull, reason: name);
+      await _captureScreenshot(tester, name);
+    }
+
+    try {
+      for (final appearance in [AppAppearance.light, AppAppearance.dark]) {
+        final phone = 'tour-${appearance.name}-phone';
+        await openApp(appearance, const Size(390, 844), TargetPlatform.iOS);
+        await capture('$phone-messages');
+        await tapKey('conversation-row:dm:peer-scope:v1:hermes-ui');
+        await capture('$phone-chat');
+        await tapKey('chat-back-button');
+        await tapKey('conversation-row:group:did:test:group:product');
+        await capture('$phone-group-chat');
+        await tapKey('chat-back-button');
+        await tapKey('compact-nav-agents');
+        await capture('$phone-agents');
+        await tapKey('compact-nav-contacts');
+        await capture('$phone-contacts');
+        await tapKey('friends-all-contact:did:test:person:alice');
+        await capture('$phone-peer-profile');
+
+        await openApp(appearance, const Size(390, 844), TargetPlatform.iOS);
+        await tapKey('compact-nav-profile');
+        await capture('$phone-me');
+        await tapKey('profile-settings-row');
+        await capture('$phone-settings');
+        await tapKey('settings-devices-row');
+        await capture('$phone-devices');
+
+        final desk = 'tour-${appearance.name}-desk';
+        await openApp(appearance, const Size(1440, 900), TargetPlatform.macOS);
+        await tapKey('conversation-row:dm:peer-scope:v1:hermes-ui');
+        await capture('$desk-messages');
+        await tapKey('desktop-rail-agents');
+        await capture('$desk-agents');
+        await tapKey('desktop-rail-contacts');
+        await capture('$desk-contacts');
+        await tapKey('desktop-rail-settings');
+        await capture('$desk-settings');
+        if (find.byKey(const Key('settings-devices-row')).evaluate().isNotEmpty) {
+          await tapKey('settings-devices-row');
+          await capture('$desk-devices');
+        }
+      }
+    } finally {
+      await _resetEnvironment(tester);
+    }
+  });
+
   testWidgets('capture compact and expanded onboarding', (tester) async {
     try {
       await _prepareEnvironment(

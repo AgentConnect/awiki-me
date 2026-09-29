@@ -41,6 +41,7 @@ import '../shared/sidebar_workspace.dart';
 import '../shared/startup_splash.dart';
 import '../shared/tenant_management_dialog.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass.dart';
 import 'providers/app_update_provider.dart';
 import 'providers/app_runtime_provider.dart';
 import 'providers/message_sync_coordinator_provider.dart';
@@ -277,10 +278,17 @@ class _AppShellState extends ConsumerState<AppShell> {
             onProfileTap: _showDesktopIdentityDialog,
             child: page,
           )
-        : Column(
+        : compactDetailVisible
+        ? page
+        : Stack(
             children: <Widget>[
-              Expanded(child: page),
-              if (!compactDetailVisible) bottomNav,
+              Positioned.fill(
+                child: AwikiFloatingTabBarInset(
+                  inset: _compactTabBarInset(context),
+                  child: page,
+                ),
+              ),
+              Positioned(left: 0, right: 0, bottom: 0, child: bottomNav),
             ],
           );
 
@@ -291,14 +299,24 @@ class _AppShellState extends ConsumerState<AppShell> {
           children: <Widget>[
             e2eSemantics(
               identifier: 'e2e-authenticated',
-              child: AwikiMeWidgets.pageBackground(
-                key: const Key('app-shell-page-background'),
-                color: expanded ? null : context.awikiTheme.surface,
-                child: SafeArea(
-                  bottom: false,
-                  child: AwikiSystemNavigationClearance(child: content),
-                ),
-              ),
+              child: expanded
+                  ? AwikiMeWidgets.pageBackground(
+                      key: const Key('app-shell-page-background'),
+                      child: SafeArea(
+                        bottom: false,
+                        child: AwikiSystemNavigationClearance(child: content),
+                      ),
+                    )
+                  : AwikiGlassBackdrop(
+                      key: const Key('app-shell-page-background'),
+                      color: awikiCompactListBackground(context),
+                      child: SafeArea(
+                        bottom: false,
+                        child: compactDetailVisible
+                            ? AwikiSystemNavigationClearance(child: content)
+                            : content,
+                      ),
+                    ),
             ),
             if (pendingJoinRequest != null)
               _DeviceJoinRequestBanner(
@@ -1307,6 +1325,18 @@ class _DesktopPlaceholderPage extends StatelessWidget {
   }
 }
 
+/// Reference `--tab-h`: the floating capsule's height.
+const double _compactTabBarHeight = 62;
+
+/// Space the floating bar reserves above the device's bottom inset.
+double _compactTabBarGap(BuildContext context) {
+  final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+  return safeBottom - 8 > 12 ? safeBottom - 8 : 12;
+}
+
+double _compactTabBarInset(BuildContext context) =>
+    _compactTabBarHeight + _compactTabBarGap(context) + 12;
+
 class _BottomNavBar extends StatelessWidget {
   const _BottomNavBar({
     required this.currentDestination,
@@ -1314,68 +1344,100 @@ class _BottomNavBar extends StatelessWidget {
     required this.onTap,
   });
 
+  static const List<ShellDestination> _order = <ShellDestination>[
+    ShellDestination.messages,
+    ShellDestination.agents,
+    ShellDestination.contacts,
+    ShellDestination.profile,
+  ];
+
   final ShellDestination currentDestination;
   final int unreadCount;
   final ValueChanged<ShellDestination> onTap;
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    return DecoratedBox(
-      key: const Key('compact-bottom-navigation'),
-      decoration: BoxDecoration(
-        color: context.awikiTheme.surface,
-        border: Border(top: BorderSide(color: theme.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.fromLTRB(4, 2, 4, 0),
-        child: SizedBox(
-          height: 62,
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: _BottomNavItem(
-                  key: const Key('compact-nav-messages'),
-                  label: context.l10n.shellNavMessages,
-                  semanticsIdentifier: 'e2e-messages-tab',
-                  role: AwikiMeIconRole.messages,
-                  active: currentDestination == ShellDestination.messages,
-                  badge: _formatUnreadBadge(unreadCount),
-                  onTap: () => onTap(ShellDestination.messages),
-                ),
-              ),
-              Expanded(
-                child: _BottomNavItem(
-                  key: const Key('compact-nav-contacts'),
-                  label: context.l10n.shellNavContacts,
-                  semanticsIdentifier: 'e2e-contacts-tab',
-                  role: AwikiMeIconRole.contacts,
-                  active: currentDestination == ShellDestination.contacts,
-                  onTap: () => onTap(ShellDestination.contacts),
-                ),
-              ),
-              Expanded(
-                child: _BottomNavItem(
-                  key: const Key('compact-nav-agents'),
-                  label: context.l10n.shellNavAgents,
-                  semanticsIdentifier: 'e2e-agents-tab',
-                  role: AwikiMeIconRole.agents,
-                  active: currentDestination == ShellDestination.agents,
-                  onTap: () => onTap(ShellDestination.agents),
-                ),
-              ),
-              Expanded(
-                child: _BottomNavItem(
-                  key: const Key('compact-nav-profile'),
-                  label: context.l10n.shellNavMe,
-                  semanticsIdentifier: 'e2e-profile-tab',
-                  role: AwikiMeIconRole.profile,
-                  active: currentDestination == ShellDestination.profile,
-                  onTap: () => onTap(ShellDestination.profile),
-                ),
-              ),
-            ],
+    final l10n = context.l10n;
+    final selectedIndex = _order.indexOf(currentDestination);
+    const radius = BorderRadius.all(Radius.circular(_compactTabBarHeight / 2));
+    return Padding(
+      padding: EdgeInsets.fromLTRB(14, 0, 14, _compactTabBarGap(context)),
+      child: SizedBox(
+        key: const Key('compact-bottom-navigation'),
+        height: _compactTabBarHeight,
+        child: AwikiGlassSurface(
+          borderRadius: radius,
+          padding: const EdgeInsets.all(5),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final slot = constraints.maxWidth / _order.length;
+              return Stack(
+                children: <Widget>[
+                  if (selectedIndex >= 0)
+                    AnimatedPositioned(
+                      key: const Key('compact-nav-lens'),
+                      duration: const Duration(milliseconds: 450),
+                      curve: const Cubic(0.3, 1.35, 0.5, 1),
+                      top: 0,
+                      bottom: 0,
+                      left: slot * selectedIndex,
+                      width: slot,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: context.awikiTheme.glassLens,
+                          borderRadius: BorderRadius.circular(26),
+                          border: Border.all(
+                            color: context.awikiTheme.glassEdgeActive,
+                            width: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  Row(
+                    children: <Widget>[
+                      for (final destination in _order)
+                        Expanded(
+                          child: switch (destination) {
+                            ShellDestination.messages => _BottomNavItem(
+                              key: const Key('compact-nav-messages'),
+                              label: l10n.shellNavMessages,
+                              semanticsIdentifier: 'e2e-messages-tab',
+                              role: AwikiMeIconRole.messages,
+                              active: currentDestination == destination,
+                              badge: _formatUnreadBadge(unreadCount),
+                              onTap: () => onTap(destination),
+                            ),
+                            ShellDestination.agents => _BottomNavItem(
+                              key: const Key('compact-nav-agents'),
+                              label: l10n.shellNavAgents,
+                              semanticsIdentifier: 'e2e-agents-tab',
+                              role: AwikiMeIconRole.agents,
+                              active: currentDestination == destination,
+                              onTap: () => onTap(destination),
+                            ),
+                            ShellDestination.contacts => _BottomNavItem(
+                              key: const Key('compact-nav-contacts'),
+                              label: l10n.shellNavContacts,
+                              semanticsIdentifier: 'e2e-contacts-tab',
+                              role: AwikiMeIconRole.contacts,
+                              active: currentDestination == destination,
+                              onTap: () => onTap(destination),
+                            ),
+                            _ => _BottomNavItem(
+                              key: const Key('compact-nav-profile'),
+                              label: l10n.shellNavMe,
+                              semanticsIdentifier: 'e2e-profile-tab',
+                              role: AwikiMeIconRole.profile,
+                              active: currentDestination == destination,
+                              onTap: () => onTap(destination),
+                            ),
+                          },
+                        ),
+                    ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -1403,105 +1465,67 @@ class _BottomNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final iconSize = responsive.scaled(22);
-    final labelFontSize = responsive.scaled(10.5);
-    final iconSlotSize = responsive.scaled(30);
     final foreground = active
-        ? context.awikiTheme.primary
-        : context.awikiTheme.secondaryText;
-    Widget buildNavIcon() {
-      final icon = AwikiMeSemanticIcon(
-        role: role,
-        selected: active,
-        color: foreground,
-        size: iconSize,
-      );
-      final badgeLabel = badge;
-      return SizedBox(
-        width: iconSlotSize,
-        height: iconSlotSize,
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: <Widget>[
-            icon,
-            if (badgeLabel != null)
-              Positioned(
-                top: 0,
-                right: responsive.scaled(-4),
-                child: _NavUnreadBadge(label: badgeLabel),
-              ),
-          ],
-        ),
-      );
-    }
-
-    return Stack(
-      fit: StackFit.expand,
-      children: <Widget>[
-        AppPressable(
-          onTap: onTap,
-          semanticLabel: label,
-          semanticsIdentifier: semanticsIdentifier,
-          selected: active,
-          scaleOnPress: true,
-          pressedScale: 0.96,
-          borderRadius: BorderRadius.circular(responsive.radius(10)),
-          child: ExcludeSemantics(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
-              curve: Curves.easeOut,
-              width: double.infinity,
-              height: double.infinity,
-              padding: EdgeInsets.fromLTRB(
-                responsive.spacing(4),
-                responsive.scaled(2),
-                responsive.spacing(4),
-                responsive.spacing(4),
-              ),
-              color: CupertinoColors.transparent,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: <Widget>[
-                  buildNavIcon(),
-                  SizedBox(height: responsive.scaled(2)),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      softWrap: false,
-                      style: TextStyle(
-                        color: foreground,
-                        fontSize: labelFontSize,
-                        fontWeight: active ? FontWeight.w400 : FontWeight.w400,
-                        height: 1,
-                      ),
+        ? context.awikiTheme.primaryDark
+        : context.awikiTheme.title;
+    final badgeLabel = badge;
+    return AppPressable(
+      onTap: onTap,
+      semanticLabel: label,
+      semanticsIdentifier: semanticsIdentifier,
+      selected: active,
+      scaleOnPress: true,
+      pressedScale: 0.92,
+      borderRadius: BorderRadius.circular(26),
+      child: ExcludeSemantics(
+        child: SizedBox.expand(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              SizedBox.square(
+                dimension: 26,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: <Widget>[
+                    AwikiMeSemanticIcon(
+                      role: role,
+                      selected: active,
+                      color: foreground,
+                      size: 22,
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        if (active)
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              key: Key('compact-nav-active-indicator:${role.name}'),
-              width: responsive.scaled(28),
-              height: responsive.scaled(3),
-              decoration: BoxDecoration(
-                color: context.awikiTheme.primary,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(3),
+                    if (badgeLabel != null)
+                      Positioned(
+                        top: -3,
+                        left: 16,
+                        child: _NavUnreadBadge(label: badgeLabel),
+                      ),
+                  ],
                 ),
               ),
-            ),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  key: active
+                      ? Key('compact-nav-active-indicator:${role.name}')
+                      : null,
+                  maxLines: 1,
+                  softWrap: false,
+                  textScaler: TextScaler.noScaling,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w400,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ],
           ),
-      ],
+        ),
+      ),
     );
   }
 }

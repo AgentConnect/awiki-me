@@ -645,7 +645,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shellNavSettings => '设置';
 
   @override
-  String get shellNavMe => '我';
+  String get shellNavMe => '我的';
 
   @override
   String get shellTasksPlaceholderTitle => '任务';

@@ -36,6 +36,7 @@ import '../shared/formatters/markdown_preview_formatter.dart';
 import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass.dart';
 import '../profile/peer_display_profile_provider.dart';
 import 'conversation_list_ordering.dart';
 import 'conversation_peer_classifier.dart';
@@ -482,14 +483,17 @@ class _ConversationFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final phone = context.awikiResponsive.isPhone;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
+      padding: phone
+          ? const EdgeInsets.fromLTRB(16, 6, 16, 10)
+          : const EdgeInsets.fromLTRB(12, 2, 12, 6),
       child: Row(
         children: <Widget>[
           for (final filter in _ConversationFilter.values)
             Padding(
-              padding: const EdgeInsets.only(right: 2),
+              padding: EdgeInsets.only(right: phone ? 8 : 2),
               child: AppPressable(
                 key: Key('conversation-filter-${filter.name}'),
                 semanticLabel: switch (filter) {
@@ -501,35 +505,58 @@ class _ConversationFilterBar extends StatelessWidget {
                 },
                 selected: filter == value,
                 onTap: () => onChanged(filter),
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: filter == value
-                        ? theme.subtleSurface
-                        : CupertinoColors.transparent,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    switch (filter) {
-                      _ConversationFilter.all => context.l10n.friendsTabAll,
-                      _ConversationFilter.unread =>
-                        context.l10n.conversationsFilterUnread,
-                      _ConversationFilter.agent => context.l10n.shellNavAgents,
-                      _ConversationFilter.group =>
-                        context.l10n.friendsTabGroups,
-                    },
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: filter == value
-                          ? theme.title
-                          : theme.secondaryText,
-                    ),
-                  ),
-                ),
+                borderRadius: BorderRadius.circular(phone ? 18 : 16),
+                child: phone
+                    ? SizedBox(
+                        height: 36,
+                        child: AwikiGlassSurface(
+                          key: Key('conversation-filter-chip-${filter.name}'),
+                          selected: filter == value,
+                          borderRadius: BorderRadius.circular(18),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Center(
+                            widthFactor: 1,
+                            child: Text(
+                              _conversationFilterLabel(context, filter),
+                              style: TextStyle(
+                                fontSize: 15,
+                                height: 1.2,
+                                color: theme.title,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: filter == value
+                              ? theme.subtleSurface
+                              : CupertinoColors.transparent,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          switch (filter) {
+                            _ConversationFilter.all =>
+                              context.l10n.friendsTabAll,
+                            _ConversationFilter.unread =>
+                              context.l10n.conversationsFilterUnread,
+                            _ConversationFilter.agent =>
+                              context.l10n.shellNavAgents,
+                            _ConversationFilter.group =>
+                              context.l10n.friendsTabGroups,
+                          },
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: filter == value
+                                ? theme.title
+                                : theme.secondaryText,
+                          ),
+                        ),
+                      ),
               ),
             ),
         ],
@@ -537,6 +564,16 @@ class _ConversationFilterBar extends StatelessWidget {
     );
   }
 }
+
+String _conversationFilterLabel(
+  BuildContext context,
+  _ConversationFilter filter,
+) => switch (filter) {
+  _ConversationFilter.all => context.l10n.friendsTabAll,
+  _ConversationFilter.unread => context.l10n.conversationsFilterUnread,
+  _ConversationFilter.agent => context.l10n.shellNavAgents,
+  _ConversationFilter.group => context.l10n.friendsTabGroups,
+};
 
 String? _selectedConversationKey(String? value) {
   final key = value?.trim();
@@ -767,7 +804,14 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
           )
         else
           SliverPadding(
-            padding: EdgeInsets.only(bottom: bottomInset),
+            padding: responsive.isPhone
+                ? EdgeInsets.fromLTRB(
+                    6,
+                    0,
+                    6,
+                    bottomInset + AwikiFloatingTabBarInset.of(context),
+                  )
+                : EdgeInsets.only(bottom: bottomInset),
             sliver: SliverList.builder(
               itemCount: visibleConversations.length,
               itemBuilder: (_, index) {
@@ -991,6 +1035,42 @@ class _CompactConversationSearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
+    if (responsive.isPhone) {
+      return Padding(
+        key: const Key('compact-conversation-search-surface'),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        child: SizedBox(
+          height: 44,
+          child: AwikiGlassSurface(
+            borderRadius: BorderRadius.circular(22),
+            child: CupertinoSearchTextField(
+              key: const Key('conversation-search-field'),
+              controller: controller,
+              placeholder: context.l10n.conversationsSearchPlaceholder,
+              onChanged: onChanged,
+              style: TextStyle(fontSize: 16, color: theme.title),
+              placeholderStyle: TextStyle(
+                fontSize: 16,
+                color: theme.secondaryText,
+              ),
+              prefixIcon: Icon(
+                CupertinoIcons.search,
+                color: theme.secondaryText,
+                size: 17,
+              ),
+              suffixIcon: Icon(
+                CupertinoIcons.xmark_circle_fill,
+                color: theme.tertiaryText,
+                size: 17,
+              ),
+              prefixInsets: const EdgeInsetsDirectional.only(start: 14),
+              decoration: const BoxDecoration(),
+              padding: const EdgeInsetsDirectional.fromSTEB(8, 10, 12, 10),
+            ),
+          ),
+        ),
+      );
+    }
     return DecoratedBox(
       key: const Key('compact-conversation-search-surface'),
       decoration: BoxDecoration(color: theme.surface),
@@ -1308,6 +1388,7 @@ class _ConversationRow extends StatelessWidget {
       context.l10n,
       classification,
     );
+    final phone = responsive.isPhone;
     return Stack(
       children: <Widget>[
         AppPressableTile(
@@ -1315,21 +1396,25 @@ class _ConversationRow extends StatelessWidget {
           onLongPress: onLongPress,
           selected: isSelected,
           semanticLabel: title,
-          borderRadius: BorderRadius.zero,
-          backgroundColor: theme.surface,
-          selectedBackgroundColor: theme.subtleSurface,
-          hoverColor: theme.subtleSurface,
-          pressedColor: theme.mutedSurface,
+          borderRadius: phone ? BorderRadius.circular(16) : BorderRadius.zero,
+          backgroundColor: phone ? const Color(0x00000000) : theme.surface,
+          selectedBackgroundColor: phone
+              ? theme.glassLens
+              : theme.subtleSurface,
+          hoverColor: phone ? theme.glassLens : theme.subtleSurface,
+          pressedColor: phone ? theme.glassLens : theme.mutedSurface,
           duration: AwikiMeMotion.instant,
           interactionExitDuration: Duration.zero,
           animateSelection: false,
-          padding: EdgeInsets.symmetric(
-            horizontal: responsive.spacing(16),
-            vertical: responsive.spacing(12),
-          ),
+          padding: phone
+              ? const EdgeInsets.symmetric(horizontal: 10, vertical: 12)
+              : EdgeInsets.symmetric(
+                  horizontal: responsive.spacing(16),
+                  vertical: responsive.spacing(12),
+                ),
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              minHeight: responsive.displayScaled(50),
+              minHeight: responsive.displayScaled(phone ? 44 : 50),
             ),
             child: Row(
               children: <Widget>[
@@ -1339,7 +1424,7 @@ class _ConversationRow extends StatelessWidget {
                   children: <Widget>[
                     AvatarBadge(
                       seed: title,
-                      size: responsive.displayScaled(48),
+                      size: phone ? 40 : responsive.displayScaled(48),
                       avatarUri: avatarUri,
                     ),
                     if (unreadCount > 0)
@@ -1378,7 +1463,7 @@ class _ConversationRow extends StatelessWidget {
                                     isDeletedAgentConversation,
                                 compact: false,
                                 titleStyle: TextStyle(
-                                  fontSize: 15.5,
+                                  fontSize: phone ? 16 : 15.5,
                                   fontWeight: FontWeight.w400,
                                   color: theme.title,
                                   height: 1.25,
@@ -1442,16 +1527,17 @@ class _ConversationRow extends StatelessWidget {
             ),
           ),
         ),
-        Positioned(
-          left: 80,
-          right: 0,
-          bottom: 0,
-          child: SizedBox(
-            key: Key('conversation-row-separator:$conversationId'),
-            height: 1,
-            child: ColoredBox(color: theme.border),
+        if (!phone)
+          Positioned(
+            left: 80,
+            right: 0,
+            bottom: 0,
+            child: SizedBox(
+              key: Key('conversation-row-separator:$conversationId'),
+              height: 1,
+              child: ColoredBox(color: theme.border),
+            ),
           ),
-        ),
       ],
     );
   }

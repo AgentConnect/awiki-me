@@ -4,6 +4,7 @@ import '../../l10n/l10n.dart';
 import 'awiki_me_design.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
+import 'widgets/awiki_glass.dart';
 
 enum AwikiMeTopBarTitleLayout { centered, adaptive }
 
@@ -177,6 +178,15 @@ class AwikiMeShellTopBar extends StatelessWidget {
       leading: const SizedBox.shrink(),
       trailing: onQuickActionsTap == null
           ? const SizedBox.shrink()
+          : responsive.isPhone && _isPlusIcon(quickActionIcon)
+          ? Builder(
+              builder: (anchorContext) => AwikiCircledPlusButton(
+                key: const Key('shell-quick-actions-button'),
+                onTap: () => onQuickActionsTap!(anchorContext),
+                semanticsIdentifier: 'e2e-quick-actions-button',
+                semanticsLabel: context.l10n.commonMoreActions,
+              ),
+            )
           : Builder(
               builder: (anchorContext) => TopBarActionButton(
                 key: const Key('shell-quick-actions-button'),
@@ -193,6 +203,12 @@ class AwikiMeShellTopBar extends StatelessWidget {
     );
   }
 }
+
+bool _isPlusIcon(IconData icon) =>
+    icon == CupertinoIcons.add_circled ||
+    icon == CupertinoIcons.add ||
+    icon == CupertinoIcons.plus ||
+    icon == CupertinoIcons.plus_circle;
 
 class AwikiMeBrandMark extends StatelessWidget {
   const AwikiMeBrandMark({super.key, this.size});
@@ -236,29 +252,42 @@ class AwikiMeShellTabPage extends StatelessWidget {
     final innerPadding = responsive.isPhone
         ? const EdgeInsets.symmetric(horizontal: 8)
         : responsive.tabInnerPadding;
+    // Phone root pages let the shell's glow canvas show through; headers
+    // float without a divider, like the reference's glass title bars.
+    final phone = responsive.isPhone;
+    final body = Column(
+      children: <Widget>[
+        DecoratedBox(
+          key: phone ? const Key('shell-compact-header') : null,
+          decoration: BoxDecoration(
+            color: phone ? null : theme.surface,
+            border: phone
+                ? null
+                : Border(bottom: BorderSide(color: theme.border)),
+          ),
+          child: Padding(
+            padding: responsive.scaledInsets(innerPadding),
+            child: AwikiMeShellTopBar(
+              title: title,
+              onQuickActionsTap: onQuickActionsTap,
+              quickActionIcon: quickActionIcon,
+            ),
+          ),
+        ),
+        Expanded(child: child),
+      ],
+    );
+    if (phone) {
+      return AwikiGlassBackdrop(
+        key: const Key('shell-tab-page-surface'),
+        color: awikiCompactListBackground(context),
+        child: body,
+      );
+    }
     return ColoredBox(
       key: const Key('shell-tab-page-surface'),
       color: theme.surface,
-      child: Column(
-        children: <Widget>[
-          DecoratedBox(
-            key: responsive.isPhone ? const Key('shell-compact-header') : null,
-            decoration: BoxDecoration(
-              color: theme.surface,
-              border: Border(bottom: BorderSide(color: theme.border)),
-            ),
-            child: Padding(
-              padding: responsive.scaledInsets(innerPadding),
-              child: AwikiMeShellTopBar(
-                title: title,
-                onQuickActionsTap: onQuickActionsTap,
-                quickActionIcon: quickActionIcon,
-              ),
-            ),
-          ),
-          Expanded(child: child),
-        ],
-      ),
+      child: body,
     );
   }
 }

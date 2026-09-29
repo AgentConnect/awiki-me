@@ -349,6 +349,12 @@ class AwikiMeSemanticColors {
     required this.incomingMessage,
     required this.outgoingMessage,
     required this.onOutgoingMessage,
+    this.glass = const Color(0x80FFFFFF),
+    this.glassLens = const Color(0x142D2B26),
+    this.glassEdge = const Color(0x1F262F38),
+    this.glassEdgeActive = const Color(0x29262F38),
+    this.glowPrimary = const Color(0x6BADDBFB),
+    this.glowSecondary = const Color(0x6BFFE1C7),
   });
 
   final Color canvas;
@@ -375,6 +381,18 @@ class AwikiMeSemanticColors {
   final Color incomingMessage;
   final Color outgoingMessage;
   final Color onOutgoingMessage;
+
+  /// Phone liquid-glass material: an even frosted fill with a hairline edge.
+  final Color glass;
+
+  /// Selected segment/tab tint that sits on top of [glass].
+  final Color glassLens;
+  final Color glassEdge;
+  final Color glassEdgeActive;
+
+  /// Soft brand light painted behind phone glass so the blur has color.
+  final Color glowPrimary;
+  final Color glowSecondary;
 
   static AwikiMeSemanticColors lerp(
     AwikiMeSemanticColors a,
@@ -408,6 +426,12 @@ class AwikiMeSemanticColors {
       incomingMessage: blend(a.incomingMessage, b.incomingMessage),
       outgoingMessage: blend(a.outgoingMessage, b.outgoingMessage),
       onOutgoingMessage: blend(a.onOutgoingMessage, b.onOutgoingMessage),
+      glass: blend(a.glass, b.glass),
+      glassLens: blend(a.glassLens, b.glassLens),
+      glassEdge: blend(a.glassEdge, b.glassEdge),
+      glassEdgeActive: blend(a.glassEdgeActive, b.glassEdgeActive),
+      glowPrimary: blend(a.glowPrimary, b.glowPrimary),
+      glowSecondary: blend(a.glowSecondary, b.glowSecondary),
     );
   }
 }
@@ -477,6 +501,13 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
   Color get incomingMessage => semanticColors.incomingMessage;
   Color get outgoingMessage => semanticColors.outgoingMessage;
   Color get onOutgoingMessage => semanticColors.onOutgoingMessage;
+  Color get glass => semanticColors.glass;
+  Color get glassLens => semanticColors.glassLens;
+  Color get glassEdge => semanticColors.glassEdge;
+  Color get glassEdgeActive => semanticColors.glassEdgeActive;
+  Color get glowPrimary => semanticColors.glowPrimary;
+  Color get glowSecondary => semanticColors.glowSecondary;
+  bool get isDark => colorScheme.brightness == Brightness.dark;
   Color get alert => AwikiMePalette.alert;
   Color get warningContainer => colorScheme.brightness == Brightness.dark
       ? const Color(0xFF493B22)
@@ -584,6 +615,12 @@ class AwikiMeTheme {
     incomingMessage: Color(0xFF2C2E31),
     outgoingMessage: Color(0xFF1A4B73),
     onOutgoingMessage: Color(0xFFEBF3F9),
+    glass: Color(0x752F3339),
+    glassLens: Color(0x24E6E8EA),
+    glassEdge: Color(0x1AFFFFFF),
+    glassEdgeActive: Color(0x24FFFFFF),
+    glowPrimary: Color(0x820E4F86),
+    glowSecondary: Color(0x74573222),
   );
 
   static final ColorScheme darkColorScheme = ColorScheme.dark(
