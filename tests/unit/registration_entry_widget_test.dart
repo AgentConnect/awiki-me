@@ -2,7 +2,6 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/registration_entry_provider.dart';
-import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:awiki_me/src/core/app_error_classifier.dart';
@@ -339,7 +338,7 @@ void main() {
     },
   );
   testWidgets(
-    'existing account keeps recovery available inside the fixed form',
+    'existing account does not offer recovery before OTP verification',
     (tester) async {
       tester.view.physicalSize = const Size(390, 1000);
       tester.view.devicePixelRatio = 1;
@@ -367,8 +366,7 @@ void main() {
             w is AppSecondaryButton &&
             w.semanticsIdentifier == 'e2e-existing-recovery',
       );
-      await tapVisible(tester, recovery);
-      expect(find.byType(HandleRecoveryPage), findsOneWidget);
+      expect(recovery, findsNothing);
       expect(gateway.sendOtpCalls, 1);
       expect(gateway.registerHandleCalls, 0);
     },
