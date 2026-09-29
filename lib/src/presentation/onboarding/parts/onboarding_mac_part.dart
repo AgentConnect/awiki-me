@@ -952,9 +952,18 @@ class _MacRegisterForm extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final registrationCheckBusy = ref.watch(
-      registrationEntryProvider.select((entry) => entry.busy),
+    final registrationCheck = ref.watch(
+      registrationEntryProvider.select(
+        (entry) => (entry.busy, entry.busyAction),
+      ),
     );
+    final registrationCheckBusy = registrationCheck.$1;
+    final sendCheckBusy =
+        registrationCheckBusy &&
+        registrationCheck.$2 == RegistrationEntryBusyAction.sendVerification;
+    final submitCheckBusy =
+        registrationCheckBusy &&
+        registrationCheck.$2 == RegistrationEntryBusyAction.submitRegistration;
     if (onboarding.isServerInfoLoading) {
       return _OnboardingCapabilityPanel(
         loading: true,
@@ -1011,7 +1020,10 @@ class _MacRegisterForm extends ConsumerWidget {
           const SizedBox(height: 22),
           _MacPrimaryAction(
             label: context.l10n.onboardingCompleteRegister,
-            onPressed: onboarding.isBusy ? null : onSubmitRegister,
+            isLoading: submitCheckBusy,
+            onPressed: onboarding.isBusy || registrationCheckBusy
+                ? null
+                : onSubmitRegister,
           ),
         ],
       );
@@ -1052,7 +1064,7 @@ class _MacRegisterForm extends ConsumerWidget {
                       otpCooldown.remainingSeconds,
                     )
                   : context.l10n.onboardingSendOtp,
-              isLoading: registrationCheckBusy,
+              isLoading: sendCheckBusy,
               onPressed:
                   onboarding.isBusy ||
                       registrationCheckBusy ||
@@ -1071,7 +1083,11 @@ class _MacRegisterForm extends ConsumerWidget {
             width: double.infinity,
             child: _MacPrimaryAction(
               label: context.l10n.onboardingPhoneLoginOrRegisterAction,
-              onPressed: onboarding.isBusy || !onboarding.canSubmitPhoneOtp
+              isLoading: submitCheckBusy,
+              onPressed:
+                  onboarding.isBusy ||
+                      registrationCheckBusy ||
+                      !onboarding.canSubmitPhoneOtp
                   ? null
                   : onSubmitRegister,
             ),
@@ -1104,7 +1120,7 @@ class _MacRegisterForm extends ConsumerWidget {
                     onboarding.emailResendCountdown,
                   )
                 : context.l10n.onboardingSendActivationEmail,
-            isLoading: registrationCheckBusy,
+            isLoading: sendCheckBusy,
             onPressed:
                 onboarding.isBusy ||
                     registrationCheckBusy ||
@@ -1122,11 +1138,16 @@ class _MacRegisterForm extends ConsumerWidget {
           child: onboarding.emailVerified
               ? _MacPrimaryAction(
                   label: context.l10n.onboardingCompleteEmailRegister,
-                  onPressed: onboarding.isBusy ? null : onSubmitRegister,
+                  isLoading: submitCheckBusy,
+                  onPressed: onboarding.isBusy || registrationCheckBusy
+                      ? null
+                      : onSubmitRegister,
                 )
               : _MacSecondaryAction(
                   label: context.l10n.onboardingCheckActivationStatus,
-                  onPressed: onboarding.isBusy ? null : onCheckEmailActivation,
+                  onPressed: onboarding.isBusy || registrationCheckBusy
+                      ? null
+                      : onCheckEmailActivation,
                 ),
         ),
       ],
@@ -1330,18 +1351,23 @@ class _MacInlineAction extends StatelessWidget {
 }
 
 class _MacPrimaryAction extends StatelessWidget {
-  const _MacPrimaryAction({required this.label, this.onPressed});
+  const _MacPrimaryAction({
+    required this.label,
+    this.onPressed,
+    this.isLoading = false,
+  });
 
   final String label;
   final VoidCallback? onPressed;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     return AppPressable(
-      onTap: onPressed,
+      onTap: isLoading ? null : onPressed,
       semanticLabel: label,
       tooltip: label,
-      enabled: onPressed != null,
+      enabled: onPressed != null && !isLoading,
       scaleOnPress: true,
       pressedScale: 0.985,
       borderRadius: BorderRadius.circular(9),
@@ -1367,24 +1393,34 @@ class _MacPrimaryAction extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Stack(
+          alignment: Alignment.center,
           children: <Widget>[
-            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  style: const TextStyle(
-                    color: CupertinoColors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w400,
-                    height: 1,
+            Opacity(
+              opacity: isLoading ? 0 : 1,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        style: const TextStyle(
+                          color: CupertinoColors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                          height: 1,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
+            if (isLoading)
+              const CupertinoActivityIndicator(color: CupertinoColors.white),
           ],
         ),
       ),

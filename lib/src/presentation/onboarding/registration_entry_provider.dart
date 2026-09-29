@@ -9,6 +9,8 @@ import '../../application/tenant/app_tenant.dart';
 
 enum RegistrationEntryStep { account, invite, verification }
 
+enum RegistrationEntryBusyAction { sendVerification, submitRegistration }
+
 class RegistrationEntryState {
   const RegistrationEntryState({
     this.step = RegistrationEntryStep.account,
@@ -17,6 +19,7 @@ class RegistrationEntryState {
     this.domain = '',
     this.inviteCode = '',
     this.busy = false,
+    this.busyAction,
     this.error,
     this.errorDetail,
     this.existingAccountPath = false,
@@ -28,6 +31,7 @@ class RegistrationEntryState {
   final String domain;
   final String inviteCode;
   final bool busy;
+  final RegistrationEntryBusyAction? busyAction;
   final String? error;
   final String? errorDetail;
   final bool existingAccountPath;
@@ -178,6 +182,9 @@ class RegistrationEntryController
       inviteCode:
           inviteCode?.trim() ?? (sameAccount ? previousState.inviteCode : ''),
       busy: true,
+      busyAction: requireInvite
+          ? RegistrationEntryBusyAction.submitRegistration
+          : RegistrationEntryBusyAction.sendVerification,
       existingAccountPath: sameAccount && previousState.existingAccountPath,
     );
     try {

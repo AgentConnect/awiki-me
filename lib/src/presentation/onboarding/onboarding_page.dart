@@ -292,9 +292,18 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     required AwikiResponsiveInfo responsive,
     required AwikiMeThemeTokens theme,
   }) {
-    final registrationCheckBusy = ref.watch(
-      registrationEntryProvider.select((entry) => entry.busy),
+    final registrationCheck = ref.watch(
+      registrationEntryProvider.select(
+        (entry) => (entry.busy, entry.busyAction),
+      ),
     );
+    final registrationCheckBusy = registrationCheck.$1;
+    final sendCheckBusy =
+        registrationCheckBusy &&
+        registrationCheck.$2 == RegistrationEntryBusyAction.sendVerification;
+    final submitCheckBusy =
+        registrationCheckBusy &&
+        registrationCheck.$2 == RegistrationEntryBusyAction.submitRegistration;
     if (onboarding.isServerInfoLoading) {
       return <Widget>[
         _OnboardingCapabilityPanel(
@@ -365,7 +374,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           child: AppPrimaryButton(
             label: context.l10n.onboardingCompleteRegister,
             semanticsIdentifier: 'e2e-complete-login-button',
-            onPressed: onboarding.isBusy
+            isLoading: submitCheckBusy,
+            onPressed: onboarding.isBusy || registrationCheckBusy
                 ? null
                 : () => _submitRegister(context),
           ),
@@ -419,7 +429,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     otpCooldown.remainingSeconds,
                   )
                 : context.l10n.onboardingSendOtp,
-            isLoading: registrationCheckBusy,
+            isLoading: sendCheckBusy,
             onPressed:
                 onboarding.isBusy ||
                     registrationCheckBusy ||
@@ -440,7 +450,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           child: AppPrimaryButton(
             label: context.l10n.onboardingPhoneLoginOrRegisterAction,
             semanticsIdentifier: 'e2e-complete-login-button',
-            onPressed: onboarding.isBusy || !onboarding.canSubmitPhoneOtp
+            isLoading: submitCheckBusy,
+            onPressed:
+                onboarding.isBusy ||
+                    registrationCheckBusy ||
+                    !onboarding.canSubmitPhoneOtp
                 ? null
                 : () => _submitRegister(context),
           ),
@@ -468,7 +482,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     onboarding.emailResendCountdown,
                   )
                 : context.l10n.onboardingSendActivationEmail,
-            isLoading: registrationCheckBusy,
+            isLoading: sendCheckBusy,
             onPressed:
                 onboarding.isBusy ||
                     registrationCheckBusy ||
@@ -490,13 +504,16 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               ? AppPrimaryButton(
                   label: context.l10n.onboardingCompleteEmailRegister,
                   semanticsIdentifier: 'e2e-complete-login-button',
-                  onPressed: onboarding.isBusy
+                  isLoading: submitCheckBusy,
+                  onPressed: onboarding.isBusy || registrationCheckBusy
                       ? null
                       : () => _submitRegister(context),
                 )
               : AppSecondaryButton(
                   label: context.l10n.onboardingCheckActivationStatus,
-                  onPressed: onboarding.isBusy ? null : _checkEmailActivation,
+                  onPressed: onboarding.isBusy || registrationCheckBusy
+                      ? null
+                      : _checkEmailActivation,
                 ),
         ),
       ],
