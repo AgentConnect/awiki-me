@@ -272,6 +272,7 @@ class _AppShellState extends ConsumerState<AppShell> {
             unreadCount: unreadCount,
             session: session.session,
             profile: profile,
+            online: realtimeStatus == RealtimeConnectionStatus.connected,
             onTap: (next) {
               ref.read(shellDestinationProvider.notifier).selectExpanded(next);
             },
@@ -853,6 +854,7 @@ class _DesktopShell extends StatelessWidget {
     required this.unreadCount,
     required this.session,
     required this.profile,
+    required this.online,
     required this.onTap,
     required this.onProfileTap,
     required this.child,
@@ -862,6 +864,7 @@ class _DesktopShell extends StatelessWidget {
   final int unreadCount;
   final SessionIdentity? session;
   final UserProfile? profile;
+  final bool online;
   final ValueChanged<ShellDestination> onTap;
   final VoidCallback onProfileTap;
   final Widget child;
@@ -883,6 +886,7 @@ class _DesktopShell extends StatelessWidget {
             unreadCount: unreadCount,
             session: session,
             profile: profile,
+            online: online,
             onTap: onTap,
             onProfileTap: onProfileTap,
           ),
@@ -964,6 +968,7 @@ class _DesktopRail extends StatelessWidget {
     required this.unreadCount,
     required this.session,
     required this.profile,
+    required this.online,
     required this.onTap,
     required this.onProfileTap,
   });
@@ -972,6 +977,7 @@ class _DesktopRail extends StatelessWidget {
   final int unreadCount;
   final SessionIdentity? session;
   final UserProfile? profile;
+  final bool online;
   final ValueChanged<ShellDestination> onTap;
   final VoidCallback onProfileTap;
 
@@ -994,6 +1000,7 @@ class _DesktopRail extends StatelessWidget {
                 labelOverride: avatar.labelOverride,
                 avatarUri: avatar.avatarUri,
                 userId: avatar.userId,
+                online: online,
                 onTap: onProfileTap,
               ),
               SizedBox(height: responsive.displayScaled(compact ? 10 : 12)),
@@ -1038,15 +1045,6 @@ class _DesktopRail extends StatelessWidget {
                         label: context.l10n.shellNavTasks,
                         selected: currentDestination == ShellDestination.tasks,
                         onTap: () => onTap(ShellDestination.tasks),
-                      ),
-                      SizedBox(height: gap),
-                      _DesktopRailItem(
-                        key: const Key('desktop-rail-workbench'),
-                        role: AwikiMeIconRole.workbench,
-                        label: context.l10n.shellNavWorkspace,
-                        selected:
-                            currentDestination == ShellDestination.workbench,
-                        onTap: () => onTap(ShellDestination.workbench),
                       ),
                     ],
                   ),
@@ -1253,6 +1251,7 @@ class _DesktopRailAvatar extends StatelessWidget {
     this.labelOverride,
     this.avatarUri,
     this.userId,
+    this.online = false,
     required this.onTap,
   });
 
@@ -1260,6 +1259,9 @@ class _DesktopRailAvatar extends StatelessWidget {
   final String? labelOverride;
   final String? avatarUri;
   final String? userId;
+
+  /// Mirrors the realtime connection, not a presence claim to peers.
+  final bool online;
   final VoidCallback onTap;
 
   @override
@@ -1281,14 +1283,37 @@ class _DesktopRailAvatar extends StatelessWidget {
             borderRadius: BorderRadius.circular(responsive.displayScaled(19)),
             border: Border.all(color: context.awikiTheme.border),
           ),
-          child: Center(
-            child: AvatarBadge(
-              seed: seed,
-              size: responsive.displayScaled(34),
-              labelOverride: labelOverride,
-              avatarUri: avatarUri,
-              userId: userId,
-            ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              Center(
+                child: AvatarBadge(
+                  seed: seed,
+                  size: responsive.displayScaled(34),
+                  labelOverride: labelOverride,
+                  avatarUri: avatarUri,
+                  userId: userId,
+                ),
+              ),
+              if (online)
+                Positioned(
+                  right: responsive.displayScaled(-1),
+                  bottom: responsive.displayScaled(-1),
+                  child: Container(
+                    key: const Key('mac-me-rail-online-dot'),
+                    width: responsive.displayScaled(10),
+                    height: responsive.displayScaled(10),
+                    decoration: BoxDecoration(
+                      color: context.awikiTheme.success,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: context.awikiTheme.navigationSurface,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
