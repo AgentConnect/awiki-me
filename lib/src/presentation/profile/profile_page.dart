@@ -959,7 +959,11 @@ class _CompactMeLink extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: theme.title, fontSize: 16),
+                  style: TextStyle(
+                    color: theme.title,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
               ),
               if (meta != null) ...<Widget>[

@@ -19,6 +19,7 @@ import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
 import 'package:flutter/cupertino.dart'
     show CupertinoIcons, CupertinoPageScaffold;
 import 'package:flutter/foundation.dart';
@@ -163,10 +164,7 @@ void main() {
               .isNotEmpty) {
             final send = find.byKey(const Key('chat-send-button'));
             expect(tester.widget<AppIconButton>(send).onPressed, isNull);
-            expect(
-              find.descendant(of: send, matching: find.text('发送')),
-              findsOneWidget,
-            );
+            expect(tester.widget<AppIconButton>(send).semanticLabel, '发送');
             expect(
               tester
                   .getRect(find.byKey(const Key('chat-attachment-button')))
@@ -272,7 +270,10 @@ void main() {
         await capture('$desk-contacts');
         await tapKey('desktop-rail-settings');
         await capture('$desk-settings');
-        if (find.byKey(const Key('settings-devices-row')).evaluate().isNotEmpty) {
+        if (find
+            .byKey(const Key('settings-devices-row'))
+            .evaluate()
+            .isNotEmpty) {
           await tapKey('settings-devices-row');
           await capture('$desk-devices');
         }
@@ -573,10 +574,11 @@ void main() {
         tester.getSize(
           find.byKey(const Key('peer-profile-send-message-visual')),
         ),
-        Size(_compactSize.width - 32, 56),
+        const Size(32, 32),
       );
       expect(find.byKey(const Key('peer-profile-follow')), findsNothing);
       expect(find.byKey(const Key('peer-profile-unfollow')), findsOneWidget);
+      expect(find.text('已关注'), findsOneWidget);
       expect(
         tester
             .widget<Text>(
@@ -589,22 +591,18 @@ void main() {
             ?.fontSize,
         16,
       );
-      final sendActionRect = tester.getRect(
-        find.byKey(const Key('peer-profile-send-message-visual')),
+      expect(
+        tester
+            .getSize(find.byKey(const Key('peer-profile-delete-thread-visual')))
+            .height,
+        52,
       );
-      final clearActionRect = tester.getRect(
-        find.byKey(const Key('peer-profile-delete-thread-visual')),
-      );
-      expect(clearActionRect.height, 56);
-      expect(sendActionRect.left, clearActionRect.left);
-      expect(sendActionRect.right, clearActionRect.right);
-      expect(sendActionRect.bottom, lessThan(clearActionRect.top));
       await _captureScreenshot(tester, '09e-compact-contact-profile');
 
       await tester.tap(find.bySemanticsLabel('返回'));
       await _pumpVisualFrames(tester);
 
-      await tester.tap(find.bySemanticsLabel('我'));
+      await tester.tap(find.bySemanticsLabel('我的'));
       await _pumpVisualFrames(tester);
       expect(find.byKey(const Key('profile-compact-summary')), findsOneWidget);
       expect(find.byKey(const Key('profile-back-button')), findsNothing);
@@ -615,70 +613,6 @@ void main() {
       _expectCompactProfileGeometry(tester);
       await _captureScreenshot(tester, '10-compact-profile');
 
-      final navigation = find.byKey(const Key('profile-navigation-group'));
-      final collapsedHeight = tester.getSize(navigation).height;
-      await tester.tap(find.byKey(const Key('profile-did-row')));
-      await _pumpVisualFrames(tester);
-      final didDetails = tester.getRect(
-        find.byKey(const Key('profile-did-details')),
-      );
-      expect(didDetails.height, 84);
-      expect(didDetails.width, _compactSize.width);
-      expect(
-        didDetails.top,
-        tester.getRect(find.byKey(const Key('profile-did-row'))).bottom,
-      );
-      expect(tester.getSize(navigation).height, collapsedHeight + 84);
-      expect(
-        tester.widget<Text>(find.byKey(const Key('profile-did-value'))).data,
-        _sessionDid,
-      );
-      expect(
-        tester.getSize(find.byKey(const Key('profile-copy-did-button'))),
-        const Size.square(44),
-      );
-      expect(find.byKey(const Key('profile-homepage-details')), findsNothing);
-      expect(
-        tester.widget<Icon>(find.byKey(const Key('profile-did-arrow'))).icon,
-        CupertinoIcons.chevron_down,
-      );
-      await _captureScreenshot(tester, '10a-compact-profile-did-expanded');
-
-      await tester.tap(find.byKey(const Key('profile-homepage-row')));
-      await _pumpVisualFrames(tester);
-      expect(find.byKey(const Key('profile-did-details')), findsNothing);
-      final homepageDetails = tester.getRect(
-        find.byKey(const Key('profile-homepage-details')),
-      );
-      expect(homepageDetails.height, 64);
-      expect(homepageDetails.width, _compactSize.width);
-      expect(
-        homepageDetails.top,
-        tester.getRect(find.byKey(const Key('profile-homepage-row'))).bottom,
-      );
-      expect(tester.getSize(navigation).height, collapsedHeight + 64);
-      expect(
-        tester
-            .widget<Text>(find.byKey(const Key('profile-homepage-value')))
-            .data,
-        contains('ui-reviewer.awiki.ai'),
-      );
-      expect(
-        tester.getSize(find.byKey(const Key('profile-homepage-action-target'))),
-        const Size.square(44),
-      );
-      expect(
-        tester
-            .widget<Icon>(find.byKey(const Key('profile-homepage-arrow')))
-            .icon,
-        CupertinoIcons.chevron_down,
-      );
-      await _captureScreenshot(tester, '10c-compact-profile-homepage-expanded');
-
-      await tester.tap(find.byKey(const Key('profile-homepage-row')));
-      await _pumpVisualFrames(tester);
-      expect(find.byKey(const Key('profile-homepage-details')), findsNothing);
-      expect(tester.getSize(navigation).height, collapsedHeight);
       // Compact identity-card editing was replaced by the owned profile editor.
       await tester.tap(find.byKey(const Key('profile-edit-button')));
       await tester.pumpAndSettle(
@@ -717,8 +651,7 @@ void main() {
       await _captureScreenshot(tester, '11-compact-settings');
 
       final securityGroup = find.byKey(const Key('settings-security-group'));
-      expect(tester.getSize(securityGroup).width, _compactSize.width);
-      expect(tester.getSize(securityGroup).height, 244);
+      expect(tester.getSize(securityGroup).width, _compactSize.width - 32);
       expect(
         tester.getSize(
           find.byKey(const Key('settings-delete-credential-icon')),
@@ -748,7 +681,7 @@ void main() {
       await _pumpVisualFrames(tester);
       await _captureScreenshot(tester, '12-expanded-contacts');
 
-      await tester.tap(find.bySemanticsLabel('我'));
+      await tester.tap(find.bySemanticsLabel('我的'));
       await _pumpVisualFrames(tester);
       expect(
         find.byKey(const Key('desktop-current-identity-dialog')),
@@ -1449,130 +1382,84 @@ void _expectCompactAgentGeometry(
   expect(title.style?.fontWeight, FontWeight.w400);
   expect(title.style?.height, 1.25);
   expect(
-    tester.widget<ColoredBox>(find.byKey(const Key('agents-list-pane'))).color,
-    AwikiMeColors.background,
+    tester
+        .widget<AwikiGlassBackdrop>(find.byKey(const Key('agents-list-pane')))
+        .color,
+    AwikiMeColors.surface,
   );
-  expect(section.top, closeTo(64, 0.1));
-  expect(section.height, closeTo(60, 0.1));
-  final sectionSurface = tester.widget<DecoratedBox>(
-    find.descendant(
-      of: find.byKey(const Key('agents-compact-section-header')),
-      matching: find.byType(DecoratedBox),
-    ),
-  );
-  final sectionDecoration = sectionSurface.decoration as BoxDecoration;
-  expect(sectionDecoration.color, AwikiMeColors.surface);
-  expect(
-    (sectionDecoration.border! as Border).bottom.color,
-    AwikiMeColors.border,
-  );
-  expect(
-    tester.getCenter(find.byKey(const Key('agents-more-actions-button'))).dx,
-    closeTo(300 + (_compactSize.width - 390), 1.5),
-  );
+  // Section label, glass tree card and install row stack inside a 16-unit
+  // gutter under the divider-less header.
+  expect(section.top, closeTo(68, 0.1));
+  expect(section.left, closeTo(16, 0.1));
+  expect(section.height, closeTo(36, 0.1));
   expect(
     tester.getCenter(find.byKey(const Key('agents-install-daemon-button'))).dx,
     closeTo(356 + (_compactSize.width - 390), 1.5),
   );
-  expect(daemon.top, closeTo(124, 0.1));
-  expect(daemon.height, closeTo(65, 0.1));
-  expect(install.top, closeTo(340, 0.1));
-  expect(install.height, closeTo(56, 0.1));
+  expect(daemon.top, closeTo(108, 0.1));
+  expect(daemon.height, closeTo(64, 0.1));
+  expect(install.height, closeTo(52, 0.1));
+  expect(install.left, closeTo(16, 0.1));
 }
 
 void _expectCompactProfileGeometry(WidgetTester tester) {
   Rect rect(String key) => tester.getRect(find.byKey(Key(key)));
-  final header = rect('profile-compact-header');
   final summary = rect('profile-compact-summary');
   final avatar = rect('profile-avatar');
-  final edit = rect('profile-edit-button');
   final navigation = rect('profile-navigation-group');
-  final did = rect('profile-did-row');
-  final homepage = rect('profile-homepage-row');
-  final settings = rect('profile-settings-row');
 
-  expect(header, Rect.fromLTWH(0, 0, _compactSize.width, 64));
-  final title = tester.widget<Text>(
-    find.descendant(
-      of: find.byKey(const Key('profile-compact-header')),
-      matching: find.text('我'),
-    ),
-  );
-  expect(title.style?.fontSize, 16);
-  expect(title.style?.fontWeight, FontWeight.w400);
-  expect(title.style?.height, 1.25);
+  // The root Me tab has no title bar; the glass identity card leads.
+  expect(find.byKey(const Key('profile-compact-header')), findsNothing);
   expect(
     tester
-        .widget<ColoredBox>(find.byKey(const Key('shell-tab-page-surface')))
+        .widget<AwikiGlassBackdrop>(
+          find.byKey(const Key('shell-tab-page-surface')),
+        )
         .color,
-    AwikiMeColors.background,
+    AwikiMeColors.surface,
   );
-  final headerDecoration =
-      tester
-              .widget<DecoratedBox>(
-                find.byKey(const Key('profile-compact-header')),
-              )
-              .decoration
-          as BoxDecoration;
-  expect(headerDecoration.color, AwikiMeColors.surface);
-  expect(headerDecoration.border, isNull);
-  expect(summary.top, header.bottom);
-  expect(summary.left, 0);
-  expect(summary.width, _compactSize.width);
-  final summaryWidget = tester.widget<Container>(
-    find.byKey(const Key('profile-compact-summary')),
+  expect(summary.left, 16);
+  expect(summary.top, 16);
+  expect(summary.width, _compactSize.width - 32);
+  expect(
+    tester.widget(find.byKey(const Key('profile-compact-summary'))),
+    isA<AwikiGlassSurface>(),
   );
-  expect(summaryWidget.decoration, isNull);
-  expect(summaryWidget.color, AwikiMeColors.surface);
-  expect(avatar.size, const Size.square(72));
-  expect(avatar.left, 32);
-  expect(edit.top, summary.top);
-  expect(edit.width, summary.width);
-  expect(edit.height, greaterThanOrEqualTo(104));
+  expect(avatar.size, const Size.square(64));
   expect(find.byKey(const Key('profile-edit-chevron')), findsOneWidget);
   final displayName = tester.widget<Text>(
     find.byKey(const Key('profile-display-name')),
   );
   expect(displayName.data, 'UI Reviewer');
   expect(displayName.maxLines, 1);
+  expect(displayName.style?.fontSize, 20);
   expect(displayName.style?.fontWeight, FontWeight.w400);
+  expect(
+    tester.widget<Text>(find.byKey(const Key('profile-handle-value'))).data,
+    '@ui-reviewer.awiki.ai',
+  );
   expect(rect('profile-statistics').height, 30);
-  expect(rect('profile-statistics-top-divider').top, edit.bottom);
-  expect(navigation.top - summary.bottom, 8);
-  expect(navigation.width, _compactSize.width);
-  expect(navigation.height, 166);
-  expect(did.top, navigation.top + 1);
-  expect(homepage.top, did.bottom + 1);
-  expect(settings.top - homepage.bottom, 8);
+  expect(navigation.top - summary.bottom, 14);
+  expect(navigation.left, 16);
+  expect(navigation.width, _compactSize.width - 32);
   for (final key in [
-    'profile-did-row',
+    'profile-devices-row',
     'profile-homepage-row',
     'profile-settings-row',
   ]) {
-    expect(rect(key).height, 52);
-    expect(rect(key).width, _compactSize.width);
+    expect(rect(key).height, 52, reason: key);
   }
-  for (final role in ['did', 'homepage', 'settings']) {
-    expect(rect('profile-$role-icon-target').size, const Size.square(44));
-    expect(
-      tester.widget<Icon>(find.byKey(Key('profile-$role-arrow'))).icon,
-      CupertinoIcons.chevron_right,
-    );
-  }
-  for (final text in ['DID', '主页', '设置']) {
+  for (final text in ['设备管理', '主页', '设置']) {
     final label = tester.widget<Text>(find.text(text));
     expect(label.style?.fontSize, 16);
     expect(label.style?.fontWeight, FontWeight.w400);
-    expect(label.style?.height, 1.25);
   }
   for (final key in [
-    'profile-handle-value',
-    'profile-statistics-divider',
+    'profile-did-row',
+    'profile-did-value',
     'profile-identity-document-row',
     'profile-identity-document',
     'profile-identity-empty-state',
-    'profile-did-value',
-    'profile-homepage-value',
   ]) {
     expect(find.byKey(Key(key)), findsNothing);
   }
@@ -1590,22 +1477,18 @@ void _expectCompactSettingsGeometry(WidgetTester tester) {
     tester
         .widget<CupertinoPageScaffold>(find.byType(CupertinoPageScaffold))
         .backgroundColor,
-    AwikiMeColors.background,
+    AwikiMeColors.surface,
   );
-  expect(rect('settings-back-button'), const Rect.fromLTWH(8, 10, 44, 44));
-  expect(profile, Rect.fromLTWH(0, header.bottom, _compactSize.width, 104));
-  expect(rect('settings-profile-avatar'), const Rect.fromLTWH(20, 87, 58, 58));
-  expect(account.top - profile.bottom, 40);
-  expect(app.top - account.bottom, 40);
-  expect(security.top - app.bottom, 40);
+  expect(rect('settings-back-button'), const Rect.fromLTWH(12, 10, 44, 44));
+  expect(profile.height, 84);
+  expect(profile.top, greaterThan(account.top));
+  expect(rect('settings-profile-avatar').size, const Size.square(52));
+  expect(app.top - account.bottom, 14);
+  expect(security.top - app.bottom, 14);
   for (final group in [account, app, security]) {
-    expect(group.left, 0);
-    expect(group.width, _compactSize.width);
+    expect(group.left, 16);
+    expect(group.width, _compactSize.width - 32);
   }
-  // One device row, four App rows, four security rows, each with a hairline.
-  expect(account.height, 61);
-  expect(app.height, 244);
-  expect(security.height, 244);
   for (final key in [
     'settings-devices-row',
     'settings-current-version-row',
@@ -1616,8 +1499,9 @@ void _expectCompactSettingsGeometry(WidgetTester tester) {
     'settings-logout-row',
     'settings-delete-credential-row',
   ]) {
-    expect(rect(key).height, 60);
+    expect(rect(key).height, 52, reason: key);
   }
+  expect(security.bottom, lessThan(_compactSize.height));
   expect(find.byKey(const Key('settings-personal-agent-row')), findsNothing);
   expect(find.byKey(const Key('settings-danger-section-title')), findsNothing);
   expect(rect('settings-current-version-icon').size, const Size.square(24));
