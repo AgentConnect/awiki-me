@@ -3,6 +3,10 @@ import 'dart:async';
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/app_locale.dart';
+import 'package:awiki_me/src/app/app_appearance.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/settings/display_settings_page.dart';
+import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/agent/agent_control_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
@@ -24,7 +28,6 @@ import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
-import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -86,6 +89,108 @@ void main() {
       );
       expect(container.read(activeAppTenantProvider).didHost, 'awiki.info');
     });
+
+    for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+      testWidgets(
+        '$platform settings entry changes the actual App appearance',
+        (tester) async {
+          debugDefaultTargetPlatformOverride = platform;
+          tester.view
+            ..devicePixelRatio = 1
+            ..physicalSize = const Size(390, 844);
+          addTearDown(() {
+            debugDefaultTargetPlatformOverride = null;
+            tester.view.resetPhysicalSize();
+            tester.view.resetDevicePixelRatio();
+          });
+          await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+          await pumpUntilAppShellReady(tester, loggedIn: false);
+          final context = tester.element(find.byType(OnboardingPage));
+          Navigator.of(context).push(
+            CupertinoPageRoute<void>(builder: (_) => const SettingsPage()),
+          );
+          await tester.pumpAndSettle();
+          final entry = find.byKey(const Key('settings-display-row'));
+          await tester.ensureVisible(entry);
+          await tester.tap(entry);
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const Key('window-placement-reset-row')),
+            findsNothing,
+          );
+          for (final appearance in [AppAppearance.dark, AppAppearance.light]) {
+            await tester.tap(find.byKey(Key('appearance-${appearance.name}')));
+            await tester.pumpAndSettle();
+            final pageContext = tester.element(
+              find.byType(DisplaySettingsPage),
+            );
+            final brightness = appearance == AppAppearance.dark
+                ? Brightness.dark
+                : Brightness.light;
+            expect(pageContext.awikiTheme.colorScheme.brightness, brightness);
+            expect(CupertinoTheme.of(pageContext).brightness, brightness);
+          }
+          expect(tester.takeException(), isNull);
+          debugDefaultTargetPlatformOverride = null;
+        },
+      );
+    }
+
+    testWidgets(
+      'appearance settings update the App and system mode follows brightness changes',
+      (tester) async {
+        tester.binding.platformDispatcher.platformBrightnessTestValue =
+            Brightness.dark;
+        addTearDown(
+          tester.binding.platformDispatcher.clearPlatformBrightnessTestValue,
+        );
+        await _pumpDesktopOnboarding(tester, AwikiMeApp(bootstrap: bootstrap));
+        BuildContext appContext() =>
+            tester.element(find.byType(OnboardingPage, skipOffstage: false));
+        final container = ProviderScope.containerOf(appContext());
+        expect(appContext().awikiTheme.colorScheme.brightness, Brightness.dark);
+        expect(CupertinoTheme.of(appContext()).brightness, Brightness.dark);
+        Navigator.of(appContext()).push(
+          CupertinoPageRoute<void>(builder: (_) => const DisplaySettingsPage()),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('appearance-light')));
+        await tester.pumpAndSettle();
+        expect(container.read(appAppearanceProvider), AppAppearance.light);
+        expect(
+          appContext().awikiTheme.colorScheme.brightness,
+          Brightness.light,
+        );
+        tester.binding.platformDispatcher.platformBrightnessTestValue =
+            Brightness.light;
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('appearance-dark')));
+        await tester.pumpAndSettle();
+        expect(appContext().awikiTheme.colorScheme.brightness, Brightness.dark);
+        await tester.tap(find.byKey(const Key('appearance-system')));
+        await tester.pumpAndSettle();
+        expect(
+          appContext().awikiTheme.colorScheme.brightness,
+          Brightness.light,
+        );
+        tester.binding.platformDispatcher.platformBrightnessTestValue =
+            Brightness.dark;
+        await tester.pumpAndSettle();
+        expect(appContext().awikiTheme.colorScheme.brightness, Brightness.dark);
+        final overlay = tester
+            .widgetList<AnnotatedRegion<SystemUiOverlayStyle>>(
+              find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+            )
+            .first
+            .value;
+        expect(overlay.systemNavigationBarIconBrightness, Brightness.light);
+        expect(
+          overlay.systemNavigationBarColor,
+          appContext().awikiTheme.background,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets('uses English when system locale is English', (tester) async {
       tester.binding.platformDispatcher.localesTestValue = const <Locale>[
@@ -250,10 +355,12 @@ void main() {
         await tester.tap(find.text('+86'));
         await tester.pump();
 
-        Finder phoneEditable() => find.descendant(
-          of: find.byType(AppTextField).first,
-          matching: find.byType(EditableText),
-        );
+        Finder phoneEditable() => find
+            .descendant(
+              of: find.byKey(const Key('onboarding-mac-auth-card')),
+              matching: find.byType(EditableText),
+            )
+            .first;
         final focusNode = tester
             .widget<EditableText>(phoneEditable())
             .focusNode;
@@ -269,10 +376,12 @@ void main() {
         expect(resizedFocusNode.hasFocus, isTrue);
 
         await tester.enterText(
-          find.descendant(
-            of: find.byType(AppTextField).first,
-            matching: find.byType(CupertinoTextField),
-          ),
+          find
+              .descendant(
+                of: find.byKey(const Key('onboarding-mac-auth-card')),
+                matching: find.byType(CupertinoTextField),
+              )
+              .first,
           '13800138000',
         );
         await tester.pump();

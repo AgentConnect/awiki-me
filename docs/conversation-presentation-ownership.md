@@ -106,6 +106,7 @@ Rust im-core
 | conversation preview | Rust `im-core` conversation summary + `awiki-me` mapper/overlay | SDK snapshot、conversation patch、latest renderable core message projection | `ConversationListProvider`、conversation workspace |
 | control payload 会话预览可见性 | `awiki-me` mapper / realtime projection | SDK message 的 `body.text` + `payloadJson` | 只允许带显式可见文本的 control payload 更新 recents 预览；payload-only control 继续隐藏 |
 | `hidden`、`pinned`、`muted` | `awiki-me` `ProductLocalStore` | `ConversationService.setThreadHidden`、`hideConversationFromRecents`、`restoreConversationToRecents` | `ImCoreConversationService` 加载 overlay 后过滤、排序和展示 |
+| 会话列表类别筛选与搜索 | App 列表组件的临时展示状态 | 全部/未读/智能体/群组按钮与搜索输入 | 在现有会话集合上取交集后排序；未读只读 projected count，智能体复用 peer classifier，群组读取 canonical kind。不得删除 base row、写 hidden overlay 或改变 read state；筛选隐藏行不清除已打开详情的 canonical selection |
 | Direct `customTitle`、`avatarSeed` | `awiki-me` `ProductLocalStore` | `ProductLocalStore.upsertConversationOverlay` | `customTitle` 仅作为旧本地备注数据保留，不参与当前身份主名称解析；未来如恢复备注功能必须作为显式次级信息展示。`avatarSeed` 仍为 App overlay |
 | 当前账号 Agent inventory topology | User Service 权威、AWiki Me `ProductLocalStore` v4 展示 cache | 版本化完整快照；App 只通过 `replaceAgentInventorySnapshot` 单事务替换 | Agent 页面；topology 不覆盖独立 status，也不替代 Core committed Agent control projection |
 | 当前账号 Agent latest status | User Service 权威、AWiki Me `ProductLocalStore` v4 展示 cache | 独立 status version；`replaceAgentStatusSnapshot` 单事务替换 | Agent 页面将 status 按 `agentDid` 叠加到 topology；status 不能改变 `activeState` 或重新激活 Agent |

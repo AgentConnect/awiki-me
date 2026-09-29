@@ -9,6 +9,21 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String get chatMentionMember => 'Mention a group member';
+
+  @override
+  String get settingsAppearance => 'Appearance';
+
+  @override
+  String get appearanceSystem => 'Follow system';
+
+  @override
+  String get appearanceLight => 'Light';
+
+  @override
+  String get appearanceDark => 'Dark';
+
+  @override
   String get appTitle => 'AWikiMe';
 
   @override
@@ -773,6 +788,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get friendsSearchGroupsPlaceholder => 'Search groups';
+
+  @override
+  String get conversationsFilterUnread => 'Unread';
 
   @override
   String get friendsTabAll => 'All';

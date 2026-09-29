@@ -27,6 +27,7 @@ import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
+import 'package:awiki_me/src/presentation/conversation_list/conversation_peer_classifier.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_workspace_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_page.dart';
@@ -148,6 +149,112 @@ const _groupWorkspaceSession = SessionIdentity(
 );
 
 void main() {
+  for (final size in <Size>[const Size(390, 844), const Size(1280, 800)]) {
+    testWidgets('会话筛选与搜索组合且不修改原始会话 $size', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = size;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final items = <ConversationSummary>[
+        for (final id in <String>['human', 'agent', 'group'])
+          ConversationSummary(
+            conversationId: 'filter-$id',
+            threadId: 'filter-$id',
+            displayName: 'Filter $id',
+            lastMessagePreview: '$id message',
+            lastMessageAt: DateTime(2026, 9, 28),
+            unreadCount: id == 'agent' ? 0 : 1,
+            isGroup: id == 'group',
+            targetDid: 'did:test:$id',
+          ),
+      ];
+      final gateway = FakeAwikiGateway()..conversations = items;
+      late _StaticConversationListController controller;
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const ConversationWorkspacePage(),
+          gateway: gateway,
+          providerOverrides: <Override>[
+            conversationListProvider.overrideWith((ref) {
+              controller = _StaticConversationListController(ref, items);
+              return controller;
+            }),
+            conversationPeerClassificationProvider.overrideWith((
+              ref,
+              target,
+            ) async {
+              if (target.isGroup) {
+                return const ConversationPeerClassification.group();
+              }
+              if (target.targetDid == 'did:test:agent') {
+                return const ConversationPeerClassification.agent();
+              }
+              return const ConversationPeerClassification.human();
+            }),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      Finder row(String id) => find.byKey(Key('conversation-row:filter-$id'));
+      Future<void> filter(String id) async {
+        final button = find.byKey(Key('conversation-filter-$id'));
+        await tester.ensureVisible(button);
+        await tester.tap(button);
+        await tester.pumpAndSettle();
+        expect(tester.widget<AppPressable>(button).selected, isTrue);
+      }
+
+      expect(row('human'), findsOneWidget);
+      expect(row('agent'), findsOneWidget);
+      expect(row('group'), findsOneWidget);
+      await filter('unread');
+      expect(row('human'), findsOneWidget);
+      expect(row('agent'), findsNothing);
+      expect(row('group'), findsOneWidget);
+      final search = find.byKey(const Key('conversation-search-field'));
+      await tester.enterText(search, 'human');
+      await tester.pumpAndSettle();
+      expect(row('human'), findsOneWidget);
+      expect(row('group'), findsNothing);
+      await filter('group');
+      expect(row('human'), findsNothing);
+      expect(row('group'), findsNothing);
+      expect(controller.state.conversations.length, 3);
+      expect(controller.state.unreadCount, 2);
+      await tester.enterText(search, '');
+      await tester.pumpAndSettle();
+      expect(row('group'), findsOneWidget);
+      await filter('agent');
+      expect(row('agent'), findsOneWidget);
+      expect(row('human'), findsNothing);
+      expect(row('group'), findsNothing);
+      await filter('unread');
+      controller.upsertConversation(items.first.copyWith(unreadCount: 0));
+      await tester.pumpAndSettle();
+      expect(row('human'), findsNothing);
+      expect(row('group'), findsOneWidget);
+      await filter('all');
+      expect(row('human'), findsOneWidget);
+      expect(row('agent'), findsOneWidget);
+      expect(controller.state.conversations.length, 3);
+      if (size.width > 700) {
+        await tester.tap(row('human'));
+        await tester.pumpAndSettle();
+        await filter('group');
+        expect(row('human'), findsNothing);
+        expect(find.byType(ChatView), findsOneWidget);
+        expect(
+          ProviderScope.containerOf(
+            tester.element(find.byType(ConversationWorkspacePage)),
+          ).read(selectedConversationProvider),
+          'filter-human',
+        );
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets('会话行头像和昵称复用 Persona Profile 投影', (tester) async {
     const ownerDid = 'did:wba:awiki.info:user:me:e1_current';
     const peerDid = 'did:wba:awiki.info:user:zhuocheng:e1_peer';
@@ -789,9 +896,14 @@ void main() {
     );
     expect(selectedTile.hoverColor, CupertinoColors.transparent);
     expect(selectedTile.hoverBoxShadow, isEmpty);
-    expect(selectedTile.selectedBoxShadow, AwikiMeShadows.selectedListItem);
+    expect(selectedTile.selectedBoxShadow, isEmpty);
+    expect(selectedTile.selectedBackgroundColor, AwikiMeColors.subtleSurface);
     expect(
-      unselectedTiles.every((tile) => tile.hoverColor == AwikiMeColors.surface),
+      unselectedTiles.every(
+        (tile) =>
+            tile.hoverColor ==
+            AwikiMeColors.subtleSurface.withValues(alpha: 0.65),
+      ),
       isTrue,
     );
     expect(
@@ -801,9 +913,7 @@ void main() {
       isTrue,
     );
     expect(
-      unselectedTiles.every(
-        (tile) => tile.hoverBoxShadow == AwikiMeShadows.hoveredListItem,
-      ),
+      unselectedTiles.every((tile) => tile.hoverBoxShadow?.isEmpty == true),
       isTrue,
     );
 
@@ -2791,10 +2901,10 @@ void main() {
 
     expect(find.byKey(const Key('mac-desktop-rail-slot')), findsOneWidget);
     expect(find.byKey(const Key('conversation-search-field')), findsOneWidget);
-    expect(find.text('智能体'), findsOneWidget);
+    expect(find.byTooltip('智能体'), findsOneWidget);
     expect(find.byKey(const Key('mac-conversation-list-pane')), findsOneWidget);
 
-    await tester.tap(find.text('任务'));
+    await tester.tap(find.byKey(const Key('desktop-rail-tasks')));
     await tester.pumpAndSettle();
     expect(find.textContaining('任务视图即将接入'), findsOneWidget);
 
@@ -2860,8 +2970,8 @@ void main() {
       'https://cdn.example/mia.png',
     );
     expect(find.byKey(const Key('conversation-search-field')), findsOneWidget);
-    expect(find.text('智能体'), findsOneWidget);
-    expect(find.text('Agents'), findsNothing);
+    expect(find.byTooltip('智能体'), findsOneWidget);
+    expect(find.byTooltip('Agents'), findsNothing);
     expect(find.byKey(const Key('mac-messages-unread-badge')), findsOneWidget);
     expect(
       find.descendant(
@@ -2883,20 +2993,20 @@ void main() {
       find.descendant(of: unreadBadge, matching: find.text('3')),
       findsOneWidget,
     );
-    await tester.tap(find.text('任务'));
+    await tester.tap(find.byKey(const Key('desktop-rail-tasks')));
     await tester.pumpAndSettle();
     expect(find.textContaining('任务视图即将接入'), findsOneWidget);
 
-    await tester.tap(find.text('工作台'));
+    await tester.tap(find.byKey(const Key('desktop-rail-workbench')));
     await tester.pumpAndSettle();
     expect(find.textContaining('工作台模块即将接入'), findsOneWidget);
 
-    await tester.tap(find.text('消息'));
+    await tester.tap(find.byKey(const Key('desktop-rail-messages')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('conversation-search-field')), findsOneWidget);
     expect(conversationRow, findsOneWidget);
 
-    await tester.tap(find.text('联系人'));
+    await tester.tap(find.byKey(const Key('desktop-rail-contacts')));
     await tester.pumpAndSettle();
     expect(find.text('联系人'), findsWidgets);
 
@@ -2918,7 +3028,7 @@ void main() {
     await tester.tap(find.byKey(const Key('desktop-current-identity-close')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('设置').first);
+    await tester.tap(find.byKey(const Key('desktop-rail-settings')));
     await tester.pumpAndSettle();
     expect(find.byType(SettingsPage), findsOneWidget);
     expect(find.text('设置'), findsWidgets);
@@ -2931,7 +3041,7 @@ void main() {
     expect(settingsPaneSize.width, closeTo(272, 0.1));
     expect(settingsPaneSize.width, lessThan(1280 - 64));
 
-    await tester.tap(find.text('消息'));
+    await tester.tap(find.byKey(const Key('desktop-rail-messages')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('conversation-search-field')), findsOneWidget);
 
@@ -3044,7 +3154,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.text('消息'));
+    await tester.tap(find.byKey(const Key('desktop-rail-messages')));
     await tester.pumpAndSettle();
     final row = find.byKey(Key('conversation-row:${initial.conversationId}'));
     expect(
@@ -3092,8 +3202,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('智能体'), findsOneWidget);
-    expect(find.text('Agents'), findsNothing);
+    expect(find.byTooltip('智能体'), findsOneWidget);
+    expect(find.byTooltip('Agents'), findsNothing);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -3111,8 +3221,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Agents'), findsOneWidget);
-    expect(find.text('智能体'), findsNothing);
+    expect(find.byTooltip('Agents'), findsOneWidget);
+    expect(find.byTooltip('智能体'), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -3180,11 +3290,11 @@ void main() {
     }
     expect(
       tester.getSize(find.byKey(const Key('desktop-rail-messages'))).width,
-      closeTo(54 * AwikiDisplayScale.layoutBaseline, 0.01),
+      closeTo(44 * AwikiDisplayScale.layoutBaseline, 0.01),
     );
     expect(
       railIcon(AwikiMeIconRole.messages).size,
-      closeTo(18 * AwikiDisplayScale.layoutBaseline, 0.01),
+      closeTo(22 * AwikiDisplayScale.layoutBaseline, 0.01),
     );
     expect(
       tester.getCenter(find.byKey(const Key('mac-me-rail-avatar'))).dy,
@@ -3199,7 +3309,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('联系人'));
+    await tester.tap(find.byKey(const Key('desktop-rail-contacts')));
     await tester.pumpAndSettle();
 
     expect(railIcon(AwikiMeIconRole.messages).selected, isFalse);
@@ -3262,10 +3372,12 @@ void main() {
       ..conversations = <ConversationSummary>[conversation];
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
-      tester.binding.setSurfaceSize(null);
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
     });
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    await tester.binding.setSurfaceSize(const Size(1280, 720));
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 720);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -3284,11 +3396,11 @@ void main() {
 
     expect(
       tester.getSize(find.byKey(const Key('mac-desktop-rail-slot'))).width,
-      closeTo(64 * AwikiDisplayScale.effective(1.12), 0.1),
+      closeTo(68 * AwikiDisplayScale.effective(1.12), 0.1),
     );
     expect(
       tester.getSize(find.byKey(const Key('mac-conversation-list-pane'))).width,
-      closeTo(272 * AwikiDisplayScale.effective(1.12), 0.1),
+      closeTo(264 * AwikiDisplayScale.effective(1.12), 0.1),
     );
 
     debugDefaultTargetPlatformOverride = null;
@@ -3439,6 +3551,14 @@ void main() {
     tester.view.devicePixelRatio = 1;
 
     for (final size in <Size>[
+      const Size(360, 800),
+      const Size(390, 844),
+      const Size(430, 932),
+      const Size(600, 960),
+      const Size(820, 1180),
+      const Size(1024, 768),
+      const Size(1366, 768),
+      const Size(1920, 1080),
       const Size(360, 780),
       const Size(393, 852),
       const Size(720, 600),
@@ -3477,6 +3597,17 @@ void main() {
       );
       if (!expectsExpanded) {
         expect(find.text('消息'), findsWidgets);
+      } else {
+        expect(
+          tester
+              .getSize(find.byKey(const Key('mac-conversation-list-pane')))
+              .width,
+          closeTo(
+            (size.width <= 920 ? 240 : 264) * AwikiDisplayScale.layoutBaseline,
+            0.1,
+          ),
+        );
+        expect(find.byTooltip('消息'), findsOneWidget);
       }
       await tester.tap(find.text('Marcus Chen').first);
       await tester.pumpAndSettle();
@@ -3534,7 +3665,13 @@ void main() {
       matching: find.byType(CupertinoTextField),
     );
     expect(find.byType(ChatView), findsOneWidget);
-    expect(find.text('智能体'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('compact-bottom-navigation')),
+        matching: find.text('智能体'),
+      ),
+      findsNothing,
+    );
     await tester.enterText(chatInput, '跨断点草稿');
     await tester.pump();
 
@@ -3553,7 +3690,13 @@ void main() {
 
     expect(find.byKey(const Key('mac-desktop-rail-slot')), findsNothing);
     expect(find.byType(ChatView), findsOneWidget);
-    expect(find.text('智能体'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('compact-bottom-navigation')),
+        matching: find.text('智能体'),
+      ),
+      findsNothing,
+    );
     expect(
       tester.widget<CupertinoTextField>(chatInput).controller!.text,
       '跨断点草稿',
@@ -3563,7 +3706,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatView), findsNothing);
-    expect(find.text('智能体'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('compact-bottom-navigation')),
+        matching: find.text('智能体'),
+      ),
+      findsOneWidget,
+    );
     expect(
       find.byKey(Key('conversation-row:${conversation.conversationId}')),
       findsOneWidget,
@@ -4182,11 +4331,23 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('消息'), findsWidgets);
-    expect(find.text('智能体'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('compact-bottom-navigation')),
+        matching: find.text('智能体'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('联系人'), findsOneWidget);
     expect(find.text('我'), findsOneWidget);
     expect(find.byKey(const Key('compact-bottom-navigation')), findsOneWidget);
-    expect(find.text('Agents'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('compact-bottom-navigation')),
+        matching: find.text('Agents'),
+      ),
+      findsNothing,
+    );
     final shellBackground = tester.widget<DecoratedBox>(
       find.byKey(const Key('app-shell-page-background')),
     );
@@ -4255,10 +4416,21 @@ void main() {
         .toList();
     expect(navLabels, ['消息', '联系人', '智能体', '我']);
 
-    await tester.tap(find.text('智能体'));
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const Key('compact-bottom-navigation')),
+        matching: find.text('智能体'),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.byType(AgentsWorkspacePage), findsOneWidget);
-    expect(find.text('智能体'), findsWidgets);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('compact-bottom-navigation')),
+        matching: find.text('智能体'),
+      ),
+      findsWidgets,
+    );
 
     await tester.tap(find.text('联系人'));
     await tester.pumpAndSettle();
@@ -4349,12 +4521,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Messages'), findsWidgets);
-    expect(find.text('Agents'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('compact-bottom-navigation')),
+        matching: find.text('Agents'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Contacts'), findsOneWidget);
     expect(find.text('Me'), findsOneWidget);
-    expect(find.text('智能体'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('compact-bottom-navigation')),
+        matching: find.text('智能体'),
+      ),
+      findsNothing,
+    );
 
-    await tester.tap(find.text('Agents'));
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const Key('compact-bottom-navigation')),
+        matching: find.text('Agents'),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.byType(AgentsWorkspacePage), findsOneWidget);
     expect(tester.takeException(), isNull);

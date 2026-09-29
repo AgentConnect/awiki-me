@@ -25,8 +25,8 @@ class AwikiMePalette {
   static const Color unreadRed = Color(0xFFFA5152);
   static const Color navigationSurface = Color(0xFFEEEDE9);
   static const Color navigationBorder = Color(0xFFDDDCD9);
-  static const Color chatSurface = Color(0xFFFAFAFA);
-  static const Color messageIncoming = Color(0xFFEEEEF0);
+  static const Color chatSurface = Color(0xFFFFFFFF);
+  static const Color messageIncoming = Color(0xFFF2F2F4);
   static const Color messageOutgoing = Color(0xFFB6E4FF);
   static const Color onMessageOutgoing = Color(0xFF0F304A);
   static const Color messagePreview = Color(0xFF9F9FA6);
@@ -265,6 +265,34 @@ class AwikiMeTypographyTokens {
     );
   }
 
+  AwikiMeTypographyTokens withColors(AwikiMeSemanticColors colors) {
+    TextStyle recolor(TextStyle style) => style.copyWith(
+      color: style.color == AwikiMePalette.mutedNeutral
+          ? colors.secondaryText
+          : style.color == AwikiMePalette.messagePreview
+          ? colors.tertiaryText
+          : style.color == null
+          ? null
+          : colors.body,
+    );
+    return copyWith(
+      displayTitle: recolor(displayTitle),
+      sectionTitle: recolor(sectionTitle),
+      navTitle: recolor(navTitle),
+      cardTitle: recolor(cardTitle),
+      cardSubtitle: recolor(cardSubtitle),
+      meta: recolor(meta),
+      listTitle: recolor(listTitle),
+      listSubtitle: recolor(listSubtitle),
+      listMeta: recolor(listMeta),
+      body: recolor(body),
+      messageBody: recolor(messageBody),
+      inputText: recolor(inputText),
+      fieldLabel: recolor(fieldLabel),
+      markdownBody: recolor(markdownBody),
+    );
+  }
+
   static AwikiMeTypographyTokens lerp(
     AwikiMeTypographyTokens a,
     AwikiMeTypographyTokens b,
@@ -450,8 +478,10 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
   Color get outgoingMessage => semanticColors.outgoingMessage;
   Color get onOutgoingMessage => semanticColors.onOutgoingMessage;
   Color get alert => AwikiMePalette.alert;
-  Color get warningContainer => AwikiMePalette.warningContainer;
-  Color get dangerContainer => AwikiMePalette.errorContainer;
+  Color get warningContainer => colorScheme.brightness == Brightness.dark
+      ? const Color(0xFF493B22)
+      : AwikiMePalette.warningContainer;
+  Color get dangerContainer => colorScheme.errorContainer;
   Color get infoAccent => AwikiMePalette.infoBlue;
 
   @override
@@ -525,8 +555,58 @@ class AwikiMeTheme {
     'Yu Gothic UI',
     'Malgun Gothic',
   ];
-  static final Map<TargetPlatform, AwikiMePlatformTheme> _platformThemes =
-      <TargetPlatform, AwikiMePlatformTheme>{};
+  static final Map<(TargetPlatform, Brightness), AwikiMePlatformTheme>
+  _platformThemes = <(TargetPlatform, Brightness), AwikiMePlatformTheme>{};
+
+  // sRGB equivalents of the reference HTML's OKLCH graphite appearance.
+  static const _darkColors = AwikiMeSemanticColors(
+    canvas: Color(0xFF181A1C),
+    surface: Color(0xFF1E1F22),
+    subtleSurface: Color(0xFF25272A),
+    mutedSurface: Color(0xFF2C2E31),
+    navigationSurface: Color(0xFF121417),
+    navigationBorder: Color(0xFF26282A),
+    chatSurface: Color(0xFF1E1F22),
+    border: Color(0xFF313336),
+    primary: Color(0xFF4BA6EC),
+    primaryPressed: Color(0xFF56ACF0),
+    primarySoft: Color(0xFF1A354D),
+    avatarBackground: Color(0xFF543E24),
+    avatarForeground: Color(0xFFF2DABA),
+    title: Color(0xFFE6E8EA),
+    body: Color(0xFFE6E8EA),
+    secondaryText: Color(0xFF9B9FA3),
+    tertiaryText: Color(0xFF9B9FA3),
+    success: Color(0xFF4AC06C),
+    warning: Color(0xFFEDB345),
+    danger: Color(0xFFF47B74),
+    unread: Color(0xFFFA5152),
+    incomingMessage: Color(0xFF2C2E31),
+    outgoingMessage: Color(0xFF1A4B73),
+    onOutgoingMessage: Color(0xFFEBF3F9),
+  );
+
+  static final ColorScheme darkColorScheme = ColorScheme.dark(
+    primary: _darkColors.primary,
+    onPrimary: const Color(0xFF0B1723),
+    secondary: _darkColors.primary,
+    onSecondary: const Color(0xFF0B1723),
+    surface: _darkColors.surface,
+    onSurface: _darkColors.body,
+    surfaceContainerLowest: _darkColors.canvas,
+    surfaceContainerLow: _darkColors.subtleSurface,
+    surfaceContainerHighest: _darkColors.mutedSurface,
+    onSurfaceVariant: _darkColors.secondaryText,
+    outline: _darkColors.secondaryText,
+    outlineVariant: _darkColors.border,
+    primaryContainer: _darkColors.primarySoft,
+    onPrimaryContainer: _darkColors.primary,
+    error: _darkColors.danger,
+    onError: const Color(0xFF301410),
+    errorContainer: const Color(0xFF4B2728),
+    onErrorContainer: _darkColors.danger,
+    surfaceTint: const Color(0x00000000),
+  );
 
   static const ColorScheme colorScheme = ColorScheme(
     brightness: Brightness.light,
@@ -829,20 +909,26 @@ class AwikiMeTheme {
   static AwikiMePlatformTheme forPlatform(
     TargetPlatform platform, {
     String? fontFamilyOverride,
+    Brightness brightness = Brightness.light,
   }) {
     final override = fontFamilyOverride?.trim();
     if (override != null && override.isNotEmpty) {
-      return _buildForPlatform(platform, fontFamilyOverride: override);
+      return _buildForPlatform(
+        platform,
+        fontFamilyOverride: override,
+        brightness: brightness,
+      );
     }
-    return _platformThemes.putIfAbsent(
+    return _platformThemes.putIfAbsent((
       platform,
-      () => _buildForPlatform(platform),
-    );
+      brightness,
+    ), () => _buildForPlatform(platform, brightness: brightness));
   }
 
   static AwikiMePlatformTheme _buildForPlatform(
     TargetPlatform platform, {
     String? fontFamilyOverride,
+    Brightness brightness = Brightness.light,
   }) {
     final isWindows =
         platform == TargetPlatform.windows && fontFamilyOverride == null;
@@ -851,7 +937,7 @@ class AwikiMeTheme {
     final fontFallback = fontFamilyOverride != null
         ? const <String>[]
         : (isWindows ? windowsFontFamilyFallback : null);
-    final platformTokens = fontFamilyOverride != null
+    var platformTokens = fontFamilyOverride != null
         ? _baseTokens.copyWith(
             compactTypography: _baseTokens.compactTypography.withFont(
               fontFamily: fontFamilyOverride,
@@ -863,11 +949,26 @@ class AwikiMeTheme {
             ),
           )
         : (isWindows ? _windowsTokens() : _baseTokens);
+    final scheme = brightness == Brightness.dark
+        ? darkColorScheme
+        : colorScheme;
+    if (brightness == Brightness.dark) {
+      platformTokens = platformTokens.copyWith(
+        colorScheme: scheme,
+        semanticColors: _darkColors,
+        compactTypography: platformTokens.compactTypography.withColors(
+          _darkColors,
+        ),
+        expandedTypography: platformTokens.expandedTypography.withColors(
+          _darkColors,
+        ),
+      );
+    }
     final baseMaterialTheme = ThemeData(
       useMaterial3: true,
       platform: platform,
-      colorScheme: colorScheme,
-      scaffoldBackgroundColor: colorScheme.surfaceContainerLowest,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: scheme.surfaceContainerLowest,
       fontFamily: fontFamily,
       fontFamilyFallback: fontFallback,
       extensions: <ThemeExtension<dynamic>>[platformTokens],
@@ -886,13 +987,15 @@ class AwikiMeTheme {
         ),
       ),
       cupertinoTheme: CupertinoThemeData(
-        brightness: Brightness.light,
-        primaryColor: colorScheme.primary,
-        scaffoldBackgroundColor: colorScheme.surfaceContainerLowest,
-        barBackgroundColor: colorScheme.surface,
+        brightness: brightness,
+        primaryColor: scheme.primary,
+        primaryContrastingColor: scheme.onPrimary,
+        scaffoldBackgroundColor: scheme.surfaceContainerLowest,
+        barBackgroundColor: scheme.surface,
         textTheme: _cupertinoTextThemeFor(
           platform,
           fontFamilyOverride: fontFamilyOverride,
+          scheme: scheme,
         ),
       ),
       tokens: platformTokens,
@@ -970,11 +1073,12 @@ class AwikiMeTheme {
   static CupertinoTextThemeData _cupertinoTextThemeFor(
     TargetPlatform platform, {
     String? fontFamilyOverride,
+    ColorScheme scheme = colorScheme,
   }) {
-    const base = CupertinoTextThemeData(
-      primaryColor: AwikiMePalette.brandAccent,
+    final base = CupertinoTextThemeData(
+      primaryColor: scheme.primary,
       textStyle: TextStyle(
-        color: AwikiMePalette.inkNeutral,
+        color: scheme.onSurface,
         fontSize: 15,
         letterSpacing: 0,
       ),
@@ -999,7 +1103,7 @@ class AwikiMeTheme {
     }
 
     return CupertinoTextThemeData(
-      primaryColor: colorScheme.primary,
+      primaryColor: scheme.primary,
       textStyle: normalize(base.textStyle),
       actionTextStyle: normalize(base.actionTextStyle),
       actionSmallTextStyle: normalize(base.actionSmallTextStyle),

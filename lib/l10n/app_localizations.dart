@@ -98,6 +98,36 @@ abstract class AppLocalizations {
     Locale('zh'),
   ];
 
+  /// No description provided for @chatMentionMember.
+  ///
+  /// In zh, this message translates to:
+  /// **'提及群成员'**
+  String get chatMentionMember;
+
+  /// No description provided for @settingsAppearance.
+  ///
+  /// In zh, this message translates to:
+  /// **'外观'**
+  String get settingsAppearance;
+
+  /// No description provided for @appearanceSystem.
+  ///
+  /// In zh, this message translates to:
+  /// **'跟随系统'**
+  String get appearanceSystem;
+
+  /// No description provided for @appearanceLight.
+  ///
+  /// In zh, this message translates to:
+  /// **'浅色'**
+  String get appearanceLight;
+
+  /// No description provided for @appearanceDark.
+  ///
+  /// In zh, this message translates to:
+  /// **'深色'**
+  String get appearanceDark;
+
   /// No description provided for @appTitle.
   ///
   /// In zh, this message translates to:
@@ -1477,6 +1507,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'搜索群组'**
   String get friendsSearchGroupsPlaceholder;
+
+  /// No description provided for @conversationsFilterUnread.
+  ///
+  /// In zh, this message translates to:
+  /// **'未读'**
+  String get conversationsFilterUnread;
 
   /// No description provided for @friendsTabAll.
   ///

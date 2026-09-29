@@ -8,23 +8,26 @@ import '../presentation/shared/responsive_layout.dart';
 class AppNavigator {
   const AppNavigator._();
 
-  static const SystemUiOverlayStyle _defaultOverlayStyle = SystemUiOverlayStyle(
-    statusBarColor: AwikiMePalette.canvas,
-    statusBarIconBrightness: Brightness.dark,
-    statusBarBrightness: Brightness.light,
-    systemNavigationBarColor: AwikiMePalette.canvas,
-    systemNavigationBarIconBrightness: Brightness.dark,
-    systemNavigationBarDividerColor: AwikiMePalette.canvas,
-  );
-
-  static const SystemUiOverlayStyle _sheetOverlayStyle = SystemUiOverlayStyle(
-    statusBarColor: AwikiMePalette.navigationSurface,
-    statusBarIconBrightness: Brightness.dark,
-    statusBarBrightness: Brightness.light,
-    systemNavigationBarColor: AwikiMePalette.navigationSurface,
-    systemNavigationBarIconBrightness: Brightness.dark,
-    systemNavigationBarDividerColor: AwikiMePalette.navigationBorder,
-  );
+  static SystemUiOverlayStyle _overlayStyle(
+    BuildContext context, {
+    bool sheet = false,
+  }) {
+    final theme = context.awikiTheme;
+    final brightness = theme.colorScheme.brightness;
+    final surface = sheet ? theme.navigationSurface : theme.background;
+    return SystemUiOverlayStyle(
+      statusBarColor: surface,
+      statusBarIconBrightness: brightness == Brightness.dark
+          ? Brightness.light
+          : Brightness.dark,
+      statusBarBrightness: brightness,
+      systemNavigationBarColor: surface,
+      systemNavigationBarIconBrightness: brightness == Brightness.dark
+          ? Brightness.light
+          : Brightness.dark,
+      systemNavigationBarDividerColor: sheet ? theme.navigationBorder : surface,
+    );
+  }
 
   static Future<T?> push<T>(
     BuildContext context,
@@ -66,7 +69,7 @@ class AppNavigator {
     bool barrierDismissible = true,
   }) async {
     if (context.awikiResponsive.isCompact) {
-      SystemChrome.setSystemUIOverlayStyle(_sheetOverlayStyle);
+      SystemChrome.setSystemUIOverlayStyle(_overlayStyle(context, sheet: true));
       try {
         return await showCupertinoModalPopup<T>(
           context: context,
@@ -79,7 +82,9 @@ class AppNavigator {
               _AppDialogKeyboardDismissScope(child: builder(dialogContext)),
         );
       } finally {
-        SystemChrome.setSystemUIOverlayStyle(_defaultOverlayStyle);
+        if (context.mounted) {
+          SystemChrome.setSystemUIOverlayStyle(_overlayStyle(context));
+        }
       }
     }
     return Navigator.of(context, rootNavigator: true).push<T>(
@@ -100,7 +105,7 @@ class AppNavigator {
     if (context.awikiResponsive.isExpanded) {
       return showDialog<T>(context, builder);
     }
-    SystemChrome.setSystemUIOverlayStyle(_sheetOverlayStyle);
+    SystemChrome.setSystemUIOverlayStyle(_overlayStyle(context, sheet: true));
     try {
       return await showCupertinoModalPopup<T>(
         context: context,
@@ -110,7 +115,9 @@ class AppNavigator {
         builder: builder,
       );
     } finally {
-      SystemChrome.setSystemUIOverlayStyle(_defaultOverlayStyle);
+      if (context.mounted) {
+        SystemChrome.setSystemUIOverlayStyle(_overlayStyle(context));
+      }
     }
   }
 }

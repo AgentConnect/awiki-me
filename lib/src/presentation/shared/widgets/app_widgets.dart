@@ -779,7 +779,7 @@ class AppPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: AwikiMeTextStyles.pillLabel.copyWith(
+        style: context.awikiTheme.pillLabel.copyWith(
           fontSize: responsive.metaSm,
           color: foregroundColor == AwikiMeColors.primaryDark
               ? theme.primaryDark
@@ -1042,11 +1042,11 @@ class _AppTextFieldState extends State<AppTextField> {
           ? EdgeInsets.symmetric(vertical: responsive.spacing(10))
           : EdgeInsets.zero,
       enabled: widget.enabled,
-      style: AwikiMeTextStyles.inputText.copyWith(
+      style: context.awikiTheme.inputText.copyWith(
         fontSize: responsive.bodyMd,
         color: theme.title,
       ),
-      placeholderStyle: AwikiMeTextStyles.inputText.copyWith(
+      placeholderStyle: context.awikiTheme.inputText.copyWith(
         fontSize: responsive.bodyMd,
         color: theme.secondaryText,
       ),
@@ -1075,7 +1075,7 @@ class _AppTextFieldState extends State<AppTextField> {
               if (widget.showLabel) ...<Widget>[
                 Text(
                   widget.label,
-                  style: AwikiMeTextStyles.fieldLabel.copyWith(
+                  style: context.awikiTheme.fieldLabel.copyWith(
                     fontSize: responsive.metaSm,
                     color: theme.secondaryText,
                   ),
@@ -1157,9 +1157,9 @@ class AppInlineActionButton extends StatelessWidget {
         ),
         padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
         decoration: BoxDecoration(
-          color: AwikiMePalette.actionBlueSoft,
+          color: context.awikiTheme.primarySoft,
           borderRadius: BorderRadius.circular(responsive.radius(8)),
-          border: Border.all(color: AwikiMePalette.actionBlueBorder),
+          border: Border.all(color: context.awikiTheme.border),
         ),
         alignment: Alignment.center,
         child: isLoading
@@ -1175,8 +1175,8 @@ class AppInlineActionButton extends StatelessWidget {
                     height: 1,
                     forceStrutHeight: true,
                   ),
-                  style: AwikiMeTextStyles.buttonLabel.copyWith(
-                    color: AwikiMePalette.actionBlue,
+                  style: context.awikiTheme.buttonLabel.copyWith(
+                    color: context.awikiTheme.primary,
                     fontSize: responsive.bodySm,
                     height: 1,
                   ),
@@ -1245,7 +1245,7 @@ class AppPrimaryButton extends StatelessWidget {
               height: 1,
               forceStrutHeight: true,
             ),
-            style: AwikiMeTextStyles.buttonLabel.copyWith(
+            style: context.awikiTheme.buttonLabel.copyWith(
               color: theme.primaryForeground,
               fontSize: responsive.bodyMd,
               height: 1,
@@ -1309,7 +1309,7 @@ class AppSecondaryButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: theme.surface,
           borderRadius: BorderRadius.circular(responsive.radius(9)),
-          border: Border.all(color: AwikiMePalette.actionBlueBorder),
+          border: Border.all(color: context.awikiTheme.border),
         ),
         child: Center(
           child: Text(
@@ -1320,8 +1320,8 @@ class AppSecondaryButton extends StatelessWidget {
               height: 1,
               forceStrutHeight: true,
             ),
-            style: AwikiMeTextStyles.buttonLabel.copyWith(
-              color: AwikiMePalette.actionInk,
+            style: context.awikiTheme.buttonLabel.copyWith(
+              color: context.awikiTheme.title,
               fontSize: responsive.bodyMd,
               height: 1,
             ),
@@ -1384,8 +1384,8 @@ class AppDangerButton extends StatelessWidget {
               height: 1,
               forceStrutHeight: true,
             ),
-            style: AwikiMeTextStyles.buttonLabel.copyWith(
-              color: filled ? CupertinoColors.white : theme.danger,
+            style: context.awikiTheme.buttonLabel.copyWith(
+              color: filled ? theme.colorScheme.onError : theme.danger,
               fontSize: responsive.bodyMd,
               height: 1,
             ),
@@ -1437,7 +1437,7 @@ class AppInlineLinkRow extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: AwikiMeTextStyles.listSubtitle.copyWith(
+                style: context.awikiTheme.listSubtitle.copyWith(
                   fontSize: responsive.bodySm,
                   color: theme.primaryDark,
                 ),
@@ -1494,7 +1494,7 @@ class EmptyStateCard extends StatelessWidget {
         children: <Widget>[
           Text(
             title,
-            style: AwikiMeTextStyles.sectionTitle.copyWith(
+            style: context.awikiTheme.sectionTitle.copyWith(
               color: context.awikiTheme.secondaryText,
               fontSize: 18,
               fontWeight: FontWeight.w400,
@@ -1503,7 +1503,7 @@ class EmptyStateCard extends StatelessWidget {
           SizedBox(height: context.awikiResponsive.spacing(8)),
           Text(
             subtitle,
-            style: AwikiMeTextStyles.cardSubtitle.copyWith(
+            style: context.awikiTheme.cardSubtitle.copyWith(
               fontSize: context.awikiResponsive.bodySm,
             ),
           ),
@@ -1550,7 +1550,7 @@ class AppListTile extends StatelessWidget {
           key: titleKey,
           maxLines: useLargeTextLayout ? 2 : null,
           overflow: useLargeTextLayout ? TextOverflow.ellipsis : null,
-          style: AwikiMeTextStyles.listTitle.copyWith(
+          style: context.awikiTheme.listTitle.copyWith(
             fontSize: 14,
             color: destructive ? theme.danger : theme.title,
           ),
@@ -1559,7 +1559,7 @@ class AppListTile extends StatelessWidget {
           SizedBox(height: responsive.spacing(2)),
           Text(
             subtitle!,
-            style: AwikiMeTextStyles.cardSubtitle.copyWith(fontSize: 12),
+            style: context.awikiTheme.cardSubtitle.copyWith(fontSize: 12),
           ),
         ],
       ],

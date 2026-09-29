@@ -9,6 +9,21 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
+  String get chatMentionMember => '提及群成员';
+
+  @override
+  String get settingsAppearance => '外观';
+
+  @override
+  String get appearanceSystem => '跟随系统';
+
+  @override
+  String get appearanceLight => '浅色';
+
+  @override
+  String get appearanceDark => '深色';
+
+  @override
   String get appTitle => 'AWikiMe';
 
   @override
@@ -735,6 +750,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get friendsSearchGroupsPlaceholder => '搜索群组';
+
+  @override
+  String get conversationsFilterUnread => '未读';
 
   @override
   String get friendsTabAll => '全部';

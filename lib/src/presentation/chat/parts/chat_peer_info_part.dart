@@ -340,7 +340,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                       textKey: const Key('peer-info-dialog-did-value'),
                       buttonKey: const Key('peer-info-dialog-copy-did-button'),
                       textStyle: TextStyle(
-                        color: AwikiMePalette.inkNeutral,
+                        color: context.awikiTheme.title,
                         fontSize: responsive.bodyMd,
                         height: 1.35,
                       ),
@@ -814,8 +814,8 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
       value.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
 
   Widget _profilePlaceholder(PeerProfileState state) {
-    const textStyle = TextStyle(
-      color: AwikiMePalette.mutedNeutral,
+    final textStyle = TextStyle(
+      color: context.awikiTheme.secondaryText,
       fontSize: 13,
       height: 1.35,
     );
@@ -944,9 +944,9 @@ class _PeerInfoHeader extends StatelessWidget {
             ? const Key('peer-info-compact-agent-header')
             : null,
         decoration: BoxDecoration(
-          color: AwikiMePalette.content,
+          color: context.awikiTheme.surface,
           border: showDivider
-              ? const Border(bottom: BorderSide(color: AwikiMePalette.hairline))
+              ? Border(bottom: BorderSide(color: context.awikiTheme.border))
               : null,
         ),
         child: Padding(
@@ -978,7 +978,7 @@ class _PeerInfoHeader extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           border: showDivider
-              ? const Border(bottom: BorderSide(color: AwikiMePalette.hairline))
+              ? Border(bottom: BorderSide(color: context.awikiTheme.border))
               : null,
         ),
         child: Padding(
@@ -1164,12 +1164,12 @@ class _AgentRenameIconButton extends StatelessWidget {
         semanticLabel: context.l10n.chatPeerInfoRenameAgent,
         tooltip: context.l10n.chatPeerInfoRenameAgentTooltip,
         size: responsive.displayScaled(30),
-        backgroundColor: AwikiMePalette.mist,
-        borderColor: AwikiMePalette.hairline,
+        backgroundColor: context.awikiTheme.subtleSurface,
+        borderColor: context.awikiTheme.border,
         borderRadius: BorderRadius.circular(responsive.radius(9)),
         child: Icon(
           CupertinoIcons.pencil,
-          color: AwikiMePalette.mutedNeutral,
+          color: context.awikiTheme.secondaryText,
           size: responsive.iconSm,
         ),
       ),
@@ -1189,17 +1189,17 @@ class _PeerInfoSection extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AwikiMePalette.mist,
+        color: context.awikiTheme.subtleSurface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AwikiMePalette.hairline),
+        border: Border.all(color: context.awikiTheme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
             title,
-            style: const TextStyle(
-              color: AwikiMePalette.inkNeutral,
+            style: TextStyle(
+              color: context.awikiTheme.title,
               fontSize: 14,
               fontWeight: FontWeight.w400,
             ),
@@ -1295,8 +1295,8 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                                     _group.displayName,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: AwikiMePalette.inkNeutral,
+                                    style: TextStyle(
+                                      color: context.awikiTheme.title,
                                       fontSize: 20,
                                       fontWeight: FontWeight.w400,
                                     ),
@@ -1306,8 +1306,8 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                                     _group.description.isEmpty
                                         ? context.l10n.groupNoDescription
                                         : _group.description,
-                                    style: const TextStyle(
-                                      color: AwikiMePalette.mutedNeutral,
+                                    style: TextStyle(
+                                      color: context.awikiTheme.secondaryText,
                                       fontSize: 13,
                                       height: 1.35,
                                     ),
@@ -1347,8 +1347,8 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                           buttonKey: const Key(
                             'group-info-dialog-copy-did-button',
                           ),
-                          textStyle: const TextStyle(
-                            color: AwikiMePalette.mutedNeutral,
+                          textStyle: TextStyle(
+                            color: context.awikiTheme.secondaryText,
                             fontSize: 12,
                             height: 1.25,
                           ),
@@ -1372,7 +1372,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                                   : context.l10n.chatPeerInfoMemberCount(
                                       members.length,
                                     ),
-                              style: AwikiMeTextStyles.cardSubtitle,
+                              style: context.awikiTheme.cardSubtitle,
                             ),
                           ),
                           _ChatNeutralIconButton(
@@ -1587,11 +1587,11 @@ class _ChatNeutralIconButton extends StatelessWidget {
       isLoading: isLoading,
       size: responsive.scaled(34),
       backgroundColor: theme.surface,
-      borderColor: AwikiMePalette.hairline,
+      borderColor: context.awikiTheme.border,
       borderRadius: BorderRadius.circular(responsive.radius(8)),
       child: Icon(
         icon,
-        color: enabled ? AwikiMePalette.mutedNeutral : theme.tertiaryText,
+        color: enabled ? context.awikiTheme.secondaryText : theme.tertiaryText,
         size: responsive.iconSm,
       ),
     );

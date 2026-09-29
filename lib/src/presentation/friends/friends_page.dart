@@ -254,7 +254,7 @@ class FriendsPage extends ConsumerWidget {
         key: const Key('friends-list-surface'),
         decoration: BoxDecoration(
           color: responsive.isCompact
-              ? AwikiMeColors.background
+              ? context.awikiTheme.background
               : theme.surface,
         ),
         child: ListView(
@@ -395,7 +395,7 @@ class _CompactFriendsDirectory extends ConsumerWidget {
     final theme = context.awikiTheme;
     return DecoratedBox(
       key: const Key('friends-list-surface'),
-      decoration: const BoxDecoration(color: AwikiMeColors.background),
+      decoration: BoxDecoration(color: context.awikiTheme.background),
       child: Column(
         children: <Widget>[
           _FriendsSearchField(
@@ -1012,7 +1012,7 @@ class _FriendRow extends StatelessWidget {
             decoration: BoxDecoration(
               color: theme.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AwikiMePalette.navigationBorder),
+              border: Border.all(color: context.awikiTheme.navigationBorder),
             ),
             child: Row(
               children: <Widget>[

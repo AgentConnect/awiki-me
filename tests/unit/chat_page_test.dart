@@ -60,6 +60,7 @@ import 'package:flutter/material.dart'
         InlineSpan,
         SelectionArea,
         SelectionAreaState,
+        Theme,
         TextSpan;
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -84,7 +85,7 @@ Offset _textOffsetToPosition(RenderParagraph paragraph, int offset) {
         TextPosition(offset: offset),
         const Rect.fromLTWH(0, 0, 2, 20),
       ) +
-      Offset(0, paragraph.preferredLineHeight - 2);
+      Offset(1, paragraph.preferredLineHeight / 2);
   return paragraph.localToGlobal(localOffset);
 }
 
@@ -592,6 +593,120 @@ ConversationSummary _scrollConversation(String id) {
 }
 
 void main() {
+  for (final brightness in Brightness.values) {
+    for (final macStyle in [false, true]) {
+      testWidgets(
+        'overdue agent text remains readable in $brightness macStyle=$macStyle',
+        (tester) async {
+          tester.view
+            ..devicePixelRatio = 1
+            ..physicalSize = macStyle
+                ? const Size(1000, 800)
+                : const Size(390, 844);
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final theme = AwikiMeTheme.forPlatform(
+            TargetPlatform.android,
+            brightness: brightness,
+          );
+          final conversation = _scrollConversation('dm:overdue-contrast');
+          final message = ChatMessage(
+            localId: 'overdue-message',
+            remoteId: 'overdue-message',
+            threadId: conversation.threadId,
+            senderDid: 'did:test:me',
+            receiverDid: 'did:test:alice',
+            content: 'Pending response',
+            createdAt: DateTime(2026, 9, 28),
+            isMine: true,
+            sendState: MessageSendState.sent,
+          );
+          await tester.pumpWidget(
+            buildLocalizedTestApp(
+              home: Theme(
+                data: theme.materialTheme,
+                child: CupertinoPageScaffold(
+                  child: ChatView(
+                    conversation: conversation,
+                    embedded: false,
+                    macStyle: macStyle,
+                  ),
+                ),
+              ),
+              session: const SessionIdentity(
+                did: 'did:test:me',
+                credentialName: 'default',
+                handle: 'me',
+                displayName: 'Me',
+              ),
+              providerOverrides: [
+                chatThreadsProvider.overrideWith((ref) {
+                  final controller = _StaticChatThreadsController(ref, {
+                    conversation.threadId: [message],
+                  });
+                  controller.state = {
+                    conversation.threadId: ChatThreadState(
+                      threadId: conversation.threadId,
+                      messages: [message],
+                      agentPendingTurns: [
+                        AgentPendingTurn(
+                          agentDid: 'did:agent:runtime',
+                          localMessageId: message.localId,
+                          startedAt: message.createdAt,
+                          isOverdue: true,
+                        ),
+                      ],
+                    ),
+                  };
+                  return controller;
+                }),
+              ],
+            ),
+          );
+          await tester.pumpAndSettle();
+          final label = find.text('已发送，智能体暂未响应');
+          expect(label, findsOneWidget);
+          final foreground = tester.widget<Text>(label).style!.color!;
+          final container = tester.widget<Container>(
+            find.ancestor(of: label, matching: find.byType(Container)).first,
+          );
+          final background = (container.decoration! as BoxDecoration).color!;
+          final luminances = [
+            foreground.computeLuminance(),
+            background.computeLuminance(),
+          ]..sort();
+          expect(
+            (luminances.last + 0.05) / (luminances.first + 0.05),
+            greaterThanOrEqualTo(4.5),
+          );
+          expect(background, theme.tokens.warningContainer);
+          expect(
+            foreground,
+            brightness == Brightness.dark
+                ? theme.tokens.warning
+                : macStyle
+                ? const Color(0xFF9A5A00)
+                : const Color(0xFF936300),
+          );
+          expect(
+            tester
+                .widget<Icon>(
+                  find.descendant(
+                    of: find
+                        .ancestor(of: label, matching: find.byType(Container))
+                        .first,
+                    matching: find.byIcon(CupertinoIcons.clock),
+                  ),
+                )
+                .color,
+            foreground,
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
   testWidgets('compact 聊天使用暖中性整面背景、双方头像和 44px composer', (tester) async {
     final gateway = FakeAwikiGateway();
     final conversation = _scrollConversation('dm:compact-visual-contract');
@@ -653,7 +768,7 @@ void main() {
         incomingBubbleWidget.decoration! as ShapeDecoration;
     final outgoingDecoration =
         outgoingBubbleWidget.decoration! as ShapeDecoration;
-    expect(incomingDecoration.color, AwikiMePalette.content);
+    expect(incomingDecoration.color, AwikiMePalette.messageIncoming);
     expect(outgoingDecoration.color, AwikiMePalette.messageOutgoing);
     final outgoingText = tester.widget<Text>(find.text('outgoing'));
     expect(outgoingText.style?.fontSize, 14);
@@ -670,8 +785,8 @@ void main() {
     }
     final incomingPadding = incomingBubbleWidget.padding! as EdgeInsets;
     final outgoingPadding = outgoingBubbleWidget.padding! as EdgeInsets;
-    expect(incomingPadding.left, greaterThan(incomingPadding.right));
-    expect(outgoingPadding.right, greaterThan(outgoingPadding.left));
+    expect(incomingPadding.left, incomingPadding.right);
+    expect(outgoingPadding.right, outgoingPadding.left);
     final incomingAvatar = find.byKey(
       const Key('chat-message-avatar:compact-incoming:peer'),
     );
@@ -717,35 +832,82 @@ void main() {
         reason: key,
       );
     }
+    final send = find.byKey(const Key('chat-send-button'));
+    expect(tester.widget<AppIconButton>(send).onPressed, isNull);
+    expect(
+      tester.widget<AppIconButton>(send).backgroundColor,
+      tester.element(send).awikiTheme.mutedSurface,
+    );
     expect(
       tester
-          .widget<AnimatedOpacity>(
-            find
-                .ancestor(
-                  of: find.byKey(const Key('chat-send-button')),
-                  matching: find.byType(AnimatedOpacity),
-                )
-                .first,
-          )
-          .opacity,
-      0,
+          .widget<Text>(find.descendant(of: send, matching: find.text('发送')))
+          .style
+          ?.color,
+      tester.element(send).awikiTheme.secondaryText,
     );
+    expect(
+      find.descendant(of: send, matching: find.text('发送')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('chat-attachment-button'))).right,
+      lessThan(
+        tester
+            .getRect(find.byKey(const Key('chat-compact-composer-input-shell')))
+            .left,
+      ),
+    );
+    expect(find.byKey(const Key('chat-mention-button')), findsNothing);
 
     await tester.enterText(find.byType(CupertinoTextField), 'ready');
     await tester.pump();
 
+    final shell = find.byKey(const Key('chat-compact-composer-input-shell'));
+    final singleLineHeight = tester.getSize(shell).height;
+    final decoration =
+        tester.widget<Container>(shell).decoration! as BoxDecoration;
+    expect(
+      decoration.borderRadius,
+      BorderRadius.circular(22 * AwikiDisplayScale.layoutBaseline),
+    );
+    expect(
+      (decoration.border! as Border).top.color,
+      tester.element(shell).awikiTheme.primary,
+    );
+    await tester.enterText(
+      find.byType(CupertinoTextField),
+      'first\nsecond\nthird',
+    );
+    await tester.pump();
+    expect(tester.getSize(shell).height, greaterThan(singleLineHeight));
+    expect(tester.getSize(shell).height, lessThan(130));
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('chat-send-button')),
+        matching: find.text('发送'),
+      ),
+      findsOneWidget,
+    );
+
+    expect(tester.widget<AppIconButton>(send).onPressed, isNotNull);
+    expect(
+      tester.widget<AppIconButton>(send).backgroundColor,
+      tester.element(send).awikiTheme.title,
+    );
     expect(
       tester
-          .widget<AnimatedOpacity>(
-            find
-                .ancestor(
-                  of: find.byKey(const Key('chat-send-button')),
-                  matching: find.byType(AnimatedOpacity),
-                )
-                .first,
+          .widget<Text>(find.descendant(of: send, matching: find.text('发送')))
+          .style
+          ?.color,
+      tester.element(send).awikiTheme.surface,
+    );
+    expect(
+      tester
+          .widget<AppIconButton>(
+            find.byKey(const Key('chat-attachment-button')),
           )
-          .opacity,
-      1,
+          .onPressed,
+      isNotNull,
     );
     expect(tester.takeException(), isNull);
   });
@@ -1109,6 +1271,13 @@ void main() {
     expect(ownBadge, findsOneWidget);
     expect(tester.widget<AvatarBadge>(ownBadge).seed, '长山');
     expect(tester.widget<AvatarBadge>(ownBadge).userId, profile.did);
+    final bubble = tester.widget<Container>(
+      find.byKey(const Key('chat-message-bubble:mac-own-profile-avatar')),
+    );
+    expect(
+      (bubble.decoration! as BoxDecoration).borderRadius,
+      BorderRadius.circular(6 * AwikiDisplayScale.layoutBaseline),
+    );
   });
 
   testWidgets('macOS 聊天输入条保持发送能力', (tester) async {
@@ -4173,7 +4342,7 @@ void main() {
     expect(
       bubbleSize.width,
       moreOrLessEquals(
-        imageSize.width + 32 * AwikiDisplayScale.layoutBaseline,
+        imageSize.width + 24 * AwikiDisplayScale.layoutBaseline,
         epsilon: 1,
       ),
     );
@@ -4229,7 +4398,7 @@ void main() {
     expect(
       desktopBubbleSize.width,
       moreOrLessEquals(
-        desktopImageSize.width + 26 * AwikiDisplayScale.layoutBaseline,
+        desktopImageSize.width + 24 * AwikiDisplayScale.layoutBaseline,
         epsilon: 1,
       ),
     );
@@ -8160,7 +8329,7 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('macOS 输入框使用上层文字和下层紧凑工具栏', (tester) async {
+  testWidgets('macOS 参考稿输入区按工具栏、文字和发送按钮排列', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -8203,7 +8372,29 @@ void main() {
     final toolRowRect = tester.getRect(
       find.byKey(const Key('chat-composer-tool-row')),
     );
-    expect(toolRowRect.top, greaterThanOrEqualTo(textRect.bottom));
+    expect(toolRowRect.bottom, lessThanOrEqualTo(textRect.top));
+    final sendRect = tester.getRect(find.byKey(const Key('chat-send-button')));
+    expect(sendRect.top, greaterThanOrEqualTo(textRect.bottom));
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('chat-send-button')),
+        matching: find.text('发送'),
+      ),
+      findsOneWidget,
+    );
+    final composer = tester.widget<Container>(
+      find.byKey(const Key('chat-desktop-composer-shell')),
+    );
+    final decoration = composer.decoration! as BoxDecoration;
+    expect(decoration.borderRadius, isNull);
+    expect(decoration.boxShadow, isNull);
+    expect((decoration.border! as Border).top.width, 1);
+    expect(
+      tester
+          .getSize(find.byKey(const Key('chat-desktop-composer-shell')))
+          .height,
+      greaterThanOrEqualTo(148 * AwikiDisplayScale.layoutBaseline),
+    );
     for (final key in const <String>[
       'chat-attachment-button',
       'chat-emoji-button',
@@ -8708,17 +8899,28 @@ void main() {
     await tester.tap(find.byType(CupertinoTextField));
     await tester.enterText(find.byType(CupertinoTextField), 'ni');
     await tester.pump();
-    var sendIcon = tester.widget<AwikiAssetIcon>(
+    var sendLabel = tester.widget<Text>(
       find.descendant(
         of: find.byKey(const Key('chat-send-button')),
-        matching: find.byWidgetPredicate(
-          (widget) =>
-              widget is AwikiAssetIcon &&
-              widget.assetName == 'assets/icons/icon_send.svg',
-        ),
+        matching: find.byType(Text),
       ),
     );
-    expect(sendIcon.color, const Color(0xFFFFFFFF));
+    expect(
+      sendLabel.style?.color,
+      tester
+          .element(find.byKey(const Key('chat-send-button')))
+          .awikiTheme
+          .surface,
+    );
+    expect(
+      tester
+          .widget<AppIconButton>(find.byKey(const Key('chat-send-button')))
+          .backgroundColor,
+      tester
+          .element(find.byKey(const Key('chat-send-button')))
+          .awikiTheme
+          .title,
+    );
 
     final input = tester.widget<CupertinoTextField>(
       find.byType(CupertinoTextField),
@@ -8728,17 +8930,28 @@ void main() {
     );
     await tester.pump();
 
-    sendIcon = tester.widget<AwikiAssetIcon>(
+    sendLabel = tester.widget<Text>(
       find.descendant(
         of: find.byKey(const Key('chat-send-button')),
-        matching: find.byWidgetPredicate(
-          (widget) =>
-              widget is AwikiAssetIcon &&
-              widget.assetName == 'assets/icons/icon_send.svg',
-        ),
+        matching: find.byType(Text),
       ),
     );
-    expect(sendIcon.color, const Color(0xFFFFFFFF));
+    expect(
+      sendLabel.style?.color,
+      tester
+          .element(find.byKey(const Key('chat-send-button')))
+          .awikiTheme
+          .surface,
+    );
+    expect(
+      tester
+          .widget<AppIconButton>(find.byKey(const Key('chat-send-button')))
+          .backgroundColor,
+      tester
+          .element(find.byKey(const Key('chat-send-button')))
+          .awikiTheme
+          .title,
+    );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();

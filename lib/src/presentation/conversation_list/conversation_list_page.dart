@@ -240,6 +240,7 @@ class _MacConversationList extends ConsumerStatefulWidget {
 
 class _MacConversationListState extends ConsumerState<_MacConversationList> {
   String _query = '';
+  _ConversationFilter _filter = _ConversationFilter.all;
 
   @override
   void didUpdateWidget(covariant _MacConversationList oldWidget) {
@@ -271,7 +272,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
       level: AwikiPerformanceLogLevel.verbose,
     );
     return DecoratedBox(
-      decoration: BoxDecoration(color: theme.background),
+      decoration: BoxDecoration(color: theme.surface),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -335,6 +336,10 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                 ),
               ],
             ),
+          ),
+          _ConversationFilterBar(
+            value: _filter,
+            onChanged: (value) => setState(() => _filter = value),
           ),
           Expanded(
             child: CustomScrollView(
@@ -447,9 +452,86 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
             ).contains(query);
           });
     return sortConversationsForPresentation(
-      conversations,
+      conversations.where(
+        (conversation) => switch (_filter) {
+          _ConversationFilter.all => true,
+          _ConversationFilter.unread => conversation.unreadCount > 0,
+          _ConversationFilter.agent => _conversationPeerClassification(
+            ref,
+            conversation,
+          ).isAgent,
+          _ConversationFilter.group => conversation.isGroup,
+        },
+      ),
       draftFor: (conversation) =>
           _draftSortStateForConversation(conversation, widget.composerDrafts),
+    );
+  }
+}
+
+enum _ConversationFilter { all, unread, agent, group }
+
+class _ConversationFilterBar extends StatelessWidget {
+  const _ConversationFilterBar({required this.value, required this.onChanged});
+
+  final _ConversationFilter value;
+  final ValueChanged<_ConversationFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
+      child: Row(
+        children: <Widget>[
+          for (final filter in _ConversationFilter.values)
+            Padding(
+              padding: const EdgeInsets.only(right: 2),
+              child: AppPressable(
+                key: Key('conversation-filter-${filter.name}'),
+                semanticLabel: switch (filter) {
+                  _ConversationFilter.all => context.l10n.friendsTabAll,
+                  _ConversationFilter.unread =>
+                    context.l10n.conversationsFilterUnread,
+                  _ConversationFilter.agent => context.l10n.shellNavAgents,
+                  _ConversationFilter.group => context.l10n.friendsTabGroups,
+                },
+                selected: filter == value,
+                onTap: () => onChanged(filter),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: filter == value
+                        ? theme.subtleSurface
+                        : CupertinoColors.transparent,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    switch (filter) {
+                      _ConversationFilter.all => context.l10n.friendsTabAll,
+                      _ConversationFilter.unread =>
+                        context.l10n.conversationsFilterUnread,
+                      _ConversationFilter.agent => context.l10n.shellNavAgents,
+                      _ConversationFilter.group =>
+                        context.l10n.friendsTabGroups,
+                    },
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: filter == value
+                          ? theme.title
+                          : theme.secondaryText,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -512,6 +594,7 @@ class _ConversationRefreshViewState
     extends ConsumerState<_ConversationRefreshView> {
   late final TextEditingController _searchController;
   String _query = '';
+  _ConversationFilter _filter = _ConversationFilter.all;
 
   @override
   void initState() {
@@ -555,6 +638,10 @@ class _ConversationRefreshViewState
       level: AwikiPerformanceLogLevel.verbose,
     );
     return _ConversationSearchableRefreshView(
+      filterControls: _ConversationFilterBar(
+        value: _filter,
+        onChanged: (value) => setState(() => _filter = value),
+      ),
       conversations: widget.conversations,
       loadState: widget.loadState,
       visibleConversations: visibleConversations,
@@ -587,7 +674,17 @@ class _ConversationRefreshViewState
             ).contains(query);
           });
     return sortConversationsForPresentation(
-      conversations,
+      conversations.where(
+        (conversation) => switch (_filter) {
+          _ConversationFilter.all => true,
+          _ConversationFilter.unread => conversation.unreadCount > 0,
+          _ConversationFilter.agent => _conversationPeerClassification(
+            ref,
+            conversation,
+          ).isAgent,
+          _ConversationFilter.group => conversation.isGroup,
+        },
+      ),
       draftFor: (conversation) =>
           _draftSortStateForConversation(conversation, widget.composerDrafts),
     );
@@ -596,6 +693,7 @@ class _ConversationRefreshViewState
 
 class _ConversationSearchableRefreshView extends ConsumerWidget {
   const _ConversationSearchableRefreshView({
+    required this.filterControls,
     required this.conversations,
     required this.loadState,
     required this.visibleConversations,
@@ -611,6 +709,7 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
     required this.onDelete,
   });
 
+  final Widget filterControls;
   final List<ConversationSummary> conversations;
   final ConversationListLoadState loadState;
   final List<ConversationSummary> visibleConversations;
@@ -637,6 +736,7 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
             onChanged: onQueryChanged,
           ),
         ),
+        SliverToBoxAdapter(child: filterControls),
         if (conversations.isEmpty &&
             loadState == ConversationListLoadState.error)
           SliverFillRemaining(
@@ -844,14 +944,14 @@ class _SwipeToDeleteConversationRowState
                       children: <Widget>[
                         Icon(
                           CupertinoIcons.delete,
-                          color: CupertinoColors.white,
+                          color: context.awikiTheme.surface,
                           size: responsive.displayScaled(20),
                         ),
                         SizedBox(height: responsive.spacing(4)),
                         Text(
                           context.l10n.conversationsSwipeDelete,
-                          style: const TextStyle(
-                            color: CupertinoColors.white,
+                          style: TextStyle(
+                            color: context.awikiTheme.surface,
                             fontSize: 13,
                             fontWeight: FontWeight.w400,
                           ),
@@ -1015,22 +1115,22 @@ class _MacConversationRow extends StatelessWidget {
           onTap: onTap,
           selected: isSelected,
           semanticLabel: title,
-          borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
+          borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
           backgroundColor: CupertinoColors.transparent,
-          selectedBackgroundColor: theme.surface,
-          hoverColor: isSelected ? CupertinoColors.transparent : theme.surface,
+          selectedBackgroundColor: theme.subtleSurface,
+          hoverColor: isSelected
+              ? CupertinoColors.transparent
+              : theme.subtleSurface.withValues(alpha: 0.65),
           pressedColor: theme.subtleSurface,
-          selectedBoxShadow: AwikiMeShadows.selectedListItem,
-          hoverBoxShadow: isSelected
-              ? const <BoxShadow>[]
-              : AwikiMeShadows.hoveredListItem,
+          selectedBoxShadow: const <BoxShadow>[],
+          hoverBoxShadow: const <BoxShadow>[],
           duration: AwikiMeMotion.instant,
           interactionExitDuration: Duration.zero,
           animateSelection: false,
           border: Border.all(color: CupertinoColors.transparent),
           padding: EdgeInsets.symmetric(
             horizontal: responsive.displayScaled(10),
-            vertical: responsive.displayScaled(9),
+            vertical: responsive.displayScaled(11),
           ),
           child: Row(
             children: <Widget>[
@@ -1146,8 +1246,8 @@ class _MacConversationEmptyState extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AwikiMePalette.mutedNeutral,
+              style: TextStyle(
+                color: context.awikiTheme.secondaryText,
                 fontSize: 14,
               ),
             ),
@@ -1156,8 +1256,8 @@ class _MacConversationEmptyState extends StatelessWidget {
               Text(
                 subtitle!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AwikiMePalette.messagePreview,
+                style: TextStyle(
+                  color: context.awikiTheme.tertiaryText,
                   fontSize: 12,
                 ),
               ),
@@ -1872,7 +1972,7 @@ class _ConversationTitleStatusLine extends StatelessWidget {
         ),
         if (isDeletedAgentConversation) ...<Widget>[
           SizedBox(width: responsive.displayScaled(compact ? 6 : 7)),
-          _DeletedAgentConversationBadge(compact: compact),
+          Flexible(child: _DeletedAgentConversationBadge(compact: compact)),
         ],
       ],
     );
@@ -1896,15 +1996,15 @@ class _ConversationPeerBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final background = muted
-        ? AwikiMePalette.mist
+        ? context.awikiTheme.subtleSurface
         : isGroup
         ? const Color(0xFFEFE4FF)
-        : AwikiMePalette.brandAccentSoft;
+        : context.awikiTheme.primarySoft;
     final foreground = muted
-        ? AwikiMePalette.mutedNeutral
+        ? context.awikiTheme.secondaryText
         : isGroup
         ? const Color(0xFF7C3AED)
-        : AwikiMePalette.brandAccent;
+        : context.awikiTheme.primary;
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: responsive.displayScaled(compact ? 5 : 7),
@@ -1946,16 +2046,16 @@ class _DeletedAgentConversationBadge extends StatelessWidget {
         vertical: responsive.displayScaled(compact ? 2 : 3),
       ),
       decoration: BoxDecoration(
-        color: AwikiMePalette.mist,
+        color: context.awikiTheme.subtleSurface,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AwikiMePalette.hairline),
+        border: Border.all(color: context.awikiTheme.border),
       ),
       child: Text(
         context.l10n.conversationsDeletedAgentBadge,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: AwikiMePalette.mutedNeutral,
+          color: context.awikiTheme.secondaryText,
           fontSize: compact ? 10 : 10.5,
           fontWeight: FontWeight.w400,
           height: 1,
@@ -1983,8 +2083,8 @@ class _ConversationLoadErrorState extends StatelessWidget {
               context.l10n.operationFailedRetry,
               key: const Key('conversation-list-load-error'),
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AwikiMePalette.mutedNeutral,
+              style: TextStyle(
+                color: context.awikiTheme.secondaryText,
                 fontSize: 13,
               ),
             ),

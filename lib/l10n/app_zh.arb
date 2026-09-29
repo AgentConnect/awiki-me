@@ -1,5 +1,10 @@
 {
   "@@locale": "zh",
+  "chatMentionMember": "提及群成员",
+  "settingsAppearance": "外观",
+  "appearanceSystem": "跟随系统",
+  "appearanceLight": "浅色",
+  "appearanceDark": "深色",
   "appTitle": "AWikiMe",
   "commonCancel": "取消",
   "commonConfirm": "确定",
@@ -281,6 +286,7 @@
   "friendsTitle": "联系人",
   "friendsSearchPlaceholder": "搜索联系人",
   "friendsSearchGroupsPlaceholder": "搜索群组",
+  "conversationsFilterUnread": "未读",
   "friendsTabAll": "全部",
   "friendsTabFollowing": "关注",
   "friendsTabFollowers": "粉丝",

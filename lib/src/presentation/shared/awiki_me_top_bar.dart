@@ -45,7 +45,7 @@ class AwikiMeTopBar extends StatelessWidget {
     final titleInset = leadingWidth > trailingWidth
         ? leadingWidth
         : trailingWidth;
-    final resolvedTitleStyle = AwikiMeTextStyles.navTitle.copyWith(
+    final resolvedTitleStyle = context.awikiTheme.navTitle.copyWith(
       color: titleColor,
       fontSize: titleFontSize ?? responsive.titleXl,
       fontWeight: titleFontWeight,
@@ -160,7 +160,7 @@ class AwikiMeShellTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    const titleColor = AwikiMePalette.inkNeutral;
+    final titleColor = context.awikiTheme.title;
     return AwikiMeTopBar(
       title: title,
       padding: responsive.isPhone
@@ -186,7 +186,7 @@ class AwikiMeShellTopBar extends StatelessWidget {
                 child: Icon(
                   quickActionIcon,
                   size: responsive.iconLg,
-                  color: AwikiMePalette.brandAccent,
+                  color: context.awikiTheme.primary,
                 ),
               ),
             ),

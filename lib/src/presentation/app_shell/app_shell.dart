@@ -48,10 +48,7 @@ import 'providers/navigation_provider.dart';
 import 'providers/selected_conversation_provider.dart';
 import 'providers/session_provider.dart';
 
-const _desktopRailActiveColor = AwikiMePalette.brandAccent;
-const _desktopRailInactiveColor = AwikiMePalette.mutedNeutral;
-const _desktopRailActiveBackground = AwikiMePalette.brandAccentSoft;
-const double _desktopRailWidth = 64;
+const double _desktopRailWidth = 68;
 const double _desktopRailMinWidth = 56;
 const MethodChannel _macWindowChromeChannel = MethodChannel(
   'ai.awiki.awikime/window_chrome',
@@ -594,7 +591,7 @@ class _AppUpdateRecommendationBanner extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: context.awikiTheme.surface,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AwikiMePalette.brandAccentSoft),
+                border: Border.all(color: context.awikiTheme.primarySoft),
                 boxShadow: const <BoxShadow>[
                   BoxShadow(
                     color: Color(0x18000000),
@@ -607,9 +604,9 @@ class _AppUpdateRecommendationBanner extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
                 child: Row(
                   children: <Widget>[
-                    const Icon(
+                    Icon(
                       CupertinoIcons.arrow_down_circle,
-                      color: AwikiMePalette.brandAccent,
+                      color: context.awikiTheme.primary,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -747,15 +744,15 @@ class _DeviceJoinRequestBanner extends StatelessWidget {
                   color: theme.surface,
                   borderRadius: BorderRadius.circular(AwikiMeRadii.lg),
                   border: Border.all(
-                    color: AwikiMeColors.primary.withValues(alpha: 0.2),
+                    color: context.awikiTheme.primary.withValues(alpha: 0.2),
                   ),
                   boxShadow: theme.overlayShadow,
                 ),
                 child: Row(
                   children: <Widget>[
-                    const Icon(
+                    Icon(
                       CupertinoIcons.device_phone_portrait,
-                      color: AwikiMeColors.primary,
+                      color: context.awikiTheme.primary,
                       size: 22,
                     ),
                     const SizedBox(width: 10),
@@ -788,8 +785,8 @@ class _DeviceJoinRequestBanner extends StatelessWidget {
                     const SizedBox(width: 10),
                     Text(
                       context.l10n.deviceReviewAction,
-                      style: const TextStyle(
-                        color: AwikiMeColors.primary,
+                      style: TextStyle(
+                        color: context.awikiTheme.primary,
                         fontSize: 14,
                         fontWeight: FontWeight.w400,
                       ),
@@ -937,11 +934,11 @@ class _DesktopRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     return DecoratedBox(
-      decoration: const BoxDecoration(color: AwikiMePalette.navigationSurface),
+      decoration: BoxDecoration(color: context.awikiTheme.navigationSurface),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxHeight < 760;
-          final gap = responsive.displayScaled(compact ? 7.0 : 10.0);
+          final gap = responsive.displayScaled(4);
           final avatar = _avatarForCurrentIdentity(session, profile);
           return Column(
             children: <Widget>[
@@ -968,7 +965,6 @@ class _DesktopRail extends StatelessWidget {
                         selected:
                             currentDestination == ShellDestination.messages,
                         badge: _formatUnreadBadge(unreadCount),
-                        compact: compact,
                         onTap: () => onTap(ShellDestination.messages),
                       ),
                       SizedBox(height: gap),
@@ -977,7 +973,6 @@ class _DesktopRail extends StatelessWidget {
                         role: AwikiMeIconRole.agents,
                         label: context.l10n.shellNavAgents,
                         selected: currentDestination == ShellDestination.agents,
-                        compact: compact,
                         semanticsIdentifier: 'e2e-agents-tab',
                         onTap: () => onTap(ShellDestination.agents),
                       ),
@@ -989,7 +984,6 @@ class _DesktopRail extends StatelessWidget {
                         semanticsIdentifier: 'e2e-contacts-tab',
                         selected:
                             currentDestination == ShellDestination.contacts,
-                        compact: compact,
                         onTap: () => onTap(ShellDestination.contacts),
                       ),
                       SizedBox(height: gap),
@@ -998,7 +992,6 @@ class _DesktopRail extends StatelessWidget {
                         role: AwikiMeIconRole.tasks,
                         label: context.l10n.shellNavTasks,
                         selected: currentDestination == ShellDestination.tasks,
-                        compact: compact,
                         onTap: () => onTap(ShellDestination.tasks),
                       ),
                       SizedBox(height: gap),
@@ -1008,7 +1001,6 @@ class _DesktopRail extends StatelessWidget {
                         label: context.l10n.shellNavWorkspace,
                         selected:
                             currentDestination == ShellDestination.workbench,
-                        compact: compact,
                         onTap: () => onTap(ShellDestination.workbench),
                       ),
                     ],
@@ -1021,7 +1013,6 @@ class _DesktopRail extends StatelessWidget {
                 label: context.l10n.shellNavSettings,
                 semanticsIdentifier: 'e2e-settings-tab',
                 selected: currentDestination == ShellDestination.settings,
-                compact: compact,
                 onTap: () => onTap(ShellDestination.settings),
               ),
               SizedBox(height: responsive.displayScaled(compact ? 10 : 14)),
@@ -1101,7 +1092,6 @@ class _DesktopRailItem extends StatelessWidget {
     required this.role,
     required this.label,
     required this.selected,
-    required this.compact,
     required this.onTap,
     this.badge,
     this.semanticsIdentifier,
@@ -1110,7 +1100,6 @@ class _DesktopRailItem extends StatelessWidget {
   final AwikiMeIconRole role;
   final String label;
   final bool selected;
-  final bool compact;
   final VoidCallback onTap;
   final String? badge;
   final String? semanticsIdentifier;
@@ -1119,13 +1108,14 @@ class _DesktopRailItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final foreground = selected
-        ? _desktopRailActiveColor
-        : _desktopRailInactiveColor;
-    final height = responsive.displayScaled(compact ? 56.0 : 58.0);
-    final width = responsive.displayScaled(54);
+        ? context.awikiTheme.primary
+        : context.awikiTheme.secondaryText;
+    final height = responsive.displayScaled(44);
+    final width = responsive.displayScaled(44);
     return AppPressable(
       onTap: onTap,
       semanticLabel: label,
+      tooltip: label,
       semanticsIdentifier: semanticsIdentifier,
       selected: selected,
       borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
@@ -1133,9 +1123,9 @@ class _DesktopRailItem extends StatelessWidget {
       scaleOnPress: true,
       builder: (context, state, child) {
         final overlay = state.pressed
-            ? _desktopRailActiveColor.withValues(alpha: 0.10)
+            ? context.awikiTheme.primary.withValues(alpha: 0.10)
             : state.hovered || state.focused
-            ? _desktopRailActiveColor.withValues(alpha: 0.06)
+            ? context.awikiTheme.primary.withValues(alpha: 0.06)
             : CupertinoColors.transparent;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 140),
@@ -1158,54 +1148,21 @@ class _DesktopRailItem extends StatelessWidget {
                 duration: const Duration(milliseconds: 140),
                 width: width,
                 height: height,
-                padding: EdgeInsets.symmetric(
-                  vertical: responsive.displayScaled(compact ? 6 : 8),
-                ),
                 decoration: BoxDecoration(
                   color: selected
-                      ? _desktopRailActiveBackground
+                      ? context.awikiTheme.primarySoft
                       : const Color(0x00FFFFFF),
                   borderRadius: BorderRadius.circular(
                     responsive.displayScaled(10),
                   ),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    SizedBox(
-                      width: responsive.displayScaled(30),
-                      height: responsive.displayScaled(24),
-                      child: Center(
-                        child: AwikiMeSemanticIcon(
-                          role: role,
-                          selected: selected,
-                          color: foreground,
-                          size: responsive.displayScaled(18),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: responsive.displayScaled(1)),
-                    SizedBox(
-                      width: width - responsive.displayScaled(6),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          softWrap: false,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: foreground,
-                            fontSize: 10.5,
-                            fontWeight: selected
-                                ? FontWeight.w400
-                                : FontWeight.w400,
-                            height: 1,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                child: Center(
+                  child: AwikiMeSemanticIcon(
+                    role: role,
+                    selected: selected,
+                    color: foreground,
+                    size: responsive.displayScaled(22),
+                  ),
                 ),
               ),
               if (badge != null)
@@ -1222,7 +1179,7 @@ class _DesktopRailItem extends StatelessWidget {
                       color: AwikiMePalette.unreadRed,
                       borderRadius: BorderRadius.circular(99),
                       border: Border.all(
-                        color: AwikiMePalette.navigationSurface,
+                        color: context.awikiTheme.navigationSurface,
                       ),
                     ),
                     child: Text(
@@ -1275,9 +1232,9 @@ class _DesktopRailAvatar extends StatelessWidget {
           width: responsive.displayScaled(38),
           height: responsive.displayScaled(38),
           decoration: BoxDecoration(
-            color: AwikiMePalette.content,
+            color: context.awikiTheme.surface,
             borderRadius: BorderRadius.circular(responsive.displayScaled(19)),
-            border: Border.all(color: AwikiMePalette.hairline),
+            border: Border.all(color: context.awikiTheme.border),
           ),
           child: Center(
             child: AvatarBadge(
@@ -1367,7 +1324,7 @@ class _BottomNavBar extends StatelessWidget {
     return DecoratedBox(
       key: const Key('compact-bottom-navigation'),
       decoration: BoxDecoration(
-        color: AwikiMePalette.content,
+        color: context.awikiTheme.surface,
         border: Border(top: BorderSide(color: theme.border)),
       ),
       child: SafeArea(
@@ -1451,8 +1408,8 @@ class _BottomNavItem extends StatelessWidget {
     final labelFontSize = responsive.scaled(10.5);
     final iconSlotSize = responsive.scaled(30);
     final foreground = active
-        ? AwikiMePalette.brandAccent
-        : AwikiMePalette.mutedNeutral;
+        ? context.awikiTheme.primary
+        : context.awikiTheme.secondaryText;
     Widget buildNavIcon() {
       final icon = AwikiMeSemanticIcon(
         role: role,
@@ -1536,9 +1493,11 @@ class _BottomNavItem extends StatelessWidget {
               key: Key('compact-nav-active-indicator:${role.name}'),
               width: responsive.scaled(28),
               height: responsive.scaled(3),
-              decoration: const BoxDecoration(
-                color: AwikiMePalette.brandAccent,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(3)),
+              decoration: BoxDecoration(
+                color: context.awikiTheme.primary,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(3),
+                ),
               ),
             ),
           ),

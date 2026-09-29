@@ -48,7 +48,7 @@ class _ChatHeader extends StatelessWidget {
     if (macStyle) {
       return Container(
         key: const Key('chat-header'),
-        height: responsive.displayScaled(52),
+        height: responsive.displayScaled(48),
         padding: EdgeInsets.fromLTRB(
           responsive.displayScaled(14),
           0,
@@ -265,11 +265,11 @@ class _MacHeaderIdentityText extends StatelessWidget {
             key: const Key('chat-header-agent-badge'),
             label: agentBadgeLabel!,
             color: isDeletedAgentConversation
-                ? AwikiMePalette.mist
-                : AwikiMePalette.brandAccentSoft,
+                ? context.awikiTheme.subtleSurface
+                : context.awikiTheme.primarySoft,
             textColor: isDeletedAgentConversation
-                ? AwikiMePalette.mutedNeutral
-                : AwikiMePalette.brandAccent,
+                ? context.awikiTheme.secondaryText
+                : context.awikiTheme.primary,
           ),
         ],
       ],

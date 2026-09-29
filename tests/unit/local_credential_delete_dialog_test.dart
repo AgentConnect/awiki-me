@@ -3,7 +3,10 @@ import '../e2e/flutter/support/confirm_local_credential_deletion.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/shared/local_credential_delete_dialog.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Theme;
 import 'package:flutter_test/flutter_test.dart';
 
 const identity = SessionIdentity(
@@ -21,9 +24,20 @@ Future<void> pumpDialog(
   Future<bool> Function() query,
   VoidCallback onConfirm, {
   bool signsOut = false,
+  Brightness? brightness,
 }) async {
+  final theme = brightness == null
+      ? null
+      : AwikiMeTheme.forPlatform(
+          TargetPlatform.android,
+          brightness: brightness,
+        );
   await tester.pumpWidget(
     CupertinoApp(
+      theme: theme?.cupertinoTheme,
+      builder: theme == null
+          ? null
+          : (context, child) => Theme(data: theme.materialTheme, child: child!),
       locale: const Locale('zh'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -41,6 +55,86 @@ Future<void> pumpDialog(
 }
 
 void main() {
+  for (final brightness in Brightness.values) {
+    for (final signsOut in [false, true]) {
+      testWidgets(
+        '$brightness compact delete confirmation uses readable enabled danger text (signsOut=$signsOut)',
+        (tester) async {
+          tester.view
+            ..devicePixelRatio = 1
+            ..physicalSize = const Size(390, 844);
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          var confirmations = 0;
+          await pumpDialog(
+            tester,
+            () async => false,
+            () => confirmations++,
+            brightness: brightness,
+            signsOut: signsOut,
+          );
+          await tester.pumpAndSettle();
+
+          final danger = find.byKey(confirm);
+          final button = tester.widget<AppDangerButton>(danger);
+          expect(button.filled, isTrue);
+          expect(button.onPressed, isNotNull);
+          final pressable = tester.widget<AppPressable>(
+            find.descendant(of: danger, matching: find.byType(AppPressable)),
+          );
+          expect(pressable.enabled, isTrue);
+          final opacity = tester.widget<AnimatedOpacity>(
+            find.descendant(of: danger, matching: find.byType(AnimatedOpacity)),
+          );
+          expect(opacity.opacity, 1);
+          final foreground = tester
+              .widget<Text>(
+                find.descendant(of: danger, matching: find.byType(Text)),
+              )
+              .style!
+              .color!;
+          final surface = find.descendant(
+            of: danger,
+            matching: find.byType(AppSurface),
+          );
+          final background =
+              (tester
+                          .widget<Container>(
+                            find
+                                .descendant(
+                                  of: surface,
+                                  matching: find.byType(Container),
+                                )
+                                .first,
+                          )
+                          .decoration!
+                      as BoxDecoration)
+                  .color!;
+          final theme = tester.element(danger).awikiTheme;
+          expect(foreground, theme.colorScheme.onError);
+          expect(background, theme.colorScheme.error);
+          if (brightness == Brightness.light) {
+            // Preserve the existing light button's exact foreground and surface.
+            expect(foreground, const Color(0xFFFFFFFF));
+            expect(background, const Color(0xFFD73431));
+          }
+          final luminances = [
+            foreground.computeLuminance(),
+            background.computeLuminance(),
+          ]..sort();
+          expect(
+            (luminances.last + 0.05) / (luminances.first + 0.05),
+            greaterThanOrEqualTo(4.5),
+          );
+          await tester.tap(danger);
+          await tester.pumpAndSettle();
+          expect(confirmations, 1);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
   testWidgets(
     'E2E confirmation waits for delayed impact query and clicks once',
     (tester) async {

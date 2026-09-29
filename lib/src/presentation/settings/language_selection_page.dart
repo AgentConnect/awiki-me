@@ -43,7 +43,7 @@ class LanguageSelectionPage extends ConsumerWidget {
                   child: Icon(
                     CupertinoIcons.chevron_left,
                     size: context.awikiResponsive.iconMd,
-                    color: AwikiMePalette.actionBlue,
+                    color: context.awikiTheme.primary,
                   ),
                 ),
               ),
@@ -161,7 +161,7 @@ class _LanguageOptionRow extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: selected
-                                ? AwikiMePalette.actionBlue
+                                ? context.awikiTheme.primary
                                 : theme.title,
                             fontSize: 17,
                             fontWeight: selected
@@ -190,11 +190,11 @@ class _LanguageOptionRow extends StatelessWidget {
                   SizedBox.square(
                     dimension: 24,
                     child: selected
-                        ? const Icon(
+                        ? Icon(
                             CupertinoIcons.check_mark,
-                            key: Key('language-option-selected-check'),
+                            key: const Key('language-option-selected-check'),
                             size: 23,
-                            color: AwikiMePalette.actionBlue,
+                            color: context.awikiTheme.primary,
                           )
                         : null,
                   ),

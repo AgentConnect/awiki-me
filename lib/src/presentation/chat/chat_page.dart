@@ -219,9 +219,9 @@ class _AttachmentDropOverlay extends StatelessWidget {
     return IgnorePointer(
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: AwikiMePalette.brandAccent.withValues(alpha: 0.20),
+          color: context.awikiTheme.primary.withValues(alpha: 0.20),
           border: Border.all(
-            color: AwikiMePalette.brandAccent,
+            color: context.awikiTheme.primary,
             width: macStyle ? 1.4 : 1.8,
           ),
           borderRadius: BorderRadius.circular(radius),
@@ -238,7 +238,7 @@ class _AttachmentDropOverlay extends StatelessWidget {
                   : responsive.spacing(12),
             ),
             decoration: BoxDecoration(
-              color: CupertinoColors.white,
+              color: context.awikiTheme.surface,
               borderRadius: BorderRadius.circular(
                 macStyle ? responsive.displayScaled(14) : responsive.radius(18),
               ),
@@ -255,7 +255,7 @@ class _AttachmentDropOverlay extends StatelessWidget {
               children: <Widget>[
                 Icon(
                   CupertinoIcons.paperclip,
-                  color: AwikiMePalette.brandAccent,
+                  color: context.awikiTheme.primary,
                   size: macStyle
                       ? responsive.displayScaled(20)
                       : responsive.iconMd,
@@ -268,7 +268,7 @@ class _AttachmentDropOverlay extends StatelessWidget {
                 Text(
                   context.l10n.chatAddAttachment,
                   style: TextStyle(
-                    color: AwikiMePalette.inkNeutral,
+                    color: context.awikiTheme.title,
                     fontWeight: FontWeight.w400,
                     fontSize: macStyle
                         ? responsive.displayScaled(14)

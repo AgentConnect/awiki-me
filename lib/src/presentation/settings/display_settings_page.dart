@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../app/app_appearance.dart';
 import '../../app/ui_feedback.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
@@ -20,9 +22,14 @@ class DisplaySettingsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isDesktopPlatform =
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
     final l10n = context.l10n;
     final theme = context.awikiTheme;
     final scale = ref.watch(displayScaleProvider);
+    final appearance = ref.watch(appAppearanceProvider);
     final levelIndex = AwikiDisplayScale.levelIndex(scale);
     final percent = (scale * 100).round();
 
@@ -37,7 +44,9 @@ class DisplaySettingsPage extends ConsumerWidget {
               key: const Key('display-settings-header'),
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: AwikiMeTopBar(
-                title: l10n.settingsDisplayAndWindow,
+                title: isDesktopPlatform
+                    ? l10n.settingsDisplayAndWindow
+                    : l10n.settingsAppearance,
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 titleFontSize: awikiMeCompactTopBarTitleFontSize,
                 titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
@@ -49,7 +58,7 @@ class DisplaySettingsPage extends ConsumerWidget {
                   child: Icon(
                     CupertinoIcons.chevron_left,
                     size: context.awikiResponsive.iconMd,
-                    color: AwikiMePalette.actionBlue,
+                    color: theme.primary,
                   ),
                 ),
               ),
@@ -62,6 +71,59 @@ class DisplaySettingsPage extends ConsumerWidget {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
                     children: <Widget>[
+                      Text(l10n.settingsAppearance, style: theme.sectionTitle),
+                      const SizedBox(height: 12),
+                      for (final choice in AppAppearance.values)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: AppPressable(
+                            key: Key('appearance-${choice.name}'),
+                            selected: appearance == choice,
+                            semanticLabel: _appearanceLabel(context, choice),
+                            onTap: () async {
+                              try {
+                                await ref
+                                    .read(appAppearanceProvider.notifier)
+                                    .setAppearance(choice);
+                              } on Object {
+                                ref
+                                    .read(uiFeedbackProvider.notifier)
+                                    .showError(
+                                      AppMessage.operationFailedRetry(),
+                                    );
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              decoration: BoxDecoration(
+                                color: appearance == choice
+                                    ? theme.primarySoft
+                                    : theme.surface,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _appearanceLabel(context, choice),
+                                      style: theme.inputText,
+                                    ),
+                                  ),
+                                  if (appearance == choice)
+                                    Icon(
+                                      CupertinoIcons.check_mark,
+                                      color: theme.primary,
+                                      size: 18,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
                       DecoratedBox(
                         key: const Key('display-scale-control'),
                         decoration: BoxDecoration(
@@ -88,8 +150,8 @@ class DisplaySettingsPage extends ConsumerWidget {
                                   Text(
                                     '$percent%',
                                     key: const Key('display-scale-value'),
-                                    style: const TextStyle(
-                                      color: AwikiMePalette.actionBlue,
+                                    style: TextStyle(
+                                      color: theme.primary,
                                       fontSize: 15,
                                       fontWeight: FontWeight.w400,
                                     ),
@@ -122,25 +184,26 @@ class DisplaySettingsPage extends ConsumerWidget {
                             ref.read(displayScaleProvider.notifier).reset(),
                       ),
                       const SizedBox(height: 12),
-                      _DisplayActionRow(
-                        key: const Key('window-placement-reset-row'),
-                        icon: CupertinoIcons.rectangle_expand_vertical,
-                        title: l10n.settingsWindowPlacementReset,
-                        onTap: () async {
-                          try {
-                            await ref
-                                .read(desktopWindowPlacementServiceProvider)
-                                .resetPlacement();
-                          } on Object catch (error) {
-                            ref
-                                .read(uiFeedbackProvider.notifier)
-                                .showError(
-                                  AppMessage.operationFailedRetry(),
-                                  detail: error.toString(),
-                                );
-                          }
-                        },
-                      ),
+                      if (isDesktopPlatform)
+                        _DisplayActionRow(
+                          key: const Key('window-placement-reset-row'),
+                          icon: CupertinoIcons.rectangle_expand_vertical,
+                          title: l10n.settingsWindowPlacementReset,
+                          onTap: () async {
+                            try {
+                              await ref
+                                  .read(desktopWindowPlacementServiceProvider)
+                                  .resetPlacement();
+                            } on Object catch (error) {
+                              ref
+                                  .read(uiFeedbackProvider.notifier)
+                                  .showError(
+                                    AppMessage.operationFailedRetry(),
+                                    detail: error.toString(),
+                                  );
+                            }
+                          },
+                        ),
                     ],
                   ),
                 ),
@@ -152,6 +215,13 @@ class DisplaySettingsPage extends ConsumerWidget {
     );
   }
 }
+
+String _appearanceLabel(BuildContext context, AppAppearance appearance) =>
+    switch (appearance) {
+      AppAppearance.system => context.l10n.appearanceSystem,
+      AppAppearance.light => context.l10n.appearanceLight,
+      AppAppearance.dark => context.l10n.appearanceDark,
+    };
 
 class _DiscreteDisplayScaleSlider extends StatelessWidget {
   const _DiscreteDisplayScaleSlider({
@@ -220,7 +290,7 @@ class _DisplayScaleTicks extends StatelessWidget {
             child: _DisplayScaleTick(
               level: level,
               selected: AwikiDisplayScale.nearestLevel(selectedScale) == level,
-              selectedColor: AwikiMePalette.actionBlue,
+              selectedColor: theme.primary,
               unselectedColor: theme.tertiaryText,
               onTap: () => onSelected(level),
             ),
@@ -317,7 +387,7 @@ class _DisplayActionRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: <Widget>[
-                  Icon(icon, size: 22, color: AwikiMePalette.actionBlue),
+                  Icon(icon, size: 22, color: theme.primary),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Text(

@@ -180,11 +180,13 @@ class SettingsPage extends ConsumerWidget {
               (_) => const LanguageSelectionPage(),
             ),
           ),
-          if (isDesktopPlatform) ...<Widget>[
+          ...<Widget>[
             const AppSectionDivider(),
             AppListTile(
               key: const Key('settings-display-row'),
-              title: l10n.settingsDisplayAndWindow,
+              title: isDesktopPlatform
+                  ? l10n.settingsDisplayAndWindow
+                  : l10n.settingsAppearance,
               leading: leading(
                 const _SettingsIcon(icon: CupertinoIcons.textformat_size),
               ),
@@ -395,19 +397,20 @@ class SettingsPage extends ConsumerWidget {
                 (_) => const LanguageSelectionPage(),
               ),
             ),
-            if (isDesktopPlatform)
-              _QuietSettingsRow(
-                key: const Key('settings-display-row'),
-                icon: CupertinoIcons.textformat_size,
-                iconKey: const Key('settings-display-icon'),
-                title: l10n.settingsDisplayAndWindow,
-                trailingText: '${(displayScale * 100).round()}%',
-                height: optionRowHeight,
-                onTap: () => AppNavigator.push<void>(
-                  context,
-                  (_) => const DisplaySettingsPage(),
-                ),
+            _QuietSettingsRow(
+              key: const Key('settings-display-row'),
+              icon: CupertinoIcons.textformat_size,
+              iconKey: const Key('settings-display-icon'),
+              title: isDesktopPlatform
+                  ? l10n.settingsDisplayAndWindow
+                  : l10n.settingsAppearance,
+              trailingText: '${(displayScale * 100).round()}%',
+              height: optionRowHeight,
+              onTap: () => AppNavigator.push<void>(
+                context,
+                (_) => const DisplaySettingsPage(),
               ),
+            ),
           ],
         ),
         _QuietSettingsSectionTitle(
@@ -483,7 +486,7 @@ class SettingsPage extends ConsumerWidget {
                   child: Icon(
                     CupertinoIcons.chevron_left,
                     size: responsive.iconMd,
-                    color: AwikiMePalette.actionBlue,
+                    color: context.awikiTheme.primary,
                   ),
                 ),
               ),
@@ -819,7 +822,7 @@ class _QuietSettingsRow extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final trailingValue = trailingText?.trim() ?? '';
-    final foreground = destructive ? theme.danger : AwikiMePalette.actionBlue;
+    final foreground = destructive ? theme.danger : context.awikiTheme.primary;
     return AppPressable(
       onTap: onTap,
       semanticLabel: title,

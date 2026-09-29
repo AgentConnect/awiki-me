@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:awiki_me/src/app/awiki_me_app.dart';
+import 'package:awiki_me/src/app/app_appearance.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
@@ -16,6 +17,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart'
     show CupertinoIcons, CupertinoPageScaffold;
@@ -26,7 +28,10 @@ import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter/widgets.dart'
     show
         ColoredBox,
+        Container,
+        Brightness,
         DecoratedBox,
+        EditableText,
         FontWeight,
         Icon,
         Key,
@@ -93,6 +98,117 @@ class _StaticGroupController extends GroupController {
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(_loadGoldenFont);
+  setUpAll(() => EditableText.debugDeterministicCursor = true);
+  tearDownAll(() => EditableText.debugDeterministicCursor = false);
+
+  testWidgets('reference matrix renders login and chat in both appearances', (
+    tester,
+  ) async {
+    const sizes = [
+      Size(360, 800),
+      Size(390, 844),
+      Size(430, 932),
+      Size(600, 960),
+      Size(820, 1180),
+      Size(1024, 768),
+      Size(1366, 768),
+      Size(1440, 900),
+      Size(1920, 1080),
+    ];
+    try {
+      for (final appearance in [AppAppearance.light, AppAppearance.dark]) {
+        final brightness = appearance == AppAppearance.dark
+            ? Brightness.dark
+            : Brightness.light;
+        for (final size in sizes) {
+          final platform = size.width < 700
+              ? TargetPlatform.iOS
+              : TargetPlatform.macOS;
+          final name =
+              'reference-${appearance.name}-${size.width.toInt()}x${size.height.toInt()}';
+          await _prepareEnvironment(tester, size: size, platform: platform);
+          await _pumpOnboarding(tester, appearance: appearance);
+          final login = find.byKey(const Key('onboarding-mac-auth-card'));
+          expect(login, findsOneWidget);
+          expect(
+            tester.element(login).awikiTheme.colorScheme.brightness,
+            brightness,
+          );
+          expect(tester.takeException(), isNull, reason: '$name login layout');
+          await _captureScreenshot(tester, '$name-login');
+
+          await _prepareEnvironment(tester, size: size, platform: platform);
+          await _pumpVisualApp(
+            tester,
+            _createVisualHarness(),
+            appearance: appearance,
+          );
+          final row = find.byKey(
+            const Key('conversation-row:dm:peer-scope:v1:hermes-ui'),
+          );
+          expect(row, findsOneWidget);
+          expect(
+            tester.element(row).awikiTheme.colorScheme.brightness,
+            brightness,
+          );
+          expect(tester.takeException(), isNull, reason: '$name list layout');
+          await _captureScreenshot(tester, '$name-list');
+          await tester.tap(row);
+          await _pumpVisualFrames(tester);
+          final input = find.byKey(const Key('chat-composer-input'));
+          expect(input, findsOneWidget);
+          if (find
+              .byKey(const Key('chat-compact-composer'))
+              .evaluate()
+              .isNotEmpty) {
+            final send = find.byKey(const Key('chat-send-button'));
+            expect(tester.widget<AppIconButton>(send).onPressed, isNull);
+            expect(
+              find.descendant(of: send, matching: find.text('发送')),
+              findsOneWidget,
+            );
+            expect(
+              tester
+                  .getRect(find.byKey(const Key('chat-attachment-button')))
+                  .right,
+              lessThan(tester.getRect(input).left),
+            );
+          }
+          expect(
+            tester.element(input).awikiTheme.colorScheme.brightness,
+            brightness,
+          );
+          expect(tester.takeException(), isNull, reason: '$name chat layout');
+          await _captureScreenshot(tester, '$name-chat');
+          if (size == const Size(390, 844)) {
+            await tester.enterText(input, '第一行草稿\n第二行草稿\n第三行草稿');
+            await _pumpVisualFrames(tester);
+            expect(
+              tester.takeException(),
+              isNull,
+              reason: '$name multiline composer',
+            );
+            await _captureScreenshot(tester, '$name-composer');
+            tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+            await _pumpVisualFrames(tester);
+            expect(
+              tester.getRect(find.byKey(const Key('chat-send-button'))).bottom,
+              lessThanOrEqualTo(size.height - 300),
+            );
+            expect(
+              tester.takeException(),
+              isNull,
+              reason: '$name keyboard composer',
+            );
+            await _captureScreenshot(tester, '$name-keyboard');
+            tester.view.resetViewInsets();
+          }
+        }
+      }
+    } finally {
+      await _resetEnvironment(tester);
+    }
+  });
 
   testWidgets('capture compact and expanded onboarding', (tester) async {
     try {
@@ -102,10 +218,7 @@ void main() {
         platform: TargetPlatform.iOS,
       );
       await _pumpOnboarding(tester);
-      expect(
-        find.byKey(const Key('onboarding-compact-auth-card')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('onboarding-mac-auth-card')), findsOneWidget);
       await _captureScreenshot(tester, '01-compact-onboarding');
 
       await _prepareEnvironment(
@@ -118,10 +231,7 @@ void main() {
         find.byKey(const Key('onboarding-expanded-layout')),
         findsOneWidget,
       );
-      expect(
-        find.byKey(const Key('onboarding-desktop-dot-pattern')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('onboarding-brand-pane')), findsOneWidget);
       await _captureScreenshot(tester, '02-expanded-onboarding');
     } finally {
       await _resetEnvironment(tester);
@@ -149,6 +259,7 @@ void main() {
   });
 
   testWidgets('capture compact and expanded messages and chat', (tester) async {
+    final semantics = tester.ensureSemantics();
     try {
       await _prepareEnvironment(
         tester,
@@ -162,6 +273,7 @@ void main() {
       );
       _expectCompactShellHeader(tester, title: '消息');
       await _captureScreenshot(tester, '03-compact-messages');
+      await _verifyConversationFilters(tester);
 
       final swipeConversation = find.byKey(
         const Key('conversation-row:dm:peer-scope:v1:hermes-ui'),
@@ -241,11 +353,24 @@ void main() {
         platform: TargetPlatform.macOS,
       );
       await _pumpVisualApp(tester, _createVisualHarness());
+      await _verifyConversationFilters(tester);
       await tester.tap(
         find.byKey(const Key('conversation-row:dm:peer-scope:v1:hermes-ui')),
       );
       await _pumpVisualFrames(tester);
       expect(find.text('product-brief.pdf'), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(const Key('mac-desktop-rail-slot'))).width,
+        closeTo(68 * AwikiDisplayScale.layoutBaseline, 0.1),
+      );
+      expect(
+        tester
+            .getSize(find.byKey(const Key('mac-conversation-list-pane')))
+            .width,
+        closeTo(264 * AwikiDisplayScale.layoutBaseline, 0.1),
+      );
+      expect(find.byTooltip('消息'), findsOneWidget);
+      expect(find.bySemanticsLabel('消息'), findsOneWidget);
       await _captureScreenshot(tester, '05-expanded-messages-chat');
 
       final expandedImage = find.byKey(
@@ -259,6 +384,7 @@ void main() {
       );
       await _captureScreenshot(tester, '19-expanded-image-actions');
     } finally {
+      semantics.dispose();
       await _resetEnvironment(tester);
     }
   });
@@ -271,7 +397,7 @@ void main() {
         platform: TargetPlatform.iOS,
       );
       await _pumpVisualApp(tester, _createVisualHarness());
-      await tester.tap(find.bySemanticsLabel('智能体'));
+      await tester.tap(find.byKey(const Key('compact-nav-agents')));
       await _pumpVisualFrames(tester);
       expect(find.byKey(const Key('agents-compact-list')), findsOneWidget);
       _expectAgentListStatusOverlay(tester, _daemonDid);
@@ -295,7 +421,7 @@ void main() {
         platform: TargetPlatform.macOS,
       );
       await _pumpVisualApp(tester, _createVisualHarness());
-      await tester.tap(find.bySemanticsLabel('智能体'));
+      await tester.tap(find.byKey(const Key('desktop-rail-agents')));
       await _pumpVisualFrames(tester);
       expect(find.byKey(const Key('agents-expanded-layout')), findsOneWidget);
       _expectExpandedAgentHeaderUsesAvailableWidth(tester);
@@ -375,7 +501,7 @@ void main() {
         tester.getSize(
           find.byKey(const Key('peer-profile-send-message-visual')),
         ),
-        const Size(84, 40),
+        Size(_compactSize.width - 32, 56),
       );
       expect(find.byKey(const Key('peer-profile-follow')), findsNothing);
       expect(find.byKey(const Key('peer-profile-unfollow')), findsOneWidget);
@@ -384,13 +510,23 @@ void main() {
             .widget<Text>(
               find.descendant(
                 of: find.byKey(const Key('peer-profile-delete-thread-visual')),
-                matching: find.text('删除本地聊天记录'),
+                matching: find.text('清空聊天记录'),
               ),
             )
             .style
             ?.fontSize,
         16,
       );
+      final sendActionRect = tester.getRect(
+        find.byKey(const Key('peer-profile-send-message-visual')),
+      );
+      final clearActionRect = tester.getRect(
+        find.byKey(const Key('peer-profile-delete-thread-visual')),
+      );
+      expect(clearActionRect.height, 56);
+      expect(sendActionRect.left, clearActionRect.left);
+      expect(sendActionRect.right, clearActionRect.right);
+      expect(sendActionRect.bottom, lessThan(clearActionRect.top));
       await _captureScreenshot(tester, '09e-compact-contact-profile');
 
       await tester.tap(find.bySemanticsLabel('返回'));
@@ -398,7 +534,7 @@ void main() {
 
       await tester.tap(find.bySemanticsLabel('我'));
       await _pumpVisualFrames(tester);
-      expect(find.byKey(const Key('profile-handle-value')), findsOneWidget);
+      expect(find.byKey(const Key('profile-compact-summary')), findsOneWidget);
       expect(find.byKey(const Key('profile-back-button')), findsNothing);
       expect(
         find.byKey(const Key('compact-bottom-navigation')),
@@ -407,80 +543,95 @@ void main() {
       _expectCompactProfileGeometry(tester);
       await _captureScreenshot(tester, '10-compact-profile');
 
+      final navigation = find.byKey(const Key('profile-navigation-group'));
+      final collapsedHeight = tester.getSize(navigation).height;
       await tester.tap(find.byKey(const Key('profile-did-row')));
       await _pumpVisualFrames(tester);
-      expect(
-        tester.getRect(find.byKey(const Key('profile-navigation-group'))),
-        Rect.fromLTWH(0, 354, _compactSize.width, 296),
+      final didDetails = tester.getRect(
+        find.byKey(const Key('profile-did-details')),
       );
+      expect(didDetails.height, 84);
+      expect(didDetails.width, _compactSize.width);
       expect(
-        tester.getRect(find.byKey(const Key('profile-did-details'))),
-        Rect.fromLTWH(0, 407, _compactSize.width, 84),
+        didDetails.top,
+        tester.getRect(find.byKey(const Key('profile-did-row'))).bottom,
       );
-      expect(find.byKey(const Key('profile-did-value')), findsOneWidget);
+      expect(tester.getSize(navigation).height, collapsedHeight + 84);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('profile-did-value'))).data,
+        _sessionDid,
+      );
       expect(
         tester.getSize(find.byKey(const Key('profile-copy-did-button'))),
         const Size.square(44),
       );
       expect(find.byKey(const Key('profile-homepage-details')), findsNothing);
+      expect(
+        tester.widget<Icon>(find.byKey(const Key('profile-did-arrow'))).icon,
+        CupertinoIcons.chevron_down,
+      );
       await _captureScreenshot(tester, '10a-compact-profile-did-expanded');
 
       await tester.tap(find.byKey(const Key('profile-homepage-row')));
       await _pumpVisualFrames(tester);
       expect(find.byKey(const Key('profile-did-details')), findsNothing);
-      expect(
-        tester.getRect(find.byKey(const Key('profile-homepage-details'))),
-        Rect.fromLTWH(0, 460, _compactSize.width, 64),
+      final homepageDetails = tester.getRect(
+        find.byKey(const Key('profile-homepage-details')),
       );
-      expect(find.byKey(const Key('profile-homepage-value')), findsOneWidget);
+      expect(homepageDetails.height, 64);
+      expect(homepageDetails.width, _compactSize.width);
+      expect(
+        homepageDetails.top,
+        tester.getRect(find.byKey(const Key('profile-homepage-row'))).bottom,
+      );
+      expect(tester.getSize(navigation).height, collapsedHeight + 64);
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('profile-homepage-value')))
+            .data,
+        contains('ui-reviewer.awiki.ai'),
+      );
       expect(
         tester.getSize(find.byKey(const Key('profile-homepage-action-target'))),
         const Size.square(44),
       );
-      await _captureScreenshot(tester, '10c-compact-profile-homepage-expanded');
-
-      await tester.tap(find.byKey(const Key('profile-identity-document-row')));
-      await _pumpVisualFrames(tester);
-      expect(find.byKey(const Key('profile-homepage-details')), findsNothing);
-      expect(
-        tester.getRect(find.byKey(const Key('profile-navigation-group'))),
-        Rect.fromLTWH(0, 354, _compactSize.width, 240),
-      );
-      expect(
-        tester.getRect(find.byKey(const Key('profile-identity-empty-state'))),
-        Rect.fromLTWH(0, 513, _compactSize.width, 28),
-      );
-      expect(find.text('暂无资料'), findsOneWidget);
-      expect(
-        find.byKey(const Key('profile-expanded-identity-summary')),
-        findsNothing,
-      );
-      expect(find.byKey(const Key('profile-expanded-did-row')), findsNothing);
-      expect(
-        find.byKey(const Key('profile-expanded-homepage-row')),
-        findsNothing,
-      );
-      expect(find.byKey(const Key('profile-identity-document')), findsNothing);
-      expect(
-        tester.getRect(find.byKey(const Key('profile-settings-row'))),
-        Rect.fromLTWH(0, 542, _compactSize.width, 52),
-      );
       expect(
         tester
-            .widget<Icon>(
-              find.byKey(const Key('profile-identity-document-arrow')),
-            )
+            .widget<Icon>(find.byKey(const Key('profile-homepage-arrow')))
             .icon,
         CupertinoIcons.chevron_down,
       );
+      await _captureScreenshot(tester, '10c-compact-profile-homepage-expanded');
+
+      await tester.tap(find.byKey(const Key('profile-homepage-row')));
+      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('profile-homepage-details')), findsNothing);
+      expect(tester.getSize(navigation).height, collapsedHeight);
+      // Compact identity-card editing was replaced by the owned profile editor.
+      await tester.tap(find.byKey(const Key('profile-edit-button')));
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 5),
+      );
+      expect(find.byKey(const Key('profile-edit-page')), findsOneWidget);
+      expect(find.byKey(const Key('profile-edit-dialog')), findsNothing);
       expect(
-        find.byKey(const Key('profile-identity-empty-state-text')),
+        find.byKey(const Key('profile-edit-nickname-row')),
         findsOneWidget,
       );
-      await _captureScreenshot(tester, '10b-compact-profile-identity-expanded');
-
-      await tester.tap(find.byKey(const Key('profile-identity-document-row')));
-      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('profile-edit-bio-row')), findsOneWidget);
+      expect(find.byKey(const Key('profile-edit-tags-row')), findsOneWidget);
+      expect(find.byKey(const Key('profile-edit-save-button')), findsOneWidget);
+      await _captureScreenshot(tester, '10b-compact-profile-edit');
+      await tester.tap(find.byKey(const Key('profile-edit-back-button')));
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 5),
+      );
+      expect(find.byKey(const Key('profile-edit-page')), findsNothing);
+      _expectCompactProfileGeometry(tester);
 
       await tester.tap(find.byKey(const Key('profile-settings-row')));
       await _pumpVisualFrames(tester);
@@ -495,7 +646,7 @@ void main() {
 
       final securityGroup = find.byKey(const Key('settings-security-group'));
       expect(tester.getSize(securityGroup).width, _compactSize.width);
-      expect(tester.getSize(securityGroup).height, 284);
+      expect(tester.getSize(securityGroup).height, 244);
       expect(
         tester.getSize(
           find.byKey(const Key('settings-delete-credential-icon')),
@@ -751,16 +902,23 @@ Future<void> _resetEnvironment(WidgetTester tester) async {
   await _pumpVisualFrames(tester);
   tester.view.resetPhysicalSize();
   tester.view.resetDevicePixelRatio();
+  tester.view.resetViewInsets();
 }
 
-Future<void> _pumpOnboarding(WidgetTester tester) async {
+Future<void> _pumpOnboarding(
+  WidgetTester tester, {
+  AppAppearance appearance = AppAppearance.light,
+}) async {
   final harness = createFakeAwikiMeAppHarness();
   await tester.pumpWidget(
     RepaintBoundary(
       key: _captureBoundaryKey,
       child: AwikiMeApp(
         bootstrap: harness.bootstrap,
-        providerOverrides: harness.providerOverrides,
+        providerOverrides: [
+          ...harness.providerOverrides,
+          initialAppAppearanceProvider.overrideWithValue(appearance),
+        ],
         testFontFamily: _goldenFontFamily,
       ),
     ),
@@ -1126,14 +1284,18 @@ List<ChatMessage> _visualHistory() {
 
 Future<void> _pumpVisualApp(
   WidgetTester tester,
-  FakeAwikiMeAppHarness harness,
-) async {
+  FakeAwikiMeAppHarness harness, {
+  AppAppearance appearance = AppAppearance.light,
+}) async {
   await tester.pumpWidget(
     RepaintBoundary(
       key: _captureBoundaryKey,
       child: AwikiMeApp(
         bootstrap: harness.bootstrap,
-        providerOverrides: harness.providerOverrides,
+        providerOverrides: [
+          ...harness.providerOverrides,
+          initialAppAppearanceProvider.overrideWithValue(appearance),
+        ],
         testFontFamily: _goldenFontFamily,
       ),
     ),
@@ -1247,25 +1409,15 @@ void _expectCompactAgentGeometry(
 }
 
 void _expectCompactProfileGeometry(WidgetTester tester) {
-  final header = tester.getRect(
-    find.byKey(const Key('profile-compact-header')),
-  );
-  final avatar = tester.getRect(find.byKey(const Key('profile-avatar')));
-  final statistics = tester.getRect(
-    find.byKey(const Key('profile-statistics')),
-  );
-  final navigationGroup = find.byKey(const Key('profile-navigation-group'));
-  final navigation = tester.getRect(navigationGroup);
-  final did = tester.getRect(find.byKey(const Key('profile-did-row')));
-  final homepage = tester.getRect(
-    find.byKey(const Key('profile-homepage-row')),
-  );
-  final identity = tester.getRect(
-    find.byKey(const Key('profile-identity-document-row')),
-  );
-  final settings = tester.getRect(
-    find.byKey(const Key('profile-settings-row')),
-  );
+  Rect rect(String key) => tester.getRect(find.byKey(Key(key)));
+  final header = rect('profile-compact-header');
+  final summary = rect('profile-compact-summary');
+  final avatar = rect('profile-avatar');
+  final edit = rect('profile-edit-button');
+  final navigation = rect('profile-navigation-group');
+  final did = rect('profile-did-row');
+  final homepage = rect('profile-homepage-row');
+  final settings = rect('profile-settings-row');
 
   expect(header, Rect.fromLTWH(0, 0, _compactSize.width, 64));
   final title = tester.widget<Text>(
@@ -1292,188 +1444,111 @@ void _expectCompactProfileGeometry(WidgetTester tester) {
           as BoxDecoration;
   expect(headerDecoration.color, AwikiMeColors.surface);
   expect(headerDecoration.border, isNull);
-  expect(find.byKey(const Key('awiki-me-brand-mark')), findsNothing);
-  expect(avatar, Rect.fromLTWH((_compactSize.width - 104) / 2, 104, 104, 104));
-  final handle = tester.widget<Text>(
-    find.byKey(const Key('profile-handle-value')),
+  expect(summary.top, header.bottom);
+  expect(summary.left, 0);
+  expect(summary.width, _compactSize.width);
+  final summaryWidget = tester.widget<Container>(
+    find.byKey(const Key('profile-compact-summary')),
   );
-  expect(handle.maxLines, 1);
-  expect(handle.softWrap, isFalse);
-  expect(
-    tester.getSize(find.byKey(const Key('profile-edit-button'))),
-    const Size.square(44),
+  expect(summaryWidget.decoration, isNull);
+  expect(summaryWidget.color, AwikiMeColors.surface);
+  expect(avatar.size, const Size.square(72));
+  expect(avatar.left, 32);
+  expect(edit.top, summary.top);
+  expect(edit.width, summary.width);
+  expect(edit.height, greaterThanOrEqualTo(104));
+  expect(find.byKey(const Key('profile-edit-chevron')), findsOneWidget);
+  final displayName = tester.widget<Text>(
+    find.byKey(const Key('profile-display-name')),
   );
-  expect(statistics, Rect.fromLTWH(16, 292, _compactSize.width - 32, 30));
-  expect(
-    tester.getRect(find.byKey(const Key('profile-statistics-divider'))),
-    Rect.fromLTWH((_compactSize.width / 2) - 0.5, 292, 1, 30),
-  );
-  expect(find.byKey(const Key('profile-metadata-card')), findsNothing);
-  expect(
-    tester.getRect(find.byKey(const Key('profile-navigation-top-divider'))),
-    Rect.fromLTWH(0, 354, _compactSize.width, 1),
-  );
-  expect(navigation, Rect.fromLTWH(0, 354, _compactSize.width, 212));
-  expect(did, Rect.fromLTWH(0, 355, _compactSize.width, 52));
-  expect(
-    tester.getRect(find.byKey(const Key('profile-did-icon-target'))),
-    const Rect.fromLTWH(16, 359, 44, 44),
-  );
-  expect(
-    tester.getRect(find.byKey(const Key('profile-did-divider'))),
-    Rect.fromLTWH(0, 407, _compactSize.width, 1),
-  );
-  expect(homepage, Rect.fromLTWH(0, 408, _compactSize.width, 52));
-  expect(
-    tester.getRect(find.byKey(const Key('profile-homepage-divider'))),
-    Rect.fromLTWH(0, 460, _compactSize.width, 1),
-  );
-  expect(identity, Rect.fromLTWH(0, 461, _compactSize.width, 52));
-  expect(
-    tester.getSize(find.byKey(const Key('profile-did-icon-target'))),
-    const Size.square(44),
-  );
-  expect(
-    tester.getSize(find.byKey(const Key('profile-homepage-icon-target'))),
-    const Size.square(44),
-  );
-  expect(
-    tester.getRect(
-      find.byKey(const Key('profile-identity-document-icon-target')),
-    ),
-    const Rect.fromLTWH(16, 465, 44, 44),
-  );
-  expect(
-    tester.getRect(find.byKey(const Key('profile-identity-document-icon-box'))),
-    const Rect.fromLTWH(27, 476, 22, 22),
-  );
-  for (final title in <String>['DID', '主页', '身份卡', '设置']) {
-    final text = tester.widget<Text>(find.text(title));
-    expect(text.style?.fontSize, 16);
-    expect(text.style?.fontWeight, FontWeight.w400);
-    expect(text.style?.height, 1.25);
+  expect(displayName.data, 'UI Reviewer');
+  expect(displayName.maxLines, 1);
+  expect(displayName.style?.fontWeight, FontWeight.w400);
+  expect(rect('profile-statistics').height, 30);
+  expect(rect('profile-statistics-top-divider').top, edit.bottom);
+  expect(navigation.top - summary.bottom, 8);
+  expect(navigation.width, _compactSize.width);
+  expect(navigation.height, 166);
+  expect(did.top, navigation.top + 1);
+  expect(homepage.top, did.bottom + 1);
+  expect(settings.top - homepage.bottom, 8);
+  for (final key in [
+    'profile-did-row',
+    'profile-homepage-row',
+    'profile-settings-row',
+  ]) {
+    expect(rect(key).height, 52);
+    expect(rect(key).width, _compactSize.width);
   }
-  expect(find.byKey(const Key('profile-did-value')), findsNothing);
-  expect(find.byKey(const Key('profile-homepage-value')), findsNothing);
-  expect(
-    tester.widget<Icon>(find.byKey(const Key('profile-did-arrow'))).icon,
-    CupertinoIcons.chevron_right,
-  );
-  expect(
-    tester.widget<Icon>(find.byKey(const Key('profile-homepage-arrow'))).icon,
-    CupertinoIcons.chevron_right,
-  );
-  expect(tester.getRect(find.text('身份卡')).left, closeTo(68, 0.1));
-  final identityTitle = tester.widget<Text>(find.text('身份卡'));
-  expect(identityTitle.style?.fontSize, 16);
-  expect(identityTitle.style?.fontWeight, FontWeight.w400);
-  expect(identityTitle.style?.height, 1.25);
-  expect(find.text('完整资料，让协作更可信'), findsNothing);
-  expect(find.byKey(const Key('profile-identity-empty-state')), findsNothing);
-  expect(
-    find.byKey(const Key('profile-expanded-identity-summary')),
-    findsNothing,
-  );
-  expect(find.byKey(const Key('profile-expanded-did-row')), findsNothing);
-  expect(find.byKey(const Key('profile-expanded-homepage-row')), findsNothing);
-  expect(
-    tester
-        .widget<Icon>(find.byKey(const Key('profile-identity-document-arrow')))
-        .size,
-    18,
-  );
-  expect(settings, Rect.fromLTWH(0, 514, _compactSize.width, 52));
-  expect(
-    tester.getRect(find.byKey(const Key('profile-navigation-divider'))),
-    Rect.fromLTWH(0, 513, _compactSize.width, 1),
-  );
-  expect(find.byKey(const Key('profile-identity-document')), findsNothing);
+  for (final role in ['did', 'homepage', 'settings']) {
+    expect(rect('profile-$role-icon-target').size, const Size.square(44));
+    expect(
+      tester.widget<Icon>(find.byKey(Key('profile-$role-arrow'))).icon,
+      CupertinoIcons.chevron_right,
+    );
+  }
+  for (final text in ['DID', '主页', '设置']) {
+    final label = tester.widget<Text>(find.text(text));
+    expect(label.style?.fontSize, 16);
+    expect(label.style?.fontWeight, FontWeight.w400);
+    expect(label.style?.height, 1.25);
+  }
+  for (final key in [
+    'profile-handle-value',
+    'profile-statistics-divider',
+    'profile-identity-document-row',
+    'profile-identity-document',
+    'profile-identity-empty-state',
+    'profile-did-value',
+    'profile-homepage-value',
+  ]) {
+    expect(find.byKey(Key(key)), findsNothing);
+  }
 }
 
 void _expectCompactSettingsGeometry(WidgetTester tester) {
-  final header = tester.getRect(
-    find.byKey(const Key('settings-compact-header')),
-  );
-  final avatar = tester.getRect(
-    find.byKey(const Key('settings-profile-avatar')),
-  );
-  final account = tester.getRect(
-    find.byKey(const Key('settings-account-group')),
-  );
-  final app = tester.getRect(find.byKey(const Key('settings-app-group')));
-  final security = tester.getRect(
-    find.byKey(const Key('settings-security-group')),
-  );
-
-  expect(header.height, closeTo(64, 0.1));
+  Rect rect(String key) => tester.getRect(find.byKey(Key(key)));
+  final header = rect('settings-compact-header');
+  final profile = rect('settings-profile-row');
+  final account = rect('settings-account-group');
+  final app = rect('settings-app-group');
+  final security = rect('settings-security-group');
+  expect(header, Rect.fromLTWH(0, 0, _compactSize.width, 64));
   expect(
     tester
         .widget<CupertinoPageScaffold>(find.byType(CupertinoPageScaffold))
         .backgroundColor,
     AwikiMeColors.background,
   );
-  expect(
-    tester.getRect(find.byKey(const Key('settings-back-button'))),
-    const Rect.fromLTWH(8, 10, 44, 44),
-  );
-  expect(avatar.left, closeTo(20, 0.1));
-  expect(avatar.top, closeTo(87, 0.1));
-  expect(avatar.size, const Size.square(58));
-  expect(account.top, closeTo(208, 0.1));
-  expect(account.left, 0);
-  expect(account.width, _compactSize.width);
-  expect(account.height, closeTo(146, 0.1));
-  expect(
-    tester.getSize(find.byKey(const Key('settings-devices-row'))).height,
-    closeTo(72, 0.1),
-  );
-  expect(
-    tester.getSize(find.byKey(const Key('settings-personal-agent-row'))).height,
-    closeTo(72, 0.1),
-  );
-  expect(app.top, closeTo(394, 0.1));
-  expect(app.left, 0);
-  expect(app.width, _compactSize.width);
-  expect(app.height, closeTo(183, 0.1));
-  expect(
-    tester
-        .getSize(find.byKey(const Key('settings-current-version-row')))
-        .height,
-    closeTo(60, 0.1),
-  );
-  expect(
-    tester.getSize(find.byKey(const Key('settings-check-updates-row'))).height,
-    closeTo(60, 0.1),
-  );
-  expect(
-    tester.getSize(find.byKey(const Key('settings-language-row'))).height,
-    closeTo(60, 0.1),
-  );
-  expect(security.top, closeTo(617, 0.1));
-  expect(security.left, 0);
-  expect(security.width, _compactSize.width);
-  expect(security.height, closeTo(284, 0.1));
-  expect(
-    tester
-        .getSize(find.byKey(const Key('settings-export-credential-row')))
-        .height,
-    closeTo(68, 0.1),
-  );
-  expect(
-    tester.getSize(find.byKey(const Key('settings-logout-row'))).height,
-    closeTo(68, 0.1),
-  );
-  expect(
-    tester
-        .getSize(find.byKey(const Key('settings-delete-credential-row')))
-        .height,
-    closeTo(84, 0.1),
-  );
+  expect(rect('settings-back-button'), const Rect.fromLTWH(8, 10, 44, 44));
+  expect(profile, Rect.fromLTWH(0, header.bottom, _compactSize.width, 104));
+  expect(rect('settings-profile-avatar'), const Rect.fromLTWH(20, 87, 58, 58));
+  expect(account.top - profile.bottom, 40);
+  expect(app.top - account.bottom, 40);
+  expect(security.top - app.bottom, 40);
+  for (final group in [account, app, security]) {
+    expect(group.left, 0);
+    expect(group.width, _compactSize.width);
+  }
+  // One device row, four App rows, four security rows, each with a hairline.
+  expect(account.height, 61);
+  expect(app.height, 244);
+  expect(security.height, 244);
+  for (final key in [
+    'settings-devices-row',
+    'settings-current-version-row',
+    'settings-check-updates-row',
+    'settings-language-row',
+    'settings-recover-handle-did-row',
+    'settings-export-credential-row',
+    'settings-logout-row',
+    'settings-delete-credential-row',
+  ]) {
+    expect(rect(key).height, 60);
+  }
+  expect(find.byKey(const Key('settings-personal-agent-row')), findsNothing);
   expect(find.byKey(const Key('settings-danger-section-title')), findsNothing);
-  expect(
-    tester.getSize(find.byKey(const Key('settings-current-version-icon'))),
-    const Size.square(24),
-  );
+  expect(rect('settings-current-version-icon').size, const Size.square(24));
   expect(
     find.descendant(
       of: find.byKey(const Key('settings-current-version-row')),
@@ -1547,6 +1622,36 @@ void _expectCompactAgentPeerInfoGeometry(WidgetTester tester) {
   expect(identity.width, closeTo(_compactSize.width - 48, 0.1));
   expect(identity.height, closeTo(104, 0.1));
   expect(find.byKey(const Key('compact-bottom-navigation')), findsNothing);
+}
+
+Future<void> _verifyConversationFilters(WidgetTester tester) async {
+  final alice = find.byKey(
+    const Key('conversation-row:dm:peer-scope:v1:alice'),
+  );
+  final agent = find.byKey(
+    const Key('conversation-row:dm:peer-scope:v1:hermes-ui'),
+  );
+  final group = find.byKey(
+    const Key('conversation-row:group:did:test:group:product'),
+  );
+  await tester.tap(find.byKey(const Key('conversation-filter-unread')));
+  await _pumpVisualFrames(tester);
+  expect(alice, findsOneWidget);
+  expect(group, findsNothing);
+  await tester.tap(find.byKey(const Key('conversation-filter-group')));
+  await _pumpVisualFrames(tester);
+  expect(group, findsOneWidget);
+  expect(alice, findsNothing);
+  await tester.tap(find.byKey(const Key('conversation-filter-agent')));
+  await _pumpVisualFrames(tester);
+  expect(agent, findsOneWidget);
+  expect(alice, findsNothing);
+  expect(group, findsNothing);
+  await tester.tap(find.byKey(const Key('conversation-filter-all')));
+  await _pumpVisualFrames(tester);
+  expect(alice, findsOneWidget);
+  expect(agent, findsOneWidget);
+  expect(group, findsOneWidget);
 }
 
 Future<void> _captureScreenshot(WidgetTester tester, String name) async {
