@@ -1229,11 +1229,25 @@ class _DesktopAppRobot {
     final peerInfoButton = find
         .byKey(const Key('chat-peer-info-avatar-button'))
         .hitTestable();
-    await pumpUntilFinder(
-      peerInfoButton,
-      description: 'hit-testable peer info button',
+    final chatInformationButton = find
+        .byKey(const Key('chat-information-button'))
+        .hitTestable();
+    await pumpUntil(
+      description: 'visible peer information entry',
+      condition: () =>
+          peerInfoButton.evaluate().length +
+              chatInformationButton.evaluate().length ==
+          1,
     );
-    await tapOne(peerInfoButton, description: 'peer info button');
+    if (peerInfoButton.evaluate().isNotEmpty) {
+      await tapOne(peerInfoButton, description: 'peer info button');
+    } else {
+      await tapOne(chatInformationButton, description: 'chat information');
+      await tapOne(
+        find.byKey(const Key('chat-information-peer-row')),
+        description: 'peer profile row',
+      );
+    }
     await pumpUntilFinder(
       find.byKey(const Key('peer-profile-display-name')),
       description: 'peer profile display name',
