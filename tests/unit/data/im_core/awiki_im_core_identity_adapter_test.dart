@@ -202,6 +202,62 @@ void main() {
     },
   );
 
+  test(
+    'prepared Join reserves clock skew without extending server TTL',
+    () async {
+      final sdk = _IdentityErrorCore();
+      final adapter = AwikiImCoreIdentityAdapter.withCoreInstance(
+        coreInstance: () async => sdk,
+      );
+      final registration = await adapter.registerHandleWithPhone(
+        phone: 'test-contact',
+        otp: 'test-code',
+        handle: 'alice',
+      );
+      final progress = await adapter.beginExistingHandleDeviceJoin(
+        registration.existingHandleContinuationId!,
+        userPresenceConfirmed: false,
+      );
+
+      expect(sdk.lastJoinTtlSeconds, 570);
+      expect(sdk.lastJoinPreparationId, 'prepared-join-1');
+      expect(sdk.lastJoinOperationId, 'awiki-me-register-join-prepared-join-1');
+      expect(sdk.lastJoinUserPresenceConfirmed, isFalse);
+      expect(progress.joinSessionId, 'join-registration-recovery');
+      final issuedAt = DateTime.utc(2026, 9, 29, 13, 32, 29, 184, 671);
+      final expiresAt = issuedAt.add(
+        Duration(seconds: sdk.lastJoinTtlSeconds!),
+      );
+      for (final skew in <Duration>[
+        Duration.zero,
+        const Duration(microseconds: 5719),
+        const Duration(seconds: 30),
+      ]) {
+        final serverNow = issuedAt.subtract(skew);
+        expect(expiresAt.isAfter(serverNow), isTrue);
+        expect(
+          expiresAt.difference(issuedAt),
+          lessThanOrEqualTo(const Duration(seconds: 600)),
+        );
+        expect(
+          expiresAt.difference(serverNow),
+          lessThanOrEqualTo(const Duration(seconds: 600)),
+        );
+        expect(
+          issuedAt.isAfter(serverNow.add(const Duration(seconds: 30))),
+          isFalse,
+        );
+      }
+      await expectLater(
+        adapter.beginExistingHandleDeviceJoin(
+          registration.existingHandleContinuationId!,
+          userPresenceConfirmed: false,
+        ),
+        throwsStateError,
+      );
+    },
+  );
+
   test('adapter preserves structured errors through prepared Join', () async {
     final sdk = _IdentityErrorCore();
     final adapter = AwikiImCoreIdentityAdapter.withCoreInstance(
@@ -381,6 +437,10 @@ class _IdentityErrorCore implements core.AwikiImCore {
 
   Object? registrationError;
   Object? joinError;
+  int? lastJoinTtlSeconds;
+  String? lastJoinPreparationId;
+  String? lastJoinOperationId;
+  bool? lastJoinUserPresenceConfirmed;
   Object? upgradeError;
   Object? deletionError;
 
@@ -451,6 +511,10 @@ class _IdentityErrorCore implements core.AwikiImCore {
     int ttlSeconds = 600,
     required bool userPresenceConfirmed,
   }) async {
+    lastJoinTtlSeconds = ttlSeconds;
+    lastJoinPreparationId = preparationId;
+    lastJoinOperationId = operationId;
+    lastJoinUserPresenceConfirmed = userPresenceConfirmed;
     final error = joinError;
     if (error != null) throw error;
     return _authorizedRegistrationJoin();

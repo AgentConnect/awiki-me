@@ -864,6 +864,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     return Stack(
       children: <Widget>[
         child,
+        if (onboarding.isBusy &&
+            onboarding.existingHandleContinuationId != null &&
+            !onboarding.isLegacyUpgradeRunning)
+          AwikiMeLoadingMask(
+            key: const Key('existing-handle-join-loading'),
+            label: context.l10n.commonLoading,
+          ),
         if (onboarding.isLegacyUpgradeRunning)
           const AwikiMeLoadingMask(key: Key('legacy-upgrade-loading-mask')),
         if (onboarding.isLegacyUpgradeRetryRequired)

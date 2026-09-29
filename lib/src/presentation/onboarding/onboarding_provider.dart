@@ -806,32 +806,43 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }) async {
     final continuationId = state.existingHandleContinuationId;
     final mode = state.existingHandleJoinMode;
-    if (continuationId == null || mode == null) {
-      throw StateError('existing_handle_continuation_unavailable');
-    }
-    final port = ref.read(identityCorePortProvider);
-    if (port is! ExistingHandleContinuationPort) {
-      throw StateError('existing_handle_continuation_unavailable');
-    }
-    final continuationPort = port as ExistingHandleContinuationPort;
-    var userPresenceConfirmed = false;
-    if (state.existingHandleJoinRequiresUserPresence) {
-      userPresenceConfirmed = await ref
-          .read(userPresencePortProvider)
-          .confirm(reason: presenceReason);
-      if (!userPresenceConfirmed) {
-        return false;
+    final generation = _busyGeneration + 1;
+    final progress = await _runBusy<DeviceJoinProgress?>(() async {
+      if (continuationId == null || mode == null) {
+        throw StateError('existing_handle_continuation_unavailable');
       }
-    }
-    final progress = await continuationPort.beginExistingHandleDeviceJoin(
-      continuationId,
-      userPresenceConfirmed: userPresenceConfirmed,
-    );
-    final expectedCause = mode == ExistingHandleJoinMode.handleRecoveryRebind
-        ? DeviceJoinCause.handleRecovery
-        : DeviceJoinCause.ordinary;
-    if (progress.cause != expectedCause) {
-      throw StateError('registration_join_mode_mismatch');
+      final port = ref.read(identityCorePortProvider);
+      if (port is! ExistingHandleContinuationPort) {
+        throw StateError('existing_handle_continuation_unavailable');
+      }
+      final continuationPort = port as ExistingHandleContinuationPort;
+      var userPresenceConfirmed = false;
+      if (state.existingHandleJoinRequiresUserPresence) {
+        userPresenceConfirmed = await ref
+            .read(userPresencePortProvider)
+            .confirm(reason: presenceReason);
+        if (!userPresenceConfirmed ||
+            !mounted ||
+            generation != _busyGeneration ||
+            !state.isBusy) {
+          return null;
+        }
+      }
+      final progress = await continuationPort.beginExistingHandleDeviceJoin(
+        continuationId,
+        userPresenceConfirmed: userPresenceConfirmed,
+      );
+      final expectedCause = mode == ExistingHandleJoinMode.handleRecoveryRebind
+          ? DeviceJoinCause.handleRecovery
+          : DeviceJoinCause.ordinary;
+      if (progress.cause != expectedCause) {
+        throw StateError('registration_join_mode_mismatch');
+      }
+      return progress;
+    }, failureMessage: AppMessage.operationFailedRetry());
+    // A timed-out or superseded request must not activate a late result.
+    if (!mounted || generation != _busyGeneration || progress == null) {
+      return false;
     }
     ref.read(devicesProvider.notifier).resumeNewDevice(progress);
     state = state.copyWith(
@@ -951,6 +962,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   Future<T?> _runBusy<T>(
     Future<T> Function() action, {
     AppSessionTransition? sessionTransition,
+    AppMessage? failureMessage,
   }) async {
     if (state.isBusy) {
       return null;
@@ -995,7 +1007,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(
-            AppMessage.fromError(error),
+            failureMessage ?? AppMessage.fromError(error),
             detail: appTransportDiagnostic(error),
           );
     } finally {

@@ -40,6 +40,12 @@ Handle Recovery 是默认开启的产品基线，最终可用性
 
 ## 2. App 状态流
 
+首页“将此设备加入已有账户”通过 Core 的 prepared-registration Join 入口显式使用
+570 秒有效期，在服务端 600 秒上限内预留 30 秒时钟偏差余量；不改变服务端校验、签名或
+过期规则。请求期间显示加载遮罩并阻止重复提交；失败显示本地化提示，超时或切换上下文
+后的迟到结果不得打开进度页或修改当前 Join 投影。失败不自动重试、不清除账户数据，
+也不向界面暴露原始异常、验证码或 grant。
+
 ```text
 新设备：统一登录/注册中的 Handle + SMS OTP
   -> AWiki 域内 account-verification exchange 返回一次性 grant
