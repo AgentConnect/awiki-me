@@ -1249,11 +1249,11 @@ void main() {
     expect(outgoingText.style?.fontWeight, FontWeight.w400);
     // Phone bubbles are 20-unit rounded with a tighter corner on the sender
     // side; neither carries a tail or outline.
-    final large = Radius.circular(20 * AwikiDisplayScale.layoutBaseline);
-    final small = Radius.circular(8 * AwikiDisplayScale.layoutBaseline);
+    const large = Radius.circular(20 * AwikiDisplayScale.layoutBaseline);
+    const small = Radius.circular(8 * AwikiDisplayScale.layoutBaseline);
     expect(
       incomingDecoration.borderRadius,
-      BorderRadius.only(
+      const BorderRadius.only(
         topLeft: small,
         topRight: large,
         bottomLeft: large,
@@ -1262,7 +1262,7 @@ void main() {
     );
     expect(
       outgoingDecoration.borderRadius,
-      BorderRadius.only(
+      const BorderRadius.only(
         topLeft: large,
         topRight: small,
         bottomLeft: large,

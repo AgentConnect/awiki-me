@@ -28,13 +28,9 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter/widgets.dart'
     show
-        ColoredBox,
-        Container,
         Brightness,
-        DecoratedBox,
         EditableText,
         FontWeight,
-        Icon,
         Key,
         RepaintBoundary,
         Size,

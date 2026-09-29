@@ -9,7 +9,6 @@ import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/compact_nested_navigator_back_scope.dart';
 import 'package:awiki_me/src/presentation/shared/identity_profile_surface.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart' show JSONMessageCodec;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
