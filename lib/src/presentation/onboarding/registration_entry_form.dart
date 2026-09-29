@@ -90,10 +90,6 @@ class RegistrationEntryForm extends ConsumerWidget {
         ],
         if (state.check?.decision == 'unavailable')
           Text(l10n.onboardingAccountUnavailable),
-        if (state.check?.isExisting == true || state.existingAccountPath) ...[
-          Text(l10n.onboardingExistingAccount),
-          const SizedBox(height: 12),
-        ],
         PendingHandleRecoveryEntry(
           handleController: handleController,
           phoneController: phoneController,
