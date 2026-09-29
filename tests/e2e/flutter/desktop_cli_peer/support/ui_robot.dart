@@ -1226,6 +1226,14 @@ class _DesktopAppRobot {
   }
 
   Future<void> openSelectedPeerInfo() async {
+    // A live update recommendation can cover the desktop chat header. Dismiss
+    // its visible UI; do not change update policy or bypass pointer hit testing.
+    final updateDismiss = find.byKey(
+      const Key('app-update-recommendation-dismiss'),
+    );
+    if (updateDismiss.evaluate().isNotEmpty) {
+      await tapOne(updateDismiss, description: 'dismiss update recommendation');
+    }
     final peerInfoButton = find
         .byKey(const Key('chat-peer-info-avatar-button'))
         .hitTestable();
