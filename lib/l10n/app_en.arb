@@ -1683,5 +1683,13 @@
   "handleRecoveryOtherPending": "Back to other recoveries",
   "secureConnectionFailed": "Unable to establish a secure connection. Check your system date and time, or contact support.",
   "trustResourcesInvalid": "The app’s secure connection resources are missing or damaged. Update or reinstall the app.",
-  "onboardingAccountCheckUnsupported": "This server does not support account checks yet. Existing accounts can continue to sign in."
+  "onboardingAccountCheckUnsupported": "This server does not support account checks yet. Existing accounts can continue to sign in.",
+  "profileDevicePendingCount": "{count} pending",
+  "@profileDevicePendingCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

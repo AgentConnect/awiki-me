@@ -3821,4 +3821,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get onboardingAccountCheckUnsupported => '当前服务器暂不支持账号检查。已有账号可继续登录。';
+
+  @override
+  String profileDevicePendingCount(int count) {
+    return '$count 个待审批';
+  }
 }

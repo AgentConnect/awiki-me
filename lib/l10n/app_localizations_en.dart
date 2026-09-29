@@ -4104,4 +4104,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get onboardingAccountCheckUnsupported =>
       'This server does not support account checks yet. Existing accounts can continue to sign in.';
+
+  @override
+  String profileDevicePendingCount(int count) {
+    return '$count pending';
+  }
 }

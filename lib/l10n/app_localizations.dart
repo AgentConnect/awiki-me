@@ -1301,7 +1301,7 @@ abstract class AppLocalizations {
   /// No description provided for @shellNavMe.
   ///
   /// In zh, this message translates to:
-  /// **'我'**
+  /// **'我的'**
   String get shellNavMe;
 
   /// No description provided for @shellTasksPlaceholderTitle.
@@ -7173,6 +7173,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'当前服务器暂不支持账号检查。已有账号可继续登录。'**
   String get onboardingAccountCheckUnsupported;
+
+  /// No description provided for @profileDevicePendingCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 个待审批'**
+  String profileDevicePendingCount(int count);
 }
 
 class _AppLocalizationsDelegate
