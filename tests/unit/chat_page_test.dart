@@ -44,7 +44,6 @@ import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
 import 'package:awiki_me/src/presentation/profile/profile_page.dart';
-import 'package:awiki_me/src/presentation/shared/adaptive_overlays.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_top_bar.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
@@ -924,7 +923,10 @@ void main() {
           await tester.tap(find.byKey(const Key('chat-send-button')));
           await tester.pumpAndSettle();
           if (membership == 'active') {
-            expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+            expect(
+              find.byKey(const Key('acp-composer-block-alert')),
+              findsOneWidget,
+            );
             expect(gateway.lastSentPayload, isNull);
             expect(
               container
@@ -934,7 +936,10 @@ void main() {
               text,
             );
           } else {
-            expect(find.byType(CupertinoAlertDialog), findsNothing);
+            expect(
+              find.byKey(const Key('acp-composer-block-alert')),
+              findsNothing,
+            );
             expect(gateway.lastSentPayload?['text'], text);
             expect(gateway.lastSentPayload?['mentions'], isNotEmpty);
             expect(
@@ -1149,7 +1154,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('chat-send-button')));
       await tester.pumpAndSettle();
-      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      expect(find.byKey(const Key('acp-composer-block-alert')), findsOneWidget);
       expect(gateway.lastSentContent, isNull);
       expect(gateway.lastSentAttachment, isNull);
       expect(
@@ -5130,7 +5135,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(AppDropMenu), findsOneWidget);
     expect(
-      find.byType(CompactActionSheet, skipOffstage: false),
+      find.byKey(const Key('compact-action-sheet'), skipOffstage: false),
       findsOneWidget,
     );
     expect(find.text('图片'), findsOneWidget);

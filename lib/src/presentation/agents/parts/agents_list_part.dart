@@ -311,26 +311,25 @@ class _AgentListHeader extends StatelessWidget {
     required VoidCallback onCreateSkill,
     required VoidCallback onRefresh,
   }) async {
-    final action = await showCupertinoModalPopup<String>(
-      context: context,
-      builder: (sheetContext) => CupertinoActionSheet(
-        actions: <Widget>[
-          CupertinoActionSheetAction(
-            key: const Key('agent-skill-onboarding-button'),
-            onPressed: () => Navigator.of(sheetContext).pop('skill'),
-            child: Text(context.l10n.agentSkillCreateInstruction),
-          ),
-          CupertinoActionSheetAction(
-            key: const Key('agents-list-refresh-button'),
-            onPressed: () => Navigator.of(sheetContext).pop('refresh'),
-            child: Text(context.l10n.agentRefreshList),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(sheetContext).pop(),
-          child: Text(context.l10n.commonCancel),
+    final action = await showAwikiGlassAlert<String>(
+      context,
+      actions: <AwikiAlertAction<String>>[
+        AwikiAlertAction<String>(
+          key: const Key('agent-skill-onboarding-button'),
+          label: context.l10n.agentSkillCreateInstruction,
+          value: 'skill',
         ),
-      ),
+        AwikiAlertAction<String>(
+          key: const Key('agents-list-refresh-button'),
+          label: context.l10n.agentRefreshList,
+          value: 'refresh',
+        ),
+        AwikiAlertAction<String>(
+          label: context.l10n.commonCancel,
+          value: 'cancel',
+          tone: AwikiPillTone.text,
+        ),
+      ],
     );
     if (!context.mounted) {
       return;

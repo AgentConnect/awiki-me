@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Tooltip;
@@ -6,9 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../app/e2e_semantics.dart';
-import '../adaptive_overlays.dart';
 import '../awiki_me_design.dart';
 import '../responsive_layout.dart';
+import 'awiki_glass_controls.dart' show awikiThickGlassDecoration;
 
 @immutable
 class AppPressableState {
@@ -892,10 +893,30 @@ class AppDropMenu extends StatelessWidget {
         ],
       ],
     );
-    if (compact) {
-      return CompactActionSheet(
-        key: const Key('compact-action-sheet'),
-        child: menuContent,
+    if (responsive.isPhone) {
+      // A floating thick-glass card centered over the scrim.
+      const phoneRadius = BorderRadius.all(Radius.circular(28));
+      return SafeArea(
+        minimum: const EdgeInsets.all(24),
+        child: Center(
+          child: ConstrainedBox(
+            key: const Key('compact-action-sheet'),
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: DecoratedBox(
+              decoration: awikiThickGlassDecoration(
+                context,
+                borderRadius: phoneRadius,
+              ),
+              child: ClipRRect(
+                borderRadius: phoneRadius,
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                  child: SingleChildScrollView(child: menuContent),
+                ),
+              ),
+            ),
+          ),
+        ),
       );
     }
     return SafeArea(

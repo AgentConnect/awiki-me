@@ -7,6 +7,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
 
+import '../../../app/app_router.dart';
 import '../awiki_me_design.dart';
 import 'app_widgets.dart';
 
@@ -76,38 +77,164 @@ class AwikiGlassPanel extends StatelessWidget {
   }
 }
 
-/// Presents [builder] as a floating glass sheet 8 units from the screen
-/// edges, the reference's phone treatment for dialogs and approvals.
-Future<T?> showAwikiGlassSheet<T>(
+/// Presents [builder] inside a centered floating glass panel, the
+/// reference's treatment for approvals and other composed dialogs.
+Future<T?> showAwikiGlassDialog<T>(
   BuildContext context, {
   required WidgetBuilder builder,
   bool dismissible = true,
+  double maxWidth = 440,
 }) {
-  return showCupertinoModalPopup<T>(
-    context: context,
+  return AppNavigator.showDialog<T>(
+    context,
+    (dialogContext) => AwikiGlassDialogFrame(
+      maxWidth: maxWidth,
+      child: builder(dialogContext),
+    ),
     barrierDismissible: dismissible,
-    barrierColor: const Color(0x3D0F171F),
-    builder: (sheetContext) {
-      final bottom = MediaQuery.viewPaddingOf(sheetContext).bottom;
-      return SafeArea(
-        top: true,
-        bottom: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(8, 0, 8, 8 + bottom / 2),
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
-              child: AwikiGlassPanel(
-                radius: 32,
-                child: SingleChildScrollView(child: builder(sheetContext)),
-              ),
-            ),
+  );
+}
+
+/// Centers [child] in a thick glass panel that stays clear of the keyboard
+/// and scrolls when the content is taller than the screen.
+class AwikiGlassDialogFrame extends StatelessWidget {
+  const AwikiGlassDialogFrame({
+    super.key,
+    required this.child,
+    this.maxWidth = 440,
+  });
+
+  final Widget child;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    return SafeArea(
+      minimum: const EdgeInsets.all(16),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: keyboard),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: AwikiGlassPanel(child: SingleChildScrollView(child: child)),
           ),
         ),
-      );
-    },
+      ),
+    );
+  }
+}
+
+/// One choice in an [AwikiGlassAlert]; tapping it closes the alert with
+/// [value].
+class AwikiAlertAction<T> {
+  const AwikiAlertAction({
+    required this.label,
+    required this.value,
+    this.key,
+    this.tone = AwikiPillTone.secondary,
+  });
+
+  final String label;
+  final T value;
+  final Key? key;
+  final AwikiPillTone tone;
+}
+
+/// Shows a centered glass alert and resolves with the chosen action's value,
+/// or null when dismissed. [dismissible] false also blocks back navigation.
+Future<T?> showAwikiGlassAlert<T>(
+  BuildContext context, {
+  Key? alertKey,
+  String? title,
+  String? message,
+  Widget? content,
+  required List<AwikiAlertAction<T>> actions,
+  bool dismissible = true,
+}) {
+  return AppNavigator.showDialog<T>(
+    context,
+    (_) => PopScope<T>(
+      canPop: dismissible,
+      child: AwikiGlassDialogFrame(
+        maxWidth: 360,
+        child: AwikiGlassAlert<T>(
+          key: alertKey,
+          title: title,
+          message: message,
+          content: content,
+          actions: actions,
+        ),
+      ),
+    ),
+    barrierDismissible: dismissible,
   );
+}
+
+/// Alert body: title, message or custom content, then pill actions side by
+/// side when there are two or fewer, stacked otherwise.
+class AwikiGlassAlert<T> extends StatelessWidget {
+  const AwikiGlassAlert({
+    super.key,
+    this.title,
+    this.message,
+    this.content,
+    required this.actions,
+  });
+
+  final String? title;
+  final String? message;
+  final Widget? content;
+  final List<AwikiAlertAction<T>> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    Widget button(AwikiAlertAction<T> action) => AwikiPillButton(
+      key: action.key,
+      label: action.label,
+      tone: action.tone,
+      expand: true,
+      onPressed: () => Navigator.of(context).pop(action.value),
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        if (title != null)
+          Text(
+            title!,
+            style: TextStyle(color: theme.title, fontSize: 18, height: 1.25),
+          ),
+        if (message != null) ...<Widget>[
+          if (title != null) const SizedBox(height: 10),
+          Text(
+            message!,
+            style: TextStyle(color: theme.body, fontSize: 14, height: 1.45),
+          ),
+        ],
+        if (content != null) ...<Widget>[
+          if (title != null || message != null) const SizedBox(height: 14),
+          content!,
+        ],
+        const SizedBox(height: 20),
+        if (actions.length <= 2)
+          Row(
+            children: <Widget>[
+              for (var i = 0; i < actions.length; i++) ...<Widget>[
+                if (i > 0) const SizedBox(width: 10),
+                Expanded(child: button(actions[i])),
+              ],
+            ],
+          )
+        else
+          for (var i = 0; i < actions.length; i++) ...<Widget>[
+            if (i > 0) const SizedBox(height: 10),
+            button(actions[i]),
+          ],
+      ],
+    );
+  }
 }
 
 enum AwikiPillTone {
@@ -151,11 +278,7 @@ class AwikiPillButton extends StatelessWidget {
         null,
         theme.primaryForeground,
       ),
-      AwikiPillTone.secondary => (
-        theme.glassLens,
-        theme.glassEdgeActive,
-        theme.title,
-      ),
+      AwikiPillTone.secondary => (theme.glass, theme.glassEdge, theme.title),
       AwikiPillTone.danger => (theme.dangerFill, null, CupertinoColors.white),
       AwikiPillTone.dangerOutline => (null, theme.danger, theme.danger),
       AwikiPillTone.text => (null, null, theme.title),

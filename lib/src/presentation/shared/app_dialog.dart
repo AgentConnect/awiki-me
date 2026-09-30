@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 
 import '../../l10n/l10n.dart';
-import 'adaptive_overlays.dart';
 import 'awiki_me_design.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
@@ -69,16 +68,6 @@ class AppDialogScaffold extends StatelessWidget {
               ? 28
               : responsive.radius(responsive.isCompact ? 14 : 8),
         );
-    if (responsive.isCompact && !compactCentered) {
-      return CompactBottomSheet(
-        maxWidth: maxWidth,
-        maxHeightFraction: effectiveHeightFraction,
-        horizontalMargin: horizontalPadding,
-        avoidKeyboard: avoidViewInsets,
-        surfaceColor: surfaceColor,
-        child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
-      );
-    }
     return SafeArea(
       minimum: EdgeInsets.symmetric(
         horizontal: horizontalPadding,

@@ -16,6 +16,7 @@ import '../shared/awiki_me_top_bar.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../shared/widgets/awiki_glass.dart';
+import '../shared/widgets/awiki_glass_controls.dart';
 import 'device_join_approval_sheet.dart';
 import 'device_labels.dart';
 import 'devices_provider.dart';
@@ -268,27 +269,20 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
   }
 
   Future<void> _confirmDeviceRevoke(DeviceSummary device) async {
-    final confirmed = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        key: const Key('device-revoke-confirm-dialog'),
-        title: Text(context.l10n.deviceRevokeConfirmTitle),
-        content: Text(
-          context.l10n.deviceRevokeConfirmDetail(device.protocolDeviceId),
+    final confirmed = await showAwikiGlassAlert<bool>(
+      context,
+      alertKey: const Key('device-revoke-confirm-dialog'),
+      title: context.l10n.deviceRevokeConfirmTitle,
+      message: context.l10n.deviceRevokeConfirmDetail(device.protocolDeviceId),
+      actions: <AwikiAlertAction<bool>>[
+        AwikiAlertAction<bool>(label: context.l10n.commonCancel, value: false),
+        AwikiAlertAction<bool>(
+          key: const Key('device-revoke-confirm-action'),
+          label: context.l10n.deviceRevokeConfirmAction,
+          value: true,
+          tone: AwikiPillTone.danger,
         ),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(context.l10n.commonCancel),
-          ),
-          CupertinoDialogAction(
-            key: const Key('device-revoke-confirm-action'),
-            isDestructiveAction: true,
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(context.l10n.deviceRevokeConfirmAction),
-          ),
-        ],
-      ),
+      ],
     );
     if (!mounted || confirmed != true) return;
     await ref
@@ -342,31 +336,35 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
         await _showRootTransferResult(false);
         return;
       }
-      final confirmed = await showCupertinoDialog<bool>(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          key: const Key('device-root-transfer-confirm-dialog'),
-          title: Text(context.l10n.deviceRootTransferGrantManagement),
-          content: Text(
-            context.l10n.deviceRootTransferTarget(
-              preparation.recipient.deviceId,
-              preparation.recipient.signingKeyId,
-              preparation.recipient.e2eeKeyId,
-            ),
-            key: const Key('device-root-transfer-recipient-summary'),
+      final confirmed = await showAwikiGlassAlert<bool>(
+        context,
+        alertKey: const Key('device-root-transfer-confirm-dialog'),
+        title: context.l10n.deviceRootTransferGrantManagement,
+        content: Text(
+          context.l10n.deviceRootTransferTarget(
+            preparation.recipient.deviceId,
+            preparation.recipient.signingKeyId,
+            preparation.recipient.e2eeKeyId,
           ),
-          actions: <Widget>[
-            CupertinoDialogAction(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(context.l10n.commonCancel),
-            ),
-            CupertinoDialogAction(
-              key: const Key('device-root-transfer-confirm-action'),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(context.l10n.deviceRootTransferConfirm),
-            ),
-          ],
+          key: const Key('device-root-transfer-recipient-summary'),
+          style: TextStyle(
+            color: context.awikiTheme.body,
+            fontSize: 14,
+            height: 1.45,
+          ),
         ),
+        actions: <AwikiAlertAction<bool>>[
+          AwikiAlertAction<bool>(
+            label: context.l10n.commonCancel,
+            value: false,
+          ),
+          AwikiAlertAction<bool>(
+            key: const Key('device-root-transfer-confirm-action'),
+            label: context.l10n.deviceRootTransferConfirm,
+            value: true,
+            tone: AwikiPillTone.primary,
+          ),
+        ],
       );
       if (!mounted) return;
       if (confirmed != true) {
@@ -386,26 +384,23 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
   }
 
   Future<void> _showRootTransferResult(bool sent) async {
-    await showCupertinoDialog<void>(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        key: Key(
-          sent
-              ? 'device-root-transfer-sent-dialog'
-              : 'device-root-transfer-failed-dialog',
-        ),
-        title: Text(
-          sent
-              ? context.l10n.deviceRootTransferSent
-              : context.l10n.deviceRootTransferFailed,
-        ),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(context.l10n.commonDone),
-          ),
-        ],
+    await showAwikiGlassAlert<void>(
+      context,
+      alertKey: Key(
+        sent
+            ? 'device-root-transfer-sent-dialog'
+            : 'device-root-transfer-failed-dialog',
       ),
+      title: sent
+          ? context.l10n.deviceRootTransferSent
+          : context.l10n.deviceRootTransferFailed,
+      actions: <AwikiAlertAction<void>>[
+        AwikiAlertAction<void>(
+          label: context.l10n.commonDone,
+          value: null,
+          tone: AwikiPillTone.primary,
+        ),
+      ],
     );
   }
 

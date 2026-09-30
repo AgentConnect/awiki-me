@@ -38,7 +38,6 @@ import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.
 import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
 import 'package:awiki_me/src/presentation/profile/profile_workspace_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
-import 'package:awiki_me/src/presentation/shared/adaptive_overlays.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_semantic_icon.dart';
@@ -747,7 +746,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AppDropMenu), findsNothing);
-    expect(find.byType(CompactActionSheet, skipOffstage: false), findsNothing);
+    expect(
+      find.byKey(const Key('compact-action-sheet'), skipOffstage: false),
+      findsNothing,
+    );
     final menu = find.byKey(const Key('compact-quick-actions-menu'));
     final pointer = find.byKey(const Key('compact-quick-actions-pointer'));
     expect(menu, findsOneWidget);

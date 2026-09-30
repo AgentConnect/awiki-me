@@ -45,6 +45,7 @@ import 'providers/message_sync_coordinator_provider.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/selected_conversation_provider.dart';
 import 'providers/session_provider.dart';
+import '../shared/widgets/awiki_glass_controls.dart';
 
 const double _desktopRailWidth = 68;
 const double _desktopRailMinWidth = 56;
@@ -406,25 +407,20 @@ class _AppShellState extends ConsumerState<AppShell> {
         context,
         rootNavigator: true,
       ).popUntil((route) => route.isFirst);
-      await showCupertinoDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        useRootNavigator: true,
-        builder: (dialogContext) => PopScope<void>(
-          canPop: false,
-          child: CupertinoAlertDialog(
-            key: const Key('auth-revoked-dialog'),
-            title: Text(context.l10n.authRevokedDialogTitle),
-            content: Text(context.l10n.authRevokedDialogMessage),
-            actions: <Widget>[
-              CupertinoDialogAction(
-                key: const Key('auth-revoked-dialog-confirm'),
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: Text(context.l10n.commonConfirm),
-              ),
-            ],
+      await showAwikiGlassAlert<void>(
+        context,
+        alertKey: const Key('auth-revoked-dialog'),
+        dismissible: false,
+        title: context.l10n.authRevokedDialogTitle,
+        message: context.l10n.authRevokedDialogMessage,
+        actions: <AwikiAlertAction<void>>[
+          AwikiAlertAction<void>(
+            key: const Key('auth-revoked-dialog-confirm'),
+            label: context.l10n.commonConfirm,
+            value: null,
+            tone: AwikiPillTone.primary,
           ),
-        ),
+        ],
       );
       if (!mounted) return;
       setState(() {

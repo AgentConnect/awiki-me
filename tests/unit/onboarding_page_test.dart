@@ -38,6 +38,7 @@ import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass_controls.dart';
 
 import 'test_support.dart';
 
@@ -2624,10 +2625,7 @@ void main() {
       const Key('existing-handle-recovery-action'),
     );
     expect(recoveryAction, findsOneWidget);
-    expect(
-      tester.widget<CupertinoDialogAction>(recoveryAction).onPressed,
-      isNotNull,
-    );
+    expect(tester.widget<AwikiPillButton>(recoveryAction).onPressed, isNotNull);
     await _tapVisible(tester, recoveryAction);
     await _settleVerificationStep(tester);
 

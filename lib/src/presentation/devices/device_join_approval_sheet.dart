@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/device_management.dart';
 import '../../l10n/l10n.dart';
 import '../shared/awiki_me_design.dart';
-import '../shared/responsive_layout.dart';
 import '../shared/widgets/awiki_glass_controls.dart';
 import '../../core/date_time_formatter.dart';
 import 'device_labels.dart';
@@ -520,33 +519,13 @@ class _TerminalBody extends StatelessWidget {
   }
 }
 
-/// Opens the join approval: a floating glass sheet on phones and a centered
-/// glass dialog on wider layouts.
+/// Opens the join approval as a centered floating glass dialog.
 Future<void> showDeviceJoinApproval(
   BuildContext context,
   DeviceJoinRequestNotice request,
 ) {
-  if (context.awikiResponsive.isPhone) {
-    return showAwikiGlassSheet<void>(
-      context,
-      builder: (_) => DeviceJoinApprovalSheet(request: request),
-    );
-  }
-  return showCupertinoDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    builder: (dialogContext) => Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: AwikiGlassPanel(
-            child: SingleChildScrollView(
-              child: DeviceJoinApprovalSheet(request: request),
-            ),
-          ),
-        ),
-      ),
-    ),
+  return showAwikiGlassDialog<void>(
+    context,
+    builder: (_) => DeviceJoinApprovalSheet(request: request),
   );
 }

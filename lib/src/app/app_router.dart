@@ -1,10 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show DialogRoute;
 import 'package:flutter/services.dart';
 
-import '../presentation/shared/awiki_me_design.dart';
-import '../presentation/shared/responsive_layout.dart';
 
 class AppNavigator {
   const AppNavigator._();
@@ -26,27 +23,6 @@ class AppNavigator {
     return MediaQuery(
       data: media.copyWith(padding: media.padding.copyWith(top: top)),
       child: Builder(builder: builder),
-    );
-  }
-
-  static SystemUiOverlayStyle _overlayStyle(
-    BuildContext context, {
-    bool sheet = false,
-  }) {
-    final theme = context.awikiTheme;
-    final brightness = theme.colorScheme.brightness;
-    final surface = sheet ? theme.navigationSurface : theme.background;
-    return SystemUiOverlayStyle(
-      statusBarColor: surface,
-      statusBarIconBrightness: brightness == Brightness.dark
-          ? Brightness.light
-          : Brightness.dark,
-      statusBarBrightness: brightness,
-      systemNavigationBarColor: surface,
-      systemNavigationBarIconBrightness: brightness == Brightness.dark
-          ? Brightness.light
-          : Brightness.dark,
-      systemNavigationBarDividerColor: sheet ? theme.navigationBorder : surface,
     );
   }
 
@@ -90,62 +66,45 @@ class AppNavigator {
     );
   }
 
+  /// Shows a modal dialog centered over a dimmed scrim on every layout,
+  /// fading and scaling it in rather than sliding a sheet up from the bottom.
   static Future<T?> showDialog<T>(
     BuildContext context,
     WidgetBuilder builder, {
     bool barrierDismissible = true,
-  }) async {
-    if (context.awikiResponsive.isCompact) {
-      SystemChrome.setSystemUIOverlayStyle(_overlayStyle(context, sheet: true));
-      try {
-        return await showCupertinoModalPopup<T>(
-          context: context,
-          barrierColor: const Color(0x66000000),
-          barrierDismissible: barrierDismissible,
-          semanticsDismissible: true,
-          useRootNavigator: true,
-          requestFocus: true,
-          builder: (dialogContext) =>
-              _AppDialogKeyboardDismissScope(child: builder(dialogContext)),
+  }) {
+    return showGeneralDialog<T>(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: barrierDismissible,
+      barrierLabel: 'Dismiss',
+      barrierColor: const Color(0x520F171F),
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (dialogContext, _, __) =>
+          _AppDialogKeyboardDismissScope(child: builder(dialogContext)),
+      transitionBuilder: (_, animation, __, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
         );
-      } finally {
-        if (context.mounted) {
-          SystemChrome.setSystemUIOverlayStyle(_overlayStyle(context));
-        }
-      }
-    }
-    return Navigator.of(context, rootNavigator: true).push<T>(
-      DialogRoute<T>(
-        context: context,
-        barrierDismissible: barrierDismissible,
-        barrierColor: const Color(0x66000000),
-        builder: (dialogContext) =>
-            _AppDialogKeyboardDismissScope(child: builder(dialogContext)),
-      ),
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.94, end: 1).animate(curved),
+            child: child,
+          ),
+        );
+      },
     );
   }
 
+  /// Menus and pickers share the centered dialog presentation.
   static Future<T?> showSheet<T>(
     BuildContext context,
     WidgetBuilder builder,
-  ) async {
-    if (context.awikiResponsive.isExpanded) {
-      return showDialog<T>(context, builder);
-    }
-    SystemChrome.setSystemUIOverlayStyle(_overlayStyle(context, sheet: true));
-    try {
-      return await showCupertinoModalPopup<T>(
-        context: context,
-        barrierColor: const Color(0x57000000),
-        semanticsDismissible: true,
-        requestFocus: true,
-        builder: builder,
-      );
-    } finally {
-      if (context.mounted) {
-        SystemChrome.setSystemUIOverlayStyle(_overlayStyle(context));
-      }
-    }
+  ) {
+    return showDialog<T>(context, builder);
   }
 }
 

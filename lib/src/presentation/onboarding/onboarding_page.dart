@@ -29,6 +29,7 @@ import '../shared/sms_otp_cooldown_provider.dart';
 import '../shared/tenant_management_dialog.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../shared/widgets/awiki_glass.dart';
+import '../shared/widgets/awiki_glass_controls.dart';
 import '../recovery/pending_handle_recovery_entry.dart';
 import 'onboarding_provider.dart';
 import 'registration_entry_provider.dart';
@@ -333,40 +334,33 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             true &&
         (ref.read(onboardingProvider).serverInfo?.supportsPhoneHandleRecovery ??
             false);
-    final action = await showCupertinoDialog<_ExistingHandleAction>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => CupertinoAlertDialog(
-        title: Text(context.l10n.onboardingExistingHandleTitle),
-        content: Text(
-          recoveryAvailable
-              ? context.l10n.onboardingExistingHandleMessage
-              : context.l10n.onboardingExistingHandleJoinOnlyMessage,
+    final action = await showAwikiGlassAlert<_ExistingHandleAction>(
+      context,
+      dismissible: false,
+      title: context.l10n.onboardingExistingHandleTitle,
+      message: recoveryAvailable
+          ? context.l10n.onboardingExistingHandleMessage
+          : context.l10n.onboardingExistingHandleJoinOnlyMessage,
+      actions: <AwikiAlertAction<_ExistingHandleAction>>[
+        AwikiAlertAction<_ExistingHandleAction>(
+          key: const Key('existing-handle-join-action'),
+          label: context.l10n.deviceJoinEntry,
+          value: _ExistingHandleAction.joinDevice,
+          tone: AwikiPillTone.primary,
         ),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            key: const Key('existing-handle-join-action'),
-            onPressed: () => Navigator.of(
-              dialogContext,
-            ).pop(_ExistingHandleAction.joinDevice),
-            child: Text(context.l10n.deviceJoinEntry),
+        if (recoveryAvailable)
+          AwikiAlertAction<_ExistingHandleAction>(
+            key: const Key('existing-handle-recovery-action'),
+            label: context.l10n.handleRecoveryTitle,
+            value: _ExistingHandleAction.recoverHandle,
           ),
-          if (recoveryAvailable)
-            CupertinoDialogAction(
-              key: const Key('existing-handle-recovery-action'),
-              onPressed: () => Navigator.of(
-                dialogContext,
-              ).pop(_ExistingHandleAction.recoverHandle),
-              child: Text(context.l10n.handleRecoveryTitle),
-            ),
-          CupertinoDialogAction(
-            key: const Key('existing-handle-cancel-action'),
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(_ExistingHandleAction.cancel),
-            child: Text(context.l10n.commonCancel),
-          ),
-        ],
-      ),
+        AwikiAlertAction<_ExistingHandleAction>(
+          key: const Key('existing-handle-cancel-action'),
+          label: context.l10n.commonCancel,
+          value: _ExistingHandleAction.cancel,
+          tone: AwikiPillTone.text,
+        ),
+      ],
     );
     if (!context.mounted) return;
     final controller = ref.read(onboardingProvider.notifier);

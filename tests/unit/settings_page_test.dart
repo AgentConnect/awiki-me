@@ -26,6 +26,7 @@ import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass_controls.dart';
 
 import 'app_update_provider_test.dart' show buildManifest;
 import 'test_support.dart';
@@ -252,7 +253,7 @@ void main() {
 
     expect(gateway.exportCalls, 0);
     expect(gateway.deleteLocalCredentialCalls, 0);
-    expect(find.byType(CupertinoAlertDialog), findsNothing);
+    expect(find.byWidgetPredicate((w) => w is AwikiGlassAlert), findsNothing);
   });
 
   testWidgets('桌面 272px 设置栏完整显示真实设置项且不溢出', (tester) async {

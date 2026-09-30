@@ -117,6 +117,7 @@ import '../shared/widgets/awiki_glass.dart';
 import 'chat_mention_presentation.dart';
 import 'chat_provider.dart';
 import 'message_actions.dart';
+import '../shared/widgets/awiki_glass_controls.dart';
 
 part 'parts/chat_header_part.dart';
 part 'parts/chat_information_part.dart';
@@ -2369,17 +2370,17 @@ class _ChatViewState extends ConsumerState<ChatView> {
         : const <ChatMentionDraft>[];
     final block = _acpComposerBlock(conversation, validMentionDrafts);
     if (block != null) {
-      await showCupertinoDialog<void>(
-        context: context,
-        builder: (dialogContext) => CupertinoAlertDialog(
-          content: Text(acpBlockText(context, block)),
-          actions: [
-            CupertinoDialogAction(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(acpText(context, '知道了', 'OK')),
-            ),
-          ],
-        ),
+      await showAwikiGlassAlert<void>(
+        context,
+        alertKey: const Key('acp-composer-block-alert'),
+        message: acpBlockText(context, block),
+        actions: <AwikiAlertAction<void>>[
+          AwikiAlertAction<void>(
+            label: acpText(context, '知道了', 'OK'),
+            value: null,
+            tone: AwikiPillTone.primary,
+          ),
+        ],
       );
       return;
     }
