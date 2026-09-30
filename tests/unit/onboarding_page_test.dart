@@ -988,12 +988,31 @@ void main() {
     expect(find.byKey(const Key('auth-mode-phone')), findsOneWidget);
 
     await _scrollToOnboardingUtilityBar(tester);
+    final languageButton = find.byKey(
+      const Key('onboarding-language-switcher-button'),
+    );
+    await _tapVisible(tester, languageButton);
+    await _settleVerificationStep(tester);
+    // An anchored menu opens from the footer button instead of a sheet, with
+    // the current language checked.
+    final languageMenu = find.byKey(const Key('app-language-menu'));
+    expect(languageMenu, findsOneWidget);
+    expect(find.byKey(const Key('compact-action-sheet')), findsNothing);
+    expect(
+      tester.getRect(languageMenu).bottom,
+      lessThanOrEqualTo(tester.getRect(languageButton).top),
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('app-language-option:system')),
+        matching: find.byIcon(CupertinoIcons.checkmark),
+      ),
+      findsOneWidget,
+    );
     await _tapVisible(
       tester,
-      find.byKey(const Key('onboarding-language-switcher-button')),
+      find.byKey(const Key('app-language-option:english')),
     );
-    await _settleVerificationStep(tester);
-    await _tapVisible(tester, find.text('English'));
     await _settleVerificationStep(tester);
 
     await _scrollToOnboardingUtilityBar(tester);

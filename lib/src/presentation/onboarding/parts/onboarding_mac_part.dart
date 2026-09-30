@@ -46,7 +46,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final VoidCallback onSubmitRegister;
   final AppTenantProfile activeTenant;
   final AppLocaleMode localeMode;
-  final VoidCallback onLanguagePressed;
+  final ValueChanged<BuildContext> onLanguagePressed;
   final VoidCallback onTenantPressed;
 
   @override
@@ -67,12 +67,14 @@ class _MacOnboardingScaffold extends StatelessWidget {
                   onTap: () => showTenantSwitcherMenu(anchorContext),
                 ),
               );
-              final languageButton = _MacFooterButton(
-                key: const Key('onboarding-language-switcher-button'),
-                icon: CupertinoIcons.globe,
-                label: appLocaleModeLabel(context, localeMode),
-                tooltip: context.l10n.settingsLanguage,
-                onTap: onLanguagePressed,
+              final languageButton = Builder(
+                builder: (anchorContext) => _MacFooterButton(
+                  key: const Key('onboarding-language-switcher-button'),
+                  icon: CupertinoIcons.globe,
+                  label: appLocaleModeLabel(context, localeMode),
+                  tooltip: context.l10n.settingsLanguage,
+                  onTap: () => onLanguagePressed(anchorContext),
+                ),
               );
               final form = Expanded(
                 child: ColoredBox(

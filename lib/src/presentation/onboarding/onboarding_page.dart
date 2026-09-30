@@ -155,8 +155,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     );
   }
 
-  Future<void> _showLanguageSheet() {
-    return showAppLanguageSheet(context, ref, ref.read(appLocaleModeProvider));
+  Future<void> _showLanguageSheet(BuildContext anchorContext) {
+    return showAppLanguageMenu(
+      anchorContext,
+      ref,
+      ref.read(appLocaleModeProvider),
+    );
   }
 
   Future<void> _showTenantManagementDialog() async {
