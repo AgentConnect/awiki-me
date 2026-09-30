@@ -61,9 +61,10 @@ class _MacOnboardingScaffold extends StatelessWidget {
             builder: (context, constraints) {
               final compact = constraints.maxWidth <= 700;
               final tenantButton = Builder(
-                builder: (anchorContext) => _MacTenantButton(
+                builder: (anchorContext) => _PhoneTenantPill(
                   key: const Key('onboarding-tenant-switcher-button'),
                   name: activeTenant.name,
+                  dense: true,
                   onTap: () => showTenantSwitcherMenu(anchorContext),
                 ),
               );
@@ -170,7 +171,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
                 children: <Widget>[
                   Container(
                     key: const Key('onboarding-brand-pane'),
-                    width: 296,
+                    width: 352,
                     decoration: BoxDecoration(
                       color: theme.background,
                       border: Border(right: BorderSide(color: theme.border)),
@@ -223,13 +224,22 @@ class _MacOnboardingScaffold extends StatelessWidget {
   }
 }
 
-/// Phone tenant switcher: a glass pill carrying the "租户" label, a hairline
-/// and the active tenant name, beside the brand in the divider-free header.
+/// Tenant switcher pill shared by the phone header and the desktop login
+/// footer: "租户 | name" with an up/down chevron on the flat glass material.
 class _PhoneTenantPill extends StatelessWidget {
-  const _PhoneTenantPill({super.key, required this.name, required this.onTap});
+  const _PhoneTenantPill({
+    super.key,
+    required this.name,
+    required this.onTap,
+    this.dense = false,
+  });
 
   final String name;
   final VoidCallback onTap;
+
+  /// Tighter insets for the desktop login footer, where the pill shares a
+  /// row with the language control.
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -242,11 +252,13 @@ class _PhoneTenantPill extends StatelessWidget {
       pressedScale: 0.96,
       borderRadius: BorderRadius.circular(22),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44, maxWidth: 220),
+        constraints: BoxConstraints(minHeight: dense ? 36 : 44, maxWidth: 240),
         child: DecoratedBox(
           decoration: _phoneGlassDecoration(context, radius: 22),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 5, 12, 5),
+            padding: dense
+                ? const EdgeInsets.fromLTRB(12, 4, 10, 4)
+                : const EdgeInsets.fromLTRB(16, 5, 12, 5),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
@@ -262,7 +274,7 @@ class _PhoneTenantPill extends StatelessWidget {
                 Container(
                   width: 1,
                   height: 12,
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  margin: EdgeInsets.symmetric(horizontal: dense ? 6 : 8),
                   color: theme.glassEdgeActive,
                 ),
                 Flexible(
@@ -278,7 +290,7 @@ class _PhoneTenantPill extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: dense ? 6 : 8),
                 Icon(
                   CupertinoIcons.chevron_up_chevron_down,
                   size: 14,
@@ -1448,69 +1460,6 @@ BoxDecoration _macFieldDecoration(BuildContext context) {
     borderRadius: BorderRadius.circular(6),
     border: Border.all(color: context.awikiTheme.border),
   );
-}
-
-/// Reference desktop `.tenant-btn`: a quiet "租户" caption over the active
-/// tenant name with an up/down chevron, distinct from the language control.
-class _MacTenantButton extends StatelessWidget {
-  const _MacTenantButton({super.key, required this.name, required this.onTap});
-
-  final String name;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final radius = BorderRadius.circular(8);
-    return AppPressable(
-      onTap: onTap,
-      semanticLabel: context.l10n.tenantSwitcherLabel,
-      tooltip: context.l10n.tenantSwitcherLabel,
-      borderRadius: radius,
-      builder: (context, state, child) => AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        decoration: BoxDecoration(
-          color: state.hovered || state.pressed
-              ? awikiDesktopSoftFill(context)
-              : awikiDesktopSoftFill(context).withValues(alpha: 0),
-          borderRadius: radius,
-        ),
-        child: child,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                    context.l10n.tenantManagementTitle,
-                    style: TextStyle(color: theme.secondaryText, fontSize: 11),
-                  ),
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: theme.title, fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 6),
-            Icon(
-              CupertinoIcons.chevron_up_chevron_down,
-              color: theme.secondaryText,
-              size: 14,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _MacFooterButton extends StatelessWidget {

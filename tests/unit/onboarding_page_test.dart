@@ -146,7 +146,7 @@ void main() {
         final brand = find.byKey(const Key('onboarding-brand-pane'));
         expect(brand, size.width > 700 ? findsOneWidget : findsNothing);
         if (size.width > 700) {
-          expect(tester.getSize(brand).width, 296);
+          expect(tester.getSize(brand).width, 352);
         }
         final card = find.byKey(const Key('onboarding-mac-auth-card'));
         expect(tester.getSize(card).width, lessThanOrEqualTo(336));
@@ -358,7 +358,7 @@ void main() {
     expect(languageRect.center.dy, closeTo(tenantRect.center.dy, 12));
     expect(
       tester.getSize(find.byKey(const Key('onboarding-brand-pane'))).width,
-      296,
+      352,
     );
     await tester.tap(find.byKey(const Key('onboarding-identity-entry')));
     await tester.pumpAndSettle();
