@@ -1,6 +1,7 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/data/im_core/awiki_im_core_mappers.dart';
 import 'dart:async';
+import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -6741,6 +6742,63 @@ void main() {
     expect(sentAttachment.attachment?.filename, 'report.pdf');
     expect(thread.agentPendingTurns, isEmpty);
     expect(thread.isAgentProcessing, isFalse);
+  });
+
+  test('发送成功后仍显示已解码的原始图片文件并照常写入缓存', () async {
+    gateway.includeLocalPathInSentAttachment = false;
+    gateway.nextSentMessageId = 'sent-photo';
+    final sourceDir = await Directory.systemTemp.createTemp('awiki-send-');
+    addTearDown(() => sourceDir.delete(recursive: true));
+    final source = File('${sourceDir.path}/photo.png');
+    await source.writeAsBytes(<int>[1, 2, 3]);
+    final cache = FakeAttachmentCacheService();
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(
+          gateway,
+          attachmentCacheService: cache,
+        ),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendAttachment(
+          conversation: conversation,
+          attachment: AttachmentDraft(
+            filename: 'photo.png',
+            mimeType: 'image/png',
+            localPath: source.path,
+            sizeBytes: 3,
+          ),
+        );
+    await Future<void>.delayed(Duration.zero);
+
+    final sent = sendContainer
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
+        .messages
+        .singleWhere((message) => message.attachment?.filename == 'photo.png');
+    expect(sent.remoteId, 'sent-photo');
+    expect(sent.sendState, MessageSendState.sent);
+    // Same file the pending bubble decoded, so delivery does not re-decode.
+    expect(sent.attachment?.localPath, source.path);
+    expect(sent.attachment?.hasLocalSource, isTrue);
+    expect(cache.cacheLocalSourceCalls, 1);
+    expect(cache.lastSourcePath, source.path);
   });
 
   test('服务端附件消息不带本地路径时发送成功后仍保留本地缓存路径', () async {

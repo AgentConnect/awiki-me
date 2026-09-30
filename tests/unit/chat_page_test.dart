@@ -8186,6 +8186,93 @@ void main() {
     expect(find.text('photo.png'), findsNothing);
   });
 
+  testWidgets('发送图片时显示上传遮罩，送达后消失且图片不重建', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
+      threadId: 'dm:peer-scope:v1:uploading-image',
+      displayName: 'Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    final image = File(
+      '${Directory.systemTemp.createTempSync('awiki-upload-').path}/p.png',
+    )..writeAsBytesSync(_tinyPngBytes());
+    addTearDown(() => image.parent.deleteSync(recursive: true));
+    final gate = Completer<void>();
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[]
+      ..attachmentSendGate = gate;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+          chatImageWidgetBuilderProvider.overrideWithValue(
+            _testImageWidgetBuilder,
+          ),
+        ],
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pump();
+
+    final send = container
+        .read(chatThreadsProvider.notifier)
+        .sendAttachment(
+          conversation: conversation,
+          attachment: AttachmentDraft(
+            filename: 'p.png',
+            mimeType: 'image/png',
+            localPath: image.path,
+            sizeBytes: _tinyPngBytes().length,
+          ),
+        );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    Finder keyPrefix(String prefix) => find.byWidgetPredicate(
+      (widget) =>
+          widget.key is ValueKey<String> &&
+          (widget.key! as ValueKey<String>).value.startsWith(prefix),
+    );
+    final overlay = keyPrefix('chat-inline-image-uploading:');
+    final inlineImage = keyPrefix('chat-inline-image:');
+    expect(overlay, findsOneWidget);
+    expect(inlineImage, findsOneWidget);
+    final imageBefore = tester.element(inlineImage);
+
+    gate.complete();
+    await tester.runAsync(() => send);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(overlay, findsNothing);
+    expect(inlineImage, findsOneWidget);
+    // The delivered bubble keeps the same image element: no remount, so no
+    // placeholder flash when the upload finishes.
+    expect(identical(tester.element(inlineImage), imageBefore), isTrue);
+  });
+
   testWidgets('同一消息切换附件身份后只显示当前预览 handle', (tester) async {
     final gateway = FakeAwikiGateway();
     final conversation = _scrollConversation('dm:preview-handle-switch');

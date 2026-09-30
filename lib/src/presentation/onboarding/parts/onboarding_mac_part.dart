@@ -259,44 +259,49 @@ class _PhoneTenantPill extends StatelessWidget {
             padding: dense
                 ? const EdgeInsets.fromLTRB(12, 4, 10, 4)
                 : const EdgeInsets.fromLTRB(16, 5, 12, 5),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
-                  context.l10n.tenantManagementTitle,
-                  style: TextStyle(
-                    color: theme.secondaryText,
-                    fontSize: 12,
-                    height: 1.2,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 12,
-                  margin: EdgeInsets.symmetric(horizontal: dense ? 6 : 8),
-                  color: theme.glassEdgeActive,
-                ),
-                Flexible(
-                  child: Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: theme.title,
-                      fontSize: 14,
-                      height: 1.3,
-                      fontWeight: FontWeight.w400,
+            // In a tight slot the "租户 |" caption gives way to the name.
+            child: LayoutBuilder(
+              builder: (context, constraints) => Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  if (constraints.maxWidth >= 150) ...<Widget>[
+                    Text(
+                      context.l10n.tenantManagementTitle,
+                      style: TextStyle(
+                        color: theme.secondaryText,
+                        fontSize: 12,
+                        height: 1.2,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 12,
+                      margin: EdgeInsets.symmetric(horizontal: dense ? 6 : 8),
+                      color: theme.glassEdgeActive,
+                    ),
+                  ],
+                  Flexible(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: theme.title,
+                        fontSize: 14,
+                        height: 1.3,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ),
-                ),
-                SizedBox(width: dense ? 6 : 8),
-                Icon(
-                  CupertinoIcons.chevron_up_chevron_down,
-                  size: 14,
-                  color: theme.secondaryText,
-                ),
-              ],
+                  SizedBox(width: dense ? 6 : 8),
+                  Icon(
+                    CupertinoIcons.chevron_up_chevron_down,
+                    size: 14,
+                    color: theme.secondaryText,
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -1064,14 +1064,18 @@ class _MessageBubble extends StatelessWidget {
     required bool macStyle,
     required Widget child,
   }) {
-    if (!isMine || message.sendState != MessageSendState.sending) {
+    if (!isMine) {
       return child;
     }
     final responsive = context.awikiResponsive;
     final gap = macStyle ? responsive.displayScaled(7) : responsive.spacing(8);
+    // Own messages keep this wrapper for their whole life, so delivery only
+    // hides the indicator instead of reshaping the tree and rebuilding the
+    // bubble (which made sent images flash).
     return _DelayedSendingMessageRow(
       key: ValueKey<String>('chat-delayed-send:${message.localId}'),
       messageId: message.localId,
+      sending: message.sendState == MessageSendState.sending,
       macStyle: macStyle,
       gap: gap,
       child: child,
@@ -1403,11 +1407,15 @@ class _DelayedSendingMessageRow extends StatefulWidget {
     required this.macStyle,
     required this.gap,
     required this.child,
+    this.sending = true,
   });
 
   static const Duration delay = Duration(seconds: 3);
 
   final String messageId;
+
+  /// Only a sending message schedules the delayed indicator.
+  final bool sending;
   final bool macStyle;
   final double gap;
   final Widget child;
@@ -1430,7 +1438,8 @@ class _DelayedSendingMessageRowState extends State<_DelayedSendingMessageRow> {
   @override
   void didUpdateWidget(covariant _DelayedSendingMessageRow oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.messageId != widget.messageId) {
+    if (oldWidget.messageId != widget.messageId ||
+        oldWidget.sending != widget.sending) {
       _scheduleIndicator();
     }
   }
@@ -1438,6 +1447,9 @@ class _DelayedSendingMessageRowState extends State<_DelayedSendingMessageRow> {
   void _scheduleIndicator() {
     _timer?.cancel();
     _showIndicator = false;
+    if (!widget.sending) {
+      return;
+    }
     _timer = Timer(_DelayedSendingMessageRow.delay, () {
       if (!mounted) {
         return;
@@ -1454,19 +1466,23 @@ class _DelayedSendingMessageRowState extends State<_DelayedSendingMessageRow> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_showIndicator) {
-      return widget.child;
-    }
+    // One constant Row: the bubble keeps its keyed slot while the indicator
+    // appears or disappears beside it.
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
-        _SendingMessageIndicator(
-          key: Key('chat-sending-indicator:${widget.messageId}'),
-          macStyle: widget.macStyle,
+        if (_showIndicator) ...<Widget>[
+          _SendingMessageIndicator(
+            key: Key('chat-sending-indicator:${widget.messageId}'),
+            macStyle: widget.macStyle,
+          ),
+          SizedBox(width: widget.gap),
+        ],
+        Flexible(
+          key: const ValueKey<String>('chat-delayed-send-body'),
+          child: widget.child,
         ),
-        SizedBox(width: widget.gap),
-        Flexible(child: widget.child),
       ],
     );
   }
@@ -1771,11 +1787,27 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
             macStyle: widget.macStyle,
           );
         }
+        final uploading =
+            widget.message.isMine &&
+            widget.message.sendState == MessageSendState.sending;
         return _InlineImageEnvelope(
           messageId: widget.message.localId,
           macStyle: widget.macStyle,
           dimensions: snapshot.dimensions,
-          child: content,
+          // The image stays the Stack's first child whether or not the
+          // overlay shows, so finishing the upload never rebuilds it.
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              content,
+              if (uploading)
+                _InlineImageUploadingOverlay(
+                  key: Key(
+                    'chat-inline-image-uploading:${widget.message.localId}',
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
@@ -2030,6 +2062,30 @@ class _InlineImageEnvelope extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Shown over your own image while it uploads: Core reports no byte
+/// progress for attachment sends, so this is an indeterminate state that
+/// clears as soon as the message is delivered or fails.
+class _InlineImageUploadingOverlay extends StatelessWidget {
+  const _InlineImageUploadingOverlay({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: context.l10n.chatSending,
+      liveRegion: true,
+      child: const ColoredBox(
+        color: Color(0x59000000),
+        child: Center(
+          child: CupertinoActivityIndicator(
+            radius: 12,
+            color: CupertinoColors.white,
+          ),
+        ),
+      ),
     );
   }
 }
