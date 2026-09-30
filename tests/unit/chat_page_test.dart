@@ -1250,30 +1250,13 @@ void main() {
     expect(incomingDecoration.color, AwikiMePalette.messageIncoming);
     expect(outgoingDecoration.color, AwikiMePalette.messageOutgoing);
     final outgoingText = tester.widget<Text>(find.text('outgoing'));
-    expect(outgoingText.style?.fontSize, 14);
+    expect(outgoingText.style?.fontSize, 16);
     expect(outgoingText.style?.fontWeight, FontWeight.w400);
-    // Phone bubbles are 20-unit rounded with a tighter corner on the sender
-    // side; neither carries a tail or outline.
-    const large = Radius.circular(20 * AwikiDisplayScale.layoutBaseline);
-    const small = Radius.circular(8 * AwikiDisplayScale.layoutBaseline);
-    expect(
-      incomingDecoration.borderRadius,
-      const BorderRadius.only(
-        topLeft: small,
-        topRight: large,
-        bottomLeft: large,
-        bottomRight: large,
-      ),
-    );
-    expect(
-      outgoingDecoration.borderRadius,
-      const BorderRadius.only(
-        topLeft: large,
-        topRight: small,
-        bottomLeft: large,
-        bottomRight: large,
-      ),
-    );
+    // Phone bubbles are evenly 20-unit rounded, matching the reference; neither
+    // carries a tail or outline.
+    final radius = BorderRadius.circular(20 * AwikiDisplayScale.layoutBaseline);
+    expect(incomingDecoration.borderRadius, radius);
+    expect(outgoingDecoration.borderRadius, radius);
     expect(incomingDecoration.border, isNull);
     expect(outgoingDecoration.border, isNull);
     final incomingPadding = incomingBubbleWidget.padding! as EdgeInsets;
@@ -4920,7 +4903,7 @@ void main() {
     expect(
       bubbleSize.width,
       moreOrLessEquals(
-        imageSize.width + 28 * AwikiDisplayScale.layoutBaseline + 2,
+        imageSize.width + 30 * AwikiDisplayScale.layoutBaseline + 2,
         epsilon: 1,
       ),
     );

@@ -1200,15 +1200,15 @@ class _MessageBubble extends StatelessWidget {
                   avatarUri: senderAvatarUri,
                   userId: senderAvatarUserId,
                   isMine: false,
-                  size: responsive.displayScaled(30),
+                  size: responsive.displayScaled(40),
                 ),
               ),
             ),
-            SizedBox(width: responsive.displayScaled(8)),
+            SizedBox(width: responsive.displayScaled(11)),
           ],
           Flexible(child: bubble),
           if (isMine) ...<Widget>[
-            SizedBox(width: responsive.displayScaled(8)),
+            SizedBox(width: responsive.displayScaled(11)),
             _alignAvatarWithBubbleTop(
               context,
               macStyle: true,
@@ -1221,7 +1221,7 @@ class _MessageBubble extends StatelessWidget {
                   avatarUri: senderAvatarUri,
                   userId: senderAvatarUserId,
                   isMine: true,
-                  size: responsive.displayScaled(30),
+                  size: responsive.displayScaled(40),
                 ),
               ),
             ),
@@ -1239,11 +1239,12 @@ class _MessageBubble extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final attachment = message.attachment;
+    // Reference phone bubbles read at 16 units.
     final textStyle = TextStyle(
       color: isMine ? theme.onOutgoingMessage : theme.title,
-      fontSize: 14,
+      fontSize: 16,
       fontWeight: FontWeight.w400,
-      height: 1.6,
+      height: 1.5,
     );
     final messageContent = attachment == null
         ? _MessageTextContent(
@@ -1349,15 +1350,15 @@ class _MessageBubble extends StatelessWidget {
                   avatarUri: senderAvatarUri,
                   userId: senderAvatarUserId,
                   isMine: false,
-                  size: responsive.displayScaled(32),
+                  size: responsive.displayScaled(40),
                 ),
               ),
             ),
-            SizedBox(width: responsive.spacing(8)),
+            SizedBox(width: responsive.displayScaled(11)),
           ],
           Flexible(child: bubble),
           if (isMine) ...<Widget>[
-            SizedBox(width: responsive.spacing(8)),
+            SizedBox(width: responsive.displayScaled(11)),
             _alignAvatarWithBubbleTop(
               context,
               macStyle: false,
@@ -1370,7 +1371,7 @@ class _MessageBubble extends StatelessWidget {
                   avatarUri: senderAvatarUri,
                   userId: senderAvatarUserId,
                   isMine: true,
-                  size: responsive.displayScaled(32),
+                  size: responsive.displayScaled(40),
                 ),
               ),
             ),
@@ -2541,21 +2542,17 @@ class _AttachmentFileCard extends StatelessWidget {
               ? responsive.displayScaled(38)
               : responsive.scaled(40),
           alignment: Alignment.center,
+          // Reference `.file-ico`: a quiet soft tile with a line glyph.
           decoration: BoxDecoration(
-            color: macStyle
-                ? context.awikiTheme.primarySoft
-                : theme.surface.withValues(alpha: 0.72),
+            color: theme.title.withValues(alpha: theme.isDark ? 0.10 : 0.06),
             borderRadius: BorderRadius.circular(
-              macStyle ? responsive.displayScaled(8) : 10,
-            ),
-            border: Border.all(
-              color: macStyle ? context.awikiTheme.border : theme.border,
+              macStyle ? responsive.displayScaled(6) : 10,
             ),
           ),
           child: Icon(
-            CupertinoIcons.doc_fill,
-            color: macStyle ? context.awikiTheme.primary : theme.primary,
-            size: macStyle ? responsive.displayScaled(20) : responsive.iconSm,
+            CupertinoIcons.doc,
+            color: theme.title,
+            size: macStyle ? responsive.displayScaled(18) : 20,
           ),
         ),
         SizedBox(
@@ -2580,11 +2577,13 @@ class _AttachmentFileCard extends StatelessWidget {
               ),
               Text(
                 _attachmentTransferMeta(context, transferSnapshot) ??
-                    _formatAttachmentMeta(
-                      context.l10n,
-                      attachment.mimeType,
-                      attachment.sizeBytes,
-                    ),
+                    (attachment.sizeBytes != null && attachment.sizeBytes! > 0
+                        ? _formatFileSize(attachment.sizeBytes!)
+                        : _formatAttachmentMeta(
+                            context.l10n,
+                            attachment.mimeType,
+                            attachment.sizeBytes,
+                          )),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: metaStyle,

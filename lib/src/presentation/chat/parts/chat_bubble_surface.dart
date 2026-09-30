@@ -29,14 +29,14 @@ class _MessageBubbleSurface extends StatelessWidget {
         ? theme.outgoingMessage
         : theme.incomingMessage;
     // Desktop follows the reference's flat 6-unit bubble; phone uses the
-    // rounder bubble whose sender-side top corner tightens toward the avatar.
+    // reference's evenly rounded 20-unit bubble.
     final large = responsive.displayScaled(macStyle ? 6 : 20);
-    final small = responsive.displayScaled(macStyle ? 6 : 8);
+    final small = large;
     return Container(
       constraints: BoxConstraints(maxWidth: maxWidth),
       padding: EdgeInsets.symmetric(
-        horizontal: responsive.displayScaled(macStyle ? 12 : 14),
-        vertical: responsive.displayScaled(macStyle ? 8 : 9),
+        horizontal: responsive.displayScaled(macStyle ? 12 : 15),
+        vertical: responsive.displayScaled(macStyle ? 8 : 10),
       ),
       decoration: BoxDecoration(
         color: color,
