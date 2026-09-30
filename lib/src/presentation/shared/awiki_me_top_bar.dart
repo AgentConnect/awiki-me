@@ -152,16 +152,46 @@ class AwikiMeShellTopBar extends StatelessWidget {
     required this.title,
     this.onQuickActionsTap,
     this.quickActionIcon = CupertinoIcons.square_pencil,
+    this.secondaryAction,
   });
 
   final String title;
   final ValueChanged<BuildContext>? onQuickActionsTap;
   final IconData quickActionIcon;
 
+  /// Phone-only action placed just left of the quick-actions button, such
+  /// as the messages page's search toggle.
+  final Widget? secondaryAction;
+
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final titleColor = context.awikiTheme.title;
+    final extra = responsive.isPhone ? secondaryAction : null;
+    final Widget quickAction = onQuickActionsTap == null
+        ? const SizedBox.shrink()
+        : responsive.isPhone && _isPlusIcon(quickActionIcon)
+        ? Builder(
+            builder: (anchorContext) => AwikiCircledPlusButton(
+              key: const Key('shell-quick-actions-button'),
+              onTap: () => onQuickActionsTap!(anchorContext),
+              semanticsIdentifier: 'e2e-quick-actions-button',
+              semanticsLabel: context.l10n.commonMoreActions,
+            ),
+          )
+        : Builder(
+            builder: (anchorContext) => TopBarActionButton(
+              key: const Key('shell-quick-actions-button'),
+              onTap: () => onQuickActionsTap!(anchorContext),
+              semanticsIdentifier: 'e2e-quick-actions-button',
+              semanticsLabel: context.l10n.commonMoreActions,
+              child: Icon(
+                quickActionIcon,
+                size: responsive.iconLg,
+                color: context.awikiTheme.primary,
+              ),
+            ),
+          );
     return AwikiMeTopBar(
       title: title,
       padding: responsive.isPhone
@@ -176,29 +206,12 @@ class AwikiMeShellTopBar extends StatelessWidget {
           : FontWeight.w400,
       titleHeight: responsive.isPhone ? awikiMeCompactTopBarTitleHeight : null,
       leading: const SizedBox.shrink(),
-      trailing: onQuickActionsTap == null
-          ? const SizedBox.shrink()
-          : responsive.isPhone && _isPlusIcon(quickActionIcon)
-          ? Builder(
-              builder: (anchorContext) => AwikiCircledPlusButton(
-                key: const Key('shell-quick-actions-button'),
-                onTap: () => onQuickActionsTap!(anchorContext),
-                semanticsIdentifier: 'e2e-quick-actions-button',
-                semanticsLabel: context.l10n.commonMoreActions,
-              ),
-            )
-          : Builder(
-              builder: (anchorContext) => TopBarActionButton(
-                key: const Key('shell-quick-actions-button'),
-                onTap: () => onQuickActionsTap!(anchorContext),
-                semanticsIdentifier: 'e2e-quick-actions-button',
-                semanticsLabel: context.l10n.commonMoreActions,
-                child: Icon(
-                  quickActionIcon,
-                  size: responsive.iconLg,
-                  color: context.awikiTheme.primary,
-                ),
-              ),
+      trailingWidth: extra == null ? 44 : 80,
+      trailing: extra == null
+          ? quickAction
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[extra, quickAction],
             ),
     );
   }
@@ -238,11 +251,13 @@ class AwikiMeShellTabPage extends StatelessWidget {
     required this.child,
     this.onQuickActionsTap,
     this.quickActionIcon = CupertinoIcons.square_pencil,
+    this.secondaryAction,
   });
 
   final String title;
   final ValueChanged<BuildContext>? onQuickActionsTap;
   final IconData quickActionIcon;
+  final Widget? secondaryAction;
   final Widget child;
 
   @override
@@ -271,6 +286,7 @@ class AwikiMeShellTabPage extends StatelessWidget {
               title: title,
               onQuickActionsTap: onQuickActionsTap,
               quickActionIcon: quickActionIcon,
+              secondaryAction: secondaryAction,
             ),
           ),
         ),

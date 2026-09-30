@@ -213,6 +213,15 @@ void main() {
       expect(row('human'), findsOneWidget);
       expect(row('agent'), findsNothing);
       expect(row('group'), findsOneWidget);
+      if (size.width < 600) {
+        // Phones fold search behind the header icon.
+        expect(
+          find.byKey(const Key('conversation-search-field')),
+          findsNothing,
+        );
+        await tester.tap(find.byKey(const Key('conversation-search-toggle')));
+        await tester.pumpAndSettle();
+      }
       final search = find.byKey(const Key('conversation-search-field'));
       await tester.enterText(search, 'human');
       await tester.pumpAndSettle();
@@ -695,8 +704,34 @@ void main() {
       const Size(393, 852),
     );
 
+    // Search folds behind a bare icon left of the plus button.
+    expect(
+      find.byKey(const Key('compact-conversation-search-surface')),
+      findsNothing,
+    );
+    final searchToggle = find.byKey(const Key('conversation-search-toggle'));
+    expect(
+      tester.getRect(searchToggle).right,
+      lessThanOrEqualTo(
+        tester
+            .getRect(find.byKey(const Key('shell-quick-actions-button')))
+            .left,
+      ),
+    );
+    await tester.tap(searchToggle);
+    await tester.pumpAndSettle();
     final searchSurface = find.byKey(
       const Key('compact-conversation-search-surface'),
+    );
+    expect(searchSurface, findsOneWidget);
+    expect(
+      tester
+          .widget<CupertinoSearchTextField>(
+            find.byKey(const Key('conversation-search-field')),
+          )
+          .focusNode
+          ?.hasFocus,
+      isTrue,
     );
     final searchGlass = tester.widget<AwikiGlassSurface>(
       find.descendant(
@@ -713,6 +748,37 @@ void main() {
       find.byKey(const Key('conversation-search-field')),
     );
     expect((searchField.decoration as BoxDecoration).color, isNull);
+    await tester.enterText(
+      find.byKey(const Key('conversation-search-field')),
+      'x',
+    );
+    await tester.tap(searchToggle);
+    await tester.pumpAndSettle();
+    expect(searchSurface, findsNothing);
+    // Reopening starts from an empty query.
+    await tester.tap(searchToggle);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<CupertinoSearchTextField>(
+            find.byKey(const Key('conversation-search-field')),
+          )
+          .controller
+          ?.text,
+      isEmpty,
+    );
+    await tester.tap(searchToggle);
+    await tester.pumpAndSettle();
+    // Filters sit in one fitted glass track with 30pt segments.
+    final filterTrack = find.byKey(const Key('conversation-filter-track'));
+    expect(filterTrack, findsOneWidget);
+    expect(
+      tester
+          .getSize(find.byKey(const Key('conversation-filter-chip-all')))
+          .height,
+      30,
+    );
+    expect(tester.getSize(filterTrack).width, lessThan(393 - 32));
     final pageSurface = tester.widget<AwikiGlassBackdrop>(
       find.byKey(const Key('shell-tab-page-surface')),
     );

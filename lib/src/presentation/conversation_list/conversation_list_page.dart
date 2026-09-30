@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart'
     show PopupMenuEntry, PopupMenuItem, RelativeRect, showMenu;
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 
@@ -69,6 +70,15 @@ class ConversationListPage extends ConsumerStatefulWidget {
 
 class _ConversationListPageState extends ConsumerState<ConversationListPage> {
   bool get _usesEmbeddedSelection => widget.onConversationSelected != null;
+
+  /// Phone search stays folded behind the header icon until opened.
+  final ValueNotifier<bool> _searchOpen = ValueNotifier<bool>(false);
+
+  @override
+  void dispose() {
+    _searchOpen.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -143,6 +153,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
     return AwikiMeShellTabPage(
       title: context.l10n.conversationsTitle,
       quickActionIcon: CupertinoIcons.add_circled,
+      secondaryAction: _ConversationSearchToggle(searchOpen: _searchOpen),
       onQuickActionsTap: (anchorContext) => showCommonQuickActionsMenu(
         anchorContext,
         ref,
@@ -157,6 +168,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
         ),
         embedded: widget.embedded,
         bottomInset: widget.bottomInset,
+        searchOpen: _searchOpen,
         onRefresh: refreshConversations,
         onOpen: (item) => _openConversation(context, ref, item),
         onDelete: (item) => _deleteConversationFromRecents(context, ref, item),
@@ -484,83 +496,123 @@ class _ConversationFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
-    final phone = context.awikiResponsive.isPhone;
+    if (context.awikiResponsive.isPhone) {
+      return _PhoneConversationFilterTrack(value: value, onChanged: onChanged);
+    }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: phone
-          ? const EdgeInsets.fromLTRB(16, 6, 16, 10)
-          : const EdgeInsets.fromLTRB(12, 2, 12, 6),
+      padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
       child: Row(
         children: <Widget>[
           for (final filter in _ConversationFilter.values)
             Padding(
-              padding: EdgeInsets.only(right: phone ? 8 : 2),
+              padding: const EdgeInsets.only(right: 2),
               child: AppPressable(
                 key: Key('conversation-filter-${filter.name}'),
-                semanticLabel: switch (filter) {
-                  _ConversationFilter.all => context.l10n.friendsTabAll,
-                  _ConversationFilter.unread =>
-                    context.l10n.conversationsFilterUnread,
-                  _ConversationFilter.agent => context.l10n.shellNavAgents,
-                  _ConversationFilter.group => context.l10n.friendsTabGroups,
-                },
+                semanticLabel: _conversationFilterLabel(context, filter),
                 selected: filter == value,
                 onTap: () => onChanged(filter),
-                borderRadius: BorderRadius.circular(phone ? 18 : 16),
-                child: phone
-                    ? SizedBox(
-                        height: 36,
-                        child: AwikiGlassSurface(
-                          key: Key('conversation-filter-chip-${filter.name}'),
-                          selected: filter == value,
-                          borderRadius: BorderRadius.circular(18),
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Center(
-                            widthFactor: 1,
-                            child: Text(
-                              _conversationFilterLabel(context, filter),
-                              style: TextStyle(
-                                fontSize: 15,
-                                height: 1.2,
-                                color: theme.title,
-                              ),
-                            ),
-                          ),
-                        ),
-                      )
-                    : Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: filter == value
-                              ? theme.subtleSurface
-                              : CupertinoColors.transparent,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          switch (filter) {
-                            _ConversationFilter.all =>
-                              context.l10n.friendsTabAll,
-                            _ConversationFilter.unread =>
-                              context.l10n.conversationsFilterUnread,
-                            _ConversationFilter.agent =>
-                              context.l10n.shellNavAgents,
-                            _ConversationFilter.group =>
-                              context.l10n.friendsTabGroups,
-                          },
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: filter == value
-                                ? theme.title
-                                : theme.secondaryText,
-                          ),
-                        ),
-                      ),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: filter == value
+                        ? theme.subtleSurface
+                        : CupertinoColors.transparent,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    _conversationFilterLabel(context, filter),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: filter == value
+                          ? theme.title
+                          : theme.secondaryText,
+                    ),
+                  ),
+                ),
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Phone filters: one fitted glass track whose chosen segment is a flat
+/// lens, as in the reference.
+class _PhoneConversationFilterTrack extends StatelessWidget {
+  const _PhoneConversationFilterTrack({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final _ConversationFilter value;
+  final ValueChanged<_ConversationFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: AwikiGlassSurface(
+            key: const Key('conversation-filter-track'),
+            borderRadius: BorderRadius.circular(18),
+            padding: const EdgeInsets.all(3),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                for (final filter in _ConversationFilter.values) ...<Widget>[
+                  if (filter != _ConversationFilter.values.first)
+                    const SizedBox(width: 2),
+                  AppPressable(
+                    key: Key('conversation-filter-${filter.name}'),
+                    semanticLabel: _conversationFilterLabel(context, filter),
+                    selected: filter == value,
+                    onTap: () => onChanged(filter),
+                    borderRadius: BorderRadius.circular(15),
+                    child: AnimatedContainer(
+                      key: Key('conversation-filter-chip-${filter.name}'),
+                      duration: const Duration(milliseconds: 150),
+                      height: 30,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: filter == value
+                            ? theme.glassLens
+                            : theme.glassLens.withValues(alpha: 0),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(
+                          color: filter == value
+                              ? theme.glassEdgeActive
+                              : theme.glassEdgeActive.withValues(alpha: 0),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Text(
+                        _conversationFilterLabel(context, filter),
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.2,
+                          color: filter == value
+                              ? theme.title
+                              : theme.secondaryText,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -610,6 +662,7 @@ class _ConversationRefreshView extends ConsumerStatefulWidget {
     required this.selectedConversationId,
     required this.embedded,
     required this.bottomInset,
+    required this.searchOpen,
     required this.onRefresh,
     required this.onOpen,
     required this.onDelete,
@@ -621,6 +674,9 @@ class _ConversationRefreshView extends ConsumerStatefulWidget {
   final String? selectedConversationId;
   final bool embedded;
   final double bottomInset;
+
+  /// Whether the phone search row is shown; toggled from the header.
+  final ValueNotifier<bool> searchOpen;
   final Future<void> Function() onRefresh;
   final ValueChanged<ConversationSummary> onOpen;
   final ValueChanged<ConversationSummary> onDelete;
@@ -633,6 +689,7 @@ class _ConversationRefreshView extends ConsumerStatefulWidget {
 class _ConversationRefreshViewState
     extends ConsumerState<_ConversationRefreshView> {
   late final TextEditingController _searchController;
+  final FocusNode _searchFocus = FocusNode();
   String _query = '';
   _ConversationFilter _filter = _ConversationFilter.all;
 
@@ -640,6 +697,37 @@ class _ConversationRefreshViewState
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    widget.searchOpen.addListener(_onSearchOpenChanged);
+    _searchFocus.addListener(_onSearchFocusChanged);
+  }
+
+  void _onSearchOpenChanged() {
+    if (!mounted) {
+      return;
+    }
+    if (widget.searchOpen.value) {
+      setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.searchOpen.value) {
+          _searchFocus.requestFocus();
+        }
+      });
+      return;
+    }
+    // Folding the field away also drops the query, as in the reference.
+    _searchFocus.unfocus();
+    setState(() {
+      _query = '';
+      _searchController.clear();
+    });
+  }
+
+  void _onSearchFocusChanged() {
+    if (!_searchFocus.hasFocus &&
+        _searchController.text.trim().isEmpty &&
+        widget.searchOpen.value) {
+      widget.searchOpen.value = false;
+    }
   }
 
   @override
@@ -654,7 +742,18 @@ class _ConversationRefreshViewState
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Only phones fold the search behind the header icon.
+    if (!context.awikiResponsive.isPhone && widget.searchOpen.value) {
+      widget.searchOpen.value = false;
+    }
+  }
+
+  @override
   void dispose() {
+    widget.searchOpen.removeListener(_onSearchOpenChanged);
+    _searchFocus.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -691,6 +790,9 @@ class _ConversationRefreshViewState
       bottomInset: widget.bottomInset,
       hasQuery: hasQuery,
       searchController: _searchController,
+      searchFocus: _searchFocus,
+      showSearch: !context.awikiResponsive.isPhone || widget.searchOpen.value,
+      onSearchEscape: () => widget.searchOpen.value = false,
       onQueryChanged: (value) {
         setState(() {
           _query = value;
@@ -743,6 +845,9 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
     required this.bottomInset,
     required this.hasQuery,
     required this.searchController,
+    required this.searchFocus,
+    required this.showSearch,
+    required this.onSearchEscape,
     required this.onQueryChanged,
     required this.onRefresh,
     required this.onOpen,
@@ -759,6 +864,9 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
   final double bottomInset;
   final bool hasQuery;
   final TextEditingController searchController;
+  final FocusNode searchFocus;
+  final bool showSearch;
+  final VoidCallback onSearchEscape;
   final ValueChanged<String> onQueryChanged;
   final Future<void> Function() onRefresh;
   final ValueChanged<ConversationSummary> onOpen;
@@ -770,12 +878,15 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
     return CustomScrollView(
       slivers: <Widget>[
         CupertinoSliverRefreshControl(onRefresh: onRefresh),
-        SliverToBoxAdapter(
-          child: _CompactConversationSearchField(
-            controller: searchController,
-            onChanged: onQueryChanged,
+        if (showSearch)
+          SliverToBoxAdapter(
+            child: _CompactConversationSearchField(
+              controller: searchController,
+              focusNode: searchFocus,
+              onChanged: onQueryChanged,
+              onEscape: onSearchEscape,
+            ),
           ),
-        ),
         if (responsive.isPhone && ref.watch(pendingJoinRequestProvider) != null)
           SliverToBoxAdapter(
             child: Padding(
@@ -1041,11 +1152,15 @@ class _SwipeToDeleteConversationRowState
 class _CompactConversationSearchField extends StatelessWidget {
   const _CompactConversationSearchField({
     required this.controller,
+    required this.focusNode,
     required this.onChanged,
+    required this.onEscape,
   });
 
   final TextEditingController controller;
+  final FocusNode focusNode;
   final ValueChanged<String> onChanged;
+  final VoidCallback onEscape;
 
   @override
   Widget build(BuildContext context) {
@@ -1059,29 +1174,35 @@ class _CompactConversationSearchField extends StatelessWidget {
           height: 44,
           child: AwikiGlassSurface(
             borderRadius: BorderRadius.circular(22),
-            child: CupertinoSearchTextField(
-              key: const Key('conversation-search-field'),
-              controller: controller,
-              placeholder: context.l10n.conversationsSearchPlaceholder,
-              onChanged: onChanged,
-              style: TextStyle(fontSize: 16, color: theme.title),
-              placeholderStyle: TextStyle(
-                fontSize: 16,
-                color: theme.secondaryText,
+            child: CallbackShortcuts(
+              bindings: <ShortcutActivator, VoidCallback>{
+                const SingleActivator(LogicalKeyboardKey.escape): onEscape,
+              },
+              child: CupertinoSearchTextField(
+                key: const Key('conversation-search-field'),
+                controller: controller,
+                focusNode: focusNode,
+                placeholder: context.l10n.conversationsSearchPlaceholder,
+                onChanged: onChanged,
+                style: TextStyle(fontSize: 16, color: theme.title),
+                placeholderStyle: TextStyle(
+                  fontSize: 16,
+                  color: theme.secondaryText,
+                ),
+                prefixIcon: Icon(
+                  CupertinoIcons.search,
+                  color: theme.secondaryText,
+                  size: 17,
+                ),
+                suffixIcon: Icon(
+                  CupertinoIcons.xmark_circle_fill,
+                  color: theme.tertiaryText,
+                  size: 17,
+                ),
+                prefixInsets: const EdgeInsetsDirectional.only(start: 14),
+                decoration: const BoxDecoration(),
+                padding: const EdgeInsetsDirectional.fromSTEB(8, 10, 12, 10),
               ),
-              prefixIcon: Icon(
-                CupertinoIcons.search,
-                color: theme.secondaryText,
-                size: 17,
-              ),
-              suffixIcon: Icon(
-                CupertinoIcons.xmark_circle_fill,
-                color: theme.tertiaryText,
-                size: 17,
-              ),
-              prefixInsets: const EdgeInsetsDirectional.only(start: 14),
-              decoration: const BoxDecoration(),
-              padding: const EdgeInsetsDirectional.fromSTEB(8, 10, 12, 10),
             ),
           ),
         ),
@@ -1102,6 +1223,7 @@ class _CompactConversationSearchField extends StatelessWidget {
           child: CupertinoSearchTextField(
             key: const Key('conversation-search-field'),
             controller: controller,
+            focusNode: focusNode,
             placeholder: context.l10n.conversationsSearchPlaceholder,
             onChanged: onChanged,
             style: TextStyle(fontSize: 15, color: theme.title),
@@ -1129,6 +1251,53 @@ class _CompactConversationSearchField extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Bare search glyph beside the phone header's plus button; it folds the
+/// search row open and closed.
+class _ConversationSearchToggle extends StatelessWidget {
+  const _ConversationSearchToggle({required this.searchOpen});
+
+  final ValueNotifier<bool> searchOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return ValueListenableBuilder<bool>(
+      valueListenable: searchOpen,
+      builder: (context, open, _) => AppPressable(
+        key: const Key('conversation-search-toggle'),
+        onTap: () => searchOpen.value = !open,
+        semanticLabel: context.l10n.conversationsSearchPlaceholder,
+        semanticsIdentifier: 'e2e-conversation-search-toggle',
+        tooltip: context.l10n.conversationsSearchPlaceholder,
+        button: true,
+        selected: open,
+        scaleOnPress: true,
+        pressedScale: 0.9,
+        borderRadius: BorderRadius.circular(18),
+        builder: (context, state, child) => SizedBox(
+          width: 36,
+          height: 44,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: open || state.pressed || state.hovered
+                    ? theme.title.withValues(alpha: 0.08)
+                    : theme.title.withValues(alpha: 0),
+              ),
+              child: child,
+            ),
+          ),
+        ),
+        child: Icon(CupertinoIcons.search, size: 20, color: theme.title),
       ),
     );
   }

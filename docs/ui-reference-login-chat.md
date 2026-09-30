@@ -107,8 +107,14 @@ the bar. Pushed pages and conversation detail hide the bar.
 Titles are centered at 16 units (the reference's 14 × 16/14 phone scale).
 Header "+" actions are a thin 1-unit circle whose diameter is 1.125 × the title
 size (`AwikiCircledPlusButton`). Back controls are only the chevron, in the
-title color (`AwikiBackButton`). Search fields and filter chips are glass
-capsules; conversation, contact and Agent rows are flat, rounded and divider-free.
+title color (`AwikiBackButton`). On the phone Messages page search folds
+behind a bare search glyph just left of the "+" (`AwikiMeShellTabPage`'s
+`secondaryAction`); tapping it opens the glass search field as a second header
+row and focuses it, and tapping it again, Escape, or leaving an empty field
+folds it away and clears the query. Its filters are one fitted glass track
+whose 30-unit segments show the chosen one as a flat lens. Other search fields
+are glass capsules; conversation, contact and Agent rows are flat, rounded and
+divider-free.
 
 The device-join approval entry remains a global banner so review is reachable
 from any tab, now drawn as a glass card with a soft brand "review" pill below
@@ -151,7 +157,7 @@ the title bar.
   one, a delete action on removable custom tenants, then 添加租户配置, which
   adds the tenant and switches to it. Long-press a custom tenant to edit it.
 - **Join requests:** a pending request is a glass notice ("{device} 请求加入你的
-  账户 · valid until") inline under the phone message search, and floating on
+  账户 · valid until") inline under the phone Messages header, and floating on
   every other surface so review stays globally reachable. Review opens as a
   centered glass dialog: request details,
   then 核对验证码 with six digit tiles, an explicit check and pill actions.
