@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Tooltip;
@@ -909,10 +908,7 @@ class AppDropMenu extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: phoneRadius,
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-                  child: SingleChildScrollView(child: menuContent),
-                ),
+                child: SingleChildScrollView(child: menuContent),
               ),
             ),
           ),

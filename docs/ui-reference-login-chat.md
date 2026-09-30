@@ -161,10 +161,12 @@ the title bar.
 - **Controls:** on phones `AppTextField` is a glass field with an outward
   accent focus ring; primary, secondary and destructive buttons are pills;
   every dialog, menu, picker and alert opened from a control is a centered
-  floating thick-glass card (`AppNavigator.showDialog`, `showAwikiGlassDialog`,
-  `showAwikiGlassAlert`) that fades and scales in over a dimmed scrim; nothing
+  floating card (`AppNavigator.showDialog`, `showAwikiGlassDialog`,
+  `showAwikiGlassAlert`) that fades and scales in over a light scrim; nothing
   slides up from the bottom edge and stock Cupertino alerts and action sheets
-  are not used. Secondary pills share the fields' frosted fill; the quick-actions
+  are not used. Floating cards and menus use a solid bright surface, a
+  hairline edge and a tight, light shadow (`awikiFloatingShadow`) with no
+  backdrop blur, so their edges stay crisp instead of pulling in the scrim. Secondary pills share the fields' frosted fill; the quick-actions
   menu is a glass panel without a pointer. Destructive fills use the deeper
   `dangerFill` red in dark mode.
 - Language, appearance (a glass segmented track), profile edit and chat

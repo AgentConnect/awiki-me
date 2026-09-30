@@ -3,16 +3,14 @@
 //           progress steps shared by device, recovery and dialog flows.
 // [POS]: Presentation-only building blocks for the flat liquid-glass style.
 
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/cupertino.dart';
 
 import '../../../app/app_router.dart';
 import '../awiki_me_design.dart';
 import 'app_widgets.dart';
 
-/// Thick glass panel used by floating sheets and dialogs: a near-opaque
-/// frosted fill with a bright top rim, hairline edge and a soft drop shadow.
+/// Floating panel used by menus and dialogs: a solid bright fill, hairline
+/// edge and a tight, light drop shadow.
 class AwikiGlassPanel extends StatelessWidget {
   const AwikiGlassPanel({
     super.key,
@@ -29,52 +27,47 @@ class AwikiGlassPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final borderRadius = BorderRadius.circular(radius);
+    // Solid bright fill and a tight, light shadow keep floating panels crisp
+    // over the dimmed scrim; a see-through backdrop blur would pull the dark
+    // scrim into the panel's edges.
     return DecoratedBox(
       decoration: BoxDecoration(
+        color: awikiFloatingFill(context),
         borderRadius: borderRadius,
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: const Color(
-              0xFF0B1320,
-            ).withValues(alpha: theme.isDark ? 0.45 : 0.18),
-            blurRadius: 60,
-            offset: const Offset(0, 24),
-          ),
-        ],
+        border: Border.all(color: theme.glassEdgeActive, width: 0.5),
+        boxShadow: awikiFloatingShadow(context),
       ),
       child: ClipRRect(
         borderRadius: borderRadius,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-          // A gradient replaces a BoxDecoration's color, so the fill and
-          // the top highlight are painted as separate layers.
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: theme.surface.withValues(alpha: theme.isDark ? 0.9 : 0.86),
-              borderRadius: borderRadius,
-            ),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: borderRadius,
-                border: Border.all(color: theme.glassEdgeActive, width: 0.5),
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.center,
-                  colors: <Color>[
-                    CupertinoColors.white.withValues(
-                      alpha: theme.isDark ? 0.06 : 0.5,
-                    ),
-                    CupertinoColors.white.withValues(alpha: 0),
-                  ],
-                ),
-              ),
-              child: Padding(padding: padding, child: child),
-            ),
-          ),
-        ),
+        child: Padding(padding: padding, child: child),
       ),
     );
   }
+}
+
+/// Solid fill for floating panels: the bright surface in light mode and a
+/// raised graphite in dark mode so cards lift off the page behind them.
+Color awikiFloatingFill(BuildContext context) {
+  final theme = context.awikiTheme;
+  return theme.isDark ? theme.subtleSurface : theme.surface;
+}
+
+/// The tight, light drop shadow under floating panels, dialogs and menus.
+List<BoxShadow> awikiFloatingShadow(BuildContext context) {
+  final dark = context.awikiTheme.isDark;
+  const ink = Color(0xFF0B1320);
+  return <BoxShadow>[
+    BoxShadow(
+      color: ink.withValues(alpha: dark ? 0.36 : 0.10),
+      blurRadius: 28,
+      offset: const Offset(0, 10),
+    ),
+    BoxShadow(
+      color: ink.withValues(alpha: dark ? 0.2 : 0.05),
+      blurRadius: 3,
+      offset: const Offset(0, 1),
+    ),
+  ];
 }
 
 /// Presents [builder] inside a centered floating glass panel, the
@@ -638,17 +631,9 @@ BoxDecoration awikiThickGlassDecoration(
 }) {
   final theme = context.awikiTheme;
   return BoxDecoration(
-    color: fill ?? theme.surface.withValues(alpha: theme.isDark ? 0.96 : 0.94),
+    color: fill ?? awikiFloatingFill(context),
     borderRadius: borderRadius,
     border: Border.all(color: theme.glassEdgeActive, width: 0.5),
-    boxShadow: <BoxShadow>[
-      BoxShadow(
-        color: const Color(
-          0xFF0B1320,
-        ).withValues(alpha: theme.isDark ? 0.45 : 0.18),
-        blurRadius: 60,
-        offset: const Offset(0, 24),
-      ),
-    ],
+    boxShadow: awikiFloatingShadow(context),
   );
 }

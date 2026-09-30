@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-
 class AppNavigator {
   const AppNavigator._();
 
@@ -78,7 +77,7 @@ class AppNavigator {
       useRootNavigator: true,
       barrierDismissible: barrierDismissible,
       barrierLabel: 'Dismiss',
-      barrierColor: const Color(0x520F171F),
+      barrierColor: const Color(0x330F171F),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (dialogContext, _, __) =>
           _AppDialogKeyboardDismissScope(child: builder(dialogContext)),
@@ -100,10 +99,7 @@ class AppNavigator {
   }
 
   /// Menus and pickers share the centered dialog presentation.
-  static Future<T?> showSheet<T>(
-    BuildContext context,
-    WidgetBuilder builder,
-  ) {
+  static Future<T?> showSheet<T>(BuildContext context, WidgetBuilder builder) {
     return showDialog<T>(context, builder);
   }
 }
