@@ -61,11 +61,9 @@ class _MacOnboardingScaffold extends StatelessWidget {
             builder: (context, constraints) {
               final compact = constraints.maxWidth <= 700;
               final tenantButton = Builder(
-                builder: (anchorContext) => _MacFooterButton(
+                builder: (anchorContext) => _MacTenantButton(
                   key: const Key('onboarding-tenant-switcher-button'),
-                  icon: CupertinoIcons.globe,
-                  label: activeTenant.name,
-                  tooltip: context.l10n.tenantSwitcherLabel,
+                  name: activeTenant.name,
                   onTap: () => showTenantSwitcherMenu(anchorContext),
                 ),
               );
@@ -1431,6 +1429,68 @@ BoxDecoration _macFieldDecoration(BuildContext context) {
     borderRadius: BorderRadius.circular(6),
     border: Border.all(color: context.awikiTheme.border),
   );
+}
+
+/// Reference desktop `.tenant-btn`: a quiet "租户" caption over the active
+/// tenant name with an up/down chevron, distinct from the language control.
+class _MacTenantButton extends StatelessWidget {
+  const _MacTenantButton({super.key, required this.name, required this.onTap});
+
+  final String name;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final radius = BorderRadius.circular(8);
+    return AppPressable(
+      onTap: onTap,
+      semanticLabel: context.l10n.tenantSwitcherLabel,
+      tooltip: context.l10n.tenantSwitcherLabel,
+      borderRadius: radius,
+      builder: (context, state, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        decoration: BoxDecoration(
+          color: state.hovered || state.pressed
+              ? awikiDesktopSoftFill(context)
+              : awikiDesktopSoftFill(context).withValues(alpha: 0),
+          borderRadius: radius,
+        ),
+        child: child,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    context.l10n.tenantManagementTitle,
+                    style: TextStyle(color: theme.secondaryText, fontSize: 11),
+                  ),
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: theme.title, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              CupertinoIcons.chevron_up_chevron_down,
+              color: theme.secondaryText,
+              size: 14,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _MacFooterButton extends StatelessWidget {
