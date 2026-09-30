@@ -172,9 +172,33 @@ class _MacOnboardingScaffold extends StatelessWidget {
                   Container(
                     key: const Key('onboarding-brand-pane'),
                     width: 352,
+                    // Reference brand pane: the canvas with a blue glow at the
+                    // top and a warm glow toward the bottom.
+                    foregroundDecoration: BoxDecoration(
+                      border: Border(right: BorderSide(color: theme.border)),
+                    ),
                     decoration: BoxDecoration(
                       color: theme.background,
-                      border: Border(right: BorderSide(color: theme.border)),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomCenter,
+                        colors: <Color>[
+                          Color.alphaBlend(
+                            theme.glowPrimary.withValues(
+                              alpha: theme.glowPrimary.a * 0.75,
+                            ),
+                            theme.background,
+                          ),
+                          theme.background,
+                          Color.alphaBlend(
+                            theme.glowSecondary.withValues(
+                              alpha: theme.glowSecondary.a * 0.6,
+                            ),
+                            theme.background,
+                          ),
+                        ],
+                        stops: const <double>[0, 0.55, 1],
+                      ),
                     ),
                     padding: const EdgeInsets.fromLTRB(24, 64, 20, 20),
                     child: Column(
@@ -752,9 +776,16 @@ class _OnboardingCredentialTile extends StatelessWidget {
         : identity.did;
     final displayName = identity.visibleDisplayName;
     final enabled = actionsEnabled && !isDeleting;
+    final phone = context.awikiResponsive.isPhone;
     return Container(
-      constraints: const BoxConstraints(minHeight: 68),
-      decoration: _macFieldDecoration(context),
+      constraints: BoxConstraints(minHeight: phone ? 68 : 60),
+      decoration: phone
+          ? _macFieldDecoration(context)
+          : BoxDecoration(
+              color: theme.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: theme.border),
+            ),
       clipBehavior: Clip.antiAlias,
       child: IntrinsicHeight(
         child: Row(
@@ -773,11 +804,13 @@ class _OnboardingCredentialTile extends StatelessWidget {
                   left: Radius.circular(10),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(15, 11, 12, 11),
+                  padding: phone
+                      ? const EdgeInsets.fromLTRB(15, 11, 12, 11)
+                      : const EdgeInsets.fromLTRB(12, 10, 8, 10),
                   child: Row(
                     children: <Widget>[
-                      AvatarBadge(seed: displayName, size: 38),
-                      const SizedBox(width: 13),
+                      AvatarBadge(seed: displayName, size: phone ? 38 : 36),
+                      SizedBox(width: phone ? 13 : 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -791,7 +824,7 @@ class _OnboardingCredentialTile extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: context.awikiTheme.title,
-                                  fontSize: 15,
+                                  fontSize: phone ? 15 : 14,
                                   fontWeight: FontWeight.w400,
                                 ),
                               ),
@@ -817,12 +850,6 @@ class _OnboardingCredentialTile extends StatelessWidget {
                 ),
               ),
             ),
-            if (!context.awikiResponsive.isPhone)
-              Container(
-                width: 1,
-                margin: const EdgeInsets.symmetric(vertical: 11),
-                color: theme.navigationBorder,
-              ),
             AppPressable(
               key: Key(
                 'onboarding-local-credential-delete:${identity.credentialName}',
@@ -844,8 +871,14 @@ class _OnboardingCredentialTile extends StatelessWidget {
                       ? const CupertinoActivityIndicator(radius: 7)
                       : Icon(
                           CupertinoIcons.delete,
-                          size: 17,
-                          color: enabled ? theme.danger : theme.tertiaryText,
+                          size: phone ? 17 : 15,
+                          // Desktop keeps the delete action quiet; the hover
+                          // tint signals it is destructive.
+                          color: !enabled
+                              ? theme.tertiaryText
+                              : phone
+                              ? theme.danger
+                              : theme.secondaryText,
                         ),
                 ),
               ),
@@ -965,7 +998,7 @@ class _MacRegisterForm extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           registrationEntry,
-          const SizedBox(height: 22),
+          SizedBox(height: context.awikiResponsive.isPhone ? 22 : 8),
           _MacPrimaryAction(
             label: context.l10n.onboardingCompleteRegister,
             onPressed: onboarding.isBusy ? null : onSubmitRegister,
@@ -1018,7 +1051,7 @@ class _MacRegisterForm extends StatelessWidget {
           _OtpCompleteMarker(controller: otpController),
           const SizedBox(height: 16),
           registrationEntry,
-          const SizedBox(height: 22),
+          SizedBox(height: context.awikiResponsive.isPhone ? 22 : 8),
           SizedBox(
             key: const Key('onboarding-mac-phone-submit-action'),
             width: double.infinity,
@@ -1064,7 +1097,7 @@ class _MacRegisterForm extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         registrationEntry,
-        const SizedBox(height: 22),
+        SizedBox(height: context.awikiResponsive.isPhone ? 22 : 8),
         SizedBox(
           key: const Key('onboarding-mac-email-action'),
           width: double.infinity,
@@ -1181,7 +1214,20 @@ class _MacOutlinedFieldState extends State<_MacOutlinedField> {
                       color: phone ? theme.glassEdgeActive : theme.border,
                     ),
                     const SizedBox(width: 8),
-                  ] else if (widget.icon != null) ...<Widget>[
+                  ] else if (!phone &&
+                      widget.icon == CupertinoIcons.at) ...<Widget>[
+                    // Reference desktop fields: a small quiet "@" for the
+                    // handle and no glyph for code or email.
+                    Text(
+                      '@',
+                      style: TextStyle(
+                        color: theme.secondaryText,
+                        fontSize: 13,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                  ] else if (phone && widget.icon != null) ...<Widget>[
                     Icon(widget.icon, size: 18, color: theme.secondaryText),
                     const SizedBox(width: 6),
                   ],
@@ -1210,11 +1256,7 @@ class _MacOutlinedFieldState extends State<_MacOutlinedField> {
                     ),
                   ),
                   if (widget.suffix != null) ...<Widget>[
-                    const SizedBox(width: 6),
-                    if (!phone) ...<Widget>[
-                      Container(width: 1, height: 16, color: theme.border),
-                      const SizedBox(width: 6),
-                    ],
+                    const SizedBox(width: 8),
                     widget.suffix!,
                   ],
                 ],
@@ -1232,11 +1274,14 @@ class _MacPhonePrefix extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final phone = context.awikiResponsive.isPhone;
     return Text(
       '+86',
       style: TextStyle(
-        color: context.awikiTheme.title,
-        fontSize: 14,
+        color: phone
+            ? context.awikiTheme.title
+            : context.awikiTheme.secondaryText,
+        fontSize: phone ? 14 : 13,
         fontWeight: FontWeight.w400,
       ),
     );
@@ -1250,11 +1295,14 @@ class _MacFieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final phone = context.awikiResponsive.isPhone;
     return Text(
       label,
       style: TextStyle(
-        color: context.awikiTheme.title,
-        fontSize: 13,
+        color: phone
+            ? context.awikiTheme.title
+            : context.awikiTheme.secondaryText,
+        fontSize: phone ? 13 : 12,
         fontWeight: FontWeight.w400,
       ),
     );
@@ -1326,7 +1374,7 @@ class _MacInlineAction extends StatelessWidget {
                   label,
                   maxLines: 1,
                   style: TextStyle(
-                    color: context.awikiTheme.primary,
+                    color: context.awikiTheme.title,
                     fontSize: 13,
                     fontWeight: FontWeight.w400,
                     height: 1,
