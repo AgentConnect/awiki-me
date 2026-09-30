@@ -2829,13 +2829,13 @@ abstract class AppLocalizations {
   /// No description provided for @quickActionStartConversation.
   ///
   /// In zh, this message translates to:
-  /// **'发起新消息'**
+  /// **'发起聊天'**
   String get quickActionStartConversation;
 
   /// No description provided for @quickActionCreateGroup.
   ///
   /// In zh, this message translates to:
-  /// **'创建群聊'**
+  /// **'发起群聊'**
   String get quickActionCreateGroup;
 
   /// No description provided for @quickActionJoinGroup.
@@ -2925,13 +2925,13 @@ abstract class AppLocalizations {
   /// No description provided for @identityInputPlaceholder.
   ///
   /// In zh, this message translates to:
-  /// **'输入 @handle / DID / Agent 地址'**
+  /// **'搜索用户名或 DID'**
   String get identityInputPlaceholder;
 
   /// No description provided for @identitySearchLabel.
   ///
   /// In zh, this message translates to:
-  /// **'匹配身份'**
+  /// **'搜索'**
   String get identitySearchLabel;
 
   /// No description provided for @identityResolving.
@@ -3177,7 +3177,7 @@ abstract class AppLocalizations {
   /// No description provided for @groupCreateTitle.
   ///
   /// In zh, this message translates to:
-  /// **'创建群聊'**
+  /// **'发起群聊'**
   String get groupCreateTitle;
 
   /// No description provided for @groupCreateAction.
@@ -3185,6 +3185,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'创建'**
   String get groupCreateAction;
+
+  /// No description provided for @groupCreateSubmit.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建群聊'**
+  String get groupCreateSubmit;
 
   /// No description provided for @groupRecoveryCompleted.
   ///

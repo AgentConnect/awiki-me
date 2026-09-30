@@ -183,3 +183,130 @@ class AwikiSmallButton extends StatelessWidget {
     );
   }
 }
+
+/// Reference `.dlg-actions`: a right-aligned quiet cancel and a primary
+/// action. Phones use pills; desktop uses 32-unit buttons with 6-unit corners.
+class AwikiDialogActionRow extends StatelessWidget {
+  const AwikiDialogActionRow({
+    super.key,
+    required this.cancelLabel,
+    required this.onCancel,
+    required this.primaryLabel,
+    required this.onPrimary,
+    this.primaryKey,
+    this.primarySemanticsIdentifier,
+    this.primaryBusy = false,
+    this.destructive = false,
+  });
+
+  final String cancelLabel;
+  final VoidCallback? onCancel;
+  final String primaryLabel;
+  final VoidCallback? onPrimary;
+  final Key? primaryKey;
+  final String? primarySemanticsIdentifier;
+  final bool primaryBusy;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final phone = context.awikiResponsive.isPhone;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: <Widget>[
+        _AwikiDialogButton(
+          label: cancelLabel,
+          onTap: onCancel,
+          primary: false,
+          phone: phone,
+        ),
+        SizedBox(width: phone ? 10 : 8),
+        _AwikiDialogButton(
+          key: primaryKey,
+          label: primaryLabel,
+          onTap: onPrimary,
+          primary: true,
+          destructive: destructive,
+          busy: primaryBusy,
+          phone: phone,
+          semanticsIdentifier: primarySemanticsIdentifier,
+        ),
+      ],
+    );
+  }
+}
+
+class _AwikiDialogButton extends StatelessWidget {
+  const _AwikiDialogButton({
+    super.key,
+    required this.label,
+    required this.onTap,
+    required this.primary,
+    required this.phone,
+    this.destructive = false,
+    this.busy = false,
+    this.semanticsIdentifier,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+  final bool primary;
+  final bool phone;
+  final bool destructive;
+  final bool busy;
+  final String? semanticsIdentifier;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final enabled = onTap != null && !busy;
+    final height = phone ? 40.0 : 32.0;
+    final radius = BorderRadius.circular(phone ? height / 2 : 6);
+    final fill = primary
+        ? (destructive ? theme.dangerFill : theme.primaryDark)
+        : null;
+    final textColor = primary
+        ? (destructive ? CupertinoColors.white : theme.primaryForeground)
+        : theme.title;
+    return AppPressable(
+      onTap: enabled ? onTap : null,
+      enabled: enabled,
+      semanticLabel: label,
+      semanticsIdentifier: semanticsIdentifier,
+      button: true,
+      borderRadius: radius,
+      builder: (context, state, child) => AnimatedOpacity(
+        duration: const Duration(milliseconds: 120),
+        opacity: enabled || busy ? 1 : 0.45,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          height: height,
+          padding: EdgeInsets.symmetric(horizontal: phone ? 18 : 14),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: fill ??
+                (state.hovered || state.pressed
+                    ? awikiDesktopSoftFill(context)
+                    : awikiDesktopSoftFill(context).withValues(alpha: 0)),
+            borderRadius: radius,
+          ),
+          child: child,
+        ),
+      ),
+      child: busy
+          ? CupertinoActivityIndicator(
+              radius: 7,
+              color: primary ? textColor : null,
+            )
+          : Text(
+              label,
+              maxLines: 1,
+              style: TextStyle(
+                color: textColor,
+                fontSize: phone ? 15 : 14,
+                height: 1,
+              ),
+            ),
+    );
+  }
+}

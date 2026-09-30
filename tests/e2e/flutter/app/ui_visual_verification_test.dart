@@ -266,6 +266,11 @@ void main() {
         await openApp(appearance, const Size(1440, 900), TargetPlatform.macOS);
         await tapKey('conversation-row:dm:peer-scope:v1:hermes-ui');
         await capture('$desk-messages');
+        await tapKey('conversation-quick-actions-button');
+        await tapKey('quick-action-start-conversation');
+        await capture('$desk-start-chat');
+        await tester.tapAt(const Offset(8, 450));
+        await _pumpVisualFrames(tester);
         await tapKey('desktop-rail-agents');
         await capture('$desk-agents');
         await tapKey('desktop-rail-contacts');
@@ -343,7 +348,9 @@ void main() {
         );
         await tapKey('shell-quick-actions-button');
         await capture('$name-quick-actions');
-        await tester.tapAt(const Offset(40, 700));
+        await tapKey('quick-action-start-conversation');
+        await capture('$name-start-chat');
+        await tester.tapAt(const Offset(8, 60));
         await _pumpVisualFrames(tester);
         await tapKey('conversation-row:dm:peer-scope:v1:hermes-ui');
         await tapKey('chat-information-button');
@@ -843,7 +850,7 @@ void main() {
       await _pumpVisualApp(tester, _createVisualHarness());
       await tester.tap(find.bySemanticsLabel('更多操作'));
       await _pumpVisualFrames(tester);
-      expect(find.text('发起新消息'), findsOneWidget);
+      expect(find.text('发起聊天'), findsOneWidget);
       await _captureScreenshot(tester, '15-compact-quick-actions');
 
       await tester.tapAt(const Offset(8, 400));
@@ -860,7 +867,7 @@ void main() {
         find.byKey(const Key('compact-quick-actions-menu')),
         findsOneWidget,
       );
-      expect(find.text('发起新消息'), findsOneWidget);
+      expect(find.text('发起聊天'), findsOneWidget);
       await _captureScreenshot(tester, '15b-compact-contacts-quick-actions');
     } finally {
       await _resetEnvironment(tester);

@@ -1459,10 +1459,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get quickActionsTitle => '更多操作';
 
   @override
-  String get quickActionStartConversation => '发起新消息';
+  String get quickActionStartConversation => '发起聊天';
 
   @override
-  String get quickActionCreateGroup => '创建群聊';
+  String get quickActionCreateGroup => '发起群聊';
 
   @override
   String get quickActionJoinGroup => '加入群聊';
@@ -1509,10 +1509,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get identityInputSemantics => '输入 handle 或 DID';
 
   @override
-  String get identityInputPlaceholder => '输入 @handle / DID / Agent 地址';
+  String get identityInputPlaceholder => '搜索用户名或 DID';
 
   @override
-  String get identitySearchLabel => '匹配身份';
+  String get identitySearchLabel => '搜索';
 
   @override
   String get identityResolving => '匹配中...';
@@ -1644,10 +1644,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get groupMembersEmpty => '暂无成员快照，先执行一次刷新群详情与成员。';
 
   @override
-  String get groupCreateTitle => '创建群聊';
+  String get groupCreateTitle => '发起群聊';
 
   @override
   String get groupCreateAction => '创建';
+
+  @override
+  String get groupCreateSubmit => '创建群聊';
 
   @override
   String get groupRecoveryCompleted => '群身份已恢复';

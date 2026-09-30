@@ -14,7 +14,7 @@ import '../../l10n/l10n.dart';
 import '../shared/app_dialog.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/responsive_layout.dart';
-import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_desktop.dart';
 import 'group_chat_navigation.dart';
 import 'group_provider.dart';
 
@@ -111,32 +111,30 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    // Reference `.dlg`: title, the name field and right-aligned actions.
     return AppDialogScaffold(
-      maxWidth: responsive.displayScaled(420),
+      maxWidth: 420,
       maxHeightFraction: 0.9,
-      horizontalPadding: responsive.isPhone
-          ? responsive.spacing(16)
-          : responsive.spacing(24),
-      verticalPadding: responsive.spacing(18),
-      borderRadius: BorderRadius.circular(responsive.radius(16)),
+      horizontalPadding: responsive.isPhone ? 14 : 16,
+      verticalPadding: 24,
       avoidViewInsets: true,
-      padding: EdgeInsets.fromLTRB(
-        responsive.spacing(20),
-        responsive.spacing(18),
-        responsive.spacing(20),
-        responsive.spacing(20),
-      ),
+      compactCentered: true,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          AppDialogHeader(
-            title: context.l10n.groupCreateTitle,
-            closeLabel: context.l10n.commonCancel,
-            onClose: () => Navigator.of(context).pop(),
-            isCloseEnabled: !_isLoading,
+          Text(
+            context.l10n.groupCreateTitle,
+            style: TextStyle(
+              color: theme.title,
+              fontSize: 19,
+              height: 1.25,
+              fontWeight: FontWeight.w400,
+            ),
           ),
-          SizedBox(height: responsive.spacing(18)),
+          const SizedBox(height: 14),
           _GroupNameInput(
             controller: _nameController,
             focusNode: _nameFocusNode,
@@ -145,29 +143,16 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
             placeholder: context.l10n.groupFieldNamePlaceholder,
             onSubmitted: _create,
           ),
-          SizedBox(height: responsive.spacing(20)),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: AppSecondaryButton(
-                  label: context.l10n.commonCancel,
-                  onPressed: _isLoading
-                      ? null
-                      : () => Navigator.of(context).pop(),
-                ),
-              ),
-              SizedBox(width: responsive.spacing(12)),
-              Expanded(
-                child: AppPrimaryButton(
-                  key: const Key('create-group-submit-button'),
-                  label: _isLoading
-                      ? context.l10n.groupCreating
-                      : context.l10n.groupCreateAction,
-                  onPressed: _isLoading ? null : _create,
-                  semanticsIdentifier: 'e2e-create-group-submit-button',
-                ),
-              ),
-            ],
+          const SizedBox(height: 16),
+          AwikiDialogActionRow(
+            cancelLabel: context.l10n.commonCancel,
+            onCancel: _isLoading ? null : () => Navigator.of(context).pop(),
+            primaryKey: const Key('create-group-submit-button'),
+            primaryLabel: _isLoading
+                ? context.l10n.groupCreating
+                : context.l10n.groupCreateSubmit,
+            primarySemanticsIdentifier: 'e2e-create-group-submit-button',
+            onPrimary: _isLoading ? null : _create,
           ),
         ],
       ),
@@ -203,30 +188,31 @@ class _GroupNameInput extends StatelessWidget {
           label,
           style: TextStyle(
             color: theme.secondaryText,
-            fontSize: responsive.metaSm,
+            fontSize: 12,
             fontWeight: FontWeight.w400,
           ),
         ),
-        SizedBox(height: responsive.spacing(8)),
+        const SizedBox(height: 6),
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: enabled ? focusNode.requestFocus : null,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
             curve: Curves.easeOutCubic,
-            constraints: BoxConstraints(minHeight: responsive.controlHeight),
+            height: responsive.isPhone ? 48 : 38,
             padding: EdgeInsets.symmetric(
-              horizontal: responsive.spacing(14),
-              vertical: responsive.spacing(12),
+              horizontal: responsive.isPhone ? 14 : 10,
             ),
             decoration: BoxDecoration(
-              color: enabled ? context.awikiTheme.surface : theme.subtleSurface,
-              borderRadius: BorderRadius.circular(responsive.radius(12)),
+              color: responsive.isPhone
+                  ? (focusNode.hasFocus ? theme.glassLens : theme.glass)
+                  : theme.surface,
+              borderRadius: BorderRadius.circular(responsive.isPhone ? 16 : 6),
               border: Border.all(
                 color: focusNode.hasFocus
-                    ? theme.primary.withValues(alpha: 0.56)
-                    : context.awikiTheme.border,
-                width: focusNode.hasFocus ? 1.2 : 1,
+                    ? theme.primary
+                    : (responsive.isPhone ? theme.glassEdge : theme.border),
+                width: responsive.isPhone && !focusNode.hasFocus ? 0.5 : 1,
               ),
             ),
             child: Row(

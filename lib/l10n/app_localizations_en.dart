@@ -1545,10 +1545,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quickActionsTitle => 'More actions';
 
   @override
-  String get quickActionStartConversation => 'New message';
+  String get quickActionStartConversation => 'Start chat';
 
   @override
-  String get quickActionCreateGroup => 'Create group chat';
+  String get quickActionCreateGroup => 'New group chat';
 
   @override
   String get quickActionJoinGroup => 'Join group chat';
@@ -1597,10 +1597,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get identityInputSemantics => 'Enter a handle or DID';
 
   @override
-  String get identityInputPlaceholder => 'Enter @handle, DID, or Agent address';
+  String get identityInputPlaceholder => 'Search username or DID';
 
   @override
-  String get identitySearchLabel => 'Resolve identity';
+  String get identitySearchLabel => 'Search';
 
   @override
   String get identityResolving => 'Resolving...';
@@ -1737,10 +1737,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'No member snapshot yet. Refresh group details and members first.';
 
   @override
-  String get groupCreateTitle => 'Create group chat';
+  String get groupCreateTitle => 'New group chat';
 
   @override
   String get groupCreateAction => 'Create';
+
+  @override
+  String get groupCreateSubmit => 'Create group';
 
   @override
   String get groupRecoveryCompleted => 'Group identity restored';

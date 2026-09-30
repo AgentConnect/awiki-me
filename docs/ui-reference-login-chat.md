@@ -175,6 +175,13 @@ The desktop layout follows the reference's flat window, not the phone glass.
 - **Chat:** a 48-unit header with the name and outline kind tag; the name
   chip itself opens peer details (`chat-peer-info-avatar-button`).
 
+- **Quick-action dialogs:** 发起聊天 (identity lookup, also used for follow
+  and add-member), 发起群聊 and 加入群聊 follow the reference `.dlg`: a
+  19-unit title only, one field (the lookup has an inline 搜索 trigger; Enter
+  works too), the match as one compact row (avatar, name, "@handle · 已验证",
+  DID, verified shield) and right-aligned actions (`AwikiDialogActionRow`:
+  quiet cancel plus primary; pills on phones, 32-unit buttons on desktop).
+
 ## Shared glass surfaces
 
 - **Tenant menu:** the login tenant control opens a thick glass menu anchored
