@@ -519,45 +519,49 @@ class _ConversationFilterBar extends StatelessWidget {
     if (context.awikiResponsive.isPhone) {
       return _PhoneConversationFilterTrack(value: value, onChanged: onChanged);
     }
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-      child: Row(
-        children: <Widget>[
-          for (final filter in _ConversationFilter.values)
-            Padding(
-              padding: const EdgeInsets.only(right: 2),
-              child: AppPressable(
-                key: Key('conversation-filter-${filter.name}'),
-                semanticLabel: _conversationFilterLabel(context, filter),
-                selected: filter == value,
-                onTap: () => onChanged(filter),
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  height: 26,
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: filter == value
-                        ? theme.title.withValues(
-                            alpha: theme.isDark ? 0.10 : 0.065,
-                          )
-                        : CupertinoColors.transparent,
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                  child: Text(
-                    _conversationFilterLabel(context, filter),
-                    style: TextStyle(
-                      fontSize: 13,
+    // The filter strip scrolls only when it overflows; it never shows a bar.
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+        child: Row(
+          children: <Widget>[
+            for (final filter in _ConversationFilter.values)
+              Padding(
+                padding: const EdgeInsets.only(right: 2),
+                child: AppPressable(
+                  key: Key('conversation-filter-${filter.name}'),
+                  semanticLabel: _conversationFilterLabel(context, filter),
+                  selected: filter == value,
+                  onTap: () => onChanged(filter),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    height: 26,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
                       color: filter == value
-                          ? theme.title
-                          : theme.secondaryText,
+                          ? theme.title.withValues(
+                              alpha: theme.isDark ? 0.10 : 0.065,
+                            )
+                          : CupertinoColors.transparent,
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Text(
+                      _conversationFilterLabel(context, filter),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: filter == value
+                            ? theme.title
+                            : theme.secondaryText,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -581,56 +585,60 @@ class _PhoneConversationFilterTrack extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: AwikiGlassSurface(
-            key: const Key('conversation-filter-track'),
-            borderRadius: BorderRadius.circular(18),
-            padding: const EdgeInsets.all(3),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                for (final filter in _ConversationFilter.values) ...<Widget>[
-                  if (filter != _ConversationFilter.values.first)
-                    const SizedBox(width: 2),
-                  AppPressable(
-                    key: Key('conversation-filter-${filter.name}'),
-                    semanticLabel: _conversationFilterLabel(context, filter),
-                    selected: filter == value,
-                    onTap: () => onChanged(filter),
-                    borderRadius: BorderRadius.circular(15),
-                    child: AnimatedContainer(
-                      key: Key('conversation-filter-chip-${filter.name}'),
-                      duration: const Duration(milliseconds: 150),
-                      height: 30,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: filter == value
-                            ? theme.glassLens
-                            : theme.glassLens.withValues(alpha: 0),
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(
+        // Mirrors the desktop strip: overflow scrolls without a bar.
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: AwikiGlassSurface(
+              key: const Key('conversation-filter-track'),
+              borderRadius: BorderRadius.circular(18),
+              padding: const EdgeInsets.all(3),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  for (final filter in _ConversationFilter.values) ...<Widget>[
+                    if (filter != _ConversationFilter.values.first)
+                      const SizedBox(width: 2),
+                    AppPressable(
+                      key: Key('conversation-filter-${filter.name}'),
+                      semanticLabel: _conversationFilterLabel(context, filter),
+                      selected: filter == value,
+                      onTap: () => onChanged(filter),
+                      borderRadius: BorderRadius.circular(15),
+                      child: AnimatedContainer(
+                        key: Key('conversation-filter-chip-${filter.name}'),
+                        duration: const Duration(milliseconds: 150),
+                        height: 30,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
                           color: filter == value
-                              ? theme.glassEdgeActive
-                              : theme.glassEdgeActive.withValues(alpha: 0),
-                          width: 0.5,
+                              ? theme.glassLens
+                              : theme.glassLens.withValues(alpha: 0),
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(
+                            color: filter == value
+                                ? theme.glassEdgeActive
+                                : theme.glassEdgeActive.withValues(alpha: 0),
+                            width: 0.5,
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        _conversationFilterLabel(context, filter),
-                        style: TextStyle(
-                          fontSize: 13,
-                          height: 1.2,
-                          color: filter == value
-                              ? theme.title
-                              : theme.secondaryText,
+                        child: Text(
+                          _conversationFilterLabel(context, filter),
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.2,
+                            color: filter == value
+                                ? theme.title
+                                : theme.secondaryText,
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

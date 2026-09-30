@@ -209,6 +209,25 @@ void main() {
       expect(row('human'), findsOneWidget);
       expect(row('agent'), findsOneWidget);
       expect(row('group'), findsOneWidget);
+      // The filter strip scrolls on overflow but never draws a scrollbar.
+      final filterContext = tester.element(
+        find.byKey(const Key('conversation-filter-all')),
+      );
+      const probe = SizedBox.shrink();
+      final scrollController = ScrollController();
+      addTearDown(scrollController.dispose);
+      // Desktop platforms draw scrollbars by default, so probe as macOS.
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      final scrollbar = ScrollConfiguration.of(filterContext).buildScrollbar(
+        filterContext,
+        probe,
+        ScrollableDetails(
+          direction: AxisDirection.right,
+          controller: scrollController,
+        ),
+      );
+      debugDefaultTargetPlatformOverride = null;
+      expect(scrollbar, same(probe));
       await filter('unread');
       expect(row('human'), findsOneWidget);
       expect(row('agent'), findsNothing);
