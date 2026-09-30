@@ -245,34 +245,26 @@ class _AgentListHeader extends StatelessWidget {
             onPressed: isLoading ? null : onRefresh,
             semanticLabel: context.l10n.agentRefreshList,
             tooltip: context.l10n.agentRefreshList,
-            size: responsive.displayScaled(32),
+            size: responsive.displayScaled(30),
             isLoading: isLoading,
-            borderRadius: BorderRadius.circular(responsive.radius(8)),
+            borderRadius: BorderRadius.circular(responsive.displayScaled(6)),
             child: Icon(
               CupertinoIcons.refresh,
-              size: responsive.iconMd,
+              size: responsive.displayScaled(15),
               color: theme.secondaryText,
             ),
           ),
-          SizedBox(width: responsive.spacing(4)),
+          SizedBox(width: responsive.displayScaled(6)),
           Builder(
-            builder: (anchorContext) => AppIconButton(
+            builder: (anchorContext) => AwikiSoftIconButton(
               key: const Key('agents-more-actions-button'),
-              onPressed: () => _showExpandedAgentActions(
+              onTap: () => _showExpandedAgentActions(
                 anchorContext,
                 onCreateSkill: onCreateSkill,
                 onInstall: onInstall,
               ),
               semanticLabel: context.l10n.commonMoreActions,
-              tooltip: context.l10n.commonMoreActions,
-              size: responsive.displayScaled(32),
-              backgroundColor: theme.surface,
-              borderRadius: BorderRadius.circular(999),
-              child: Icon(
-                CupertinoIcons.plus,
-                size: responsive.iconMd,
-                color: theme.secondaryText,
-              ),
+              icon: CupertinoIcons.plus,
             ),
           ),
         ],
@@ -1141,11 +1133,13 @@ class _AgentListTile extends ConsumerWidget {
             : null,
         borderRadius: responsive.isCompact
             ? BorderRadius.zero
-            : BorderRadius.circular(responsive.radius(10)),
+            : BorderRadius.circular(responsive.displayScaled(8)),
         backgroundColor: responsive.isCompact && !responsive.isPhone
             ? theme.surface
             : CupertinoColors.transparent,
-        selectedBackgroundColor: theme.body.withValues(alpha: 0.07),
+        selectedBackgroundColor: responsive.isCompact
+            ? theme.body.withValues(alpha: 0.07)
+            : awikiDesktopSoftFill(context),
         border: responsive.isCompact && !responsive.isPhone
             ? Border(bottom: BorderSide(color: theme.border))
             : null,
@@ -1209,7 +1203,9 @@ class _AgentListTile extends ConsumerWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: theme.title,
-                              fontSize: responsive.bodySm,
+                              fontSize: responsive.isCompact
+                                  ? responsive.bodySm
+                                  : 14,
                               fontWeight: FontWeight.w400,
                             ),
                           ),
@@ -1247,8 +1243,12 @@ class _AgentListTile extends ConsumerWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: theme.tertiaryText,
-                                    fontSize: responsive.metaSm,
+                                    color: responsive.isCompact
+                                        ? theme.tertiaryText
+                                        : theme.secondaryText,
+                                    fontSize: responsive.isCompact
+                                        ? responsive.metaSm
+                                        : 12,
                                   ),
                                 ),
                               ),
@@ -1302,14 +1302,15 @@ class _AgentKindIcon extends StatelessWidget {
                 ? 36
                 : 42
           : isChild
-          ? 28
-          : 30,
+          ? 34
+          : 36,
     );
     if (agent.isRuntime) {
       return AvatarBadge(
         key: ValueKey<String>('agent-list-kind-icon-${agent.agentDid}'),
         seed: title,
         size: size,
+        square: true,
       );
     }
     if (responsive.isCompact) {

@@ -5,6 +5,7 @@ import '../../core/date_time_formatter.dart';
 import '../../domain/entities/device_management.dart';
 import '../../l10n/l10n.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../shared/widgets/awiki_glass.dart';
 import 'device_join_approval_sheet.dart';
@@ -55,6 +56,9 @@ class DeviceJoinRequestNoticeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final l10n = context.l10n;
+    if (!context.awikiResponsive.isPhone) {
+      return _buildDesktop(context);
+    }
     final card = AwikiGlassSurface(
       borderRadius: BorderRadius.circular(18),
       child: ColoredBox(
@@ -144,6 +148,86 @@ class DeviceJoinRequestNoticeCard extends StatelessWidget {
                 child: card,
               )
             : card,
+      ),
+    );
+  }
+
+  /// Reference desktop `.join-notice`: a flat soft card with a small
+  /// bordered "review" button; floating copies add a surface and shadow.
+  Widget _buildDesktop(BuildContext context) {
+    final theme = context.awikiTheme;
+    final l10n = context.l10n;
+    final radius = BorderRadius.circular(8);
+    return Semantics(
+      identifier: 'device-join-request-entry',
+      button: true,
+      child: AppPressable(
+        key: const Key('device-join-request-banner'),
+        onTap: onReview,
+        semanticLabel: l10n.deviceJoinApprovalTitle,
+        borderRadius: radius,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 9, 10, 9),
+          decoration: BoxDecoration(
+            color: floating
+                ? theme.surface
+                : theme.title.withValues(alpha: theme.isDark ? 0.06 : 0.05),
+            borderRadius: radius,
+            border: floating ? Border.all(color: theme.border) : null,
+            boxShadow: floating ? theme.overlayShadow : null,
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                CupertinoIcons.device_laptop,
+                color: theme.secondaryText,
+                size: 18,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      l10n.deviceJoinNoticeTitle(request.protocolDeviceId),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: theme.title, fontSize: 13),
+                    ),
+                    Text(
+                      l10n.deviceJoinNoticeExpiry(
+                        DateTimeFormatter.requestTime(
+                          request.expiresAt.toLocal(),
+                        ),
+                      ),
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: theme.secondaryText,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                height: 28,
+                padding: const EdgeInsets.symmetric(horizontal: 11),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: theme.surface,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: theme.border),
+                ),
+                child: Text(
+                  l10n.deviceReviewAction,
+                  style: TextStyle(color: theme.title, fontSize: 13, height: 1),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

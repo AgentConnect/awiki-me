@@ -1606,42 +1606,6 @@ class _ChatNeutralIconButton extends StatelessWidget {
   }
 }
 
-class _MacChatPill extends StatelessWidget {
-  const _MacChatPill({
-    super.key,
-    required this.label,
-    required this.color,
-    required this.textColor,
-  });
-
-  final String label;
-  final Color color;
-  final Color textColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: responsive.displayScaled(8),
-        vertical: responsive.displayScaled(4),
-      ),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 11.5,
-          fontWeight: FontWeight.w400,
-        ),
-      ),
-    );
-  }
-}
-
 class _ChatFollowButton extends StatefulWidget {
   const _ChatFollowButton({
     required this.isFollowing,

@@ -112,7 +112,7 @@ void main() {
       tester
           .getSize(find.byKey(const Key('friends-expanded-list-header')))
           .height,
-      closeTo(headerContext.awikiResponsive.displayScaled(56), 0.01),
+      closeTo(headerContext.awikiResponsive.displayScaled(52), 0.01),
     );
     expect(
       titleRect.left - paneRect.left,

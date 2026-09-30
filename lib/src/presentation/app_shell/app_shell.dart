@@ -309,12 +309,12 @@ class _AppShellState extends ConsumerState<AppShell> {
                       ),
                     ),
             ),
-            // Phones show the notice inline at the top of the messages list;
-            // every other surface keeps it floating so review stays reachable.
+            // The messages list shows the notice inline (under the phone
+            // header, or under the desktop search); every other surface keeps
+            // it floating so review stays reachable.
             if (pendingJoinRequest != null &&
-                !(!expanded &&
-                    destination == ShellDestination.messages &&
-                    !compactDetailVisible))
+                !(destination == ShellDestination.messages &&
+                    (expanded || !compactDetailVisible)))
               Positioned(
                 left: 16,
                 right: 16,
@@ -865,84 +865,109 @@ class _DesktopRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    // The reference rail is glass over a wallpaper that glows blue at the
+    // top and warm at the bottom; paint that glow into the rail itself.
     return DecoratedBox(
-      decoration: BoxDecoration(color: context.awikiTheme.navigationSurface),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxHeight < 760;
-          final gap = responsive.displayScaled(4);
-          final avatar = _avatarForCurrentIdentity(session, profile);
-          return Column(
-            children: <Widget>[
-              SizedBox(height: responsive.displayScaled(compact ? 40 : 50)),
-              _DesktopRailAvatar(
-                key: const Key('mac-me-rail-avatar'),
-                seed: avatar.seed,
-                labelOverride: avatar.labelOverride,
-                avatarUri: avatar.avatarUri,
-                userId: avatar.userId,
-                online: online,
-                onTap: onProfileTap,
+      key: const Key('mac-desktop-rail-surface'),
+      decoration: BoxDecoration(
+        color: theme.isDark ? theme.navigationSurface : theme.background,
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: <Color>[
+              theme.glowPrimary.withValues(alpha: theme.glowPrimary.a * 0.7),
+              theme.glowPrimary.withValues(alpha: 0),
+              theme.glowSecondary.withValues(alpha: 0),
+              theme.glowSecondary.withValues(
+                alpha: theme.glowSecondary.a * 0.8,
               ),
-              SizedBox(height: responsive.displayScaled(compact ? 10 : 12)),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.zero,
-                  child: Column(
-                    children: <Widget>[
-                      _DesktopRailItem(
-                        key: const Key('desktop-rail-messages'),
-                        role: AwikiMeIconRole.messages,
-                        label: context.l10n.shellNavMessages,
-                        semanticsIdentifier: 'e2e-messages-tab',
-                        selected:
-                            currentDestination == ShellDestination.messages,
-                        badge: _formatUnreadBadge(unreadCount),
-                        onTap: () => onTap(ShellDestination.messages),
-                      ),
-                      SizedBox(height: gap),
-                      _DesktopRailItem(
-                        key: const Key('desktop-rail-agents'),
-                        role: AwikiMeIconRole.agents,
-                        label: context.l10n.shellNavAgents,
-                        selected: currentDestination == ShellDestination.agents,
-                        semanticsIdentifier: 'e2e-agents-tab',
-                        onTap: () => onTap(ShellDestination.agents),
-                      ),
-                      SizedBox(height: gap),
-                      _DesktopRailItem(
-                        key: const Key('desktop-rail-contacts'),
-                        role: AwikiMeIconRole.contacts,
-                        label: context.l10n.shellNavContacts,
-                        semanticsIdentifier: 'e2e-contacts-tab',
-                        selected:
-                            currentDestination == ShellDestination.contacts,
-                        onTap: () => onTap(ShellDestination.contacts),
-                      ),
-                      SizedBox(height: gap),
-                      _DesktopRailItem(
-                        key: const Key('desktop-rail-tasks'),
-                        role: AwikiMeIconRole.tasks,
-                        label: context.l10n.shellNavTasks,
-                        selected: currentDestination == ShellDestination.tasks,
-                        onTap: () => onTap(ShellDestination.tasks),
-                      ),
-                    ],
+            ],
+            stops: const <double>[0, 0.42, 0.6, 1],
+          ),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxHeight < 760;
+            final gap = responsive.displayScaled(4);
+            final avatar = _avatarForCurrentIdentity(session, profile);
+            return Column(
+              children: <Widget>[
+                SizedBox(height: responsive.displayScaled(compact ? 40 : 50)),
+                _DesktopRailAvatar(
+                  key: const Key('mac-me-rail-avatar'),
+                  seed: avatar.seed,
+                  labelOverride: avatar.labelOverride,
+                  avatarUri: avatar.avatarUri,
+                  userId: avatar.userId,
+                  online: online,
+                  onTap: onProfileTap,
+                ),
+                SizedBox(height: responsive.displayScaled(compact ? 10 : 12)),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: <Widget>[
+                        _DesktopRailItem(
+                          key: const Key('desktop-rail-messages'),
+                          role: AwikiMeIconRole.messages,
+                          label: context.l10n.shellNavMessages,
+                          semanticsIdentifier: 'e2e-messages-tab',
+                          selected:
+                              currentDestination == ShellDestination.messages,
+                          badge: _formatUnreadBadge(unreadCount),
+                          onTap: () => onTap(ShellDestination.messages),
+                        ),
+                        SizedBox(height: gap),
+                        _DesktopRailItem(
+                          key: const Key('desktop-rail-agents'),
+                          role: AwikiMeIconRole.agents,
+                          label: context.l10n.shellNavAgents,
+                          selected:
+                              currentDestination == ShellDestination.agents,
+                          semanticsIdentifier: 'e2e-agents-tab',
+                          onTap: () => onTap(ShellDestination.agents),
+                        ),
+                        SizedBox(height: gap),
+                        _DesktopRailItem(
+                          key: const Key('desktop-rail-contacts'),
+                          role: AwikiMeIconRole.contacts,
+                          label: context.l10n.shellNavContacts,
+                          semanticsIdentifier: 'e2e-contacts-tab',
+                          selected:
+                              currentDestination == ShellDestination.contacts,
+                          onTap: () => onTap(ShellDestination.contacts),
+                        ),
+                        SizedBox(height: gap),
+                        _DesktopRailItem(
+                          key: const Key('desktop-rail-tasks'),
+                          role: AwikiMeIconRole.tasks,
+                          label: context.l10n.shellNavTasks,
+                          selected:
+                              currentDestination == ShellDestination.tasks,
+                          onTap: () => onTap(ShellDestination.tasks),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              _DesktopRailItem(
-                key: const Key('desktop-rail-settings'),
-                role: AwikiMeIconRole.settings,
-                label: context.l10n.shellNavSettings,
-                semanticsIdentifier: 'e2e-settings-tab',
-                selected: currentDestination == ShellDestination.settings,
-                onTap: () => onTap(ShellDestination.settings),
-              ),
-              SizedBox(height: responsive.displayScaled(compact ? 10 : 14)),
-            ],
-          );
-        },
+                _DesktopRailItem(
+                  key: const Key('desktop-rail-settings'),
+                  role: AwikiMeIconRole.settings,
+                  label: context.l10n.shellNavSettings,
+                  semanticsIdentifier: 'e2e-settings-tab',
+                  selected: currentDestination == ShellDestination.settings,
+                  onTap: () => onTap(ShellDestination.settings),
+                ),
+                SizedBox(height: responsive.displayScaled(compact ? 10 : 14)),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

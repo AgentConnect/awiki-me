@@ -905,6 +905,7 @@ class _MessageAvatar extends StatelessWidget {
     required this.size,
     this.avatarUri,
     this.userId,
+    this.square = false,
   });
 
   final String messageId;
@@ -913,6 +914,9 @@ class _MessageAvatar extends StatelessWidget {
   final double size;
   final String? avatarUri;
   final String? userId;
+
+  /// Agent senders use the rounded-square avatar.
+  final bool square;
 
   @override
   Widget build(BuildContext context) {
@@ -923,6 +927,7 @@ class _MessageAvatar extends StatelessWidget {
         size: size,
         avatarUri: avatarUri,
         userId: userId,
+        square: square,
       ),
     );
   }

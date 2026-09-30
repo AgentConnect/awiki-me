@@ -27,6 +27,7 @@ import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_desktop.dart';
 
 import '../test_support.dart';
 
@@ -562,7 +563,8 @@ void main() {
     expect(menuButton, findsOneWidget);
     expect(refreshButton, findsOneWidget);
     expect(find.byTooltip('刷新智能体列表'), findsOneWidget);
-    expect(tester.widget<AppIconButton>(menuButton).borderColor, isNull);
+    // The plus menu is the reference's borderless soft square.
+    expect(tester.widget(menuButton), isA<AwikiSoftIconButton>());
     expect(
       find.descendant(
         of: menuButton,
@@ -1082,7 +1084,7 @@ void main() {
         tester
             .getSize(find.byKey(const Key('agents-expanded-list-header')))
             .height,
-        closeTo(56 * AwikiDisplayScale.layoutBaseline, 0.01),
+        closeTo(52 * AwikiDisplayScale.layoutBaseline, 0.01),
       );
       expect(
         find.byKey(const Key('agents-persistent-detail-header')),

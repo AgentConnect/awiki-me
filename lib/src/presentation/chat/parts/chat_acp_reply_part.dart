@@ -52,6 +52,7 @@ class _AcpReplyPreview extends StatelessWidget {
                   avatarUri: avatarUri,
                   isMine: false,
                   size: responsive.displayScaled(macStyle ? 30 : 32),
+                  square: true,
                 ),
               ),
               SizedBox(

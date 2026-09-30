@@ -262,26 +262,34 @@ class AwikiFloatingTabBarInset extends InheritedWidget {
 /// The reference's small outlined kind tag (`AI`, `群`, `社区`) that sits
 /// beside a display name.
 class AwikiNameTag extends StatelessWidget {
-  const AwikiNameTag({super.key, required this.label});
+  const AwikiNameTag({super.key, required this.label, this.muted = false});
 
   final String label;
+
+  /// Dims the text further, e.g. for a deleted Agent.
+  final bool muted;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    // Reference `.tag`: 16 units tall, hairline outline, 4-unit corners.
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      height: 16,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: theme.border),
       ),
       child: Text(
         label,
         maxLines: 1,
+        overflow: TextOverflow.clip,
         style: TextStyle(
-          fontSize: 10,
-          height: 1.3,
-          color: theme.secondaryText,
+          fontSize: 10.5,
+          height: 1,
+          letterSpacing: 0.4,
+          color: muted ? theme.tertiaryText : theme.secondaryText,
           fontWeight: FontWeight.w400,
         ),
       ),

@@ -150,6 +150,31 @@ the title bar.
   not a presence claim to peers. The workbench destination remains routable but
   has no rail entry.
 
+## Desktop (macOS) shell: flat
+
+The desktop layout follows the reference's flat window, not the phone glass.
+
+- **Rail:** the canvas tone with the brand glow fading in from the top and
+  the warm glow from the bottom (`mac-desktop-rail-surface`), the avatar with
+  an online dot, and 44-unit items whose selection is a soft brand square.
+  Navigation glyphs on the rail and the phone tab bar are the reference's
+  24-unit line icons (`assets/icons/nav_*.svg`).
+- **List panes:** `AwikiSidebarHeader` is a divider-free 52-unit row with a
+  16-unit title. Messages pair a 30-unit borderless soft search pill with a
+  square soft "+" (`AwikiSoftIconButton`, `AwikiSoftSearchField` in
+  `widgets/awiki_desktop.dart`), show a pending join request inline as a flat
+  soft card with a small bordered review button, and use 26-unit filter
+  chips. Rows are flat and rounded with 40-unit avatars (Agents are rounded
+  squares), a 14-unit name followed by its outline kind tag (`AwikiNameTag`),
+  11-unit time and 12-unit preview; the selected row takes the soft fill.
+- **Contacts, Agents, Settings:** contacts keep their following / followers
+  sections but use the soft search pill, divider-free rows and small bordered
+  actions (`AwikiSmallButton`); Agents keep the Daemon tree with rounded-square
+  runtime avatars; Settings are flat groups with a quiet caption, 14-unit
+  rows and trailing values split by hairlines.
+- **Chat:** a 48-unit header with the name and outline kind tag; the name
+  chip itself opens peer details (`chat-peer-info-avatar-button`).
+
 ## Shared glass surfaces
 
 - **Tenant menu:** the login tenant control opens a thick glass menu anchored

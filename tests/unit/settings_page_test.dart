@@ -297,7 +297,7 @@ void main() {
       tester
           .getSize(find.byKey(const Key('settings-expanded-list-header')))
           .height,
-      closeTo(56 * AwikiDisplayScale.layoutBaseline, 0.01),
+      closeTo(52 * AwikiDisplayScale.layoutBaseline, 0.01),
     );
     final pageSurface = tester.widget<CupertinoPageScaffold>(
       find.byKey(const Key('settings-expanded-page-surface')),

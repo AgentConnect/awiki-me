@@ -11,6 +11,7 @@ class AvatarBadge extends StatelessWidget {
     this.labelOverride,
     this.avatarUri,
     this.userId,
+    this.square = false,
   });
 
   final String seed;
@@ -19,6 +20,10 @@ class AvatarBadge extends StatelessWidget {
   final String? avatarUri;
   final String? userId;
 
+  /// Agents use the reference's rounded square (radius 24% of the size);
+  /// people stay round.
+  final bool square;
+
   @override
   Widget build(BuildContext context) {
     final fallback = _FallbackAvatarBadge(
@@ -26,13 +31,14 @@ class AvatarBadge extends StatelessWidget {
       size: size,
       labelOverride: labelOverride,
       userId: userId,
+      square: square,
     );
     final uri = _safeAvatarUri(avatarUri);
     if (uri == null) {
       return fallback;
     }
     return ClipRRect(
-      borderRadius: BorderRadius.circular(size / 2),
+      borderRadius: avatarBadgeRadius(size, square: square),
       child: Image.network(
         uri.toString(),
         width: size,
@@ -56,12 +62,14 @@ class _FallbackAvatarBadge extends StatelessWidget {
     required this.size,
     this.labelOverride,
     this.userId,
+    this.square = false,
   });
 
   final String seed;
   final double size;
   final String? labelOverride;
   final String? userId;
+  final bool square;
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +84,7 @@ class _FallbackAvatarBadge extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: theme.avatarBackground,
-        borderRadius: BorderRadius.circular(size / 2),
+        borderRadius: avatarBadgeRadius(size, square: square),
       ),
       alignment: Alignment.center,
       child: Text(
@@ -94,6 +102,11 @@ class _FallbackAvatarBadge extends StatelessWidget {
     );
   }
 }
+
+/// Corner radius for an avatar of [size]: round, or the reference's rounded
+/// square for agents.
+BorderRadius avatarBadgeRadius(double size, {bool square = false}) =>
+    BorderRadius.circular(square ? size * 0.24 : size / 2);
 
 Uri? _safeAvatarUri(String? raw) {
   final trimmed = raw?.trim();

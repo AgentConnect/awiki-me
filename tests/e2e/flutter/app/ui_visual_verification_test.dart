@@ -22,6 +22,7 @@ import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_desktop.dart';
 import 'package:flutter/cupertino.dart'
     show CupertinoIcons, CupertinoPageRoute, CupertinoPageScaffold;
 import 'package:flutter/foundation.dart';
@@ -330,7 +331,6 @@ void main() {
         await _pumpVisualFrames(tester);
         await capture('$name-device-join');
 
-
         await _prepareEnvironment(
           tester,
           size: const Size(390, 844),
@@ -588,12 +588,8 @@ void main() {
       expect(find.byKey(const Key('agents-expanded-layout')), findsOneWidget);
       _expectExpandedAgentHeaderUsesAvailableWidth(tester);
       expect(
-        tester
-            .widget<AppIconButton>(
-              find.byKey(const Key('agents-more-actions-button')),
-            )
-            .borderColor,
-        isNull,
+        tester.widget(find.byKey(const Key('agents-more-actions-button'))),
+        isA<AwikiSoftIconButton>(),
       );
       _expectAgentListStatusOverlay(tester, _daemonDid);
       _expectAgentListStatusOverlay(tester, _runtimeDid);

@@ -292,18 +292,20 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          // Reference `.col-head`: a borderless soft search pill and a
+          // square soft "+" sharing one 30-unit row.
           Padding(
             padding: EdgeInsets.fromLTRB(
+              responsive.displayScaled(14),
               responsive.displayScaled(12),
-              responsive.displayScaled(10),
               responsive.displayScaled(12),
-              responsive.displayScaled(8),
+              responsive.displayScaled(4),
             ),
             child: Row(
               children: <Widget>[
                 Expanded(
                   child: SizedBox(
-                    height: responsive.displayScaled(32),
+                    height: responsive.displayScaled(30),
                     child: CupertinoSearchTextField(
                       key: const Key('conversation-search-field'),
                       placeholder: context.l10n.conversationsSearchPlaceholder,
@@ -315,12 +317,15 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                       style: TextStyle(fontSize: 13, color: theme.title),
                       placeholderStyle: TextStyle(
                         fontSize: 13,
-                        color: theme.tertiaryText,
+                        color: theme.secondaryText,
                       ),
                       prefixIcon: Icon(
                         CupertinoIcons.search,
                         color: theme.secondaryText,
                         size: responsive.displayScaled(15),
+                      ),
+                      prefixInsets: EdgeInsetsDirectional.only(
+                        start: responsive.displayScaled(9),
                       ),
                       suffixIcon: Icon(
                         CupertinoIcons.xmark_circle_fill,
@@ -328,14 +333,15 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                         size: responsive.displayScaled(14),
                       ),
                       decoration: BoxDecoration(
-                        color: theme.surface,
-                        borderRadius: BorderRadius.circular(
-                          responsive.displayScaled(8),
+                        color: theme.title.withValues(
+                          alpha: theme.isDark ? 0.10 : 0.065,
                         ),
-                        border: Border.all(color: theme.border),
+                        borderRadius: BorderRadius.circular(
+                          responsive.displayScaled(6),
+                        ),
                       ),
                       padding: EdgeInsets.symmetric(
-                        horizontal: responsive.displayScaled(10),
+                        horizontal: responsive.displayScaled(6),
                         vertical: responsive.displayScaled(6),
                       ),
                     ),
@@ -353,6 +359,20 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
               ],
             ),
           ),
+          if (ref.watch(pendingJoinRequestProvider) case final request?)
+            Padding(
+              key: const Key('conversation-list-join-notice'),
+              padding: EdgeInsets.fromLTRB(
+                responsive.displayScaled(12),
+                responsive.displayScaled(8),
+                responsive.displayScaled(12),
+                0,
+              ),
+              child: DeviceJoinRequestNoticeCard(
+                request: request,
+                onReview: () => reviewDeviceJoinRequest(context, ref, request),
+              ),
+            ),
           _ConversationFilterBar(
             value: _filter,
             onChanged: (value) => setState(() => _filter = value),
@@ -501,7 +521,7 @@ class _ConversationFilterBar extends StatelessWidget {
     }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
       child: Row(
         children: <Widget>[
           for (final filter in _ConversationFilter.values)
@@ -514,15 +534,16 @@ class _ConversationFilterBar extends StatelessWidget {
                 onTap: () => onChanged(filter),
                 borderRadius: BorderRadius.circular(16),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
+                  height: 26,
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
                     color: filter == value
-                        ? theme.subtleSurface
+                        ? theme.title.withValues(
+                            alpha: theme.isDark ? 0.10 : 0.065,
+                          )
                         : CupertinoColors.transparent,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(13),
                   ),
                   child: Text(
                     _conversationFilterLabel(context, filter),
@@ -1303,6 +1324,7 @@ class _ConversationSearchToggle extends StatelessWidget {
   }
 }
 
+/// Reference `.icon-btn.sq`: a 30-unit square with a soft fill.
 class _MacListIconButton extends StatelessWidget {
   const _MacListIconButton({
     super.key,
@@ -1319,19 +1341,26 @@ class _MacListIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    return AppIconButton(
-      onPressed: onTap,
+    final soft = theme.title.withValues(alpha: theme.isDark ? 0.10 : 0.065);
+    return AppPressable(
+      onTap: onTap,
       semanticLabel: semanticLabel,
       tooltip: semanticLabel,
-      size: responsive.displayScaled(24),
-      backgroundColor: theme.surface,
-      borderColor: theme.border,
-      borderRadius: BorderRadius.circular(999),
-      child: Icon(
-        icon,
-        color: theme.secondaryText,
-        size: responsive.displayScaled(12),
+      button: true,
+      borderRadius: BorderRadius.circular(responsive.displayScaled(6)),
+      builder: (context, state, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: responsive.displayScaled(30),
+        height: responsive.displayScaled(30),
+        decoration: BoxDecoration(
+          color: state.hovered || state.pressed
+              ? theme.title.withValues(alpha: theme.isDark ? 0.16 : 0.14)
+              : soft,
+          borderRadius: BorderRadius.circular(responsive.displayScaled(6)),
+        ),
+        child: child,
       ),
+      child: Icon(icon, color: theme.title, size: responsive.displayScaled(16)),
     );
   }
 }
@@ -1406,8 +1435,9 @@ class _MacConversationRow extends StatelessWidget {
                 children: <Widget>[
                   AvatarBadge(
                     seed: title,
-                    size: responsive.displayScaled(38),
+                    size: responsive.displayScaled(40),
                     avatarUri: avatarUri,
+                    square: classification.isAgent,
                   ),
                   if (unreadCount > 0)
                     Positioned(
@@ -1434,38 +1464,46 @@ class _MacConversationRow extends StatelessWidget {
                     Row(
                       children: <Widget>[
                         Expanded(
-                          child: KeyedSubtree(
-                            key: Key('conversation-row-title:$conversationId'),
-                            child: _ConversationTitleStatusLine(
-                              title: title,
-                              isDeletedAgentConversation:
-                                  isDeletedAgentConversation,
-                              compact: true,
-                              titleStyle: TextStyle(
-                                color: theme.title,
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w400,
+                          child: Row(
+                            children: <Widget>[
+                              Flexible(
+                                child: KeyedSubtree(
+                                  key: Key(
+                                    'conversation-row-title:$conversationId',
+                                  ),
+                                  child: _ConversationTitleStatusLine(
+                                    title: title,
+                                    isDeletedAgentConversation:
+                                        isDeletedAgentConversation,
+                                    compact: true,
+                                    titleStyle: TextStyle(
+                                      color: theme.title,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
+                              if (badgeLabel != null) ...<Widget>[
+                                const SizedBox(width: 6),
+                                _ConversationPeerBadge(
+                                  label: badgeLabel,
+                                  isGroup: classification.isGroup,
+                                  muted: isDeletedAgentConversation,
+                                  compact: true,
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-                        if (badgeLabel != null) ...<Widget>[
-                          SizedBox(width: responsive.displayScaled(4)),
-                          _ConversationPeerBadge(
-                            label: badgeLabel,
-                            isGroup: classification.isGroup,
-                            muted: isDeletedAgentConversation,
-                            compact: true,
-                          ),
-                        ],
-                        SizedBox(width: responsive.displayScaled(6)),
+                        const SizedBox(width: 6),
                         KeyedSubtree(
                           key: const Key('conversation-row-right-meta'),
                           child: Text(
                             timeLabel,
                             maxLines: 1,
                             style: TextStyle(
-                              color: theme.tertiaryText,
+                              color: theme.secondaryText,
                               fontSize: 11,
                               fontFeatures: const <FontFeature>[
                                 FontFeature.tabularFigures(),
@@ -1475,7 +1513,7 @@ class _MacConversationRow extends StatelessWidget {
                         ),
                       ],
                     ),
-                    SizedBox(height: responsive.displayScaled(1)),
+                    SizedBox(height: responsive.displayScaled(3)),
                     KeyedSubtree(
                       key: Key('conversation-row-preview:$conversationId'),
                       child: _ConversationPreviewLine(
@@ -1611,6 +1649,7 @@ class _ConversationRow extends StatelessWidget {
                       seed: title,
                       size: phone ? 40 : responsive.displayScaled(48),
                       avatarUri: avatarUri,
+                      square: classification.isAgent,
                     ),
                     if (unreadCount > 0)
                       Positioned(
@@ -1635,9 +1674,10 @@ class _ConversationRow extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
+                      // The kind tag follows the name, as in the reference.
                       Row(
                         children: <Widget>[
-                          Expanded(
+                          Flexible(
                             child: KeyedSubtree(
                               key: Key(
                                 'conversation-row-title:$conversationId',
@@ -2255,6 +2295,8 @@ class _ConversationTitleStatusLine extends StatelessWidget {
   }
 }
 
+/// Kind tag beside a conversation name ("AI", "群"): the reference's quiet
+/// hairline outline with muted text, never a colored fill.
 class _ConversationPeerBadge extends StatelessWidget {
   const _ConversationPeerBadge({
     required this.label,
@@ -2270,39 +2312,10 @@ class _ConversationPeerBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final background = muted
-        ? context.awikiTheme.subtleSurface
-        : isGroup
-        ? const Color(0xFFEFE4FF)
-        : context.awikiTheme.primarySoft;
-    final foreground = muted
-        ? context.awikiTheme.secondaryText
-        : isGroup
-        ? const Color(0xFF7C3AED)
-        : context.awikiTheme.primary;
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: responsive.displayScaled(compact ? 5 : 7),
-        vertical: responsive.displayScaled(compact ? 2 : 3),
-      ),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(
-          responsive.displayScaled(compact ? 5 : 999),
-        ),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.clip,
-        style: TextStyle(
-          color: foreground,
-          fontSize: compact ? 9 : 10.5,
-          fontWeight: FontWeight.w400,
-          height: 1,
-        ),
-      ),
+    return AwikiNameTag(
+      key: const Key('conversation-peer-badge'),
+      label: label,
+      muted: muted,
     );
   }
 }

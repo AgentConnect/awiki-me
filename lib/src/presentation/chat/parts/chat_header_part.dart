@@ -46,6 +46,8 @@ class _ChatHeader extends StatelessWidget {
     final showAddGroupMemberButton =
         conversation.isGroup && onAddGroupMemberTap != null;
     if (macStyle) {
+      // Reference `.chat-head`: a 48-unit bar with the name and a quiet kind
+      // tag; the name chip itself opens the peer's details.
       return Container(
         key: const Key('chat-header'),
         height: responsive.displayScaled(48),
@@ -57,39 +59,23 @@ class _ChatHeader extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: theme.chatSurface,
-          border: Border(
-            bottom: BorderSide(color: theme.border.withValues(alpha: 0.55)),
-          ),
+          border: Border(bottom: BorderSide(color: theme.border)),
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            final avatarSize = responsive.displayScaled(30);
-
             return Row(
               children: <Widget>[
-                _ChatHeaderIdentityTapTarget(
-                  key: const Key('chat-peer-info-avatar-button'),
-                  semanticLabel: openInfoLabel,
-                  semanticsIdentifier: 'chat-peer-info-avatar-button',
-                  onTap: onPeerInfoTap,
-                  child: AvatarBadge(
-                    seed: compactName,
-                    size: avatarSize,
-                    avatarUri: conversation.avatarUri,
-                  ),
-                ),
-                SizedBox(width: responsive.displayScaled(8)),
-                Expanded(
+                Flexible(
                   child: _MacHeaderIdentityText(
                     compactName: compactName,
                     agentBadgeLabel: agentBadgeLabel,
                     isDeletedAgentConversation: isDeletedAgentConversation,
-                    showAgentBadge: width >= 500,
+                    showAgentBadge: constraints.maxWidth >= 320,
                     semanticLabel: openInfoLabel,
                     onNameTap: onPeerInfoTap,
                   ),
                 ),
+                const Spacer(),
                 if (showAddGroupMemberButton) ...<Widget>[
                   SizedBox(width: responsive.displayScaled(12)),
                   _ChatHeaderAddGroupMemberButton(
@@ -253,20 +239,17 @@ class _ChatHeaderIdentityTapTarget extends StatelessWidget {
     required this.child,
     required this.onTap,
     required this.semanticLabel,
-    this.semanticsIdentifier,
   });
 
   final Widget child;
   final VoidCallback onTap;
   final String semanticLabel;
-  final String? semanticsIdentifier;
 
   @override
   Widget build(BuildContext context) {
     return AppPressable(
       onTap: onTap,
       semanticLabel: semanticLabel,
-      semanticsIdentifier: semanticsIdentifier,
       tooltip: semanticLabel,
       builder: (_, __, child) => child,
       child: child,
@@ -293,40 +276,54 @@ class _MacHeaderIdentityText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return Row(
-      children: <Widget>[
-        Flexible(
-          child: _ChatHeaderIdentityTapTarget(
-            semanticLabel: semanticLabel,
-            onTap: onNameTap,
+    final theme = context.awikiTheme;
+    return AppPressable(
+      key: const Key('chat-peer-info-avatar-button'),
+      onTap: onNameTap,
+      semanticLabel: semanticLabel,
+      semanticsIdentifier: 'chat-peer-info-avatar-button',
+      tooltip: semanticLabel,
+      borderRadius: BorderRadius.circular(6),
+      builder: (context, state, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: state.pressed
+              ? theme.title.withValues(alpha: theme.isDark ? 0.10 : 0.065)
+              : state.hovered
+              ? theme.title.withValues(alpha: theme.isDark ? 0.06 : 0.05)
+              : theme.title.withValues(alpha: 0),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: child,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Flexible(
             child: Text(
               compactName,
               key: const Key('chat-header-title'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: context.awikiTheme.title,
-                fontSize: 14.5,
+                color: theme.title,
+                fontSize: 16,
+                height: 1.3,
                 fontWeight: FontWeight.w400,
               ),
             ),
           ),
-        ),
-        if (agentBadgeLabel != null && showAgentBadge) ...<Widget>[
-          SizedBox(width: responsive.displayScaled(8)),
-          _MacChatPill(
-            key: const Key('chat-header-agent-badge'),
-            label: agentBadgeLabel!,
-            color: isDeletedAgentConversation
-                ? context.awikiTheme.subtleSurface
-                : context.awikiTheme.primarySoft,
-            textColor: isDeletedAgentConversation
-                ? context.awikiTheme.secondaryText
-                : context.awikiTheme.primary,
-          ),
+          if (agentBadgeLabel != null && showAgentBadge) ...<Widget>[
+            const SizedBox(width: 6),
+            AwikiNameTag(
+              key: const Key('chat-header-agent-badge'),
+              label: agentBadgeLabel!,
+              muted: isDeletedAgentConversation,
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

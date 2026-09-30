@@ -24,6 +24,7 @@ import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_desktop.dart';
 import '../shared/widgets/awiki_glass.dart';
 import 'language_selection_page.dart';
 import 'display_settings_page.dart';
@@ -260,6 +261,131 @@ class SettingsPage extends ConsumerWidget {
     ];
 
     if (embedded && responsive.usesDesktopLayout) {
+      // Reference desktop settings: flat groups with a quiet caption,
+      // title/subtitle rows and trailing values, split by hairlines.
+      final checkingUpdates = updateState.status == AppUpdateStatus.checking;
+      final desktopGroups = <Widget>[
+        if (session != null)
+          _DesktopSettingsGroup(
+            key: const Key('settings-devices-section'),
+            first: true,
+            title: l10n.settingsAccountDevicesSection,
+            children: <Widget>[
+              _DesktopSettingsProfileRow(session: session, onTap: onProfileTap),
+              _DesktopSettingsRow(
+                key: const Key('settings-devices-row'),
+                title: l10n.settingsDevices,
+                onTap: () => AppNavigator.push<void>(
+                  context,
+                  (_) => const DevicesPage(),
+                ),
+              ),
+            ],
+          ),
+        _DesktopSettingsGroup(
+          key: const Key('settings-general-section'),
+          first: session == null,
+          title: l10n.settingsAppSection,
+          children: <Widget>[
+            _DesktopSettingsRow(
+              key: const Key('settings-current-version-row'),
+              title: l10n.settingsCurrentVersion,
+              trailingText: updateState.currentVersion?.version ?? '--',
+            ),
+            _DesktopSettingsRow(
+              key: const Key('settings-check-updates-row'),
+              title: l10n.settingsCheckForUpdates,
+              trailingText: _updateStatusLabel(context, updateState),
+              onTap: checkingUpdates
+                  ? null
+                  : () => ref
+                        .read(appUpdateProvider.notifier)
+                        .checkForUpdates(force: true),
+            ),
+            if (!activeTenant.isOfficialTenant) ...<Widget>[
+              _DesktopSettingsRow(
+                key: const Key('settings-check-primary-update-source-row'),
+                title:
+                    '${l10n.settingsCheckForUpdates} · $primaryBuiltinTenantName',
+                onTap: checkingUpdates
+                    ? null
+                    : () => ref
+                          .read(appUpdateProvider.notifier)
+                          .checkOfficialSource(AppOfficialUpdateSource.primary),
+              ),
+              _DesktopSettingsRow(
+                key: const Key('settings-check-secondary-update-source-row'),
+                title:
+                    '${l10n.settingsCheckForUpdates} · $secondaryBuiltinTenantName',
+                onTap: checkingUpdates
+                    ? null
+                    : () => ref
+                          .read(appUpdateProvider.notifier)
+                          .checkOfficialSource(
+                            AppOfficialUpdateSource.secondary,
+                          ),
+              ),
+            ],
+            _DesktopSettingsRow(
+              key: const Key('settings-language-row'),
+              title: l10n.settingsLanguage,
+              trailingText: appLocaleModeLabel(context, localeMode),
+              onTap: () => AppNavigator.push<void>(
+                context,
+                (_) => const LanguageSelectionPage(),
+              ),
+            ),
+            _DesktopSettingsRow(
+              key: const Key('settings-display-row'),
+              title: isDesktopPlatform
+                  ? l10n.settingsDisplayAndWindow
+                  : l10n.settingsAppearance,
+              trailingText: '${(displayScale * 100).round()}%',
+              trailingTextKey: const Key('settings-display-value'),
+              onTap: () => AppNavigator.push<void>(
+                context,
+                (_) => const DisplaySettingsPage(),
+              ),
+            ),
+          ],
+        ),
+        _DesktopSettingsGroup(
+          key: const Key('settings-session-section'),
+          title: l10n.settingsSecuritySection,
+          children: <Widget>[
+            _DesktopSettingsRow(
+              key: const Key('settings-recover-handle-did-row'),
+              title: l10n.settingsRecoverHandleDid,
+              onTap: _canRecoverHandleDid(session)
+                  ? () => _openHandleRecovery(context, session!)
+                  : null,
+            ),
+            _DesktopSettingsRow(
+              key: const Key('settings-export-credential-row'),
+              title: l10n.settingsExportCredential,
+              onTap: session == null ? null : runtime.exportCurrentCredential,
+            ),
+            _DesktopSettingsRow(
+              key: const Key('settings-logout-row'),
+              title: l10n.settingsLogout,
+              onTap: () => _showLogoutDialog(context, runtime),
+            ),
+            _DesktopSettingsRow(
+              key: const Key('settings-delete-credential-row'),
+              title: l10n.settingsDeleteCredential,
+              destructive: true,
+              onTap: session == null
+                  ? null
+                  : () => _showDeleteCredentialDialog(
+                      context,
+                      ref,
+                      runtime,
+                      session,
+                    ),
+            ),
+          ],
+        ),
+      ];
       return CupertinoPageScaffold(
         key: const Key('settings-expanded-page-surface'),
         backgroundColor: theme.surface,
@@ -271,13 +397,8 @@ class SettingsPage extends ConsumerWidget {
             ),
             Expanded(
               child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                  0,
-                  responsive.spacing(10),
-                  0,
-                  responsive.spacing(24),
-                ),
-                children: sections,
+                padding: EdgeInsets.only(bottom: responsive.spacing(24)),
+                children: desktopGroups,
               ),
             ),
           ],
@@ -944,6 +1065,219 @@ class _SettingsIcon extends StatelessWidget {
               size: responsive.iconSm,
               color: color,
             ),
+    );
+  }
+}
+
+/// Reference desktop `.set-group`: a quiet 12-unit caption over its rows,
+/// separated from the previous group by a hairline.
+class _DesktopSettingsGroup extends StatelessWidget {
+  const _DesktopSettingsGroup({
+    super.key,
+    required this.title,
+    required this.children,
+    this.first = false,
+  });
+
+  final String title;
+  final List<Widget> children;
+  final bool first;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: first ? null : Border(top: BorderSide(color: theme.border)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          responsive.displayScaled(6),
+          responsive.displayScaled(10),
+          responsive.displayScaled(6),
+          responsive.displayScaled(4),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                responsive.displayScaled(8),
+                0,
+                responsive.displayScaled(8),
+                responsive.displayScaled(4),
+              ),
+              child: Text(
+                title,
+                style: TextStyle(color: theme.secondaryText, fontSize: 12),
+              ),
+            ),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A flat desktop settings row: 14-unit title and a trailing value;
+/// interactive rows show a soft hover fill and chevron.
+class _DesktopSettingsRow extends StatelessWidget {
+  const _DesktopSettingsRow({
+    super.key,
+    required this.title,
+    this.trailingText,
+    this.trailingTextKey,
+    this.destructive = false,
+    this.onTap,
+  });
+
+  final String title;
+  final String? trailingText;
+  final Key? trailingTextKey;
+  final bool destructive;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    final radius = BorderRadius.circular(responsive.displayScaled(8));
+    return AppPressable(
+      onTap: onTap,
+      enabled: onTap != null,
+      semanticLabel: title,
+      borderRadius: radius,
+      builder: (context, state, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          color: onTap != null && (state.hovered || state.pressed)
+              ? awikiDesktopHoverFill(context)
+              : awikiDesktopHoverFill(context).withValues(alpha: 0),
+          borderRadius: radius,
+        ),
+        child: child,
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: responsive.displayScaled(8),
+          vertical: responsive.displayScaled(9),
+        ),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: destructive ? theme.danger : theme.title,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (trailingText != null) ...<Widget>[
+              SizedBox(width: responsive.displayScaled(8)),
+              Text(
+                trailingText!,
+                key: trailingTextKey,
+                maxLines: 1,
+                style: TextStyle(color: theme.secondaryText, fontSize: 12),
+              ),
+            ],
+            if (onTap != null) ...<Widget>[
+              SizedBox(width: responsive.displayScaled(6)),
+              Icon(
+                CupertinoIcons.chevron_right,
+                size: responsive.displayScaled(13),
+                color: theme.tertiaryText,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The signed-in identity at the top of the desktop account group.
+class _DesktopSettingsProfileRow extends StatelessWidget {
+  const _DesktopSettingsProfileRow({required this.session, this.onTap});
+
+  final SessionIdentity session;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    final title = _sessionProfileTitle(session);
+    final subtitle = _sessionProfileSubtitle(session);
+    final radius = BorderRadius.circular(responsive.displayScaled(8));
+    return AppPressable(
+      key: const Key('settings-profile-row'),
+      onTap: onTap,
+      enabled: onTap != null,
+      semanticLabel: title,
+      borderRadius: radius,
+      builder: (context, state, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          color: onTap != null && (state.hovered || state.pressed)
+              ? awikiDesktopHoverFill(context)
+              : awikiDesktopHoverFill(context).withValues(alpha: 0),
+          borderRadius: radius,
+        ),
+        child: child,
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: responsive.displayScaled(8),
+          vertical: responsive.displayScaled(8),
+        ),
+        child: Row(
+          children: <Widget>[
+            AvatarBadge(
+              key: const Key('settings-profile-avatar'),
+              seed: title,
+              size: responsive.displayScaled(40),
+              userId: session.did,
+            ),
+            SizedBox(width: responsive.displayScaled(10)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: theme.title, fontSize: 14),
+                  ),
+                  if (subtitle.isNotEmpty)
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: theme.secondaryText,
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

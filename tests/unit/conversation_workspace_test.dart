@@ -4314,7 +4314,7 @@ void main() {
     expect(find.text('搜索会话'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const Key('conversation-search-field'))).height,
-      closeTo(32 * AwikiDisplayScale.layoutBaseline, 0.01),
+      closeTo(30 * AwikiDisplayScale.layoutBaseline, 0.01),
     );
     expect(find.text('搜索会话或 Agent'), findsNothing);
     expect(find.text('Marcus Chen'), findsOneWidget);
