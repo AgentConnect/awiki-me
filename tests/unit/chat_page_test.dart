@@ -1252,6 +1252,11 @@ void main() {
     final outgoingText = tester.widget<Text>(find.text('outgoing'));
     expect(outgoingText.style?.fontSize, 16);
     expect(outgoingText.style?.fontWeight, FontWeight.w400);
+    // Even leading keeps CJK glyphs vertically centred inside the bubble.
+    expect(
+      outgoingText.style?.leadingDistribution,
+      TextLeadingDistribution.even,
+    );
     // Phone bubbles are evenly 20-unit rounded, matching the reference; neither
     // carries a tail or outline.
     final radius = BorderRadius.circular(20 * AwikiDisplayScale.layoutBaseline);

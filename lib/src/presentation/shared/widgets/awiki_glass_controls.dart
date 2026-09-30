@@ -411,6 +411,7 @@ class AwikiPillButton extends StatelessWidget {
                     fontSize: 15,
                     height: 1.2,
                     fontWeight: FontWeight.w400,
+                    leadingDistribution: TextLeadingDistribution.even,
                   ),
                 ),
         ),

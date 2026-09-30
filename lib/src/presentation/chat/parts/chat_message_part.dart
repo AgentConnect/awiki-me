@@ -1095,6 +1095,7 @@ class _MessageBubble extends StatelessWidget {
       fontSize: 14,
       fontWeight: FontWeight.w400,
       height: 1.6,
+      leadingDistribution: TextLeadingDistribution.even,
     );
     final messageContent = message.attachment == null
         ? _MessageTextContent(
@@ -1245,6 +1246,7 @@ class _MessageBubble extends StatelessWidget {
       fontSize: 16,
       fontWeight: FontWeight.w400,
       height: 1.5,
+      leadingDistribution: TextLeadingDistribution.even,
     );
     final messageContent = attachment == null
         ? _MessageTextContent(

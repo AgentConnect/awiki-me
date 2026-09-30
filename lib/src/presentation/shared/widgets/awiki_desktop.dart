@@ -174,10 +174,12 @@ class AwikiSmallButton extends StatelessWidget {
           : Text(
               label,
               maxLines: 1,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: danger ? theme.danger : theme.title,
                 fontSize: 13,
                 height: 1,
+                leadingDistribution: TextLeadingDistribution.even,
               ),
             ),
     );
@@ -301,10 +303,12 @@ class _AwikiDialogButton extends StatelessWidget {
           : Text(
               label,
               maxLines: 1,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: textColor,
                 fontSize: phone ? 15 : 14,
                 height: 1,
+                leadingDistribution: TextLeadingDistribution.even,
               ),
             ),
     );
