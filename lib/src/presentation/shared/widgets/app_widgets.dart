@@ -8,7 +8,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../app/e2e_semantics.dart';
 import '../awiki_me_design.dart';
 import '../responsive_layout.dart';
-import 'awiki_glass_controls.dart' show awikiThickGlassDecoration;
+import 'awiki_glass_controls.dart' show AwikiFrostedSurface;
 
 @immutable
 class AppPressableState {
@@ -901,15 +901,9 @@ class AppDropMenu extends StatelessWidget {
           child: ConstrainedBox(
             key: const Key('compact-action-sheet'),
             constraints: const BoxConstraints(maxWidth: 320),
-            child: DecoratedBox(
-              decoration: awikiThickGlassDecoration(
-                context,
-                borderRadius: phoneRadius,
-              ),
-              child: ClipRRect(
-                borderRadius: phoneRadius,
-                child: SingleChildScrollView(child: menuContent),
-              ),
+            child: AwikiFrostedSurface(
+              borderRadius: phoneRadius,
+              child: SingleChildScrollView(child: menuContent),
             ),
           ),
         ),

@@ -216,24 +216,18 @@ class _CompactAnchoredQuickActionsMenu extends StatelessWidget {
             width: menuWidth,
             height: menuHeight,
             // Thick glass menu without a pointer, as in the reference.
-            child: DecoratedBox(
+            child: AwikiFrostedSurface(
               key: const Key('compact-quick-actions-menu'),
-              decoration: awikiThickGlassDecoration(
-                context,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Column(
-                  children: <Widget>[
-                    for (var index = 0; index < items.length; index++)
-                      _CompactQuickActionRow(
-                        item: items[index],
-                        value: index,
-                        showDivider: false,
-                      ),
-                  ],
-                ),
+              borderRadius: BorderRadius.circular(20),
+              child: Column(
+                children: <Widget>[
+                  for (var index = 0; index < items.length; index++)
+                    _CompactQuickActionRow(
+                      item: items[index],
+                      value: index,
+                      showDivider: false,
+                    ),
+                ],
               ),
             ),
           ),

@@ -162,11 +162,13 @@ the title bar.
   accent focus ring; primary, secondary and destructive buttons are pills;
   every dialog, menu, picker and alert opened from a control is a centered
   floating card (`AppNavigator.showDialog`, `showAwikiGlassDialog`,
-  `showAwikiGlassAlert`) that fades and scales in over a light scrim; nothing
+  `showAwikiGlassAlert`) that fades and scales in over a dimmed scrim; nothing
   slides up from the bottom edge and stock Cupertino alerts and action sheets
-  are not used. Floating cards and menus use a solid bright surface, a
-  hairline edge and a tight, light shadow (`awikiFloatingShadow`) with no
-  backdrop blur, so their edges stay crisp instead of pulling in the scrim. Secondary pills share the fields' frosted fill; the quick-actions
+  are not used. Floating cards and menus share `AwikiFrostedSurface`: the
+  reference's thick glass (a ~80% fill over a 30px, 180%-saturated backdrop
+  blur, a white sheen over the top 40%, a bright top rim and a hairline). Its
+  drop shadow is painted after the blur and only outside the card, so the
+  blur never samples it and the edges stay bright. Secondary pills share the fields' frosted fill; the quick-actions
   menu is a glass panel without a pointer. Destructive fills use the deeper
   `dangerFill` red in dark mode.
 - Language, appearance (a glass segmented track), profile edit and chat

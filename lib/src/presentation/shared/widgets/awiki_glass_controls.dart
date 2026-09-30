@@ -3,14 +3,16 @@
 //           progress steps shared by device, recovery and dialog flows.
 // [POS]: Presentation-only building blocks for the flat liquid-glass style.
 
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/cupertino.dart';
 
 import '../../../app/app_router.dart';
 import '../awiki_me_design.dart';
 import 'app_widgets.dart';
 
-/// Floating panel used by menus and dialogs: a solid bright fill, hairline
-/// edge and a tight, light drop shadow.
+/// Floating panel used by menus and dialogs: a frosted glass card with
+/// padding around [child].
 class AwikiGlassPanel extends StatelessWidget {
   const AwikiGlassPanel({
     super.key,
@@ -25,49 +27,141 @@ class AwikiGlassPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final borderRadius = BorderRadius.circular(radius);
-    // Solid bright fill and a tight, light shadow keep floating panels crisp
-    // over the dimmed scrim; a see-through backdrop blur would pull the dark
-    // scrim into the panel's edges.
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: awikiFloatingFill(context),
+    return AwikiFrostedSurface(
+      borderRadius: BorderRadius.circular(radius),
+      child: Padding(padding: padding, child: child),
+    );
+  }
+}
+
+/// The reference's thick liquid glass for floating cards: a translucent
+/// fill over a blurred, saturated backdrop, a bright sheen across the top
+/// 40%, a white top rim, a hairline outline and a soft drop shadow.
+///
+/// The shadow is painted after the blur and only outside the card, so the
+/// blur never picks it up; blurring its own shadow is what darkens the
+/// edges of a naive glass card.
+class AwikiFrostedSurface extends StatelessWidget {
+  const AwikiFrostedSurface({
+    super.key,
+    required this.borderRadius,
+    required this.child,
+  });
+
+  final BorderRadius borderRadius;
+  final Widget child;
+
+  static final ImageFilter _backdrop = ImageFilter.compose(
+    outer: _saturation(1.8),
+    inner: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+  );
+
+  static ColorFilter _saturation(double s) {
+    const r = 0.2126, g = 0.7152, b = 0.0722;
+    final i = 1 - s;
+    return ColorFilter.matrix(<double>[
+      r * i + s, g * i, b * i, 0, 0, //
+      r * i, g * i + s, b * i, 0, 0, //
+      r * i, g * i, b * i + s, 0, 0, //
+      0, 0, 0, 1, 0, //
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = context.awikiTheme.isDark;
+    const white = CupertinoColors.white;
+    return CustomPaint(
+      foregroundPainter: _OuterShadowPainter(
         borderRadius: borderRadius,
-        border: Border.all(color: theme.glassEdgeActive, width: 0.5),
-        boxShadow: awikiFloatingShadow(context),
+        dark: dark,
       ),
       child: ClipRRect(
         borderRadius: borderRadius,
-        child: Padding(padding: padding, child: child),
+        child: BackdropFilter(
+          filter: _backdrop,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: dark ? const Color(0xD12B2D31) : const Color(0xCCFCFDFE),
+            ),
+            child: DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                borderRadius: borderRadius,
+                border: Border.all(
+                  color: white.withValues(alpha: dark ? 0.07 : 0.4),
+                  width: 0.5,
+                ),
+              ),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: const Alignment(0, -0.2),
+                    colors: <Color>[
+                      white.withValues(alpha: dark ? 0.09 : 0.55),
+                      white.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+                child: child,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
-/// Solid fill for floating panels: the bright surface in light mode and a
-/// raised graphite in dark mode so cards lift off the page behind them.
-Color awikiFloatingFill(BuildContext context) {
-  final theme = context.awikiTheme;
-  return theme.isDark ? theme.subtleSurface : theme.surface;
-}
+/// Paints the glass card's drop shadow outside its rounded rect only, then
+/// its top rim and hairline outline.
+class _OuterShadowPainter extends CustomPainter {
+  const _OuterShadowPainter({required this.borderRadius, required this.dark});
 
-/// The tight, light drop shadow under floating panels, dialogs and menus.
-List<BoxShadow> awikiFloatingShadow(BuildContext context) {
-  final dark = context.awikiTheme.isDark;
-  const ink = Color(0xFF0B1320);
-  return <BoxShadow>[
-    BoxShadow(
-      color: ink.withValues(alpha: dark ? 0.36 : 0.10),
-      blurRadius: 28,
-      offset: const Offset(0, 10),
-    ),
-    BoxShadow(
-      color: ink.withValues(alpha: dark ? 0.2 : 0.05),
-      blurRadius: 3,
-      offset: const Offset(0, 1),
-    ),
-  ];
+  final BorderRadius borderRadius;
+  final bool dark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final card = borderRadius.toRRect(Offset.zero & size);
+    const ink = Color(0xFF141C2A);
+    canvas.save();
+    canvas.clipPath(
+      Path()
+        ..fillType = PathFillType.evenOdd
+        ..addRect((Offset.zero & size).inflate(240))
+        ..addRRect(card),
+    );
+    canvas.drawRRect(
+      card.shift(const Offset(0, 24)),
+      Paint()
+        ..color = ink.withValues(alpha: dark ? 0.45 : 0.22)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 30),
+    );
+    canvas.restore();
+    // Bright top rim: the sliver between the card and itself nudged down
+    // 1px, like the reference's `inset 0 1px 0`.
+    canvas.drawDRRect(
+      card,
+      card.shift(const Offset(0, 1)),
+      Paint()
+        ..color = CupertinoColors.white.withValues(alpha: dark ? 0.24 : 0.95),
+    );
+    canvas.drawRRect(
+      card.inflate(0.25),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.5
+        ..color = dark ? white06 : ink.withValues(alpha: 0.08),
+    );
+  }
+
+  static const Color white06 = Color(0x0FFFFFFF);
+
+  @override
+  bool shouldRepaint(_OuterShadowPainter oldDelegate) =>
+      oldDelegate.borderRadius != borderRadius || oldDelegate.dark != dark;
 }
 
 /// Presents [builder] inside a centered floating glass panel, the
@@ -620,20 +714,4 @@ class AwikiDetailRows extends StatelessWidget {
       ],
     );
   }
-}
-
-/// Thick glass decoration for opaque-enough floating surfaces (sheets and
-/// dialogs) that do not need a live backdrop blur.
-BoxDecoration awikiThickGlassDecoration(
-  BuildContext context, {
-  required BorderRadius borderRadius,
-  Color? fill,
-}) {
-  final theme = context.awikiTheme;
-  return BoxDecoration(
-    color: fill ?? awikiFloatingFill(context),
-    borderRadius: borderRadius,
-    border: Border.all(color: theme.glassEdgeActive, width: 0.5),
-    boxShadow: awikiFloatingShadow(context),
-  );
 }

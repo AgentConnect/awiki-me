@@ -84,27 +84,29 @@ class AppDialogScaffold extends StatelessWidget {
               maxWidth: maxDialogWidth,
               maxHeight: maxDialogHeight,
             ),
-            child: DecoratedBox(
-              decoration: responsive.isPhone
-                  ? awikiThickGlassDecoration(
-                      context,
-                      borderRadius: effectiveBorderRadius,
-                      fill: surfaceColor,
-                    )
-                  : BoxDecoration(
+            child: responsive.isPhone
+                ? AwikiFrostedSurface(
+                    borderRadius: effectiveBorderRadius,
+                    child: Padding(
+                      padding: padding ?? EdgeInsets.zero,
+                      child: child,
+                    ),
+                  )
+                : DecoratedBox(
+                    decoration: BoxDecoration(
                       color: surfaceColor ?? theme.surface,
                       borderRadius: effectiveBorderRadius,
                       boxShadow: theme.overlayShadow,
                     ),
-              child: ClipRRect(
-                borderRadius: effectiveBorderRadius,
-                clipBehavior: clipBehavior,
-                child: Padding(
-                  padding: padding ?? EdgeInsets.zero,
-                  child: child,
-                ),
-              ),
-            ),
+                    child: ClipRRect(
+                      borderRadius: effectiveBorderRadius,
+                      clipBehavior: clipBehavior,
+                      child: Padding(
+                        padding: padding ?? EdgeInsets.zero,
+                        child: child,
+                      ),
+                    ),
+                  ),
           ),
         ),
       ),
