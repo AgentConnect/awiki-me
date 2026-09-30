@@ -1,5 +1,27 @@
 part of '../chat_page.dart';
 
+/// Converts a reference-design pixel value into layout units, so the chat
+/// matches the reference exactly at the default display scale.
+double _chatDesignPx(AwikiResponsiveInfo responsive, double px) =>
+    responsive.displayScaled(px / AwikiDisplayScale.layoutBaseline);
+
+/// Reference `--bubble-r` / `--bubble-tail`: 18/6 on desktop, 20/8 on phone.
+/// The sharper tail corner sits at the top on the sender's side.
+BorderRadius _chatBubbleRadius(
+  AwikiResponsiveInfo responsive, {
+  required bool isMine,
+  required bool macStyle,
+}) {
+  final round = Radius.circular(_chatDesignPx(responsive, macStyle ? 18 : 20));
+  final tail = Radius.circular(_chatDesignPx(responsive, macStyle ? 6 : 8));
+  return BorderRadius.only(
+    topLeft: isMine ? round : tail,
+    topRight: isMine ? tail : round,
+    bottomLeft: round,
+    bottomRight: round,
+  );
+}
+
 /// Shared geometry for messages and ACP previews; contains no message identity.
 class _MessageBubbleSurface extends StatelessWidget {
   const _MessageBubbleSurface({
@@ -20,56 +42,35 @@ class _MessageBubbleSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    const shadows = [
-      BoxShadow(color: Color(0x0D000000), blurRadius: 2, offset: Offset(0, 1)),
-    ];
-    final padding = responsive.displayScaled(13);
-    final tail = macStyle ? 0.0 : responsive.displayScaled(6);
+    // Reference `.file`: attachments sit on the surface with a hairline
+    // border instead of a tinted bubble.
+    final color = hasAttachment
+        ? theme.surface
+        : isMine
+        ? theme.outgoingMessage
+        : theme.incomingMessage;
     return Container(
       constraints: BoxConstraints(maxWidth: maxWidth),
-      padding: EdgeInsets.fromLTRB(
-        padding + (isMine ? 0 : tail),
-        responsive.displayScaled(9),
-        padding + (isMine ? tail : 0),
-        responsive.displayScaled(9),
-      ),
-      decoration: macStyle
-          ? BoxDecoration(
-              color: hasAttachment
-                  ? theme.surface
-                  : isMine
-                  ? theme.outgoingMessage
-                  : theme.incomingMessage,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(
-                  responsive.displayScaled(isMine ? 13 : 4),
-                ),
-                topRight: Radius.circular(
-                  responsive.displayScaled(isMine ? 4 : 13),
-                ),
-                bottomLeft: Radius.circular(responsive.displayScaled(13)),
-                bottomRight: Radius.circular(responsive.displayScaled(13)),
-              ),
-              boxShadow: hasAttachment ? shadows : null,
+      padding: hasAttachment
+          ? EdgeInsets.fromLTRB(
+              _chatDesignPx(responsive, 10),
+              _chatDesignPx(responsive, 10),
+              _chatDesignPx(responsive, 14),
+              _chatDesignPx(responsive, 10),
             )
-          : ShapeDecoration(
-              color: hasAttachment
-                  ? theme.surface
-                  : isMine
-                  ? theme.outgoingMessage
-                  : theme.surface,
-              shape: _ChatBubbleShapeBorder(
-                isMine: isMine,
-                radius: responsive.displayScaled(16),
-                tailExtent: tail,
-                side: BorderSide(
-                  color: isMine
-                      ? AwikiMePalette.brandAccent.withValues(alpha: 0.28)
-                      : theme.border,
-                ),
-              ),
-              shadows: hasAttachment ? shadows : null,
+          : EdgeInsets.symmetric(
+              horizontal: _chatDesignPx(responsive, 14),
+              vertical: _chatDesignPx(responsive, 9),
             ),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: _chatBubbleRadius(
+          responsive,
+          isMine: isMine,
+          macStyle: macStyle,
+        ),
+        border: hasAttachment ? Border.all(color: theme.border) : null,
+      ),
       child: child,
     );
   }

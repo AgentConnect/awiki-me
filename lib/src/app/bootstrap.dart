@@ -3,6 +3,7 @@
 // [POS]: Production composition root; device secrets remain owned by Vault-backed IM Core.
 
 import 'dart:async';
+import '../data/services/appearance_preference_service.dart';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -114,6 +115,7 @@ class AppBootstrap {
     required this.localePreferenceService,
     required this.updateService,
     this.tenantRegistry,
+    this.appearancePreferenceService = const AppearancePreferenceService(),
     this.displayScalePreferenceService =
         const NoopDisplayScalePreferenceService(),
     this.smsOtpCooldownService = const NoopSmsOtpCooldownService(),
@@ -156,6 +158,7 @@ class AppBootstrap {
   final RealtimeGateway realtimeGateway;
   final NotificationFacade notificationFacade;
   final LocalePreferenceService localePreferenceService;
+  final AppearancePreferenceService appearancePreferenceService;
   final UpdateService updateService;
   final AppTenantRegistry? tenantRegistry;
   final DisplayScalePreferenceService displayScalePreferenceService;
@@ -449,6 +452,9 @@ class AppBootstrap {
           delay: const Duration(seconds: 8),
         ),
       );
+      final appearancePreferenceService = AppearancePreferenceService(
+        storage: preferenceStorage,
+      );
       final localePreferenceService = LocalePreferenceService(
         storage: preferenceStorage,
       );
@@ -470,6 +476,7 @@ class AppBootstrap {
         realtimeGateway: realtimeGateway,
         notificationFacade: effectiveNotificationFacade,
         localePreferenceService: localePreferenceService,
+        appearancePreferenceService: appearancePreferenceService,
         displayScalePreferenceService: displayScalePreferenceService,
         smsOtpCooldownService: smsOtpCooldownService,
         updateService: updateService,
@@ -574,6 +581,7 @@ class AppBootstrap {
       realtimeGateway: realtimeGateway,
       notificationFacade: notificationFacade,
       localePreferenceService: localePreferenceService,
+      appearancePreferenceService: appearancePreferenceService,
       displayScalePreferenceService: displayScalePreferenceService,
       smsOtpCooldownService: smsOtpCooldownService,
       updateService: updateService,

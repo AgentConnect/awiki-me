@@ -18,12 +18,15 @@ import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/app/app_appearance.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass_controls.dart';
 
 import 'app_update_provider_test.dart' show buildManifest;
 import 'test_support.dart';
@@ -44,6 +47,56 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(notifyChannel, null);
   });
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    testWidgets('$platform settings opens appearance and switches every mode', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = platform;
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = const Size(390, 844);
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      await tester.pumpWidget(
+        buildLocalizedTestApp(home: const SettingsPage()),
+      );
+      await tester.pumpAndSettle();
+      final entry = find.byKey(const Key('settings-display-row'));
+      await tester.ensureVisible(entry);
+      expect(
+        find.descendant(of: entry, matching: find.text('外观')),
+        findsOneWidget,
+      );
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('display-settings-page')), findsOneWidget);
+      expect(find.byKey(const Key('window-placement-reset-row')), findsNothing);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(DisplaySettingsPage)),
+      );
+      for (final appearance in [
+        AppAppearance.dark,
+        AppAppearance.light,
+        AppAppearance.system,
+      ]) {
+        final option = find.byKey(Key('appearance-${appearance.name}'));
+        await tester.tap(option);
+        await tester.pumpAndSettle();
+        expect(container.read(appAppearanceProvider), appearance);
+        expect(tester.widget<AppPressable>(option).selected, isTrue);
+      }
+      await tester.tap(find.byKey(const Key('display-settings-back-button')));
+      await tester.pumpAndSettle();
+      expect(find.byType(DisplaySettingsPage), findsNothing);
+      expect(entry, findsOneWidget);
+      expect(tester.takeException(), isNull);
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
+
   testWidgets(
     'desktop display settings remain usable at the minimum compact width',
     (tester) async {
@@ -200,7 +253,7 @@ void main() {
 
     expect(gateway.exportCalls, 0);
     expect(gateway.deleteLocalCredentialCalls, 0);
-    expect(find.byType(CupertinoAlertDialog), findsNothing);
+    expect(find.byWidgetPredicate((w) => w is AwikiGlassAlert), findsNothing);
   });
 
   testWidgets('桌面 272px 设置栏完整显示真实设置项且不溢出', (tester) async {
@@ -244,7 +297,7 @@ void main() {
       tester
           .getSize(find.byKey(const Key('settings-expanded-list-header')))
           .height,
-      closeTo(56 * AwikiDisplayScale.layoutBaseline, 0.01),
+      closeTo(52 * AwikiDisplayScale.layoutBaseline, 0.01),
     );
     final pageSurface = tester.widget<CupertinoPageScaffold>(
       find.byKey(const Key('settings-expanded-page-surface')),
@@ -259,7 +312,7 @@ void main() {
     expect(tester.getSize(sectionSurface).width, greaterThanOrEqualTo(256));
   });
 
-  testWidgets('紧凑设置页按图1使用连续全宽列表并在首屏展示全部安全操作', (tester) async {
+  testWidgets('紧凑设置页使用玻璃分组卡片并在首屏展示全部安全操作', (tester) async {
     tester.view
       ..devicePixelRatio = 1
       ..physicalSize = const Size(390, 844);
@@ -277,37 +330,60 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final headerRect = tester.getRect(
-      find.byKey(const Key('settings-compact-header')),
-    );
-    final avatarRect = tester.getRect(
-      find.byKey(const Key('settings-profile-avatar')),
-    );
-    final accountFinder = find.byKey(const Key('settings-account-group'));
-    final appFinder = find.byKey(const Key('settings-app-group'));
-    final securityFinder = find.byKey(const Key('settings-security-group'));
-    final accountRect = tester.getRect(accountFinder);
-    final appRect = tester.getRect(appFinder);
-    final securityRect = tester.getRect(securityFinder);
-    final profileRect = tester.getRect(
-      find.byKey(const Key('settings-profile-row')),
-    );
     final compactScaffold = tester.widget<CupertinoPageScaffold>(
       find.byType(CupertinoPageScaffold),
     );
-
-    expect(compactScaffold.backgroundColor, AwikiMeColors.background);
-    expect(headerRect, const Rect.fromLTWH(0, 0, 390, 64));
+    expect(compactScaffold.backgroundColor, AwikiMeColors.surface);
+    expect(find.byType(AwikiGlassBackdrop), findsOneWidget);
+    expect(
+      tester.getRect(find.byKey(const Key('settings-compact-header'))),
+      const Rect.fromLTWH(0, 0, 390, 64),
+    );
+    // Bare chevron back control in the title colour.
+    expect(
+      tester.widget(find.byKey(const Key('settings-back-button'))),
+      isA<AwikiBackButton>(),
+    );
     expect(
       tester.getRect(find.byKey(const Key('settings-back-button'))),
-      const Rect.fromLTWH(8, 10, 44, 44),
+      const Rect.fromLTWH(12, 10, 44, 44),
     );
-    expect(profileRect, const Rect.fromLTWH(0, 64, 390, 104));
-    expect(avatarRect, const Rect.fromLTWH(20, 87, 58, 58));
-    expect(accountRect, const Rect.fromLTWH(0, 208, 390, 61));
-    expect(appRect, const Rect.fromLTWH(0, 309, 390, 244));
-    expect(securityRect, const Rect.fromLTWH(0, 593, 390, 244));
-
+    // Three glass cards separated by 14-unit gaps; the account card leads
+    // with the identity row, and each card carries its own section label.
+    final accountRect = tester.getRect(
+      find.byKey(const Key('settings-account-group')),
+    );
+    final appRect = tester.getRect(find.byKey(const Key('settings-app-group')));
+    final securityRect = tester.getRect(
+      find.byKey(const Key('settings-security-group')),
+    );
+    expect(accountRect.left, 16);
+    expect(accountRect.right, 374);
+    expect(appRect.top - accountRect.bottom, 14);
+    expect(securityRect.top - appRect.bottom, 14);
+    for (final group in <String>[
+      'settings-account-group',
+      'settings-app-group',
+      'settings-security-group',
+    ]) {
+      expect(
+        find.descendant(
+          of: find.byKey(Key(group)),
+          matching: find.byType(AwikiGlassSurface),
+        ),
+        findsOneWidget,
+      );
+    }
+    final profileRect = tester.getRect(
+      find.byKey(const Key('settings-profile-row')),
+    );
+    expect(profileRect.top, greaterThan(accountRect.top));
+    expect(profileRect.bottom, lessThan(accountRect.bottom));
+    expect(profileRect.height, 84);
+    expect(
+      tester.getSize(find.byKey(const Key('settings-profile-avatar'))),
+      const Size.square(52),
+    );
     for (final titleKey in <String>[
       'settings-account-section-title',
       'settings-app-section-title',
@@ -325,11 +401,10 @@ void main() {
     }
     final versionRow = find.byKey(const Key('settings-current-version-row'));
     expect(
-      tester.getRect(find.byKey(const Key('settings-current-version-icon'))),
-      const Rect.fromLTWH(28, 327, 24, 24),
+      tester.getSize(find.byKey(const Key('settings-current-version-icon'))),
+      const Size.square(24),
     );
-    expect(tester.getRect(find.text('当前版本')).left, closeTo(68, 0.1));
-    expect(tester.getSize(versionRow).height, 60);
+    expect(tester.getSize(versionRow).height, 52);
     expect(
       find.descendant(
         of: versionRow,
@@ -337,38 +412,18 @@ void main() {
       ),
       findsNothing,
     );
-    expect(
-      tester.getSize(find.byKey(const Key('settings-devices-row'))).height,
-      60,
-    );
+    for (final row in <String>[
+      'settings-devices-row',
+      'settings-check-updates-row',
+      'settings-language-row',
+      'settings-export-credential-row',
+      'settings-logout-row',
+      'settings-delete-credential-row',
+    ]) {
+      expect(tester.getSize(find.byKey(Key(row))).height, 52, reason: row);
+    }
     expect(find.byKey(const Key('settings-personal-agent-row')), findsNothing);
     expect(find.text('个人助理'), findsNothing);
-    expect(find.text('配置个人助理的启用、暂停和 Daemon 管理'), findsNothing);
-    expect(find.text('查看已授权设备并审批新设备'), findsNothing);
-    expect(
-      tester
-          .getSize(find.byKey(const Key('settings-check-updates-row')))
-          .height,
-      60,
-    );
-    expect(
-      tester.getSize(find.byKey(const Key('settings-language-row'))).height,
-      60,
-    );
-    expect(
-      tester
-          .getSize(find.byKey(const Key('settings-export-credential-row')))
-          .height,
-      60,
-    );
-    expect(
-      tester.getSize(find.byKey(const Key('settings-logout-row'))).height,
-      60,
-    );
-    expect(
-      tester.getSize(find.byKey(const Key('settings-profile-row'))).height,
-      greaterThanOrEqualTo(44),
-    );
     expect(
       find.byKey(const Key('settings-danger-section-title')),
       findsNothing,
@@ -377,22 +432,6 @@ void main() {
     expect(find.text('退出登录'), findsOneWidget);
     expect(find.text('退出并删除当前数据'), findsOneWidget);
     expect(tester.getRect(find.text('退出并删除当前数据')).bottom, lessThan(844));
-    final securitySurface = tester.widget<ColoredBox>(
-      find
-          .descendant(of: securityFinder, matching: find.byType(ColoredBox))
-          .first,
-    );
-    expect(securitySurface.color, AwikiMeColors.surface);
-    expect(
-      tester
-          .getSize(find.byKey(const Key('settings-delete-credential-row')))
-          .height,
-      60,
-    );
-    expect(
-      tester.getSize(find.byKey(const Key('settings-delete-credential-icon'))),
-      const Size.square(24),
-    );
     expect(tester.takeException(), isNull);
   });
 
@@ -1203,7 +1242,7 @@ void main() {
     );
     expect(
       tester.getRect(find.byKey(const Key('language-selection-options'))),
-      const Rect.fromLTWH(16, 88, 358, 208),
+      const Rect.fromLTWH(16, 88, 358, 207),
     );
     expect(
       tester.getSize(find.byKey(const Key('language-option-system'))).height,

@@ -28,10 +28,9 @@ import '../shared/identity_flow.dart';
 import '../shared/identity_profile_surface.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass.dart';
 import 'peer_display_profile_provider.dart';
 import 'peer_profile_provider.dart';
-
-enum _PeerProfileExpandedSection { profile, did, homepage }
 
 enum PeerProfilePageResult { directConversationOpened }
 
@@ -67,8 +66,6 @@ class PeerProfilePage extends ConsumerStatefulWidget {
 }
 
 class _PeerProfilePageState extends ConsumerState<PeerProfilePage> {
-  _PeerProfileExpandedSection? _expandedSection;
-
   @override
   void initState() {
     super.initState();
@@ -134,6 +131,25 @@ class _PeerProfilePageState extends ConsumerState<PeerProfilePage> {
 
     Future<void> toggleRelationship() async {
       final controller = ref.read(peerProfileProvider(did).notifier);
+      if (isFollowing && responsive.isCompact) {
+        // The compact follow pill keeps its look once followed, so leaving
+        // is confirmed explicitly rather than inferred from a colour change.
+        final confirmed = await AppNavigator.showDialog<bool>(
+          context,
+          (dialogContext) => AppConfirmationDialog(
+            title: context.l10n.friendsUnfollowTitle,
+            message: context.l10n.friendsUnfollowMessage,
+            confirmLabel: context.l10n.friendsUnfollow,
+            confirmButtonKey: const Key('confirm-unfollow-button'),
+            destructive: true,
+            onCancel: () => Navigator.of(dialogContext).pop(false),
+            onConfirm: () => Navigator.of(dialogContext).pop(true),
+          ),
+        );
+        if (confirmed != true) {
+          return;
+        }
+      }
       try {
         if (isFollowing) {
           await controller.unfollow();
@@ -223,6 +239,96 @@ class _PeerProfilePageState extends ConsumerState<PeerProfilePage> {
       }
     }
 
+    if (responsive.isCompact && profile != null) {
+      return Stack(
+        children: <Widget>[
+          CupertinoPageScaffold(
+            backgroundColor: awikiCompactListBackground(context),
+            child: AwikiGlassBackdrop(
+              color: awikiCompactListBackground(context),
+              child: SafeArea(
+                bottom: false,
+                child: Column(
+                  children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+                      child: AwikiMeTopBar(
+                        title: context.l10n.peerProfileTitle,
+                        titleFontSize: 16,
+                        padding: EdgeInsets.zero,
+                        leading: widget.embedded && widget.onBack == null
+                            ? const SizedBox.shrink()
+                            : AwikiBackButton(
+                                key: const Key('peer-profile-back-button'),
+                                onTap:
+                                    widget.onBack ??
+                                    () => Navigator.of(context).pop(),
+                                semanticsLabel: context.l10n.commonBack,
+                              ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView(
+                        key: const Key('peer-profile-scroll'),
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          4,
+                          16,
+                          24 + MediaQuery.paddingOf(context).bottom,
+                        ),
+                        children: <Widget>[
+                          if (availability?.unavailable == true)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text(
+                                '${context.l10n.agentLifecycleUnavailable} · ${agentAvailabilityReasonText(context, availability!)}',
+                                key: const Key(
+                                  'peer-profile-agent-unavailable',
+                                ),
+                                style: TextStyle(
+                                  color: theme.secondaryText,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          _PeerProfileGlassContent(
+                            displayName: displayName,
+                            handle:
+                                displayProfile?.handle ??
+                                profile.fullHandle ??
+                                profile.handle,
+                            bio: profile.bio,
+                            tags: profile.tags,
+                            avatarUri:
+                                displayProfile?.avatarUri ?? profile.avatarUri,
+                            following: isFollowing,
+                            did: profile.did,
+                            homepageUrl: homepageUrl,
+                            onOpenHomepage: homepageUrl.isEmpty
+                                ? null
+                                : () => _openHomepage(
+                                    context,
+                                    ref,
+                                    did,
+                                    homepageUrl,
+                                  ),
+                            onSendMessage: sendMessage,
+                            onToggleRelationship: toggleRelationship,
+                            onClearHistory: clearLocalThread,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (state.isActionBusy)
+            AwikiMeLoadingMask(label: context.l10n.commonPleaseWait),
+        ],
+      );
+    }
     return Stack(
       children: <Widget>[
         CupertinoPageScaffold(
@@ -286,121 +392,69 @@ class _PeerProfilePageState extends ConsumerState<PeerProfilePage> {
                                     semanticsLabel: context.l10n.commonBack,
                                     child: AwikiAssetIcon(
                                       assetName: 'assets/icons/icon_left.svg',
-                                      color: theme.primaryDark,
+                                      color: context.awikiTheme.title,
                                       size: 22,
                                     ),
                                   ),
                           ),
                         ),
                       ),
-                      if (responsive.isCompact) ...<Widget>[
-                        SliverToBoxAdapter(
-                          child: _PeerProfileCompactContent(
-                            displayName: displayName,
-                            bio: profile.bio,
-                            tags: profile.tags,
-                            avatarUri:
-                                displayProfile?.avatarUri ?? profile.avatarUri,
-                            following: isFollowing,
-                            did: profile.did,
-                            homepageUrl: homepageUrl,
-                            expandedSection: _expandedSection,
-                            onProfileTap: () => setState(
-                              () => _expandedSection =
-                                  _expandedSection ==
-                                      _PeerProfileExpandedSection.profile
+                      SliverToBoxAdapter(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 640),
+                            child: _PeerProfileHero(
+                              displayName: displayName,
+                              bio: profile.bio,
+                              tags: profile.tags,
+                              avatarUri:
+                                  displayProfile?.avatarUri ??
+                                  profile.avatarUri,
+                              following: isFollowing,
+                              onSendMessage: sendMessage,
+                              onToggleRelationship: toggleRelationship,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 640),
+                            child: _PeerProfileDetails(
+                              did: profile.did,
+                              homepageUrl: homepageUrl,
+                              onOpenHomepage: homepageUrl.isEmpty
                                   ? null
-                                  : _PeerProfileExpandedSection.profile,
-                            ),
-                            onDidTap: () => setState(
-                              () => _expandedSection =
-                                  _expandedSection ==
-                                      _PeerProfileExpandedSection.did
-                                  ? null
-                                  : _PeerProfileExpandedSection.did,
-                            ),
-                            onHomepageTap: () => setState(
-                              () => _expandedSection =
-                                  _expandedSection ==
-                                      _PeerProfileExpandedSection.homepage
-                                  ? null
-                                  : _PeerProfileExpandedSection.homepage,
-                            ),
-                            onOpenHomepage: homepageUrl.isEmpty
-                                ? null
-                                : () => _openHomepage(
-                                    context,
-                                    ref,
-                                    did,
-                                    homepageUrl,
-                                  ),
-                            onSendMessage: sendMessage,
-                            onToggleRelationship: toggleRelationship,
-                            onClearHistory: clearLocalThread,
-                          ),
-                        ),
-                        const SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: SizedBox.shrink(),
-                        ),
-                      ] else ...<Widget>[
-                        SliverToBoxAdapter(
-                          child: Align(
-                            alignment: Alignment.topCenter,
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 640),
-                              child: _PeerProfileHero(
-                                displayName: displayName,
-                                bio: profile.bio,
-                                tags: profile.tags,
-                                avatarUri:
-                                    displayProfile?.avatarUri ??
-                                    profile.avatarUri,
-                                following: isFollowing,
-                                onSendMessage: sendMessage,
-                                onToggleRelationship: toggleRelationship,
-                              ),
+                                  : () => _openHomepage(
+                                      context,
+                                      ref,
+                                      did,
+                                      homepageUrl,
+                                    ),
                             ),
                           ),
                         ),
-                        SliverToBoxAdapter(
-                          child: Align(
-                            alignment: Alignment.topCenter,
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 640),
-                              child: _PeerProfileDetails(
-                                did: profile.did,
-                                homepageUrl: homepageUrl,
-                                onOpenHomepage: homepageUrl.isEmpty
-                                    ? null
-                                    : () => _openHomepage(
-                                        context,
-                                        ref,
-                                        did,
-                                        homepageUrl,
-                                      ),
-                              ),
+                      ),
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              responsive.spacing(16),
+                              responsive.spacing(28),
+                              responsive.spacing(16),
+                              responsive.spacing(24),
+                            ),
+                            child: _PeerProfileDeleteButton(
+                              onPressed: clearLocalThread,
                             ),
                           ),
                         ),
-                        SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: Align(
-                            alignment: Alignment.bottomCenter,
-                            child: Padding(
-                              padding: EdgeInsets.fromLTRB(
-                                responsive.spacing(16),
-                                responsive.spacing(28),
-                                responsive.spacing(16),
-                                responsive.spacing(24),
-                              ),
-                              child: _PeerProfileDeleteButton(
-                                onPressed: clearLocalThread,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ],
                   ),
           ),
@@ -441,530 +495,6 @@ Future<void> _openHomepage(
     await launchUrl(url, mode: LaunchMode.externalApplication);
   } catch (error) {
     ref.read(peerProfileProvider(did).notifier).showLinkOpenError(error);
-  }
-}
-
-class _PeerProfileCompactContent extends StatelessWidget {
-  const _PeerProfileCompactContent({
-    required this.displayName,
-    required this.bio,
-    required this.tags,
-    required this.following,
-    required this.did,
-    required this.homepageUrl,
-    required this.expandedSection,
-    required this.onProfileTap,
-    required this.onDidTap,
-    required this.onHomepageTap,
-    required this.onOpenHomepage,
-    required this.onSendMessage,
-    required this.onToggleRelationship,
-    required this.onClearHistory,
-    this.avatarUri,
-  });
-
-  final String displayName;
-  final String bio;
-  final List<String> tags;
-  final bool following;
-  final String did;
-  final String homepageUrl;
-  final String? avatarUri;
-  final _PeerProfileExpandedSection? expandedSection;
-  final VoidCallback onProfileTap;
-  final VoidCallback onDidTap;
-  final VoidCallback onHomepageTap;
-  final VoidCallback? onOpenHomepage;
-  final Future<void> Function() onSendMessage;
-  final Future<void> Function() onToggleRelationship;
-  final Future<void> Function() onClearHistory;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    return Column(
-      key: const Key('peer-profile-compact-content'),
-      children: <Widget>[
-        _PeerProfileCompactSummary(
-          displayName: displayName,
-          bio: bio,
-          tags: tags,
-          avatarUri: avatarUri,
-          following: following,
-          expanded: expandedSection == _PeerProfileExpandedSection.profile,
-          onTap: onProfileTap,
-          onToggleRelationship: onToggleRelationship,
-        ),
-        const SizedBox(height: 8),
-        _PeerProfileAccordionGroup(
-          did: did,
-          homepageUrl: homepageUrl,
-          expandedSection: expandedSection,
-          onDidTap: onDidTap,
-          onHomepageTap: onHomepageTap,
-          onOpenHomepage: onOpenHomepage,
-        ),
-        const SizedBox(height: 8),
-        Container(
-          key: const Key('peer-profile-action-group'),
-          color: theme.surface,
-          child: Column(
-            children: <Widget>[
-              _PeerProfileFullWidthActionRow(
-                key: const Key('peer-profile-send-message'),
-                visualKey: const Key('peer-profile-send-message-visual'),
-                label: context.l10n.peerProfileSendMessage,
-                color: theme.primary,
-                onTap: onSendMessage,
-              ),
-              Container(height: 1, color: theme.border),
-              _PeerProfileFullWidthActionRow(
-                key: const Key('peer-profile-delete-thread'),
-                visualKey: const Key('peer-profile-delete-thread-visual'),
-                label: context.l10n.peerProfileDeleteThread,
-                color: theme.danger,
-                onTap: onClearHistory,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PeerProfileCompactSummary extends StatelessWidget {
-  const _PeerProfileCompactSummary({
-    required this.displayName,
-    required this.bio,
-    required this.tags,
-    required this.following,
-    required this.expanded,
-    required this.onTap,
-    required this.onToggleRelationship,
-    this.avatarUri,
-  });
-
-  final String displayName;
-  final String bio;
-  final List<String> tags;
-  final bool following;
-  final bool expanded;
-  final String? avatarUri;
-  final VoidCallback onTap;
-  final Future<void> Function() onToggleRelationship;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final visibleTags = tags
-        .map((tag) => tag.trim())
-        .where((tag) => tag.isNotEmpty)
-        .take(3)
-        .toList(growable: false);
-    return Semantics(
-      expanded: expanded,
-      child: ColoredBox(
-        key: const Key('peer-profile-identity-hero'),
-        color: theme.surface,
-        child: Column(
-          children: <Widget>[
-            AppPressable(
-              key: const Key('peer-profile-summary-toggle'),
-              onTap: onTap,
-              semanticLabel: context.l10n.chatPeerInfoUserTitle,
-              borderRadius: BorderRadius.zero,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-                child: Row(
-                  children: <Widget>[
-                    AvatarBadge(
-                      key: const Key('peer-profile-avatar'),
-                      seed: displayName,
-                      avatarUri: avatarUri,
-                      size: 64,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Row(
-                        children: <Widget>[
-                          Flexible(
-                            child: Text(
-                              displayName,
-                              key: const Key('peer-profile-display-name'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: theme.title,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w400,
-                                height: 1.25,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          _PeerProfileRelationshipButton(
-                            following: following,
-                            onPressed: onToggleRelationship,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    SizedBox.square(
-                      dimension: 36,
-                      child: Icon(
-                        expanded
-                            ? CupertinoIcons.chevron_up
-                            : CupertinoIcons.chevron_right,
-                        key: const Key('peer-profile-summary-arrow'),
-                        size: 18,
-                        color: theme.tertiaryText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (expanded)
-              Container(
-                key: const Key('peer-profile-summary-details'),
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-                color: theme.surface,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    if (bio.trim().isNotEmpty) ...<Widget>[
-                      Text(
-                        context.l10n.identityBioLabel,
-                        style: TextStyle(
-                          color: theme.secondaryText,
-                          fontSize: 14,
-                          height: 1.35,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        bio.trim(),
-                        key: const Key('peer-profile-bio'),
-                        style: TextStyle(
-                          color: theme.title,
-                          fontSize: 15,
-                          height: 1.45,
-                        ),
-                      ),
-                    ],
-                    if (visibleTags.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 14),
-                      Text(
-                        context.l10n.profileTagsLabel,
-                        style: TextStyle(
-                          color: theme.secondaryText,
-                          fontSize: 14,
-                          height: 1.35,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        key: const Key('peer-profile-tags'),
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: visibleTags
-                            .map(
-                              (tag) => IdentityProfileBadge(
-                                label: tag,
-                                tone: IdentityProfileBadgeTone.outlined,
-                              ),
-                            )
-                            .toList(growable: false),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PeerProfileRelationshipButton extends StatelessWidget {
-  const _PeerProfileRelationshipButton({
-    required this.following,
-    required this.onPressed,
-  });
-
-  final bool following;
-  final Future<void> Function() onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final label = following
-        ? context.l10n.peerProfileUnfollow
-        : context.l10n.friendsFollow;
-    final color = following ? theme.danger : theme.primary;
-    return AppPressable(
-      key: following
-          ? const Key('peer-profile-unfollow')
-          : const Key('peer-profile-follow'),
-      onTap: onPressed,
-      semanticLabel: label,
-      borderRadius: BorderRadius.circular(18),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Container(
-          key: const Key('peer-profile-relationship-visual'),
-          constraints: const BoxConstraints(minWidth: 48),
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: theme.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color),
-          ),
-          child: Text(
-            label,
-            maxLines: 1,
-            style: TextStyle(
-              color: color,
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              height: 1,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PeerProfileAccordionGroup extends StatelessWidget {
-  const _PeerProfileAccordionGroup({
-    required this.did,
-    required this.homepageUrl,
-    required this.expandedSection,
-    required this.onDidTap,
-    required this.onHomepageTap,
-    required this.onOpenHomepage,
-  });
-
-  final String did;
-  final String homepageUrl;
-  final _PeerProfileExpandedSection? expandedSection;
-  final VoidCallback onDidTap;
-  final VoidCallback onHomepageTap;
-  final VoidCallback? onOpenHomepage;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final didExpanded = expandedSection == _PeerProfileExpandedSection.did;
-    final homepageExpanded =
-        expandedSection == _PeerProfileExpandedSection.homepage;
-    return Container(
-      key: const Key('peer-profile-details'),
-      color: theme.surface,
-      child: Column(
-        children: <Widget>[
-          _PeerProfileDisclosureRow(
-            key: const Key('peer-profile-did-row'),
-            icon: CupertinoIcons.link,
-            title: 'DID',
-            expanded: didExpanded,
-            onTap: onDidTap,
-          ),
-          if (didExpanded)
-            ColoredBox(
-              key: const Key('peer-profile-did-details'),
-              color: theme.subtleSurface,
-              child: SizedBox(
-                height: 84,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-                  child: CopyableDidLine(
-                    value: did,
-                    displayValue: did,
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                    copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
-                    copiedMessage: context.l10n.chatPeerInfoDidCopied,
-                    textKey: const Key('peer-profile-did-value'),
-                    buttonKey: const Key('peer-profile-copy-did-button'),
-                    textStyle: TextStyle(
-                      color: theme.title,
-                      fontSize: 12,
-                      height: 16 / 12,
-                    ),
-                    gap: 4,
-                    buttonSize: 44,
-                    iconSize: 20,
-                    showButtonChrome: false,
-                  ),
-                ),
-              ),
-            ),
-          Container(
-            height: 1,
-            margin: const EdgeInsets.only(left: 58),
-            color: theme.border,
-          ),
-          if (homepageUrl.trim().isNotEmpty) ...<Widget>[
-            _PeerProfileDisclosureRow(
-              key: const Key('peer-profile-homepage-row'),
-              icon: CupertinoIcons.globe,
-              title: context.l10n.profileHomepageLabel,
-              expanded: homepageExpanded,
-              onTap: onHomepageTap,
-            ),
-            if (homepageExpanded)
-              ColoredBox(
-                key: const Key('peer-profile-homepage-details'),
-                color: theme.subtleSurface,
-                child: SizedBox(
-                  height: 64,
-                  child: AppPressable(
-                    onTap: onOpenHomepage,
-                    semanticLabel: context.l10n.profileOpenHomepage,
-                    borderRadius: BorderRadius.zero,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(58, 10, 16, 10),
-                      child: Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Text(
-                              homepageUrl,
-                              key: const Key('peer-profile-homepage-value'),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: theme.primary,
-                                fontSize: 13,
-                                height: 20 / 13,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Icon(
-                            CupertinoIcons.arrow_up_right_square,
-                            color: theme.primary,
-                            size: 20,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _PeerProfileDisclosureRow extends StatelessWidget {
-  const _PeerProfileDisclosureRow({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.expanded,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final bool expanded;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    return Semantics(
-      expanded: expanded,
-      child: SizedBox(
-        height: 52,
-        child: AppPressable(
-          onTap: onTap,
-          semanticLabel: title,
-          borderRadius: BorderRadius.zero,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: <Widget>[
-                SizedBox.square(
-                  dimension: 34,
-                  child: Icon(icon, size: 22, color: theme.primary),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      color: theme.title,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ),
-                SizedBox.square(
-                  dimension: 44,
-                  child: Icon(
-                    expanded
-                        ? CupertinoIcons.chevron_up
-                        : CupertinoIcons.chevron_right,
-                    size: 18,
-                    color: theme.tertiaryText,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PeerProfileFullWidthActionRow extends StatelessWidget {
-  const _PeerProfileFullWidthActionRow({
-    super.key,
-    required this.visualKey,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  final Key visualKey;
-  final String label;
-  final Color color;
-  final Future<void> Function() onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppPressable(
-      onTap: onTap,
-      semanticLabel: label,
-      borderRadius: BorderRadius.zero,
-      child: SizedBox(
-        key: visualKey,
-        height: 56,
-        child: Center(
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: color,
-              fontSize: 16,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -1393,4 +923,324 @@ String _mergePeerRelationship(
     'follower' => 'friend',
     _ => relationship,
   };
+}
+
+/// Phone profile page body: a glass identity hero (name, handle, follow and
+/// message actions, DID), a details card and the local-history action.
+class _PeerProfileGlassContent extends StatelessWidget {
+  const _PeerProfileGlassContent({
+    required this.displayName,
+    required this.handle,
+    required this.bio,
+    required this.tags,
+    required this.following,
+    required this.did,
+    required this.homepageUrl,
+    required this.onOpenHomepage,
+    required this.onSendMessage,
+    required this.onToggleRelationship,
+    required this.onClearHistory,
+    this.avatarUri,
+  });
+
+  final String displayName;
+  final String? handle;
+  final String bio;
+  final List<String> tags;
+  final bool following;
+  final String did;
+  final String homepageUrl;
+  final String? avatarUri;
+  final VoidCallback? onOpenHomepage;
+  final Future<void> Function() onSendMessage;
+  final Future<void> Function() onToggleRelationship;
+  final Future<void> Function() onClearHistory;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final l10n = context.l10n;
+    final handleLabel = (handle ?? '').trim();
+    final visibleTags = tags
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .toList(growable: false);
+    final details = <(String, Widget)>[
+      if (bio.trim().isNotEmpty)
+        (
+          l10n.identityBioLabel,
+          Text(
+            bio.trim(),
+            key: const Key('peer-profile-bio'),
+            textAlign: TextAlign.right,
+            style: TextStyle(color: theme.title, fontSize: 14, height: 1.45),
+          ),
+        ),
+      if (visibleTags.isNotEmpty)
+        (
+          l10n.profileTagsLabel,
+          Wrap(
+            key: const Key('peer-profile-tags'),
+            alignment: WrapAlignment.end,
+            spacing: 6,
+            runSpacing: 6,
+            children: visibleTags
+                .map((tag) => AwikiNameTag(label: tag))
+                .toList(growable: false),
+          ),
+        ),
+      if (homepageUrl.trim().isNotEmpty)
+        (
+          l10n.profileHomepageLabel,
+          AppPressable(
+            key: const Key('peer-profile-homepage-row'),
+            onTap: onOpenHomepage,
+            semanticLabel: l10n.profileOpenHomepage,
+            child: Text(
+              homepageUrl,
+              key: const Key('peer-profile-homepage-value'),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: TextStyle(color: theme.primary, fontSize: 14),
+            ),
+          ),
+        ),
+    ];
+    return Column(
+      key: const Key('peer-profile-compact-content'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        AwikiGlassSurface(
+          key: const Key('peer-profile-identity-hero'),
+          padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  AvatarBadge(
+                    key: const Key('peer-profile-avatar'),
+                    seed: displayName,
+                    avatarUri: avatarUri,
+                    size: 56,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          displayName,
+                          key: const Key('peer-profile-display-name'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: theme.title,
+                            fontSize: 20,
+                            height: 1.3,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                        if (handleLabel.isNotEmpty)
+                          Text(
+                            handleLabel.startsWith('@')
+                                ? handleLabel
+                                : '@$handleLabel',
+                            key: const Key('peer-profile-handle'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: theme.secondaryText,
+                              fontSize: 14,
+                              height: 1.4,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _PeerProfileFollowPill(
+                    following: following,
+                    onPressed: onToggleRelationship,
+                  ),
+                  const SizedBox(width: 8),
+                  _PeerProfileMessageButton(onPressed: onSendMessage),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Container(
+                key: const Key('peer-profile-did-details'),
+                padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: theme.glassEdgeActive),
+                ),
+                child: CopyableDidLine(
+                  value: did,
+                  displayValue: DidDisplayFormatter.compactDidPath(did),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  copySemanticLabel: l10n.chatPeerInfoCopyDid,
+                  copiedMessage: l10n.chatPeerInfoDidCopied,
+                  textKey: const Key('peer-profile-did-value'),
+                  buttonKey: const Key('peer-profile-copy-did-button'),
+                  textStyle: TextStyle(
+                    color: theme.secondaryText,
+                    fontSize: 12,
+                    height: 16 / 12,
+                  ),
+                  gap: 4,
+                  buttonSize: 36,
+                  iconSize: 16,
+                  showButtonChrome: false,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (details.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 14),
+          AwikiGlassSurface(
+            key: const Key('peer-profile-details'),
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(
+                  l10n.peerProfileDetailsSection,
+                  style: TextStyle(color: theme.secondaryText, fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+                for (final entry in details)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          entry.$1,
+                          style: TextStyle(
+                            color: theme.title,
+                            fontSize: 14,
+                            height: 1.45,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: entry.$2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        AwikiGlassSurface(
+          key: const Key('peer-profile-action-group'),
+          child: AppPressable(
+            key: const Key('peer-profile-delete-thread'),
+            onTap: onClearHistory,
+            semanticLabel: l10n.peerProfileDeleteThread,
+            borderRadius: BorderRadius.circular(24),
+            child: SizedBox(
+              key: const Key('peer-profile-delete-thread-visual'),
+              height: 52,
+              child: Center(
+                child: Text(
+                  l10n.peerProfileDeleteThread,
+                  style: TextStyle(color: theme.danger, fontSize: 16),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PeerProfileFollowPill extends StatelessWidget {
+  const _PeerProfileFollowPill({
+    required this.following,
+    required this.onPressed,
+  });
+
+  final bool following;
+  final Future<void> Function() onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final label = following
+        ? context.l10n.relationshipFollowing
+        : context.l10n.friendsFollow;
+    return AppPressable(
+      key: following
+          ? const Key('peer-profile-unfollow')
+          : const Key('peer-profile-follow'),
+      onTap: onPressed,
+      semanticLabel: following ? context.l10n.peerProfileUnfollow : label,
+      scaleOnPress: true,
+      pressedScale: 0.94,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        key: const Key('peer-profile-relationship-visual'),
+        height: 32,
+        constraints: const BoxConstraints(minWidth: 64),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: theme.primarySoft,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: theme.primary.withValues(alpha: 0.22),
+            width: 0.5,
+          ),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: theme.primaryDeep, fontSize: 13, height: 1),
+        ),
+      ),
+    );
+  }
+}
+
+class _PeerProfileMessageButton extends StatelessWidget {
+  const _PeerProfileMessageButton({required this.onPressed});
+
+  final Future<void> Function() onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return AppPressable(
+      key: const Key('peer-profile-send-message'),
+      onTap: onPressed,
+      semanticLabel: context.l10n.peerProfileSendMessage,
+      tooltip: context.l10n.peerProfileSendMessage,
+      scaleOnPress: true,
+      pressedScale: 0.94,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        key: const Key('peer-profile-send-message-visual'),
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: theme.glassLens,
+          shape: BoxShape.circle,
+          border: Border.all(color: theme.glassEdgeActive, width: 0.5),
+        ),
+        child: Icon(CupertinoIcons.paperplane, size: 16, color: theme.title),
+      ),
+    );
+  }
 }

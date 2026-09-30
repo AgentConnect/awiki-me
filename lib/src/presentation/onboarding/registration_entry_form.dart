@@ -181,8 +181,8 @@ class _RegistrationMacInviteField extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(
-                color: AwikiMePalette.inkNeutral,
+              style: TextStyle(
+                color: context.awikiTheme.title,
                 fontSize: 13,
                 fontWeight: FontWeight.w400,
               ),
@@ -192,8 +192,8 @@ class _RegistrationMacInviteField extends StatelessWidget {
                 child: Text(
                   labelHint!,
                   textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    color: AwikiMePalette.mutedNeutral,
+                  style: TextStyle(
+                    color: context.awikiTheme.secondaryText,
                     fontSize: 11,
                     fontWeight: FontWeight.w400,
                   ),
@@ -208,7 +208,7 @@ class _RegistrationMacInviteField extends StatelessWidget {
           decoration: BoxDecoration(
             color: CupertinoColors.white,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AwikiMePalette.hairline),
+            border: Border.all(color: context.awikiTheme.border),
           ),
           alignment: Alignment.center,
           child: Semantics(
@@ -219,13 +219,13 @@ class _RegistrationMacInviteField extends StatelessWidget {
               placeholder: placeholder,
               decoration: null,
               padding: EdgeInsets.zero,
-              style: const TextStyle(
-                color: AwikiMePalette.inkNeutral,
+              style: TextStyle(
+                color: context.awikiTheme.title,
                 fontSize: 14,
                 height: 1.2,
               ),
-              placeholderStyle: const TextStyle(
-                color: AwikiMePalette.messagePreview,
+              placeholderStyle: TextStyle(
+                color: context.awikiTheme.tertiaryText,
                 fontSize: 14,
                 height: 1.2,
               ),

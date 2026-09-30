@@ -144,7 +144,7 @@ class _SolidDot extends StatelessWidget {
 
 Color agentVisualStatusColor(AgentVisualStatus status) {
   return switch (status.kind) {
-    AgentVisualStatusKind.processing => AwikiMeColors.primary,
+    AgentVisualStatusKind.processing => AwikiMePalette.brandAccent,
     AgentVisualStatusKind.ready => AwikiMeColors.online,
     AgentVisualStatusKind.needsConfig ||
     AgentVisualStatusKind.needsUpgrade => AwikiMeColors.alert,

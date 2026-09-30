@@ -24,6 +24,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show JSONMessageCodec;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
 
 import 'test_support.dart';
 
@@ -111,7 +112,7 @@ void main() {
       tester
           .getSize(find.byKey(const Key('friends-expanded-list-header')))
           .height,
-      closeTo(headerContext.awikiResponsive.displayScaled(56), 0.01),
+      closeTo(headerContext.awikiResponsive.displayScaled(52), 0.01),
     );
     expect(
       titleRect.left - paneRect.left,
@@ -314,7 +315,7 @@ void main() {
     expect(find.text('Compact Follower'), findsNothing);
     expect(
       tester.getSize(find.byKey(const Key('relationship-action-visual'))),
-      const Size(80, 38),
+      const Size(80, 32),
     );
 
     await tester.tap(find.byKey(const Key('friends-category-tab-followers')));
@@ -747,9 +748,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(PeerProfilePage), findsOneWidget);
-    expect(find.text('Responsive profile'), findsNothing);
-    await tester.tap(find.byKey(const Key('peer-profile-summary-toggle')));
-    await tester.pumpAndSettle();
+    // The compact profile shows the bio in its details card up front.
     expect(find.text('Responsive profile'), findsOneWidget);
 
     tester.view.physicalSize = const Size(1280, 900);
@@ -888,24 +887,30 @@ void main() {
     final contactTitle = tester.widget<Text>(find.text('Compact Contact'));
     expect(contactTitle.style?.fontSize, 14);
     expect(contactTitle.style?.fontWeight, FontWeight.w400);
+    // The list lets the tab page's glow canvas show through.
     final listSurface = tester.widget<DecoratedBox>(
       find.byKey(const Key('friends-list-surface')),
     );
+    expect((listSurface.decoration as BoxDecoration).color, isNull);
     expect(
-      (listSurface.decoration as BoxDecoration).color,
-      AwikiMeColors.background,
+      tester
+          .widget<AwikiGlassBackdrop>(
+            find.byKey(const Key('shell-tab-page-surface')),
+          )
+          .color,
+      AwikiMeColors.surface,
     );
     final categoryTabs = find.byKey(const Key('friends-category-tabs'));
-    expect(tester.getRect(categoryTabs), const Rect.fromLTWH(0, 132, 390, 56));
+    expect(tester.getRect(categoryTabs), const Rect.fromLTWH(16, 122, 358, 50));
     for (final tab in <String>['all', 'following', 'followers', 'groups']) {
       expect(
         tester.getSize(find.byKey(Key('friends-category-tab-$tab'))),
-        const Size(97.5, 55),
+        const Size(88, 44),
       );
     }
     expect(
       tester.getSize(find.byKey(const Key('friends-category-tab-indicator'))),
-      const Size(40, 3),
+      const Size(88, 44),
     );
     expect(find.byKey(const Key('friends-groups-row')), findsNothing);
     final compactHeader = find.byKey(const Key('shell-compact-header'));
@@ -918,7 +923,7 @@ void main() {
     expect(title.style?.height, 1.25);
     expect(find.byKey(const Key('awiki-me-brand-mark')), findsNothing);
     final actionVisual = find.byKey(const Key('relationship-action-visual'));
-    expect(tester.getSize(actionVisual.first), const Size(64, 38));
+    expect(tester.getSize(actionVisual.first), const Size(64, 32));
     final actionTarget = find.ancestor(
       of: actionVisual.first,
       matching: find.byType(AppPressable),

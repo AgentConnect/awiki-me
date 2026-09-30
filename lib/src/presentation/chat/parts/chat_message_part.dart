@@ -45,12 +45,14 @@ class _AgentProcessingIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final bubbleColor = macStyle ? AwikiMePalette.mist : theme.subtleSurface;
+    final bubbleColor = macStyle
+        ? context.awikiTheme.subtleSurface
+        : theme.subtleSurface;
     final borderColor = macStyle
-        ? AwikiMePalette.hairline
+        ? context.awikiTheme.border
         : theme.border.withValues(alpha: 0.72);
     final textColor = macStyle
-        ? AwikiMePalette.mutedNeutral
+        ? context.awikiTheme.secondaryText
         : theme.secondaryText;
     return Semantics(
       liveRegion: true,
@@ -170,15 +172,19 @@ class _PersonalAgentProcessingStatus extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final foreground = overdue
-        ? (macStyle ? const Color(0xFF9A5A00) : const Color(0xFF936300))
-        : (macStyle ? AwikiMePalette.mutedNeutral : theme.secondaryText);
+        ? (theme.colorScheme.brightness == Brightness.dark
+              ? theme.warning
+              : macStyle
+              ? const Color(0xFF9A5A00)
+              : const Color(0xFF936300))
+        : (macStyle ? context.awikiTheme.secondaryText : theme.secondaryText);
     final background = overdue
-        ? const Color(0xFFFFF5DC)
-        : (macStyle ? AwikiMePalette.mist : theme.subtleSurface);
+        ? theme.warningContainer
+        : (macStyle ? context.awikiTheme.subtleSurface : theme.subtleSurface);
     final border = overdue
-        ? const Color(0xFFE9D49D)
+        ? theme.warning.withValues(alpha: 0.35)
         : (macStyle
-              ? AwikiMePalette.hairline
+              ? context.awikiTheme.border
               : theme.border.withValues(alpha: 0.68));
     final iconSize = macStyle
         ? responsive.displayScaled(12.5)
@@ -393,21 +399,21 @@ class _PersonalAgentRecoveryCard extends StatelessWidget {
     final accent = isDanger
         ? theme.danger
         : isAttention
-        ? const Color(0xFF996300)
+        ? theme.warning
         : theme.primary;
     final background = macStyle
-        ? CupertinoColors.white
+        ? theme.surface
         : (isDanger
-              ? const Color(0xFFFFF3F1)
+              ? theme.dangerContainer
               : isAttention
-              ? const Color(0xFFFFF7E6)
+              ? theme.warningContainer
               : theme.subtleSurface);
     final border = isDanger
-        ? const Color(0xFFFFD1CA)
+        ? theme.danger.withValues(alpha: 0.35)
         : isAttention
-        ? const Color(0xFFEAD49A)
+        ? theme.warning.withValues(alpha: 0.35)
         : (macStyle
-              ? AwikiMePalette.hairline
+              ? context.awikiTheme.border
               : theme.border.withValues(alpha: 0.76));
     final width = macStyle
         ? responsive.displayScaled(420)
@@ -460,7 +466,7 @@ class _PersonalAgentRecoveryCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: macStyle
-                              ? AwikiMePalette.inkNeutral
+                              ? context.awikiTheme.title
                               : theme.title,
                           fontSize: macStyle
                               ? responsive.displayScaled(13)
@@ -484,7 +490,7 @@ class _PersonalAgentRecoveryCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: macStyle
-                          ? AwikiMePalette.mutedNeutral
+                          ? context.awikiTheme.secondaryText
                           : theme.secondaryText,
                       fontSize: macStyle
                           ? responsive.displayScaled(12)
@@ -512,7 +518,7 @@ class _PersonalAgentRecoveryCard extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: macStyle
-                          ? AwikiMePalette.mist
+                          ? context.awikiTheme.subtleSurface
                           : theme.surface.withValues(alpha: 0.72),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -522,7 +528,7 @@ class _PersonalAgentRecoveryCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: macStyle
-                            ? AwikiMePalette.inkNeutral
+                            ? context.awikiTheme.title
                             : theme.title,
                         fontSize: macStyle
                             ? responsive.displayScaled(12.5)
@@ -872,13 +878,13 @@ class _NewMessagesButton extends StatelessWidget {
               ? responsive.displayScaled(7)
               : responsive.spacing(7),
         ),
-        color: AwikiMePalette.brandAccent,
+        color: context.awikiTheme.primary,
         borderRadius: BorderRadius.circular(999),
         onPressed: onTap,
         child: Text(
           context.l10n.conversationsNewMessages,
           style: TextStyle(
-            color: CupertinoColors.white,
+            color: context.awikiTheme.primaryForeground,
             fontSize: macStyle
                 ? responsive.displayScaled(12)
                 : responsive.metaSm,
@@ -899,6 +905,7 @@ class _MessageAvatar extends StatelessWidget {
     required this.size,
     this.avatarUri,
     this.userId,
+    this.square = false,
   });
 
   final String messageId;
@@ -907,6 +914,9 @@ class _MessageAvatar extends StatelessWidget {
   final double size;
   final String? avatarUri;
   final String? userId;
+
+  /// Agent senders use the rounded-square avatar.
+  final bool square;
 
   @override
   Widget build(BuildContext context) {
@@ -917,140 +927,10 @@ class _MessageAvatar extends StatelessWidget {
         size: size,
         avatarUri: avatarUri,
         userId: userId,
+        square: square,
       ),
     );
   }
-}
-
-class _ChatBubbleShapeBorder extends ShapeBorder {
-  const _ChatBubbleShapeBorder({
-    required this.isMine,
-    required this.radius,
-    required this.tailExtent,
-    required this.side,
-  });
-
-  final bool isMine;
-  final double radius;
-  final double tailExtent;
-  final BorderSide side;
-
-  @override
-  EdgeInsetsGeometry get dimensions => EdgeInsets.zero;
-
-  @override
-  Path getInnerPath(Rect rect, {TextDirection? textDirection}) {
-    return _buildPath(rect.deflate(side.width));
-  }
-
-  @override
-  Path getOuterPath(Rect rect, {TextDirection? textDirection}) {
-    return _buildPath(rect);
-  }
-
-  Path _buildPath(Rect rect) {
-    final width = rect.width;
-    final height = rect.height;
-    final resolvedTail = tailExtent.clamp(0.0, width / 3).toDouble();
-    final bodyWidth = width - resolvedTail;
-    final maxRadiusByHeight = ((height - 9) / 2).clamp(0.0, height / 2);
-    final maxRadius = bodyWidth < height ? bodyWidth / 2 : maxRadiusByHeight;
-    final resolvedRadius = radius.clamp(0.0, maxRadius).toDouble();
-    final joinHalfHeight = (resolvedTail * 0.8).clamp(4.0, 5.0);
-    final minTailCenter = resolvedRadius + joinHalfHeight;
-    final maxTailCenter = height - resolvedRadius - joinHalfHeight;
-    final preferredTailCenter = resolvedRadius + 4;
-    final tailCenter = maxTailCenter >= minTailCenter
-        ? preferredTailCenter.clamp(minTailCenter, maxTailCenter).toDouble()
-        : height / 2;
-    final bodyLeft = resolvedTail;
-    final bodyRight = width;
-    const tipX = 1.0;
-
-    double x(double localX) =>
-        isMine ? rect.right - localX : rect.left + localX;
-    double y(double localY) => rect.top + localY;
-
-    return Path()
-      ..moveTo(x(bodyLeft + resolvedRadius), y(0))
-      ..lineTo(x(bodyRight - resolvedRadius), y(0))
-      ..quadraticBezierTo(x(bodyRight), y(0), x(bodyRight), y(resolvedRadius))
-      ..lineTo(x(bodyRight), y(height - resolvedRadius))
-      ..quadraticBezierTo(
-        x(bodyRight),
-        y(height),
-        x(bodyRight - resolvedRadius),
-        y(height),
-      )
-      ..lineTo(x(bodyLeft + resolvedRadius), y(height))
-      ..quadraticBezierTo(
-        x(bodyLeft),
-        y(height),
-        x(bodyLeft),
-        y(height - resolvedRadius),
-      )
-      ..lineTo(x(bodyLeft), y(tailCenter + joinHalfHeight))
-      ..cubicTo(
-        x(bodyLeft - 0.8),
-        y(tailCenter + joinHalfHeight - 0.3),
-        x(tipX + 2.8),
-        y(tailCenter + 2.8),
-        x(tipX + 1.3),
-        y(tailCenter + 1.3),
-      )
-      ..quadraticBezierTo(
-        x(tipX - 0.2),
-        y(tailCenter),
-        x(tipX + 1.3),
-        y(tailCenter - 1.3),
-      )
-      ..cubicTo(
-        x(tipX + 2.8),
-        y(tailCenter - 2.8),
-        x(bodyLeft - 0.8),
-        y(tailCenter - joinHalfHeight + 0.3),
-        x(bodyLeft),
-        y(tailCenter - joinHalfHeight),
-      )
-      ..lineTo(x(bodyLeft), y(resolvedRadius))
-      ..quadraticBezierTo(x(bodyLeft), y(0), x(bodyLeft + resolvedRadius), y(0))
-      ..close();
-  }
-
-  @override
-  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
-    if (side.style == BorderStyle.none || side.width <= 0) {
-      return;
-    }
-    canvas.drawPath(
-      getOuterPath(rect, textDirection: textDirection),
-      side.toPaint()
-        ..isAntiAlias = true
-        ..strokeJoin = StrokeJoin.round,
-    );
-  }
-
-  @override
-  ShapeBorder scale(double t) {
-    return _ChatBubbleShapeBorder(
-      isMine: isMine,
-      radius: radius * t,
-      tailExtent: tailExtent * t,
-      side: side.scale(t),
-    );
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return other is _ChatBubbleShapeBorder &&
-        other.isMine == isMine &&
-        other.radius == radius &&
-        other.tailExtent == tailExtent &&
-        other.side == side;
-  }
-
-  @override
-  int get hashCode => Object.hash(isMine, radius, tailExtent, side);
 }
 
 class _MessageBubble extends StatelessWidget {
@@ -1062,6 +942,7 @@ class _MessageBubble extends StatelessWidget {
     required this.senderAvatarUri,
     required this.senderAvatarUserId,
     required this.showSenderLabel,
+    this.showAvatar = true,
     this.macStyle = false,
     this.onRetry,
     this.onDownload,
@@ -1082,6 +963,10 @@ class _MessageBubble extends StatelessWidget {
   final String? senderAvatarUri;
   final String? senderAvatarUserId;
   final bool showSenderLabel;
+
+  /// Reference `.msg.cont`: a follow-up from the same sender keeps the
+  /// avatar's slot but hides it.
+  final bool showAvatar;
   final bool macStyle;
   final Future<void> Function()? onRetry;
   final Future<void> Function()? onDownload;
@@ -1127,12 +1012,7 @@ class _MessageBubble extends StatelessWidget {
     required bool macStyle,
   }) {
     final responsive = context.awikiResponsive;
-    return (
-      fontSize: macStyle ? responsive.displayScaled(11.5) : responsive.metaSm,
-      bottomSpacing: macStyle
-          ? responsive.displayScaled(5)
-          : responsive.spacing(5),
-    );
+    return (fontSize: 12, bottomSpacing: _chatDesignPx(responsive, 4));
   }
 
   Widget _buildSenderLabel(BuildContext context, {required bool macStyle}) {
@@ -1150,12 +1030,27 @@ class _MessageBubble extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: macStyle ? AwikiMePalette.mutedNeutral : theme.secondaryText,
+          color: macStyle
+              ? context.awikiTheme.secondaryText
+              : theme.secondaryText,
           fontSize: metrics.fontSize,
           fontWeight: FontWeight.w400,
           height: 1.2,
         ),
       ),
+    );
+  }
+
+  Widget _hideUnlessFirstInGroup(Widget avatar) {
+    if (showAvatar) {
+      return avatar;
+    }
+    return Visibility(
+      visible: false,
+      maintainSize: true,
+      maintainAnimation: true,
+      maintainState: true,
+      child: avatar,
     );
   }
 
@@ -1182,14 +1077,18 @@ class _MessageBubble extends StatelessWidget {
     required bool macStyle,
     required Widget child,
   }) {
-    if (!isMine || message.sendState != MessageSendState.sending) {
+    if (!isMine) {
       return child;
     }
     final responsive = context.awikiResponsive;
     final gap = macStyle ? responsive.displayScaled(7) : responsive.spacing(8);
+    // Own messages keep this wrapper for their whole life, so delivery only
+    // hides the indicator instead of reshaping the tree and rebuilding the
+    // bubble (which made sent images flash).
     return _DelayedSendingMessageRow(
       key: ValueKey<String>('chat-delayed-send:${message.localId}'),
       messageId: message.localId,
+      sending: message.sendState == MessageSendState.sending,
       macStyle: macStyle,
       gap: gap,
       child: child,
@@ -1208,7 +1107,8 @@ class _MessageBubble extends StatelessWidget {
       color: isMine ? theme.onOutgoingMessage : theme.title,
       fontSize: 14,
       fontWeight: FontWeight.w400,
-      height: 1.45,
+      height: 1.55,
+      leadingDistribution: TextLeadingDistribution.even,
     );
     final messageContent = message.attachment == null
         ? _MessageTextContent(
@@ -1266,9 +1166,9 @@ class _MessageBubble extends StatelessWidget {
               SelectionArea(
                 child: Text(
                   context.l10n.chatSendFailed,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: AwikiMePalette.dangerRed,
+                    color: context.awikiTheme.danger,
                     fontWeight: FontWeight.w400,
                   ),
                 ),
@@ -1281,9 +1181,9 @@ class _MessageBubble extends StatelessWidget {
                   semanticLabel: context.l10n.chatRetrySend,
                   child: Text(
                     context.l10n.commonRetry,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: AwikiMePalette.brandAccent,
+                      color: context.awikiTheme.primary,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
@@ -1305,37 +1205,41 @@ class _MessageBubble extends StatelessWidget {
             _alignAvatarWithBubbleTop(
               context,
               macStyle: true,
-              child: _withSenderInfoTap(
-                context: context,
-                borderRadius: responsive.displayScaled(15),
-                child: _MessageAvatar(
-                  messageId: message.localId,
-                  label: senderLabel,
-                  avatarUri: senderAvatarUri,
-                  userId: senderAvatarUserId,
-                  isMine: false,
-                  size: responsive.displayScaled(30),
+              child: _hideUnlessFirstInGroup(
+                _withSenderInfoTap(
+                  context: context,
+                  borderRadius: _chatDesignPx(responsive, 17),
+                  child: _MessageAvatar(
+                    messageId: message.localId,
+                    label: senderLabel,
+                    avatarUri: senderAvatarUri,
+                    userId: senderAvatarUserId,
+                    isMine: false,
+                    size: _chatDesignPx(responsive, 34),
+                  ),
                 ),
               ),
             ),
-            SizedBox(width: responsive.displayScaled(8)),
+            SizedBox(width: _chatDesignPx(responsive, 10)),
           ],
           Flexible(child: bubble),
           if (isMine) ...<Widget>[
-            SizedBox(width: responsive.displayScaled(8)),
+            SizedBox(width: _chatDesignPx(responsive, 10)),
             _alignAvatarWithBubbleTop(
               context,
               macStyle: true,
-              child: _withSenderInfoTap(
-                context: context,
-                borderRadius: responsive.displayScaled(15),
-                child: _MessageAvatar(
-                  messageId: message.localId,
-                  label: senderLabel,
-                  avatarUri: senderAvatarUri,
-                  userId: senderAvatarUserId,
-                  isMine: true,
-                  size: responsive.displayScaled(30),
+              child: _hideUnlessFirstInGroup(
+                _withSenderInfoTap(
+                  context: context,
+                  borderRadius: _chatDesignPx(responsive, 17),
+                  child: _MessageAvatar(
+                    messageId: message.localId,
+                    label: senderLabel,
+                    avatarUri: senderAvatarUri,
+                    userId: senderAvatarUserId,
+                    isMine: true,
+                    size: _chatDesignPx(responsive, 34),
+                  ),
                 ),
               ),
             ),
@@ -1353,11 +1257,13 @@ class _MessageBubble extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final attachment = message.attachment;
+    // Reference phone bubbles read at 16 units.
     final textStyle = TextStyle(
       color: isMine ? theme.onOutgoingMessage : theme.title,
-      fontSize: 14,
+      fontSize: 16,
       fontWeight: FontWeight.w400,
-      height: 1.45,
+      height: 1.55,
+      leadingDistribution: TextLeadingDistribution.even,
     );
     final messageContent = attachment == null
         ? _MessageTextContent(
@@ -1454,37 +1360,41 @@ class _MessageBubble extends StatelessWidget {
             _alignAvatarWithBubbleTop(
               context,
               macStyle: false,
-              child: _withSenderInfoTap(
-                context: context,
-                borderRadius: responsive.displayScaled(16),
-                child: _MessageAvatar(
-                  messageId: message.localId,
-                  label: senderLabel,
-                  avatarUri: senderAvatarUri,
-                  userId: senderAvatarUserId,
-                  isMine: false,
-                  size: responsive.displayScaled(32),
+              child: _hideUnlessFirstInGroup(
+                _withSenderInfoTap(
+                  context: context,
+                  borderRadius: _chatDesignPx(responsive, 17),
+                  child: _MessageAvatar(
+                    messageId: message.localId,
+                    label: senderLabel,
+                    avatarUri: senderAvatarUri,
+                    userId: senderAvatarUserId,
+                    isMine: false,
+                    size: _chatDesignPx(responsive, 34),
+                  ),
                 ),
               ),
             ),
-            SizedBox(width: responsive.spacing(8)),
+            SizedBox(width: _chatDesignPx(responsive, 10)),
           ],
           Flexible(child: bubble),
           if (isMine) ...<Widget>[
-            SizedBox(width: responsive.spacing(8)),
+            SizedBox(width: _chatDesignPx(responsive, 10)),
             _alignAvatarWithBubbleTop(
               context,
               macStyle: false,
-              child: _withSenderInfoTap(
-                context: context,
-                borderRadius: responsive.displayScaled(16),
-                child: _MessageAvatar(
-                  messageId: message.localId,
-                  label: senderLabel,
-                  avatarUri: senderAvatarUri,
-                  userId: senderAvatarUserId,
-                  isMine: true,
-                  size: responsive.displayScaled(32),
+              child: _hideUnlessFirstInGroup(
+                _withSenderInfoTap(
+                  context: context,
+                  borderRadius: _chatDesignPx(responsive, 17),
+                  child: _MessageAvatar(
+                    messageId: message.localId,
+                    label: senderLabel,
+                    avatarUri: senderAvatarUri,
+                    userId: senderAvatarUserId,
+                    isMine: true,
+                    size: _chatDesignPx(responsive, 34),
+                  ),
                 ),
               ),
             ),
@@ -1521,11 +1431,15 @@ class _DelayedSendingMessageRow extends StatefulWidget {
     required this.macStyle,
     required this.gap,
     required this.child,
+    this.sending = true,
   });
 
   static const Duration delay = Duration(seconds: 3);
 
   final String messageId;
+
+  /// Only a sending message schedules the delayed indicator.
+  final bool sending;
   final bool macStyle;
   final double gap;
   final Widget child;
@@ -1548,7 +1462,8 @@ class _DelayedSendingMessageRowState extends State<_DelayedSendingMessageRow> {
   @override
   void didUpdateWidget(covariant _DelayedSendingMessageRow oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.messageId != widget.messageId) {
+    if (oldWidget.messageId != widget.messageId ||
+        oldWidget.sending != widget.sending) {
       _scheduleIndicator();
     }
   }
@@ -1556,6 +1471,9 @@ class _DelayedSendingMessageRowState extends State<_DelayedSendingMessageRow> {
   void _scheduleIndicator() {
     _timer?.cancel();
     _showIndicator = false;
+    if (!widget.sending) {
+      return;
+    }
     _timer = Timer(_DelayedSendingMessageRow.delay, () {
       if (!mounted) {
         return;
@@ -1572,19 +1490,23 @@ class _DelayedSendingMessageRowState extends State<_DelayedSendingMessageRow> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_showIndicator) {
-      return widget.child;
-    }
+    // One constant Row: the bubble keeps its keyed slot while the indicator
+    // appears or disappears beside it.
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
-        _SendingMessageIndicator(
-          key: Key('chat-sending-indicator:${widget.messageId}'),
-          macStyle: widget.macStyle,
+        if (_showIndicator) ...<Widget>[
+          _SendingMessageIndicator(
+            key: Key('chat-sending-indicator:${widget.messageId}'),
+            macStyle: widget.macStyle,
+          ),
+          SizedBox(width: widget.gap),
+        ],
+        Flexible(
+          key: const ValueKey<String>('chat-delayed-send-body'),
+          child: widget.child,
         ),
-        SizedBox(width: widget.gap),
-        Flexible(child: widget.child),
       ],
     );
   }
@@ -1614,7 +1536,7 @@ class _SendingMessageIndicator extends StatelessWidget {
           child: CupertinoActivityIndicator(
             radius: radius,
             color: macStyle
-                ? AwikiMePalette.messagePreview
+                ? context.awikiTheme.tertiaryText
                 : theme.tertiaryText,
           ),
         ),
@@ -1726,14 +1648,15 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
     final theme = context.awikiTheme;
     final caption = attachment.caption?.trim() ?? '';
     final titleStyle = TextStyle(
-      color: widget.macStyle ? AwikiMePalette.inkNeutral : theme.title,
-      fontSize: 13,
+      color: widget.macStyle ? context.awikiTheme.title : theme.title,
+      // Reference `.file-name`.
+      fontSize: 14,
       fontWeight: FontWeight.w400,
-      height: 1.25,
+      height: 1.4,
     );
     final metaStyle = TextStyle(
       color: widget.macStyle
-          ? AwikiMePalette.mutedNeutral
+          ? context.awikiTheme.secondaryText
           : theme.secondaryText,
       fontSize: 11,
       fontWeight: FontWeight.w400,
@@ -1758,9 +1681,7 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
               payloadJson: message.payloadJson,
               mentionPresentation: widget.mentionPresentation,
               style: TextStyle(
-                color: widget.macStyle
-                    ? AwikiMePalette.inkNeutral
-                    : theme.title,
+                color: widget.macStyle ? context.awikiTheme.title : theme.title,
                 fontSize: widget.macStyle
                     ? responsive.displayScaled(14)
                     : responsive.bodyMd,
@@ -1775,11 +1696,7 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
     return ConstrainedBox(
       key: Key('chat-attachment-content:${message.localId}'),
       constraints: BoxConstraints(
-        minWidth: _previewHandle == null
-            ? (widget.macStyle
-                  ? responsive.displayScaled(280)
-                  : responsive.displayScaled(240))
-            : 0,
+        minWidth: _previewHandle == null ? _chatDesignPx(responsive, 216) : 0,
         maxWidth: widget.macStyle
             ? responsive.displayScaled(360)
             : responsive.displayScaled(300),
@@ -1798,10 +1715,10 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
     if (handle == null) {
       final responsive = context.awikiResponsive;
       final transfer = _transferHandle;
+      // Reference `.file` is 240 wide including its 10 + 14 padding.
+      final cardWidth = _chatDesignPx(responsive, 216);
       final card = SizedBox(
-        width: widget.macStyle
-            ? responsive.displayScaled(280)
-            : responsive.displayScaled(240),
+        width: cardWidth,
         child: _AttachmentFileCard(
           message: widget.message,
           macStyle: widget.macStyle,
@@ -1821,9 +1738,7 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
         stream: transfer.changes,
         initialData: transfer.snapshot,
         builder: (context, _) => SizedBox(
-          width: widget.macStyle
-              ? responsive.displayScaled(280)
-              : responsive.displayScaled(240),
+          width: cardWidth,
           child: _AttachmentFileCard(
             message: widget.message,
             macStyle: widget.macStyle,
@@ -1891,11 +1806,27 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
             macStyle: widget.macStyle,
           );
         }
+        final uploading =
+            widget.message.isMine &&
+            widget.message.sendState == MessageSendState.sending;
         return _InlineImageEnvelope(
           messageId: widget.message.localId,
           macStyle: widget.macStyle,
           dimensions: snapshot.dimensions,
-          child: content,
+          // The image stays the Stack's first child whether or not the
+          // overlay shows, so finishing the upload never rebuilds it.
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              content,
+              if (uploading)
+                _InlineImageUploadingOverlay(
+                  key: Key(
+                    'chat-inline-image-uploading:${widget.message.localId}',
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
@@ -2143,10 +2074,37 @@ class _InlineImageEnvelope extends StatelessWidget {
           height: size.height,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(radius),
-            child: ColoredBox(color: AwikiMePalette.mist, child: child),
+            child: ColoredBox(
+              color: context.awikiTheme.subtleSurface,
+              child: child,
+            ),
           ),
         );
       },
+    );
+  }
+}
+
+/// Shown over your own image while it uploads: Core reports no byte
+/// progress for attachment sends, so this is an indeterminate state that
+/// clears as soon as the message is delivered or fails.
+class _InlineImageUploadingOverlay extends StatelessWidget {
+  const _InlineImageUploadingOverlay({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: context.l10n.chatSending,
+      liveRegion: true,
+      child: const ColoredBox(
+        color: Color(0x59000000),
+        child: Center(
+          child: CupertinoActivityIndicator(
+            radius: 12,
+            color: CupertinoColors.white,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2254,7 +2212,7 @@ class _InlineImageFileFallback extends StatelessWidget {
                 child: Icon(
                   CupertinoIcons.doc_fill,
                   color: macStyle
-                      ? AwikiMePalette.brandAccent
+                      ? context.awikiTheme.primary
                       : context.awikiTheme.primary,
                   size: macStyle
                       ? responsive.displayScaled(20)
@@ -2594,36 +2552,22 @@ class _AttachmentFileCard extends StatelessWidget {
       key: Key('chat-attachment-file-card:${message.localId}'),
       mainAxisSize: MainAxisSize.max,
       children: <Widget>[
+        // Reference `.file-ico`: a 36 soft tile with a muted line glyph.
         Container(
-          width: macStyle
-              ? responsive.displayScaled(38)
-              : responsive.scaled(40),
-          height: macStyle
-              ? responsive.displayScaled(38)
-              : responsive.scaled(40),
+          width: _chatDesignPx(responsive, 36),
+          height: _chatDesignPx(responsive, 36),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: macStyle
-                ? AwikiMePalette.brandAccentSoft
-                : theme.surface.withValues(alpha: 0.72),
-            borderRadius: BorderRadius.circular(
-              macStyle ? responsive.displayScaled(8) : 10,
-            ),
-            border: Border.all(
-              color: macStyle ? AwikiMePalette.hairline : theme.border,
-            ),
+            color: theme.title.withValues(alpha: theme.isDark ? 0.10 : 0.065),
+            borderRadius: BorderRadius.circular(_chatDesignPx(responsive, 10)),
           ),
           child: Icon(
-            CupertinoIcons.doc_fill,
-            color: macStyle ? AwikiMePalette.brandAccent : theme.primary,
-            size: macStyle ? responsive.displayScaled(20) : responsive.iconSm,
+            CupertinoIcons.doc,
+            color: theme.secondaryText,
+            size: _chatDesignPx(responsive, 18),
           ),
         ),
-        SizedBox(
-          width: macStyle
-              ? responsive.displayScaled(10)
-              : responsive.spacing(10),
-        ),
+        SizedBox(width: _chatDesignPx(responsive, 10)),
         Expanded(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -2634,18 +2578,15 @@ class _AttachmentFileCard extends StatelessWidget {
                 maxLines: 2,
                 style: titleStyle,
               ),
-              SizedBox(
-                height: macStyle
-                    ? responsive.displayScaled(4)
-                    : responsive.spacing(4),
-              ),
               Text(
                 _attachmentTransferMeta(context, transferSnapshot) ??
-                    _formatAttachmentMeta(
-                      context.l10n,
-                      attachment.mimeType,
-                      attachment.sizeBytes,
-                    ),
+                    (attachment.sizeBytes != null && attachment.sizeBytes! > 0
+                        ? _formatFileSize(attachment.sizeBytes!)
+                        : _formatAttachmentMeta(
+                            context.l10n,
+                            attachment.mimeType,
+                            attachment.sizeBytes,
+                          )),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: metaStyle,
@@ -3243,6 +3184,14 @@ TextStyle _mentionHighlightStyle(
   AwikiMeThemeTokens theme,
   TextStyle baseStyle,
 ) {
+  // Reference `.msg.out .mention`: on the accent bubble a mention keeps the
+  // bubble's text colour over a 16% tint of it.
+  if (baseStyle.color == theme.onOutgoingMessage) {
+    return baseStyle.copyWith(
+      fontWeight: FontWeight.w400,
+      backgroundColor: theme.onOutgoingMessage.withValues(alpha: 0.16),
+    );
+  }
   return baseStyle.copyWith(
     color: theme.primary,
     fontWeight: FontWeight.w400,
@@ -3449,7 +3398,7 @@ class _AttachmentCaptionDivider extends StatelessWidget {
         key: const Key('chat-attachment-caption-divider'),
         decoration: BoxDecoration(
           color: macStyle
-              ? AwikiMePalette.messagePreview.withValues(alpha: 0.95)
+              ? context.awikiTheme.tertiaryText.withValues(alpha: 0.95)
               : theme.secondaryText.withValues(alpha: 0.24),
           borderRadius: BorderRadius.circular(1),
         ),
@@ -3497,14 +3446,14 @@ class _AttachmentActionButton extends StatelessWidget {
           : context.l10n.commonCancel,
       isLoading: isLoading && cancel == null,
       size: size,
-      backgroundColor: macStyle ? CupertinoColors.white : theme.surface,
-      borderColor: macStyle ? AwikiMePalette.hairline : theme.border,
+      backgroundColor: macStyle ? theme.surface : theme.surface,
+      borderColor: macStyle ? context.awikiTheme.border : theme.border,
       borderRadius: BorderRadius.circular(
         macStyle ? responsive.displayScaled(8) : 10,
       ),
       child: Icon(
         cancel == null ? CupertinoIcons.eye : CupertinoIcons.xmark,
-        color: macStyle ? AwikiMePalette.brandAccent : theme.primary,
+        color: macStyle ? context.awikiTheme.primary : theme.primary,
         size: macStyle ? responsive.displayScaled(17) : responsive.iconSm,
       ),
     );

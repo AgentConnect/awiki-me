@@ -6,6 +6,11 @@
   "agentLifecycleMessageNotice": "{name}已不可用",
   "@agentLifecycleMessageNotice": {"placeholders": {"name": {"type": "String"}}},
   "@@locale": "zh",
+  "chatMentionMember": "提及群成员",
+  "settingsAppearance": "外观",
+  "appearanceSystem": "跟随系统",
+  "appearanceLight": "浅色",
+  "appearanceDark": "深色",
   "identityMethodLabel": "身份方法",
   "identityWebAdminLimitation": "Web 身份不支持账号恢复、根密钥导入或管理权转移。请保管好首个管理员设备；失去该设备后无法恢复管理权限。",
   "identityRegistrationPending": "继续未完成的注册",
@@ -174,6 +179,25 @@
       "tenantName": {}
     }
   },
+  "tenantMenuHint": "切换这个 App 使用的后端和 DID Host",
+  "tenantBuiltinTag": "默认配置",
+  "tenantCreateAndUse": "添加并使用",
+  "tenantDidHostCreateHint": "DID Host 与租户的本地身份和存储作用域绑定，保存后不能修改。",
+  "tenantDeleteConfirmTitle": "删除租户配置？",
+  "tenantDeleteConfirmMessage": "确定要删除 {tenantName}（{didHost}）吗？本机数据会保留，但这个租户不会再出现在切换列表中。",
+  "@tenantDeleteConfirmMessage": {
+    "placeholders": {
+      "tenantName": {},
+      "didHost": {}
+    }
+  },
+  "tenantDeleteAction": "删除租户",
+  "tenantDeleteSemantic": "删除租户 {tenantName}",
+  "@tenantDeleteSemantic": {
+    "placeholders": {
+      "tenantName": {}
+    }
+  },
   "tenantCannotEditDefault": "默认 AWiki 租户不能编辑。接入其他后端请添加租户配置。",
   "tenantCannotEditWithData": "这个租户已经有本地数据，只能修改名称，不能修改后端地址或 DID Host。",
   "tenantDidHostImmutable": "DID Host 与租户的本地身份和存储作用域绑定，已有租户不能修改；如需更换，请添加新的租户配置。",
@@ -230,7 +254,7 @@
   "shellNavTasks": "任务",
   "shellNavWorkspace": "工作台",
   "shellNavSettings": "设置",
-  "shellNavMe": "我",
+  "shellNavMe": "我的",
   "shellTasksPlaceholderTitle": "任务",
   "shellTasksPlaceholderSubtitle": "任务视图即将接入。当前任务状态会在会话与身份卡中展示。",
   "shellWorkspacePlaceholderTitle": "工作台",
@@ -302,6 +326,7 @@
   "friendsTitle": "联系人",
   "friendsSearchPlaceholder": "搜索联系人",
   "friendsSearchGroupsPlaceholder": "搜索群组",
+  "conversationsFilterUnread": "未读",
   "friendsTabAll": "全部",
   "friendsTabFollowing": "关注",
   "friendsTabFollowers": "粉丝",
@@ -590,8 +615,8 @@
   "settingsDeleteCredentialConfirmHint": "不会注销线上身份或影响其他设备；删除的本地历史消息和端到端加密密钥不能通过恢复或加入设备找回。",
   "settingsDeleteCredentialConfirmAction": "退出并删除数据",
   "quickActionsTitle": "更多操作",
-  "quickActionStartConversation": "发起新消息",
-  "quickActionCreateGroup": "创建群聊",
+  "quickActionStartConversation": "发起聊天",
+  "quickActionCreateGroup": "发起群聊",
   "quickActionJoinGroup": "加入群聊",
   "quickActionFollowContact": "关注联系人",
   "followContactTitle": "关注联系人",
@@ -606,8 +631,8 @@
   "identityFollowContactAction": "关注",
   "identityFollowContactNotice": "确认身份后会关注该联系人或 Agent。",
   "identityInputSemantics": "输入 handle 或 DID",
-  "identityInputPlaceholder": "输入 @handle / DID / Agent 地址",
-  "identitySearchLabel": "匹配身份",
+  "identityInputPlaceholder": "搜索用户名或 DID",
+  "identitySearchLabel": "搜索",
   "identityResolving": "匹配中...",
   "identitySubmitting": "处理中...",
   "identityQueryRequired": "请输入 handle 或 DID。",
@@ -674,8 +699,9 @@
   "groupRefreshSnapshot": "刷新群详情与成员",
   "groupMembersTitle": "群成员",
   "groupMembersEmpty": "暂无成员快照，先执行一次刷新群详情与成员。",
-  "groupCreateTitle": "创建群聊",
+  "groupCreateTitle": "发起群聊",
   "groupCreateAction": "创建",
+  "groupCreateSubmit": "创建群聊",
   "groupRecoveryCompleted": "群身份已恢复",
   "groupRecoveryPending": "身份已恢复，仍有 {count} 个群等待更新",
   "@groupRecoveryPending": {
@@ -1677,5 +1703,33 @@
   "handleRecoveryOtherPending": "返回处理其他恢复",
   "secureConnectionFailed": "无法建立安全连接。请检查系统日期和时间，或联系支持人员。",
   "trustResourcesInvalid": "应用的安全连接资源缺失或损坏。请更新或重新安装应用。",
-  "onboardingAccountCheckUnsupported": "当前服务器暂不支持账号检查。已有账号可继续登录。"
+  "onboardingAccountCheckUnsupported": "当前服务器暂不支持账号检查。已有账号可继续登录。",
+  "profileDevicePendingCount": "{count} 个待审批",
+  "@profileDevicePendingCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "peerProfileDetailsSection": "资料",
+  "deviceJoinIssuedAtLabel": "发起时间",
+  "deviceJoinExpiresAtLabel": "过期时间",
+  "deviceJoinFingerprintLabel": "密钥指纹",
+  "deviceJoinRequestAsMember": "请求以普通设备加入",
+  "deviceJoinOpenHint": "打开请求不会授权。点击「开始验证」后，两台设备会各自显示 6 位验证码。",
+  "deviceJoinCompareTitle": "核对验证码",
+  "deviceJoinLocalSasLabel": "本机显示",
+  "commonLater": "稍后",
+  "deviceJoinNoticeTitle": "{device} 请求加入你的账户",
+  "@deviceJoinNoticeTitle": {"placeholders": {"device": {"type": "String"}}},
+  "deviceJoinNoticeExpiry": "{time} 前有效",
+  "@deviceJoinNoticeExpiry": {"placeholders": {"time": {"type": "String"}}},
+  "deviceJoinStepRequest": "发起关联请求",
+  "deviceJoinStepRequestSub": "已发送给你的管理设备",
+  "deviceJoinStepVerify": "管理设备验证",
+  "deviceJoinStepVerifyWaiting": "等待对方点击「开始验证」",
+  "deviceJoinStepVerifySas": "确认两端 6 位验证码一致",
+  "deviceJoinStepJoin": "加入账户",
+  "deviceJoinStepJoinSub": "作为普通设备加入，之后可由管理设备授予管理权限"
 }

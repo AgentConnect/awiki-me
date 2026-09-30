@@ -6,8 +6,7 @@ import '../../l10n/l10n.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_top_bar.dart';
-import '../shared/responsive_layout.dart';
-import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass.dart';
 
 class ProfileEditPage extends StatefulWidget {
   const ProfileEditPage({
@@ -131,112 +130,123 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
     final canSave = !_saving && _nicknameController.text.trim().isNotEmpty;
 
     return CupertinoPageScaffold(
       key: const Key('profile-edit-page'),
       backgroundColor: theme.background,
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: <Widget>[
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: theme.background,
-                border: Border(
-                  bottom: BorderSide(color: theme.border, width: 0.5),
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: AwikiMeTopBar(
-                  title: l10n.profileEditTitle,
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  titleFontSize: awikiMeCompactTopBarTitleFontSize,
-                  titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
-                  titleHeight: awikiMeCompactTopBarTitleHeight,
-                  leading: TopBarActionButton(
-                    key: const Key('profile-edit-back-button'),
-                    onTap: () => Navigator.of(context).pop(),
-                    semanticsLabel: l10n.commonBack,
-                    child: Icon(
-                      CupertinoIcons.chevron_left,
-                      size: responsive.iconMd,
-                      color: AwikiMePalette.actionBlue,
+      child: AwikiPageCanvas(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: <Widget>[
+              DecoratedBox(
+                decoration: const BoxDecoration(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: AwikiMeTopBar(
+                    title: l10n.profileEditTitle,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    titleFontSize: awikiMeCompactTopBarTitleFontSize,
+                    titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
+                    titleHeight: awikiMeCompactTopBarTitleHeight,
+                    leading: AwikiBackButton(
+                      key: const Key('profile-edit-back-button'),
+                      onTap: () => Navigator.of(context).pop(),
+                      semanticsLabel: l10n.commonBack,
+                    ),
+                    trailingWidth: 72,
+                    trailing: CupertinoButton(
+                      key: const Key('profile-edit-save-button'),
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(64, 44),
+                      onPressed: canSave ? _save : null,
+                      child: Container(
+                        height: 32,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: canSave ? theme.primaryDark : theme.glassLens,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: _saving
+                            ? const CupertinoActivityIndicator(radius: 8)
+                            : Text(
+                                l10n.commonSave,
+                                style: TextStyle(
+                                  color: canSave
+                                      ? theme.primaryForeground
+                                      : theme.tertiaryText,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                      ),
                     ),
                   ),
-                  trailingWidth: 56,
-                  trailing: CupertinoButton(
-                    key: const Key('profile-edit-save-button'),
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size(56, 44),
-                    onPressed: canSave ? _save : null,
-                    child: _saving
-                        ? const CupertinoActivityIndicator(radius: 9)
-                        : Text(
-                            l10n.commonSave,
-                            style: TextStyle(
-                              color: canSave
-                                  ? AwikiMePalette.actionBlue
-                                  : theme.tertiaryText,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                  ),
                 ),
               ),
-            ),
-            Expanded(
-              child: ListView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: EdgeInsets.zero,
-                children: <Widget>[
-                  _AvatarEditRow(
-                    profile: widget.profile,
-                    onChangeAvatar: widget.onChangeAvatar,
-                  ),
-                  const _ProfileEditDivider(inset: 0),
-                  _CompactInlineFieldRow(
-                    key: const Key('profile-edit-nickname-row'),
-                    label: l10n.onboardingNickname,
-                    controller: _nicknameController,
-                    textInputAction: TextInputAction.next,
-                  ),
-                  const _ProfileEditDivider(),
-                  _CompactFieldRow(
-                    key: const Key('profile-edit-bio-row'),
-                    label: l10n.profileBioPlaceholder,
-                    placeholder: l10n.profileBioHint,
-                    controller: _bioController,
-                    minHeight: 200,
-                    maxLines: 4,
-                    maxLength: 100,
-                    showCounter: true,
-                    textInputAction: TextInputAction.newline,
-                  ),
-                  const _ProfileEditDivider(),
-                  _ProfileTagsEditor(
-                    key: const Key('profile-edit-tags-row'),
-                    label: l10n.profileTagsLabel,
-                    tags: _tags,
-                    addingTag: _addingTag,
-                    inputController: _tagInputController,
-                    inputFocusNode: _tagInputFocusNode,
-                    helper: l10n.profileTagsLimit,
-                    addLabel: l10n.profileTagAdd,
-                    inputPlaceholder: l10n.profileTagInputPlaceholder,
-                    removeSemanticLabel: l10n.profileTagRemove,
-                    onAddTap: _startAddingTag,
-                    onTagSubmitted: _commitTag,
-                    onRemoveTag: _removeTag,
-                  ),
-                ],
+              Expanded(
+                child: ListView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                  children: <Widget>[
+                    DecoratedBox(
+                      decoration: awikiGroupDecoration(context),
+                      child: _AvatarEditRow(
+                        profile: widget.profile,
+                        onChangeAvatar: widget.onChangeAvatar,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    DecoratedBox(
+                      decoration: awikiGroupDecoration(context),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          _CompactInlineFieldRow(
+                            key: const Key('profile-edit-nickname-row'),
+                            label: l10n.onboardingNickname,
+                            controller: _nicknameController,
+                            textInputAction: TextInputAction.next,
+                          ),
+                          const _ProfileEditDivider(),
+                          _CompactFieldRow(
+                            key: const Key('profile-edit-bio-row'),
+                            label: l10n.profileBioPlaceholder,
+                            placeholder: l10n.profileBioHint,
+                            controller: _bioController,
+                            minHeight: 200,
+                            maxLines: 4,
+                            maxLength: 100,
+                            showCounter: true,
+                            textInputAction: TextInputAction.newline,
+                          ),
+                          const _ProfileEditDivider(),
+                          _ProfileTagsEditor(
+                            key: const Key('profile-edit-tags-row'),
+                            label: l10n.profileTagsLabel,
+                            tags: _tags,
+                            addingTag: _addingTag,
+                            inputController: _tagInputController,
+                            inputFocusNode: _tagInputFocusNode,
+                            helper: l10n.profileTagsLimit,
+                            addLabel: l10n.profileTagAdd,
+                            inputPlaceholder: l10n.profileTagInputPlaceholder,
+                            removeSemanticLabel: l10n.profileTagRemove,
+                            onAddTap: _startAddingTag,
+                            onTagSubmitted: _commitTag,
+                            onRemoveTag: _removeTag,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -254,7 +264,7 @@ class _AvatarEditRow extends StatelessWidget {
     final theme = context.awikiTheme;
     final l10n = context.l10n;
     return ColoredBox(
-      color: theme.background,
+      color: const Color(0x00000000),
       child: SizedBox(
         height: 152,
         child: Padding(
@@ -325,7 +335,7 @@ class _CompactInlineFieldRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     return ColoredBox(
-      color: theme.background,
+      color: const Color(0x00000000),
       child: SizedBox(
         height: 95,
         child: Padding(
@@ -391,7 +401,7 @@ class _CompactFieldRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     return ColoredBox(
-      color: theme.background,
+      color: const Color(0x00000000),
       child: ConstrainedBox(
         constraints: BoxConstraints(minHeight: minHeight),
         child: Padding(
@@ -495,7 +505,7 @@ class _ProfileTagsEditor extends StatelessWidget {
     final theme = context.awikiTheme;
     final canAdd = tags.length < 5;
     return ColoredBox(
-      color: theme.background,
+      color: const Color(0x00000000),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 154),
         child: Padding(
@@ -650,20 +660,17 @@ class _ProfileTagsEditor extends StatelessWidget {
 }
 
 class _ProfileEditDivider extends StatelessWidget {
-  const _ProfileEditDivider({this.inset = 24});
+  const _ProfileEditDivider();
 
-  final double inset;
+  static const double inset = 24;
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: context.awikiTheme.background,
-      child: Padding(
-        padding: EdgeInsets.only(left: inset, right: inset),
-        child: ColoredBox(
-          color: context.awikiTheme.border,
-          child: const SizedBox(height: 1, width: double.infinity),
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(left: inset, right: inset),
+      child: ColoredBox(
+        color: awikiGroupDividerColor(context),
+        child: const SizedBox(height: 0.5, width: double.infinity),
       ),
     );
   }

@@ -596,7 +596,7 @@ class _PersonalAgentSettingsEntryCard extends StatelessWidget {
       semanticLabel: l10n.personalAgentConfigure,
       semanticsIdentifier: 'personal-agent-settings-entry',
       borderRadius: BorderRadius.circular(responsive.radius(10)),
-      backgroundColor: CupertinoColors.white,
+      backgroundColor: context.awikiTheme.surface,
       border: Border.all(color: const Color(0xFFE4EAF3)),
       child: Padding(
         padding: EdgeInsets.all(responsive.spacing(16)),
@@ -623,7 +623,11 @@ class _PersonalAgentSettingsEntryCard extends StatelessWidget {
                   Text(
                     l10n.personalAgentTitle,
                     style: TextStyle(
-                      color: const Color(0xFF101B32),
+                      color:
+                          context.awikiTheme.colorScheme.brightness ==
+                              Brightness.dark
+                          ? context.awikiTheme.title
+                          : const Color(0xFF101B32),
                       fontSize: responsive.bodyMd,
                       fontWeight: FontWeight.w400,
                     ),
@@ -632,7 +636,11 @@ class _PersonalAgentSettingsEntryCard extends StatelessWidget {
                   Text(
                     l10n.personalAgentSettingsSubtitle,
                     style: TextStyle(
-                      color: const Color(0xFF66728A),
+                      color:
+                          context.awikiTheme.colorScheme.brightness ==
+                              Brightness.dark
+                          ? context.awikiTheme.secondaryText
+                          : const Color(0xFF66728A),
                       fontSize: responsive.metaSm,
                       height: 1.35,
                     ),
@@ -741,9 +749,9 @@ class _PersonalAgentSettingsPanel extends StatelessWidget {
       key: const Key('personal-agent-settings-panel'),
       padding: EdgeInsets.all(responsive.spacing(16)),
       decoration: BoxDecoration(
-        color: CupertinoColors.white,
+        color: context.awikiTheme.surface,
         borderRadius: BorderRadius.circular(responsive.radius(10)),
-        border: Border.all(color: AwikiMePalette.hairline),
+        border: Border.all(color: context.awikiTheme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -759,7 +767,7 @@ class _PersonalAgentSettingsPanel extends StatelessWidget {
                 ),
                 child: Icon(
                   CupertinoIcons.bubble_left_bubble_right,
-                  color: AwikiMePalette.successGreen,
+                  color: context.awikiTheme.success,
                   size: responsive.iconMd,
                 ),
               ),
@@ -771,7 +779,7 @@ class _PersonalAgentSettingsPanel extends StatelessWidget {
                     Text(
                       context.l10n.personalAgentTitle,
                       style: TextStyle(
-                        color: AwikiMePalette.inkNeutral,
+                        color: context.awikiTheme.title,
                         fontSize: responsive.bodyMd,
                         fontWeight: FontWeight.w400,
                       ),
@@ -784,7 +792,7 @@ class _PersonalAgentSettingsPanel extends StatelessWidget {
                             )
                           : context.l10n.personalAgentExperimentDisabled,
                       style: TextStyle(
-                        color: AwikiMePalette.mutedNeutral,
+                        color: context.awikiTheme.secondaryText,
                         fontSize: responsive.metaSm,
                       ),
                     ),
@@ -1003,8 +1011,8 @@ class _PersonalAgentStatePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = active
-        ? AwikiMePalette.successGreen
-        : AwikiMePalette.mutedNeutral;
+        ? context.awikiTheme.success
+        : context.awikiTheme.secondaryText;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
@@ -1069,7 +1077,7 @@ class _PersonalAgentFactGrid extends StatelessWidget {
                   Text(
                     row.label,
                     style: TextStyle(
-                      color: AwikiMePalette.mutedNeutral,
+                      color: context.awikiTheme.secondaryText,
                       fontSize: responsive.metaSm,
                       fontWeight: FontWeight.w400,
                     ),
@@ -1080,7 +1088,7 @@ class _PersonalAgentFactGrid extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: AwikiMePalette.inkNeutral,
+                      color: context.awikiTheme.title,
                       fontSize: responsive.bodySm,
                       fontWeight: FontWeight.w400,
                     ),
@@ -1105,16 +1113,16 @@ class _PersonalAgentPermissionSummary extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(responsive.spacing(12)),
       decoration: BoxDecoration(
-        color: AwikiMePalette.mist,
+        color: context.awikiTheme.subtleSurface,
         borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: AwikiMePalette.hairline),
+        border: Border.all(color: context.awikiTheme.border),
       ),
       child: Text(
         enabled
             ? context.l10n.personalAgentPermissionSummaryEnabled
             : context.l10n.personalAgentPermissionSummaryDisabled,
         style: TextStyle(
-          color: AwikiMePalette.mutedNeutral,
+          color: context.awikiTheme.secondaryText,
           fontSize: responsive.bodySm,
           height: 1.35,
         ),

@@ -24,6 +24,7 @@ import '../shared/copyable_did_line.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_desktop.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../agents/agents_provider.dart';
 import '../agents/agent_availability_provider.dart';
@@ -80,7 +81,7 @@ class GroupListPage extends ConsumerWidget {
                       onTap: () => Navigator.of(context).pop(),
                       child: AwikiAssetIcon(
                         assetName: 'assets/icons/icon_left.svg',
-                        color: theme.primaryDark,
+                        color: context.awikiTheme.title,
                         size: 22,
                       ),
                     ),
@@ -212,70 +213,67 @@ class GroupListPage extends ConsumerWidget {
       await AppNavigator.showDialog<void>(
         context,
         (ctx) => AppDialogScaffold(
-          maxWidth: 560,
+          maxWidth: 420,
           avoidViewInsets: true,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                AppDialogHeader(
-                  title: context.l10n.groupJoinDialogTitle,
-                  onClose: () => Navigator.of(ctx).pop(),
+          compactCentered: true,
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(
+                context.l10n.groupJoinDialogTitle,
+                style: TextStyle(
+                  color: ctx.awikiTheme.title,
+                  fontSize: 19,
+                  height: 1.25,
+                  fontWeight: FontWeight.w400,
                 ),
-                const SizedBox(height: 16),
-                AppTextField(
-                  controller: textController,
-                  label: context.l10n.groupJoinDialogTitle,
-                  placeholder: context.l10n.groupJoinDialogPlaceholder,
-                  keyboardType: TextInputType.text,
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: AppSecondaryButton(
-                        label: context.l10n.commonCancel,
-                        onPressed: () => Navigator.of(ctx).pop(),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: AppPrimaryButton(
-                        label: context.l10n.commonJoin,
-                        onPressed: () async {
-                          final groupDid = textController.text.trim();
-                          if (groupDid.isEmpty) {
-                            return;
-                          }
-                          Navigator.of(ctx).pop();
-                          try {
-                            final group = await ref
-                                .read(groupProvider.notifier)
-                                .joinGroup(
-                                  groupDid,
-                                  identity:
-                                      const GroupIdentitySelection.didOnly(),
-                                );
-                            await ref
-                                .read(groupProvider.notifier)
-                                .loadGroupMembers(group.groupId);
-                            if (!context.mounted) {
-                              return;
-                            }
-                            await openGroupChat(context, ref, group);
-                          } catch (error) {
-                            ref
-                                .read(uiFeedbackProvider.notifier)
-                                .showError(AppMessage.fromError(error));
-                          }
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 14),
+              AppTextField(
+                key: const Key('join-group-did-input'),
+                controller: textController,
+                label: context.l10n.groupJoinDialogTitle,
+                showLabel: false,
+                placeholder: context.l10n.groupJoinDialogPlaceholder,
+                keyboardType: TextInputType.text,
+                bottomPadding: 12,
+              ),
+              const SizedBox(height: 16),
+              AwikiDialogActionRow(
+                cancelLabel: context.l10n.commonCancel,
+                onCancel: () => Navigator.of(ctx).pop(),
+                primaryKey: const Key('join-group-submit-button'),
+                primaryLabel: context.l10n.commonJoin,
+                onPrimary: () async {
+                  final groupDid = textController.text.trim();
+                  if (groupDid.isEmpty) {
+                    return;
+                  }
+                  Navigator.of(ctx).pop();
+                  try {
+                    final group = await ref
+                        .read(groupProvider.notifier)
+                        .joinGroup(
+                          groupDid,
+                          identity: const GroupIdentitySelection.didOnly(),
+                        );
+                    await ref
+                        .read(groupProvider.notifier)
+                        .loadGroupMembers(group.groupId);
+                    if (!context.mounted) {
+                      return;
+                    }
+                    await openGroupChat(context, ref, group);
+                  } catch (error) {
+                    ref
+                        .read(uiFeedbackProvider.notifier)
+                        .showError(AppMessage.fromError(error));
+                  }
+                },
+              ),
+            ],
           ),
         ),
       );
@@ -333,7 +331,7 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                         padding: const EdgeInsets.all(8),
                         child: AwikiAssetIcon(
                           assetName: 'assets/icons/icon_left.svg',
-                          color: theme.primaryDark,
+                          color: context.awikiTheme.title,
                           size: 22,
                         ),
                       ),
@@ -675,11 +673,11 @@ class _GroupDetailIconButton extends StatelessWidget {
       isLoading: isLoading,
       size: responsive.scaled(34),
       backgroundColor: theme.surface,
-      borderColor: AwikiMePalette.hairline,
+      borderColor: context.awikiTheme.border,
       borderRadius: BorderRadius.circular(responsive.radius(8)),
       child: Icon(
         icon,
-        color: enabled ? AwikiMePalette.mutedNeutral : theme.tertiaryText,
+        color: enabled ? context.awikiTheme.secondaryText : theme.tertiaryText,
         size: responsive.iconSm,
       ),
     );
@@ -839,7 +837,7 @@ class GroupMemberRow extends ConsumerWidget {
             tooltip: context.l10n.groupRemoveMember,
             size: responsive.scaled(32),
             backgroundColor: theme.subtleSurface,
-            borderColor: AwikiMePalette.hairline,
+            borderColor: context.awikiTheme.border,
             borderRadius: BorderRadius.circular(responsive.radius(8)),
             child: Icon(
               CupertinoIcons.minus_circle,

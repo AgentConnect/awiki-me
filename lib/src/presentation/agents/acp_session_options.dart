@@ -50,9 +50,9 @@ class AcpSessionOptions extends ConsumerWidget {
                       .read(acpSessionsProvider)
                       .sessions
                       .containsKey(session.key);
-                  showCupertinoModalPopup<void>(
-                    context: context,
-                    builder: (_) => _AcpModelPicker(
+                  AppNavigator.showDialog<void>(
+                    context,
+                    (_) => _AcpModelPicker(
                       initial: session,
                       epoch: epoch,
                       wasProjected: projected,

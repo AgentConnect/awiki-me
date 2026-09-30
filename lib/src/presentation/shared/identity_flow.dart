@@ -25,13 +25,11 @@ import '../friends/friends_provider.dart';
 import '../profile/peer_display_profile_provider.dart';
 import 'app_dialog.dart';
 import 'awiki_me_design.dart';
-import 'awiki_me_feedback.dart';
 import 'avatar_badge.dart';
 import 'formatters/display_formatters.dart';
-import 'identity_profile_surface.dart';
 import 'responsive_layout.dart';
-import 'semantic_pill.dart';
 import 'widgets/app_widgets.dart';
+import 'widgets/awiki_desktop.dart';
 
 enum IdentityFlowMode { startConversation, followContact }
 
@@ -776,30 +774,31 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   Widget build(BuildContext context) {
     final config = _config;
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    // Reference `.dlg`: a title, one search field with the match listed
+    // below it, and right-aligned cancel / primary actions.
     return AppDialogScaffold(
-      maxWidth: 560,
+      maxWidth: 420,
       maxHeightFraction: 0.9,
       horizontalPadding: responsive.isPhone ? 14 : 16,
       verticalPadding: 24,
-      borderRadius: BorderRadius.circular(responsive.radius(16)),
       avoidViewInsets: true,
-      padding: EdgeInsets.fromLTRB(
-        responsive.spacing(22),
-        responsive.spacing(20),
-        responsive.spacing(22),
-        responsive.spacing(22),
-      ),
+      compactCentered: true,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          AppDialogHeader(
-            title: config.title,
-            subtitle: config.subtitle,
-            onClose: () => Navigator.of(context).pop(),
-            isCloseEnabled: !_isSubmitting,
+          Text(
+            config.title,
+            style: TextStyle(
+              color: theme.title,
+              fontSize: 19,
+              height: 1.25,
+              fontWeight: FontWeight.w400,
+            ),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 14),
           Flexible(
             child: SingleChildScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -814,59 +813,55 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                     semanticsLabel: config.inputSemanticsLabel,
                     placeholder: config.inputPlaceholder,
                     onSubmitted: _resolve,
-                  ),
-                  const SizedBox(height: 14),
-                  AppPrimaryButton(
-                    key: config.searchButtonKey,
-                    label: _isResolving
-                        ? config.resolvingLabel
-                        : config.searchLabel,
-                    semanticsIdentifier: 'e2e-identity-lookup-search-button',
-                    onPressed: _isResolving || _isSubmitting ? null : _resolve,
+                    searchButton: _IdentitySearchButton(
+                      key: config.searchButtonKey,
+                      label: _isResolving
+                          ? config.resolvingLabel
+                          : config.searchLabel,
+                      busy: _isResolving,
+                      onTap: _isResolving || _isSubmitting ? null : _resolve,
+                    ),
                   ),
                   if (_errorText != null) ...<Widget>[
-                    const SizedBox(height: 12),
-                    _InlineNotice(text: _errorText!, danger: true),
+                    const SizedBox(height: 8),
+                    Text(
+                      _errorText!,
+                      style: TextStyle(color: theme.danger, fontSize: 12),
+                    ),
                   ],
                   if (_profile != null) ...<Widget>[
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 12),
                     _IdentityPreviewCard(
                       profile: _profile!,
                       relationship: _relationship,
                       showRelationship: config.showRelationship,
                     ),
-                    const SizedBox(height: 12),
-                    _InlineNotice(text: config.previewNoticeText),
+                    const SizedBox(height: 8),
+                    Text(
+                      config.previewNoticeText,
+                      style: TextStyle(
+                        color: theme.secondaryText,
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
                   ],
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 22),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: AppSecondaryButton(
-                  label: context.l10n.commonCancel,
-                  onPressed: _isSubmitting
-                      ? null
-                      : () => Navigator.of(context).pop(),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: AppPrimaryButton(
-                  key: config.actionButtonKey,
-                  label: _isSubmitting
-                      ? config.submittingLabel
-                      : config.actionLabel,
-                  semanticsIdentifier: config.actionSemanticsIdentifier,
-                  onPressed: _profile == null || _isResolving || _isSubmitting
-                      ? null
-                      : _submit,
-                ),
-              ),
-            ],
+          const SizedBox(height: 16),
+          AwikiDialogActionRow(
+            cancelLabel: context.l10n.commonCancel,
+            onCancel: _isSubmitting ? null : () => Navigator.of(context).pop(),
+            primaryKey: config.actionButtonKey,
+            primaryLabel: _isSubmitting
+                ? config.submittingLabel
+                : config.actionLabel,
+            primarySemanticsIdentifier: config.actionSemanticsIdentifier,
+            onPrimary: _profile == null || _isResolving || _isSubmitting
+                ? null
+                : _submit,
           ),
         ],
       ),
@@ -904,6 +899,7 @@ class _IdentitySearchInput extends StatelessWidget {
     required this.semanticsLabel,
     required this.placeholder,
     required this.onSubmitted,
+    required this.searchButton,
   });
 
   final TextEditingController controller;
@@ -913,22 +909,31 @@ class _IdentitySearchInput extends StatelessWidget {
   final String semanticsLabel;
   final String placeholder;
   final Future<void> Function() onSubmitted;
+  final Widget searchButton;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final phone = context.awikiResponsive.isPhone;
     return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      height: phone ? 48 : 38,
+      padding: EdgeInsets.fromLTRB(phone ? 14 : 10, 0, phone ? 5 : 4, 0),
       decoration: BoxDecoration(
-        color: theme.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: theme.border),
+        color: phone ? theme.glass : theme.surface,
+        borderRadius: BorderRadius.circular(phone ? 16 : 6),
+        border: Border.all(
+          color: phone ? theme.glassEdge : theme.border,
+          width: phone ? 0.5 : 1,
+        ),
       ),
       child: Row(
         children: <Widget>[
-          Icon(CupertinoIcons.search, color: theme.secondaryText, size: 20),
-          const SizedBox(width: 10),
+          Icon(
+            CupertinoIcons.search,
+            color: theme.secondaryText,
+            size: phone ? 17 : 15,
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: e2eSemantics(
               identifier: semanticsIdentifier,
@@ -938,6 +943,7 @@ class _IdentitySearchInput extends StatelessWidget {
                 key: keyValue,
                 controller: controller,
                 enabled: enabled,
+                autofocus: true,
                 placeholder: placeholder,
                 textInputAction: TextInputAction.search,
                 onSubmitted: (_) async {
@@ -947,20 +953,78 @@ class _IdentitySearchInput extends StatelessWidget {
                 },
                 decoration: null,
                 padding: EdgeInsets.zero,
-                style: TextStyle(color: theme.body, fontSize: 14),
+                style: TextStyle(color: theme.title, fontSize: phone ? 16 : 14),
                 placeholderStyle: TextStyle(
-                  color: theme.tertiaryText,
-                  fontSize: 14,
+                  color: theme.secondaryText,
+                  fontSize: phone ? 16 : 14,
                 ),
               ),
             ),
           ),
+          const SizedBox(width: 6),
+          searchButton,
         ],
       ),
     );
   }
 }
 
+/// Inline trigger inside the search field; Enter does the same.
+class _IdentitySearchButton extends StatelessWidget {
+  const _IdentitySearchButton({
+    super.key,
+    required this.label,
+    required this.busy,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool busy;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final phone = context.awikiResponsive.isPhone;
+    final radius = BorderRadius.circular(phone ? 18 : 5);
+    return AppPressable(
+      onTap: onTap,
+      enabled: onTap != null,
+      semanticLabel: label,
+      semanticsIdentifier: 'e2e-identity-lookup-search-button',
+      button: true,
+      borderRadius: radius,
+      builder: (context, state, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        height: phone ? 38 : 28,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: phone
+              ? theme.glassLens
+              : (state.hovered || state.pressed
+                    ? theme.title.withValues(alpha: 0.12)
+                    : theme.title.withValues(alpha: 0.065)),
+          borderRadius: radius,
+        ),
+        child: child,
+      ),
+      child: busy
+          ? const CupertinoActivityIndicator(radius: 7)
+          : Text(
+              label,
+              style: TextStyle(
+                color: theme.title,
+                fontSize: phone ? 14 : 13,
+                height: 1,
+              ),
+            ),
+    );
+  }
+}
+
+/// Reference `.match`: one compact row with the avatar, name,
+/// "@handle · verified" and a verified shield.
 class _IdentityPreviewCard extends StatelessWidget {
   const _IdentityPreviewCard({
     required this.profile,
@@ -975,212 +1039,101 @@ class _IdentityPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final phone = context.awikiResponsive.isPhone;
     final displayName = DidDisplayFormatter.identityLookupTitle(profile);
     final secondaryHandle = DidDisplayFormatter.identityLookupSecondaryHandle(
       profile,
     );
     final relationshipLabel = relationship?.relationship.trim();
+    final metaStyle = TextStyle(color: theme.secondaryText, fontSize: 12);
+    final isAgent = profile.identityType.isAgent;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        color: theme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.border),
+        color: phone ? theme.glass : theme.surface,
+        borderRadius: BorderRadius.circular(phone ? 14 : 8),
+        border: Border.all(
+          color: phone ? theme.glassEdge : theme.border,
+          width: phone ? 0.5 : 1,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              AvatarBadge(
-                seed: displayName,
-                size: 52,
-                avatarUri: profile.avatarUri,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          AvatarBadge(
+            seed: displayName,
+            size: 36,
+            avatarUri: profile.avatarUri,
+            square: isAgent,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  displayName,
+                  key: const Key('identity-preview-display-name'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: theme.title, fontSize: 14),
+                ),
+                const SizedBox(height: 2),
+                Row(
                   children: <Widget>[
-                    Text(
-                      displayName,
-                      key: const Key('identity-preview-display-name'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: theme.title,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
                     if (secondaryHandle.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 5),
-                      Text(
-                        secondaryHandle,
-                        key: const Key('identity-preview-handle-value'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: theme.secondaryText,
-                          fontSize: 12,
+                      Flexible(
+                        child: Text(
+                          secondaryHandle,
+                          key: const Key('identity-preview-handle-value'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: metaStyle,
+                        ),
+                      ),
+                      Text(' · ', style: metaStyle),
+                    ],
+                    Text(context.l10n.identityVerified, style: metaStyle),
+                    if (showRelationship &&
+                        relationshipLabel != null &&
+                        relationshipLabel.isNotEmpty &&
+                        relationshipLabel != 'none') ...<Widget>[
+                      Text(' · ', style: metaStyle),
+                      Flexible(
+                        child: Text(
+                          localizeRelationshipLabel(
+                            context.l10n,
+                            relationshipLabel,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: metaStyle,
                         ),
                       ),
                     ],
                   ],
                 ),
-              ),
-              _IdentityStatusPill(label: context.l10n.identityVerified),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _IdentityMetaLine(
-            label: 'DID',
-            value: DidDisplayFormatter.compactDidPath(profile.did),
-          ),
-          _IdentityMetaLine(
-            label: context.l10n.identityTypeLabel,
-            value: IdentityTypePresentation.label(
-              context,
-              profile.identityType,
+                // The full identity stays visible: the DID is what the
+                // conversation or follow will actually bind to.
+                const SizedBox(height: 2),
+                Text(
+                  DidDisplayFormatter.compactDidPath(profile.did),
+                  key: const Key('identity-preview-did-value'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: theme.tertiaryText,
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ],
             ),
           ),
-          if (showRelationship)
-            _IdentityMetaLine(
-              label: context.l10n.identityRelationshipLabel,
-              value: relationshipLabel == null || relationshipLabel.isEmpty
-                  ? localizeRelationshipLabel(context.l10n, 'none')
-                  : localizeRelationshipLabel(context.l10n, relationshipLabel),
-            ),
-          if (profile.bio.trim().isNotEmpty)
-            _IdentityMetaLine(
-              label: context.l10n.identityBioLabel,
-              value: profile.bio.trim(),
-            ),
-          if (profile.tags.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: profile.tags
-                  .map(
-                    (tag) => SemanticPill(
-                      label: tag,
-                      tone: SemanticPillTone.metadata,
-                    ),
-                  )
-                  .toList(),
-            ),
-          ],
+          const SizedBox(width: 8),
+          Icon(CupertinoIcons.checkmark_shield, size: 16, color: theme.success),
         ],
-      ),
-    );
-  }
-}
-
-class _IdentityStatusPill extends StatelessWidget {
-  const _IdentityStatusPill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE6F8EE),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const Icon(
-            CupertinoIcons.checkmark_shield_fill,
-            size: 13,
-            color: AwikiMePalette.successGreen,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AwikiMePalette.successGreen,
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _IdentityMetaLine extends StatelessWidget {
-  const _IdentityMetaLine({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          SizedBox(
-            width: 52,
-            child: Text(
-              '$label:',
-              style: const TextStyle(
-                color: AwikiMePalette.mutedNeutral,
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              maxLines: label == 'DID' ? 2 : 3,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AwikiMePalette.inkNeutral,
-                fontSize: 12,
-                height: 1.35,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InlineNotice extends StatelessWidget {
-  const _InlineNotice({required this.text, this.danger = false});
-
-  final String text;
-  final bool danger;
-
-  @override
-  Widget build(BuildContext context) {
-    if (danger) {
-      return AwikiMeErrorNotice(message: text, compact: true);
-    }
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AwikiMePalette.brandAccentSoft,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: AwikiMePalette.brandAccent,
-          fontSize: 12,
-          height: 1.35,
-        ),
       ),
     );
   }

@@ -21,7 +21,7 @@ class SemanticPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final colors = _colorsForTone(tone);
+    final colors = _colorsForTone(context, tone);
     return Container(
       padding: responsive.scaledInsets(
         const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -41,11 +41,14 @@ class SemanticPill extends StatelessWidget {
   }
 }
 
-_SemanticPillColors _colorsForTone(SemanticPillTone tone) {
+_SemanticPillColors _colorsForTone(
+  BuildContext context,
+  SemanticPillTone tone,
+) {
   return switch (tone) {
-    SemanticPillTone.identity => const _SemanticPillColors(
-      background: AwikiMePalette.brandAccentSoft,
-      foreground: AwikiMePalette.brandAccent,
+    SemanticPillTone.identity => _SemanticPillColors(
+      background: context.awikiTheme.primarySoft,
+      foreground: context.awikiTheme.primary,
     ),
     SemanticPillTone.runtime => const _SemanticPillColors(
       background: Color(0xFFE4F3FA),
@@ -59,13 +62,13 @@ _SemanticPillColors _colorsForTone(SemanticPillTone tone) {
       background: Color(0xFFFFF4D6),
       foreground: AwikiMePalette.warningGold,
     ),
-    SemanticPillTone.metadata => const _SemanticPillColors(
-      background: AwikiMeColors.subtleSurface,
-      foreground: AwikiMePalette.mutedNeutral,
+    SemanticPillTone.metadata => _SemanticPillColors(
+      background: context.awikiTheme.subtleSurface,
+      foreground: context.awikiTheme.secondaryText,
     ),
-    SemanticPillTone.muted => const _SemanticPillColors(
-      background: AwikiMePalette.messageIncoming,
-      foreground: AwikiMePalette.mutedNeutral,
+    SemanticPillTone.muted => _SemanticPillColors(
+      background: context.awikiTheme.mutedSurface,
+      foreground: context.awikiTheme.secondaryText,
     ),
   };
 }
