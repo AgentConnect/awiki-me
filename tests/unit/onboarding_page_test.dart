@@ -353,7 +353,9 @@ void main() {
     expect(heroRect.right, lessThan(cardRect.left));
     expect(cardRect.width, moreOrLessEquals(336, epsilon: 0.1));
     expect(cardRect.height, lessThan(900 * 0.8));
-    expect(languageRect.top, greaterThanOrEqualTo(tenantRect.bottom));
+    // Language and tenant share one footer row: language left, tenant right.
+    expect(languageRect.right, lessThanOrEqualTo(tenantRect.left));
+    expect(languageRect.center.dy, closeTo(tenantRect.center.dy, 12));
     expect(
       tester.getSize(find.byKey(const Key('onboarding-brand-pane'))).width,
       296,

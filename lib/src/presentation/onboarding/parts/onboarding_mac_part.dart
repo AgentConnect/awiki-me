@@ -67,15 +67,17 @@ class _MacOnboardingScaffold extends StatelessWidget {
                   onTap: () => showTenantSwitcherMenu(anchorContext),
                 ),
               );
-              final languageButton = Builder(
+              Widget languageButtonFor({required bool showChevron}) => Builder(
                 builder: (anchorContext) => _MacFooterButton(
                   key: const Key('onboarding-language-switcher-button'),
                   icon: CupertinoIcons.globe,
                   label: appLocaleModeLabel(context, localeMode),
                   tooltip: context.l10n.settingsLanguage,
+                  showChevron: showChevron,
                   onTap: () => onLanguagePressed(anchorContext),
                 ),
               );
+              final languageButton = languageButtonFor(showChevron: true);
               final form = Expanded(
                 child: ColoredBox(
                   color: phone ? const Color(0x00000000) : theme.surface,
@@ -173,7 +175,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
                       color: theme.background,
                       border: Border(right: BorderSide(color: theme.border)),
                     ),
-                    padding: const EdgeInsets.fromLTRB(32, 64, 28, 20),
+                    padding: const EdgeInsets.fromLTRB(24, 64, 20, 20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
@@ -182,8 +184,23 @@ class _MacOnboardingScaffold extends StatelessWidget {
                             child: _MacOnboardingHero(),
                           ),
                         ),
-                        tenantButton,
-                        languageButton,
+                        // Language on the left, tenant on the right, in one
+                        // footer row.
+                        Row(
+                          key: const Key('onboarding-brand-footer'),
+                          children: <Widget>[
+                            // Space is tight beside the tenant, so the globe
+                            // alone marks the language control here.
+                            languageButtonFor(showChevron: false),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: tenantButton,
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -1461,10 +1478,11 @@ class _MacTenantButton extends StatelessWidget {
         child: child,
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Expanded(
+            Flexible(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -1482,7 +1500,7 @@ class _MacTenantButton extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Icon(
               CupertinoIcons.chevron_up_chevron_down,
               color: theme.secondaryText,
@@ -1502,12 +1520,14 @@ class _MacFooterButton extends StatelessWidget {
     required this.label,
     required this.tooltip,
     required this.onTap,
+    this.showChevron = true,
   });
 
   final IconData icon;
   final String label;
   final String tooltip;
   final VoidCallback onTap;
+  final bool showChevron;
 
   @override
   Widget build(BuildContext context) {
@@ -1539,12 +1559,14 @@ class _MacFooterButton extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 7),
-              Icon(
-                CupertinoIcons.chevron_down,
-                color: context.awikiTheme.tertiaryText,
-                size: 12,
-              ),
+              if (showChevron) ...<Widget>[
+                const SizedBox(width: 7),
+                Icon(
+                  CupertinoIcons.chevron_down,
+                  color: context.awikiTheme.tertiaryText,
+                  size: 12,
+                ),
+              ],
             ],
           ),
         ),
