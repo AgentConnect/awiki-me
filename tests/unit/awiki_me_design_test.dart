@@ -169,8 +169,8 @@ void main() {
     expect(colors.navigationBorder, const Color(0xFFDDDCD9));
     expect(colors.chatSurface, const Color(0xFFFFFFFF));
     expect(colors.incomingMessage, const Color(0xFFF2F2F4));
-    expect(colors.outgoingMessage, const Color(0xFFB6E4FF));
-    expect(colors.onOutgoingMessage, const Color(0xFF0F304A));
+    expect(colors.outgoingMessage, const Color(0xFF016EBA));
+    expect(colors.onOutgoingMessage, const Color(0xFFFFFFFF));
   });
 
   test('compact and expanded typography expose intentional type ramps', () {

@@ -1257,11 +1257,28 @@ void main() {
       outgoingText.style?.leadingDistribution,
       TextLeadingDistribution.even,
     );
-    // Phone bubbles are evenly 20-unit rounded, matching the reference; neither
-    // carries a tail or outline.
-    final radius = BorderRadius.circular(20 * AwikiDisplayScale.layoutBaseline);
-    expect(incomingDecoration.borderRadius, radius);
-    expect(outgoingDecoration.borderRadius, radius);
+    // Reference phone bubbles: 20 rounded with an 8 tail corner at the top on
+    // the sender's side; neither carries an outline.
+    const round = Radius.circular(20);
+    const tail = Radius.circular(8);
+    expect(
+      incomingDecoration.borderRadius,
+      const BorderRadius.only(
+        topLeft: tail,
+        topRight: round,
+        bottomLeft: round,
+        bottomRight: round,
+      ),
+    );
+    expect(
+      outgoingDecoration.borderRadius,
+      const BorderRadius.only(
+        topLeft: round,
+        topRight: tail,
+        bottomLeft: round,
+        bottomRight: round,
+      ),
+    );
     expect(incomingDecoration.border, isNull);
     expect(outgoingDecoration.border, isNull);
     final incomingPadding = incomingBubbleWidget.padding! as EdgeInsets;
@@ -1781,7 +1798,13 @@ void main() {
     );
     expect(
       (bubble.decoration! as BoxDecoration).borderRadius,
-      BorderRadius.circular(6 * AwikiDisplayScale.layoutBaseline),
+      // Reference desktop bubble: 18 rounded with a 6 tail on the own side.
+      const BorderRadius.only(
+        topLeft: Radius.circular(18),
+        topRight: Radius.circular(6),
+        bottomLeft: Radius.circular(18),
+        bottomRight: Radius.circular(18),
+      ),
     );
   });
 
@@ -4842,6 +4865,66 @@ void main() {
     expect(size.height, moreOrLessEquals(100, epsilon: 0.5));
   });
 
+  testWidgets('同一发送者连续消息隐藏头像并收紧间距，换人恢复 14', (tester) async {
+    final conversation = _scrollConversation('dm:sender-group');
+    ChatMessage text(String id, {required bool mine, required int minute}) {
+      return ChatMessage(
+        localId: id,
+        remoteId: id,
+        conversationId: conversation.conversationId,
+        threadId: conversation.conversationId,
+        senderDid: mine ? 'did:test:me' : 'did:test:alice',
+        receiverDid: mine ? 'did:test:alice' : 'did:test:me',
+        content: 'message $id',
+        createdAt: DateTime(2026, 4, 5, 12, minute),
+        isMine: mine,
+        sendState: MessageSendState.sent,
+      );
+    }
+
+    await _pumpScrollableChatView(
+      tester,
+      gateway: FakeAwikiGateway(),
+      conversation: conversation,
+      messages: <ChatMessage>[
+        text('first', mine: false, minute: 1),
+        text('follow', mine: false, minute: 2),
+        text('reply', mine: true, minute: 3),
+      ],
+    );
+
+    bool avatarVisible(String id, String side) {
+      final avatar = find.byKey(Key('chat-message-avatar:$id:$side'));
+      expect(avatar, findsOneWidget);
+      final hiding = find.ancestor(
+        of: avatar,
+        matching: find.byWidgetPredicate((w) => w is Visibility && !w.visible),
+      );
+      return hiding.evaluate().isEmpty;
+    }
+
+    // Reference `.msg.cont`: the follow-up keeps the slot but hides the
+    // avatar; a new sender shows it again.
+    expect(avatarVisible('first', 'peer'), isTrue);
+    expect(avatarVisible('follow', 'peer'), isFalse);
+    expect(avatarVisible('reply', 'mine'), isTrue);
+
+    Rect bubble(String id) =>
+        tester.getRect(find.byKey(Key('chat-message-bubble:$id')));
+    expect(
+      bubble('follow').left,
+      moreOrLessEquals(bubble('first').left, epsilon: 0.1),
+    );
+    expect(
+      bubble('follow').top - bubble('first').bottom,
+      moreOrLessEquals(6, epsilon: 0.5),
+    );
+    expect(
+      bubble('reply').top - bubble('follow').bottom,
+      moreOrLessEquals(14, epsilon: 0.5),
+    );
+  });
+
   testWidgets('纯图片保留附件卡片边界，短说明不会把图文消息撑满', (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -4889,7 +4972,9 @@ void main() {
     final bareDecoration = bareBubble.decoration! as BoxDecoration;
     expect(bareBubble.padding, isNot(EdgeInsets.zero));
     expect(bareDecoration.color, isNot(CupertinoColors.transparent));
-    expect(bareDecoration.boxShadow, isNotEmpty);
+    // Reference `.file`: a hairline border, no shadow.
+    expect(bareDecoration.border, isNotNull);
+    expect(bareBubble.padding!.horizontal, moreOrLessEquals(24, epsilon: 1.5));
     expect(
       find.byKey(const Key('chat-attachment-caption-divider')),
       findsOneWidget,
@@ -4908,7 +4993,8 @@ void main() {
     expect(
       bubbleSize.width,
       moreOrLessEquals(
-        imageSize.width + 30 * AwikiDisplayScale.layoutBaseline + 2,
+        // Reference `.file` padding (10 + 14) plus the 1-unit borders.
+        imageSize.width + bareBubble.padding!.horizontal + 2,
         epsilon: 1,
       ),
     );
@@ -4964,7 +5050,8 @@ void main() {
     expect(
       desktopBubbleSize.width,
       moreOrLessEquals(
-        desktopImageSize.width + 24 * AwikiDisplayScale.layoutBaseline + 2,
+        // Reference `.file` padding (10 + 14) plus the 1-unit borders.
+        desktopImageSize.width + 24 + 2,
         epsilon: 1,
       ),
     );

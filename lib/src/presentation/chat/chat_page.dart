@@ -49,6 +49,7 @@ import '../../app/app_router.dart';
 import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
 import '../../application/attachment_preview_service.dart';
+import '../../application/display_scale_preference_service.dart';
 import '../../application/agent/group_agent_availability.dart';
 import '../../application/screenshot_failure.dart';
 import 'screenshot_permission_dialog.dart';
@@ -1431,6 +1432,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
                             previous,
                             message,
                           );
+                          final continuesGroup = _continuesSenderGroup(
+                            previous,
+                            message,
+                          );
                           return _buildTimelineChild(
                             entry.id,
                             Padding(
@@ -1477,6 +1482,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                         senderAvatarUri: senderAvatarUri,
                                         senderAvatarUserId: senderAvatarUserId,
                                         showSenderLabel: showSenderLabel,
+                                        showAvatar: !continuesGroup,
                                         header: acpFinalTasks.isEmpty
                                             ? null
                                             : Column(
@@ -3735,6 +3741,20 @@ class _ChatViewState extends ConsumerState<ChatView> {
         30;
   }
 
+  /// Reference `.msg.cont`: the same sender on the same side, with no time
+  /// divider between, continues the previous message's group.
+  bool _continuesSenderGroup(ChatMessage? previous, ChatMessage current) {
+    if (previous == null ||
+        previous.isGroupSystemEvent ||
+        current.isGroupSystemEvent ||
+        previous.isMine != current.isMine ||
+        _shouldShowDivider(previous, current)) {
+      return false;
+    }
+    return current.isMine ||
+        previous.senderDid.trim() == current.senderDid.trim();
+  }
+
   bool _shouldShowSenderLabel(ChatMessage? previous, ChatMessage current) {
     if (current.isGroupSystemEvent) {
       return false;
@@ -3763,9 +3783,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (isLastItem) {
       return 0;
     }
-    final defaultSpacing = macStyle
-        ? responsive.displayScaled(6)
-        : responsive.spacing(6);
+    // Reference `.stream` gap is 14; a same-sender follow-up (`.msg.cont`)
+    // tucks up to 6.
+    final defaultSpacing = _chatDesignPx(
+      responsive,
+      next != null && _continuesSenderGroup(current, next) ? 6 : 14,
+    );
     if (hasAgentProcessing) {
       return macStyle ? responsive.displayScaled(10) : responsive.spacing(10);
     }

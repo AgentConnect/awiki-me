@@ -27,8 +27,9 @@ class AwikiMePalette {
   static const Color navigationBorder = Color(0xFFDDDCD9);
   static const Color chatSurface = Color(0xFFFFFFFF);
   static const Color messageIncoming = Color(0xFFF2F2F4);
-  static const Color messageOutgoing = Color(0xFFB6E4FF);
-  static const Color onMessageOutgoing = Color(0xFF0F304A);
+  // Reference `--bubble-out`: the pressed brand accent with white text.
+  static const Color messageOutgoing = Color(0xFF016EBA);
+  static const Color onMessageOutgoing = Color(0xFFFFFFFF);
   static const Color messagePreview = Color(0xFF9F9FA6);
 
   // Legacy names resolve to the same semantic palette so screens still being
@@ -622,8 +623,8 @@ class AwikiMeTheme {
     danger: Color(0xFFF47B74),
     unread: Color(0xFFFA5152),
     incomingMessage: Color(0xFF2C2E31),
-    outgoingMessage: Color(0xFF1A4B73),
-    onOutgoingMessage: Color(0xFFEBF3F9),
+    outgoingMessage: Color(0xFF135E9A),
+    onOutgoingMessage: Color(0xFFEFF6FB),
     glass: Color(0x752F3339),
     glassLens: Color(0x24E6E8EA),
     glassEdge: Color(0x1AFFFFFF),

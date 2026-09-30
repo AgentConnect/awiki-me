@@ -1,5 +1,27 @@
 part of '../chat_page.dart';
 
+/// Converts a reference-design pixel value into layout units, so the chat
+/// matches the reference exactly at the default display scale.
+double _chatDesignPx(AwikiResponsiveInfo responsive, double px) =>
+    responsive.displayScaled(px / AwikiDisplayScale.layoutBaseline);
+
+/// Reference `--bubble-r` / `--bubble-tail`: 18/6 on desktop, 20/8 on phone.
+/// The sharper tail corner sits at the top on the sender's side.
+BorderRadius _chatBubbleRadius(
+  AwikiResponsiveInfo responsive, {
+  required bool isMine,
+  required bool macStyle,
+}) {
+  final round = Radius.circular(_chatDesignPx(responsive, macStyle ? 18 : 20));
+  final tail = Radius.circular(_chatDesignPx(responsive, macStyle ? 6 : 8));
+  return BorderRadius.only(
+    topLeft: isMine ? round : tail,
+    topRight: isMine ? tail : round,
+    bottomLeft: round,
+    bottomRight: round,
+  );
+}
+
 /// Shared geometry for messages and ACP previews; contains no message identity.
 class _MessageBubbleSurface extends StatelessWidget {
   const _MessageBubbleSurface({
@@ -20,34 +42,34 @@ class _MessageBubbleSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    const shadows = [
-      BoxShadow(color: Color(0x0D000000), blurRadius: 2, offset: Offset(0, 1)),
-    ];
+    // Reference `.file`: attachments sit on the surface with a hairline
+    // border instead of a tinted bubble.
     final color = hasAttachment
         ? theme.surface
         : isMine
         ? theme.outgoingMessage
         : theme.incomingMessage;
-    // Desktop follows the reference's flat 6-unit bubble; phone uses the
-    // reference's evenly rounded 20-unit bubble.
-    final large = responsive.displayScaled(macStyle ? 6 : 20);
-    final small = large;
     return Container(
       constraints: BoxConstraints(maxWidth: maxWidth),
-      padding: EdgeInsets.symmetric(
-        horizontal: responsive.displayScaled(macStyle ? 12 : 15),
-        vertical: responsive.displayScaled(macStyle ? 8 : 10),
-      ),
+      padding: hasAttachment
+          ? EdgeInsets.fromLTRB(
+              _chatDesignPx(responsive, 10),
+              _chatDesignPx(responsive, 10),
+              _chatDesignPx(responsive, 14),
+              _chatDesignPx(responsive, 10),
+            )
+          : EdgeInsets.symmetric(
+              horizontal: _chatDesignPx(responsive, 14),
+              vertical: _chatDesignPx(responsive, 9),
+            ),
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(isMine ? large : small),
-          topRight: Radius.circular(isMine ? small : large),
-          bottomLeft: Radius.circular(large),
-          bottomRight: Radius.circular(large),
+        borderRadius: _chatBubbleRadius(
+          responsive,
+          isMine: isMine,
+          macStyle: macStyle,
         ),
         border: hasAttachment ? Border.all(color: theme.border) : null,
-        boxShadow: hasAttachment ? shadows : null,
       ),
       child: child,
     );
