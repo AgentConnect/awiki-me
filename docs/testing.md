@@ -1591,3 +1591,19 @@ recents before first send` 同时核对匹配卡的完整 Handle、昵称和聊�
 fake 服务。以 Flutter tester 执行只证明产品交互编排，不替代真实平台或跨域投递验收。
 完整修复还需要 `awiki-cli-rs2` 的公共 Profile 解析修复进入实际 native SDK；仅更新 Dart
 源码或复用旧原生库不能宣称解决底层问题。正式构建仍使用发布后的 SDK 和精确 registry pin。
+
+### 客户域注册能力发现
+
+`--case registration-domain-discovery` 使用真实 AppBootstrap/native Core 和公开 User
+Service，按同一 platform backend 下的客户 A/B/A 验证返回的域名策略及可见 phone/email
+输入框，不创建账号或发送验证码。先为两个授权测试域准备不同的 allowlist 方法，
+用 `AWIKI_REGISTRATION_DISCOVERY_FIXTURE` 指向私有 JSON：
+
+```json
+{"backend":"https://platform.example","domains":[{"domain":"a.customer.example","method":"email"},{"domain":"b.customer.example","method":"phone"}]}
+```
+
+fixture backend 必须与 `--config` 选定的 userServiceUrl 相同；客户 DID 域明确与平台
+Host 不同。Linux 使用 runner 的 Xvfb 执行；结束删除本轮独立 App 状态，域策略由
+拥有 fixture 的 Node 域名验收流程恢复。真实短信/邮箱新建与管理 API 验收仍归
+`awiki-agent-node/tests/system/tenant_registration.py`，本例不替代注册事务验收。

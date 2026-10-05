@@ -355,12 +355,16 @@ class OnboardingHandleRegistrationCapabilities {
     required this.methods,
     this.defaultMethod,
     this.availability,
+    this.registrationPolicy,
   });
 
   final bool enabled;
   final OnboardingIdentityMethodId? defaultMethod;
   final List<OnboardingIdentityMethod> methods;
   final String? availability;
+
+  /// Null means the backend returned legacy deployment capabilities.
+  final Map<String, Object?>? registrationPolicy;
 
   List<OnboardingIdentityMethod> get enabledMethods {
     return methods.where((method) => method.enabled).toList(growable: false);
@@ -375,6 +379,9 @@ class OnboardingHandleRegistrationCapabilities {
         _stringValue(json['default_method']),
       ),
       availability: _stringValue(json['availability']),
+      registrationPolicy: json['registration_policy'] == null
+          ? null
+          : _objectValue(json['registration_policy'], 'registration_policy'),
       methods: _methodList(
         json['methods'],
         'identity.handle_registration.methods',

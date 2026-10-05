@@ -1307,7 +1307,9 @@ class FakeAwikiGateway implements AwikiAccountGateway {
     return following;
   }
 
-  Future<OnboardingServerInfo> loadServerInfo() async {
+  Future<OnboardingServerInfo> loadServerInfo({
+    bool existingAccount = false,
+  }) async {
     loadServerInfoCalls += 1;
     final completer = serverInfoCompleter;
     if (completer != null) {
@@ -4212,7 +4214,7 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
   );
 
   @override
-  Future<OnboardingServerInfo> loadServerInfo() {
+  Future<OnboardingServerInfo> loadServerInfo({bool existingAccount = false}) {
     return gateway.loadServerInfo();
   }
 

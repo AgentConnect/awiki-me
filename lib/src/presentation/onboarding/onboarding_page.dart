@@ -753,6 +753,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     if (!mounted) return;
     _stopE2eOtpRequestLoop();
     ref.read(registrationEntryProvider.notifier).reset();
+    if (ref.read(onboardingProvider).existingAccountMethods) {
+      unawaited(
+        ref.read(onboardingProvider.notifier).loadServerInfo(force: true),
+      );
+    }
     inviteController.clear();
     otpController.clear();
     ref.read(onboardingProvider.notifier).resetPhoneOtpTarget();

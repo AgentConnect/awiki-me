@@ -571,3 +571,13 @@ Production不读取或迁移：
 
 会话激活与本地身份列表按 Core 已验证身份的 WBA/Web 域检查当前租户；未知方法或
 跨租户身份在切换 Core owner、启动认证之前被拒绝。识别 Web 域不授予设备管理权限。
+
+### 域名注册发现
+
+Onboarding support 与 bootstrap 的有效 environment 绑定，`server-info` 查询包含
+该 environment 的 `didDomain`（`registration_domain`），不从平台 backend Host
+推断客户域。响应带 `registration_policy` 时必须校验 domain；无元数据标记为旧
+部署能力。环境切换重建 support/client，查询本身不维护跨域缓存。App 展示服务端
+返回的有效 phone/email 方法，最终注册准入仍由 Core 调用 User Service 原子执行。
+
+对于联系人类型受限的客户域，已有账号入口先对精确 Handle 做公开 existing 检查，再读取未带 registration_domain 的部署验证渠道，以保留既有登录/Join 的正常因子。该显示路径不授予身份或新建资格；发送与注册前仍复核 existing 分支，服务端保留最终域策略。切换 Handle 时恢复域名注册发现，异步结果用请求 revision 防止旧加载覆盖新模式。

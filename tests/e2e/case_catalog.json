@@ -6273,6 +6273,49 @@
           ]
         ]
       }
+    },
+    {
+      "caseId": "REGISTRATION-DOMAIN-DISCOVERY-E2E-001",
+      "feature": "按客户 DID 域名发现并展示有效注册方式",
+      "layer": "remote_product_ui",
+      "preconditions": "Explicit remote platform backend and two provisioned customer policies with different phone/email methods; isolated native App roots.",
+      "action": "Open the real App for customer A, B, A through the same platform backend and inspect visible contact fields.",
+      "exactOracles": [
+        "Policy domain/source and visible method match each selected customer."
+      ],
+      "negativeChecks": [
+        "An unsupported method cannot replace the selected enabled method; no cross-domain state is reused."
+      ],
+      "environment": "configured_remote",
+      "cleanupPolicy": "isolated_app_state_only",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/registration_domain_discovery_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "REGISTRATION-DOMAIN-DISCOVERY-E2E-001:real_backend_customer_scope",
+          "REGISTRATION-DOMAIN-DISCOVERY-E2E-001:visible_effective_methods",
+          "REGISTRATION-DOMAIN-DISCOVERY-E2E-001:domain_a_b_a_isolation"
+        ],
+        "exactOracleAssertions": [
+          [
+            "REGISTRATION-DOMAIN-DISCOVERY-E2E-001:real_backend_customer_scope",
+            "REGISTRATION-DOMAIN-DISCOVERY-E2E-001:visible_effective_methods",
+            "REGISTRATION-DOMAIN-DISCOVERY-E2E-001:domain_a_b_a_isolation"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "REGISTRATION-DOMAIN-DISCOVERY-E2E-001:real_backend_customer_scope",
+            "REGISTRATION-DOMAIN-DISCOVERY-E2E-001:visible_effective_methods",
+            "REGISTRATION-DOMAIN-DISCOVERY-E2E-001:domain_a_b_a_isolation"
+          ]
+        ]
+      }
     }
   ]
 }

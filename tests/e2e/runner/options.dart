@@ -74,6 +74,7 @@ Checked-in user exclusions stay in full reports as user_excluded and are not exe
 Usage:
   dart run tests/e2e/runner.dart --case smoke
   dart run tests/e2e/runner.dart --case multi-device
+  dart run tests/e2e/runner.dart --case registration-domain-discovery
   dart run tests/e2e/runner.dart --case multi-device-remote-join
   dart run tests/e2e/runner.dart --case multi-device-remote-recovery
   dart run tests/e2e/runner.dart --case multi-device-remote-recovery-fresh
@@ -164,6 +165,9 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   smoke(_desktopSmokeCaseIds),
   multiDevice(_multiDeviceCapabilityGateCaseIds),
   registrationAccountFirst(<String>['REGISTRATION-ACCOUNT-FIRST-E2E-001']),
+  registrationDomainDiscovery(<String>[
+    'REGISTRATION-DOMAIN-DISCOVERY-E2E-001',
+  ]),
   multiDeviceRemoteJoin(_multiDeviceRemoteJoinCaseIds),
   multiDeviceRemoteRecovery(_multiDeviceRemoteRecoveryCaseIds),
   handleRecoveryLocalData(_handleRecoveryLocalDataCaseIds),
@@ -224,6 +228,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         'integration_test/multi_device_capability_gate_test.dart',
       DesktopE2eCase.registrationAccountFirst =>
         'integration_test/registration_account_first_test.dart',
+      DesktopE2eCase.registrationDomainDiscovery =>
+        'integration_test/registration_domain_discovery_test.dart',
       DesktopE2eCase.multiDeviceRemoteJoin =>
         'integration_test/multi_device_join_ui_test.dart',
       DesktopE2eCase.multiDeviceRemoteRecovery =>
@@ -290,6 +296,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.identitySwitch => 'identity-switch',
       DesktopE2eCase.multiDevice => 'multi-device',
       DesktopE2eCase.registrationAccountFirst => 'registration-account-first',
+      DesktopE2eCase.registrationDomainDiscovery =>
+        'registration-domain-discovery',
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         'multi-device-remote-recovery',
@@ -332,6 +340,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       this != DesktopE2eCase.smoke &&
       this != DesktopE2eCase.multiDevice &&
       this != DesktopE2eCase.registrationAccountFirst &&
+      this != DesktopE2eCase.registrationDomainDiscovery &&
       this != DesktopE2eCase.multiDeviceRemoteRecovery &&
       this != DesktopE2eCase.handleRecoveryLocalData &&
       this != DesktopE2eCase.handleRecoveryStateMachine &&
@@ -353,6 +362,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.smoke => 'smoke',
       DesktopE2eCase.multiDevice => 'multi-device',
       DesktopE2eCase.registrationAccountFirst => 'registration-account-first',
+      DesktopE2eCase.registrationDomainDiscovery =>
+        'registration-domain-discovery',
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         'multi-device-remote-recovery',
@@ -436,6 +447,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.performance => _desktopCliPeerPerformanceScenario,
       DesktopE2eCase.multiDevice => _multiDeviceCapabilityGateScenario,
       DesktopE2eCase.registrationAccountFirst => 'registration-account-first',
+      DesktopE2eCase.registrationDomainDiscovery =>
+        'registration-domain-discovery',
       DesktopE2eCase.multiDeviceRemoteJoin => _multiDeviceRemoteJoinScenario,
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         _multiDeviceRemoteRecoveryScenario,
@@ -507,6 +520,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       'did-method-web' || 'did_method_web' => DesktopE2eCase.didMethodWeb,
       '' || 'smoke' || 'app' || 'local' => DesktopE2eCase.smoke,
       'registration-account-first' => DesktopE2eCase.registrationAccountFirst,
+      'registration-domain-discovery' =>
+        DesktopE2eCase.registrationDomainDiscovery,
       'multi-device' ||
       'multi_device' ||
       'device-capability' ||

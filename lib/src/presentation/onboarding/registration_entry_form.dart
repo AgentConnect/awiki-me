@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
+import '../../application/tenant/app_tenant.dart';
 import '../../core/app_transport_failure.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../../domain/entities/identity_method.dart';
@@ -91,6 +92,34 @@ class RegistrationEntryForm extends ConsumerWidget {
                 ),
           const SizedBox(height: 4),
         ],
+        if (onboarding
+                    .serverInfo
+                    ?.identity
+                    .handleRegistration
+                    .registrationPolicy?['source'] ==
+                'tenant' &&
+            !onboarding.existingAccountMethods)
+          AppSecondaryButton(
+            label: l10n.onboardingExistingAccountAction,
+            semanticsIdentifier: 'e2e-existing-account-methods',
+            onPressed: state.busy || onboarding.isServerInfoLoading
+                ? null
+                : () async {
+                    final handle = handleController.text.trim().toLowerCase();
+                    final domain = ref.read(activeAppTenantProvider).didHost;
+                    final entry = ref.read(registrationEntryProvider.notifier);
+                    entry.continueExisting(handle, domain);
+                    if (await entry.prepareVerification(
+                          handle: handle,
+                          domain: domain,
+                        ) &&
+                        context.mounted) {
+                      await ref
+                          .read(onboardingProvider.notifier)
+                          .loadServerInfo(force: true, existingAccount: true);
+                    }
+                  },
+          ),
         if (state.check?.decision == 'unavailable')
           Text(l10n.onboardingAccountUnavailable),
         if (state.check?.isExisting == true || state.existingAccountPath) ...[

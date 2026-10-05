@@ -43,6 +43,7 @@ class OnboardingState {
     this.selectedPendingRegistration,
     this.entryMode = 'register',
     this.authMode = 'phone',
+    this.existingAccountMethods = false,
     this.emailVerified = false,
     this.emailResendCountdown = 0,
     this.isBusy = false,
@@ -68,6 +69,7 @@ class OnboardingState {
   final PendingIdentityRegistration? selectedPendingRegistration;
   final String entryMode;
   final String authMode;
+  final bool existingAccountMethods;
   final bool emailVerified;
   final int emailResendCountdown;
   final bool isBusy;
@@ -154,6 +156,7 @@ class OnboardingState {
     Object? existingHandleMethodCapabilities = _unset,
     String? entryMode,
     String? authMode,
+    bool? existingAccountMethods,
     bool? emailVerified,
     int? emailResendCountdown,
     bool? isBusy,
@@ -185,6 +188,8 @@ class OnboardingState {
           : existingHandleMethodCapabilities as IdentityMethodCapabilities?,
       entryMode: entryMode ?? this.entryMode,
       authMode: authMode ?? this.authMode,
+      existingAccountMethods:
+          existingAccountMethods ?? this.existingAccountMethods,
       emailVerified: emailVerified ?? this.emailVerified,
       emailResendCountdown: emailResendCountdown ?? this.emailResendCountdown,
       isBusy: isBusy ?? this.isBusy,
@@ -243,6 +248,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   Timer? _emailResendTimer;
   int _busyGeneration = 0;
   int _verificationRevision = 0;
+  int _serverInfoRevision = 0;
   String? _otpInputPhone;
   AppSessionTransition? _activeSessionTransition;
   OnboardingPhoneRegistrationOutcome? _lastBusyFailureOutcome;
@@ -321,20 +327,26 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     _cancelEmailResendCountdown();
   }
 
-  Future<void> loadServerInfo({bool force = false}) async {
+  Future<void> loadServerInfo({
+    bool force = false,
+    bool existingAccount = false,
+  }) async {
     if (!force &&
+        state.existingAccountMethods == existingAccount &&
         (state.isServerInfoReady ||
             state.isServerInfoLoading && state.serverInfo != null)) {
       return;
     }
+    final requestRevision = ++_serverInfoRevision;
     state = state.copyWith(
       serverInfoStatus: OnboardingServerInfoStatus.loading,
+      existingAccountMethods: existingAccount,
       serverInfoError: null,
     );
     try {
       final info = await ref
           .read(onboardingSupportServiceProvider)
-          .loadServerInfo()
+          .loadServerInfo(existingAccount: existingAccount)
           .timeout(_requestTimeout);
       final identities = ref.read(identityCorePortProvider);
       final methods = await identities.identityCreationMethods().timeout(
@@ -343,7 +355,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       final pending = await identities.pendingIdentityRegistrations().timeout(
         _requestTimeout,
       );
-      if (!mounted) return;
+      if (!mounted || requestRevision != _serverInfoRevision) return;
       state = state.copyWith(
         availableDidMethods: methods,
         pendingRegistrations: pending,
@@ -355,13 +367,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       );
       _applyServerInfo(info);
     } on TimeoutException {
-      if (!mounted) return;
+      if (!mounted || requestRevision != _serverInfoRevision) return;
       state = state.copyWith(
         serverInfoStatus: OnboardingServerInfoStatus.failed,
         serverInfoError: 'request_timeout_retry',
       );
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || requestRevision != _serverInfoRevision) return;
       state = state.copyWith(
         serverInfoStatus: OnboardingServerInfoStatus.failed,
         serverInfoError: error.toString(),

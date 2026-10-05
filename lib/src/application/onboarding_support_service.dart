@@ -24,7 +24,7 @@ class RegistrationOtpRateLimited implements Exception {
 }
 
 abstract interface class OnboardingSupportService {
-  Future<OnboardingServerInfo> loadServerInfo();
+  Future<OnboardingServerInfo> loadServerInfo({bool existingAccount = false});
 
   Future<RegistrationCheck> checkRegistration({
     required String handle,

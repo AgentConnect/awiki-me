@@ -710,6 +710,8 @@ class DesktopE2eRunner {
           await _runLocalMultiDeviceCapabilityGate();
         case DesktopE2eCase.registrationAccountFirst:
           await _runRemoteRegistrationAccountFirst();
+        case DesktopE2eCase.registrationDomainDiscovery:
+          await _runRemoteRegistrationDomainDiscovery();
         case DesktopE2eCase.multiDeviceRemoteJoin:
           await _runRemoteMultiDeviceJoin();
         case DesktopE2eCase.multiDeviceRemoteRecovery:
@@ -1073,6 +1075,44 @@ class DesktopE2eRunner {
         );
       });
     }
+  }
+
+  Future<void> _runRemoteRegistrationDomainDiscovery() async {
+    final fixturePath = Platform
+        .environment['AWIKI_REGISTRATION_DISCOVERY_FIXTURE']
+        ?.trim();
+    if (!options.dryRun && !commands.dryRun) {
+      if (fixturePath == null || fixturePath.isEmpty) {
+        throw E2eFailure(
+          'AWIKI_REGISTRATION_DISCOVERY_FIXTURE must name the reviewed remote fixture.',
+        );
+      }
+      final fixture =
+          jsonDecode(await File(fixturePath).readAsString())
+              as Map<String, dynamic>;
+      if (fixture['backend'] != fileConfig.userServiceUrl) {
+        throw E2eFailure(
+          'Discovery fixture backend differs from the selected remote target.',
+        );
+      }
+    }
+    if (options.prepareOnly) {
+      await commands.requireExecutable('flutter');
+      return;
+    }
+    await _runFlutterArgs(
+      <String>[
+        'test',
+        '--dart-define=AWIKI_E2E=true',
+        '--dart-define=AWIKI_REGISTRATION_DISCOVERY_FIXTURE=${fixturePath ?? "reviewed-fixture.json"}',
+        options.e2eCase.testFile,
+        '-d',
+        platform.name,
+      ],
+      platform: platform,
+      timeout: suiteDefinition.timeout,
+      runtimeCaseIds: options.e2eCase.caseIds,
+    );
   }
 
   Future<void> _runRemoteRegistrationAccountFirst() async {

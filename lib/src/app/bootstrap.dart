@@ -421,6 +421,7 @@ class AppBootstrap {
       );
       final onboardingSupportService = AwikiOnboardingSupportService(
         userServiceUrl: effectiveEnvironment.userServiceUrl,
+        didDomain: effectiveEnvironment.didDomain,
         userClient: userServiceUtilityClient,
       );
       final peerIdentityService = UserServicePeerIdentityService(

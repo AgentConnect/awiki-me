@@ -7,16 +7,24 @@ import 'awiki_onboarding_utility_client.dart';
 class AwikiOnboardingSupportService implements OnboardingSupportService {
   AwikiOnboardingSupportService({
     required this.userServiceUrl,
+    String? didDomain,
     AwikiOnboardingUtilityClient? userClient,
-  }) : _userClient = userClient;
+  }) : didDomain = (didDomain ?? Uri.parse(userServiceUrl).host)
+           .trim()
+           .toLowerCase()
+           .replaceFirst(RegExp(r'\.$'), ''),
+       _userClient = userClient;
 
   factory AwikiOnboardingSupportService.fromEnvironment() {
-    final userServiceUrl =
-        AwikiEnvironmentConfig.fromEnvironment().userServiceUrl;
-    return AwikiOnboardingSupportService(userServiceUrl: userServiceUrl);
+    final environment = AwikiEnvironmentConfig.fromEnvironment();
+    return AwikiOnboardingSupportService(
+      userServiceUrl: environment.userServiceUrl,
+      didDomain: environment.didDomain,
+    );
   }
 
   final String userServiceUrl;
+  final String didDomain;
   final AwikiOnboardingUtilityClient? _userClient;
   AwikiOnboardingUtilityClient? _cachedUserClient;
 
@@ -30,9 +38,18 @@ class AwikiOnboardingSupportService implements OnboardingSupportService {
   }
 
   @override
-  Future<OnboardingServerInfo> loadServerInfo() async {
-    final payload = await _users.loadServerInfo();
-    return OnboardingServerInfo.fromJson(payload);
+  Future<OnboardingServerInfo> loadServerInfo({
+    bool existingAccount = false,
+  }) async {
+    final payload = await _users.loadServerInfo(
+      registrationDomain: existingAccount ? null : didDomain,
+    );
+    final result = OnboardingServerInfo.fromJson(payload);
+    final policy = result.identity.handleRegistration.registrationPolicy;
+    if (policy != null && policy['domain'] != didDomain) {
+      throw const FormatException('registration_policy_domain_mismatch');
+    }
+    return result;
   }
 
   @override

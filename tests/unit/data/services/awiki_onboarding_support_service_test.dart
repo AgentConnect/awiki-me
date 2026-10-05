@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_support_service.dart';
 import 'package:awiki_me/src/application/models/onboarding_server_info.dart';
@@ -5,6 +8,89 @@ import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'discovery follows DID domain across one backend and rejects mismatches',
+    () async {
+      final seen = <String?>[];
+      String? responseDomain;
+      var legacy = false;
+      final transport = AwikiOnboardingUtilityHttpClient(
+        baseUrl: 'https://platform.example',
+        httpClient: MockClient((request) async {
+          final target = request.url.queryParameters['registration_domain'];
+          seen.add(target);
+          expect(request.url.host, 'platform.example');
+          expect(request.url.queryParameters['client_platform'], 'app');
+          return http.Response(
+            jsonEncode({
+              'schema_version': 1,
+              'service': {'kind': 'user-service', 'name': 'fixture'},
+              'identity': {
+                'handle_registration': {
+                  'enabled': true,
+                  'availability': 'restricted',
+                  'methods': [
+                    {
+                      'id': 'email',
+                      'enabled': true,
+                      'verification': {
+                        'required': true,
+                        'type': 'email_activation',
+                      },
+                    },
+                  ],
+                  if (!legacy)
+                    'registration_policy': {
+                      'domain': responseDomain ?? target,
+                      'source': 'tenant',
+                      'revision': 2,
+                      'mode': 'allowlist',
+                    },
+                },
+              },
+            }),
+            200,
+          );
+        }),
+      );
+      final client = AwikiOnboardingUtilityClient(serviceClient: transport);
+      AwikiOnboardingSupportService service(String domain) =>
+          AwikiOnboardingSupportService(
+            userServiceUrl: 'https://platform.example',
+            didDomain: domain,
+            userClient: client,
+          );
+      for (final domain in ['a.example', 'b.example', 'a.example']) {
+        final info = await service(domain).loadServerInfo();
+        expect(
+          info.identity.handleRegistration.registrationPolicy?['domain'],
+          domain,
+        );
+        expect(info.supportsEmailActivationRegistration, isTrue);
+        expect(info.supportsPhoneOtpRegistration, isFalse);
+      }
+      expect(seen, ['a.example', 'b.example', 'a.example']);
+      responseDomain = 'b.example';
+      await expectLater(
+        service('a.example').loadServerInfo(),
+        throwsFormatException,
+      );
+      legacy = true;
+      expect(
+        (await service(
+          'a.example',
+        ).loadServerInfo()).identity.handleRegistration.registrationPolicy,
+        isNull,
+      );
+      await service('a.example').loadServerInfo(existingAccount: true);
+      expect(
+        seen.last,
+        isNull,
+        reason: 'Existing-account verification uses deployment channels',
+      );
+    },
+  );
+
   test(
     'registration check normalizes target and carries invitation and contact',
     () async {
@@ -495,7 +581,9 @@ class _FakeUserClient extends AwikiOnboardingUtilityClient {
   int loadServerInfoCalls = 0;
 
   @override
-  Future<Map<String, Object?>> loadServerInfo() async {
+  Future<Map<String, Object?>> loadServerInfo({
+    String? registrationDomain,
+  }) async {
     loadServerInfoCalls += 1;
     return <String, Object?>{
       'schema_version': 1,

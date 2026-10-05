@@ -183,9 +183,21 @@ class AwikiOnboardingUtilityClient {
   final AwikiOnboardingUtilityHttpClient _serviceClient;
   final Duration timeout;
 
-  Future<Map<String, Object?>> loadServerInfo() async {
+  Future<Map<String, Object?>> loadServerInfo({
+    String? registrationDomain,
+  }) async {
+    final endpoint = Uri.parse(
+      _serviceClient.baseUrl,
+    ).resolve(serverInfoEndpoint);
     final response = await _serviceClient.get(
-      Uri.parse(_serviceClient.baseUrl).resolve(serverInfoEndpoint),
+      registrationDomain == null
+          ? endpoint
+          : endpoint.replace(
+              queryParameters: {
+                ...endpoint.queryParameters,
+                'registration_domain': registrationDomain,
+              },
+            ),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AwikiOnboardingUtilityError(

@@ -1344,6 +1344,7 @@
         "PERF-E2E-012",
         "PROCESS-RESTART-E2E-001",
         "REGISTRATION-ACCOUNT-FIRST-E2E-001",
+        "REGISTRATION-DOMAIN-DISCOVERY-E2E-001",
         "ROOT-TRANSFER-APP-PAIR-E2E-001",
         "ROOT-TRANSFER-E2E-001",
         "SMOKE-E2E-001",
@@ -1379,7 +1380,8 @@
         "restart",
         "display-name-fallback",
         "production-keychain",
-        "avatars"
+        "avatars",
+        "registration-domain-discovery"
       ]
     },
     "registration-account-first": {
@@ -1443,6 +1445,32 @@
       ],
       "caseIds": [
         "AVATAR-E2E-001"
+      ]
+    },
+    "registration-domain-discovery": {
+      "tier": "remote_product_ui",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "requiredTools": [
+        "flutter"
+      ],
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 3,
+      "timeoutMinutes": 6,
+      "cleanupPolicy": "isolated_app_state_only",
+      "remoteTargetPolicy": "configured_same_origin",
+      "allowedHosts": [],
+      "allowedDidDomains": [],
+      "resourceCategories": [
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "REGISTRATION-DOMAIN-DISCOVERY-E2E-001"
       ]
     }
   }
