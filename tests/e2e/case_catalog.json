@@ -3111,9 +3111,9 @@
       "feature": "AWiki Me admin-side Join authorization intermediate state",
       "layer": "remote_product_ui_security",
       "preconditions": "The dedicated phone allowlist is enabled on awiki.info; the protected ignored YAML contains the fixed test phone/code; the runner explicitly enables the E2E-only unattended UserPresencePort; AWiki Me and an exact-revision CLI use independent native Core roots; the authenticated App runtime is connected before the CLI starts Join.",
-      "action": "Bootstrap AWiki Me as the ready admin, start an independent CLI Join request while the App is on its normal authenticated shell, wait for system_notification_changed to refresh the Core Join inbox and expose the global review entry, open that entry to start verification exactly once, compare the independently derived six-digit SAS, authorize Join and automatic management through exactly one test-scoped user-presence decision, and poll the new-device result. The active Join receipt is intermediate: automatic management may still be pending or already registered; full Root readiness is separately attested by the Root suites.",
+      "action": "Bootstrap AWiki Me as the ready admin, request phone verification and submit the protected OTP through two public CLI id register --verification-stdin invocations, require the second process to consume its Core preparation and create an independent CLI Join request without an externally supplied grant while the App is on its normal authenticated shell, wait for system_notification_changed to refresh the Core Join inbox and expose the global review entry, open that entry to start verification exactly once, compare the independently derived six-digit SAS, authorize Join and automatic management through exactly one test-scoped user-presence decision, and poll the new-device result. The active Join receipt is intermediate: automatic management may still be pending or already registered; full Root readiness is separately attested by the Root suites.",
       "exactOracles": [
-        "The independently bootstrapped App admin and CLI requester use distinct fresh native Core roots; the OTP-authenticated request remains pending until the App receives its system notification, refreshes the typed Core Join inbox independently of general message sync, exposes the global review entry, and the user explicitly starts verification.",
+        "The independently bootstrapped App admin and CLI requester use distinct fresh native Core roots; the public CLI phone entry itself requests OTP and consumes the registration preparation in-process without an externally supplied account-verification token; the OTP-authenticated request remains pending until the App receives its system notification, refreshes the typed Core Join inbox independently of general message sync, exposes the global review entry, and the user explicitly starts verification.",
         "The App-visible and CLI-derived six-digit SAS match without recording either value, and exactly one E2E-only user-presence confirmation succeeds without changing the production LocalAuthentication implementation.",
         "Both Registries contain exactly two devices: the joining protocol_device_id is the CLI current active joined device with a consistent member/not-ready or admin/registered state, while the original App device remains the unique current active management-ready admin."
       ],
@@ -3133,6 +3133,7 @@
       "assertionContract": {
         "assertionIds": [
           "DEVICE-JOIN-E2E-002:independent_native_devices_bootstrapped",
+          "DEVICE-JOIN-E2E-002:cli_phone_entry_consumed_registration_join",
           "DEVICE-JOIN-E2E-002:otp_left_join_pending",
           "DEVICE-JOIN-E2E-002:app_global_join_review_entry_received",
           "DEVICE-JOIN-E2E-002:sas_matched_without_secret_evidence",
@@ -3142,6 +3143,7 @@
         "exactOracleAssertions": [
           [
             "DEVICE-JOIN-E2E-002:independent_native_devices_bootstrapped",
+            "DEVICE-JOIN-E2E-002:cli_phone_entry_consumed_registration_join",
             "DEVICE-JOIN-E2E-002:otp_left_join_pending",
             "DEVICE-JOIN-E2E-002:app_global_join_review_entry_received"
           ],
@@ -3156,6 +3158,7 @@
         "negativeCheckAssertions": [
           [
             "DEVICE-JOIN-E2E-002:independent_native_devices_bootstrapped",
+            "DEVICE-JOIN-E2E-002:cli_phone_entry_consumed_registration_join",
             "DEVICE-JOIN-E2E-002:otp_left_join_pending",
             "DEVICE-JOIN-E2E-002:app_global_join_review_entry_received",
             "DEVICE-JOIN-E2E-002:sas_matched_without_secret_evidence",

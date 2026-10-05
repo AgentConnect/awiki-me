@@ -157,7 +157,6 @@ const String _compiledAppPairConfigPath = String.fromEnvironment(
 );
 const String _activationGate = 'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED';
 const String _registrationPurpose = 'awiki.identity.register.v1';
-const String _joinPurpose = 'awiki.device.join.v1';
 const Duration _remoteTimeout = Duration(seconds: 30);
 
 void main() {
@@ -667,26 +666,10 @@ void main() {
           ? await _prepareStep4Groups(container)
           : null;
 
-      final joinOperationId = 'app-join-${_nonce(10)}';
-      final joinOtp = await _requestAndResolveOtp(
-        client: httpClient,
-        config: config,
-        account: account,
-        purpose: _joinPurpose,
+      final started = await cli.startJoinWithPhone(
         handle: handle,
-      );
-      final grant = await _exchangeJoinGrant(
-        client: httpClient,
-        config: config,
-        account: account,
-        handle: handle,
-        otp: joinOtp,
-        operationId: joinOperationId,
-      );
-      final started = await cli.startJoin(
-        did: adminSession.did,
-        operationId: joinOperationId,
-        accountVerificationToken: grant,
+        phone: account.phone,
+        otp: account.fixedOtp,
       );
       if (started.remoteState != 'pending' || started.sas != null) {
         fail('OTP did not leave the joining CLI pending without a SAS.');
@@ -963,6 +946,7 @@ void main() {
           _adminApprovalCaseId,
           phases: const <String>[
             'independent_native_devices_bootstrapped',
+            'cli_phone_entry_consumed_registration_join',
             'otp_left_join_pending',
             'app_global_join_review_entry_received',
             'sas_matched_without_secret_evidence',
@@ -2246,6 +2230,44 @@ class _JoinCli {
     return _JoinProgress.fromData(_data(payload, action: 'device_join_start'));
   }
 
+  Future<_JoinProgress> startJoinWithPhone({
+    required String handle,
+    required String phone,
+    required String otp,
+  }) async {
+    final args = <String>[
+      '--format',
+      'json',
+      'id',
+      'register',
+      '--handle',
+      handle,
+      '--verification-stdin',
+    ];
+    final sent = await _run(
+      args,
+      safeAction: 'cli_join_phone_otp_request',
+      stdinText: jsonEncode(<String, String>{'phone': phone}),
+    );
+    final sentData = _data(sent, action: 'send_handle_otp');
+    if (sentData['verification_state'] != 'otp_sent') {
+      fail('The CLI phone entry did not request registration verification.');
+    }
+    final joined = await _run(
+      args,
+      safeAction: 'cli_join_phone_verification',
+      stdinText: jsonEncode(<String, String>{'phone': phone, 'otp': otp}),
+    );
+    final data = _data(joined, action: 'device_join_start');
+    if (data['verification_state'] != 'join_pending' ||
+        data.containsKey('join_required')) {
+      fail(
+        'The CLI phone entry did not consume its in-process Join preparation.',
+      );
+    }
+    return _JoinProgress.fromData(data);
+  }
+
   Future<_JoinRequest> waitForJoinRequestWake({
     required String expectedSessionId,
     required String expectedDeviceId,
@@ -3420,79 +3442,6 @@ Future<String> _requestAppRegistrationOtp({
     );
   }
   return account.fixedOtp;
-}
-
-Future<String> _exchangeJoinGrant({
-  required http.Client client,
-  required _RemoteJoinEndpointConfig config,
-  required _DedicatedAccount account,
-  required String handle,
-  required String otp,
-  required String operationId,
-}) async {
-  final clientVersionHeader = await _e2eClientVersionHeader();
-  final http.Response response;
-  try {
-    response = await client
-        .post(
-          Uri.parse(
-            config.userServiceUrl,
-          ).resolve('/user-service/v1/auth/account-verification/exchange'),
-          headers: <String, String>{
-            'Content-Type': 'application/json',
-            awikiClientVersionHeaderName: clientVersionHeader,
-          },
-          body: jsonEncode(<String, Object?>{
-            'provider': 'sms',
-            'purpose': _joinPurpose,
-            'phone': account.phone,
-            'code': otp,
-            'target_handle': handle,
-            'target_handle_domain': config.didDomain,
-            'idempotency_scope': operationId,
-          }),
-        )
-        .timeout(_remoteTimeout);
-  } on Object {
-    fail('The Join account-verification exchange failed safely.');
-  }
-  if (response.statusCode != 200) {
-    fail('The Join account-verification exchange was rejected.');
-  }
-  Object? decoded;
-  try {
-    decoded = jsonDecode(response.body);
-  } on Object {
-    fail('The Join account-verification exchange returned invalid JSON.');
-  }
-  if (decoded is! Map ||
-      decoded.keys.toSet().difference(const <Object>{
-        'account_verification_token',
-        'purpose',
-        'expires_at',
-      }).isNotEmpty ||
-      decoded.length != 3 ||
-      decoded['purpose'] != _joinPurpose ||
-      decoded['expires_at'] is! String) {
-    final observedPurpose = decoded is Map && decoded['purpose'] is String
-        ? _appPairSafeToken(decoded['purpose'] as String)
-        : 'missing';
-    final fields = decoded is Map
-        ? (decoded.keys
-              .map((key) => _appPairSafeToken(key.toString()))
-              .toList(growable: false)
-            ..sort())
-        : const <String>[];
-    fail(
-      'The Join account-verification exchange returned an invalid scope '
-      '(purpose=$observedPurpose,fields=${fields.join(',')}).',
-    );
-  }
-  final token = decoded['account_verification_token'];
-  if (token is! String || token.trim().isEmpty) {
-    fail('The Join account-verification exchange returned no grant.');
-  }
-  return token;
 }
 
 Future<String> _e2eClientVersionHeader() async {
