@@ -459,6 +459,7 @@ void main() {
   testWidgets('设置页退出并删除当前数据会删除本地凭证而不显示未实现错误', (tester) async {
     final gateway = FakeAwikiGateway();
     final productLocalStore = FakeProductLocalStore();
+    final cleanedAvatarOwners = <String>[];
     const session = SessionIdentity(
       did: 'did:test:123',
       credentialName: 'default',
@@ -476,6 +477,10 @@ void main() {
         session: session,
         providerOverrides: <Override>[
           productLocalStoreProvider.overrideWithValue(productLocalStore),
+          avatarCacheCleanupProvider.overrideWithValue((owner) async {
+            cleanedAvatarOwners.add(owner);
+            throw StateError('cache-unavailable');
+          }),
         ],
       ),
     );
@@ -513,6 +518,7 @@ void main() {
     expect(gateway.prepareLocalIdentityDataDeletionCalls, 1);
     expect(gateway.completeLocalIdentityDataDeletionCalls, 1);
     expect(productLocalStore.deleteOwnerDataCalls, 1);
+    expect(cleanedAvatarOwners, [session.did]);
     expect(gateway.logoutCalls, 0);
     expect(container.read(uiFeedbackProvider), isNull);
   });

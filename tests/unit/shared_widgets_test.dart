@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+import 'package:awiki_me/src/data/avatar/avatar_image_cache.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
@@ -332,8 +334,18 @@ void main() {
   });
 
   testWidgets('AvatarBadge loads only safe HTTPS avatar URIs', (tester) async {
+    final image = await tester.runAsync(() async {
+      final recorder = ui.PictureRecorder();
+      ui.Canvas(recorder).drawColor(const Color(0xff123456), ui.BlendMode.src);
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(8, 8);
+      picture.dispose();
+      return image;
+    });
+    final cache = _AvatarCache(image!);
     await tester.pumpWidget(
       buildLocalizedTestApp(
+        providerOverrides: [avatarImageCacheProvider.overrideWithValue(cache)],
         home: const CupertinoPageScaffold(
           child: SafeArea(
             child: Column(
@@ -353,8 +365,12 @@ void main() {
       ),
     );
 
-    expect(find.byType(Image), findsOneWidget);
+    await tester.pump();
+    expect(cache.uris, ['https://cdn.example/alice.png']);
+    expect(find.byType(RawImage), findsOneWidget);
     expect(find.text('B'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    image.dispose();
   });
 
   testWidgets('AvatarBadge 使用生成文字和统一主题配色', (tester) async {
@@ -434,3 +450,21 @@ void main() {
 }
 
 void _noop() {}
+
+class _AvatarCache implements AvatarImageCache {
+  _AvatarCache(this.image);
+  final ui.Image image;
+  final uris = <String>[];
+  @override
+  Future<ui.Image?> load(
+    String uri, {
+    int edge = 128,
+    bool force = false,
+  }) async {
+    uris.add(uri);
+    return image.clone();
+  }
+
+  @override
+  void dispose() {}
+}

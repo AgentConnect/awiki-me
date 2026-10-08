@@ -240,6 +240,7 @@ Widget buildLocalizedTestApp({
   final resolvedUpdateService = updateService ?? FakeUpdateService();
   return ProviderScope(
     overrides: <Override>[
+      avatarCacheCleanupProvider.overrideWithValue((_) async {}),
       awikiAccountGatewayProvider.overrideWithValue(resolvedGateway),
       realtimeGatewayProvider.overrideWithValue(resolvedRealtime),
       notificationFacadeProvider.overrideWithValue(resolvedNotification),

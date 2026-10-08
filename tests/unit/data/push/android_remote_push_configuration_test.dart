@@ -73,7 +73,10 @@ void main() {
       expect(
         pubspec,
         contains(
-          RegExp(r'^  flutter_secure_storage: 10\.3\.1$', multiLine: true),
+          RegExp(
+            r'^  flutter_secure_storage:\n    path: third_party/flutter_secure_storage$',
+            multiLine: true,
+          ),
         ),
       );
       expect(

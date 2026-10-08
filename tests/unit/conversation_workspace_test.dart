@@ -1,3 +1,4 @@
+import 'package:awiki_me/src/presentation/shared/profile_avatar.dart';
 // ignore_for_file: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
 
 import 'dart:async';
@@ -205,7 +206,16 @@ void main() {
     final row = find.byKey(
       const Key('conversation-row:dm:peer-scope:zhuocheng'),
     );
-    expect(find.descendant(of: row, matching: find.text('卓诚')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: row,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Text && widget.data == '卓诚' && widget.maxLines == 1,
+        ),
+      ),
+      findsOneWidget,
+    );
     final avatar = tester.widget<AvatarBadge>(
       find.descendant(of: row, matching: find.byType(AvatarBadge)),
     );
@@ -2051,6 +2061,7 @@ void main() {
         }
         ..directoryConversationIdsByQuery = const <String, String>{
           memberHandle: directConversationId,
+          memberDid: directConversationId,
         };
       final messagingService = FakeMessagingService(gateway)
         ..conversationTimelineById[groupConversationId] = <ChatMessage>[
@@ -2170,6 +2181,7 @@ void main() {
       }
       ..directoryConversationIdsByQuery = const <String, String>{
         peerHandle: directConversationId,
+        peerDid: directConversationId,
       };
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
@@ -2971,10 +2983,10 @@ void main() {
     expect(find.text('我'), findsOneWidget);
     final profileBadge = find.byKey(const Key('profile-avatar'));
     expect(profileBadge, findsOneWidget);
-    expect(tester.widget<AvatarBadge>(profileBadge).seed, 'Mia');
-    expect(tester.widget<AvatarBadge>(profileBadge).userId, 'did:test:me');
+    expect(tester.widget<ProfileAvatar>(profileBadge).seed, 'Mia');
+    expect(tester.widget<ProfileAvatar>(profileBadge).userId, 'did:test:me');
     expect(
-      tester.widget<AvatarBadge>(profileBadge).avatarUri,
+      tester.widget<ProfileAvatar>(profileBadge).avatarUri,
       'https://cdn.example/mia.png',
     );
     await tester.tap(find.byKey(const Key('desktop-current-identity-close')));

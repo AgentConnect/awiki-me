@@ -1611,3 +1611,7 @@ recents before first send` 同时核对匹配卡的完整 Handle、昵称和聊�
 fake 服务。以 Flutter tester 执行只证明产品交互编排，不替代真实平台或跨域投递验收。
 完整修复还需要 `awiki-cli-rs2` 的公共 Profile 解析修复进入实际 native SDK；仅更新 Dart
 源码或复用旧原生库不能宣称解决底层问题。正式构建仍使用发布后的 SDK 和精确 registry pin。
+
+### 头像与账号测试夹具
+
+头像展示通过 `avatarImageCacheProvider` 提供已解码图片，组件测试使用内存 fake，并断言安全 URI 与 `RawImage` 投影，不依赖网络、插件或磁盘完成时机。删除账号时的公开头像缓存清理由 composition 边界的 `avatarCacheCleanupProvider` 注入；测试需保留精确 owner 参数、清理失败不阻塞身份删除的断言。导航夹具必须同时提供受测 DID / Handle 的 Core canonical 会话映射，不能让 UI 猜测会话 ID。修改 case catalog 后运行 `dart run tool/validate_test_catalog.dart --write`，再运行不带 `--write` 的校验。
