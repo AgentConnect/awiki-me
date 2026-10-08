@@ -704,16 +704,14 @@ void main() {
       find.byKey(const Key('onboarding-mac-auth-card')),
     );
     expect(authSurface.decoration, isNull);
-    // The scaffold is transparent over the glow canvas, which carries the
-    // list background colour.
+    // Monochrome login: plain paper, no glow canvas behind the form.
     expect(
       tester
-          .widget<AwikiGlassBackdrop>(
-            find.byKey(const Key('onboarding-glass-backdrop')),
-          )
+          .widget<ColoredBox>(find.byKey(const Key('onboarding-paper-surface')))
           .color,
       AwikiMePalette.content,
     );
+    expect(find.byType(AwikiGlassBackdrop), findsNothing);
     expect(
       find.byKey(const Key('onboarding-tenant-switcher-button')),
       findsOneWidget,
@@ -1460,12 +1458,12 @@ void main() {
     final identityTileRect = tester.getRect(identityTile);
     final identitySelectRect = tester.getRect(identitySelectArea);
     final deleteButtonRect = tester.getRect(deleteButton);
-    // Actions fill the tile inside its hairline edge (0.5 on phone glass).
-    expect(identitySelectRect.height, identityTileRect.height - 1);
-    expect(deleteButtonRect.height, identityTileRect.height - 1);
-    expect(identitySelectRect.left, identityTileRect.left + 0.5);
-    expect(deleteButtonRect.right, identityTileRect.right - 0.5);
-    // Phone glass rows drop the divider between select and delete.
+    // Actions fill the tile inside its 1-unit monochrome hairline.
+    expect(identitySelectRect.height, identityTileRect.height - 2);
+    expect(deleteButtonRect.height, identityTileRect.height - 2);
+    expect(identitySelectRect.left, identityTileRect.left + 1);
+    expect(deleteButtonRect.right, identityTileRect.right - 1);
+    // Phone rows drop the divider between select and delete.
     expect(deleteButtonRect.left - identitySelectRect.right, 0);
 
     await tester.ensureVisible(deleteButton);
