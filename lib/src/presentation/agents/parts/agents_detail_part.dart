@@ -137,6 +137,13 @@ class _AgentDetailPane extends ConsumerWidget {
         label: context.l10n.agentRename,
         onPressed: isRenaming ? null : () => onRename(agent),
       ),
+      if (agent.activeState == 'active')
+        _ActionButton(
+          key: const Key('agent-action-avatar'),
+          icon: CupertinoIcons.camera,
+          label: context.l10n.profileAvatarChange,
+          onPressed: () => showAgentAvatarEditor(context, agent),
+        ),
       if (daemonCanUpgrade)
         _ActionButton(
           key: const Key('agent-action-upgrade'),

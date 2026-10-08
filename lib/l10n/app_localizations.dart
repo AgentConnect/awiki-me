@@ -7263,6 +7263,66 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'所选区域较小，头像可能模糊。'**
   String get avatarSmallSelection;
+
+  /// No description provided for @agentAvatarGenerating.
+  ///
+  /// In zh, this message translates to:
+  /// **'头像生成中，当前封面仍可使用。'**
+  String get agentAvatarGenerating;
+
+  /// No description provided for @agentAvatarGenerationFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'头像生成失败，已保留原头像。可以重新生成。'**
+  String get agentAvatarGenerationFailed;
+
+  /// No description provided for @agentAvatarGenerationTimeout.
+  ///
+  /// In zh, this message translates to:
+  /// **'生成服务超时，已保留原头像。可以重新生成。'**
+  String get agentAvatarGenerationTimeout;
+
+  /// No description provided for @agentAvatarGenerationInterrupted.
+  ///
+  /// In zh, this message translates to:
+  /// **'生成任务已中断，已保留原头像。可以重新生成。'**
+  String get agentAvatarGenerationInterrupted;
+
+  /// No description provided for @agentAvatarGeneratedImageInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'生成服务未返回有效动图，已保留原头像。可以重新生成。'**
+  String get agentAvatarGeneratedImageInvalid;
+
+  /// No description provided for @agentAvatarGenerationPrivacy.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅发送名称和以下输入。请勿填写敏感资料。'**
+  String get agentAvatarGenerationPrivacy;
+
+  /// No description provided for @agentAvatarResponsibility.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体职责'**
+  String get agentAvatarResponsibility;
+
+  /// No description provided for @agentAvatarDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'形象描述'**
+  String get agentAvatarDescription;
+
+  /// No description provided for @agentAvatarRegenerate.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新生成头像'**
+  String get agentAvatarRegenerate;
+
+  /// No description provided for @agentAvatarImageRejected.
+  ///
+  /// In zh, this message translates to:
+  /// **'请选择 5 MB 内的 GIF 动图、PNG、JPEG 或静态 WebP。'**
+  String get agentAvatarImageRejected;
 }
 
 class _AppLocalizationsDelegate

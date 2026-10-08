@@ -48,6 +48,7 @@ import 'agent_visual_status.dart';
 import 'acp_session_provider.dart';
 import 'agent_ui_messages.dart';
 import 'agents_provider.dart';
+import 'agent_avatar_editor.dart';
 import 'personal_agent_feature_visibility.dart';
 import 'skill_onboarding_provider.dart';
 

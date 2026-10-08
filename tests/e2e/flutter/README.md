@@ -30,7 +30,10 @@ dart run tests/e2e/runner.dart --case full
 dart run tests/e2e/runner.dart --case display-name-fallback
 dart run tests/e2e/runner.dart --case performance
 dart run tests/e2e/runner.dart --case personal-agent
+dart run tests/e2e/runner.dart --case agent-avatars --config <local-awiki-info-config.yaml>
 ```
+
+`agent-avatars` requires the new User Service API and managed PNG/GIF Nginx routes. A reviewed fixture helper can be supplied as a JSON argv array in `AWIKI_E2E_AGENT_AVATAR_FIXTURE_COMMAND`. After App registration, the scenario issues daemon/runtime tokens through the production Inventory port and sends each token to that helper on stdin only. The helper exchanges real manifest-backed agents, returns only the DID, and maintains an exact fixture ledger. Teardown removes those agents through the production App Inventory port, verifies their absence from the active list, and asks the helper to `verify_removed` for the exact DIDs. Archived records and controller accounts remain subject to the environment's retention policy; the narrower System Test/Recovery privileged cleanup namespaces must not be widened for App-created agents. The App identity remains owned by App Core. Tokens must never enter argv, helper diagnostics, or reports. Alternatively, `AWIKI_E2E_AGENT_AVATAR_DID` selects an explicitly prepared disposable agent owned by the App account. Both paths require avatar version `0` and source `default`; no arbitrary existing agent is edited. The desktop runner currently declares macOS/Linux support; a direct Windows Flutter integration invocation must retain its actual platform, isolated App root, protected OTP config, and scenario attestation, and does not attest the full desktop suite.
 
 When changing macOS signing, entitlements, or platform secure storage, also run
 the direct native smoke:

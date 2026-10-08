@@ -68,6 +68,7 @@ flutter:
   assets:
     - assets/branding/
     - assets/branding/agents/
+    - assets/avatars/agents/
     - assets/config/
     - assets/security/
     - assets/icons/

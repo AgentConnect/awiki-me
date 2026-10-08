@@ -321,6 +321,9 @@ const List<String> _desktopCliPeerRestartCaseIds = <String>[
   'IDENTITY-DELETE-E2E-001',
 ];
 const List<String> _desktopAvatarCaseIds = <String>['AVATAR-E2E-001'];
+const List<String> _desktopAgentAvatarCaseIds = <String>[
+  'AGENT-AVATAR-E2E-001',
+];
 const List<String> _desktopCliPeerDisplayNameFallbackCaseIds = <String>[
   'DISPLAY-NAME-E2E-002',
 ];

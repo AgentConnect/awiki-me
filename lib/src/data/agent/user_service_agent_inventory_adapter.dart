@@ -3,6 +3,10 @@ import 'dart:io' show Platform;
 import '../../application/config/awiki_environment_config.dart';
 import '../../application/ports/agent_inventory_port.dart';
 import '../../application/ports/agent_availability_port.dart';
+import '../../application/ports/agent_avatar_port.dart';
+import '../../domain/entities/agent/agent_avatar.dart';
+import 'dart:typed_data';
+import 'dart:convert';
 import '../../domain/entities/agent/agent_availability.dart';
 import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
@@ -14,7 +18,8 @@ class UserServiceAgentInventoryAdapter
     implements
         AgentInventoryPort,
         VersionedAgentInventoryMutationPort,
-        AgentAvailabilityPort {
+        AgentAvailabilityPort,
+        AgentAvatarPort {
   UserServiceAgentInventoryAdapter({
     required String userServiceUrl,
     AwikiOnboardingUtilityHttpClient? client,
@@ -88,6 +93,57 @@ class UserServiceAgentInventoryAdapter
   final AwikiEnvironmentConfig _environment;
   final String? Function()? _bearerTokenProvider;
   final AuthenticatedUserServiceRpcClient? _authenticatedClient;
+
+  @override
+  Future<AgentAvatarCapabilities> loadAgentAvatar(String agentDid) async {
+    final result = await _rpcCall(
+      path: inventoryEndpoint,
+      method: 'get_avatar',
+      params: {'agent_did': agentDid},
+    );
+    return AgentAvatarCapabilities(
+      avatar: AgentAvatar.fromJson(
+        Map<String, Object?>.from(result['avatar'] as Map),
+      ),
+      uploadEnabled: result['upload_enabled'] == true,
+      generationEnabled: result['generation_enabled'] == true,
+    );
+  }
+
+  @override
+  Future<AgentAvatarMutation> setAgentAvatar({
+    required String agentDid,
+    required String requestId,
+    required String expectedVersion,
+    required String action,
+    String? presetId,
+    Uint8List? image,
+    String? name,
+    String? responsibility,
+    String? imageDescription,
+  }) async {
+    final result = await _rpcCall(
+      path: inventoryEndpoint,
+      method: 'set_avatar',
+      params: {
+        'agent_did': agentDid,
+        'request_id': requestId,
+        'expected_version': expectedVersion,
+        'action': action,
+        if (presetId != null) 'preset_id': presetId,
+        if (image != null) 'image_base64': base64Encode(image),
+        if (name != null) 'name': name,
+        if (responsibility != null) 'responsibility': responsibility,
+        if (imageDescription != null) 'image_description': imageDescription,
+      },
+    );
+    return AgentAvatarMutation(
+      avatar: AgentAvatar.fromJson(
+        Map<String, Object?>.from(result['avatar'] as Map),
+      ),
+      inventoryVersion: result['inventory_version'] as String,
+    );
+  }
 
   @override
   Future<List<AgentAvailability>> getAgentAvailability(

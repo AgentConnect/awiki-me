@@ -4158,4 +4158,41 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get avatarSmallSelection =>
       'The selected area is small and may look blurry.';
+
+  @override
+  String get agentAvatarGenerating =>
+      'Generating an avatar. The current cover remains available.';
+
+  @override
+  String get agentAvatarGenerationFailed =>
+      'Generation failed. Your previous avatar is preserved. You can try again.';
+
+  @override
+  String get agentAvatarGenerationTimeout =>
+      'The generation service timed out. Your previous avatar is preserved. You can try again.';
+
+  @override
+  String get agentAvatarGenerationInterrupted =>
+      'Generation was interrupted. Your previous avatar is preserved. You can try again.';
+
+  @override
+  String get agentAvatarGeneratedImageInvalid =>
+      'The generation service did not return a valid animation. Your previous avatar is preserved. You can try again.';
+
+  @override
+  String get agentAvatarGenerationPrivacy =>
+      'Only the name and inputs below are sent. Do not include sensitive information.';
+
+  @override
+  String get agentAvatarResponsibility => 'Agent responsibility';
+
+  @override
+  String get agentAvatarDescription => 'Appearance description';
+
+  @override
+  String get agentAvatarRegenerate => 'Regenerate avatar';
+
+  @override
+  String get agentAvatarImageRejected =>
+      'Choose a GIF animation, PNG, JPEG or static WebP up to 5 MB.';
 }

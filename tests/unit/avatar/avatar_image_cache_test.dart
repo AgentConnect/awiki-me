@@ -104,6 +104,68 @@ void main() {
   });
 
   testWidgets(
+    'agent byte downloads share the four-slot bound and deduplicate GIFs',
+    (tester) async {
+      await tester.runAsync(() async {
+        final gif = File(
+          'assets/avatars/agents/financing.gif',
+        ).readAsBytesSync();
+        final gates = <Completer<void>>[];
+        var active = 0;
+        var peak = 0;
+        final client = Client((_) async {
+          final gate = Completer<void>();
+          gates.add(gate);
+          active++;
+          if (active > peak) peak = active;
+          await gate.future;
+          active--;
+          return Response(gif, mime: 'image/gif');
+        });
+        final cache = PlatformAvatarImageCache(
+          'animated',
+          directory: root,
+          client: client,
+        );
+        final requests = [
+          for (var i = 0; i < 6; i++)
+            cache.loadBytes('https://example.com/$i.gif'),
+        ];
+        final duplicate = cache.loadBytes('https://example.com/0.gif');
+        while (gates.length < 4) {
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+        }
+        expect(gates, hasLength(4));
+        expect(client.urls, hasLength(4));
+        for (final gate in List<Completer<void>>.from(gates)) {
+          gate.complete();
+        }
+        while (gates.length < 6) {
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+        }
+        for (final gate in gates.skip(4)) {
+          gate.complete();
+        }
+        final values = await Future.wait([...requests, duplicate]);
+        expect(values, everyElement(isNotNull));
+        expect(values.first, gif);
+        expect(peak, 4);
+        expect(client.urls, hasLength(6));
+        expect(await cache.loadBytes('https://example.com/0.gif'), gif);
+        expect(client.urls, hasLength(6));
+        expect(
+          client.requests.every(
+            (request) => request.headers.value('authorization') == null,
+          ),
+          isTrue,
+        );
+        cache.dispose();
+        expect(await cache.loadBytes('https://example.com/0.gif'), isNull);
+      });
+    },
+  );
+
+  testWidgets(
     'full disk cache evicts oldest bytes including metadata before new writes',
     (tester) async {
       await tester.runAsync(() async {

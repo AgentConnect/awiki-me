@@ -12,6 +12,9 @@ import '../../domain/entities/group_summary.dart';
 import '../../l10n/l10n.dart';
 import 'awiki_me_design.dart';
 import 'default_avatar_generator.dart';
+import 'agent_avatar_image.dart';
+import '../agents/agents_provider.dart';
+import '../../domain/entities/agent/agent_avatar.dart';
 
 final avatarImageCacheProvider = Provider<AvatarImageCache>((ref) {
   final epoch = ref.watch(sessionProvider.select((state) => state.activeEpoch));
@@ -23,9 +26,33 @@ final avatarImageCacheProvider = Provider<AvatarImageCache>((ref) {
 typedef AvatarReferenceInput = ({String? did, String? uri, String? thumbnail});
 typedef AvatarReference = ({String? uri, String? thumbnail});
 
+final avatarIsAgentProvider = Provider.family<bool, String?>((ref, did) {
+  if (did == null) return false;
+  final owned = ref.watch(agentsProvider.select((state) => state.agents));
+  if (owned.any((agent) => agent.agentDid == did)) return true;
+  final peer = ref.watch(
+    peerDisplayProfileProvider.select((state) => state.forDid(did)),
+  );
+  final own = ref.watch(profileProvider.select((state) => state.profile));
+  return peer?.subjectType == 'agent' ||
+      (own?.did == did && own?.identityType.isAgent == true);
+});
+
 /// An authoritative null must not fall back to an older widget snapshot.
 final avatarReferenceProvider =
     Provider.family<AvatarReference, AvatarReferenceInput>((ref, input) {
+      final agents = ref.watch(agentsProvider.select((state) => state.agents));
+      for (final agent in agents) {
+        if (agent.agentDid == input.did && agent.avatar != null) {
+          final avatar = agent.avatar!;
+          return (
+            uri: avatar.isGenerating
+                ? avatar.posterUri
+                : avatar.animatedUri ?? avatar.posterUri,
+            thumbnail: avatar.posterUri,
+          );
+        }
+      }
       final own = ref.watch(
         profileProvider.select(
           (state) => input.did != null && state.profile?.did == input.did
@@ -55,6 +82,8 @@ class AvatarBadge extends ConsumerStatefulWidget {
     this.avatarThumbnailUri,
     this.userId,
     this.groupId,
+    this.isAgent = false,
+    this.staticOnly = false,
   });
   final String seed;
   final double size;
@@ -63,6 +92,8 @@ class AvatarBadge extends ConsumerStatefulWidget {
   final String? avatarThumbnailUri;
   final String? userId;
   final String? groupId;
+  final bool isAgent;
+  final bool staticOnly;
   @override
   ConsumerState<AvatarBadge> createState() => _AvatarBadgeState();
 }
@@ -201,6 +232,46 @@ class _AvatarBadgeState extends ConsumerState<AvatarBadge> {
     );
     final main = reference.uri;
     final thumbnail = reference.thumbnail;
+    final peer = ref.watch(
+      peerDisplayProfileProvider.select((state) => state.forDid(widget.userId)),
+    );
+    final own = ref.watch(profileProvider.select((state) => state.profile));
+    final inventoryAgent = ref.watch(
+      agentsProvider.select(
+        (state) => state.agents
+            .where((agent) => agent.agentDid == widget.userId)
+            .firstOrNull,
+      ),
+    );
+    final agentShape =
+        widget.isAgent ||
+        inventoryAgent != null ||
+        peer?.subjectType == 'agent' ||
+        (widget.userId != null &&
+            own?.did == widget.userId &&
+            own?.identityType.isAgent == true);
+    if (agentShape && widget.groupId == null) {
+      _imageTimer?.cancel();
+      final preset = AgentAvatar.defaultPreset(
+        inventoryAgent?.avatar?.agentId ?? widget.userId ?? widget.seed,
+      );
+      final defaultPoster = '/avatars/presets/$preset.png';
+      final defaultAnimated = '/avatars/presets/$preset.gif';
+      return AgentAvatarImage(
+        uri: main ?? defaultAnimated,
+        posterUri: thumbnail ?? main ?? defaultPoster,
+        staticOnly:
+            widget.staticOnly || inventoryAgent?.avatar?.isGenerating == true,
+        size: widget.size,
+        fallback: _FallbackAvatarBadge(
+          seed: widget.seed,
+          size: widget.size,
+          labelOverride: widget.labelOverride,
+          userId: widget.userId,
+          isAgent: true,
+        ),
+      );
+    }
     final raw = main == null
         ? null
         : widget.size <= 64
@@ -246,12 +317,14 @@ class _FallbackAvatarBadge extends StatelessWidget {
     required this.size,
     this.labelOverride,
     this.userId,
+    this.isAgent = false,
   });
 
   final String seed;
   final double size;
   final String? labelOverride;
   final String? userId;
+  final bool isAgent;
 
   @override
   Widget build(BuildContext context) {
@@ -266,7 +339,7 @@ class _FallbackAvatarBadge extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: theme.avatarBackground,
-        borderRadius: BorderRadius.circular(size / 2),
+        borderRadius: BorderRadius.circular(isAgent ? size * .24 : size / 2),
       ),
       alignment: Alignment.center,
       child: Text(
@@ -296,6 +369,7 @@ class _GroupAvatarTiles extends StatelessWidget {
         seed: members.first.handle ?? members.first.did,
         userId: members.first.did,
         size: size,
+        staticOnly: true,
       );
     }
     Widget tile(GroupAvatarMember member) => AvatarBadge(
@@ -303,6 +377,7 @@ class _GroupAvatarTiles extends StatelessWidget {
       seed: member.handle ?? member.did,
       userId: member.did,
       size: (size - 6) / 2,
+      staticOnly: true,
     );
     return Semantics(
       label: context.l10n.groupAvatarLabel,

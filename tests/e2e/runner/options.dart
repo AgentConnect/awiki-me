@@ -100,7 +100,7 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|handle-recovery-state-machine|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair-recovery-registration-resume|multi-device-app-pair-recovery-retirement-ordinary-rejoin|identity-deletion-recovery-guard|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|multi-device-app-pair-paging-recovery|step4-revoke-mls|multi-device-app-pair-later-admin-grant|root-transfer|full|messaging|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|avatars|personal-agent
+  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|handle-recovery-state-machine|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair-recovery-registration-resume|multi-device-app-pair-recovery-retirement-ordinary-rejoin|identity-deletion-recovery-guard|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|multi-device-app-pair-paging-recovery|step4-revoke-mls|multi-device-app-pair-later-admin-grant|root-transfer|full|messaging|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|avatars|agent-avatars|personal-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
                                unattended real App/CLI message-driven
@@ -197,6 +197,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   restart(_desktopCliPeerRestartCaseIds),
   displayNameFallback(_desktopCliPeerDisplayNameFallbackCaseIds),
   avatars(_desktopAvatarCaseIds),
+  agentAvatars(_desktopAgentAvatarCaseIds),
   personalAgent(_personalAgentCaseIds);
 
   const DesktopE2eCase(this._caseIds);
@@ -275,6 +276,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.displayNameFallback =>
         'integration_test/desktop_cli_peer_display_name_fallback_test.dart',
       DesktopE2eCase.avatars => 'integration_test/desktop_avatar_test.dart',
+      DesktopE2eCase.agentAvatars =>
+        'integration_test/desktop_agent_avatar_test.dart',
       DesktopE2eCase.personalAgent =>
         'integration_test/personal_agent_full_ui_test.dart',
     };
@@ -283,6 +286,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   @override
   String get caseName {
     return switch (this) {
+      DesktopE2eCase.agentAvatars => 'agent-avatars',
       DesktopE2eCase.personalAgent => 'personal-agent',
 
       DesktopE2eCase.displayNameFallback => 'display-name-fallback',
@@ -599,6 +603,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       'cold-restart' ||
       'cold_restart' => DesktopE2eCase.restart,
       'avatars' => DesktopE2eCase.avatars,
+      'agent-avatars' => DesktopE2eCase.agentAvatars,
       'display-name-fallback' ||
       'display_name_fallback' ||
       'handle-fallback' ||

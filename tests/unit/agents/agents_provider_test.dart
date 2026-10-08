@@ -16,6 +16,7 @@ import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/personal_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_avatar.dart';
 import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
@@ -39,6 +40,49 @@ const _daemonSubkeyProposal = <String, Object?>{
 };
 
 void main() {
+  test(
+    'late avatar reads do not replace a newer committed projection or invent membership',
+    () async {
+      final container = _container(FakeAgentControlService());
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+      final base = _accountAgentInventorySnapshot(includeRuntime: false);
+      await controller.applyAccountStateSnapshots(
+        inventory: ProductAgentInventorySnapshot(
+          binding: base.binding,
+          domainVersion: '1',
+          refreshedAt: base.refreshedAt,
+          agents: [
+            const ProductAgentInventoryItem(
+              agentDid: 'did:agent:avatar',
+              activeState: 'active',
+              payloadJson:
+                  '{"agent_kind":"runtime","display_name":"Avatar agent"}',
+            ),
+          ],
+        ),
+        isSessionCurrent: () => true,
+      );
+      AgentAvatar image(String version, String preset) => AgentAvatar(
+        agentId: 'stable',
+        source: 'preset',
+        posterUri: '/avatars/presets/$preset.png',
+        version: version,
+        status: 'ready',
+        presetId: preset,
+      );
+      controller.applyAvatarProjection('did:agent:avatar', image('5', 'legal'));
+      controller.applyAvatarProjection(
+        'did:agent:avatar',
+        image('4', 'schedule'),
+      );
+      controller.applyAvatarProjection('did:agent:absent', image('9', 'bp'));
+      final agents = container.read(agentsProvider).agents;
+      expect(agents, hasLength(1));
+      expect(agents.single.avatar?.version, '5');
+      expect(agents.single.avatar?.presetId, 'legal');
+    },
+  );
   test(
     'account-state keeps retired runtime manageable while preserving its lifecycle',
     () async {

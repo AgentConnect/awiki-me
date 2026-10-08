@@ -12,6 +12,7 @@ import '../../l10n/l10n.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../profile/peer_display_profile_provider.dart';
 import 'avatar_badge.dart';
+import 'agent_avatar_image.dart';
 import 'awiki_me_design.dart';
 
 /// Profile-only interaction; list/message avatars keep their existing actions.
@@ -45,6 +46,7 @@ class _ProfileAvatarState extends ConsumerState<ProfileAvatar> {
       thumbnail: null as String?,
     );
     final reference = ref.watch(avatarReferenceProvider(input));
+    final isAgent = ref.watch(avatarIsAgentProvider(widget.userId));
     final editable = widget.onEdit != null;
     final active = editable || safeAvatarUri(reference.uri) != null;
     final label = editable
@@ -101,7 +103,10 @@ class _ProfileAvatarState extends ConsumerState<ProfileAvatar> {
               onTap: active ? activate : null,
               child: Container(
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
+                  shape: isAgent ? BoxShape.rectangle : BoxShape.circle,
+                  borderRadius: isAgent
+                      ? BorderRadius.circular(widget.size * .24)
+                      : null,
                   border: _focus
                       ? Border.all(color: theme.primaryDark, width: 2)
                       : null,
@@ -118,9 +123,14 @@ class _ProfileAvatarState extends ConsumerState<ProfileAvatar> {
                     if (editable && (_hover || _focus))
                       Positioned.fill(
                         child: DecoratedBox(
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Color(0x66000000),
+                          decoration: BoxDecoration(
+                            shape: isAgent
+                                ? BoxShape.rectangle
+                                : BoxShape.circle,
+                            borderRadius: isAgent
+                                ? BorderRadius.circular(widget.size * .24)
+                                : null,
+                            color: const Color(0x66000000),
                           ),
                           child: Icon(
                             CupertinoIcons.camera,
@@ -227,8 +237,9 @@ class _AvatarPreviewDialogState extends ConsumerState<AvatarPreviewDialog> {
       if (next != _epoch && mounted) Navigator.of(context).pop();
     });
     final reference = ref.watch(avatarReferenceProvider(widget.input));
+    final isAgent = ref.watch(avatarIsAgentProvider(widget.input.did));
     final uri = safeAvatarUri(reference.uri)?.toString();
-    if (_uri != uri || (_generation == 0)) {
+    if (!isAgent && (_uri != uri || (_generation == 0))) {
       _uri = uri;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _uri == uri) unawaited(_load(uri));
@@ -280,7 +291,16 @@ class _AvatarPreviewDialogState extends ConsumerState<AvatarPreviewDialog> {
                       width: side,
                       height: side,
                       child: Center(
-                        child: _loading
+                        child: isAgent
+                            ? AgentAvatarImage(
+                                uri: reference.uri,
+                                posterUri: reference.thumbnail,
+                                size: side,
+                                fallback: const Icon(
+                                  CupertinoIcons.person_crop_square,
+                                ),
+                              )
+                            : _loading
                             ? const CupertinoActivityIndicator()
                             : _image != null && uri != null && _loadedUri == uri
                             ? RawImage(

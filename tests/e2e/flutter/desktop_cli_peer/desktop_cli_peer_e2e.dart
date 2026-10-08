@@ -10,6 +10,9 @@ import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
+import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/agent_avatar_editor.dart';
+import 'package:awiki_me/src/presentation/shared/agent_avatar_image.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/attachment_open_service.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
@@ -88,6 +91,7 @@ import 'support/ui_oracles.dart';
 
 part 'flows/attachment_flow.dart';
 part 'flows/avatar_flow.dart';
+part 'flows/agent_avatar_flow.dart';
 part 'flows/contact_flow.dart';
 part 'flows/conversation_correctness_flow.dart';
 part 'flows/direct_message_flow.dart';
@@ -118,6 +122,7 @@ enum DesktopCliPeerIntegrationCase {
   processRestart,
   displayNameFallback,
   avatars,
+  agentAvatars,
   performance;
 
   static DesktopCliPeerIntegrationCase parse(String value) {
@@ -158,6 +163,7 @@ enum DesktopCliPeerIntegrationCase {
       'cold-restart' ||
       'cold_restart' => DesktopCliPeerIntegrationCase.processRestart,
       'avatars' => DesktopCliPeerIntegrationCase.avatars,
+      'agent-avatars' => DesktopCliPeerIntegrationCase.agentAvatars,
       'display-name-fallback' ||
       'display_name_fallback' ||
       'handle-fallback' ||
@@ -211,7 +217,8 @@ enum DesktopCliPeerIntegrationCase {
       this != DesktopCliPeerIntegrationCase.contactFirst &&
       this != DesktopCliPeerIntegrationCase.inboundFirst &&
       this != DesktopCliPeerIntegrationCase.displayNameFallback &&
-      this != DesktopCliPeerIntegrationCase.avatars;
+      this != DesktopCliPeerIntegrationCase.avatars &&
+      this != DesktopCliPeerIntegrationCase.agentAvatars;
 }
 
 DesktopCliPeerIntegrationCase desktopCliPeerCaseFromRunConfig() =>
@@ -338,6 +345,10 @@ void runDesktopCliPeerE2e({
 
       if (selectedCase == DesktopCliPeerIntegrationCase.avatars) {
         await _verifyAvatarEditing(robot, tester, config);
+        return;
+      }
+      if (selectedCase == DesktopCliPeerIntegrationCase.agentAvatars) {
+        await _verifyAgentAvatarEditing(robot, tester, config, session);
         return;
       }
 

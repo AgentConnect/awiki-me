@@ -1,0 +1,257 @@
+{
+  "schema_version": 1,
+  "development_generated_static_presets": [
+    {
+      "id": "research",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-50ddf52a-40ef-41bb-9822-8ccb423d8656.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a teal rounded triangular head wearing thin black round glasses, inquisitive brows. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/research.png",
+      "animated_path": "assets/avatars/agents/research.gif"
+    },
+    {
+      "id": "coding",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-bf4a21d4-f339-463d-8992-0e9d5ea8f292.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a cobalt-blue softly rounded cube head with a tiny dark visor-like brow and two friendly eyes, no symbols. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/coding.png",
+      "animated_path": "assets/avatars/agents/coding.gif"
+    },
+    {
+      "id": "writing",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-859119c6-d890-44dd-b7fe-bc6a97f9479c.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a warm coral oval head wearing a small dark writer's beret. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/writing.png",
+      "animated_path": "assets/avatars/agents/writing.gif"
+    },
+    {
+      "id": "design",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-1406f4bc-a8af-484b-94f5-bb5a66197df3.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a lilac rounded diamond head wearing a small raspberry beret at an angle. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/design.png",
+      "animated_path": "assets/avatars/agents/design.gif"
+    },
+    {
+      "id": "data",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-fc360140-0776-4518-806a-bfd94bd49132.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a turquoise softly rounded cube head with small square dark glasses. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/data.png",
+      "animated_path": "assets/avatars/agents/data.gif"
+    },
+    {
+      "id": "finance",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-89560480-e832-4a6b-a2fd-b5b5f41f2c18.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: an amber round head wearing thin dark oval glasses and subtly raised brows. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/finance.png",
+      "animated_path": "assets/avatars/agents/finance.gif"
+    },
+    {
+      "id": "marketing",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-15756131-8a0d-446b-ae61-ed0dcb724242.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a bright pink rounded five-point star head with enthusiastic friendly eyes. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/marketing.png",
+      "animated_path": "assets/avatars/agents/marketing.gif"
+    },
+    {
+      "id": "sales",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-91dccea9-6239-48eb-8e0b-38e719b55b19.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: an orange softly rounded square head with one slightly raised brow and a small confident smile. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/sales.png",
+      "animated_path": "assets/avatars/agents/sales.gif"
+    },
+    {
+      "id": "support",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-12340922-ca28-409c-b84e-98d34ed2b34d.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a sky-blue round head wearing a slim charcoal headset with a small microphone beside its cheek. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/support.png",
+      "animated_path": "assets/avatars/agents/support.gif"
+    },
+    {
+      "id": "operations",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-9eb8973b-32d6-4077-8145-2bba99383841.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a steel-blue rounded square head wearing a small orange safety helmet. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/operations.png",
+      "animated_path": "assets/avatars/agents/operations.gif"
+    },
+    {
+      "id": "product",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-1846a799-8b67-4ebc-b2f9-f806e8b32497.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a mint-green smooth egg-shaped head with a tiny upward curved hair tuft and curious eyes. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/product.png",
+      "animated_path": "assets/avatars/agents/product.gif"
+    },
+    {
+      "id": "strategy",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-d5a27d5a-5635-4a30-bdfc-7e4215cad110.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a deep-violet rounded diamond head wearing thin dark rectangular glasses. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/strategy.png",
+      "animated_path": "assets/avatars/agents/strategy.gif"
+    },
+    {
+      "id": "learning",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-c57f34af-5875-42af-8aa6-3cad7eb4b15f.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a sunny yellow softly rounded triangular head wearing a tiny navy graduation cap. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/learning.png",
+      "animated_path": "assets/avatars/agents/learning.gif"
+    },
+    {
+      "id": "translation",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-b31de56c-3496-4b6f-882f-4fd736cfbcaf.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a pale aqua round head wearing a slim dark single-ear translator headset. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/translation.png",
+      "animated_path": "assets/avatars/agents/translation.gif"
+    },
+    {
+      "id": "travel",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-863a9c7e-0f04-43cb-a6b6-1a48887d6ebc.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a turquoise softly rounded triangular head wearing a small tan explorer hat. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/travel.png",
+      "animated_path": "assets/avatars/agents/travel.gif"
+    },
+    {
+      "id": "health",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-337a1ad9-db13-41c8-840b-5e7592a96a23.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a soft mint-green round head wearing a tiny white nurse cap without any symbols. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/health.png",
+      "animated_path": "assets/avatars/agents/health.gif"
+    },
+    {
+      "id": "security",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-ec87f3b3-937f-4445-868e-2a36ba7dd175.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a navy-blue rounded square head wearing a small silver futuristic brow guard. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/security.png",
+      "animated_path": "assets/avatars/agents/security.gif"
+    },
+    {
+      "id": "testing",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-80539091-c337-4dbc-a6e9-c2f7be475348.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a lemon-yellow softly rounded square head wearing thin black square glasses, curious asymmetric brows. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/testing.png",
+      "animated_path": "assets/avatars/agents/testing.gif"
+    },
+    {
+      "id": "recruiting",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-d876540b-c32d-4c69-b00d-34fdc840af10.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a peach rounded triangular head with gentle eyes and a tiny dark-blue side hair curl. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/recruiting.png",
+      "animated_path": "assets/avatars/agents/recruiting.gif"
+    },
+    {
+      "id": "news",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-7ae49b0c-8797-463e-8e37-52a75ebb6ffa.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a deep coral rounded cube head wearing a small navy newsboy cap. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/news.png",
+      "animated_path": "assets/avatars/agents/news.gif"
+    },
+    {
+      "id": "music",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-86a36dc3-a520-4a5a-a5de-6897c39953b7.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a purple round head wearing chunky charcoal headphones with subtle pink earcups. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/music.png",
+      "animated_path": "assets/avatars/agents/music.gif"
+    },
+    {
+      "id": "science",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-b28d4662-73e8-4d5e-aafb-d09fa38fa5b6.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a pale lavender round head wearing clear circular laboratory goggles with a slim dark rim. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/science.png",
+      "animated_path": "assets/avatars/agents/science.gif"
+    },
+    {
+      "id": "food",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-482ae53d-5539-4e2a-b08a-35519d43d0d2.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: an apricot rounded triangular head wearing a small white chef hat. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/food.png",
+      "animated_path": "assets/avatars/agents/food.gif"
+    },
+    {
+      "id": "shopping",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-a694056d-6c13-46da-af0e-d9ccef1f1d4b.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a raspberry-pink rounded diamond head wearing a small cream sunhat. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/shopping.png",
+      "animated_path": "assets/avatars/agents/shopping.gif"
+    },
+    {
+      "id": "planning",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-6f0e20e8-ad4b-4abf-98bc-866dafcf72ac.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a periwinkle softly rounded square head with a small neatly parted navy hair tuft. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/planning.png",
+      "animated_path": "assets/avatars/agents/planning.gif"
+    },
+    {
+      "id": "knowledge",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-7baa557e-85ad-4278-bbbe-4f0178684db2.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: an emerald softly rounded triangular head wearing thin dark round spectacles. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/knowledge.png",
+      "animated_path": "assets/avatars/agents/knowledge.gif"
+    },
+    {
+      "id": "creative",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-3496afb0-25a5-498e-ba63-d0f441e14eca.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a soft peach rounded five-point star head wearing a tiny violet beret. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/creative.png",
+      "animated_path": "assets/avatars/agents/creative.gif"
+    },
+    {
+      "id": "assistant",
+      "source_path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a10799-e572-7143-ae58-5b093cb59920\\exec-5cf7cec8-9960-4bfe-a4f3-3a6e513d7b52.png",
+      "prompt": "Use case: stylized-concept. Asset type: one packaged AI agent avatar, square 1:1 transparent PNG. Input images 1–4 are STYLE AND COMPOSITION REFERENCES: the user's original yellow triangle with glasses, blue sphere with headphones, red cube with beret, purple star with monocle. Make a new matching member of THIS exact avatar family, with the same smooth glossy toy-like 3D rendering, large simple white oval eyes and small black pupils, subtle friendly facial expression, vivid color, rounded geometric silhouette. Subject: a bright azure round head with a little raised curved hair tuft and a warm friendly expression. Composition: ONLY ONE FLOATING HEAD / GEOMETRIC FACE, front view with a tiny 3/4 dimensional angle, filling approximately 85% of the square with small even safe margins. Accessories attach directly to the head. The entire shape is the head: absolutely no body, neck, shoulders, torso, arms, hands, legs, feet, handheld objects or scene. Match the compact clean reference icons, not a full-body mascot or bust. Smooth polished surface, soft studio highlights from upper left, gentle dimensional shading, no grain or fur. Clear at 48px. Transparent alpha background. No text, letters, numbers, logos, border, base, pedestal, ground shadow, checkerboard pattern or watermark.",
+      "packaged_path": "assets/avatars/agents/assistant.png",
+      "animated_path": "assets/avatars/agents/assistant.gif"
+    }
+  ],
+  "original_design_presets": [
+    {
+      "id": "financing",
+      "design_key": "AWikiStore.BOT_AVATARS[@financing.agent]",
+      "gif": "assets/avatars/agents/financing.gif",
+      "poster": "assets/avatars/agents/financing.png",
+      "original_bytes_preserved": true
+    },
+    {
+      "id": "schedule",
+      "design_key": "AWikiStore.BOT_AVATARS[@schedule.agent]",
+      "gif": "assets/avatars/agents/schedule.gif",
+      "poster": "assets/avatars/agents/schedule.png",
+      "original_bytes_preserved": true
+    },
+    {
+      "id": "bp",
+      "design_key": "AWikiStore.BOT_AVATARS[@bp.agent]",
+      "gif": "assets/avatars/agents/bp.gif",
+      "poster": "assets/avatars/agents/bp.png",
+      "original_bytes_preserved": true
+    },
+    {
+      "id": "legal",
+      "design_key": "AWikiStore.BOT_AVATARS[@legal.agent]",
+      "gif": "assets/avatars/agents/legal.gif",
+      "poster": "assets/avatars/agents/legal.png",
+      "original_bytes_preserved": true
+    }
+  ],
+  "asset_revision": {
+    "date": "2026-10-05",
+    "style": "head-only geometric 3D avatars matching the four original design references",
+    "generation_tool": "built-in imagegen",
+    "reference_preset_ids": [
+      "financing",
+      "schedule",
+      "bp",
+      "legal"
+    ],
+    "backup_path": "D:\\awiki-backups\\agent-avatars\\20261005-092140-before-heads"
+  },
+  "animation_revision": {
+    "date": "2026-10-05",
+    "method": "FFmpeg encoding of the ImageGen head artwork with subtle periodic tilt and bob",
+    "encoder": "FFmpeg 7.1",
+    "width": 256,
+    "height": 256,
+    "frame_count": 32,
+    "frame_duration_ms": 100,
+    "loop": 0,
+    "transparent": true,
+    "original_gifs_preserved": true,
+    "png_backup_path": "D:\\awiki-backups\\agent-avatars\\20261005-094349-head-pngs-before-animation",
+    "recipe_path": "D:\\awiki-space\\verification-runs\\agent-avatar-heads-20261005\\encode-animations.ps1"
+  }
+}

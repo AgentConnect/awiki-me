@@ -704,6 +704,14 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
         'cleanupPolicy': suiteDefinition.cleanupPolicy,
       },
       'app': <String, Object?>{'stateRoot': appStateRootDir.path},
+      if (peerConfig.e2eCase == DesktopE2eCase.agentAvatars)
+        'agentAvatarDid': Platform.environment['AWIKI_E2E_AGENT_AVATAR_DID'],
+      if (peerConfig.e2eCase == DesktopE2eCase.agentAvatars &&
+          Platform.environment['AWIKI_E2E_AGENT_AVATAR_FIXTURE_COMMAND'] !=
+              null)
+        'agentAvatarFixtureCommand': jsonDecode(
+          Platform.environment['AWIKI_E2E_AGENT_AVATAR_FIXTURE_COMMAND']!,
+        ),
       'processRestart': <String, Object?>{
         'handoffPath': processRestartHandoffFile.path,
       },

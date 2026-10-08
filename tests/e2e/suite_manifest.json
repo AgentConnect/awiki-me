@@ -1241,6 +1241,7 @@
         "isolated_cli_state"
       ],
       "caseIds": [
+        "AGENT-AVATAR-E2E-001",
         "AGENT-NOTIFY-SMOKE-E2E-001",
         "AGENT-STALE-DAEMON-DELETE-SMOKE-E2E-001",
         "APP-UPDATE-SMOKE-E2E-001",
@@ -1379,7 +1380,8 @@
         "restart",
         "display-name-fallback",
         "production-keychain",
-        "avatars"
+        "avatars",
+        "agent-avatars"
       ]
     },
     "registration-account-first": {
@@ -1443,6 +1445,42 @@
       ],
       "caseIds": [
         "AVATAR-E2E-001"
+      ]
+    },
+    "agent-avatars": {
+      "tier": "remote_product_ui",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "requiredTools": [
+        "flutter",
+        "awiki-cli"
+      ],
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-agents",
+      "estimatedMinutes": 6,
+      "timeoutMinutes": 12,
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "allowedHosts": [
+        "awiki.info",
+        "agentwiki.info",
+        "anpclaw.com"
+      ],
+      "allowedDidDomains": [
+        "awiki.info",
+        "agentwiki.info",
+        "anpclaw.com"
+      ],
+      "resourceCategories": [
+        "profiles",
+        "agent_inventory"
+      ],
+      "caseIds": [
+        "AGENT-AVATAR-E2E-001"
       ]
     }
   }

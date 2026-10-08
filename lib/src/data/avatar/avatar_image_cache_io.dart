@@ -41,7 +41,7 @@ class _DecodedAvatar {
 }
 
 /// Public-only, owner-fenced byte/decoded caches. No SDK credential client.
-class PlatformAvatarImageCache implements AvatarImageCache {
+class PlatformAvatarImageCache implements AvatarImageCache, AvatarByteCache {
   PlatformAvatarImageCache(
     String owner, {
     HttpClient? client,
@@ -56,6 +56,84 @@ class PlatformAvatarImageCache implements AvatarImageCache {
   static const _diskLimit = 64 * 1024 * 1024;
   static const _memoryLimit = 16 * 1024 * 1024;
   static const _downloadLimit = 1024 * 1024;
+  final _animationBytes = <String, (Uint8List, DateTime)>{};
+  final _animationPending = <String, Future<Uint8List?>>{};
+
+  @override
+  Future<Uint8List?> loadBytes(String raw) async {
+    final uri = safeAvatarUri(raw);
+    if (uri == null || _inactive) return null;
+    final cached = _animationBytes[raw];
+    if (cached != null && DateTime.now().isBefore(cached.$2)) return cached.$1;
+    _animationBytes.remove(raw);
+    return _animationPending[raw] ??= _loadAnimation(uri, raw).whenComplete(() {
+      _animationPending.remove(raw);
+    });
+  }
+
+  Future<Uint8List?> _loadAnimation(Uri uri, String raw) async {
+    if (_running >= 4) {
+      final wait = Completer<void>();
+      _slots.add(wait);
+      await wait.future;
+    } else {
+      _running++;
+    }
+    try {
+      if (_inactive) return null;
+      final result = await _download(
+        uri,
+        byteLimit: 5 * 1024 * 1024,
+        allowGif: true,
+      );
+      if (_inactive) return null;
+      final buffer = await ui.ImmutableBuffer.fromUint8List(result.$1);
+      ui.ImageDescriptor? descriptor;
+      ui.Codec? codec;
+      try {
+        descriptor = await ui.ImageDescriptor.encoded(buffer);
+        if (descriptor.width > 4096 ||
+            descriptor.height > 4096 ||
+            descriptor.width * descriptor.height > 16000000) {
+          return null;
+        }
+        codec = await descriptor.instantiateCodec(
+          targetWidth: 256,
+          targetHeight: 256,
+        );
+        if (codec.frameCount > 120 ||
+            descriptor.width * descriptor.height * codec.frameCount >
+                24000000) {
+          return null;
+        }
+      } finally {
+        codec?.dispose();
+        descriptor?.dispose();
+        buffer.dispose();
+      }
+      if (_inactive) return null;
+      if (result.$4) {
+        _animationBytes[raw] = (result.$1, result.$2);
+        while (_animationBytes.values.fold<int>(
+              0,
+              (sum, bytes) => sum + bytes.$1.length,
+            ) >
+            16 * 1024 * 1024) {
+          _animationBytes.remove(_animationBytes.keys.first);
+        }
+      }
+      return result.$1;
+    } catch (_) {
+      return null;
+    } finally {
+      if (_slots.isNotEmpty) {
+        _slots.removeFirst().complete();
+      } else {
+        _running--;
+      }
+    }
+  }
+
   final String _owner;
   final HttpClient _http;
   final _memory = <String, _DecodedAvatar>{};
@@ -238,6 +316,8 @@ class PlatformAvatarImageCache implements AvatarImageCache {
     Uri uri, {
     Uint8List? previous,
     String? etag,
+    int byteLimit = _downloadLimit,
+    bool allowGif = false,
   }) async {
     HttpClientRequest? active;
     var expired = false;
@@ -259,7 +339,9 @@ class PlatformAvatarImageCache implements AvatarImageCache {
         request.followRedirects = false;
         request.headers.set(
           HttpHeaders.acceptHeader,
-          'image/jpeg,image/png,image/webp',
+          allowGif
+              ? 'image/gif,image/jpeg,image/png,image/webp'
+              : 'image/jpeg,image/png,image/webp',
         );
         if (previous != null && etag != null && etag.length <= 512) {
           request.headers.set(HttpHeaders.ifNoneMatchHeader, etag);
@@ -296,18 +378,19 @@ class PlatformAvatarImageCache implements AvatarImageCache {
           return (previous, until, nextEtag, canStore);
         }
         if (response.statusCode != 200 ||
-            response.contentLength > _downloadLimit ||
+            response.contentLength > byteLimit ||
             !{
               'image/jpeg',
               'image/png',
               'image/webp',
+              if (allowGif) 'image/gif',
             }.contains(response.headers.contentType?.mimeType)) {
           await response.detachSocket().then((socket) => socket.destroy());
           throw const FormatException('avatar.response');
         }
         final bytes = BytesBuilder(copy: false);
         await for (final chunk in response) {
-          if (bytes.length + chunk.length > _downloadLimit) {
+          if (bytes.length + chunk.length > byteLimit) {
             throw const FormatException('avatar.byte_limit');
           }
           bytes.add(chunk);
@@ -368,6 +451,7 @@ class PlatformAvatarImageCache implements AvatarImageCache {
       entry.image.dispose();
     }
     _memory.clear();
+    _animationBytes.clear();
     _retryAfter.clear();
   }
 }

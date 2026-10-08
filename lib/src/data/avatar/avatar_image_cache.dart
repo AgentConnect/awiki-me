@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+import 'dart:typed_data';
 
 import 'avatar_image_cache_stub.dart'
     if (dart.library.io) 'avatar_image_cache_io.dart'
@@ -8,6 +9,10 @@ abstract class AvatarImageCache {
   factory AvatarImageCache(String owner) = platform.PlatformAvatarImageCache;
   Future<ui.Image?> load(String uri, {int edge = 128, bool force = false});
   void dispose();
+}
+
+abstract interface class AvatarByteCache {
+  Future<Uint8List?> loadBytes(String uri);
 }
 
 Uri? safeAvatarUri(String? value) {

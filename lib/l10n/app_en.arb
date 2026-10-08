@@ -1698,5 +1698,15 @@
   "avatarPreviewFailed": "Unable to load this photo. Please retry.",
   "avatarCurrent": "Current",
   "avatarNewPreview": "New avatar",
-  "avatarSmallSelection": "The selected area is small and may look blurry."
+  "avatarSmallSelection": "The selected area is small and may look blurry.",
+  "agentAvatarGenerating": "Generating an avatar. The current cover remains available.",
+  "agentAvatarGenerationFailed": "Generation failed. Your previous avatar is preserved. You can try again.",
+  "agentAvatarGenerationTimeout": "The generation service timed out. Your previous avatar is preserved. You can try again.",
+  "agentAvatarGenerationInterrupted": "Generation was interrupted. Your previous avatar is preserved. You can try again.",
+  "agentAvatarGeneratedImageInvalid": "The generation service did not return a valid animation. Your previous avatar is preserved. You can try again.",
+  "agentAvatarGenerationPrivacy": "Only the name and inputs below are sent. Do not include sensitive information.",
+  "agentAvatarResponsibility": "Agent responsibility",
+  "agentAvatarDescription": "Appearance description",
+  "agentAvatarRegenerate": "Regenerate avatar",
+  "agentAvatarImageRejected": "Choose a GIF animation, PNG, JPEG or static WebP up to 5 MB."
 }

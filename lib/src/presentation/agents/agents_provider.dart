@@ -22,6 +22,7 @@ import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
+import '../../domain/entities/agent/agent_avatar.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
 import '../../domain/entities/agent/personal_agent_runtime_provider.dart';
@@ -513,6 +514,27 @@ class AgentsController extends StateNotifier<AgentsState> {
        super(const AgentsState());
 
   final Ref ref;
+
+  /// Only updates metadata of an already authoritative inventory member.
+  void applyAvatarProjection(String agentDid, AgentAvatar avatar) {
+    state = state.copyWith(
+      agents: state.agents
+          .map(
+            (agent) =>
+                agent.agentDid == agentDid &&
+                    (BigInt.tryParse(avatar.version) ?? BigInt.zero) >=
+                        (BigInt.tryParse(agent.avatar?.version ?? '0') ??
+                            BigInt.zero)
+                ? AgentSummary.fromJson({
+                    ...agent.toJson(),
+                    'avatar': avatar.toJson(),
+                  })
+                : agent,
+          )
+          .toList(),
+    );
+  }
+
   final Duration _inventoryObservationInterval;
   final int _deletionRefreshAttempts;
   final Duration _deletionRefreshDelay;
@@ -4133,6 +4155,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       });
     return AgentSummary(
       agentDid: runtime.agentDid,
+      avatar: runtime.avatar,
       kind: runtime.kind,
       daemonAgentDid: runtime.daemonAgentDid,
       runtime: runtime.runtime,
@@ -4189,6 +4212,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         : null;
     return AgentSummary(
       agentDid: resolvedAgentDid,
+      avatar: current?.avatar,
       kind: kind,
       daemonAgentDid: kind == AgentKind.runtime
           ? (_string(payload['daemon_agent_did']) ??

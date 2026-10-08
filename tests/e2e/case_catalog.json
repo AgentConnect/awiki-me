@@ -6273,6 +6273,56 @@
           ]
         ]
       }
+    },
+    {
+      "caseId": "AGENT-AVATAR-E2E-001",
+      "feature": "Owned agent avatar lifecycle",
+      "layer": "remote_product_ui",
+      "preconditions": "Reviewed remote target running the new User Service avatar API with uploads enabled. AWIKI_E2E_AGENT_AVATAR_DID must identify an explicitly prepared fresh disposable Inventory agent owned by accounts.appUser (version 0, source default). Missing or non-fresh fixtures fail before writes. Only the native chooser is deterministic; production auth, Inventory adapter and storage remain real.",
+      "action": "Use the agents page avatar editor to cancel a preset selection, save a preset, upload the original animated GIF without crop, read anonymous GIF/PNG resources, and restore default.",
+      "exactOracles": [
+        "Cancel leaves the server record unchanged; a saved preset persists at the same immutable agentId with version 1.",
+        "The uploaded public GIF has multiple frames; GIF and PNG poster return their exact MIME types, bounded bytes and immutable cache headers.",
+        "The agent list uses the shared square avatar; reset preserves immutable agentId, restores the original default preset and advances the version."
+      ],
+      "negativeChecks": [
+        "Missing or non-owned/non-fresh fixtures, flattened GIFs, MIME errors, failed saves, stale list projections or a different default after reset fail."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/flows/agent_avatar_flow.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "AGENT-AVATAR-E2E-001:cancel_does_not_write_and_preset_persists",
+          "AGENT-AVATAR-E2E-001:gif_frames_and_public_poster_are_preserved",
+          "AGENT-AVATAR-E2E-001:shared_square_avatar_and_reset_keep_stable_id"
+        ],
+        "exactOracleAssertions": [
+          [
+            "AGENT-AVATAR-E2E-001:cancel_does_not_write_and_preset_persists"
+          ],
+          [
+            "AGENT-AVATAR-E2E-001:gif_frames_and_public_poster_are_preserved"
+          ],
+          [
+            "AGENT-AVATAR-E2E-001:shared_square_avatar_and_reset_keep_stable_id"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "AGENT-AVATAR-E2E-001:cancel_does_not_write_and_preset_persists",
+            "AGENT-AVATAR-E2E-001:gif_frames_and_public_poster_are_preserved",
+            "AGENT-AVATAR-E2E-001:shared_square_avatar_and_reset_keep_stable_id"
+          ]
+        ]
+      }
     }
   ]
 }

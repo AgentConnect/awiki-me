@@ -1,8 +1,10 @@
 import 'agent_status.dart';
+import 'agent_avatar.dart';
 
 class AgentSummary {
   const AgentSummary({
     required this.agentDid,
+    this.avatar,
     required this.kind,
     this.daemonAgentDid,
     this.runtime,
@@ -15,6 +17,7 @@ class AgentSummary {
   });
 
   final String agentDid;
+  final AgentAvatar? avatar;
   final AgentKind kind;
   final String? daemonAgentDid;
   final String? runtime;
@@ -65,6 +68,16 @@ class AgentSummary {
     final kind = _parseKind(json['agent_kind']?.toString());
     return AgentSummary(
       agentDid: json['agent_did']?.toString() ?? '',
+      avatar:
+          _readMap(
+            json['avatar'] ?? _readMap(json['profile_summary'])['avatar'],
+          ).isEmpty
+          ? null
+          : AgentAvatar.fromJson(
+              _readMap(
+                json['avatar'] ?? _readMap(json['profile_summary'])['avatar'],
+              ),
+            ),
       kind: kind,
       daemonAgentDid: _optionalString(json['daemon_agent_did']),
       runtime: _optionalString(json['runtime']),
@@ -88,6 +101,7 @@ class AgentSummary {
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'agent_did': agentDid,
+      'avatar': avatar?.toJson(),
       'agent_kind': kind == AgentKind.daemon ? 'daemon' : 'runtime',
       'daemon_agent_did': daemonAgentDid,
       'runtime': runtime,

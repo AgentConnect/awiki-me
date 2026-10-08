@@ -3866,4 +3866,35 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get avatarSmallSelection => '所选区域较小，头像可能模糊。';
+
+  @override
+  String get agentAvatarGenerating => '头像生成中，当前封面仍可使用。';
+
+  @override
+  String get agentAvatarGenerationFailed => '头像生成失败，已保留原头像。可以重新生成。';
+
+  @override
+  String get agentAvatarGenerationTimeout => '生成服务超时，已保留原头像。可以重新生成。';
+
+  @override
+  String get agentAvatarGenerationInterrupted => '生成任务已中断，已保留原头像。可以重新生成。';
+
+  @override
+  String get agentAvatarGeneratedImageInvalid => '生成服务未返回有效动图，已保留原头像。可以重新生成。';
+
+  @override
+  String get agentAvatarGenerationPrivacy => '仅发送名称和以下输入。请勿填写敏感资料。';
+
+  @override
+  String get agentAvatarResponsibility => '智能体职责';
+
+  @override
+  String get agentAvatarDescription => '形象描述';
+
+  @override
+  String get agentAvatarRegenerate => '重新生成头像';
+
+  @override
+  String get agentAvatarImageRejected =>
+      '请选择 5 MB 内的 GIF 动图、PNG、JPEG 或静态 WebP。';
 }

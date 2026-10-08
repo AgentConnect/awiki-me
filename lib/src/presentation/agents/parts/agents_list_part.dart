@@ -1217,7 +1217,6 @@ class _AgentKindIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final theme = context.awikiTheme;
     final title = localizeAgentTitle(context.l10n, agent).trim();
     final size = responsive.displayScaled(
       responsive.isCompact
@@ -1228,37 +1227,14 @@ class _AgentKindIcon extends StatelessWidget {
           ? 28
           : 30,
     );
-    if (agent.isRuntime) {
-      return AvatarBadge(
-        key: ValueKey<String>('agent-list-kind-icon-${agent.agentDid}'),
-        seed: title,
-        size: size,
-      );
-    }
-    if (responsive.isCompact) {
-      return SizedBox.square(
-        key: ValueKey<String>('agent-list-kind-icon-${agent.agentDid}'),
-        dimension: size,
-        child: Icon(
-          CupertinoIcons.desktopcomputer,
-          color: theme.secondaryText,
-          size: responsive.displayScaled(22),
-        ),
-      );
-    }
-    return Container(
+    return AvatarBadge(
       key: ValueKey<String>('agent-list-kind-icon-${agent.agentDid}'),
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: theme.subtleSurface,
-        borderRadius: BorderRadius.circular(responsive.radius(9)),
-      ),
-      child: Icon(
-        CupertinoIcons.desktopcomputer,
-        color: theme.secondaryText,
-        size: responsive.iconSm,
-      ),
+      seed: title,
+      size: size,
+      userId: agent.agentDid,
+      isAgent: true,
+      avatarUri: agent.avatar?.animatedUri ?? agent.avatar?.posterUri,
+      avatarThumbnailUri: agent.avatar?.posterUri,
     );
   }
 }
