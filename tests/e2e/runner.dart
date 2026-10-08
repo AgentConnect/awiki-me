@@ -1253,6 +1253,13 @@ Directory shortAppPairDaemonStateRoot(
       '${base.absolute.path}/aw-e2e-${pid.toRadixString(36)}-$suffix',
     );
     if (daemonStateRootFitsUnixSocket(candidate.path)) return candidate;
+    // A long authorized temp root can still fit IPC with a compact, stable
+    // per-process/run name. Do not silently escape that root to /tmp.
+    final digest = sha256.convert(utf8.encode('$pid:$runId')).toString();
+    final compact = Directory(
+      '${base.absolute.path}/${digest.substring(0, 16)}',
+    );
+    if (daemonStateRootFitsUnixSocket(compact.path)) return compact;
   }
   throw E2eFailure(
     'No bounded Unix-domain socket root is available for the App-pair Daemon.',
