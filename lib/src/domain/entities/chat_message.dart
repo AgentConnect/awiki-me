@@ -25,6 +25,7 @@ class ChatMessage {
     this.groupId,
     this.serverSequence,
     this.isEncrypted = false,
+    this.encryptionRequired = false,
     this.originalType = 'text',
     this.attachment,
     this.payloadJson,
@@ -52,6 +53,9 @@ class ChatMessage {
   final bool isMine;
   final int? serverSequence;
   final bool isEncrypted;
+
+  /// Captured send intent, distinct from the actual SDK encryption provenance.
+  final bool encryptionRequired;
   final MessageSendState sendState;
   final ChatAttachment? attachment;
   final String? payloadJson;
@@ -155,6 +159,7 @@ class ChatMessage {
       sendState: sendState ?? this.sendState,
       serverSequence: serverSequence ?? this.serverSequence,
       isEncrypted: isEncrypted,
+      encryptionRequired: encryptionRequired,
       originalType: originalType ?? this.originalType,
       attachment: attachment ?? this.attachment,
       payloadJson: payloadJson ?? this.payloadJson,

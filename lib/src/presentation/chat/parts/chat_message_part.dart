@@ -1257,6 +1257,21 @@ class _MessageBubble extends StatelessWidget {
             child: child,
           ),
         ),
+        if (message.isEncrypted)
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Semantics(
+              label: '端到端加密',
+              child: Tooltip(
+                message: '端到端加密',
+                child: Icon(
+                  CupertinoIcons.lock,
+                  size: 12,
+                  color: theme.secondaryText,
+                ),
+              ),
+            ),
+          ),
         if (footer != null) footer!,
         if (message.sendState == MessageSendState.failed) ...<Widget>[
           SizedBox(height: responsive.displayScaled(8)),
@@ -1406,6 +1421,21 @@ class _MessageBubble extends StatelessWidget {
             child: content,
           ),
         ),
+        if (message.isEncrypted)
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Semantics(
+              label: '端到端加密',
+              child: Tooltip(
+                message: '端到端加密',
+                child: Icon(
+                  CupertinoIcons.lock,
+                  size: 12,
+                  color: theme.secondaryText,
+                ),
+              ),
+            ),
+          ),
         if (footer != null) footer!,
         if (message.sendState == MessageSendState.failed) ...<Widget>[
           SizedBox(height: responsive.spacing(6)),

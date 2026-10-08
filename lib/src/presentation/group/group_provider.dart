@@ -637,6 +637,7 @@ class GroupController extends StateNotifier<GroupState> {
   }
 
   Future<GroupSummary> createGroup({
+    bool secureRequired = false,
     required String name,
     required String slug,
     required String description,
@@ -650,6 +651,7 @@ class GroupController extends StateNotifier<GroupState> {
     final created = await ref
         .read(groupApplicationServiceProvider)
         .createGroup(
+          secureRequired: secureRequired,
           name: name,
           slug: slug,
           description: description,

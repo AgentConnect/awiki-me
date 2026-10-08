@@ -3238,11 +3238,13 @@ class ChatThreadsController
 
   Future<void> sendMessage({
     required ConversationSummary conversation,
+    bool secure = false,
     required String content,
     List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? expectedAgentReplyDid,
     String? displayThreadId,
     VoidCallback? onSendStarted,
+    VoidCallback? onSendFailed,
   }) async {
     if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
@@ -3292,6 +3294,7 @@ class ChatThreadsController
         createdAt: DateTime.now(),
         isMine: true,
         sendState: MessageSendState.sending,
+        encryptionRequired: secure,
         payloadJson: mentionPayload == null ? null : jsonEncode(mentionPayload),
         mentions: [
           for (final mention in validMentionDrafts)
@@ -3304,6 +3307,7 @@ class ChatThreadsController
       final messaging = ref.read(messagingServiceProvider);
       final sent = validMentionDrafts.isEmpty
           ? await _sendConversationText(
+              secure: secure,
               messaging: messaging,
               conversation: conversation,
               conversationRef: conversationRef,
@@ -3314,6 +3318,7 @@ class ChatThreadsController
             ).timeout(_sendTimeout)
           : await messaging
                 .sendConversationMentionText(
+                  secure: secure,
                   conversation: conversationRef,
                   text: content,
                   mentions: validMentionDrafts,
@@ -3344,6 +3349,10 @@ class ChatThreadsController
       if (!_isCurrentSessionEpoch(sessionEpoch)) {
         return;
       }
+      onSendFailed?.call();
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
       _chatProviderTrace(
         'send.conversation_failed',
         fields: <String, Object?>{
@@ -3364,12 +3373,14 @@ class ChatThreadsController
 
   Future<void> sendAttachment({
     required ConversationSummary conversation,
+    bool secure = false,
     required AttachmentDraft attachment,
     String? caption,
     List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? expectedAgentReplyDid,
     String? displayThreadId,
     VoidCallback? onSendStarted,
+    VoidCallback? onSendFailed,
   }) async {
     if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
@@ -3427,6 +3438,7 @@ class ChatThreadsController
       createdAt: DateTime.now(),
       isMine: true,
       sendState: MessageSendState.sending,
+      encryptionRequired: secure,
       attachment: pendingAttachment,
       payloadJson: mentionPayload == null ? null : jsonEncode(mentionPayload),
       mentions: <ChatMessageMention>[
@@ -3442,6 +3454,7 @@ class ChatThreadsController
       final sent = await ref
           .read(messagingServiceProvider)
           .sendConversationAttachment(
+            secure: secure,
             conversation: conversationRef,
             attachment: attachment,
             caption: normalizedCaption,
@@ -3480,6 +3493,10 @@ class ChatThreadsController
       if (!_isCurrentSessionEpoch(sessionEpoch)) {
         return;
       }
+      onSendFailed?.call();
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
       _chatProviderTrace(
         'send_attachment.conversation_failed',
         fields: <String, Object?>{
@@ -3591,6 +3608,7 @@ class ChatThreadsController
               message.mentions.isNotEmpty
           ? await messaging
                 .sendConversationMentionText(
+                  secure: message.encryptionRequired || message.isEncrypted,
                   conversation: conversationRef,
                   text: mentionPayload.text,
                   mentions: _messageMentionsToDrafts(message.mentions),
@@ -3599,6 +3617,7 @@ class ChatThreadsController
                 )
                 .timeout(_sendTimeout)
           : await _sendConversationText(
+              secure: message.encryptionRequired || message.isEncrypted,
               messaging: messaging,
               conversation: conversation,
               conversationRef: conversationRef,
@@ -3744,6 +3763,7 @@ class ChatThreadsController
       final retried = await ref
           .read(messagingServiceProvider)
           .sendConversationAttachment(
+            secure: message.encryptionRequired || message.isEncrypted,
             conversation: conversationRef,
             attachment: AttachmentDraft(
               filename: attachment.filename,
@@ -5368,6 +5388,7 @@ class ChatThreadsController
 
   Future<ChatMessage> _sendConversationText({
     required MessagingService messaging,
+    required bool secure,
     required ConversationSummary conversation,
     required AppConversationReadRef conversationRef,
     required String content,
@@ -5378,8 +5399,9 @@ class ChatThreadsController
     final isDirectAgent =
         !conversation.isGroup &&
         expectedAgentReplyDid?.trim().isNotEmpty == true;
-    if (!isDirectAgent) {
+    if (!isDirectAgent || secure) {
       return messaging.sendConversationText(
+        secure: secure,
         conversation: conversationRef,
         content: content,
         clientMessageId: clientMessageId,
@@ -7554,6 +7576,7 @@ ChatMessage _withThreadId(ChatMessage message, String threadId) {
     sendState: message.sendState,
     serverSequence: message.serverSequence,
     isEncrypted: message.isEncrypted,
+    encryptionRequired: message.encryptionRequired,
     attachment: message.attachment,
     payloadJson: message.payloadJson,
     mentions: message.mentions,

@@ -119,6 +119,13 @@ class AwikiImCoreMappers {
     final payloadJson = bodyMentionPayload == null
         ? manifestMentionPayloadJson ?? message.body.payloadJson
         : message.body.payloadJson;
+    final encryptedUnavailable =
+        message.metadata.isEndToEndEncrypted &&
+        (message.body.kind == 'unsupported' ||
+            (message.direction != core.MessageDirection.outgoing &&
+                !message.metadata.attributes.any(
+                  (a) => a.key == 'decryption_state' && a.value == 'decrypted',
+                )));
     final bodyText = message.body.text ?? '';
     final isMine =
         message.direction == core.MessageDirection.outgoing ||
@@ -154,10 +161,14 @@ class AwikiImCoreMappers {
           _attribute(message.metadata, 'sender_name'),
       receiverDid: _nonEmpty(message.receiver),
       groupId: groupId,
-      content: systemEvent == null
+      content: encryptedUnavailable
+          ? '无法解密此消息：本设备缺少密钥，请完成设备准备或联系群主修复；历史密钥不会自动恢复。'
+          : systemEvent == null
           ? attachment?.caption ?? mentionPayload?.text ?? bodyText
           : '',
-      originalType: attachment != null
+      originalType: encryptedUnavailable
+          ? 'text'
+          : attachment != null
           ? _attachmentManifestContentType
           : systemEvent != null
           ? 'application/json'
@@ -169,9 +180,9 @@ class AwikiImCoreMappers {
       sendState: _sendStateFromCore(message.metadata, isMine: isMine),
       serverSequence: message.metadata.serverSequence,
       notifyLevel: _attribute(message.metadata, 'notify_level'),
-      isEncrypted: _isEncrypted(message.metadata.contentType),
-      attachment: attachment,
-      payloadJson: payloadJson,
+      isEncrypted: message.metadata.isEndToEndEncrypted,
+      attachment: encryptedUnavailable ? null : attachment,
+      payloadJson: encryptedUnavailable ? null : payloadJson,
       mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],
     );
   }
@@ -194,6 +205,13 @@ class AwikiImCoreMappers {
     final payloadJson = bodyMentionPayload == null
         ? manifestMentionPayloadJson ?? message.body.payloadJson
         : message.body.payloadJson;
+    final encryptedUnavailable =
+        message.isEndToEndEncrypted &&
+        (message.body.kind == 'unsupported' ||
+            (message.direction != 'outgoing' &&
+                !message.attributes.any(
+                  (a) => a.key == 'decryption_state' && a.value == 'decrypted',
+                )));
     final bodyText = message.body.text ?? '';
     final direction = message.direction.trim().toLowerCase();
     final isMine = direction == 'outgoing' || message.sender == ownerDid;
@@ -232,10 +250,14 @@ class AwikiImCoreMappers {
           _snapshotAttribute(message, 'sender_name'),
       receiverDid: _nonEmpty(message.receiver),
       groupId: groupId,
-      content: systemEvent == null
+      content: encryptedUnavailable
+          ? '无法解密此消息：本设备缺少密钥，请完成设备准备或联系群主修复；历史密钥不会自动恢复。'
+          : systemEvent == null
           ? attachment?.caption ?? mentionPayload?.text ?? bodyText
           : '',
-      originalType: attachment != null
+      originalType: encryptedUnavailable
+          ? 'text'
+          : attachment != null
           ? _attachmentManifestContentType
           : systemEvent != null
           ? 'application/json'
@@ -246,9 +268,9 @@ class AwikiImCoreMappers {
       isMine: isMine,
       sendState: MessageSendState.sent,
       serverSequence: message.serverSequence,
-      isEncrypted: _isEncrypted(message.contentType),
-      attachment: attachment,
-      payloadJson: payloadJson,
+      isEncrypted: message.isEndToEndEncrypted,
+      attachment: encryptedUnavailable ? null : attachment,
+      payloadJson: encryptedUnavailable ? null : payloadJson,
       mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],
     );
   }
@@ -479,7 +501,15 @@ class AwikiImCoreMappers {
       memberCount: group.memberCount ?? 0,
       lastMessageAt: _tryParseDateTime(group.lastMessageAt),
       avatarUri: _nonEmpty(group.avatarUri),
-      avatarMembers: group.avatarMembers?.map((member) => GroupAvatarMember(memberKey: member.memberKey, did: member.memberDid, handle: member.memberHandle)).toList(growable: false),
+      avatarMembers: group.avatarMembers
+          ?.map(
+            (member) => GroupAvatarMember(
+              memberKey: member.memberKey,
+              did: member.memberDid,
+              handle: member.memberHandle,
+            ),
+          )
+          .toList(growable: false),
       groupStateVersion: group.groupStateVersion,
       myRole: group.myRole,
       membershipStatus: group.membershipStatus,
@@ -496,7 +526,15 @@ class AwikiImCoreMappers {
       memberCount: group.memberCount ?? 0,
       lastMessageAt: _tryParseDateTime(group.lastMessageAt),
       avatarUri: _nonEmpty(group.avatarUri),
-      avatarMembers: group.avatarMembers?.map((member) => GroupAvatarMember(memberKey: member.memberKey, did: member.memberDid, handle: member.memberHandle)).toList(growable: false),
+      avatarMembers: group.avatarMembers
+          ?.map(
+            (member) => GroupAvatarMember(
+              memberKey: member.memberKey,
+              did: member.memberDid,
+              handle: member.memberHandle,
+            ),
+          )
+          .toList(growable: false),
       groupStateVersion: group.groupStateVersion,
       myRole: group.myRole ?? group.membershipStatus,
       membershipStatus: group.membershipStatus,
@@ -1158,11 +1196,6 @@ MessageSendState _sendStateFromCore(
     return MessageSendState.sending;
   }
   return isMine ? MessageSendState.sent : MessageSendState.sent;
-}
-
-bool _isEncrypted(String? contentType) {
-  final raw = contentType?.toLowerCase() ?? '';
-  return raw.contains('encrypted') || raw.contains('e2ee');
 }
 
 Set<String> _coreMessageIdentityAliases(

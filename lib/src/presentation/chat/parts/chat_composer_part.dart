@@ -96,6 +96,51 @@ class _ComposerState extends ConsumerState<_Composer> {
     });
   }
 
+  bool get _showSecuritySelector =>
+      !widget.conversation.isGroup &&
+      !isPersonalAgentConversation(
+        widget.conversation,
+        ref.watch(agentsProvider).agents,
+      );
+
+  Widget _securitySelector() {
+    final mode = ref.watch(
+      messageSecurityProvider(widget.conversation.conversationId),
+    );
+    return CupertinoButton(
+      key: const Key('chat-message-security'),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      minimumSize: const Size(0, 28),
+      onPressed: mode.isLoading
+          ? null
+          : () async {
+              try {
+                await setMessageSecurity(
+                  ref,
+                  widget.conversation.conversationId,
+                  mode.hasError ? true : !mode.requireValue,
+                );
+              } catch (error) {
+                if (mounted) {
+                  ref
+                      .read(uiFeedbackProvider.notifier)
+                      .showError(AppMessage.fromError(error));
+                }
+              }
+            },
+      child: Text(
+        mode.isLoading
+            ? '准备中'
+            : mode.hasError
+            ? '重试加密模式'
+            : mode.requireValue
+            ? '加密消息'
+            : '普通消息',
+        style: TextStyle(fontSize: 12, color: context.awikiTheme.secondaryText),
+      ),
+    );
+  }
+
   void _handleTextChanged() {
     if (mounted) {
       setState(() {});
@@ -648,6 +693,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                       Row(
                         key: const Key('chat-composer-tool-row'),
                         children: <Widget>[
+                          if (_showSecuritySelector) _securitySelector(),
                           if (showAttachment) ...<Widget>[
                             AppIconButton(
                               key: const Key('chat-attachment-button'),
@@ -815,6 +861,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                 height: responsive.displayScaled(44),
                 child: Row(
                   children: <Widget>[
+                    if (_showSecuritySelector) _securitySelector(),
                     _emojiTapRegion(
                       child: AppIconButton(
                         key: const Key('chat-emoji-button'),

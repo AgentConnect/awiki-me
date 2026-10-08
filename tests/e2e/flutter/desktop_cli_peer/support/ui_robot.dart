@@ -1989,6 +1989,7 @@ class _FailOnceMessagingService
 
   @override
   Future<ChatMessage> sendConversationText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String content,
     String? clientMessageId,
@@ -2183,12 +2184,14 @@ class _FailOnceMessagingService
 
   @override
   Future<ChatMessage> sendText({
+    bool secure = false,
     required AppThreadRef thread,
     required String content,
   }) => _delegate.sendText(thread: thread, content: content);
 
   @override
   Future<ChatMessage> sendAttachment({
+    bool secure = false,
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
@@ -2204,6 +2207,7 @@ class _FailOnceMessagingService
 
   @override
   Future<ChatMessage> sendConversationAttachment({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required AttachmentDraft attachment,
     String? caption,
@@ -2234,6 +2238,7 @@ class _FailOnceMessagingService
 
   @override
   Future<ChatMessage> sendMentionText({
+    bool secure = false,
     required AppThreadRef thread,
     required String text,
     required List<ChatMentionDraft> mentions,
@@ -2247,6 +2252,7 @@ class _FailOnceMessagingService
 
   @override
   Future<ChatMessage> sendConversationMentionText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String text,
     required List<ChatMentionDraft> mentions,

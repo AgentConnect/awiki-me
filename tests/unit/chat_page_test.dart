@@ -1637,12 +1637,19 @@ void main() {
     );
     expect(find.text('身份卡'), findsNothing);
 
+    await tester.pumpAndSettle();
+    expect(find.text('普通消息'), findsOneWidget);
     await tester.enterText(find.byType(CupertinoTextField), 'hello mac');
+    await tester.tap(find.byKey(const Key('chat-message-security')));
+    await tester.pumpAndSettle();
+    expect(find.text('加密消息'), findsOneWidget);
+    expect(tester.widget<CupertinoTextField>(find.byType(CupertinoTextField)).controller!.text, 'hello mac');
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pumpAndSettle();
 
     expect(gateway.lastSentThreadId, 'dm:did:test:peer');
     expect(gateway.lastSentContent, 'hello mac');
+    expect(gateway.lastSentSecure, isTrue);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -7742,13 +7749,27 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pumpAndSettle();
 
-    expect(find.text('hello'), findsOneWidget);
+    expect(find.text('hello'), findsNWidgets(2));
+    expect(
+      tester
+          .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+          .controller!
+          .text,
+      'hello',
+    );
     expect(find.text('发送失败'), findsOneWidget);
     expect(find.text('重试'), findsOneWidget);
     expect(gateway.lastSentContent, 'hello');
     await tester.tap(find.text('重试'));
     await tester.pumpAndSettle();
-    expect(find.text('hello'), findsOneWidget);
+    expect(find.text('hello'), findsNWidgets(2));
+    expect(
+      tester
+          .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+          .controller!
+          .text,
+      'hello',
+    );
     expect(find.text('发送失败'), findsNothing);
     expect(find.text('重试'), findsNothing);
   });

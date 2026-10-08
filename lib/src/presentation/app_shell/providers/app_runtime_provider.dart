@@ -1675,7 +1675,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       groupEventActorName: actorName,
       groupEventSubjectName: subjectName,
     );
-    final body = preview.isNotEmpty
+    final body = message.isEncrypted
+        ? '收到一条加密消息'
+        : preview.isNotEmpty
         ? preview
         : AppMessage.newMessageArrived().resolveForFallback();
     final target = NotificationTarget(

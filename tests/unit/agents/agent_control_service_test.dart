@@ -1162,6 +1162,7 @@ class _MessagesStub implements MessagingService {
 
   @override
   Future<ChatMessage> sendMentionText({
+    bool secure = false,
     required AppThreadRef thread,
     required String text,
     required List<ChatMentionDraft> mentions,
@@ -1177,6 +1178,7 @@ class _MessagesStub implements MessagingService {
 
   @override
   Future<ChatMessage> sendConversationMentionText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String text,
     required List<ChatMentionDraft> mentions,
@@ -1192,6 +1194,7 @@ class _MessagesStub implements MessagingService {
   }
 
   Future<ChatMessage> sendConversationPayload({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required Map<String, Object?> payload,
     String? clientMessageId,
@@ -1218,6 +1221,7 @@ class _MessagesStub implements MessagingService {
 
   @override
   Future<ChatMessage> sendConversationText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String content,
     String? clientMessageId,
@@ -1228,6 +1232,7 @@ class _MessagesStub implements MessagingService {
 
   @override
   Future<ChatMessage> sendText({
+    bool secure = false,
     required AppThreadRef thread,
     required String content,
   }) {
@@ -1236,6 +1241,7 @@ class _MessagesStub implements MessagingService {
 
   @override
   Future<ChatMessage> sendAttachment({
+    bool secure = false,
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
@@ -1247,6 +1253,7 @@ class _MessagesStub implements MessagingService {
 
   @override
   Future<ChatMessage> sendConversationAttachment({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required AttachmentDraft attachment,
     String? caption,

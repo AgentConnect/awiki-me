@@ -9,11 +9,13 @@ import 'ports/message_core_port.dart';
 
 abstract interface class MessagingService {
   Future<ChatMessage> sendText({
+    bool secure = false,
     required AppThreadRef thread,
     required String content,
   });
 
   Future<ChatMessage> sendAttachment({
+    bool secure = false,
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
@@ -22,6 +24,7 @@ abstract interface class MessagingService {
   });
 
   Future<ChatMessage> sendConversationAttachment({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required AttachmentDraft attachment,
     String? caption,
@@ -38,6 +41,7 @@ abstract interface class MessagingService {
   });
 
   Future<ChatMessage> sendMentionText({
+    bool secure = false,
     required AppThreadRef thread,
     required String text,
     required List<ChatMentionDraft> mentions,
@@ -45,6 +49,7 @@ abstract interface class MessagingService {
   });
 
   Future<ChatMessage> sendConversationText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String content,
     String? clientMessageId,
@@ -52,6 +57,7 @@ abstract interface class MessagingService {
   });
 
   Future<ChatMessage> sendConversationMentionText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String text,
     required List<ChatMentionDraft> mentions,
@@ -205,6 +211,7 @@ class ImCoreMessagingService
 
   @override
   Future<ChatMessage> sendText({
+    bool secure = false,
     required AppThreadRef thread,
     required String content,
   }) {
@@ -213,6 +220,7 @@ class ImCoreMessagingService
 
   @override
   Future<ChatMessage> sendAttachment({
+    bool secure = false,
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
@@ -220,6 +228,7 @@ class ImCoreMessagingService
     String? idempotencyKey,
   }) {
     return _messages.sendAttachment(
+      secure: secure,
       thread: thread,
       attachment: attachment,
       caption: caption,
@@ -230,6 +239,7 @@ class ImCoreMessagingService
 
   @override
   Future<ChatMessage> sendConversationAttachment({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required AttachmentDraft attachment,
     String? caption,
@@ -238,6 +248,7 @@ class ImCoreMessagingService
     String? idempotencyKey,
   }) {
     return _messages.sendConversationAttachment(
+      secure: secure,
       conversation: conversation,
       attachment: attachment,
       caption: caption,
@@ -264,6 +275,7 @@ class ImCoreMessagingService
 
   @override
   Future<ChatMessage> sendMentionText({
+    bool secure = false,
     required AppThreadRef thread,
     required String text,
     required List<ChatMentionDraft> mentions,
@@ -272,19 +284,21 @@ class ImCoreMessagingService
     return _messages.sendPayload(
       thread: thread,
       payload: ChatMentionPayload.toP9Json(text: text, draftMentions: mentions),
-      secure: false,
+      secure: secure,
       idempotencyKey: idempotencyKey,
     );
   }
 
   @override
   Future<ChatMessage> sendConversationText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String content,
     String? clientMessageId,
     String? idempotencyKey,
   }) {
     return _messages.sendConversationText(
+      secure: secure,
       conversation: conversation,
       content: content,
       clientMessageId: clientMessageId,
@@ -316,6 +330,7 @@ class ImCoreMessagingService
 
   @override
   Future<ChatMessage> sendConversationMentionText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String text,
     required List<ChatMentionDraft> mentions,
@@ -323,6 +338,7 @@ class ImCoreMessagingService
     String? idempotencyKey,
   }) {
     return _messages.sendConversationPayload(
+      secure: secure,
       conversation: conversation,
       payload: ChatMentionPayload.toP9Json(text: text, draftMentions: mentions),
       clientMessageId: clientMessageId,

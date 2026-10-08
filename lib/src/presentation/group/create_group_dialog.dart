@@ -1,4 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
+
+import '../../app/app_services.dart';
+import '../../application/models/product_local_models.dart';
+import '../app_shell/providers/session_provider.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -39,17 +44,59 @@ class CreateGroupDialog extends ConsumerStatefulWidget {
 class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
   final _nameController = TextEditingController();
   final _nameFocusNode = FocusNode();
-  bool _isLoading = false;
+  bool _isLoading = true;
+  bool _restoreFailed = false;
+  bool _encrypted = false;
+  String? _creationSlug;
 
   @override
   void initState() {
     super.initState();
     _nameFocusNode.addListener(_handleFocusChanged);
+    unawaited(_restorePendingCreation());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _nameFocusNode.requestFocus();
       }
     });
+  }
+
+  Future<void> _restorePendingCreation() async {
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (epoch == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+    try {
+      final stored = await ref
+          .read(productLocalStoreProvider)
+          .loadUiPreference(
+            ownerDid: epoch.ownerDid,
+            key: 'pending_group_creation',
+          );
+      if (!mounted || !epoch.matches(ref.read(sessionProvider))) return;
+      final value = stored == null ? null : jsonDecode(stored.valueJson);
+      if (value != null) {
+        if (value is! Map<String, dynamic> ||
+            value['slug'] is! String ||
+            value['name'] is! String ||
+            value['encrypted'] is! bool) {
+          throw StateError('未完成的建群记录不可用');
+        }
+        _creationSlug = value['slug'] as String;
+        _nameController.text = value['name'] as String;
+        _encrypted = value['encrypted'] as bool;
+      }
+    } catch (error) {
+      if (mounted) {
+        _restoreFailed = true;
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.fromError(error));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -67,7 +114,7 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
   }
 
   Future<void> _create() async {
-    if (_isLoading) {
+    if (_isLoading || _restoreFailed) {
       return;
     }
     final name = _nameController.text.trim();
@@ -78,19 +125,46 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
       _nameFocusNode.requestFocus();
       return;
     }
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (epoch == null) return;
+    final localStore = ref.read(productLocalStoreProvider);
     setState(() => _isLoading = true);
     try {
+      _creationSlug ??= _generatedSlug();
+      await localStore.saveUiPreference(
+        LocalUiPreference(
+          ownerDid: epoch.ownerDid,
+          key: 'pending_group_creation',
+          valueJson: jsonEncode({
+            'slug': _creationSlug,
+            'name': name,
+            'encrypted': _encrypted,
+          }),
+          updatedAt: DateTime.now().toUtc(),
+        ),
+      );
+      if (!mounted || !epoch.matches(ref.read(sessionProvider))) return;
       final group = await ref
           .read(groupProvider.notifier)
           .createGroup(
             name: name,
-            slug: _generatedSlug(),
+            slug: _creationSlug ??= _generatedSlug(),
+            secureRequired: _encrypted,
             description: '',
             goal: '',
             rules: '',
             messagePrompt: '',
             identity: const GroupIdentitySelection.didOnly(),
           );
+      await localStore.saveUiPreference(
+        LocalUiPreference(
+          ownerDid: epoch.ownerDid,
+          key: 'pending_group_creation',
+          valueJson: 'null',
+          updatedAt: DateTime.now().toUtc(),
+        ),
+      );
+      if (!mounted || !epoch.matches(ref.read(sessionProvider))) return;
       await ref.read(groupProvider.notifier).loadGroupMembers(group.groupId);
       if (!mounted) {
         return;
@@ -130,6 +204,15 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          CupertinoSlidingSegmentedControl<bool>(
+            groupValue: _encrypted,
+            children: const {false: Text('普通群'), true: Text('加密群')},
+            onValueChanged: (value) {
+              if (_isLoading || _creationSlug != null) return;
+              if (value != null) setState(() => _encrypted = value);
+            },
+          ),
+          const SizedBox(height: 12),
           AppDialogHeader(
             title: context.l10n.groupCreateTitle,
             closeLabel: context.l10n.commonCancel,
@@ -140,7 +223,7 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
           _GroupNameInput(
             controller: _nameController,
             focusNode: _nameFocusNode,
-            enabled: !_isLoading,
+            enabled: !_isLoading && _creationSlug == null,
             label: context.l10n.groupFieldName,
             placeholder: context.l10n.groupFieldNamePlaceholder,
             onSubmitted: _create,

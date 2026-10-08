@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/material.dart' show Tooltip;
 import '../app_shell/providers/remote_push_coordinator_provider.dart';
 import 'dart:io';
 
@@ -116,6 +117,7 @@ import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'chat_mention_presentation.dart';
 import 'chat_provider.dart';
+import 'message_security_provider.dart';
 import 'message_actions.dart';
 
 part 'parts/chat_header_part.dart';
@@ -2355,6 +2357,15 @@ class _ChatViewState extends ConsumerState<ChatView> {
         _groupSendDisabledReason(conversation) != null) {
       return;
     }
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    final visibilityToken = _conversationVisibilityToken;
+    bool stillCurrent() =>
+        mounted &&
+        epoch != null &&
+        epoch.matches(ref.read(sessionProvider)) &&
+        visibilityToken == _conversationVisibilityToken &&
+        _sameCanonicalConversation(conversation, widget.conversation);
+
     final attachment = _pendingAttachment;
     final rawContent = textController.text;
     final content = rawContent.trim();
@@ -2383,10 +2394,39 @@ class _ChatViewState extends ConsumerState<ChatView> {
       );
       return;
     }
+    bool security;
+    try {
+      security =
+          conversation.isGroup ||
+              isPersonalAgentConversation(
+                conversation,
+                ref.read(agentsProvider).agents,
+              )
+          ? false
+          : await ref.read(
+              messageSecurityProvider(conversation.conversationId).future,
+            );
+    } catch (error) {
+      if (stillCurrent()) {
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.fromError(error));
+      }
+      return;
+    }
+    if (!stillCurrent() ||
+        textController.text != rawContent ||
+        _pendingAttachment != attachment) {
+      return;
+    }
     final messageContent = validMentionDrafts.isEmpty ? content : rawContent;
-    // Called synchronously only after the controller has accepted this intent
-    // and published its bubble; rejected sends keep the original draft.
+    // Optimistic clear; failures restore this captured draft without overwriting new edits.
     void clearSubmittedDraft() {
+      if (!stillCurrent() ||
+          textController.text != rawContent ||
+          _pendingAttachment != attachment) {
+        return;
+      }
       textController.clear();
       ref.read(chatComposerDraftsProvider.notifier).clearDraft(conversation);
       if (attachment != null) {
@@ -2394,6 +2434,19 @@ class _ChatViewState extends ConsumerState<ChatView> {
           _pendingAttachment = null;
         });
       }
+    }
+
+    void restoreSubmittedDraft() {
+      if (!stillCurrent() ||
+          textController.text.isNotEmpty ||
+          _pendingAttachment != null) {
+        return;
+      }
+      textController.text = rawContent;
+      ref
+          .read(chatComposerDraftsProvider.notifier)
+          .setDraft(conversation, draft);
+      if (attachment != null) setState(() => _pendingAttachment = attachment);
     }
 
     final expectedAgentReplyDid = _expectedAgentReplyDidForConversation(
@@ -2408,6 +2461,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       await ref
           .read(chatThreadsProvider.notifier)
           .sendAttachment(
+            secure: security,
             conversation: conversation,
             attachment: attachment,
             caption: messageContent.trim().isEmpty ? null : messageContent,
@@ -2415,18 +2469,21 @@ class _ChatViewState extends ConsumerState<ChatView> {
             expectedAgentReplyDid: expectedAgentReplyDid,
             displayThreadId: _displayThreadId,
             onSendStarted: clearSubmittedDraft,
+            onSendFailed: restoreSubmittedDraft,
           );
       return;
     }
     await ref
         .read(chatThreadsProvider.notifier)
         .sendMessage(
+          secure: security,
           conversation: conversation,
           content: messageContent,
           mentions: validMentionDrafts,
           expectedAgentReplyDid: expectedAgentReplyDid,
           displayThreadId: _displayThreadId,
           onSendStarted: clearSubmittedDraft,
+          onSendFailed: restoreSubmittedDraft,
         );
   }
 

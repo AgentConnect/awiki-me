@@ -1861,7 +1861,9 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       groupEventActorName: actorName,
       groupEventSubjectName: subjectName,
     );
-    final body = preview.isNotEmpty
+    final body = message.isEncrypted
+        ? '收到一条加密消息'
+        : preview.isNotEmpty
         ? preview
         : AppMessage.newMessageArrived().resolveForFallback();
     var agentDisplayName = _agentDisplayNameForSender(l10n, message.senderDid);

@@ -263,6 +263,34 @@ void main() {
     },
   );
 
+  test(
+    'disabled capability never downgrades an explicit secure send',
+    () async {
+      final client = _FakeClient(ownerDid: 'did:alice');
+      final adapter = AwikiImCoreMessageAdapter(runtime: _FakeRuntime(client));
+      await adapter.sendConversationText(
+        conversation: AppConversationReadRef.fromConversationId(
+          'dm:peer-scope:v1:bob',
+        ),
+        content: 'must encrypt',
+        secure: true,
+      );
+      expect(
+        client.messages.lastSecurity,
+        core.MessageSecurityMode.secureDirect,
+      );
+      await adapter.sendPayload(
+        thread: const AppThreadRef.direct('did:bob'),
+        payload: const <String, Object?>{'text': 'must encrypt'},
+        secure: true,
+      );
+      expect(
+        client.messages.lastSecurity,
+        core.MessageSecurityMode.secureDirect,
+      );
+    },
+  );
+
   test('an explicit payload request can still use Direct E2EE', () async {
     final client = _FakeClient(ownerDid: 'did:alice');
     final adapter = AwikiImCoreMessageAdapter(
@@ -1154,6 +1182,7 @@ class _RetrySpyMessageAdapter extends AwikiImCoreMessageAdapter {
 
   @override
   Future<ChatMessage> sendText({
+    bool secure = false,
     required AppThreadRef thread,
     required String content,
   }) async {

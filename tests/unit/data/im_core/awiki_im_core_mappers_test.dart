@@ -14,6 +14,65 @@ void main() {
   const mapper = AwikiImCoreMappers();
 
   test(
+    'SDK security provenance survives history and opaque content stays hidden',
+    () {
+      for (final state in <String?>[null, 'failed', 'decrypted']) {
+        final attrs = <core.MessageMetadataAttribute>[
+          const core.MessageMetadataAttribute(
+            key: 'security',
+            value: 'direct-e2ee',
+          ),
+          if (state != null)
+            core.MessageMetadataAttribute(
+              key: 'decryption_state',
+              value: state,
+            ),
+        ];
+        final live = mapper.chatMessageFromCore(
+          core.Message(
+            id: 'secure-message',
+            conversationId: 'dm:peer',
+            threadId: 'dm:peer',
+            threadKind: 'direct',
+            direction: core.MessageDirection.incoming,
+            sender: 'did:peer',
+            senderDidSnapshot: 'did:peer',
+            receiver: 'did:me',
+            body: const core.MessageBodyView(text: 'sensitive-content'),
+            metadata: core.MessageMetadata(attributes: attrs),
+          ),
+          ownerDid: 'did:me',
+        );
+        final history = mapper.chatMessageFromSnapshot(
+          core.ConversationSnapshotMessage(
+            id: 'secure-message',
+            threadId: 'dm:peer',
+            threadKind: 'direct',
+            direction: 'incoming',
+            sender: 'did:peer',
+            receiver: 'did:me',
+            body: const core.ConversationSnapshotMessageBody(
+              text: 'sensitive-content',
+            ),
+            attributes: attrs,
+          ),
+          ownerDid: 'did:me',
+          conversationId: 'dm:peer',
+        );
+        for (final message in [live, history]) {
+          expect(message.isEncrypted, isTrue);
+          if (state == 'decrypted') {
+            expect(message.content, 'sensitive-content');
+          } else {
+            expect(message.content, isNot(contains('sensitive-content')));
+            expect(message.payloadJson, isNull);
+          }
+        }
+      }
+    },
+  );
+
+  test(
     'Core and snapshot mapping preserve explicit aliases without replacing canonical IDs',
     () {
       const canonical = 'did:example:groups:test:42';

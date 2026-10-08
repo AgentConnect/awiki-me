@@ -8,11 +8,13 @@ import '../models/thread_message_patch.dart';
 
 abstract interface class MessageCorePort {
   Future<ChatMessage> sendText({
+    bool secure = false,
     required AppThreadRef thread,
     required String content,
   });
 
   Future<ChatMessage> sendAttachment({
+    bool secure = false,
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
@@ -21,6 +23,7 @@ abstract interface class MessageCorePort {
   });
 
   Future<ChatMessage> sendConversationAttachment({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required AttachmentDraft attachment,
     String? caption,
@@ -37,6 +40,7 @@ abstract interface class MessageCorePort {
   });
 
   Future<ChatMessage> sendConversationText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String content,
     String? clientMessageId,
@@ -44,6 +48,7 @@ abstract interface class MessageCorePort {
   });
 
   Future<ChatMessage> sendConversationPayload({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required Map<String, Object?> payload,
     String? clientMessageId,
