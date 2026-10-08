@@ -341,6 +341,27 @@ void main() {
     expect(find.byType(FriendsPage), findsOneWidget);
     expect(find.text('Compact Following'), findsOneWidget);
     expect(find.text('Compact Follower'), findsOneWidget);
+
+    // Search folds behind the header magnifier, as on the messages tab.
+    final searchField = find.byKey(const Key('friends-search-field'));
+    expect(searchField, findsNothing);
+    await tester.tap(find.byKey(const Key('friends-search-toggle')));
+    await tester.pumpAndSettle();
+    expect(searchField, findsOneWidget);
+    expect(
+      tester.widget<CupertinoSearchTextField>(searchField).focusNode!.hasFocus,
+      isTrue,
+    );
+    await tester.enterText(searchField, 'Following');
+    await tester.pumpAndSettle();
+    expect(find.text('Compact Following'), findsOneWidget);
+    expect(find.text('Compact Follower'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('friends-search-toggle')));
+    await tester.pumpAndSettle();
+    expect(searchField, findsNothing);
+    expect(find.text('Compact Following'), findsOneWidget);
+    expect(find.text('Compact Follower'), findsOneWidget);
   });
 
   testWidgets('窄屏全部联系人按 DID 去重且群组 Tab 原位展示列表', (tester) async {
@@ -404,6 +425,8 @@ void main() {
     );
     expect(find.text('Design Group'), findsOneWidget);
     expect(find.text('UI review'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('friends-search-toggle')));
+    await tester.pumpAndSettle();
     expect(
       tester
           .widget<CupertinoSearchTextField>(
@@ -485,7 +508,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('联系人'), findsOneWidget);
-    expect(find.text('搜索群组'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('friends-category-tab-groups')),
+        matching: find.byKey(const Key('friends-category-tab-indicator')),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Retained Group'), findsOneWidget);
     expect(
       find.byKey(const Key('friends-group-tab-row:did:test:group:retained')),
@@ -901,16 +930,18 @@ void main() {
       AwikiMeColors.surface,
     );
     final categoryTabs = find.byKey(const Key('friends-category-tabs'));
-    expect(tester.getRect(categoryTabs), const Rect.fromLTWH(16, 122, 358, 50));
+    // No resident search field: the compact tabs sit right under the header.
+    expect(find.byKey(const Key('friends-search-field')), findsNothing);
+    expect(tester.getRect(categoryTabs), const Rect.fromLTWH(16, 68, 358, 36));
     for (final tab in <String>['all', 'following', 'followers', 'groups']) {
       expect(
         tester.getSize(find.byKey(Key('friends-category-tab-$tab'))),
-        const Size(88, 44),
+        const Size(88, 30),
       );
     }
     expect(
       tester.getSize(find.byKey(const Key('friends-category-tab-indicator'))),
-      const Size(88, 44),
+      const Size(88, 30),
     );
     expect(find.byKey(const Key('friends-groups-row')), findsNothing);
     final compactHeader = find.byKey(const Key('shell-compact-header'));

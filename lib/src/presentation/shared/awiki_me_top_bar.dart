@@ -307,3 +307,55 @@ class AwikiMeShellTabPage extends StatelessWidget {
     );
   }
 }
+
+/// Phone header search toggle: a magnifier that folds the page's search
+/// field in and out. Used as [AwikiMeShellTabPage.secondaryAction].
+class AwikiShellSearchToggle extends StatelessWidget {
+  const AwikiShellSearchToggle({
+    super.key,
+    required this.open,
+    required this.onTap,
+    required this.semanticLabel,
+    this.semanticsIdentifier,
+  });
+
+  final bool open;
+  final VoidCallback onTap;
+  final String semanticLabel;
+  final String? semanticsIdentifier;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return AppPressable(
+      onTap: onTap,
+      semanticLabel: semanticLabel,
+      semanticsIdentifier: semanticsIdentifier,
+      tooltip: semanticLabel,
+      button: true,
+      selected: open,
+      scaleOnPress: true,
+      pressedScale: 0.9,
+      borderRadius: BorderRadius.circular(18),
+      builder: (context, state, child) => SizedBox(
+        width: 36,
+        height: 44,
+        child: Center(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: open || state.pressed || state.hovered
+                  ? theme.title.withValues(alpha: 0.08)
+                  : theme.title.withValues(alpha: 0),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+      child: Icon(CupertinoIcons.search, size: 20, color: theme.title),
+    );
+  }
+}

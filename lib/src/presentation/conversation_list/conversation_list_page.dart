@@ -1296,39 +1296,14 @@ class _ConversationSearchToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
     return ValueListenableBuilder<bool>(
       valueListenable: searchOpen,
-      builder: (context, open, _) => AppPressable(
+      builder: (context, open, _) => AwikiShellSearchToggle(
         key: const Key('conversation-search-toggle'),
+        open: open,
         onTap: () => searchOpen.value = !open,
         semanticLabel: context.l10n.conversationsSearchPlaceholder,
         semanticsIdentifier: 'e2e-conversation-search-toggle',
-        tooltip: context.l10n.conversationsSearchPlaceholder,
-        button: true,
-        selected: open,
-        scaleOnPress: true,
-        pressedScale: 0.9,
-        borderRadius: BorderRadius.circular(18),
-        builder: (context, state, child) => SizedBox(
-          width: 36,
-          height: 44,
-          child: Center(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: open || state.pressed || state.hovered
-                    ? theme.title.withValues(alpha: 0.08)
-                    : theme.title.withValues(alpha: 0),
-              ),
-              child: child,
-            ),
-          ),
-        ),
-        child: Icon(CupertinoIcons.search, size: 20, color: theme.title),
       ),
     );
   }
@@ -1665,9 +1640,9 @@ class _ConversationRow extends StatelessWidget {
                       seed: title,
                       size: phone ? 40 : responsive.displayScaled(48),
                       avatarUri: avatarUri,
-                    userId: avatarUserId,
-                    groupId: classification.isGroup ? conversationId : null,
-                    isAgent: classification.isAgent,
+                      userId: avatarUserId,
+                      groupId: classification.isGroup ? conversationId : null,
+                      isAgent: classification.isAgent,
                     ),
                     if (unreadCount > 0)
                       Positioned(

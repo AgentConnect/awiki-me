@@ -80,11 +80,20 @@ class FriendsPage extends ConsumerWidget {
     final query = ref.watch(_friendsSearchQueryProvider).trim().toLowerCase();
     if (responsive.isCompact && !embedded) {
       final selectedTab = ref.watch(_friendsDirectoryTabProvider);
+      final searchOpen = ref.watch(_friendsSearchOpenProvider);
+      // Folding the field away also drops the query, as on the messages tab.
+      void closeSearch() {
+        ref.read(_friendsSearchOpenProvider.notifier).state = false;
+        ref.read(_friendsSearchQueryProvider.notifier).state = '';
+      }
+
       final compactDirectory = _CompactFriendsDirectory(
         state: state,
         selectedTab: selectedTab,
         query: query,
         bottomInset: bottomInset,
+        searchOpen: searchOpen,
+        onSearchDismissed: closeSearch,
         onTabSelected: (tab) =>
             ref.read(_friendsDirectoryTabProvider.notifier).state = tab,
         onSearchChanged: (value) =>
@@ -96,6 +105,17 @@ class FriendsPage extends ConsumerWidget {
         key: const Key('friends-page-surface'),
         title: context.l10n.friendsTitle,
         quickActionIcon: CupertinoIcons.add_circled,
+        secondaryAction: AwikiShellSearchToggle(
+          key: const Key('friends-search-toggle'),
+          open: searchOpen,
+          onTap: searchOpen
+              ? closeSearch
+              : () =>
+                    ref.read(_friendsSearchOpenProvider.notifier).state = true,
+          semanticLabel: selectedTab == _FriendsDirectoryTab.groups
+              ? context.l10n.friendsSearchGroupsPlaceholder
+              : context.l10n.friendsSearchPlaceholder,
+        ),
         onQuickActionsTap: (anchorContext) => showCommonQuickActionsMenu(
           anchorContext,
           ref,
@@ -327,6 +347,11 @@ final _friendsSearchQueryProvider = StateProvider.autoDispose<String>(
   (ref) => '',
 );
 
+/// Phone contacts fold their search field behind the header magnifier.
+final _friendsSearchOpenProvider = StateProvider.autoDispose<bool>(
+  (ref) => false,
+);
+
 enum _FriendsDirectoryTab { all, following, followers, groups }
 
 final _friendsDirectoryTabProvider = StateProvider<_FriendsDirectoryTab>(
@@ -366,6 +391,8 @@ class _CompactFriendsDirectory extends ConsumerWidget {
     required this.selectedTab,
     required this.query,
     required this.bottomInset,
+    required this.searchOpen,
+    required this.onSearchDismissed,
     required this.onTabSelected,
     required this.onSearchChanged,
     required this.onContactTap,
@@ -376,6 +403,8 @@ class _CompactFriendsDirectory extends ConsumerWidget {
   final _FriendsDirectoryTab selectedTab;
   final String query;
   final double bottomInset;
+  final bool searchOpen;
+  final VoidCallback onSearchDismissed;
   final ValueChanged<_FriendsDirectoryTab> onTabSelected;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<RelationshipSummary> onContactTap;
@@ -394,12 +423,21 @@ class _CompactFriendsDirectory extends ConsumerWidget {
       ),
       child: Column(
         children: <Widget>[
-          _FriendsSearchField(
-            placeholder: selectedTab == _FriendsDirectoryTab.groups
-                ? context.l10n.friendsSearchGroupsPlaceholder
-                : context.l10n.friendsSearchPlaceholder,
-            onChanged: onSearchChanged,
-          ),
+          if (!context.awikiResponsive.isPhone)
+            _FriendsSearchField(
+              placeholder: selectedTab == _FriendsDirectoryTab.groups
+                  ? context.l10n.friendsSearchGroupsPlaceholder
+                  : context.l10n.friendsSearchPlaceholder,
+              onChanged: onSearchChanged,
+            )
+          else if (searchOpen)
+            _PhoneFriendsSearchField(
+              placeholder: selectedTab == _FriendsDirectoryTab.groups
+                  ? context.l10n.friendsSearchGroupsPlaceholder
+                  : context.l10n.friendsSearchPlaceholder,
+              onChanged: onSearchChanged,
+              onDismissed: onSearchDismissed,
+            ),
           _FriendsCategoryTabs(
             selectedTab: selectedTab,
             onSelected: onTabSelected,
@@ -624,12 +662,13 @@ class _FriendsCategoryTabs extends StatelessWidget {
     ];
     // Flat glass track; the chosen segment is a flat lens tint.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       child: SizedBox(
         key: const Key('friends-category-tabs'),
-        height: 50,
+        // Matches the messages filter track: 30-unit lenses in a 36 track.
+        height: 36,
         child: AwikiGlassSurface(
-          borderRadius: BorderRadius.circular(25),
+          borderRadius: BorderRadius.circular(18),
           padding: const EdgeInsets.all(3),
           child: Row(
             children: entries
@@ -645,7 +684,7 @@ class _FriendsCategoryTabs extends StatelessWidget {
                         selected: selected,
                         semanticLabel: entry.$2,
                         onTap: () => onSelected(entry.$1),
-                        borderRadius: BorderRadius.circular(22),
+                        borderRadius: BorderRadius.circular(15),
                         child: AnimatedContainer(
                           key: selected
                               ? const Key('friends-category-tab-indicator')
@@ -656,7 +695,7 @@ class _FriendsCategoryTabs extends StatelessWidget {
                             color: selected
                                 ? theme.glassLens
                                 : theme.glassLens.withValues(alpha: 0),
-                            borderRadius: BorderRadius.circular(22),
+                            borderRadius: BorderRadius.circular(15),
                             border: Border.all(
                               color: selected
                                   ? theme.glassEdgeActive
@@ -669,8 +708,10 @@ class _FriendsCategoryTabs extends StatelessWidget {
                             textAlign: TextAlign.center,
                             maxLines: 1,
                             style: TextStyle(
-                              color: theme.title,
-                              fontSize: 16,
+                              color: selected
+                                  ? theme.title
+                                  : theme.secondaryText,
+                              fontSize: 14,
                               height: 1.2,
                               fontWeight: FontWeight.w400,
                             ),
@@ -771,6 +812,84 @@ String? _handleLabel(String? handle) {
     return null;
   }
   return value.startsWith('@') ? value.substring(1) : value;
+}
+
+/// Phone search field opened from the header magnifier. It takes focus on
+/// open and folds away again once it loses focus while empty.
+class _PhoneFriendsSearchField extends StatefulWidget {
+  const _PhoneFriendsSearchField({
+    required this.placeholder,
+    required this.onChanged,
+    required this.onDismissed,
+  });
+
+  final String placeholder;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onDismissed;
+
+  @override
+  State<_PhoneFriendsSearchField> createState() =>
+      _PhoneFriendsSearchFieldState();
+}
+
+class _PhoneFriendsSearchFieldState extends State<_PhoneFriendsSearchField> {
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_onFocusChanged);
+  }
+
+  void _onFocusChanged() {
+    if (!_focus.hasFocus && _controller.text.trim().isEmpty) {
+      widget.onDismissed();
+    }
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(_onFocusChanged);
+    _focus.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+      child: SizedBox(
+        height: 44,
+        child: AwikiGlassSurface(
+          borderRadius: BorderRadius.circular(22),
+          child: CupertinoSearchTextField(
+            key: const Key('friends-search-field'),
+            controller: _controller,
+            focusNode: _focus,
+            autofocus: true,
+            placeholder: widget.placeholder,
+            onChanged: widget.onChanged,
+            style: TextStyle(color: theme.title, fontSize: 16),
+            placeholderStyle: TextStyle(
+              color: theme.secondaryText,
+              fontSize: 16,
+            ),
+            prefixIcon: Icon(
+              CupertinoIcons.search,
+              color: theme.secondaryText,
+              size: 17,
+            ),
+            prefixInsets: const EdgeInsetsDirectional.only(start: 14),
+            decoration: const BoxDecoration(),
+            padding: const EdgeInsetsDirectional.fromSTEB(8, 10, 12, 10),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _FriendsSearchField extends StatelessWidget {
