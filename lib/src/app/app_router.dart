@@ -77,7 +77,7 @@ class AppNavigator {
       useRootNavigator: true,
       barrierDismissible: barrierDismissible,
       barrierLabel: 'Dismiss',
-      barrierColor: const Color(0x330F171F),
+      barrierColor: const Color(0x33161616),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (dialogContext, _, __) =>
           _AppDialogKeyboardDismissScope(child: builder(dialogContext)),

@@ -1214,10 +1214,11 @@ bool _textSpanHasStyledMention(InlineSpan span, String mentionText) {
     return false;
   }
   final style = span.style;
+  // Reference `button.mention`: semibold underlined ink.
   if (span.text == mentionText &&
-      style?.fontWeight == FontWeight.w400 &&
-      style?.color != null &&
-      style?.backgroundColor != null) {
+      style?.fontWeight == FontWeight.w600 &&
+      style?.decoration == TextDecoration.underline &&
+      style?.color != null) {
     return true;
   }
   return span.children?.any(

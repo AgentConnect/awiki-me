@@ -1436,9 +1436,9 @@ class _SelectionMark extends StatelessWidget {
         border: Border.all(color: color, width: 1.2),
       ),
       child: selected
-          ? const Icon(
+          ? Icon(
               CupertinoIcons.check_mark,
-              color: CupertinoColors.white,
+              color: context.awikiTheme.primaryForeground,
               size: 11,
             )
           : null,

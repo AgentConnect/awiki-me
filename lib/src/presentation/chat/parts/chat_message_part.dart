@@ -3198,19 +3198,20 @@ TextStyle _mentionHighlightStyle(
   AwikiMeThemeTokens theme,
   TextStyle baseStyle,
 ) {
-  // Reference `.msg.out .mention`: on the accent bubble a mention keeps the
-  // bubble's text colour over a 16% tint of it.
+  // Reference `button.mention`: semibold, underlined ink. On the outgoing
+  // bubble it keeps the bubble's text colour over a 16% tint of it.
+  final mention = baseStyle.copyWith(
+    fontWeight: FontWeight.w600,
+    decoration: TextDecoration.underline,
+    decorationThickness: 1,
+  );
   if (baseStyle.color == theme.onOutgoingMessage) {
-    return baseStyle.copyWith(
-      fontWeight: FontWeight.w400,
+    return mention.copyWith(
+      decorationColor: theme.onOutgoingMessage,
       backgroundColor: theme.onOutgoingMessage.withValues(alpha: 0.16),
     );
   }
-  return baseStyle.copyWith(
-    color: theme.primary,
-    fontWeight: FontWeight.w400,
-    backgroundColor: theme.primary.withValues(alpha: 0.10),
-  );
+  return mention.copyWith(color: theme.body, decorationColor: theme.body);
 }
 
 const _awikiMentionTag = 'awikiMention';

@@ -155,7 +155,7 @@ class _PersonalAgentSettingsPageState
                   child: Text(
                     selectionLabel,
                     style: TextStyle(
-                      color: const Color(0xFF66728A),
+                      color: const Color(0xFF727272),
                       fontSize: responsive.metaSm,
                       fontWeight: FontWeight.w400,
                     ),
@@ -277,7 +277,7 @@ class _PersonalAgentHeroCard extends StatelessWidget {
                     Text(
                       l10n.personalAgentTitle,
                       style: TextStyle(
-                        color: const Color(0xFF101B32),
+                        color: const Color(0xFF1C1C1C),
                         fontSize: responsive.titleLg,
                         fontWeight: FontWeight.w400,
                       ),
@@ -288,7 +288,7 @@ class _PersonalAgentHeroCard extends StatelessWidget {
                           ? l10n.personalAgentDescription
                           : l10n.personalAgentDisabledDescription,
                       style: TextStyle(
-                        color: const Color(0xFF66728A),
+                        color: const Color(0xFF727272),
                         fontSize: responsive.bodySm,
                         height: 1.4,
                       ),
@@ -434,7 +434,7 @@ class _PersonalAgentDaemonSelector extends StatelessWidget {
           Text(
             l10n.personalAgentSelectDaemon,
             style: TextStyle(
-              color: const Color(0xFF101B32),
+              color: const Color(0xFF1C1C1C),
               fontSize: responsive.bodyMd,
               fontWeight: FontWeight.w400,
             ),
@@ -443,7 +443,7 @@ class _PersonalAgentDaemonSelector extends StatelessWidget {
           Text(
             l10n.personalAgentRunsOnSelectedDaemon,
             style: TextStyle(
-              color: const Color(0xFF66728A),
+              color: const Color(0xFF727272),
               fontSize: responsive.bodySm,
             ),
           ),
@@ -452,7 +452,7 @@ class _PersonalAgentDaemonSelector extends StatelessWidget {
             Text(
               l10n.personalAgentNoDaemons,
               style: TextStyle(
-                color: const Color(0xFF66728A),
+                color: const Color(0xFF727272),
                 fontSize: responsive.bodySm,
               ),
             )
@@ -514,10 +514,10 @@ class _PersonalAgentDaemonOption extends StatelessWidget {
       ),
       semanticsIdentifier: 'personal-agent-daemon-option:${daemon.agentDid}',
       borderRadius: BorderRadius.circular(responsive.radius(10)),
-      backgroundColor: const Color(0xFFF8FAFD),
-      selectedBackgroundColor: const Color(0xFFEAF2FF),
+      backgroundColor: const Color(0xFFFAFAFA),
+      selectedBackgroundColor: const Color(0xFFEBEBEB),
       border: Border.all(
-        color: selected ? const Color(0xFF9DC2FF) : const Color(0xFFE5EAF2),
+        color: selected ? const Color(0xFF0B0B0B) : const Color(0xFFEAEAEA),
       ),
       child: Padding(
         padding: EdgeInsets.all(responsive.spacing(12)),
@@ -528,8 +528,8 @@ class _PersonalAgentDaemonOption extends StatelessWidget {
                   ? CupertinoIcons.check_mark_circled_solid
                   : CupertinoIcons.circle,
               color: selected
-                  ? const Color(0xFF0B65F8)
-                  : const Color(0xFF8A96AA),
+                  ? const Color(0xFF0B0B0B)
+                  : const Color(0xFF959595),
               size: responsive.iconMd,
             ),
             SizedBox(width: responsive.spacing(10)),
@@ -542,7 +542,7 @@ class _PersonalAgentDaemonOption extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: const Color(0xFF101B32),
+                      color: const Color(0xFF1C1C1C),
                       fontSize: responsive.bodySm,
                       fontWeight: FontWeight.w400,
                     ),
@@ -553,7 +553,7 @@ class _PersonalAgentDaemonOption extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: const Color(0xFF66728A),
+                      color: const Color(0xFF727272),
                       fontSize: responsive.metaSm,
                     ),
                   ),
@@ -636,7 +636,7 @@ class _PersonalAgentLimitsCard extends StatelessWidget {
           Text(
             l10n.personalAgentSafetyTitle,
             style: TextStyle(
-              color: const Color(0xFF101B32),
+              color: const Color(0xFF1C1C1C),
               fontSize: responsive.bodyMd,
               fontWeight: FontWeight.w400,
             ),
@@ -685,7 +685,7 @@ class _PersonalAgentLimitRow extends StatelessWidget {
             child: Text(
               text,
               style: TextStyle(
-                color: const Color(0xFF344056),
+                color: const Color(0xFF404040),
                 fontSize: responsive.bodySm,
                 height: 1.35,
               ),

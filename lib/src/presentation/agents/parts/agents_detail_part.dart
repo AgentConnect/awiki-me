@@ -604,7 +604,7 @@ class _PersonalAgentSettingsEntryCard extends StatelessWidget {
       semanticsIdentifier: 'personal-agent-settings-entry',
       borderRadius: BorderRadius.circular(responsive.radius(10)),
       backgroundColor: context.awikiTheme.surface,
-      border: Border.all(color: const Color(0xFFE4EAF3)),
+      border: Border.all(color: const Color(0xFFE9E9E9)),
       child: Padding(
         padding: EdgeInsets.all(responsive.spacing(16)),
         child: Row(
@@ -634,7 +634,7 @@ class _PersonalAgentSettingsEntryCard extends StatelessWidget {
                           context.awikiTheme.colorScheme.brightness ==
                               Brightness.dark
                           ? context.awikiTheme.title
-                          : const Color(0xFF101B32),
+                          : const Color(0xFF1C1C1C),
                       fontSize: responsive.bodyMd,
                       fontWeight: FontWeight.w400,
                     ),
@@ -647,7 +647,7 @@ class _PersonalAgentSettingsEntryCard extends StatelessWidget {
                           context.awikiTheme.colorScheme.brightness ==
                               Brightness.dark
                           ? context.awikiTheme.secondaryText
-                          : const Color(0xFF66728A),
+                          : const Color(0xFF727272),
                       fontSize: responsive.metaSm,
                       height: 1.35,
                     ),
@@ -666,7 +666,7 @@ class _PersonalAgentSettingsEntryCard extends StatelessWidget {
             SizedBox(width: responsive.spacing(10)),
             Icon(
               CupertinoIcons.chevron_right,
-              color: const Color(0xFF8A96AA),
+              color: const Color(0xFF959595),
               size: responsive.iconSm,
             ),
           ],

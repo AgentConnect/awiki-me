@@ -1793,12 +1793,12 @@ class _SkillOnboardingDialogState
               height: responsive.displayScaled(34),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0xFFEAF2FF),
+                color: const Color(0xFFEBEBEB),
                 borderRadius: BorderRadius.circular(responsive.radius(8)),
               ),
               child: Icon(
                 CupertinoIcons.command,
-                color: const Color(0xFF0B65F8),
+                color: const Color(0xFF0B0B0B),
                 size: responsive.iconMd,
               ),
             ),
@@ -1807,7 +1807,7 @@ class _SkillOnboardingDialogState
           Text(
             context.l10n.agentSkillDisplayName,
             style: TextStyle(
-              color: const Color(0xFF66728A),
+              color: const Color(0xFF727272),
               fontSize: responsive.metaSm,
               fontWeight: FontWeight.w400,
             ),
@@ -1828,7 +1828,7 @@ class _SkillOnboardingDialogState
           Text(
             context.l10n.agentSkillDisplayNameHint,
             style: TextStyle(
-              color: const Color(0xFF66728A),
+              color: const Color(0xFF727272),
               fontSize: responsive.metaSm,
             ),
           ),
@@ -1847,7 +1847,7 @@ class _SkillOnboardingDialogState
               ),
               style: TextStyle(
                 color: state.error == null
-                    ? const Color(0xFF66728A)
+                    ? const Color(0xFF727272)
                     : AwikiMeColors.danger,
                 fontSize: responsive.bodySm,
                 fontWeight: FontWeight.w400,
@@ -1877,7 +1877,7 @@ class _SkillOnboardingDialogState
                     Text(
                       context.l10n.agentSkillSecretNotice,
                       style: TextStyle(
-                        color: const Color(0xFF66728A),
+                        color: const Color(0xFF727272),
                         fontSize: responsive.metaSm,
                         height: 1.35,
                       ),
@@ -1942,7 +1942,7 @@ class _SkillGrantLine extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: const Color(0xFF66728A),
+              color: const Color(0xFF727272),
               fontSize: responsive.metaSm,
             ),
           ),
@@ -1953,7 +1953,7 @@ class _SkillGrantLine extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: const Color(0xFF25324A),
+              color: const Color(0xFF323232),
               fontSize: responsive.bodySm,
               fontWeight: FontWeight.w400,
             ),
@@ -1975,7 +1975,7 @@ class _SkillPromptText extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(responsive.spacing(12)),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: const Color(0xFF181818),
         borderRadius: BorderRadius.circular(responsive.radius(8)),
       ),
       child: Column(
@@ -1992,7 +1992,7 @@ class _SkillPromptText extends StatelessWidget {
                   instruction.prompt,
                   key: const Key('agent-skill-instruction-text'),
                   style: TextStyle(
-                    color: const Color(0xFFE5E7EB),
+                    color: const Color(0xFFE7E7E7),
                     fontSize: responsive.metaSm,
                     fontFamily: 'monospace',
                     height: 1.4,
@@ -2402,9 +2402,9 @@ class _CommandTextState extends State<_CommandText> {
       width: double.infinity,
       padding: EdgeInsets.all(responsive.spacing(12)),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: const Color(0xFF181818),
         borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: const Color(0xFF292929)),
       ),
       child: Row(
         key: widget.rowKey,
@@ -2430,7 +2430,7 @@ class _CommandTextState extends State<_CommandText> {
               ),
               decoration: null,
               style: TextStyle(
-                color: const Color(0xFFE5E7EB),
+                color: const Color(0xFFE7E7E7),
                 fontSize: responsive.metaSm,
                 fontFamily: 'monospace',
                 height: 1.35,
@@ -2444,11 +2444,11 @@ class _CommandTextState extends State<_CommandText> {
             semanticLabel: widget.copyLabel,
             tooltip: widget.copyLabel,
             size: responsive.displayScaled(34),
-            backgroundColor: const Color(0xFF1E293B),
+            backgroundColor: const Color(0xFF292929),
             borderRadius: BorderRadius.circular(responsive.radius(8)),
             child: Icon(
               CupertinoIcons.doc_on_doc,
-              color: const Color(0xFFCBD5E1),
+              color: const Color(0xFFD4D4D4),
               size: responsive.iconSm,
             ),
           ),

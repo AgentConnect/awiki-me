@@ -98,13 +98,13 @@ void main() {
             '个人助理',
             brightness == Brightness.dark
                 ? theme.tokens.title
-                : const Color(0xFF101B32),
+                : const Color(0xFF1C1C1C),
           ),
           (
             '配置个人助理的启用、暂停和 Daemon 管理',
             brightness == Brightness.dark
                 ? theme.tokens.secondaryText
-                : const Color(0xFF66728A),
+                : const Color(0xFF727272),
           ),
         ]) {
           final label = tester.widget<Text>(

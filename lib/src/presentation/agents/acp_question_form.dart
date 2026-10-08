@@ -594,7 +594,7 @@ class _AcpQuestionFormState extends ConsumerState<AcpQuestionForm>
                 label,
                 style: TextStyle(
                   fontSize: primary ? 14 : 12,
-                  color: primary ? CupertinoColors.white : null,
+                  color: primary ? context.awikiTheme.primaryForeground : null,
                 ),
               ),
       );

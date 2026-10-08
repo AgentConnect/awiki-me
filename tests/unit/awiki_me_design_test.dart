@@ -155,22 +155,39 @@ void main() {
       TargetPlatform.macOS,
     ).tokens.semanticColors;
 
-    expect(colors.canvas, const Color(0xFFFAF9F7));
+    expect(colors.canvas, const Color(0xFFFAFAFA));
     expect(colors.surface, const Color(0xFFFFFFFF));
-    expect(colors.title, const Color(0xFF2D2B26));
-    expect(colors.secondaryText, const Color(0xFF6B6963));
-    expect(colors.border, const Color(0xFFE8E7E4));
-    expect(colors.primary, const Color(0xFF0081D3));
+    expect(colors.title, const Color(0xFF0B0B0B));
+    expect(colors.secondaryText, const Color(0xFF585858));
+    expect(colors.border, const Color(0xFFE1E1E1));
+    expect(colors.primary, const Color(0xFF0B0B0B));
     expect(colors.success, const Color(0xFF03A14A));
     expect(colors.warning, const Color(0xFFDA950B));
     expect(colors.danger, const Color(0xFFD73431));
     expect(colors.unread, const Color(0xFFFA5152));
-    expect(colors.navigationSurface, const Color(0xFFEEEDE9));
-    expect(colors.navigationBorder, const Color(0xFFDDDCD9));
+    expect(colors.navigationSurface, const Color(0xFFF5F5F5));
+    expect(colors.navigationBorder, const Color(0xFFDCDCDC));
     expect(colors.chatSurface, const Color(0xFFFFFFFF));
-    expect(colors.incomingMessage, const Color(0xFFF2F2F4));
-    expect(colors.outgoingMessage, const Color(0xFF016EBA));
+    expect(colors.incomingMessage, const Color(0xFFEEEEEE));
+    expect(colors.outgoingMessage, const Color(0xFF0B0B0B));
     expect(colors.onOutgoingMessage, const Color(0xFFFFFFFF));
+  });
+
+  test('semantic dark colors stay achromatic apart from status roles', () {
+    final tokens = AwikiMeTheme.forPlatform(
+      TargetPlatform.macOS,
+      brightness: Brightness.dark,
+    ).tokens;
+    final colors = tokens.semanticColors;
+
+    expect(colors.canvas, const Color(0xFF000000));
+    expect(colors.surface, const Color(0xFF030303));
+    expect(colors.title, const Color(0xFFF5F5F5));
+    expect(colors.primary, const Color(0xFFF5F5F5));
+    expect(tokens.primaryForeground, const Color(0xFF020202));
+    expect(colors.incomingMessage, const Color(0xFF141414));
+    expect(colors.outgoingMessage, const Color(0xFFF5F5F5));
+    expect(colors.onOutgoingMessage, const Color(0xFF020202));
   });
 
   test('compact and expanded typography expose intentional type ramps', () {

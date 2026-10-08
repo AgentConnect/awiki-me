@@ -189,7 +189,9 @@ class _AcpActionButtonState extends ConsumerState<AcpActionButton>
                         style: TextStyle(
                           fontSize: widget.primary ? 14 : 12,
                           height: 1.4,
-                          color: widget.primary ? CupertinoColors.white : null,
+                          color: widget.primary
+                              ? theme.primaryForeground
+                              : null,
                         ),
                       ),
                 ),
@@ -199,7 +201,7 @@ class _AcpActionButtonState extends ConsumerState<AcpActionButton>
                       child: CupertinoActivityIndicator(
                         radius: 8,
                         color: widget.primary
-                            ? CupertinoColors.white
+                            ? theme.primaryForeground
                             : theme.primary,
                       ),
                     ),

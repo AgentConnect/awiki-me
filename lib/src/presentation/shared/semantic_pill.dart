@@ -50,9 +50,9 @@ _SemanticPillColors _colorsForTone(
       background: context.awikiTheme.primarySoft,
       foreground: context.awikiTheme.primary,
     ),
-    SemanticPillTone.runtime => const _SemanticPillColors(
-      background: Color(0xFFE4F3FA),
-      foreground: AwikiMePalette.badgeBlue,
+    SemanticPillTone.runtime => _SemanticPillColors(
+      background: context.awikiTheme.primarySoft,
+      foreground: context.awikiTheme.primaryDeep,
     ),
     SemanticPillTone.relationship => const _SemanticPillColors(
       background: Color(0xFFE6F8EE),

@@ -82,7 +82,7 @@ class AwikiFrostedSurface extends StatelessWidget {
           filter: _backdrop,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: dark ? const Color(0xD12B2D31) : const Color(0xCCFCFDFE),
+              color: dark ? const Color(0xD12D2D2D) : const Color(0xCCFDFDFD),
             ),
             child: DecoratedBox(
               position: DecorationPosition.foreground,
@@ -125,7 +125,7 @@ class _OuterShadowPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final card = borderRadius.toRRect(Offset.zero & size);
-    const ink = Color(0xFF141C2A);
+    const ink = Color(0xFF1C1C1C);
     canvas.save();
     canvas.clipPath(
       Path()
