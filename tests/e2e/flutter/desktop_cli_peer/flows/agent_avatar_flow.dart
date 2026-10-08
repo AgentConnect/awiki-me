@@ -150,10 +150,12 @@ Future<void> _verifyAgentAvatarEditing(
     );
     await tap('agent-list-tile-$did');
     await openEditor();
+    final preset = initial.presetCatalog.firstWhere((item) => item.selectable);
+    expect(initial.defaultAvatar, isNotNull);
     await tester.ensureVisible(
-      find.byKey(const Key('agent-avatar-preset-research')),
+      find.byKey(Key('agent-avatar-preset-${preset.id}')),
     );
-    await tap('agent-avatar-preset-research');
+    await tap('agent-avatar-preset-${preset.id}');
     await tap('agent-avatar-cancel');
     expect(
       (await port.loadAgentAvatar(did)).avatar.toJson(),
@@ -168,13 +170,17 @@ Future<void> _verifyAgentAvatarEditing(
     await save();
     final selected = (await port.loadAgentAvatar(did)).avatar;
     expect(selected.agentId, initial.avatar.agentId);
-    expect(selected.presetId, 'research');
+    expect(selected.presetId, preset.id);
     expect(selected.version, '1');
-    final gif = await rootBundle.load('assets/avatars/agents/research.gif');
-    final file = File('${fixtures.path}/agent.gif');
-    await file.writeAsBytes(
-      gif.buffer.asUint8List(gif.offsetInBytes, gif.lengthInBytes),
+    final gif = img.Image(width: 32, height: 32);
+    gif.addFrame(
+      img.fill(
+        img.Image(width: 32, height: 32),
+        color: img.ColorRgb8(0, 128, 255),
+      ),
     );
+    final file = File('${fixtures.path}/agent.gif');
+    await file.writeAsBytes(img.encodeGif(gif));
     chooser.next = XFile(file.path);
     await openEditor();
     await tester.ensureVisible(find.byKey(const Key('agent-avatar-upload')));

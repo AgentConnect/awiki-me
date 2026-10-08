@@ -1708,5 +1708,9 @@
   "agentAvatarResponsibility": "Agent responsibility",
   "agentAvatarDescription": "Appearance description",
   "agentAvatarRegenerate": "Regenerate avatar",
-  "agentAvatarImageRejected": "Choose a GIF animation, PNG, JPEG or static WebP up to 5 MB."
+  "agentAvatarImageRejected": "Choose a GIF animation, PNG, JPEG or static WebP up to 5 MB.",
+  "agentAvatarSavedRefreshFailed": "Avatar saved. Refresh failed; close and check again later.",
+  "agentAvatarVersionConflict": "Avatar changed on another device. Your draft is kept; review and save again.",
+  "agentAvatarCurrent": "Current avatar",
+  "agentAvatarDraft": "Unsaved preview"
 }

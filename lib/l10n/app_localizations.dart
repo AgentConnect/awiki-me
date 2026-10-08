@@ -7323,6 +7323,30 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'请选择 5 MB 内的 GIF 动图、PNG、JPEG 或静态 WebP。'**
   String get agentAvatarImageRejected;
+
+  /// No description provided for @agentAvatarSavedRefreshFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'头像已保存，辅助刷新失败。可关闭窗口稍后查看。'**
+  String get agentAvatarSavedRefreshFailed;
+
+  /// No description provided for @agentAvatarVersionConflict.
+  ///
+  /// In zh, this message translates to:
+  /// **'头像已被其他设备修改。已保留草稿，请确认后再次保存。'**
+  String get agentAvatarVersionConflict;
+
+  /// No description provided for @agentAvatarCurrent.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前头像'**
+  String get agentAvatarCurrent;
+
+  /// No description provided for @agentAvatarDraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'待保存预览'**
+  String get agentAvatarDraft;
 }
 
 class _AppLocalizationsDelegate

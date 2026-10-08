@@ -57,6 +57,7 @@ class _AgentAvatarEditorState extends ConsumerState<AgentAvatarEditor> {
   Uint8List? _uploadCover;
   String? _error;
   bool _busy = true;
+  bool _committed = false;
   bool _cropReady = false;
   bool get _current =>
       mounted && ref.read(sessionProvider).activeEpoch == _epoch;
@@ -107,6 +108,7 @@ class _AgentAvatarEditorState extends ConsumerState<AgentAvatarEditor> {
   void _draft(String action, {String? preset, Uint8List? image}) {
     _poll?.cancel();
     setState(() {
+      _committed = false;
       _action = action;
       _preset = preset;
       _image = image;
@@ -224,10 +226,23 @@ class _AgentAvatarEditorState extends ConsumerState<AgentAvatarEditor> {
             : null,
       );
       if (!_current) return;
+      _committed = true;
+      final previous = _capabilities!;
+      _capabilities = AgentAvatarCapabilities(
+        avatar: result.avatar,
+        presetCatalog: previous.presetCatalog,
+        defaultAvatar: previous.defaultAvatar,
+        uploadEnabled: previous.uploadEnabled,
+        generationEnabled: previous.generationEnabled,
+      );
+      _action = null;
+      _preset = null;
+      _image = null;
+      _uploadCover = null;
       ref
           .read(agentsProvider.notifier)
           .applyAvatarProjection(widget.agent.agentDid, result.avatar);
-      ref
+      await ref
           .read(accountStateSyncRequestBusProvider)
           .request(
             'agent_avatar_updated',
@@ -237,28 +252,36 @@ class _AgentAvatarEditorState extends ConsumerState<AgentAvatarEditor> {
               version: result.inventoryVersion,
             ),
           );
+      if (!_current) return;
       await ref
           .read(agentsProvider.notifier)
           .load(showLoading: false, surfaceError: false);
       if (!_current) return;
       final session = ref.read(sessionProvider);
       if (session.session != null) {
-        unawaited(
-          ref
-              .read(peerDisplayProfileProvider.notifier)
-              .refreshDisplayProfiles(
-                ownerDid: session.session!.did,
-                dids: [widget.agent.agentDid],
-                force: true,
-                expectedEpoch: _epoch,
-              ),
-        );
+        await ref
+            .read(peerDisplayProfileProvider.notifier)
+            .refreshDisplayProfiles(
+              ownerDid: session.session!.did,
+              dids: [widget.agent.agentDid],
+              force: true,
+              expectedEpoch: _epoch,
+            );
       }
       if (mounted) Navigator.of(context).pop();
     } catch (error) {
       if (_current) {
+        var conflict = false;
+        if (_committed) {
+          setState(() {
+            _busy = false;
+            _error = context.l10n.agentAvatarSavedRefreshFailed;
+          });
+          return;
+        }
         if (error is AwikiOnboardingUtilityError &&
             error.message.contains('agent_avatar.version_conflict')) {
+          conflict = true;
           try {
             final fresh = await port.loadAgentAvatar(widget.agent.agentDid);
             if (!_current) return;
@@ -271,7 +294,9 @@ class _AgentAvatarEditorState extends ConsumerState<AgentAvatarEditor> {
         if (_current) {
           setState(() {
             _busy = false;
-            _error = context.l10n.avatarSaveFailed;
+            _error = conflict
+                ? context.l10n.agentAvatarVersionConflict
+                : context.l10n.avatarSaveFailed;
           });
         }
       }
@@ -298,13 +323,14 @@ class _AgentAvatarEditorState extends ConsumerState<AgentAvatarEditor> {
       avatarUri: avatar?.animatedUri,
       avatarThumbnailUri: avatar?.posterUri,
     );
-    final previewPreset = _action == 'reset' && avatar != null
-        ? AgentAvatar.defaultPreset(avatar.agentId)
-        : _preset;
-    if (previewPreset != null) {
+    final selectedPreset = _capabilities?.presetCatalog
+        .where((p) => p.id == _preset)
+        .firstOrNull;
+    final reset = _action == 'reset' ? _capabilities?.defaultAvatar : null;
+    if (selectedPreset != null || reset != null) {
       preview = AgentAvatarImage(
-        uri: '/avatars/presets/$previewPreset.gif',
-        posterUri: '/avatars/presets/$previewPreset.png',
+        uri: reset?.animatedUri ?? selectedPreset?.animatedUri,
+        posterUri: reset?.posterUri ?? selectedPreset?.posterUri,
         size: 96,
         fallback: const Icon(CupertinoIcons.person),
       );
@@ -372,6 +398,18 @@ class _AgentAvatarEditorState extends ConsumerState<AgentAvatarEditor> {
                             enabled: !_busy,
                           )
                         else ...[
+                          if (_action != null) ...[
+                            Text(l10n.agentAvatarCurrent),
+                            AvatarBadge(
+                              seed: widget.agent.displayName,
+                              size: 48,
+                              isAgent: true,
+                              staticOnly: true,
+                              avatarUri: avatar?.animatedUri,
+                              avatarThumbnailUri: avatar?.posterUri,
+                            ),
+                            Text(l10n.agentAvatarDraft),
+                          ],
                           preview,
                           const SizedBox(height: 12),
                           if (avatar?.isGenerating == true)
@@ -391,29 +429,60 @@ class _AgentAvatarEditorState extends ConsumerState<AgentAvatarEditor> {
                               spacing: 6,
                               runSpacing: 6,
                               children: [
-                                for (final id in agentAvatarPresetIds)
+                                for (final preset
+                                    in _capabilities!.presetCatalog)
                                   CupertinoButton(
-                                    key: ValueKey('agent-avatar-preset-$id'),
+                                    key: ValueKey(
+                                      'agent-avatar-preset-${preset.id}',
+                                    ),
                                     padding: const EdgeInsets.all(4),
-                                    onPressed: _busy
+                                    onPressed: _busy || !preset.selectable
                                         ? null
-                                        : () => _draft('preset', preset: id),
+                                        : () => _draft(
+                                            'preset',
+                                            preset: preset.id,
+                                          ),
                                     child: Container(
                                       decoration: BoxDecoration(
                                         border: Border.all(
-                                          color: _preset == id
+                                          color:
+                                              (_preset ??
+                                                      (_action == null
+                                                          ? avatar?.presetId
+                                                          : null)) ==
+                                                  preset.id
                                               ? theme.primaryDark
                                               : theme.border,
                                         ),
                                         borderRadius: BorderRadius.circular(14),
                                       ),
-                                      child: AgentAvatarImage(
-                                        uri: null,
-                                        posterUri: '/avatars/presets/$id.png',
-                                        size: 56,
-                                        staticOnly: true,
-                                        fallback: const Icon(
-                                          CupertinoIcons.person,
+                                      child: Semantics(
+                                        selected:
+                                            (_preset ??
+                                                (_action == null
+                                                    ? avatar?.presetId
+                                                    : null)) ==
+                                            preset.id,
+                                        child: SizedBox(
+                                          width: 84,
+                                          child: Column(
+                                            children: [
+                                              AgentAvatarImage(
+                                                uri: null,
+                                                posterUri: preset.posterUri,
+                                                size: 56,
+                                                staticOnly: true,
+                                                fallback: const Icon(
+                                                  CupertinoIcons.person,
+                                                ),
+                                              ),
+                                              Text(
+                                                preset.displayName,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -429,7 +498,10 @@ class _AgentAvatarEditorState extends ConsumerState<AgentAvatarEditor> {
                           if (_capabilities != null)
                             CupertinoButton(
                               key: const Key('agent-avatar-reset'),
-                              onPressed: _busy ? null : () => _draft('reset'),
+                              onPressed:
+                                  _busy || _capabilities?.defaultAvatar == null
+                                  ? null
+                                  : () => _draft('reset'),
                               child: Text(l10n.avatarReset),
                             ),
                           if (_capabilities?.generationEnabled == true) ...[

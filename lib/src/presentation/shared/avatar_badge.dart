@@ -14,7 +14,6 @@ import 'awiki_me_design.dart';
 import 'default_avatar_generator.dart';
 import 'agent_avatar_image.dart';
 import '../agents/agents_provider.dart';
-import '../../domain/entities/agent/agent_avatar.dart';
 
 final avatarImageCacheProvider = Provider<AvatarImageCache>((ref) {
   final epoch = ref.watch(sessionProvider.select((state) => state.activeEpoch));
@@ -252,14 +251,9 @@ class _AvatarBadgeState extends ConsumerState<AvatarBadge> {
             own?.identityType.isAgent == true);
     if (agentShape && widget.groupId == null) {
       _imageTimer?.cancel();
-      final preset = AgentAvatar.defaultPreset(
-        inventoryAgent?.avatar?.agentId ?? widget.userId ?? widget.seed,
-      );
-      final defaultPoster = '/avatars/presets/$preset.png';
-      final defaultAnimated = '/avatars/presets/$preset.gif';
       return AgentAvatarImage(
-        uri: main ?? defaultAnimated,
-        posterUri: thumbnail ?? main ?? defaultPoster,
+        uri: main,
+        posterUri: thumbnail,
         staticOnly:
             widget.staticOnly || inventoryAgent?.avatar?.isGenerating == true,
         size: widget.size,

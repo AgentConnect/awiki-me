@@ -1708,5 +1708,9 @@
   "agentAvatarResponsibility": "智能体职责",
   "agentAvatarDescription": "形象描述",
   "agentAvatarRegenerate": "重新生成头像",
-  "agentAvatarImageRejected": "请选择 5 MB 内的 GIF 动图、PNG、JPEG 或静态 WebP。"
+  "agentAvatarImageRejected": "请选择 5 MB 内的 GIF 动图、PNG、JPEG 或静态 WebP。",
+  "agentAvatarSavedRefreshFailed": "头像已保存，辅助刷新失败。可关闭窗口稍后查看。",
+  "agentAvatarVersionConflict": "头像已被其他设备修改。已保留草稿，请确认后再次保存。",
+  "agentAvatarCurrent": "当前头像",
+  "agentAvatarDraft": "待保存预览"
 }

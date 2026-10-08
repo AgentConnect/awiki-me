@@ -3897,4 +3897,16 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get agentAvatarImageRejected =>
       '请选择 5 MB 内的 GIF 动图、PNG、JPEG 或静态 WebP。';
+
+  @override
+  String get agentAvatarSavedRefreshFailed => '头像已保存，辅助刷新失败。可关闭窗口稍后查看。';
+
+  @override
+  String get agentAvatarVersionConflict => '头像已被其他设备修改。已保留草稿，请确认后再次保存。';
+
+  @override
+  String get agentAvatarCurrent => '当前头像';
+
+  @override
+  String get agentAvatarDraft => '待保存预览';
 }

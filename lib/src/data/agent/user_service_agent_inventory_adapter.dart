@@ -105,6 +105,15 @@ class UserServiceAgentInventoryAdapter
       avatar: AgentAvatar.fromJson(
         Map<String, Object?>.from(result['avatar'] as Map),
       ),
+      presetCatalog: [
+        for (final item in result['preset_catalog'] as List? ?? const [])
+          AgentAvatarPreset.fromJson(Map<String, Object?>.from(item as Map)),
+      ],
+      defaultAvatar: result['default_avatar'] is Map
+          ? AgentAvatar.fromJson(
+              Map<String, Object?>.from(result['default_avatar'] as Map),
+            )
+          : null,
       uploadEnabled: result['upload_enabled'] == true,
       generationEnabled: result['generation_enabled'] == true,
     );
