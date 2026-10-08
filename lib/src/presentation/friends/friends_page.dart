@@ -16,7 +16,6 @@ import '../profile/peer_profile_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/app_dialog.dart';
 import '../shared/awiki_me_feedback.dart';
-import '../shared/awiki_me_semantic_icon.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/quick_actions.dart';
@@ -24,6 +23,8 @@ import '../shared/identity_flow.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_desktop.dart';
+import '../shared/widgets/awiki_glass.dart';
 import 'friends_provider.dart';
 
 class FriendsPage extends ConsumerWidget {
@@ -246,23 +247,18 @@ class FriendsPage extends ConsumerWidget {
       );
     }
 
-    final list = Padding(
-      padding: embedded
-          ? EdgeInsets.only(bottom: bottomInset)
-          : EdgeInsets.zero,
-      child: DecoratedBox(
-        key: const Key('friends-list-surface'),
-        decoration: BoxDecoration(
-          color: responsive.isCompact
-              ? AwikiMeColors.background
-              : theme.surface,
-        ),
-        child: ListView(
-          padding: embedded
-              ? EdgeInsets.zero
-              : EdgeInsets.only(bottom: bottomInset),
-          children: sectionWidgets,
-        ),
+    // The surface fills the pane; the bottom inset scrolls with the list so
+    // no unpainted strip shows beneath it.
+    final list = DecoratedBox(
+      key: const Key('friends-list-surface'),
+      decoration: BoxDecoration(
+        color: responsive.isCompact
+            ? context.awikiTheme.background
+            : theme.surface,
+      ),
+      child: ListView(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        children: sectionWidgets,
       ),
     );
 
@@ -273,7 +269,7 @@ class FriendsPage extends ConsumerWidget {
             key: const Key('friends-expanded-list-header'),
             title: context.l10n.friendsTitle,
             trailing: Builder(
-              builder: (anchorContext) => TopBarActionButton(
+              builder: (anchorContext) => AwikiSoftIconButton(
                 key: const Key('shell-quick-actions-button'),
                 onTap: () => showCommonQuickActionsMenu(
                   anchorContext,
@@ -281,12 +277,8 @@ class FriendsPage extends ConsumerWidget {
                   anchoredToTrigger: true,
                 ),
                 semanticsIdentifier: 'e2e-quick-actions-button',
-                semanticsLabel: context.l10n.commonMoreActions,
-                child: AwikiMeSemanticIcon(
-                  role: AwikiMeIconRole.add,
-                  size: responsive.iconMd,
-                  color: theme.secondaryText,
-                ),
+                semanticLabel: context.l10n.commonMoreActions,
+                icon: CupertinoIcons.plus,
               ),
             ),
           ),
@@ -395,7 +387,11 @@ class _CompactFriendsDirectory extends ConsumerWidget {
     final theme = context.awikiTheme;
     return DecoratedBox(
       key: const Key('friends-list-surface'),
-      decoration: const BoxDecoration(color: AwikiMeColors.background),
+      decoration: BoxDecoration(
+        color: context.awikiResponsive.isPhone
+            ? null
+            : context.awikiTheme.background,
+      ),
       child: Column(
         children: <Widget>[
           _FriendsSearchField(
@@ -484,7 +480,14 @@ class _CompactFriendsDirectory extends ConsumerWidget {
     }
     return ListView(
       key: ValueKey<String>('friends-${selectedTab.name}-list'),
-      padding: EdgeInsets.only(bottom: bottomInset),
+      padding: context.awikiResponsive.isPhone
+          ? EdgeInsets.fromLTRB(
+              6,
+              0,
+              6,
+              bottomInset + AwikiFloatingTabBarInset.of(context),
+            )
+          : EdgeInsets.only(bottom: bottomInset),
       children: children,
     );
   }
@@ -582,11 +585,19 @@ class _CompactFriendsDirectory extends ConsumerWidget {
         ),
       );
     }
+    final phone = context.awikiResponsive.isPhone;
     return DecoratedBox(
       key: const ValueKey<String>('friends-groups-list'),
-      decoration: BoxDecoration(color: theme.background),
+      decoration: BoxDecoration(color: phone ? null : theme.background),
       child: ListView(
-        padding: EdgeInsets.only(bottom: bottomInset),
+        padding: phone
+            ? EdgeInsets.fromLTRB(
+                6,
+                0,
+                6,
+                bottomInset + AwikiFloatingTabBarInset.of(context),
+              )
+            : EdgeInsets.only(bottom: bottomInset),
         children: children,
       ),
     );
@@ -611,69 +622,67 @@ class _FriendsCategoryTabs extends StatelessWidget {
       (_FriendsDirectoryTab.followers, context.l10n.friendsTabFollowers),
       (_FriendsDirectoryTab.groups, context.l10n.friendsTabGroups),
     ];
-    return Container(
-      key: const Key('friends-category-tabs'),
-      height: 56,
-      decoration: BoxDecoration(
-        color: theme.background,
-        border: Border(bottom: BorderSide(color: theme.border)),
-      ),
-      child: Row(
-        children: entries
-            .map((entry) {
-              final selected = entry.$1 == selectedTab;
-              return Expanded(
-                child: Semantics(
-                  selected: selected,
-                  button: true,
-                  label: entry.$2,
-                  child: AppPressable(
-                    key: Key('friends-category-tab-${entry.$1.name}'),
-                    selected: selected,
-                    semanticLabel: entry.$2,
-                    onTap: () => onSelected(entry.$1),
-                    builder: (context, state, child) => AnimatedOpacity(
-                      opacity: state.pressed ? 0.72 : 1,
-                      duration: const Duration(milliseconds: 120),
-                      child: child,
-                    ),
-                    child: SizedBox.expand(
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: <Widget>[
-                          Text(
-                            entry.$2,
-                            style: TextStyle(
-                              color: selected ? theme.primary : theme.title,
-                              fontSize: 15,
-                              fontWeight: selected
-                                  ? FontWeight.w400
-                                  : FontWeight.w400,
+    // Flat glass track; the chosen segment is a flat lens tint.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+      child: SizedBox(
+        key: const Key('friends-category-tabs'),
+        height: 50,
+        child: AwikiGlassSurface(
+          borderRadius: BorderRadius.circular(25),
+          padding: const EdgeInsets.all(3),
+          child: Row(
+            children: entries
+                .map((entry) {
+                  final selected = entry.$1 == selectedTab;
+                  return Expanded(
+                    child: Semantics(
+                      selected: selected,
+                      button: true,
+                      label: entry.$2,
+                      child: AppPressable(
+                        key: Key('friends-category-tab-${entry.$1.name}'),
+                        selected: selected,
+                        semanticLabel: entry.$2,
+                        onTap: () => onSelected(entry.$1),
+                        borderRadius: BorderRadius.circular(22),
+                        child: AnimatedContainer(
+                          key: selected
+                              ? const Key('friends-category-tab-indicator')
+                              : null,
+                          duration: const Duration(milliseconds: 200),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? theme.glassLens
+                                : theme.glassLens.withValues(alpha: 0),
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(
+                              color: selected
+                                  ? theme.glassEdgeActive
+                                  : theme.glassEdgeActive.withValues(alpha: 0),
+                              width: 0.5,
                             ),
                           ),
-                          if (selected)
-                            Positioned(
-                              bottom: 0,
-                              child: Container(
-                                key: const Key(
-                                  'friends-category-tab-indicator',
-                                ),
-                                width: 40,
-                                height: 3,
-                                decoration: BoxDecoration(
-                                  color: theme.primary,
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
+                          child: Text(
+                            entry.$2,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: theme.title,
+                              fontSize: 16,
+                              height: 1.2,
+                              fontWeight: FontWeight.w400,
                             ),
-                        ],
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              );
-            })
-            .toList(growable: false),
+                  );
+                })
+                .toList(growable: false),
+          ),
+        ),
       ),
     );
   }
@@ -692,12 +701,9 @@ class _CompactGroupRow extends StatelessWidget {
     final description = group.description.trim();
     return Container(
       key: Key('friends-group-tab-row:${group.groupId}'),
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: theme.border)),
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         child: AppListTile(
           horizontalPadding: 0,
           title: group.displayName,
@@ -708,14 +714,11 @@ class _CompactGroupRow extends StatelessWidget {
             padding: EdgeInsets.zero,
             color: theme.colorScheme.secondaryContainer,
             radius: AwikiMeRadii.pill,
-            constraints: BoxConstraints.tightFor(
-              width: responsive.displayScaled(48),
-              height: responsive.displayScaled(48),
-            ),
+            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
             child: Icon(
               CupertinoIcons.person_3,
               color: theme.colorScheme.onSecondaryContainer,
-              size: responsive.displayScaled(22),
+              size: 20,
             ),
           ),
           trailing: AwikiAssetIcon(
@@ -780,6 +783,50 @@ class _FriendsSearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
+    if (responsive.isPhone) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+        child: SizedBox(
+          height: 44,
+          child: AwikiGlassSurface(
+            borderRadius: BorderRadius.circular(22),
+            child: CupertinoSearchTextField(
+              key: const Key('friends-search-field'),
+              placeholder: placeholder ?? context.l10n.friendsSearchPlaceholder,
+              onChanged: onChanged,
+              style: TextStyle(color: theme.title, fontSize: 16),
+              placeholderStyle: TextStyle(
+                color: theme.secondaryText,
+                fontSize: 16,
+              ),
+              prefixIcon: Icon(
+                CupertinoIcons.search,
+                color: theme.secondaryText,
+                size: 17,
+              ),
+              prefixInsets: const EdgeInsetsDirectional.only(start: 14),
+              decoration: const BoxDecoration(),
+              padding: const EdgeInsetsDirectional.fromSTEB(8, 10, 12, 10),
+            ),
+          ),
+        ),
+      );
+    }
+    if (!responsive.isCompact) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+          responsive.displayScaled(12),
+          responsive.displayScaled(4),
+          responsive.displayScaled(12),
+          responsive.displayScaled(6),
+        ),
+        child: AwikiSoftSearchField(
+          key: const Key('friends-search-field'),
+          placeholder: placeholder ?? context.l10n.friendsSearchPlaceholder,
+          onChanged: onChanged,
+        ),
+      );
+    }
     return Padding(
       padding: responsive.isCompact
           ? const EdgeInsets.fromLTRB(16, 8, 16, 8)
@@ -1012,7 +1059,7 @@ class _FriendRow extends StatelessWidget {
             decoration: BoxDecoration(
               color: theme.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AwikiMePalette.navigationBorder),
+              border: Border.all(color: context.awikiTheme.navigationBorder),
             ),
             child: Row(
               children: <Widget>[
@@ -1056,24 +1103,113 @@ class _FriendRow extends StatelessWidget {
         ),
       );
     }
-    return Container(
-      key: rowKey,
-      padding: EdgeInsets.symmetric(vertical: responsive.spacing(8)),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: theme.border)),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: responsive.tabContentHorizontalPadding,
-        ),
+    if (responsive.isPhone) {
+      return Container(
+        key: rowKey,
+        padding: const EdgeInsets.symmetric(vertical: 2),
         child: AppListTile(
-          horizontalPadding: 0,
+          horizontalPadding: 10,
           title: title,
-          subtitle: subtitle,
+          subtitle: subtitle == null ? null : '@$subtitle',
           titleKey: titleKey,
           trailing: trailing,
-          leading: leading,
+          leading: isGroup
+              ? leading
+              : AvatarBadge(seed: seed, size: 40, avatarUri: avatarUri),
           onTap: onTap,
+        ),
+      );
+    }
+    // Reference desktop `.conv`-style row: flat, rounded, divider-free, with
+    // a soft hover fill and 40-unit avatars.
+    final desktopLeading = isGroup
+        ? Container(
+            width: responsive.displayScaled(40),
+            height: responsive.displayScaled(40),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.secondaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              CupertinoIcons.person_3,
+              color: theme.colorScheme.onSecondaryContainer,
+              size: responsive.displayScaled(20),
+            ),
+          )
+        : AvatarBadge(
+            seed: seed,
+            size: responsive.displayScaled(40),
+            avatarUri: avatarUri,
+          );
+    return Padding(
+      key: rowKey,
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.displayScaled(6),
+        vertical: responsive.displayScaled(1),
+      ),
+      child: AppPressable(
+        onTap: onTap,
+        semanticLabel: title,
+        borderRadius: BorderRadius.circular(8),
+        builder: (context, state, child) => AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          decoration: BoxDecoration(
+            color: state.pressed
+                ? awikiDesktopSoftFill(context)
+                : state.hovered
+                ? awikiDesktopHoverFill(context)
+                : awikiDesktopHoverFill(context).withValues(alpha: 0),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: child,
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.displayScaled(10),
+            vertical: responsive.displayScaled(9),
+          ),
+          child: Row(
+            children: <Widget>[
+              desktopLeading,
+              SizedBox(width: responsive.displayScaled(10)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      key: titleKey,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: theme.title, fontSize: 14),
+                    ),
+                    if (subtitle != null) ...<Widget>[
+                      SizedBox(height: responsive.displayScaled(3)),
+                      Text(
+                        subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: theme.secondaryText,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (trailing != null) ...<Widget>[
+                SizedBox(width: responsive.displayScaled(8)),
+                trailing!,
+              ] else if (isGroup)
+                Icon(
+                  CupertinoIcons.chevron_right,
+                  size: 14,
+                  color: theme.tertiaryText,
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -1121,27 +1257,37 @@ class _RelationshipActionButtonInnerState
     extends State<_RelationshipActionButtonInner> {
   bool _isBusy = false;
 
+  Future<void> _run() async {
+    setState(() => _isBusy = true);
+    try {
+      await widget.onTap();
+    } finally {
+      if (mounted) {
+        setState(() => _isBusy = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    if (!context.awikiResponsive.isCompact) {
+      return AwikiSmallButton(
+        key: const Key('relationship-action-visual'),
+        label: widget.label,
+        danger: widget.destructive,
+        busy: _isBusy,
+        onTap: _run,
+      );
+    }
     final buttonWidth = widget.label.runes.length > 2 ? 80.0 : 64.0;
+    // Reference follow pill: soft brand fill, deep brand text, round ends.
     final background = widget.destructive
         ? theme.dangerContainer
-        : theme.primary.withValues(alpha: 0.08);
-    final foreground = widget.destructive ? theme.danger : theme.primaryDark;
+        : theme.primarySoft;
+    final foreground = widget.destructive ? theme.danger : theme.primaryDeep;
     return AppPressable(
-      onTap: _isBusy
-          ? null
-          : () async {
-              setState(() => _isBusy = true);
-              try {
-                await widget.onTap();
-              } finally {
-                if (mounted) {
-                  setState(() => _isBusy = false);
-                }
-              }
-            },
+      onTap: _isBusy ? null : _run,
       semanticLabel: widget.label,
       tooltip: widget.label,
       enabled: !_isBusy,
@@ -1167,12 +1313,18 @@ class _RelationshipActionButtonInnerState
           child: Container(
             key: const Key('relationship-action-visual'),
             width: buttonWidth,
-            height: 38,
+            height: 32,
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: background,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: widget.destructive
+                    ? theme.danger.withValues(alpha: 0.22)
+                    : theme.primary.withValues(alpha: 0.22),
+                width: 0.5,
+              ),
             ),
             child: _isBusy
                 ? CupertinoActivityIndicator(
@@ -1185,7 +1337,8 @@ class _RelationshipActionButtonInnerState
                     maxLines: 1,
                     style: TextStyle(
                       color: foreground,
-                      fontSize: 12,
+                      fontSize: 13,
+                      height: 1,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
@@ -1278,7 +1431,7 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
                             semanticsLabel: context.l10n.commonBack,
                             child: AwikiAssetIcon(
                               assetName: 'assets/icons/icon_left.svg',
-                              color: theme.primaryDark,
+                              color: context.awikiTheme.title,
                               size: 22,
                             ),
                           ),

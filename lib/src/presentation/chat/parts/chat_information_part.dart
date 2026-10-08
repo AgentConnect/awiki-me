@@ -244,82 +244,110 @@ class _ChatInformationPageState extends ConsumerState<_ChatInformationPage> {
       handle,
     );
     final controlsEnabled = !_isLoading && !_isSaving && !_isClearing;
+    final phone = responsive.isPhone;
+    Widget group(Widget child) => phone
+        ? DecoratedBox(
+            decoration: awikiGroupDecoration(context),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: child,
+            ),
+          )
+        : child;
     return CupertinoPageScaffold(
       backgroundColor: theme.background,
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: <Widget>[
-            _ChatInformationHeader(title: context.l10n.chatInformationTitle),
-            Expanded(
-              child: ListView(
-                key: const Key('chat-information-page'),
-                padding: EdgeInsets.only(
-                  bottom:
-                      MediaQuery.viewPaddingOf(context).bottom +
-                      responsive.spacing(20),
-                ),
-                children: <Widget>[
-                  _ChatInformationIdentityRow(
-                    displayName: primaryDisplayName,
-                    handle: handle,
-                    avatarUri: widget.target.avatarUri,
-                    userId: widget.target.targetDid,
-                    onTap: () => unawaited(_openPeerInfo()),
+      child: AwikiPageCanvas(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: <Widget>[
+              _ChatInformationHeader(title: context.l10n.chatInformationTitle),
+              Expanded(
+                child: ListView(
+                  key: const Key('chat-information-page'),
+                  padding: EdgeInsets.only(
+                    left: phone ? 16 : 0,
+                    right: phone ? 16 : 0,
+                    top: phone ? 4 : 0,
+                    bottom:
+                        MediaQuery.viewPaddingOf(context).bottom +
+                        responsive.spacing(20),
                   ),
-                  SizedBox(height: responsive.spacing(12)),
-                  _ChatInformationActionRow(
-                    key: const Key('chat-information-search-row'),
-                    label: context.l10n.chatSearchHistory,
-                    semanticLabel: context.l10n.chatSearchHistory,
-                    iconRole: AwikiMeIconRole.search,
-                    iconColor: theme.primary,
-                    onTap: () => unawaited(_openSearch()),
-                  ),
-                  SizedBox(height: responsive.spacing(12)),
-                  DecoratedBox(
-                    decoration: BoxDecoration(color: theme.surface),
-                    child: Column(
-                      children: <Widget>[
-                        _ChatInformationSwitchRow(
-                          key: const Key('chat-information-mute-switch'),
-                          label: context.l10n.chatMuteNotifications,
-                          value: _overlay?.muted ?? false,
-                          enabled: controlsEnabled,
-                          onChanged: (value) =>
-                              unawaited(_updateOverlay(muted: value)),
-                        ),
-                        Padding(
-                          padding: EdgeInsets.only(
-                            left: responsive.spacing(20),
-                          ),
-                          child: Container(height: 1, color: theme.border),
-                        ),
-                        _ChatInformationSwitchRow(
-                          key: const Key('chat-information-pin-switch'),
-                          label: context.l10n.chatPinConversation,
-                          value: _overlay?.pinned ?? false,
-                          enabled: controlsEnabled,
-                          onChanged: (value) =>
-                              unawaited(_updateOverlay(pinned: value)),
-                        ),
-                      ],
+                  children: <Widget>[
+                    group(
+                      _ChatInformationIdentityRow(
+                        displayName: primaryDisplayName,
+                        handle: handle,
+                        avatarUri: widget.target.avatarUri,
+                        userId: widget.target.targetDid,
+                        onTap: () => unawaited(_openPeerInfo()),
+                      ),
                     ),
-                  ),
-                  SizedBox(height: responsive.spacing(12)),
-                  _ChatInformationActionRow(
-                    key: const Key('chat-information-remove-conversation'),
-                    label: context.l10n.chatRemoveConversation,
-                    semanticLabel: context.l10n.chatRemoveConversation,
-                    labelColor: theme.danger,
-                    trailingColor: theme.danger,
-                    enabled: !_isClearing,
-                    onTap: () => unawaited(_confirmRemoveConversation()),
-                  ),
-                ],
+                    SizedBox(height: responsive.spacing(phone ? 14 : 12)),
+                    group(
+                      _ChatInformationActionRow(
+                        key: const Key('chat-information-search-row'),
+                        label: context.l10n.chatSearchHistory,
+                        semanticLabel: context.l10n.chatSearchHistory,
+                        iconRole: AwikiMeIconRole.search,
+                        iconColor: phone ? theme.title : theme.primary,
+                        onTap: () => unawaited(_openSearch()),
+                      ),
+                    ),
+                    SizedBox(height: responsive.spacing(phone ? 14 : 12)),
+                    group(
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: phone ? null : theme.surface,
+                        ),
+                        child: Column(
+                          children: <Widget>[
+                            _ChatInformationSwitchRow(
+                              key: const Key('chat-information-mute-switch'),
+                              label: context.l10n.chatMuteNotifications,
+                              value: _overlay?.muted ?? false,
+                              enabled: controlsEnabled,
+                              onChanged: (value) =>
+                                  unawaited(_updateOverlay(muted: value)),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.only(
+                                left: responsive.spacing(20),
+                              ),
+                              child: Container(
+                                height: phone ? 0.5 : 1,
+                                color: awikiGroupDividerColor(context),
+                              ),
+                            ),
+                            _ChatInformationSwitchRow(
+                              key: const Key('chat-information-pin-switch'),
+                              label: context.l10n.chatPinConversation,
+                              value: _overlay?.pinned ?? false,
+                              enabled: controlsEnabled,
+                              onChanged: (value) =>
+                                  unawaited(_updateOverlay(pinned: value)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: responsive.spacing(phone ? 14 : 12)),
+                    group(
+                      _ChatInformationActionRow(
+                        key: const Key('chat-information-remove-conversation'),
+                        label: context.l10n.chatRemoveConversation,
+                        semanticLabel: context.l10n.chatRemoveConversation,
+                        labelColor: theme.danger,
+                        trailingColor: theme.danger,
+                        enabled: !_isClearing,
+                        onTap: () => unawaited(_confirmRemoveConversation()),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -339,10 +367,12 @@ class _ChatInformationHeader extends StatelessWidget {
     return Container(
       height: responsive.displayScaled(64),
       padding: EdgeInsets.symmetric(horizontal: responsive.spacing(8)),
-      decoration: BoxDecoration(
-        color: theme.surface,
-        border: Border(bottom: BorderSide(color: theme.border)),
-      ),
+      decoration: responsive.isPhone
+          ? null
+          : BoxDecoration(
+              color: responsive.isPhone ? null : theme.surface,
+              border: Border(bottom: BorderSide(color: theme.border)),
+            ),
       child: Row(
         children: <Widget>[
           SizedBox(
@@ -354,7 +384,7 @@ class _ChatInformationHeader extends StatelessWidget {
               semanticsLabel: context.l10n.commonBack,
               child: AwikiMeSemanticIcon(
                 role: AwikiMeIconRole.back,
-                color: theme.primaryDark,
+                color: context.awikiTheme.title,
                 size: responsive.iconMd,
               ),
             ),
@@ -408,7 +438,7 @@ class _ChatInformationIdentityRow extends StatelessWidget {
           horizontal: responsive.spacing(20),
           vertical: responsive.spacing(18),
         ),
-        color: theme.surface,
+        color: responsive.isPhone ? null : theme.surface,
         child: Row(
           children: <Widget>[
             AvatarBadge(
@@ -495,7 +525,7 @@ class _ChatInformationActionRow extends StatelessWidget {
       child: Container(
         constraints: BoxConstraints(minHeight: responsive.displayScaled(68)),
         padding: EdgeInsets.symmetric(horizontal: responsive.spacing(20)),
-        color: theme.surface,
+        color: responsive.isPhone ? null : theme.surface,
         child: Row(
           children: <Widget>[
             if (iconRole != null) ...<Widget>[
@@ -559,7 +589,7 @@ class _ChatInformationSwitchRow extends StatelessWidget {
         child: Container(
           constraints: BoxConstraints(minHeight: responsive.displayScaled(62)),
           padding: EdgeInsets.symmetric(horizontal: responsive.spacing(20)),
-          color: theme.surface,
+          color: responsive.isPhone ? null : theme.surface,
           child: Row(
             children: <Widget>[
               Expanded(
@@ -658,7 +688,7 @@ class _ChatHistorySearchPageState
           children: <Widget>[
             _ChatInformationHeader(title: context.l10n.chatSearchHistory),
             Container(
-              color: theme.surface,
+              color: responsive.isPhone ? null : theme.surface,
               padding: EdgeInsets.fromLTRB(
                 responsive.spacing(16),
                 responsive.spacing(10),
@@ -703,7 +733,7 @@ class _ChatHistorySearchPageState
                         final sender =
                             senderNames[message.localId] ?? widget.displayName;
                         return Container(
-                          color: theme.surface,
+                          color: responsive.isPhone ? null : theme.surface,
                           padding: EdgeInsets.symmetric(
                             horizontal: responsive.spacing(20),
                             vertical: responsive.spacing(14),

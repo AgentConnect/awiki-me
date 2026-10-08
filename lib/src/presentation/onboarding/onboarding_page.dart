@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Tooltip;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,6 +28,8 @@ import '../shared/responsive_layout.dart';
 import '../shared/sms_otp_cooldown_provider.dart';
 import '../shared/tenant_management_dialog.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass.dart';
+import '../shared/widgets/awiki_glass_controls.dart';
 import '../recovery/pending_handle_recovery_entry.dart';
 import 'onboarding_provider.dart';
 import 'registration_entry_provider.dart';
@@ -35,7 +38,6 @@ import 'identity_method_picker.dart';
 
 part 'parts/onboarding_mac_part.dart';
 part 'parts/onboarding_mobile_controls_part.dart';
-part 'parts/onboarding_tenant_part.dart';
 
 class OnboardingPage extends ConsumerStatefulWidget {
   const OnboardingPage({super.key});
@@ -57,7 +59,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   final emailController = TextEditingController();
   final handleController = TextEditingController();
   final inviteController = TextEditingController();
-  final _mobileScrollController = ScrollController();
   ProviderSubscription<AppTenantProfile>? _tenantSubscription;
   Timer? _e2eOtpRetryTimer;
   int _e2eOtpAttempts = 0;
@@ -115,7 +116,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     emailController.dispose();
     handleController.dispose();
     inviteController.dispose();
-    _mobileScrollController.dispose();
     super.dispose();
   }
 
@@ -126,374 +126,40 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final credentials = ref.watch(sessionProvider).localCredentials;
     final activeTenant = ref.watch(activeAppTenantProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
-    final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
-    if (responsive.usesDesktopLayout) {
-      return _withLegacyUpgradeProjection(
-        _MacOnboardingScaffold(
-          registrationEntry: _registrationEntryForm(),
-          registrationReady: true,
-          onboarding: onboarding,
-          otpCooldown: otpCooldown,
-          credentials: credentials,
-          phoneController: phoneController,
-          otpController: otpController,
-          emailController: emailController,
-          handleController: handleController,
-          onLogin: _loginWithLocalCredential,
-          onDeleteCredential: (identity) =>
-              _showDeleteCredentialDialog(context, identity),
-          onAuthModeChanged: _setAuthMode,
-          onRequestOtp: _requestOtp,
-          onRequestEmailActivation: _requestEmailActivation,
-          onCheckEmailActivation: _checkEmailActivation,
-          onSubmitRegister: () => _submitRegister(context),
-          activeTenant: activeTenant,
-          localeMode: localeMode,
-          onLanguagePressed: _showLanguageSheet,
-          onTenantPressed: _showTenantManagementDialog,
-        ),
-        onboarding,
-      );
-    }
     return _withLegacyUpgradeProjection(
-      CupertinoPageScaffold(
-        backgroundColor: theme.surface,
-        child: SafeArea(
-          bottom: false,
-          child: AwikiSystemNavigationClearance(
-            child: Column(
-              children: <Widget>[
-                Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 440),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: responsive.spacing(18),
-                        ),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final verticalPadding = responsive.spacing(16);
-                            final minimumGroupHeight =
-                                constraints.maxHeight > verticalPadding * 2
-                                ? constraints.maxHeight - verticalPadding * 2
-                                : 0.0;
-                            return ListView(
-                              key: const Key('onboarding-compact-scroll-view'),
-                              controller: _mobileScrollController,
-                              keyboardDismissBehavior:
-                                  ScrollViewKeyboardDismissBehavior.onDrag,
-                              padding: EdgeInsets.symmetric(
-                                vertical: verticalPadding,
-                              ),
-                              children: <Widget>[
-                                ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    minHeight: minimumGroupHeight,
-                                  ),
-                                  child: Align(
-                                    alignment: Alignment.center,
-                                    child: _CompactOnboardingCard(
-                                      showAuthMethods: true,
-                                      onboarding: onboarding,
-                                      onAuthModeChanged: _setAuthMode,
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: <Widget>[
-                                          IdentityMethodPicker(
-                                            handleController: handleController,
-                                          ),
-                                          ..._buildMobileRegisterWidgets(
-                                            context: context,
-                                            onboarding: onboarding,
-                                            otpCooldown: otpCooldown,
-                                            responsive: responsive,
-                                            theme: theme,
-                                          ),
-                                          if (credentials
-                                              .isNotEmpty) ...<Widget>[
-                                            SizedBox(
-                                              height: responsive.spacing(22),
-                                            ),
-                                            _OnboardingLocalIdentitySection(
-                                              credentials: credentials,
-                                              onLogin:
-                                                  _loginWithLocalCredential,
-                                              onDeleteCredential: (identity) =>
-                                                  _showDeleteCredentialDialog(
-                                                    context,
-                                                    identity,
-                                                  ),
-                                              actionsEnabled:
-                                                  !onboarding.isBusy,
-                                              deletingIdentitySelector: onboarding
-                                                  .deletingLocalIdentitySelector,
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                SafeArea(
-                  top: false,
-                  minimum: EdgeInsets.only(bottom: responsive.spacing(8)),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 440),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: responsive.spacing(18),
-                        ),
-                        child: Container(
-                          key: const Key('onboarding-compact-footer'),
-                          padding: EdgeInsets.only(top: responsive.spacing(8)),
-                          decoration: BoxDecoration(
-                            color: theme.surface,
-                            border: Border(
-                              top: BorderSide(color: theme.border),
-                            ),
-                          ),
-                          child: _OnboardingUtilityBar(
-                            tenant: activeTenant,
-                            localeMode: localeMode,
-                            fillAvailableWidth: true,
-                            onLanguagePressed: _showLanguageSheet,
-                            onPressed: _showTenantManagementDialog,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+      _MacOnboardingScaffold(
+        registrationEntry: _registrationEntryForm(),
+        registrationReady: true,
+        onboarding: onboarding,
+        otpCooldown: otpCooldown,
+        credentials: credentials,
+        phoneController: phoneController,
+        otpController: otpController,
+        emailController: emailController,
+        handleController: handleController,
+        onLogin: _loginWithLocalCredential,
+        onDeleteCredential: (identity) =>
+            _showDeleteCredentialDialog(context, identity),
+        onAuthModeChanged: _setAuthMode,
+        onRequestOtp: _requestOtp,
+        onRequestEmailActivation: _requestEmailActivation,
+        onCheckEmailActivation: _checkEmailActivation,
+        onSubmitRegister: () => _submitRegister(context),
+        activeTenant: activeTenant,
+        localeMode: localeMode,
+        onLanguagePressed: _showLanguageSheet,
+        onTenantPressed: _showTenantManagementDialog,
       ),
       onboarding,
     );
   }
 
-  List<Widget> _buildMobileRegisterWidgets({
-    required BuildContext context,
-    required OnboardingState onboarding,
-    required SmsOtpCooldownState otpCooldown,
-    required AwikiResponsiveInfo responsive,
-    required AwikiMeThemeTokens theme,
-  }) {
-    if (onboarding.isServerInfoLoading) {
-      return <Widget>[
-        _OnboardingCapabilityPanel(
-          loading: true,
-          message: context.l10n.onboardingLoadingServerInfo,
-        ),
-      ];
-    }
-    if (onboarding.isServerInfoFailed) {
-      return <Widget>[
-        _OnboardingCapabilityPanel(
-          icon: CupertinoIcons.exclamationmark_triangle,
-          message: context.l10n.onboardingServerInfoLoadFailed,
-          detail: onboarding.serverInfoError,
-          actionLabel: context.l10n.commonRetry,
-          onAction: () =>
-              ref.read(onboardingProvider.notifier).loadServerInfo(force: true),
-        ),
-      ];
-    }
-    if (!onboarding.hasRegistrationMethods) {
-      return <Widget>[
-        _OnboardingCapabilityPanel(
-          icon: CupertinoIcons.lock,
-          message: context.l10n.onboardingRegistrationUnavailable,
-          actionLabel: context.l10n.commonRetry,
-          onAction: () =>
-              ref.read(onboardingProvider.notifier).loadServerInfo(force: true),
-        ),
-      ];
-    }
-    if (onboarding.usesNoVerificationRegistration) {
-      return <Widget>[
-        Text(
-          context.l10n.onboardingNoVerificationHint,
-          style: TextStyle(
-            color: theme.secondaryText,
-            fontSize: responsive.bodySm,
-            height: 1.35,
-          ),
-        ),
-        SizedBox(height: responsive.spacing(16)),
-        AppTextField(
-          controller: phoneController,
-          label: context.l10n.onboardingPhone,
-          placeholder: context.l10n.onboardingPhonePlaceholder,
-          keyboardType: TextInputType.phone,
-          showLabel: !responsive.isPhone,
-          semanticsIdentifier: 'e2e-phone-input',
-          prefix: responsive.isPhone
-              ? const _PhoneFieldPrefix(code: '+86')
-              : null,
-        ),
-        SizedBox(height: responsive.spacing(14)),
-        AppTextField(
-          controller: handleController,
-          label: context.l10n.onboardingHandle,
-          placeholder: context.l10n.onboardingHandlePlaceholder,
-          semanticsIdentifier: 'e2e-handle-input',
-        ),
-        SizedBox(height: responsive.spacing(14)),
-        _registrationEntryForm(),
-        SizedBox(height: responsive.spacing(20)),
-        _OnboardingAlignedAction(
-          key: const Key('onboarding-no-verification-complete-action'),
-          width: responsive.displayScaled(148),
-          fillAvailableWidth: responsive.isPhone,
-          child: AppPrimaryButton(
-            label: context.l10n.onboardingCompleteRegister,
-            semanticsIdentifier: 'e2e-complete-login-button',
-            onPressed: onboarding.isBusy
-                ? null
-                : () => _submitRegister(context),
-          ),
-        ),
-      ];
-    }
-
-    return <Widget>[
-      Text(
-        context.l10n.onboardingLoginRegisterHint,
-        style: TextStyle(
-          color: theme.secondaryText,
-          fontSize: responsive.bodySm,
-          height: 1.35,
-        ),
-      ),
-      SizedBox(height: responsive.spacing(16)),
-      if (onboarding.authMode == 'phone') ...<Widget>[
-        AppTextField(
-          controller: phoneController,
-          label: context.l10n.onboardingPhone,
-          placeholder: context.l10n.onboardingPhonePlaceholder,
-          keyboardType: TextInputType.phone,
-          showLabel: !responsive.isPhone,
-          semanticsIdentifier: 'e2e-phone-input',
-          prefix: responsive.isPhone
-              ? const _PhoneFieldPrefix(code: '+86')
-              : null,
-        ),
-        SizedBox(height: responsive.spacing(14)),
-        AppTextField(
-          controller: handleController,
-          label: context.l10n.onboardingHandle,
-          placeholder: context.l10n.onboardingHandlePlaceholder,
-          showLabel: !responsive.isPhone,
-          semanticsIdentifier: 'e2e-handle-input',
-        ),
-        SizedBox(height: responsive.spacing(14)),
-        AppTextField(
-          controller: otpController,
-          label: context.l10n.onboardingOtp,
-          placeholder: context.l10n.onboardingOtpPlaceholder,
-          keyboardType: TextInputType.number,
-          showLabel: !responsive.isPhone,
-          bottomPadding: 4,
-          semanticsIdentifier: 'e2e-otp-input',
-          suffix: AppInlineActionButton(
-            semanticsIdentifier: 'e2e-send-otp-button',
-            label: otpCooldown.isCoolingDown
-                ? context.l10n.onboardingResendOtpIn(
-                    otpCooldown.remainingSeconds,
-                  )
-                : context.l10n.onboardingSendOtp,
-            onPressed: onboarding.isBusy || !otpCooldown.canSend
-                ? null
-                : _requestOtp,
-          ),
-        ),
-        if (otpCooldown.isCoolingDown) const E2eMarker('e2e-otp-sent'),
-        _OtpCompleteMarker(controller: otpController),
-        SizedBox(height: responsive.spacing(14)),
-        _registrationEntryForm(),
-        SizedBox(height: responsive.spacing(16)),
-        _OnboardingAlignedAction(
-          key: const Key('onboarding-phone-submit-action'),
-          width: responsive.displayScaled(148),
-          fillAvailableWidth: responsive.isPhone,
-          child: AppPrimaryButton(
-            label: context.l10n.onboardingPhoneLoginOrRegisterAction,
-            semanticsIdentifier: 'e2e-complete-login-button',
-            onPressed: onboarding.isBusy || !onboarding.canSubmitPhoneOtp
-                ? null
-                : () => _submitRegister(context),
-          ),
-        ),
-      ] else ...<Widget>[
-        AppTextField(
-          controller: handleController,
-          label: context.l10n.onboardingHandle,
-          placeholder: context.l10n.onboardingHandlePlaceholder,
-          showLabel: !responsive.isPhone,
-          semanticsIdentifier: 'e2e-handle-input',
-        ),
-        SizedBox(height: responsive.spacing(14)),
-        AppTextField(
-          controller: emailController,
-          semanticsIdentifier: 'e2e-email-input',
-          label: context.l10n.onboardingEmail,
-          placeholder: context.l10n.onboardingEmailPlaceholder,
-          keyboardType: TextInputType.emailAddress,
-          showLabel: !responsive.isPhone,
-          bottomPadding: 4,
-          suffix: AppInlineActionButton(
-            label: onboarding.isEmailResendCoolingDown
-                ? context.l10n.onboardingResendActivationEmailIn(
-                    onboarding.emailResendCountdown,
-                  )
-                : context.l10n.onboardingSendActivationEmail,
-            onPressed: onboarding.isBusy || onboarding.isEmailResendCoolingDown
-                ? null
-                : _requestEmailActivation,
-          ),
-        ),
-        SizedBox(height: responsive.spacing(14)),
-        _registrationEntryForm(),
-        SizedBox(height: responsive.spacing(14)),
-        _OnboardingAlignedAction(
-          key: const Key('onboarding-email-action'),
-          width: onboarding.emailVerified
-              ? responsive.displayScaled(148)
-              : responsive.displayScaled(174),
-          fillAvailableWidth: responsive.isPhone && !onboarding.emailVerified,
-          child: onboarding.emailVerified
-              ? AppPrimaryButton(
-                  label: context.l10n.onboardingCompleteEmailRegister,
-                  semanticsIdentifier: 'e2e-complete-login-button',
-                  onPressed: onboarding.isBusy
-                      ? null
-                      : () => _submitRegister(context),
-                )
-              : AppSecondaryButton(
-                  label: context.l10n.onboardingCheckActivationStatus,
-                  onPressed: onboarding.isBusy ? null : _checkEmailActivation,
-                ),
-        ),
-      ],
-    ];
-  }
-
-  Future<void> _showLanguageSheet() {
-    return showAppLanguageSheet(context, ref, ref.read(appLocaleModeProvider));
+  Future<void> _showLanguageSheet(BuildContext anchorContext) {
+    return showAppLanguageMenu(
+      anchorContext,
+      ref,
+      ref.read(appLocaleModeProvider),
+    );
   }
 
   Future<void> _showTenantManagementDialog() async {
@@ -672,40 +338,33 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             true &&
         (ref.read(onboardingProvider).serverInfo?.supportsPhoneHandleRecovery ??
             false);
-    final action = await showCupertinoDialog<_ExistingHandleAction>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => CupertinoAlertDialog(
-        title: Text(context.l10n.onboardingExistingHandleTitle),
-        content: Text(
-          recoveryAvailable
-              ? context.l10n.onboardingExistingHandleMessage
-              : context.l10n.onboardingExistingHandleJoinOnlyMessage,
+    final action = await showAwikiGlassAlert<_ExistingHandleAction>(
+      context,
+      dismissible: false,
+      title: context.l10n.onboardingExistingHandleTitle,
+      message: recoveryAvailable
+          ? context.l10n.onboardingExistingHandleMessage
+          : context.l10n.onboardingExistingHandleJoinOnlyMessage,
+      actions: <AwikiAlertAction<_ExistingHandleAction>>[
+        AwikiAlertAction<_ExistingHandleAction>(
+          key: const Key('existing-handle-join-action'),
+          label: context.l10n.deviceJoinEntry,
+          value: _ExistingHandleAction.joinDevice,
+          tone: AwikiPillTone.primary,
         ),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            key: const Key('existing-handle-join-action'),
-            onPressed: () => Navigator.of(
-              dialogContext,
-            ).pop(_ExistingHandleAction.joinDevice),
-            child: Text(context.l10n.deviceJoinEntry),
+        if (recoveryAvailable)
+          AwikiAlertAction<_ExistingHandleAction>(
+            key: const Key('existing-handle-recovery-action'),
+            label: context.l10n.handleRecoveryTitle,
+            value: _ExistingHandleAction.recoverHandle,
           ),
-          if (recoveryAvailable)
-            CupertinoDialogAction(
-              key: const Key('existing-handle-recovery-action'),
-              onPressed: () => Navigator.of(
-                dialogContext,
-              ).pop(_ExistingHandleAction.recoverHandle),
-              child: Text(context.l10n.handleRecoveryTitle),
-            ),
-          CupertinoDialogAction(
-            key: const Key('existing-handle-cancel-action'),
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(_ExistingHandleAction.cancel),
-            child: Text(context.l10n.commonCancel),
-          ),
-        ],
-      ),
+        AwikiAlertAction<_ExistingHandleAction>(
+          key: const Key('existing-handle-cancel-action'),
+          label: context.l10n.commonCancel,
+          value: _ExistingHandleAction.cancel,
+          tone: AwikiPillTone.text,
+        ),
+      ],
     );
     if (!context.mounted) return;
     final controller = ref.read(onboardingProvider.notifier);

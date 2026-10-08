@@ -15,6 +15,8 @@ import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass.dart';
+import '../shared/widgets/awiki_glass_controls.dart';
 import 'device_join_approval_sheet.dart';
 import 'device_labels.dart';
 import 'devices_provider.dart';
@@ -66,224 +68,221 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
     );
     final joinRequests = state.visibleJoinRequests;
     final refreshPending = _isRefreshing || state.isLoading;
-    return CupertinoPageScaffold(
-      backgroundColor: context.awikiTheme.background,
-      child: AwikiAdaptiveScaffold(
-        maxWidth: 820,
-        includeBottomSafeArea: true,
-        child: ListView(
-          key: const Key('devices-page'),
-          padding: const EdgeInsets.fromLTRB(0, 14, 0, 24),
-          children: <Widget>[
-            AwikiMeTopBar(
-              title: context.l10n.devicesTitle,
-              padding: EdgeInsets.zero,
-              leading: TopBarActionButton(
-                onTap: () => Navigator.of(context).maybePop(),
-                child: const AwikiAssetIcon(
-                  assetName: 'assets/icons/icon_left.svg',
-                  color: AwikiMeColors.primaryDark,
-                  size: 22,
-                ),
+    final phone = context.awikiResponsive.isPhone;
+    final page = AwikiAdaptiveScaffold(
+      maxWidth: 820,
+      includeBottomSafeArea: true,
+      child: ListView(
+        key: const Key('devices-page'),
+        padding: EdgeInsets.fromLTRB(0, phone ? 6 : 14, 0, 24),
+        children: <Widget>[
+          AwikiMeTopBar(
+            title: context.l10n.devicesTitle,
+            padding: EdgeInsets.zero,
+            titleFontSize: phone ? 16 : null,
+            leading: AwikiBackButton(
+              key: const Key('devices-back-button'),
+              onTap: () => Navigator.of(context).maybePop(),
+              semanticsLabel: context.l10n.commonBack,
+            ),
+            trailing: TopBarActionButton(
+              key: const Key('devices-refresh'),
+              onTap: refreshPending ? null : _refresh,
+              semanticsLabel: context.l10n.commonRefresh,
+              tooltip: context.l10n.commonRefresh,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 160),
+                child: refreshPending
+                    ? const CupertinoActivityIndicator(
+                        key: Key('devices-refresh-loading'),
+                        radius: 8,
+                      )
+                    : Icon(
+                        CupertinoIcons.refresh,
+                        key: const Key('devices-refresh-icon'),
+                        size: 20,
+                        color: context.awikiTheme.title,
+                      ),
               ),
-              trailing: TopBarActionButton(
-                key: const Key('devices-refresh'),
-                onTap: refreshPending ? null : _refresh,
-                semanticsLabel: context.l10n.commonRefresh,
-                tooltip: context.l10n.commonRefresh,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 160),
-                  child: refreshPending
-                      ? const CupertinoActivityIndicator(
-                          key: Key('devices-refresh-loading'),
-                          radius: 8,
-                        )
-                      : const Icon(
-                          CupertinoIcons.refresh,
-                          key: Key('devices-refresh-icon'),
-                          size: 20,
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (state.error != null) ...<Widget>[
+            AppSurface(
+              color: context.awikiTheme.dangerContainer,
+              child: Text(
+                deviceManagementErrorLabel(context.l10n, state.error!),
+                key: const Key('devices-error'),
+                style: TextStyle(color: context.awikiTheme.danger),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (state.revokeNotice != null) ...<Widget>[
+            AppSurface(
+              child: Text(
+                _deviceRevokeNoticeLabel(context, state.revokeNotice!),
+                key: const Key('device-revoke-notice'),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (registry?.methodCapabilities?.servicesUpdate == true) ...<Widget>[
+            Text(
+              context.l10n.identityWebAdminLimitation,
+              key: const Key('devices-web-admin-limitation'),
+            ),
+            const SizedBox(height: 12),
+            if (canManage)
+              CupertinoButton(
+                key: const Key('identity-services-open'),
+                onPressed: () => AppNavigator.push<void>(
+                  context,
+                  (_) => IdentityServicesPage(selector: registry!.did),
+                ),
+                child: Text(context.l10n.identityServicesTitle),
+              ),
+          ],
+          _SectionLabel(context.l10n.devicesPendingTitle),
+          const SizedBox(height: 8),
+          _DeviceCard(
+            child: joinRequests.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(context.l10n.devicesPendingEmpty),
+                  )
+                : Column(
+                    children: <Widget>[
+                      for (
+                        var index = 0;
+                        index < joinRequests.length;
+                        index++
+                      ) ...<Widget>[
+                        AppListTile(
+                          title: joinRequests[index].protocolDeviceId,
+                          subtitle:
+                              '${joinRequests[index].candidateKeyFingerprint} · '
+                              '${joinRequests[index].claimedByOther
+                                  ? context.l10n.deviceJoinClaimedByOther
+                                  : canManage
+                                  ? context.l10n.deviceReviewAction
+                                  : context.l10n.deviceManagementActionDisabled}',
+                          onTap: canManage
+                              ? () => _openPending(joinRequests[index])
+                              : null,
                         ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (state.error != null) ...<Widget>[
-              AppSurface(
-                color: context.awikiTheme.dangerContainer,
-                child: Text(
-                  deviceManagementErrorLabel(context.l10n, state.error!),
-                  key: const Key('devices-error'),
-                  style: TextStyle(color: context.awikiTheme.danger),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (state.revokeNotice != null) ...<Widget>[
-              AppSurface(
-                child: Text(
-                  _deviceRevokeNoticeLabel(context, state.revokeNotice!),
-                  key: const Key('device-revoke-notice'),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (registry?.methodCapabilities?.servicesUpdate ==
-                true) ...<Widget>[
-              Text(
-                context.l10n.identityWebAdminLimitation,
-                key: const Key('devices-web-admin-limitation'),
-              ),
-              const SizedBox(height: 12),
-              if (canManage)
-                CupertinoButton(
-                  key: const Key('identity-services-open'),
-                  onPressed: () => AppNavigator.push<void>(
-                    context,
-                    (_) => IdentityServicesPage(selector: registry!.did),
+                        if (index != joinRequests.length - 1)
+                          const AppSectionDivider(),
+                      ],
+                    ],
                   ),
-                  child: Text(context.l10n.identityServicesTitle),
-                ),
-            ],
-            _SectionLabel(context.l10n.devicesAuthorizedTitle),
-            const SizedBox(height: 8),
-            AppCardSection(
-              padding: EdgeInsets.zero,
-              child: registry == null || registry.devices.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(context.l10n.devicesEmpty),
-                    )
-                  : Column(
-                      children: <Widget>[
-                        for (
-                          var index = 0;
-                          index < registry.devices.length;
-                          index++
-                        ) ...<Widget>[
-                          _DeviceTile(
-                            device: registry.devices[index],
-                            requiresRejoin:
-                                state
-                                    .managementFor(registry.devices[index])
-                                    ?.requiresRejoin ==
-                                true,
-                            readiness: state.readinessFor(
-                              registry.devices[index],
-                            ),
-                            revokeEnabled: deviceRevokeEnabled,
-                            canRevoke: state.canRevokeDevice(
-                              registry.devices[index],
-                            ),
-                            canGrantManagement: state.canGrantManagement(
-                              registry.devices[index],
-                            ),
-                            rootTransfer:
-                                state.rootTransfer.context?.origin ==
-                                        RootKeyTransferOrigin.deviceList &&
-                                    state
-                                            .rootTransfer
-                                            .context
-                                            ?.recipientDeviceId ==
-                                        registry.devices[index].protocolDeviceId
-                                ? state.rootTransfer
-                                : const RootKeyTransferUiState(),
-                            isSubmitting:
-                                state.revokeSubmittingDeviceId ==
-                                registry.devices[index].protocolDeviceId,
-                            isConfirming:
-                                state.revokeConfirmingDeviceId ==
-                                registry.devices[index].protocolDeviceId,
-                            onRevoke: () =>
-                                _confirmDeviceRevoke(registry.devices[index]),
-                            isGrantPending:
-                                _grantingDeviceId ==
-                                registry.devices[index].protocolDeviceId,
-                            onGrantManagement: _grantingDeviceId == null
-                                ? () =>
-                                      _grantManagement(registry.devices[index])
-                                : null,
+          ),
+          const SizedBox(height: 18),
+          _SectionLabel(context.l10n.devicesAuthorizedTitle),
+          const SizedBox(height: 8),
+          _DeviceCard(
+            child: registry == null || registry.devices.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(context.l10n.devicesEmpty),
+                  )
+                : Column(
+                    children: <Widget>[
+                      for (
+                        var index = 0;
+                        index < registry.devices.length;
+                        index++
+                      ) ...<Widget>[
+                        _DeviceTile(
+                          device: registry.devices[index],
+                          requiresRejoin:
+                              state
+                                  .managementFor(registry.devices[index])
+                                  ?.requiresRejoin ==
+                              true,
+                          readiness: state.readinessFor(
+                            registry.devices[index],
                           ),
-                          if (index != registry.devices.length - 1)
-                            const AppSectionDivider(),
-                        ],
+                          revokeEnabled: deviceRevokeEnabled,
+                          canRevoke: state.canRevokeDevice(
+                            registry.devices[index],
+                          ),
+                          canGrantManagement: state.canGrantManagement(
+                            registry.devices[index],
+                          ),
+                          rootTransfer:
+                              state.rootTransfer.context?.origin ==
+                                      RootKeyTransferOrigin.deviceList &&
+                                  state
+                                          .rootTransfer
+                                          .context
+                                          ?.recipientDeviceId ==
+                                      registry.devices[index].protocolDeviceId
+                              ? state.rootTransfer
+                              : const RootKeyTransferUiState(),
+                          isSubmitting:
+                              state.revokeSubmittingDeviceId ==
+                              registry.devices[index].protocolDeviceId,
+                          isConfirming:
+                              state.revokeConfirmingDeviceId ==
+                              registry.devices[index].protocolDeviceId,
+                          onRevoke: () =>
+                              _confirmDeviceRevoke(registry.devices[index]),
+                          isGrantPending:
+                              _grantingDeviceId ==
+                              registry.devices[index].protocolDeviceId,
+                          onGrantManagement: _grantingDeviceId == null
+                              ? () => _grantManagement(registry.devices[index])
+                              : null,
+                        ),
+                        if (index != registry.devices.length - 1)
+                          const AppSectionDivider(),
                       ],
-                    ),
-            ),
-            if (deviceRevokeEnabled && canManage) ...<Widget>[
-              const SizedBox(height: 8),
-              Text(
-                context.l10n.deviceRevokeProtectionHint,
-                key: const Key('device-revoke-protection-hint'),
-                style: TextStyle(
-                  color: context.awikiTheme.secondaryText,
-                  fontSize: 12,
-                ),
+                    ],
+                  ),
+          ),
+          if (deviceRevokeEnabled && canManage) ...<Widget>[
+            const SizedBox(height: 8),
+            Text(
+              context.l10n.deviceRevokeProtectionHint,
+              key: const Key('device-revoke-protection-hint'),
+              style: TextStyle(
+                color: context.awikiTheme.secondaryText,
+                fontSize: 12,
               ),
-            ],
-            const SizedBox(height: 18),
-            _SectionLabel(context.l10n.devicesPendingTitle),
-            const SizedBox(height: 8),
-            AppCardSection(
-              padding: EdgeInsets.zero,
-              child: joinRequests.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(context.l10n.devicesPendingEmpty),
-                    )
-                  : Column(
-                      children: <Widget>[
-                        for (
-                          var index = 0;
-                          index < joinRequests.length;
-                          index++
-                        ) ...<Widget>[
-                          AppListTile(
-                            title: joinRequests[index].protocolDeviceId,
-                            subtitle:
-                                '${joinRequests[index].candidateKeyFingerprint} · '
-                                '${joinRequests[index].claimedByOther
-                                    ? context.l10n.deviceJoinClaimedByOther
-                                    : canManage
-                                    ? context.l10n.deviceReviewAction
-                                    : context.l10n.deviceManagementActionDisabled}',
-                            onTap: canManage
-                                ? () => _openPending(joinRequests[index])
-                                : null,
-                          ),
-                          if (index != joinRequests.length - 1)
-                            const AppSectionDivider(),
-                        ],
-                      ],
-                    ),
             ),
           ],
-        ),
+        ],
       ),
+    );
+    return CupertinoPageScaffold(
+      backgroundColor: phone
+          ? awikiCompactListBackground(context)
+          : context.awikiTheme.background,
+      child: phone
+          ? AwikiGlassBackdrop(
+              color: awikiCompactListBackground(context),
+              child: page,
+            )
+          : page,
     );
   }
 
   Future<void> _confirmDeviceRevoke(DeviceSummary device) async {
-    final confirmed = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        key: const Key('device-revoke-confirm-dialog'),
-        title: Text(context.l10n.deviceRevokeConfirmTitle),
-        content: Text(
-          context.l10n.deviceRevokeConfirmDetail(device.protocolDeviceId),
+    final confirmed = await showAwikiGlassAlert<bool>(
+      context,
+      alertKey: const Key('device-revoke-confirm-dialog'),
+      title: context.l10n.deviceRevokeConfirmTitle,
+      message: context.l10n.deviceRevokeConfirmDetail(device.protocolDeviceId),
+      actions: <AwikiAlertAction<bool>>[
+        AwikiAlertAction<bool>(label: context.l10n.commonCancel, value: false),
+        AwikiAlertAction<bool>(
+          key: const Key('device-revoke-confirm-action'),
+          label: context.l10n.deviceRevokeConfirmAction,
+          value: true,
+          tone: AwikiPillTone.danger,
         ),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(context.l10n.commonCancel),
-          ),
-          CupertinoDialogAction(
-            key: const Key('device-revoke-confirm-action'),
-            isDestructiveAction: true,
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(context.l10n.deviceRevokeConfirmAction),
-          ),
-        ],
-      ),
+      ],
     );
     if (!mounted || confirmed != true) return;
     await ref
@@ -337,31 +336,35 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
         await _showRootTransferResult(false);
         return;
       }
-      final confirmed = await showCupertinoDialog<bool>(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          key: const Key('device-root-transfer-confirm-dialog'),
-          title: Text(context.l10n.deviceRootTransferGrantManagement),
-          content: Text(
-            context.l10n.deviceRootTransferTarget(
-              preparation.recipient.deviceId,
-              preparation.recipient.signingKeyId,
-              preparation.recipient.e2eeKeyId,
-            ),
-            key: const Key('device-root-transfer-recipient-summary'),
+      final confirmed = await showAwikiGlassAlert<bool>(
+        context,
+        alertKey: const Key('device-root-transfer-confirm-dialog'),
+        title: context.l10n.deviceRootTransferGrantManagement,
+        content: Text(
+          context.l10n.deviceRootTransferTarget(
+            preparation.recipient.deviceId,
+            preparation.recipient.signingKeyId,
+            preparation.recipient.e2eeKeyId,
           ),
-          actions: <Widget>[
-            CupertinoDialogAction(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(context.l10n.commonCancel),
-            ),
-            CupertinoDialogAction(
-              key: const Key('device-root-transfer-confirm-action'),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(context.l10n.deviceRootTransferConfirm),
-            ),
-          ],
+          key: const Key('device-root-transfer-recipient-summary'),
+          style: TextStyle(
+            color: context.awikiTheme.body,
+            fontSize: 14,
+            height: 1.45,
+          ),
         ),
+        actions: <AwikiAlertAction<bool>>[
+          AwikiAlertAction<bool>(
+            label: context.l10n.commonCancel,
+            value: false,
+          ),
+          AwikiAlertAction<bool>(
+            key: const Key('device-root-transfer-confirm-action'),
+            label: context.l10n.deviceRootTransferConfirm,
+            value: true,
+            tone: AwikiPillTone.primary,
+          ),
+        ],
       );
       if (!mounted) return;
       if (confirmed != true) {
@@ -381,34 +384,28 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
   }
 
   Future<void> _showRootTransferResult(bool sent) async {
-    await showCupertinoDialog<void>(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        key: Key(
-          sent
-              ? 'device-root-transfer-sent-dialog'
-              : 'device-root-transfer-failed-dialog',
-        ),
-        title: Text(
-          sent
-              ? context.l10n.deviceRootTransferSent
-              : context.l10n.deviceRootTransferFailed,
-        ),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(context.l10n.commonDone),
-          ),
-        ],
+    await showAwikiGlassAlert<void>(
+      context,
+      alertKey: Key(
+        sent
+            ? 'device-root-transfer-sent-dialog'
+            : 'device-root-transfer-failed-dialog',
       ),
+      title: sent
+          ? context.l10n.deviceRootTransferSent
+          : context.l10n.deviceRootTransferFailed,
+      actions: <AwikiAlertAction<void>>[
+        AwikiAlertAction<void>(
+          label: context.l10n.commonDone,
+          value: null,
+          tone: AwikiPillTone.primary,
+        ),
+      ],
     );
   }
 
   Future<void> _openPending(DeviceJoinRequestNotice request) async {
-    await AppNavigator.push<void>(
-      context,
-      (_) => DeviceJoinApprovalSheet(request: request),
-    );
+    await showDeviceJoinApproval(context, request);
     if (mounted) {
       await ref.read(devicesProvider.notifier).loadManagement();
     }
@@ -428,6 +425,25 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
     } finally {
       if (mounted) setState(() => _isRefreshing = false);
     }
+  }
+}
+
+/// Device list card: glass on phones, the themed surface elsewhere.
+class _DeviceCard extends StatelessWidget {
+  const _DeviceCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (context.awikiResponsive.isPhone) {
+      return AwikiGlassSurface(child: child);
+    }
+    return AppCardSection(
+      padding: EdgeInsets.zero,
+      color: context.awikiTheme.surface,
+      child: child,
+    );
   }
 }
 

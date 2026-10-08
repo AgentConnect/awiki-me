@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart'
     show PopupMenuEntry, PopupMenuItem, RelativeRect, showMenu;
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 
@@ -25,6 +26,7 @@ import '../agents/agent_status_indicator.dart';
 import '../agents/agent_visual_status.dart';
 import '../agents/acp_session_provider.dart';
 import '../group/group_provider.dart';
+import '../devices/device_join_request_notice.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/app_dialog.dart';
@@ -36,6 +38,7 @@ import '../shared/formatters/markdown_preview_formatter.dart';
 import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass.dart';
 import '../profile/peer_display_profile_provider.dart';
 import 'conversation_list_ordering.dart';
 import 'conversation_peer_classifier.dart';
@@ -67,6 +70,15 @@ class ConversationListPage extends ConsumerStatefulWidget {
 
 class _ConversationListPageState extends ConsumerState<ConversationListPage> {
   bool get _usesEmbeddedSelection => widget.onConversationSelected != null;
+
+  /// Phone search stays folded behind the header icon until opened.
+  final ValueNotifier<bool> _searchOpen = ValueNotifier<bool>(false);
+
+  @override
+  void dispose() {
+    _searchOpen.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -141,6 +153,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
     return AwikiMeShellTabPage(
       title: context.l10n.conversationsTitle,
       quickActionIcon: CupertinoIcons.add_circled,
+      secondaryAction: _ConversationSearchToggle(searchOpen: _searchOpen),
       onQuickActionsTap: (anchorContext) => showCommonQuickActionsMenu(
         anchorContext,
         ref,
@@ -155,6 +168,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
         ),
         embedded: widget.embedded,
         bottomInset: widget.bottomInset,
+        searchOpen: _searchOpen,
         onRefresh: refreshConversations,
         onOpen: (item) => _openConversation(context, ref, item),
         onDelete: (item) => _deleteConversationFromRecents(context, ref, item),
@@ -242,6 +256,7 @@ class _MacConversationList extends ConsumerStatefulWidget {
 
 class _MacConversationListState extends ConsumerState<_MacConversationList> {
   String _query = '';
+  _ConversationFilter _filter = _ConversationFilter.all;
 
   @override
   void didUpdateWidget(covariant _MacConversationList oldWidget) {
@@ -273,22 +288,24 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
       level: AwikiPerformanceLogLevel.verbose,
     );
     return DecoratedBox(
-      decoration: BoxDecoration(color: theme.background),
+      decoration: BoxDecoration(color: theme.surface),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          // Reference `.col-head`: a borderless soft search pill and a
+          // square soft "+" sharing one 30-unit row.
           Padding(
             padding: EdgeInsets.fromLTRB(
+              responsive.displayScaled(14),
               responsive.displayScaled(12),
-              responsive.displayScaled(10),
               responsive.displayScaled(12),
-              responsive.displayScaled(8),
+              responsive.displayScaled(4),
             ),
             child: Row(
               children: <Widget>[
                 Expanded(
                   child: SizedBox(
-                    height: responsive.displayScaled(32),
+                    height: responsive.displayScaled(30),
                     child: CupertinoSearchTextField(
                       key: const Key('conversation-search-field'),
                       placeholder: context.l10n.conversationsSearchPlaceholder,
@@ -300,12 +317,15 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                       style: TextStyle(fontSize: 13, color: theme.title),
                       placeholderStyle: TextStyle(
                         fontSize: 13,
-                        color: theme.tertiaryText,
+                        color: theme.secondaryText,
                       ),
                       prefixIcon: Icon(
                         CupertinoIcons.search,
                         color: theme.secondaryText,
                         size: responsive.displayScaled(15),
+                      ),
+                      prefixInsets: EdgeInsetsDirectional.only(
+                        start: responsive.displayScaled(9),
                       ),
                       suffixIcon: Icon(
                         CupertinoIcons.xmark_circle_fill,
@@ -313,14 +333,15 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                         size: responsive.displayScaled(14),
                       ),
                       decoration: BoxDecoration(
-                        color: theme.surface,
-                        borderRadius: BorderRadius.circular(
-                          responsive.displayScaled(8),
+                        color: theme.title.withValues(
+                          alpha: theme.isDark ? 0.10 : 0.065,
                         ),
-                        border: Border.all(color: theme.border),
+                        borderRadius: BorderRadius.circular(
+                          responsive.displayScaled(6),
+                        ),
                       ),
                       padding: EdgeInsets.symmetric(
-                        horizontal: responsive.displayScaled(10),
+                        horizontal: responsive.displayScaled(6),
                         vertical: responsive.displayScaled(6),
                       ),
                     ),
@@ -337,6 +358,24 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                 ),
               ],
             ),
+          ),
+          if (ref.watch(pendingJoinRequestProvider) case final request?)
+            Padding(
+              key: const Key('conversation-list-join-notice'),
+              padding: EdgeInsets.fromLTRB(
+                responsive.displayScaled(12),
+                responsive.displayScaled(8),
+                responsive.displayScaled(12),
+                0,
+              ),
+              child: DeviceJoinRequestNoticeCard(
+                request: request,
+                onReview: () => reviewDeviceJoinRequest(context, ref, request),
+              ),
+            ),
+          _ConversationFilterBar(
+            value: _filter,
+            onChanged: (value) => setState(() => _filter = value),
           ),
           Expanded(
             child: CustomScrollView(
@@ -450,12 +489,174 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
             ).contains(query);
           });
     return sortConversationsForPresentation(
-      conversations,
+      conversations.where(
+        (conversation) => switch (_filter) {
+          _ConversationFilter.all => true,
+          _ConversationFilter.unread => conversation.unreadCount > 0,
+          _ConversationFilter.agent => _conversationPeerClassification(
+            ref,
+            conversation,
+          ).isAgent,
+          _ConversationFilter.group => conversation.isGroup,
+        },
+      ),
       draftFor: (conversation) =>
           _draftSortStateForConversation(conversation, widget.composerDrafts),
     );
   }
 }
+
+enum _ConversationFilter { all, unread, agent, group }
+
+class _ConversationFilterBar extends StatelessWidget {
+  const _ConversationFilterBar({required this.value, required this.onChanged});
+
+  final _ConversationFilter value;
+  final ValueChanged<_ConversationFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    if (context.awikiResponsive.isPhone) {
+      return _PhoneConversationFilterTrack(value: value, onChanged: onChanged);
+    }
+    // The filter strip scrolls only when it overflows; it never shows a bar.
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+        child: Row(
+          children: <Widget>[
+            for (final filter in _ConversationFilter.values)
+              Padding(
+                padding: const EdgeInsets.only(right: 2),
+                child: AppPressable(
+                  key: Key('conversation-filter-${filter.name}'),
+                  semanticLabel: _conversationFilterLabel(context, filter),
+                  selected: filter == value,
+                  onTap: () => onChanged(filter),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    height: 26,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: filter == value
+                          ? theme.title.withValues(
+                              alpha: theme.isDark ? 0.10 : 0.065,
+                            )
+                          : CupertinoColors.transparent,
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Text(
+                      _conversationFilterLabel(context, filter),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: filter == value
+                            ? theme.title
+                            : theme.secondaryText,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Phone filters: one fitted glass track whose chosen segment is a flat
+/// lens, as in the reference.
+class _PhoneConversationFilterTrack extends StatelessWidget {
+  const _PhoneConversationFilterTrack({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final _ConversationFilter value;
+  final ValueChanged<_ConversationFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        // Mirrors the desktop strip: overflow scrolls without a bar.
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: AwikiGlassSurface(
+              key: const Key('conversation-filter-track'),
+              borderRadius: BorderRadius.circular(18),
+              padding: const EdgeInsets.all(3),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  for (final filter in _ConversationFilter.values) ...<Widget>[
+                    if (filter != _ConversationFilter.values.first)
+                      const SizedBox(width: 2),
+                    AppPressable(
+                      key: Key('conversation-filter-${filter.name}'),
+                      semanticLabel: _conversationFilterLabel(context, filter),
+                      selected: filter == value,
+                      onTap: () => onChanged(filter),
+                      borderRadius: BorderRadius.circular(15),
+                      child: AnimatedContainer(
+                        key: Key('conversation-filter-chip-${filter.name}'),
+                        duration: const Duration(milliseconds: 150),
+                        height: 30,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: filter == value
+                              ? theme.glassLens
+                              : theme.glassLens.withValues(alpha: 0),
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(
+                            color: filter == value
+                                ? theme.glassEdgeActive
+                                : theme.glassEdgeActive.withValues(alpha: 0),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: Text(
+                          _conversationFilterLabel(context, filter),
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.2,
+                            color: filter == value
+                                ? theme.title
+                                : theme.secondaryText,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _conversationFilterLabel(
+  BuildContext context,
+  _ConversationFilter filter,
+) => switch (filter) {
+  _ConversationFilter.all => context.l10n.friendsTabAll,
+  _ConversationFilter.unread => context.l10n.conversationsFilterUnread,
+  _ConversationFilter.agent => context.l10n.shellNavAgents,
+  _ConversationFilter.group => context.l10n.friendsTabGroups,
+};
 
 String? _selectedConversationKey(String? value) {
   final key = value?.trim();
@@ -491,6 +692,7 @@ class _ConversationRefreshView extends ConsumerStatefulWidget {
     required this.selectedConversationId,
     required this.embedded,
     required this.bottomInset,
+    required this.searchOpen,
     required this.onRefresh,
     required this.onOpen,
     required this.onDelete,
@@ -502,6 +704,9 @@ class _ConversationRefreshView extends ConsumerStatefulWidget {
   final String? selectedConversationId;
   final bool embedded;
   final double bottomInset;
+
+  /// Whether the phone search row is shown; toggled from the header.
+  final ValueNotifier<bool> searchOpen;
   final Future<void> Function() onRefresh;
   final ValueChanged<ConversationSummary> onOpen;
   final ValueChanged<ConversationSummary> onDelete;
@@ -514,12 +719,45 @@ class _ConversationRefreshView extends ConsumerStatefulWidget {
 class _ConversationRefreshViewState
     extends ConsumerState<_ConversationRefreshView> {
   late final TextEditingController _searchController;
+  final FocusNode _searchFocus = FocusNode();
   String _query = '';
+  _ConversationFilter _filter = _ConversationFilter.all;
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    widget.searchOpen.addListener(_onSearchOpenChanged);
+    _searchFocus.addListener(_onSearchFocusChanged);
+  }
+
+  void _onSearchOpenChanged() {
+    if (!mounted) {
+      return;
+    }
+    if (widget.searchOpen.value) {
+      setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.searchOpen.value) {
+          _searchFocus.requestFocus();
+        }
+      });
+      return;
+    }
+    // Folding the field away also drops the query, as in the reference.
+    _searchFocus.unfocus();
+    setState(() {
+      _query = '';
+      _searchController.clear();
+    });
+  }
+
+  void _onSearchFocusChanged() {
+    if (!_searchFocus.hasFocus &&
+        _searchController.text.trim().isEmpty &&
+        widget.searchOpen.value) {
+      widget.searchOpen.value = false;
+    }
   }
 
   @override
@@ -534,7 +772,18 @@ class _ConversationRefreshViewState
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Only phones fold the search behind the header icon.
+    if (!context.awikiResponsive.isPhone && widget.searchOpen.value) {
+      widget.searchOpen.value = false;
+    }
+  }
+
+  @override
   void dispose() {
+    widget.searchOpen.removeListener(_onSearchOpenChanged);
+    _searchFocus.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -558,6 +807,10 @@ class _ConversationRefreshViewState
       level: AwikiPerformanceLogLevel.verbose,
     );
     return _ConversationSearchableRefreshView(
+      filterControls: _ConversationFilterBar(
+        value: _filter,
+        onChanged: (value) => setState(() => _filter = value),
+      ),
       conversations: widget.conversations,
       loadState: widget.loadState,
       visibleConversations: visibleConversations,
@@ -567,6 +820,9 @@ class _ConversationRefreshViewState
       bottomInset: widget.bottomInset,
       hasQuery: hasQuery,
       searchController: _searchController,
+      searchFocus: _searchFocus,
+      showSearch: !context.awikiResponsive.isPhone || widget.searchOpen.value,
+      onSearchEscape: () => widget.searchOpen.value = false,
       onQueryChanged: (value) {
         setState(() {
           _query = value;
@@ -590,7 +846,17 @@ class _ConversationRefreshViewState
             ).contains(query);
           });
     return sortConversationsForPresentation(
-      conversations,
+      conversations.where(
+        (conversation) => switch (_filter) {
+          _ConversationFilter.all => true,
+          _ConversationFilter.unread => conversation.unreadCount > 0,
+          _ConversationFilter.agent => _conversationPeerClassification(
+            ref,
+            conversation,
+          ).isAgent,
+          _ConversationFilter.group => conversation.isGroup,
+        },
+      ),
       draftFor: (conversation) =>
           _draftSortStateForConversation(conversation, widget.composerDrafts),
     );
@@ -599,6 +865,7 @@ class _ConversationRefreshViewState
 
 class _ConversationSearchableRefreshView extends ConsumerWidget {
   const _ConversationSearchableRefreshView({
+    required this.filterControls,
     required this.conversations,
     required this.loadState,
     required this.visibleConversations,
@@ -608,12 +875,16 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
     required this.bottomInset,
     required this.hasQuery,
     required this.searchController,
+    required this.searchFocus,
+    required this.showSearch,
+    required this.onSearchEscape,
     required this.onQueryChanged,
     required this.onRefresh,
     required this.onOpen,
     required this.onDelete,
   });
 
+  final Widget filterControls;
   final List<ConversationSummary> conversations;
   final ConversationListLoadState loadState;
   final List<ConversationSummary> visibleConversations;
@@ -623,6 +894,9 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
   final double bottomInset;
   final bool hasQuery;
   final TextEditingController searchController;
+  final FocusNode searchFocus;
+  final bool showSearch;
+  final VoidCallback onSearchEscape;
   final ValueChanged<String> onQueryChanged;
   final Future<void> Function() onRefresh;
   final ValueChanged<ConversationSummary> onOpen;
@@ -634,12 +908,31 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
     return CustomScrollView(
       slivers: <Widget>[
         CupertinoSliverRefreshControl(onRefresh: onRefresh),
-        SliverToBoxAdapter(
-          child: _CompactConversationSearchField(
-            controller: searchController,
-            onChanged: onQueryChanged,
+        if (showSearch)
+          SliverToBoxAdapter(
+            child: _CompactConversationSearchField(
+              controller: searchController,
+              focusNode: searchFocus,
+              onChanged: onQueryChanged,
+              onEscape: onSearchEscape,
+            ),
           ),
-        ),
+        if (responsive.isPhone && ref.watch(pendingJoinRequestProvider) != null)
+          SliverToBoxAdapter(
+            child: Padding(
+              key: const Key('conversation-list-join-notice'),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: DeviceJoinRequestNoticeCard(
+                request: ref.watch(pendingJoinRequestProvider)!,
+                onReview: () => reviewDeviceJoinRequest(
+                  context,
+                  ref,
+                  ref.read(pendingJoinRequestProvider)!,
+                ),
+              ),
+            ),
+          ),
+        SliverToBoxAdapter(child: filterControls),
         if (conversations.isEmpty &&
             loadState == ConversationListLoadState.error)
           SliverFillRemaining(
@@ -668,7 +961,14 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
           )
         else
           SliverPadding(
-            padding: EdgeInsets.only(bottom: bottomInset),
+            padding: responsive.isPhone
+                ? EdgeInsets.fromLTRB(
+                    6,
+                    0,
+                    6,
+                    bottomInset + AwikiFloatingTabBarInset.of(context),
+                  )
+                : EdgeInsets.only(bottom: bottomInset),
             sliver: SliverList.builder(
               itemCount: visibleConversations.length,
               itemBuilder: (_, index) {
@@ -848,14 +1148,14 @@ class _SwipeToDeleteConversationRowState
                       children: <Widget>[
                         Icon(
                           CupertinoIcons.delete,
-                          color: CupertinoColors.white,
+                          color: context.awikiTheme.surface,
                           size: responsive.displayScaled(20),
                         ),
                         SizedBox(height: responsive.spacing(4)),
                         Text(
                           context.l10n.conversationsSwipeDelete,
-                          style: const TextStyle(
-                            color: CupertinoColors.white,
+                          style: TextStyle(
+                            color: context.awikiTheme.surface,
                             fontSize: 13,
                             fontWeight: FontWeight.w400,
                           ),
@@ -883,16 +1183,62 @@ class _SwipeToDeleteConversationRowState
 class _CompactConversationSearchField extends StatelessWidget {
   const _CompactConversationSearchField({
     required this.controller,
+    required this.focusNode,
     required this.onChanged,
+    required this.onEscape,
   });
 
   final TextEditingController controller;
+  final FocusNode focusNode;
   final ValueChanged<String> onChanged;
+  final VoidCallback onEscape;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
+    if (responsive.isPhone) {
+      return Padding(
+        key: const Key('compact-conversation-search-surface'),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        child: SizedBox(
+          height: 44,
+          child: AwikiGlassSurface(
+            borderRadius: BorderRadius.circular(22),
+            child: CallbackShortcuts(
+              bindings: <ShortcutActivator, VoidCallback>{
+                const SingleActivator(LogicalKeyboardKey.escape): onEscape,
+              },
+              child: CupertinoSearchTextField(
+                key: const Key('conversation-search-field'),
+                controller: controller,
+                focusNode: focusNode,
+                placeholder: context.l10n.conversationsSearchPlaceholder,
+                onChanged: onChanged,
+                style: TextStyle(fontSize: 16, color: theme.title),
+                placeholderStyle: TextStyle(
+                  fontSize: 16,
+                  color: theme.secondaryText,
+                ),
+                prefixIcon: Icon(
+                  CupertinoIcons.search,
+                  color: theme.secondaryText,
+                  size: 17,
+                ),
+                suffixIcon: Icon(
+                  CupertinoIcons.xmark_circle_fill,
+                  color: theme.tertiaryText,
+                  size: 17,
+                ),
+                prefixInsets: const EdgeInsetsDirectional.only(start: 14),
+                decoration: const BoxDecoration(),
+                padding: const EdgeInsetsDirectional.fromSTEB(8, 10, 12, 10),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return DecoratedBox(
       key: const Key('compact-conversation-search-surface'),
       decoration: BoxDecoration(color: theme.surface),
@@ -908,6 +1254,7 @@ class _CompactConversationSearchField extends StatelessWidget {
           child: CupertinoSearchTextField(
             key: const Key('conversation-search-field'),
             controller: controller,
+            focusNode: focusNode,
             placeholder: context.l10n.conversationsSearchPlaceholder,
             onChanged: onChanged,
             style: TextStyle(fontSize: 15, color: theme.title),
@@ -940,6 +1287,54 @@ class _CompactConversationSearchField extends StatelessWidget {
   }
 }
 
+/// Bare search glyph beside the phone header's plus button; it folds the
+/// search row open and closed.
+class _ConversationSearchToggle extends StatelessWidget {
+  const _ConversationSearchToggle({required this.searchOpen});
+
+  final ValueNotifier<bool> searchOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return ValueListenableBuilder<bool>(
+      valueListenable: searchOpen,
+      builder: (context, open, _) => AppPressable(
+        key: const Key('conversation-search-toggle'),
+        onTap: () => searchOpen.value = !open,
+        semanticLabel: context.l10n.conversationsSearchPlaceholder,
+        semanticsIdentifier: 'e2e-conversation-search-toggle',
+        tooltip: context.l10n.conversationsSearchPlaceholder,
+        button: true,
+        selected: open,
+        scaleOnPress: true,
+        pressedScale: 0.9,
+        borderRadius: BorderRadius.circular(18),
+        builder: (context, state, child) => SizedBox(
+          width: 36,
+          height: 44,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: open || state.pressed || state.hovered
+                    ? theme.title.withValues(alpha: 0.08)
+                    : theme.title.withValues(alpha: 0),
+              ),
+              child: child,
+            ),
+          ),
+        ),
+        child: Icon(CupertinoIcons.search, size: 20, color: theme.title),
+      ),
+    );
+  }
+}
+
+/// Reference `.icon-btn.sq`: a 30-unit square with a soft fill.
 class _MacListIconButton extends StatelessWidget {
   const _MacListIconButton({
     super.key,
@@ -956,19 +1351,26 @@ class _MacListIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    return AppIconButton(
-      onPressed: onTap,
+    final soft = theme.title.withValues(alpha: theme.isDark ? 0.10 : 0.065);
+    return AppPressable(
+      onTap: onTap,
       semanticLabel: semanticLabel,
       tooltip: semanticLabel,
-      size: responsive.displayScaled(24),
-      backgroundColor: theme.surface,
-      borderColor: theme.border,
-      borderRadius: BorderRadius.circular(999),
-      child: Icon(
-        icon,
-        color: theme.secondaryText,
-        size: responsive.displayScaled(12),
+      button: true,
+      borderRadius: BorderRadius.circular(responsive.displayScaled(6)),
+      builder: (context, state, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: responsive.displayScaled(30),
+        height: responsive.displayScaled(30),
+        decoration: BoxDecoration(
+          color: state.hovered || state.pressed
+              ? theme.title.withValues(alpha: theme.isDark ? 0.16 : 0.14)
+              : soft,
+          borderRadius: BorderRadius.circular(responsive.displayScaled(6)),
+        ),
+        child: child,
       ),
+      child: Icon(icon, color: theme.title, size: responsive.displayScaled(16)),
     );
   }
 }
@@ -1021,22 +1423,22 @@ class _MacConversationRow extends StatelessWidget {
           onTap: onTap,
           selected: isSelected,
           semanticLabel: title,
-          borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
+          borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
           backgroundColor: CupertinoColors.transparent,
-          selectedBackgroundColor: theme.surface,
-          hoverColor: isSelected ? CupertinoColors.transparent : theme.surface,
+          selectedBackgroundColor: theme.subtleSurface,
+          hoverColor: isSelected
+              ? CupertinoColors.transparent
+              : theme.subtleSurface.withValues(alpha: 0.65),
           pressedColor: theme.subtleSurface,
-          selectedBoxShadow: AwikiMeShadows.selectedListItem,
-          hoverBoxShadow: isSelected
-              ? const <BoxShadow>[]
-              : AwikiMeShadows.hoveredListItem,
+          selectedBoxShadow: const <BoxShadow>[],
+          hoverBoxShadow: const <BoxShadow>[],
           duration: AwikiMeMotion.instant,
           interactionExitDuration: Duration.zero,
           animateSelection: false,
           border: Border.all(color: CupertinoColors.transparent),
           padding: EdgeInsets.symmetric(
             horizontal: responsive.displayScaled(10),
-            vertical: responsive.displayScaled(9),
+            vertical: responsive.displayScaled(11),
           ),
           child: Row(
             children: <Widget>[
@@ -1045,10 +1447,11 @@ class _MacConversationRow extends StatelessWidget {
                 children: <Widget>[
                   AvatarBadge(
                     seed: title,
-                    size: responsive.displayScaled(38),
+                    size: responsive.displayScaled(40),
                     avatarUri: avatarUri,
                     userId: avatarUserId,
                     groupId: classification.isGroup ? conversationId : null,
+                    isAgent: classification.isAgent,
                   ),
                   if (unreadCount > 0)
                     Positioned(
@@ -1075,38 +1478,46 @@ class _MacConversationRow extends StatelessWidget {
                     Row(
                       children: <Widget>[
                         Expanded(
-                          child: KeyedSubtree(
-                            key: Key('conversation-row-title:$conversationId'),
-                            child: _ConversationTitleStatusLine(
-                              title: title,
-                              isDeletedAgentConversation:
-                                  isDeletedAgentConversation,
-                              compact: true,
-                              titleStyle: TextStyle(
-                                color: theme.title,
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w400,
+                          child: Row(
+                            children: <Widget>[
+                              Flexible(
+                                child: KeyedSubtree(
+                                  key: Key(
+                                    'conversation-row-title:$conversationId',
+                                  ),
+                                  child: _ConversationTitleStatusLine(
+                                    title: title,
+                                    isDeletedAgentConversation:
+                                        isDeletedAgentConversation,
+                                    compact: true,
+                                    titleStyle: TextStyle(
+                                      color: theme.title,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
+                              if (badgeLabel != null) ...<Widget>[
+                                const SizedBox(width: 6),
+                                _ConversationPeerBadge(
+                                  label: badgeLabel,
+                                  isGroup: classification.isGroup,
+                                  muted: isDeletedAgentConversation,
+                                  compact: true,
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-                        if (badgeLabel != null) ...<Widget>[
-                          SizedBox(width: responsive.displayScaled(4)),
-                          _ConversationPeerBadge(
-                            label: badgeLabel,
-                            isGroup: classification.isGroup,
-                            muted: isDeletedAgentConversation,
-                            compact: true,
-                          ),
-                        ],
-                        SizedBox(width: responsive.displayScaled(6)),
+                        const SizedBox(width: 6),
                         KeyedSubtree(
                           key: const Key('conversation-row-right-meta'),
                           child: Text(
                             timeLabel,
                             maxLines: 1,
                             style: TextStyle(
-                              color: theme.tertiaryText,
+                              color: theme.secondaryText,
                               fontSize: 11,
                               fontFeatures: const <FontFeature>[
                                 FontFeature.tabularFigures(),
@@ -1116,7 +1527,7 @@ class _MacConversationRow extends StatelessWidget {
                         ),
                       ],
                     ),
-                    SizedBox(height: responsive.displayScaled(1)),
+                    SizedBox(height: responsive.displayScaled(3)),
                     KeyedSubtree(
                       key: Key('conversation-row-preview:$conversationId'),
                       child: _ConversationPreviewLine(
@@ -1154,8 +1565,8 @@ class _MacConversationEmptyState extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AwikiMePalette.mutedNeutral,
+              style: TextStyle(
+                color: context.awikiTheme.secondaryText,
                 fontSize: 14,
               ),
             ),
@@ -1164,8 +1575,8 @@ class _MacConversationEmptyState extends StatelessWidget {
               Text(
                 subtitle!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AwikiMePalette.messagePreview,
+                style: TextStyle(
+                  color: context.awikiTheme.tertiaryText,
                   fontSize: 12,
                 ),
               ),
@@ -1216,6 +1627,7 @@ class _ConversationRow extends StatelessWidget {
       context.l10n,
       classification,
     );
+    final phone = responsive.isPhone;
     return Stack(
       children: <Widget>[
         AppPressableTile(
@@ -1223,21 +1635,25 @@ class _ConversationRow extends StatelessWidget {
           onLongPress: onLongPress,
           selected: isSelected,
           semanticLabel: title,
-          borderRadius: BorderRadius.zero,
-          backgroundColor: theme.surface,
-          selectedBackgroundColor: theme.subtleSurface,
-          hoverColor: theme.subtleSurface,
-          pressedColor: theme.mutedSurface,
+          borderRadius: phone ? BorderRadius.circular(16) : BorderRadius.zero,
+          backgroundColor: phone ? const Color(0x00000000) : theme.surface,
+          selectedBackgroundColor: phone
+              ? theme.glassLens
+              : theme.subtleSurface,
+          hoverColor: phone ? theme.glassLens : theme.subtleSurface,
+          pressedColor: phone ? theme.glassLens : theme.mutedSurface,
           duration: AwikiMeMotion.instant,
           interactionExitDuration: Duration.zero,
           animateSelection: false,
-          padding: EdgeInsets.symmetric(
-            horizontal: responsive.spacing(16),
-            vertical: responsive.spacing(12),
-          ),
+          padding: phone
+              ? const EdgeInsets.symmetric(horizontal: 10, vertical: 12)
+              : EdgeInsets.symmetric(
+                  horizontal: responsive.spacing(16),
+                  vertical: responsive.spacing(12),
+                ),
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              minHeight: responsive.displayScaled(50),
+              minHeight: responsive.displayScaled(phone ? 44 : 50),
             ),
             child: Row(
               children: <Widget>[
@@ -1247,10 +1663,11 @@ class _ConversationRow extends StatelessWidget {
                   children: <Widget>[
                     AvatarBadge(
                       seed: title,
-                      size: responsive.displayScaled(48),
+                      size: phone ? 40 : responsive.displayScaled(48),
                       avatarUri: avatarUri,
                     userId: avatarUserId,
                     groupId: classification.isGroup ? conversationId : null,
+                    isAgent: classification.isAgent,
                     ),
                     if (unreadCount > 0)
                       Positioned(
@@ -1275,9 +1692,10 @@ class _ConversationRow extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
+                      // The kind tag follows the name, as in the reference.
                       Row(
                         children: <Widget>[
-                          Expanded(
+                          Flexible(
                             child: KeyedSubtree(
                               key: Key(
                                 'conversation-row-title:$conversationId',
@@ -1288,7 +1706,7 @@ class _ConversationRow extends StatelessWidget {
                                     isDeletedAgentConversation,
                                 compact: false,
                                 titleStyle: TextStyle(
-                                  fontSize: 15.5,
+                                  fontSize: phone ? 16 : 15.5,
                                   fontWeight: FontWeight.w400,
                                   color: theme.title,
                                   height: 1.25,
@@ -1352,16 +1770,17 @@ class _ConversationRow extends StatelessWidget {
             ),
           ),
         ),
-        Positioned(
-          left: 80,
-          right: 0,
-          bottom: 0,
-          child: SizedBox(
-            key: Key('conversation-row-separator:$conversationId'),
-            height: 1,
-            child: ColoredBox(color: theme.border),
+        if (!phone)
+          Positioned(
+            left: 80,
+            right: 0,
+            bottom: 0,
+            child: SizedBox(
+              key: Key('conversation-row-separator:$conversationId'),
+              height: 1,
+              child: ColoredBox(color: theme.border),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -1887,13 +2306,15 @@ class _ConversationTitleStatusLine extends StatelessWidget {
         ),
         if (isDeletedAgentConversation) ...<Widget>[
           SizedBox(width: responsive.displayScaled(compact ? 6 : 7)),
-          _DeletedAgentConversationBadge(compact: compact),
+          Flexible(child: _DeletedAgentConversationBadge(compact: compact)),
         ],
       ],
     );
   }
 }
 
+/// Kind tag beside a conversation name ("AI", "群"): the reference's quiet
+/// hairline outline with muted text, never a colored fill.
 class _ConversationPeerBadge extends StatelessWidget {
   const _ConversationPeerBadge({
     required this.label,
@@ -1909,39 +2330,10 @@ class _ConversationPeerBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final background = muted
-        ? AwikiMePalette.mist
-        : isGroup
-        ? const Color(0xFFEFE4FF)
-        : AwikiMePalette.brandAccentSoft;
-    final foreground = muted
-        ? AwikiMePalette.mutedNeutral
-        : isGroup
-        ? const Color(0xFF7C3AED)
-        : AwikiMePalette.brandAccent;
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: responsive.displayScaled(compact ? 5 : 7),
-        vertical: responsive.displayScaled(compact ? 2 : 3),
-      ),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(
-          responsive.displayScaled(compact ? 5 : 999),
-        ),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.clip,
-        style: TextStyle(
-          color: foreground,
-          fontSize: compact ? 9 : 10.5,
-          fontWeight: FontWeight.w400,
-          height: 1,
-        ),
-      ),
+    return AwikiNameTag(
+      key: const Key('conversation-peer-badge'),
+      label: label,
+      muted: muted,
     );
   }
 }
@@ -1961,16 +2353,16 @@ class _DeletedAgentConversationBadge extends StatelessWidget {
         vertical: responsive.displayScaled(compact ? 2 : 3),
       ),
       decoration: BoxDecoration(
-        color: AwikiMePalette.mist,
+        color: context.awikiTheme.subtleSurface,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AwikiMePalette.hairline),
+        border: Border.all(color: context.awikiTheme.border),
       ),
       child: Text(
         context.l10n.conversationsDeletedAgentBadge,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: AwikiMePalette.mutedNeutral,
+          color: context.awikiTheme.secondaryText,
           fontSize: compact ? 10 : 10.5,
           fontWeight: FontWeight.w400,
           height: 1,
@@ -1998,8 +2390,8 @@ class _ConversationLoadErrorState extends StatelessWidget {
               context.l10n.operationFailedRetry,
               key: const Key('conversation-list-load-error'),
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AwikiMePalette.mutedNeutral,
+              style: TextStyle(
+                color: context.awikiTheme.secondaryText,
                 fontSize: 13,
               ),
             ),

@@ -2209,6 +2209,10 @@ class FakeMessagingService
   int downloadAttachmentCalls = 0;
   AppThreadRef? lastDownloadedAttachmentThread;
   String? lastDownloadedAttachmentLocalPath;
+
+  /// When set, attachment sends wait for it, keeping the message in its
+  /// sending state until the test completes the gate.
+  Completer<void>? attachmentSendGate;
   AttachmentDownloadResult? nextAttachmentDownloadResult;
   AppConversationReadRef? lastAttachmentConversation;
   String? lastSentAttachmentClientMessageId;
@@ -2456,6 +2460,10 @@ class FakeMessagingService
   }) async {
     sendConversationAttachmentCalls += 1;
     lastAttachmentConversation = conversation;
+    final gate = attachmentSendGate;
+    if (gate != null) {
+      await gate.future;
+    }
     lastSentAttachmentClientMessageId = clientMessageId;
     lastSentAttachmentIdempotencyKey = idempotencyKey;
     gateway.lastSentAttachmentIdempotencyKey = idempotencyKey;

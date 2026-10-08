@@ -4,6 +4,63 @@ import 'package:flutter/material.dart' show TextTheme;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'dark themes recolor typography and preserve readable semantic pairs',
+    () {
+      double contrast(Color a, Color b) {
+        final luminances = [a.computeLuminance(), b.computeLuminance()]..sort();
+        return (luminances.last + 0.05) / (luminances.first + 0.05);
+      }
+
+      for (final platform in TargetPlatform.values) {
+        final dark = AwikiMeTheme.forPlatform(
+          platform,
+          brightness: Brightness.dark,
+        );
+        final light = AwikiMeTheme.forPlatform(platform);
+        expect(dark.materialTheme.brightness, Brightness.dark);
+        expect(dark.cupertinoTheme.brightness, Brightness.dark);
+        expect(light.materialTheme.brightness, Brightness.light);
+        expect(
+          identical(
+            dark,
+            AwikiMeTheme.forPlatform(platform, brightness: Brightness.dark),
+          ),
+          isTrue,
+        );
+        for (final color in [
+          dark.tokens.body,
+          dark.tokens.secondaryText,
+          dark.tokens.tertiaryText,
+        ]) {
+          expect(
+            contrast(color, dark.tokens.surface),
+            greaterThanOrEqualTo(4.5),
+          );
+        }
+        expect(
+          contrast(dark.tokens.onOutgoingMessage, dark.tokens.outgoingMessage),
+          greaterThanOrEqualTo(4.5),
+        );
+        expect(
+          contrast(dark.tokens.primaryForeground, dark.tokens.primary),
+          greaterThanOrEqualTo(4.5),
+        );
+        for (final style in [
+          ...dark.tokens.compactTypography.styles,
+          ...dark.tokens.expandedTypography.styles,
+        ]) {
+          if (style.color != null) {
+            expect(
+              contrast(style.color!, dark.tokens.surface),
+              greaterThanOrEqualTo(4.5),
+            );
+          }
+        }
+      }
+    },
+  );
+
   test('Windows theme applies the UI font policy to every text surface', () {
     final theme = AwikiMeTheme.forPlatform(TargetPlatform.windows);
 
@@ -110,10 +167,10 @@ void main() {
     expect(colors.unread, const Color(0xFFFA5152));
     expect(colors.navigationSurface, const Color(0xFFEEEDE9));
     expect(colors.navigationBorder, const Color(0xFFDDDCD9));
-    expect(colors.chatSurface, const Color(0xFFFAFAFA));
-    expect(colors.incomingMessage, const Color(0xFFEEEEF0));
-    expect(colors.outgoingMessage, const Color(0xFFB6E4FF));
-    expect(colors.onOutgoingMessage, const Color(0xFF0F304A));
+    expect(colors.chatSurface, const Color(0xFFFFFFFF));
+    expect(colors.incomingMessage, const Color(0xFFF2F2F4));
+    expect(colors.outgoingMessage, const Color(0xFF016EBA));
+    expect(colors.onOutgoingMessage, const Color(0xFFFFFFFF));
   });
 
   test('compact and expanded typography expose intentional type ramps', () {

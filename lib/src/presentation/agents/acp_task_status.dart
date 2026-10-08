@@ -6,6 +6,7 @@ import 'package:flutter/material.dart' show SelectableText;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/agent/acp_control_service.dart';
 import '../../domain/entities/agent/acp_session.dart';
+import '../../app/app_router.dart';
 import '../app_shell/providers/session_provider.dart';
 import 'acp_session_provider.dart';
 import 'acp_model_controller.dart';
@@ -14,6 +15,7 @@ import 'agents_provider.dart';
 import 'acp_question_controller.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/responsive_layout.dart';
+import '../shared/widgets/awiki_glass_controls.dart';
 import '../shared/app_dialog.dart';
 
 part 'acp_action_button.dart';
