@@ -58,6 +58,16 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           !options.dryRun &&
           !commands.dryRun) {
         _requireAppPairRecoveryOperatorEnvironment(Platform.environment);
+        validateReviewedOperatorServiceTarget(
+          mode: Platform.environment[_syncRecoveryOperatorModeEnv]!.trim(),
+          target: Platform.environment[_syncRecoveryTargetEnv]!.trim(),
+          didDomain: pairConfig.didDomain,
+          serviceUrls: [
+            pairConfig.serviceBaseUrl,
+            pairConfig.userServiceUrl,
+            pairConfig.messageServiceUrl,
+          ],
+        );
         if (pairConfig.functional) {
           _requireAppPairAccountStateOperatorEnvironment(
             root: root,
@@ -82,6 +92,16 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
       await commands.requireFile('test_driver/integration_test.dart');
       if (pairConfig.functional || pagingRecovery) {
         _requireAppPairRecoveryOperatorEnvironment(Platform.environment);
+        validateReviewedOperatorServiceTarget(
+          mode: Platform.environment[_syncRecoveryOperatorModeEnv]!.trim(),
+          target: Platform.environment[_syncRecoveryTargetEnv]!.trim(),
+          didDomain: pairConfig.didDomain,
+          serviceUrls: [
+            pairConfig.serviceBaseUrl,
+            pairConfig.userServiceUrl,
+            pairConfig.messageServiceUrl,
+          ],
+        );
       }
       if (pairConfig.functional) {
         _requireAppPairAccountStateOperatorEnvironment(

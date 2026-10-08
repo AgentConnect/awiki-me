@@ -615,6 +615,26 @@ recovery operator environment. It does not require a Daemon or Account State
 operator and must not be replaced by `messaging` or the 21-case functional suite.
 The `full` aggregate invokes this paging leaf with its original prerequisites.
 
+新加坡支持四个定向专项：`multi-device-app-pair`、`multi-device-app-pair-functional`、
+`multi-device-app-pair-content-sync`、`multi-device-app-pair-paging-recovery`，保持原 29 项业务断言。
+使用 `tests/e2e/configs/e2e.singapore.example.yaml` 的私有副本及精确提交的 CLI/Daemon。
+functional/paging 选择 `AWIKI_SYSTEM_TEST_TARGET=singapore-staging`、
+`AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE=singapore`，其余 Join、sync-recovery、Account State opt-in 不变。
+Account State JSON argv 必须为 `reviewedSingaporeAccountStateOperatorCommand`，仅允许固定 SSH 别名
+`singapore-dev`、受保护配置路径和 root-owned `user-operator-cf695ae189ee` 不可变算子。
+Runner/App 同时绑定算子目标、DID domain 和 HTTPS origin，不接受跨目标命令。
+新加坡须具备 `account-state-sync-v1`，测试期间启用受保护配置
+`AWIKI_ACCOUNT_STATE_TEST_FAILPOINTS_ENABLED`、`testing.sync_v2_recovery_operator_enabled`，
+并显式配置 `sync.sync_v2_shadow_write=true`（算子不读取服务端的隐式默认值）。
+启用前保留配置，通过受管生命周期重启及 readiness 检查；预检仍要求算子权限和精确 App scope 清理。
+Account State 算子从当前已部署 User Service 脚本安装为 root-owned 0555 副本，安装前确认完整 SHA-256
+为 `cf695ae189ee76820dbaf1d658216807d8499b8fe140a57a86a39bf0c9dae109`；不修改已部署 release。
+双 App functional 的 Daemon 首条命令须等公开 ready 文件的 `sync_probe` 确认
+`v2_bootstrap_completed=true`、`last_reconcile_protocol=sync_v2`、`legacy_sync_used=false`。
+进程 ready 早于首次同步，不能代替收件就绪；否则首次 tail bootstrap 会越过提前发送的创建命令。
+等待仍为 45 秒，不改变产品行为、tail-only 规则或现有严格 V2 WebSocket 专项断言。
+该适配不改变业务 oracle，也不扩大其他专项的目标范围。
+
 The macOS runner is not the service host. Account State test actions therefore
 require `AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE=ali` and the exact reviewed
 Mac-to-Ali JSON argv. The command uses non-interactive sudo, immutable

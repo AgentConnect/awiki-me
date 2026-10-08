@@ -3765,7 +3765,17 @@ Future<void> _waitForAppPairDaemonReady(
 ) async {
   final deadline = DateTime.now().add(const Duration(seconds: 45));
   while (DateTime.now().isBefore(deadline)) {
-    if (File(path).existsSync()) return;
+    try {
+      if (daemonPublicCommandReceiverReady(
+        jsonDecode(await File(path).readAsString()),
+      )) {
+        return;
+      }
+    } on FileSystemException {
+      // The process has not published its ready file yet.
+    } on FormatException {
+      // The public ready file may be observed during its next status write.
+    }
     if (await _processExited(daemon.process)) {
       final exitCode = await daemon.process.exitCode;
       try {
@@ -3780,7 +3790,10 @@ Future<void> _waitForAppPairDaemonReady(
     }
     await Future<void>.delayed(const Duration(milliseconds: 250));
   }
-  fail('The App-pair daemon did not become ready: ${daemon.safeDiagnostics}');
+  fail(
+    'The App-pair daemon did not complete its receiving bootstrap: '
+    '${daemon.safeDiagnostics}',
+  );
 }
 
 String _sanitizeAppPairDaemonLine(String input) => input
@@ -4859,8 +4872,10 @@ Future<void> _runAppPairRecoveryOperator({
   final environment = Platform.environment;
   final mode = environment[_syncRecoveryOperatorModeEnv]?.trim();
   if (environment[_syncRecoveryEnableEnv] != '1' ||
-      environment[_syncRecoveryTargetEnv] != _syncRecoveryTarget ||
-      !const <String>{'ali', 'local'}.contains(mode)) {
+      !reviewedOperatorMatchesTarget(
+        mode,
+        environment[_syncRecoveryTargetEnv]?.trim(),
+      )) {
     fail('The fixed recovery operator gate is incomplete.');
   }
   final command = reviewedSyncRecoveryOperatorCommandForMode(mode!);
@@ -5325,6 +5340,7 @@ Future<void> _waitForLocalAndRegistryAdmins(
 }) async {
   final deadline = DateTime.now().add(const Duration(minutes: 2));
   var transientIdentityReads = 0;
+  Map<String, Object?> lastRegistryState = const {};
   while (DateTime.now().isBefore(deadline)) {
     await tester.pump(const Duration(milliseconds: 200));
     if (container.read(sessionProvider).session?.did != did ||
@@ -5346,6 +5362,16 @@ Future<void> _waitForLocalAndRegistryAdmins(
       transientIdentityReads++;
       continue;
     }
+    lastRegistryState = <String, Object?>{
+      'ownerMatches': registry.did == did,
+      'deviceCount': registry.devices.length,
+      'currentCanManage': registry.currentDevice?.canManageDevices,
+      'roles': registry.devices.map((device) => device.role.name).toList(),
+      'statuses': registry.devices.map((device) => device.status.name).toList(),
+      'managementReady': registry.devices
+          .map((device) => device.managementReady)
+          .toList(),
+    };
     if (registry.did == did &&
         registry.devices.length == expectedDeviceCount &&
         registry.currentDevice?.canManageDevices == true &&
@@ -5367,7 +5393,8 @@ Future<void> _waitForLocalAndRegistryAdmins(
   }
   fail(
     'The local device and Registry did not converge to ready administrators '
-    '(transient_identity_reads=$transientIdentityReads).',
+    '(transient_identity_reads=$transientIdentityReads, '
+    'registry=${jsonEncode(lastRegistryState)}).',
   );
 }
 

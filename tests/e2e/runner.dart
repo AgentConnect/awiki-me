@@ -108,7 +108,6 @@ const String _syncRecoveryEnableEnv = 'AWIKI_MESSAGE_SYNC_V2_RECOVERY_E2E';
 const String _syncRecoveryOperatorModeEnv =
     'AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE';
 const String _syncRecoveryTargetEnv = 'AWIKI_SYSTEM_TEST_TARGET';
-const String _syncRecoveryTarget = 'awiki-info-testing';
 const String _accountStateEnableEnv = 'AWIKI_ACCOUNT_STATE_V1_E2E';
 const String _accountStateOperatorCommandEnv =
     'AWIKI_ACCOUNT_STATE_E2E_OPERATOR_COMMAND_JSON';
@@ -1513,8 +1512,10 @@ void _requireAppPairRecoveryOperatorEnvironment(
 ) {
   final mode = environment[_syncRecoveryOperatorModeEnv]?.trim();
   if (environment[_syncRecoveryEnableEnv]?.trim() != '1' ||
-      environment[_syncRecoveryTargetEnv]?.trim() != _syncRecoveryTarget ||
-      !const <String>{'ali', 'local'}.contains(mode)) {
+      !reviewedOperatorMatchesTarget(
+        mode,
+        environment[_syncRecoveryTargetEnv]?.trim(),
+      )) {
     throw E2eFailure(
       'The functional App-pair suite requires the reviewed sync-recovery '
       'operator opt-in, target, and reviewed managed mode.',
@@ -1537,11 +1538,10 @@ void _requireAppPairAccountStateOperatorEnvironment({
   required Map<String, String> environment,
 }) {
   if (environment[_accountStateEnableEnv]?.trim() != '1' ||
-      environment[_syncRecoveryTargetEnv]?.trim() != _syncRecoveryTarget ||
-      !const <String>{
-        'ali',
-        'local',
-      }.contains(environment[_syncRecoveryOperatorModeEnv]?.trim()) ||
+      !reviewedOperatorMatchesTarget(
+        environment[_syncRecoveryOperatorModeEnv]?.trim(),
+        environment[_syncRecoveryTargetEnv]?.trim(),
+      ) ||
       environment[_accountStateFailpointEnableEnv]?.trim() != '1') {
     throw E2eFailure(
       'The App-pair Account State capability, failpoint, target, and mode '
@@ -1573,13 +1573,16 @@ void _requireAppPairAccountStateOperatorEnvironment({
     );
   }
   final targets = decoded['targets'];
-  final target = targets is Map ? targets[_syncRecoveryTarget] : null;
+  final reviewed = reviewedOperatorTargetForMode(
+    environment[_syncRecoveryOperatorModeEnv]!.trim(),
+  );
+  final target = targets is Map ? targets[reviewed.target] : null;
   if (target is! Map ||
-      target['didDomain'] != 'awiki.info' ||
-      target['userServiceUrl'] != 'https://awiki.info' ||
-      target['messageServiceUrl'] != 'https://awiki.info') {
+      target['didDomain'] != reviewed.domain ||
+      target['userServiceUrl'] != 'https://${reviewed.domain}' ||
+      target['messageServiceUrl'] != 'https://${reviewed.domain}') {
     throw E2eFailure(
-      'The App-pair reviewed remote target does not match awiki.info.',
+      'The App-pair reviewed remote target does not match the selected operator.',
     );
   }
   final rawCapabilities = target['capabilities'];
