@@ -279,9 +279,9 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
   );
 
   // The fixture fails one transport attempt and emits a failed local timeline
-  // patch. The retry button is the only action that reaches awiki.info.
+  // patch. The retry button is the only action that reaches the selected target.
   messaging.failNextConversationText();
-  await robot.sendText(retryText);
+  await robot.sendText(retryText, expectRetainedDraft: true);
   final failed = await _waitForUiMessage(
     robot: robot,
     conversationId: conversationId,

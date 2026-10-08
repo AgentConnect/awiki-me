@@ -230,7 +230,7 @@ class _DesktopAppRobot {
     return selected;
   }
 
-  Future<void> sendText(String content) async {
+  Future<void> sendText(String content, {bool expectRetainedDraft = false}) async {
     final input = find.bySemanticsIdentifier('e2e-chat-input');
     await pumpUntilFinder(input, description: 'chat input');
     final inputField = find.descendant(
@@ -251,7 +251,19 @@ class _DesktopAppRobot {
       find.bySemanticsIdentifier('e2e-chat-send-button'),
       description: 'chat send button',
     );
-    await _waitForComposerClear(input, description: 'text send completion');
+    if (expectRetainedDraft) {
+      await pumpUntil(
+        description: 'failed send retains the exact draft',
+        condition: () {
+          final fields = inputField.evaluate().toList(growable: false);
+          if (fields.length != 1) return false;
+          final field = fields.single.widget as CupertinoTextField;
+          return field.enabled && field.controller?.text == content;
+        },
+      );
+    } else {
+      await _waitForComposerClear(input, description: 'text send completion');
+    }
   }
 
   Future<void> sendTextWithKeyboardAction(String content) async {
