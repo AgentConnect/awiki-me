@@ -3,6 +3,56 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/runtime_message_sync_readiness.dart';
 
 void main() {
+  test(
+    'a process-ready Daemon cannot receive the first command before bootstrap',
+    () {
+      final probe = <String, Object?>{
+        'v2_subprotocol_negotiated': false,
+        'v2_bootstrap_completed': true,
+        'last_reconcile_protocol': 'sync_v2',
+        'legacy_sync_used': false,
+      };
+      expect(
+        daemonPublicCommandReceiverReady({'ready': true, 'sync_probe': probe}),
+        isTrue,
+      );
+      for (final invalid in <Object?>[
+        null,
+        {},
+        {'ready': true},
+        {'ready': false, 'sync_probe': probe},
+        {'ready': 'true', 'sync_probe': probe},
+        for (final field in [
+          'v2_bootstrap_completed',
+          'last_reconcile_protocol',
+          'legacy_sync_used',
+        ])
+          {
+            'ready': true,
+            'sync_probe': {...probe, field: null},
+          },
+        {
+          'ready': true,
+          'sync_probe': {...probe, 'v2_bootstrap_completed': false},
+        },
+        {
+          'ready': true,
+          'sync_probe': {...probe, 'v2_bootstrap_completed': 'true'},
+        },
+        {
+          'ready': true,
+          'sync_probe': {...probe, 'last_reconcile_protocol': 'legacy'},
+        },
+        {
+          'ready': true,
+          'sync_probe': {...probe, 'legacy_sync_used': true},
+        },
+      ]) {
+        expect(daemonPublicCommandReceiverReady(invalid), isFalse);
+      }
+    },
+  );
+
   test('new Runtime at a committed tail is ready before its first prompt', () {
     expect(
       runtimeCoreBootstrapReady(

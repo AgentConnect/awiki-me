@@ -1,3 +1,4 @@
+import 'package:awiki_me/src/presentation/shared/profile_avatar.dart';
 // ignore_for_file: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
 
 import 'dart:async';
@@ -9538,7 +9539,7 @@ void main() {
     await tester.tap(senderAvatar);
     await tester.pumpAndSettle();
 
-    final peerInfoAvatar = tester.widget<AvatarBadge>(
+    final peerInfoAvatar = tester.widget<ProfileAvatar>(
       find.byKey(const Key('peer-profile-avatar')),
     );
     expect(peerInfoAvatar.seed, '卓诚');

@@ -5,6 +5,48 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/sync_recovery_operator_contract.dart';
 
 void main() {
+  test(
+    'Singapore preflight and mutation use the same fixed service assets',
+    () {
+      final checks = reviewedOperatorPreflightChecks(
+        mode: 'singapore',
+        operatingSystem: 'macos',
+        accountState: true,
+      );
+      expect(checks.length, 8);
+      for (final check in checks) {
+        expect(check.command.take(7), [
+          'ssh',
+          '-o',
+          'BatchMode=yes',
+          '-o',
+          'ConnectTimeout=10',
+          'singapore-dev',
+          '--',
+        ]);
+        expect(check.command.join(' '), isNot(contains('/usr/bin/python3.11')));
+      }
+      expect(
+        checks
+            .singleWhere((c) => c.label == 'recovery.interpreter')
+            .command
+            .last,
+        '/opt/awiki/backend-ops/venv/bin/python',
+      );
+      expect(
+        checks
+            .singleWhere((c) => c.label == 'account_state.script')
+            .command
+            .last,
+        contains('user-operator-cf695ae189ee/'),
+      );
+      expect(
+        reviewedSyncRecoveryOperatorCommandForMode('singapore'),
+        reviewedSingaporeSyncRecoveryOperatorCommand,
+      );
+    },
+  );
+
   test('local operator is rejected on macOS before any command is started', () {
     expect(
       () => reviewedOperatorPreflightChecks(

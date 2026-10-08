@@ -33,10 +33,26 @@ const List<String> reviewedLocalSyncRecoveryOperatorCommand = <String>[
   '--apply',
 ];
 
+const List<String> reviewedSingaporeSyncRecoveryOperatorCommand = <String>[
+  'ssh',
+  'singapore-dev',
+  '--',
+  'sudo',
+  '-n',
+  '/usr/bin/env',
+  'PYTHONDONTWRITEBYTECODE=1',
+  '/opt/awiki/backend-ops/venv/bin/python',
+  '/opt/awiki/services/message-service/current/scripts/prepare_sync_v2_recovery_test.py',
+  '--config',
+  '/etc/awiki/message-service.toml',
+  '--apply',
+];
+
 List<String> reviewedSyncRecoveryOperatorCommandForMode(String mode) =>
     switch (mode) {
       'ali' => reviewedSyncRecoveryOperatorCommand,
       'local' => reviewedLocalSyncRecoveryOperatorCommand,
+      'singapore' => reviewedSingaporeSyncRecoveryOperatorCommand,
       _ => throw ArgumentError.value(
         mode,
         'mode',
@@ -56,22 +72,34 @@ List<({String label, List<String> command})> reviewedOperatorPreflightChecks({
       'operator_preflight.local_requires_linux_service_host: select SSH mode ali',
     );
   }
-  final prefix = mode == 'ali'
+  final prefix = mode != 'local'
       ? <String>[
           'ssh',
           '-o',
           'BatchMode=yes',
           '-o',
           'ConnectTimeout=10',
-          'ali',
+          mode == 'singapore' ? 'singapore-dev' : 'ali',
           '--',
         ]
       : <String>[];
   final checks = <({String label, List<String> command})>[];
   for (final entry in <(String, List<String>, String)>[
-    ('recovery', reviewedLocalSyncRecoveryOperatorCommand, '--config'),
+    (
+      'recovery',
+      mode == 'singapore'
+          ? reviewedSingaporeSyncRecoveryOperatorCommand.sublist(3)
+          : reviewedLocalSyncRecoveryOperatorCommand,
+      '--config',
+    ),
     if (accountState)
-      ('account_state', reviewedLocalAccountStateOperatorCommand, '--env-file'),
+      (
+        'account_state',
+        mode == 'singapore'
+            ? reviewedSingaporeAccountStateOperatorCommand.sublist(3)
+            : reviewedLocalAccountStateOperatorCommand,
+        '--env-file',
+      ),
   ]) {
     final (label, apply, configFlag) = entry;
     final scriptIndex = apply.indexWhere((value) => value.endsWith('.py'));
@@ -82,7 +110,13 @@ List<({String label, List<String> command})> reviewedOperatorPreflightChecks({
     ]) {
       checks.add((
         label: '$label.${requirement.$1}',
-        command: [...prefix, '/usr/bin/test', requirement.$2, requirement.$3],
+        command: [
+          ...prefix,
+          if (mode == 'singapore') ...['sudo', '-n'],
+          '/usr/bin/test',
+          requirement.$2,
+          requirement.$3,
+        ],
       ));
     }
     checks.add((

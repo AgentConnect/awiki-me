@@ -273,7 +273,7 @@ class _AvatarEditDialogState extends ConsumerState<AvatarEditDialog> {
                           style: TextStyle(
                             color: theme.title,
                             fontSize: 20,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ),

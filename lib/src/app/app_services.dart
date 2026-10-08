@@ -3,6 +3,7 @@
 // [POS]: Composition boundary; high-risk device operations stay behind typed ports and user presence.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/avatar/avatar_image_cache.dart';
 
 import '../application/attachment_picker_service.dart';
 import '../application/app_presentation_service.dart';
@@ -370,4 +371,8 @@ final attachmentPreviewServiceProvider = Provider<AttachmentPreviewService>((
 
 final attachmentOpenServiceProvider = Provider<AttachmentOpenService>(
   (ref) => AttachmentOpenService(),
+);
+
+final avatarCacheCleanupProvider = Provider<Future<void> Function(String)>(
+  (ref) => clearAvatarImageCache,
 );
