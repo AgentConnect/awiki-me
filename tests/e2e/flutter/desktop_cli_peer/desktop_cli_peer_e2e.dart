@@ -434,6 +434,7 @@ void runDesktopCliPeerE2e({
               'lifecycle_and_widget_restart_exact_one_verified',
               'complete_direct_message_sequence_ordered_and_stable',
               'same_body_distinct_canonical_messages_preserved',
+              'mixed_encryption_draft_lock_and_restart_verified',
             ],
             'DISPLAY-NAME-REG-001': const <String>[
               'cached_nickname_first_nonempty_header_title',

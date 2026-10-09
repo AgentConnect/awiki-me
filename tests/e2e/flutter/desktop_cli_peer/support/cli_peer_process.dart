@@ -253,6 +253,7 @@ Future<_CliResult> _runCli(
       ])
         if ((Platform.environment[name] ?? '').trim().isNotEmpty)
           name: Platform.environment[name]!,
+      'AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED': '1',
       'HOME': config.cliHome,
       'AWIKI_CLI_WORKSPACE_HOME_DIR': config.cliWorkspace,
     },

@@ -579,6 +579,109 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
     expectedText: sameBodyText,
     expectedMessageId: sameBodySecondId,
   );
+  // Exercise the visible mode selector in the same canonical conversation.
+  await robot.openConversationRowWithFirstVisibleTitle(
+    conversationId: conversationId,
+    expectedTitle: expectedPeerName,
+  );
+  final mode = find.byKey(const Key('chat-message-security'));
+  final input = find.descendant(
+    of: find.bySemanticsIdentifier('e2e-chat-input'),
+    matching: find.byType(CupertinoTextField),
+  );
+  final secret = 'e2e encrypted ${config.runId} $nonce';
+  await robot._enterExactComposerText(
+    input,
+    secret,
+    description: 'encrypted draft',
+  );
+  await robot.tapOne(mode, description: 'select encrypted message');
+  await robot.pumpUntilFinder(find.text('加密消息'), description: 'encrypted mode');
+  expect(
+    robot.tester.widget<CupertinoTextField>(input).controller!.text,
+    secret,
+  );
+  await robot.tapOne(
+    find.bySemanticsIdentifier('e2e-chat-send-button'),
+    description: 'encrypted send',
+  );
+  final encrypted = await _waitForUiMessage(
+    robot: robot,
+    conversationId: conversationId,
+    content: secret,
+    senderDid: ownerDid,
+    sendState: MessageSendState.sent,
+  );
+  expect(encrypted.isEncrypted, isTrue);
+  await robot.expectMessageContentVisible(encrypted);
+  expect(find.byTooltip('端到端加密'), findsWidgets);
+  await _waitForCliInbox(
+    config: config,
+    expectedText: secret,
+    expectedMessageId: encrypted.remoteId,
+    expectedSenderDid: ownerDid,
+    expectedReceiverDid: cliDid,
+  );
+  final inbox = await _runCli(config, [
+    '--format',
+    'json',
+    'msg',
+    'inbox',
+    '--limit',
+    '20',
+  ]);
+  expect(inbox.exitCode, 0);
+  final messages =
+      (jsonDecode(inbox.stdout) as Map<String, dynamic>)['data']['messages']
+          as List;
+  final exact = messages
+      .where((dynamic row) => row['id'] == encrypted.remoteId)
+      .toList();
+  expect(exact, hasLength(1));
+  expect(exact.single['secure'], isTrue);
+  await robot.restart(
+    bootstrap: bootstrap,
+    providerOverrides: providerOverrides,
+    session: session,
+  );
+  await robot.openConversationRowWithFirstVisibleTitle(
+    conversationId: conversationId,
+    expectedTitle: expectedPeerName,
+  );
+  await robot.pumpUntilFinder(
+    find.text('加密消息'),
+    description: 'restored encrypted mode',
+  );
+  final restored = await _waitForUiMessage(
+    robot: robot,
+    conversationId: conversationId,
+    content: secret,
+    messageId: encrypted.remoteId,
+    senderDid: ownerDid,
+  );
+  expect(restored.isEncrypted, isTrue);
+  await robot.expectMessageContentVisible(restored);
+  expect(find.byTooltip('端到端加密'), findsWidgets);
+  await robot.tapOne(mode, description: 'restore ordinary mode');
+  await robot.pumpUntilFinder(find.text('普通消息'), description: 'ordinary mode');
+  final reply = 'e2e encrypted reply ${config.runId} $nonce';
+  final replyId = await _cliSendDirectText(
+    config: config,
+    text: reply,
+    secure: true,
+  );
+  final receivedEncrypted = await _waitForUiMessage(
+    robot: robot,
+    conversationId: conversationId,
+    content: reply,
+    messageId: replyId,
+    senderDid: cliDid,
+  );
+  expect(receivedEncrypted.isEncrypted, isTrue);
+  await robot.expectMessageContentVisible(receivedEncrypted);
+  await E2eScenarioProgressWriter.record(
+    'direct_mixed_encryption_and_restart_verified',
+  );
   return _DirectRegressionResult(
     conversationId: conversationId,
     peerPersonaId: conversation.peerPersonaId!,
@@ -590,6 +693,7 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
 Future<String> _cliSendDirectText({
   required _DesktopCliPeerSmokeConfig config,
   required String text,
+  bool secure = false,
 }) async {
   final result = await _runCli(config, <String>[
     '--format',
@@ -601,7 +705,7 @@ Future<String> _cliSendDirectText({
     '--text',
     text,
     '--secure',
-    'off',
+    secure ? 'required' : 'off',
   ]);
   if (result.exitCode != 0) {
     fail('CLI msg send failed: ${_summarizeCliResult(result)}');
