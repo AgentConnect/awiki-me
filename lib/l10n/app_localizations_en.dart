@@ -28,6 +28,21 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get chatMentionMember => 'Mention a group member';
+
+  @override
+  String get settingsAppearance => 'Appearance';
+
+  @override
+  String get appearanceSystem => 'Follow system';
+
+  @override
+  String get appearanceLight => 'Light';
+
+  @override
+  String get appearanceDark => 'Dark';
+
+  @override
   String get identityMethodLabel => 'Identity method';
 
   @override
@@ -477,6 +492,35 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get tenantMenuHint => 'Switch the backend and DID host this app uses';
+
+  @override
+  String get tenantBuiltinTag => 'Default';
+
+  @override
+  String get tenantCreateAndUse => 'Add and use';
+
+  @override
+  String get tenantDidHostCreateHint =>
+      'The DID host is bound to this tenant\'s local identities and storage scope and can\'t be changed after saving.';
+
+  @override
+  String get tenantDeleteConfirmTitle => 'Delete tenant configuration?';
+
+  @override
+  String tenantDeleteConfirmMessage(Object tenantName, Object didHost) {
+    return 'Delete $tenantName ($didHost)? Local data stays on this device, but this tenant will no longer appear in the switcher.';
+  }
+
+  @override
+  String get tenantDeleteAction => 'Delete tenant';
+
+  @override
+  String tenantDeleteSemantic(Object tenantName) {
+    return 'Delete tenant $tenantName';
+  }
+
+  @override
   String get tenantCannotEditDefault =>
       'The default AWiki tenant cannot be edited. Add a tenant configuration for another backend.';
 
@@ -843,6 +887,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get friendsSearchGroupsPlaceholder => 'Search groups';
+
+  @override
+  String get conversationsFilterUnread => 'Unread';
 
   @override
   String get friendsTabAll => 'All';
@@ -1498,10 +1545,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quickActionsTitle => 'More actions';
 
   @override
-  String get quickActionStartConversation => 'New message';
+  String get quickActionStartConversation => 'Start chat';
 
   @override
-  String get quickActionCreateGroup => 'Create group chat';
+  String get quickActionCreateGroup => 'New group chat';
 
   @override
   String get quickActionJoinGroup => 'Join group chat';
@@ -1550,10 +1597,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get identityInputSemantics => 'Enter a handle or DID';
 
   @override
-  String get identityInputPlaceholder => 'Enter @handle, DID, or Agent address';
+  String get identityInputPlaceholder => 'Search username or DID';
 
   @override
-  String get identitySearchLabel => 'Resolve identity';
+  String get identitySearchLabel => 'Search';
 
   @override
   String get identityResolving => 'Resolving...';
@@ -1690,10 +1737,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'No member snapshot yet. Refresh group details and members first.';
 
   @override
-  String get groupCreateTitle => 'Create group chat';
+  String get groupCreateTitle => 'New group chat';
 
   @override
   String get groupCreateAction => 'Create';
+
+  @override
+  String get groupCreateSubmit => 'Create group';
 
   @override
   String get groupRecoveryCompleted => 'Group identity restored';
@@ -4195,4 +4245,70 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get agentAvatarImageRejected =>
       'Choose a GIF animation, PNG, JPEG or static WebP up to 5 MB.';
+
+  @override
+  String profileDevicePendingCount(int count) {
+    return '$count pending';
+  }
+
+  @override
+  String get peerProfileDetailsSection => 'Details';
+
+  @override
+  String get deviceJoinIssuedAtLabel => 'Requested';
+
+  @override
+  String get deviceJoinExpiresAtLabel => 'Expires';
+
+  @override
+  String get deviceJoinFingerprintLabel => 'Key fingerprint';
+
+  @override
+  String get deviceJoinRequestAsMember =>
+      'Requests to join as a regular device';
+
+  @override
+  String get deviceJoinOpenHint =>
+      'Opening a request does not authorize it. After you start verification, both devices show a 6-digit code.';
+
+  @override
+  String get deviceJoinCompareTitle => 'Compare codes';
+
+  @override
+  String get deviceJoinLocalSasLabel => 'Shown on this device';
+
+  @override
+  String get commonLater => 'Later';
+
+  @override
+  String deviceJoinNoticeTitle(String device) {
+    return '$device wants to join your account';
+  }
+
+  @override
+  String deviceJoinNoticeExpiry(String time) {
+    return 'Valid until $time';
+  }
+
+  @override
+  String get deviceJoinStepRequest => 'Send join request';
+
+  @override
+  String get deviceJoinStepRequestSub => 'Sent to your managing device';
+
+  @override
+  String get deviceJoinStepVerify => 'Managing device verifies';
+
+  @override
+  String get deviceJoinStepVerifyWaiting => 'Waiting for “Start verification”';
+
+  @override
+  String get deviceJoinStepVerifySas => 'Confirm both 6-digit codes match';
+
+  @override
+  String get deviceJoinStepJoin => 'Join the account';
+
+  @override
+  String get deviceJoinStepJoinSub =>
+      'Joins as a regular device; a managing device can grant management later';
 }

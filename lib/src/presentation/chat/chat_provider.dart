@@ -2,6 +2,7 @@
 // [OUTPUT]: Canonical chat thread state, including settled sends and monotonic visible-read intents.
 // [POS]: Riverpod presentation controller for chat history, sending, realtime patches, serialized read commits, and retries.
 import 'dart:async';
+import 'dart:io' show File;
 import 'dart:collection';
 import 'dart:convert';
 
@@ -5229,13 +5230,22 @@ class ChatThreadsController
     } catch (_) {
       cachedPath = null;
     }
-    final resolvedPath = _normalizedOptionalText(cachedPath);
-    if (resolvedPath == null) {
+    // The durable cached copy backs later reloads, but while the picked
+    // source still exists this session keeps showing that exact file: the
+    // pending bubble already decoded it, so the delivered bubble renders from
+    // the image cache in the same frame instead of flashing a re-decode.
+    final displayPath =
+        sourcePath != null &&
+            sourcePath.isNotEmpty &&
+            File(sourcePath).existsSync()
+        ? sourcePath
+        : _normalizedOptionalText(cachedPath);
+    if (displayPath == null) {
       return sent;
     }
     return sent.copyWith(
       attachment: attachment.copyWith(
-        localPath: resolvedPath,
+        localPath: displayPath,
         hasLocalSource: true,
       ),
     );

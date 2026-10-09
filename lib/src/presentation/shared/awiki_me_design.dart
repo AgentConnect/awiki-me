@@ -7,32 +7,34 @@ import 'package:flutter/material.dart'
     show ColorScheme, TextTheme, Theme, ThemeData, ThemeExtension;
 
 class AwikiMePalette {
-  // The neutral light palette is derived from the approved HTML prototypes.
-  static const Color canvas = Color(0xFFFAF9F7);
+  // Monochrome palette: sRGB equivalents of the reference HTML's achromatic
+  // OKLCH tokens. Only status colours (success/warning/danger) keep hue.
+  static const Color canvas = Color(0xFFFAFAFA);
   static const Color content = Color(0xFFFFFFFF);
-  static const Color inkNeutral = Color(0xFF2D2B26);
-  static const Color mutedNeutral = Color(0xFF6B6963);
-  static const Color hairline = Color(0xFFE8E7E4);
-  static const Color brandAccent = Color(0xFF0081D3);
-  static const Color brandAccentPressed = Color(0xFF006EBA);
-  static const Color brandAccentSoft = Color(0xFFE0F0FA);
-  static const Color avatarBackground = Color(0xFFF6E3C9);
-  static const Color avatarForeground = Color(0xFF5E3A05);
-  static const Color badgeBlue = Color(0xFF1A8FCF);
+  static const Color inkNeutral = Color(0xFF0B0B0B);
+  static const Color mutedNeutral = Color(0xFF585858);
+  static const Color hairline = Color(0xFFE1E1E1);
+  static const Color brandAccent = Color(0xFF0B0B0B);
+  static const Color brandAccentPressed = Color(0xFF0B0B0B);
+  static const Color brandAccentSoft = Color(0xFFEBEBEB);
+  static const Color avatarBackground = Color(0xFFE8E8E8);
+  static const Color avatarForeground = Color(0xFF1F1F1F);
+  static const Color badgeBlue = Color(0xFF2E2E2E);
   static const Color successGreen = Color(0xFF03A14A);
   static const Color warningGold = Color(0xFFDA950B);
   static const Color dangerRed = Color(0xFFD73431);
   static const Color unreadRed = Color(0xFFFA5152);
-  static const Color navigationSurface = Color(0xFFEEEDE9);
-  static const Color navigationBorder = Color(0xFFDDDCD9);
-  static const Color chatSurface = Color(0xFFFAFAFA);
-  static const Color messageIncoming = Color(0xFFEEEEF0);
-  static const Color messageOutgoing = Color(0xFFB6E4FF);
-  static const Color onMessageOutgoing = Color(0xFF0F304A);
-  static const Color messagePreview = Color(0xFF9F9FA6);
+  static const Color navigationSurface = Color(0xFFF5F5F5);
+  static const Color navigationBorder = Color(0xFFDCDCDC);
+  static const Color chatSurface = Color(0xFFFFFFFF);
+  static const Color messageIncoming = Color(0xFFEEEEEE);
+  // Reference `--bubble-out`: ink with white text.
+  static const Color messageOutgoing = Color(0xFF0B0B0B);
+  static const Color onMessageOutgoing = Color(0xFFFFFFFF);
+  static const Color messagePreview = Color(0xFFA0A0A0);
 
   // Legacy names resolve to the same semantic palette so screens still being
-  // migrated cannot silently reintroduce the previous blue-gray theme.
+  // migrated cannot silently reintroduce a tinted theme.
   static const Color amber = warningGold;
   static const Color amberDeep = Color(0xFF805400);
   static const Color actionBlue = brandAccent;
@@ -43,7 +45,7 @@ class AwikiMePalette {
   static const Color actionMuted = mutedNeutral;
   static const Color ivory = canvas;
   static const Color white = Color(0xFFFFFFFF);
-  static const Color mist = Color(0xFFF4F4F3);
+  static const Color mist = Color(0xFFF4F4F4);
   static const Color cloud = messageIncoming;
   static const Color line = hairline;
   static const Color ink = inkNeutral;
@@ -55,13 +57,13 @@ class AwikiMePalette {
   static const Color alert = Color(0xFFFF7B61);
   static const Color warningContainer = Color(0xFFFFF4D6);
   static const Color errorContainer = Color(0xFFFFEBEB);
-  static const Color infoBlue = Color(0xFF2563EB);
+  static const Color infoBlue = Color(0xFF2E2E2E);
 }
 
 class AwikiMeColors {
   static const Color background = AwikiMePalette.canvas;
   static const Color surface = AwikiMePalette.content;
-  static const Color subtleSurface = Color(0xFFF4F4F3);
+  static const Color subtleSurface = Color(0xFFF4F4F4);
   static const Color mutedSurface = AwikiMePalette.messageIncoming;
   static const Color border = AwikiMePalette.hairline;
   static const Color primary = AwikiMePalette.brandAccent;
@@ -265,6 +267,34 @@ class AwikiMeTypographyTokens {
     );
   }
 
+  AwikiMeTypographyTokens withColors(AwikiMeSemanticColors colors) {
+    TextStyle recolor(TextStyle style) => style.copyWith(
+      color: style.color == AwikiMePalette.mutedNeutral
+          ? colors.secondaryText
+          : style.color == AwikiMePalette.messagePreview
+          ? colors.tertiaryText
+          : style.color == null
+          ? null
+          : colors.body,
+    );
+    return copyWith(
+      displayTitle: recolor(displayTitle),
+      sectionTitle: recolor(sectionTitle),
+      navTitle: recolor(navTitle),
+      cardTitle: recolor(cardTitle),
+      cardSubtitle: recolor(cardSubtitle),
+      meta: recolor(meta),
+      listTitle: recolor(listTitle),
+      listSubtitle: recolor(listSubtitle),
+      listMeta: recolor(listMeta),
+      body: recolor(body),
+      messageBody: recolor(messageBody),
+      inputText: recolor(inputText),
+      fieldLabel: recolor(fieldLabel),
+      markdownBody: recolor(markdownBody),
+    );
+  }
+
   static AwikiMeTypographyTokens lerp(
     AwikiMeTypographyTokens a,
     AwikiMeTypographyTokens b,
@@ -321,6 +351,12 @@ class AwikiMeSemanticColors {
     required this.incomingMessage,
     required this.outgoingMessage,
     required this.onOutgoingMessage,
+    this.glass = const Color(0x80FFFFFF),
+    this.glassLens = const Color(0x140B0B0B),
+    this.glassEdge = const Color(0x1F222222),
+    this.glassEdgeActive = const Color(0x29222222),
+    this.glowPrimary = const Color(0xBFFFFFFF),
+    this.glowSecondary = const Color(0x73D1D1D1),
   });
 
   final Color canvas;
@@ -347,6 +383,18 @@ class AwikiMeSemanticColors {
   final Color incomingMessage;
   final Color outgoingMessage;
   final Color onOutgoingMessage;
+
+  /// Phone liquid-glass material: an even frosted fill with a hairline edge.
+  final Color glass;
+
+  /// Selected segment/tab tint that sits on top of [glass].
+  final Color glassLens;
+  final Color glassEdge;
+  final Color glassEdgeActive;
+
+  /// Soft light painted behind phone glass so the blur has depth.
+  final Color glowPrimary;
+  final Color glowSecondary;
 
   static AwikiMeSemanticColors lerp(
     AwikiMeSemanticColors a,
@@ -380,6 +428,12 @@ class AwikiMeSemanticColors {
       incomingMessage: blend(a.incomingMessage, b.incomingMessage),
       outgoingMessage: blend(a.outgoingMessage, b.outgoingMessage),
       onOutgoingMessage: blend(a.onOutgoingMessage, b.onOutgoingMessage),
+      glass: blend(a.glass, b.glass),
+      glassLens: blend(a.glassLens, b.glassLens),
+      glassEdge: blend(a.glassEdge, b.glassEdge),
+      glassEdgeActive: blend(a.glassEdgeActive, b.glassEdgeActive),
+      glowPrimary: blend(a.glowPrimary, b.glowPrimary),
+      glowSecondary: blend(a.glowSecondary, b.glowSecondary),
     );
   }
 }
@@ -449,9 +503,27 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
   Color get incomingMessage => semanticColors.incomingMessage;
   Color get outgoingMessage => semanticColors.outgoingMessage;
   Color get onOutgoingMessage => semanticColors.onOutgoingMessage;
+  Color get glass => semanticColors.glass;
+  Color get glassLens => semanticColors.glassLens;
+  Color get glassEdge => semanticColors.glassEdge;
+  Color get glassEdgeActive => semanticColors.glassEdgeActive;
+  Color get glowPrimary => semanticColors.glowPrimary;
+  Color get glowSecondary => semanticColors.glowSecondary;
+  bool get isDark => colorScheme.brightness == Brightness.dark;
+
+  /// Reference `--danger` fill for destructive buttons; dark mode keeps the
+  /// deeper red while [danger] carries the lighter text tone.
+  Color get dangerFill => isDark ? const Color(0xFFCC3336) : danger;
+
+  /// Reference `--accent-deep`: text on [primarySoft] fills such as the
+  /// follow and review pills.
+  Color get primaryDeep =>
+      isDark ? const Color(0xFFCACACA) : const Color(0xFF2E2E2E);
   Color get alert => AwikiMePalette.alert;
-  Color get warningContainer => AwikiMePalette.warningContainer;
-  Color get dangerContainer => AwikiMePalette.errorContainer;
+  Color get warningContainer => colorScheme.brightness == Brightness.dark
+      ? const Color(0xFF493B22)
+      : AwikiMePalette.warningContainer;
+  Color get dangerContainer => colorScheme.errorContainer;
   Color get infoAccent => AwikiMePalette.infoBlue;
 
   @override
@@ -525,8 +597,64 @@ class AwikiMeTheme {
     'Yu Gothic UI',
     'Malgun Gothic',
   ];
-  static final Map<TargetPlatform, AwikiMePlatformTheme> _platformThemes =
-      <TargetPlatform, AwikiMePlatformTheme>{};
+  static final Map<(TargetPlatform, Brightness), AwikiMePlatformTheme>
+  _platformThemes = <(TargetPlatform, Brightness), AwikiMePlatformTheme>{};
+
+  // sRGB equivalents of the reference HTML's achromatic dark tokens.
+  static const _darkColors = AwikiMeSemanticColors(
+    canvas: Color(0xFF000000),
+    surface: Color(0xFF030303),
+    subtleSurface: Color(0xFF111111),
+    mutedSurface: Color(0xFF141414),
+    navigationSurface: Color(0xFF000000),
+    navigationBorder: Color(0xFF1B1B1B),
+    chatSurface: Color(0xFF030303),
+    border: Color(0xFF1B1B1B),
+    primary: Color(0xFFF5F5F5),
+    primaryPressed: Color(0xFFF5F5F5),
+    primarySoft: Color(0xFF161616),
+    avatarBackground: Color(0xFF2E2E2E),
+    avatarForeground: Color(0xFFE4E4E4),
+    title: Color(0xFFF5F5F5),
+    body: Color(0xFFF5F5F5),
+    secondaryText: Color(0xFF9E9E9E),
+    tertiaryText: Color(0xFF9E9E9E),
+    success: Color(0xFF4AC06C),
+    warning: Color(0xFFEDB345),
+    danger: Color(0xFFF47B74),
+    unread: Color(0xFFFA5152),
+    incomingMessage: Color(0xFF141414),
+    outgoingMessage: Color(0xFFF5F5F5),
+    onOutgoingMessage: Color(0xFF020202),
+    glass: Color(0x75242424),
+    glassLens: Color(0x24F5F5F5),
+    glassEdge: Color(0x1AFFFFFF),
+    glassEdgeActive: Color(0x24FFFFFF),
+    glowPrimary: Color(0x99333333),
+    glowSecondary: Color(0x990D0D0D),
+  );
+
+  static final ColorScheme darkColorScheme = ColorScheme.dark(
+    primary: _darkColors.primary,
+    onPrimary: const Color(0xFF020202),
+    secondary: _darkColors.primary,
+    onSecondary: const Color(0xFF020202),
+    surface: _darkColors.surface,
+    onSurface: _darkColors.body,
+    surfaceContainerLowest: _darkColors.canvas,
+    surfaceContainerLow: _darkColors.subtleSurface,
+    surfaceContainerHighest: _darkColors.mutedSurface,
+    onSurfaceVariant: _darkColors.secondaryText,
+    outline: _darkColors.secondaryText,
+    outlineVariant: _darkColors.border,
+    primaryContainer: _darkColors.primarySoft,
+    onPrimaryContainer: _darkColors.primary,
+    error: _darkColors.danger,
+    onError: const Color(0xFF301410),
+    errorContainer: const Color(0xFF4B2728),
+    onErrorContainer: _darkColors.danger,
+    surfaceTint: const Color(0x00000000),
+  );
 
   static const ColorScheme colorScheme = ColorScheme(
     brightness: Brightness.light,
@@ -544,11 +672,11 @@ class AwikiMeTheme {
     outlineVariant: AwikiMePalette.hairline,
     primaryContainer: AwikiMePalette.brandAccentSoft,
     onPrimaryContainer: AwikiMePalette.brandAccent,
-    secondaryContainer: Color(0xFFDFF1FA),
+    secondaryContainer: AwikiMePalette.brandAccentSoft,
     onSecondaryContainer: AwikiMePalette.badgeBlue,
     errorContainer: AwikiMePalette.errorContainer,
     onErrorContainer: AwikiMePalette.dangerRed,
-    surfaceContainerLow: Color(0xFFF4F4F3),
+    surfaceContainerLow: Color(0xFFF4F4F4),
     surfaceContainerLowest: AwikiMePalette.canvas,
     tertiary: AwikiMePalette.successGreen,
     onTertiary: AwikiMePalette.content,
@@ -565,7 +693,7 @@ class AwikiMeTheme {
   static const AwikiMeSemanticColors _semanticColors = AwikiMeSemanticColors(
     canvas: AwikiMePalette.canvas,
     surface: AwikiMePalette.content,
-    subtleSurface: Color(0xFFF4F4F3),
+    subtleSurface: Color(0xFFF4F4F4),
     mutedSurface: AwikiMePalette.messageIncoming,
     navigationSurface: AwikiMePalette.navigationSurface,
     navigationBorder: AwikiMePalette.navigationBorder,
@@ -829,20 +957,26 @@ class AwikiMeTheme {
   static AwikiMePlatformTheme forPlatform(
     TargetPlatform platform, {
     String? fontFamilyOverride,
+    Brightness brightness = Brightness.light,
   }) {
     final override = fontFamilyOverride?.trim();
     if (override != null && override.isNotEmpty) {
-      return _buildForPlatform(platform, fontFamilyOverride: override);
+      return _buildForPlatform(
+        platform,
+        fontFamilyOverride: override,
+        brightness: brightness,
+      );
     }
-    return _platformThemes.putIfAbsent(
+    return _platformThemes.putIfAbsent((
       platform,
-      () => _buildForPlatform(platform),
-    );
+      brightness,
+    ), () => _buildForPlatform(platform, brightness: brightness));
   }
 
   static AwikiMePlatformTheme _buildForPlatform(
     TargetPlatform platform, {
     String? fontFamilyOverride,
+    Brightness brightness = Brightness.light,
   }) {
     final isWindows =
         platform == TargetPlatform.windows && fontFamilyOverride == null;
@@ -851,7 +985,7 @@ class AwikiMeTheme {
     final fontFallback = fontFamilyOverride != null
         ? const <String>[]
         : (isWindows ? windowsFontFamilyFallback : null);
-    final platformTokens = fontFamilyOverride != null
+    var platformTokens = fontFamilyOverride != null
         ? _baseTokens.copyWith(
             compactTypography: _baseTokens.compactTypography.withFont(
               fontFamily: fontFamilyOverride,
@@ -863,11 +997,26 @@ class AwikiMeTheme {
             ),
           )
         : (isWindows ? _windowsTokens() : _baseTokens);
+    final scheme = brightness == Brightness.dark
+        ? darkColorScheme
+        : colorScheme;
+    if (brightness == Brightness.dark) {
+      platformTokens = platformTokens.copyWith(
+        colorScheme: scheme,
+        semanticColors: _darkColors,
+        compactTypography: platformTokens.compactTypography.withColors(
+          _darkColors,
+        ),
+        expandedTypography: platformTokens.expandedTypography.withColors(
+          _darkColors,
+        ),
+      );
+    }
     final baseMaterialTheme = ThemeData(
       useMaterial3: true,
       platform: platform,
-      colorScheme: colorScheme,
-      scaffoldBackgroundColor: colorScheme.surfaceContainerLowest,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: scheme.surfaceContainerLowest,
       fontFamily: fontFamily,
       fontFamilyFallback: fontFallback,
       extensions: <ThemeExtension<dynamic>>[platformTokens],
@@ -886,13 +1035,15 @@ class AwikiMeTheme {
         ),
       ),
       cupertinoTheme: CupertinoThemeData(
-        brightness: Brightness.light,
-        primaryColor: colorScheme.primary,
-        scaffoldBackgroundColor: colorScheme.surfaceContainerLowest,
-        barBackgroundColor: colorScheme.surface,
+        brightness: brightness,
+        primaryColor: scheme.primary,
+        primaryContrastingColor: scheme.onPrimary,
+        scaffoldBackgroundColor: scheme.surfaceContainerLowest,
+        barBackgroundColor: scheme.surface,
         textTheme: _cupertinoTextThemeFor(
           platform,
           fontFamilyOverride: fontFamilyOverride,
+          scheme: scheme,
         ),
       ),
       tokens: platformTokens,
@@ -970,11 +1121,12 @@ class AwikiMeTheme {
   static CupertinoTextThemeData _cupertinoTextThemeFor(
     TargetPlatform platform, {
     String? fontFamilyOverride,
+    ColorScheme scheme = colorScheme,
   }) {
-    const base = CupertinoTextThemeData(
-      primaryColor: AwikiMePalette.brandAccent,
+    final base = CupertinoTextThemeData(
+      primaryColor: scheme.primary,
       textStyle: TextStyle(
-        color: AwikiMePalette.inkNeutral,
+        color: scheme.onSurface,
         fontSize: 15,
         letterSpacing: 0,
       ),
@@ -999,7 +1151,7 @@ class AwikiMeTheme {
     }
 
     return CupertinoTextThemeData(
-      primaryColor: colorScheme.primary,
+      primaryColor: scheme.primary,
       textStyle: normalize(base.textStyle),
       actionTextStyle: normalize(base.actionTextStyle),
       actionSmallTextStyle: normalize(base.actionSmallTextStyle),

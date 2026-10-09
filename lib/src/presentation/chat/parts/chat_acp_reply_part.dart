@@ -53,6 +53,7 @@ class _AcpReplyPreview extends StatelessWidget {
                   userId: task.agentDid,
                   isMine: false,
                   size: responsive.displayScaled(macStyle ? 30 : 32),
+                  square: true,
                 ),
               ),
               SizedBox(
@@ -104,10 +105,8 @@ class _AcpReplyPreview extends StatelessWidget {
                           isMine: false,
                           hasAttachment: false,
                           macStyle: macStyle,
-                          child: _MessageSelectableContent(
+                          child: SelectionArea(
                             key: ValueKey('acp-stream-text:${task.runId}'),
-                            conversation: conversation,
-                            text: task.text,
                             child: _MessageTextContent(
                               text: task.text,
                               mentions: const [],

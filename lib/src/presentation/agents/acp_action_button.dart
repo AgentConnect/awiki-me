@@ -61,21 +61,20 @@ class _AcpActionButtonState extends ConsumerState<AcpActionButton>
     updateKeepAlive();
     try {
       if (widget.confirmation != null) {
-        final confirmed = await showCupertinoDialog<bool>(
-          context: context,
-          builder: (dialogContext) => CupertinoAlertDialog(
-            content: Text(widget.confirmation!),
-            actions: [
-              CupertinoDialogAction(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: Text(acpText(context, '取消', 'Cancel')),
-              ),
-              CupertinoDialogAction(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: Text(acpText(context, '确认', 'Confirm')),
-              ),
-            ],
-          ),
+        final confirmed = await showAwikiGlassAlert<bool>(
+          context,
+          message: widget.confirmation!,
+          actions: <AwikiAlertAction<bool>>[
+            AwikiAlertAction<bool>(
+              label: acpText(context, '取消', 'Cancel'),
+              value: false,
+            ),
+            AwikiAlertAction<bool>(
+              label: acpText(context, '确认', 'Confirm'),
+              value: true,
+              tone: AwikiPillTone.primary,
+            ),
+          ],
         );
         if (confirmed != true ||
             !mounted ||
@@ -190,7 +189,9 @@ class _AcpActionButtonState extends ConsumerState<AcpActionButton>
                         style: TextStyle(
                           fontSize: widget.primary ? 14 : 12,
                           height: 1.4,
-                          color: widget.primary ? CupertinoColors.white : null,
+                          color: widget.primary
+                              ? theme.primaryForeground
+                              : null,
                         ),
                       ),
                 ),
@@ -200,7 +201,7 @@ class _AcpActionButtonState extends ConsumerState<AcpActionButton>
                       child: CupertinoActivityIndicator(
                         radius: 8,
                         color: widget.primary
-                            ? CupertinoColors.white
+                            ? theme.primaryForeground
                             : theme.primary,
                       ),
                     ),

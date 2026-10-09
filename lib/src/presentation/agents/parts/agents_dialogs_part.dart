@@ -596,9 +596,9 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AwikiMePalette.mist,
+                        color: context.awikiTheme.subtleSurface,
                         borderRadius: BorderRadius.circular(9),
-                        border: Border.all(color: AwikiMePalette.hairline),
+                        border: Border.all(color: context.awikiTheme.border),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -607,7 +607,7 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
                             context.l10n.agentClientNodeSetup,
                             style: TextStyle(
                               fontSize: responsive.metaSm,
-                              color: AwikiMePalette.mutedNeutral,
+                              color: context.awikiTheme.secondaryText,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -722,7 +722,7 @@ class _CreateRuntimeDialogState extends ConsumerState<_CreateRuntimeDialog> {
                 _createError!,
                 style: TextStyle(
                   fontSize: responsive.metaSm,
-                  color: AwikiMePalette.mutedNeutral,
+                  color: context.awikiTheme.secondaryText,
                 ),
               ),
             ),
@@ -818,7 +818,7 @@ class _AgentTypeSelector extends StatelessWidget {
               child: Text(
                 context.l10n.agentCreateType,
                 style: TextStyle(
-                  color: AwikiMePalette.mutedNeutral,
+                  color: context.awikiTheme.secondaryText,
                   fontSize: responsive.metaSm,
                 ),
               ),
@@ -854,7 +854,7 @@ class _AgentTypeSelector extends StatelessWidget {
             hint,
             style: TextStyle(
               fontSize: responsive.metaSm,
-              color: AwikiMePalette.mutedNeutral,
+              color: context.awikiTheme.secondaryText,
               height: 1.35,
             ),
           ),
@@ -874,7 +874,7 @@ class _AgentTypeSelector extends StatelessWidget {
               note!,
               style: TextStyle(
                 fontSize: responsive.metaSm,
-                color: AwikiMePalette.mutedNeutral,
+                color: context.awikiTheme.secondaryText,
                 height: 1.4,
               ),
             ),
@@ -902,8 +902,8 @@ class _RuntimeKindTile extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final enabled = status.enabled;
     final accent = enabled
-        ? AwikiMePalette.brandAccent
-        : AwikiMePalette.messagePreview;
+        ? context.awikiTheme.primary
+        : context.awikiTheme.tertiaryText;
     return AppPressable(
       onTap: enabled ? onTap : null,
       enabled: enabled,
@@ -914,13 +914,13 @@ class _RuntimeKindTile extends StatelessWidget {
         padding: EdgeInsets.all(responsive.spacing(12)),
         decoration: BoxDecoration(
           color: selected && enabled
-              ? AwikiMePalette.brandAccentSoft
-              : AwikiMePalette.mist,
+              ? context.awikiTheme.primarySoft
+              : context.awikiTheme.subtleSurface,
           borderRadius: BorderRadius.circular(responsive.radius(10)),
           border: Border.all(
             color: selected && enabled
-                ? AwikiMePalette.brandAccent
-                : AwikiMePalette.hairline,
+                ? context.awikiTheme.primary
+                : context.awikiTheme.border,
           ),
         ),
         child: Row(
@@ -940,8 +940,8 @@ class _RuntimeKindTile extends StatelessWidget {
                         kind.displayLabel,
                         style: TextStyle(
                           color: enabled
-                              ? AwikiMePalette.inkNeutral
-                              : AwikiMePalette.mutedNeutral,
+                              ? context.awikiTheme.title
+                              : context.awikiTheme.secondaryText,
                           fontSize: responsive.bodyMd,
                           fontWeight: FontWeight.w400,
                         ),
@@ -951,7 +951,7 @@ class _RuntimeKindTile extends StatelessWidget {
                           status.reasonLabel ??
                               context.l10n.agentStatusDisabled,
                           style: TextStyle(
-                            color: AwikiMePalette.messagePreview,
+                            color: context.awikiTheme.tertiaryText,
                             fontSize: responsive.metaSm,
                             fontWeight: FontWeight.w400,
                           ),
@@ -963,7 +963,7 @@ class _RuntimeKindTile extends StatelessWidget {
                   Text(
                     status.description,
                     style: TextStyle(
-                      color: AwikiMePalette.mutedNeutral,
+                      color: context.awikiTheme.secondaryText,
                       fontSize: responsive.metaSm,
                       height: 1.25,
                     ),
@@ -1047,9 +1047,9 @@ class _RuntimePermissionSummary extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.all(responsive.spacing(12)),
       decoration: BoxDecoration(
-        color: AwikiMePalette.mist,
+        color: context.awikiTheme.subtleSurface,
         borderRadius: BorderRadius.circular(responsive.radius(10)),
-        border: Border.all(color: AwikiMePalette.hairline),
+        border: Border.all(color: context.awikiTheme.border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1064,7 +1064,7 @@ class _RuntimePermissionSummary extends StatelessWidget {
             ),
             child: Icon(
               CupertinoIcons.command,
-              color: AwikiMePalette.brandAccent,
+              color: context.awikiTheme.primary,
               size: responsive.iconSm,
             ),
           ),
@@ -1076,7 +1076,7 @@ class _RuntimePermissionSummary extends StatelessWidget {
                 Text(
                   context.l10n.agentCreateHostAccessTitle,
                   style: TextStyle(
-                    color: AwikiMePalette.inkNeutral,
+                    color: context.awikiTheme.title,
                     fontSize: responsive.bodyMd,
                     fontWeight: FontWeight.w400,
                   ),
@@ -1085,7 +1085,7 @@ class _RuntimePermissionSummary extends StatelessWidget {
                 Text(
                   context.l10n.agentCreateHostAccessDescription,
                   style: TextStyle(
-                    color: AwikiMePalette.mutedNeutral,
+                    color: context.awikiTheme.secondaryText,
                     fontSize: responsive.metaSm,
                     height: 1.25,
                   ),
@@ -1160,7 +1160,7 @@ class _RuntimeOptionSelector extends StatelessWidget {
         Text(
           title,
           style: TextStyle(
-            color: AwikiMePalette.mutedNeutral,
+            color: context.awikiTheme.secondaryText,
             fontSize: responsive.metaSm,
             fontWeight: FontWeight.w400,
           ),
@@ -1210,13 +1210,13 @@ class _RuntimeOptionTile extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: selected
-              ? AwikiMePalette.brandAccentSoft
-              : AwikiMePalette.mist,
+              ? context.awikiTheme.primarySoft
+              : context.awikiTheme.subtleSurface,
           borderRadius: BorderRadius.circular(responsive.radius(9)),
           border: Border.all(
             color: selected
-                ? AwikiMePalette.brandAccent
-                : AwikiMePalette.hairline,
+                ? context.awikiTheme.primary
+                : context.awikiTheme.border,
           ),
         ),
         child: Row(
@@ -1226,8 +1226,8 @@ class _RuntimeOptionTile extends StatelessWidget {
                   ? CupertinoIcons.largecircle_fill_circle
                   : CupertinoIcons.circle,
               color: selected
-                  ? AwikiMePalette.brandAccent
-                  : AwikiMePalette.messagePreview,
+                  ? context.awikiTheme.primary
+                  : context.awikiTheme.tertiaryText,
               size: responsive.iconSm,
             ),
             SizedBox(width: responsive.spacing(9)),
@@ -1240,7 +1240,7 @@ class _RuntimeOptionTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: AwikiMePalette.inkNeutral,
+                      color: context.awikiTheme.title,
                       fontSize: responsive.bodySm,
                       fontWeight: FontWeight.w400,
                     ),
@@ -1251,7 +1251,7 @@ class _RuntimeOptionTile extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: AwikiMePalette.mutedNeutral,
+                      color: context.awikiTheme.secondaryText,
                       fontSize: responsive.metaSm,
                       height: 1.25,
                     ),
@@ -1301,7 +1301,7 @@ class _AgentDialogField extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: AwikiMePalette.mutedNeutral,
+            color: context.awikiTheme.secondaryText,
             fontSize: responsive.metaSm,
             fontWeight: FontWeight.w400,
           ),
@@ -1319,7 +1319,7 @@ class _AgentDialogField extends StatelessWidget {
                   padding: EdgeInsets.only(left: responsive.spacing(10)),
                   child: DefaultTextStyle(
                     style: TextStyle(
-                      color: AwikiMePalette.mutedNeutral,
+                      color: context.awikiTheme.secondaryText,
                       fontSize: responsive.bodyMd,
                       fontWeight: FontWeight.w400,
                     ),
@@ -1331,20 +1331,20 @@ class _AgentDialogField extends StatelessWidget {
             vertical: responsive.spacing(11),
           ),
           decoration: BoxDecoration(
-            color: AwikiMePalette.mist,
+            color: context.awikiTheme.subtleSurface,
             borderRadius: BorderRadius.circular(responsive.radius(9)),
             border: Border.all(
               color: hasError
                   ? AwikiMePalette.dangerRed
-                  : AwikiMePalette.hairline,
+                  : context.awikiTheme.border,
             ),
           ),
           style: TextStyle(
-            color: AwikiMePalette.inkNeutral,
+            color: context.awikiTheme.title,
             fontSize: responsive.bodyMd,
           ),
           placeholderStyle: TextStyle(
-            color: AwikiMePalette.messagePreview,
+            color: context.awikiTheme.tertiaryText,
             fontSize: responsive.bodyMd,
           ),
           textInputAction: textInputAction,
@@ -1408,7 +1408,7 @@ class _HandlePreview extends StatelessWidget {
         vertical: responsive.spacing(9),
       ),
       decoration: BoxDecoration(
-        color: AwikiMePalette.mist,
+        color: context.awikiTheme.subtleSurface,
         borderRadius: BorderRadius.circular(responsive.radius(8)),
       ),
       child: Column(
@@ -1420,8 +1420,8 @@ class _HandlePreview extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: isValid
-                  ? AwikiMePalette.inkNeutral
-                  : AwikiMePalette.mutedNeutral,
+                  ? context.awikiTheme.title
+                  : context.awikiTheme.secondaryText,
               fontSize: responsive.metaSm,
               fontWeight: FontWeight.w400,
             ),
@@ -1508,15 +1508,15 @@ class _DialogSecondaryButton extends StatelessWidget {
       child: Container(
         constraints: BoxConstraints(minHeight: responsive.controlHeight),
         decoration: BoxDecoration(
-          color: AwikiMePalette.mist,
+          color: context.awikiTheme.subtleSurface,
           borderRadius: BorderRadius.circular(responsive.radius(9)),
-          border: Border.all(color: AwikiMePalette.hairline),
+          border: Border.all(color: context.awikiTheme.border),
         ),
         alignment: Alignment.center,
         child: Text(
           label,
           style: TextStyle(
-            color: AwikiMePalette.mutedNeutral,
+            color: context.awikiTheme.secondaryText,
             fontSize: responsive.bodyMd,
             fontWeight: FontWeight.w400,
           ),
@@ -1793,12 +1793,12 @@ class _SkillOnboardingDialogState
               height: responsive.displayScaled(34),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0xFFEAF2FF),
+                color: const Color(0xFFEBEBEB),
                 borderRadius: BorderRadius.circular(responsive.radius(8)),
               ),
               child: Icon(
                 CupertinoIcons.command,
-                color: const Color(0xFF0B65F8),
+                color: const Color(0xFF0B0B0B),
                 size: responsive.iconMd,
               ),
             ),
@@ -1807,7 +1807,7 @@ class _SkillOnboardingDialogState
           Text(
             context.l10n.agentSkillDisplayName,
             style: TextStyle(
-              color: const Color(0xFF66728A),
+              color: const Color(0xFF727272),
               fontSize: responsive.metaSm,
               fontWeight: FontWeight.w400,
             ),
@@ -1828,7 +1828,7 @@ class _SkillOnboardingDialogState
           Text(
             context.l10n.agentSkillDisplayNameHint,
             style: TextStyle(
-              color: const Color(0xFF66728A),
+              color: const Color(0xFF727272),
               fontSize: responsive.metaSm,
             ),
           ),
@@ -1847,7 +1847,7 @@ class _SkillOnboardingDialogState
               ),
               style: TextStyle(
                 color: state.error == null
-                    ? const Color(0xFF66728A)
+                    ? const Color(0xFF727272)
                     : AwikiMeColors.danger,
                 fontSize: responsive.bodySm,
                 fontWeight: FontWeight.w400,
@@ -1877,7 +1877,7 @@ class _SkillOnboardingDialogState
                     Text(
                       context.l10n.agentSkillSecretNotice,
                       style: TextStyle(
-                        color: const Color(0xFF66728A),
+                        color: const Color(0xFF727272),
                         fontSize: responsive.metaSm,
                         height: 1.35,
                       ),
@@ -1942,7 +1942,7 @@ class _SkillGrantLine extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: const Color(0xFF66728A),
+              color: const Color(0xFF727272),
               fontSize: responsive.metaSm,
             ),
           ),
@@ -1953,7 +1953,7 @@ class _SkillGrantLine extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: const Color(0xFF25324A),
+              color: const Color(0xFF323232),
               fontSize: responsive.bodySm,
               fontWeight: FontWeight.w400,
             ),
@@ -1975,7 +1975,7 @@ class _SkillPromptText extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(responsive.spacing(12)),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: const Color(0xFF181818),
         borderRadius: BorderRadius.circular(responsive.radius(8)),
       ),
       child: Column(
@@ -1992,7 +1992,7 @@ class _SkillPromptText extends StatelessWidget {
                   instruction.prompt,
                   key: const Key('agent-skill-instruction-text'),
                   style: TextStyle(
-                    color: const Color(0xFFE5E7EB),
+                    color: const Color(0xFFE7E7E7),
                     fontSize: responsive.metaSm,
                     fontFamily: 'monospace',
                     height: 1.4,
@@ -2079,12 +2079,12 @@ class _InstallCommandDialogState extends State<_InstallCommandDialog> {
               width: responsive.displayScaled(34),
               height: responsive.displayScaled(34),
               decoration: BoxDecoration(
-                color: AwikiMePalette.brandAccentSoft,
+                color: context.awikiTheme.primarySoft,
                 borderRadius: BorderRadius.circular(responsive.radius(8)),
               ),
               child: Icon(
                 CupertinoIcons.desktopcomputer,
-                color: AwikiMePalette.brandAccent,
+                color: context.awikiTheme.primary,
                 size: responsive.iconMd,
               ),
             ),
@@ -2247,16 +2247,16 @@ class _SupportedAgentTypeHint extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(responsive.spacing(12)),
       decoration: BoxDecoration(
-        color: AwikiMePalette.mist,
+        color: context.awikiTheme.subtleSurface,
         borderRadius: BorderRadius.circular(responsive.radius(9)),
-        border: Border.all(color: AwikiMePalette.hairline),
+        border: Border.all(color: context.awikiTheme.border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Icon(
             CupertinoIcons.sparkles,
-            color: AwikiMePalette.brandAccent,
+            color: context.awikiTheme.primary,
             size: responsive.iconSm,
           ),
           SizedBox(width: responsive.spacing(8)),
@@ -2265,8 +2265,8 @@ class _SupportedAgentTypeHint extends StatelessWidget {
               context.l10n.agentInstallSupportedTypes(
                 AgentTypeCatalog.names(context.l10n),
               ),
-              style: const TextStyle(
-                color: AwikiMePalette.mutedNeutral,
+              style: TextStyle(
+                color: context.awikiTheme.secondaryText,
                 fontSize: 12,
                 height: 1.35,
                 fontWeight: FontWeight.w400,
@@ -2291,10 +2291,14 @@ class _TokenExpiryRow extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(responsive.spacing(10)),
       decoration: BoxDecoration(
-        color: isExpired ? const Color(0xFFFFF3F3) : AwikiMePalette.mist,
+        color: isExpired
+            ? const Color(0xFFFFF3F3)
+            : context.awikiTheme.subtleSurface,
         borderRadius: BorderRadius.circular(responsive.radius(8)),
         border: Border.all(
-          color: isExpired ? const Color(0xFFFFD2D2) : AwikiMePalette.hairline,
+          color: isExpired
+              ? const Color(0xFFFFD2D2)
+              : context.awikiTheme.border,
         ),
       ),
       child: Row(
@@ -2305,7 +2309,7 @@ class _TokenExpiryRow extends StatelessWidget {
                 : CupertinoIcons.clock_fill,
             color: isExpired
                 ? AwikiMeColors.danger
-                : AwikiMePalette.mutedNeutral,
+                : context.awikiTheme.secondaryText,
             size: responsive.iconSm,
           ),
           SizedBox(width: responsive.spacing(8)),
@@ -2319,7 +2323,7 @@ class _TokenExpiryRow extends StatelessWidget {
               style: TextStyle(
                 color: isExpired
                     ? AwikiMeColors.danger
-                    : AwikiMePalette.mutedNeutral,
+                    : context.awikiTheme.secondaryText,
                 fontSize: responsive.metaSm,
                 fontWeight: FontWeight.w400,
               ),
@@ -2398,9 +2402,9 @@ class _CommandTextState extends State<_CommandText> {
       width: double.infinity,
       padding: EdgeInsets.all(responsive.spacing(12)),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: const Color(0xFF181818),
         borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: const Color(0xFF292929)),
       ),
       child: Row(
         key: widget.rowKey,
@@ -2426,7 +2430,7 @@ class _CommandTextState extends State<_CommandText> {
               ),
               decoration: null,
               style: TextStyle(
-                color: const Color(0xFFE5E7EB),
+                color: const Color(0xFFE7E7E7),
                 fontSize: responsive.metaSm,
                 fontFamily: 'monospace',
                 height: 1.35,
@@ -2440,11 +2444,11 @@ class _CommandTextState extends State<_CommandText> {
             semanticLabel: widget.copyLabel,
             tooltip: widget.copyLabel,
             size: responsive.displayScaled(34),
-            backgroundColor: const Color(0xFF1E293B),
+            backgroundColor: const Color(0xFF292929),
             borderRadius: BorderRadius.circular(responsive.radius(8)),
             child: Icon(
               CupertinoIcons.doc_on_doc,
-              color: const Color(0xFFCBD5E1),
+              color: const Color(0xFFD4D4D4),
               size: responsive.iconSm,
             ),
           ),

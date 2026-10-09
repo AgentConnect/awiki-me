@@ -128,6 +128,36 @@ abstract class AppLocalizations {
   /// **'{name}已不可用'**
   String agentLifecycleMessageNotice(String name);
 
+  /// No description provided for @chatMentionMember.
+  ///
+  /// In zh, this message translates to:
+  /// **'提及群成员'**
+  String get chatMentionMember;
+
+  /// No description provided for @settingsAppearance.
+  ///
+  /// In zh, this message translates to:
+  /// **'外观'**
+  String get settingsAppearance;
+
+  /// No description provided for @appearanceSystem.
+  ///
+  /// In zh, this message translates to:
+  /// **'跟随系统'**
+  String get appearanceSystem;
+
+  /// No description provided for @appearanceLight.
+  ///
+  /// In zh, this message translates to:
+  /// **'浅色'**
+  String get appearanceLight;
+
+  /// No description provided for @appearanceDark.
+  ///
+  /// In zh, this message translates to:
+  /// **'深色'**
+  String get appearanceDark;
+
   /// No description provided for @identityMethodLabel.
   ///
   /// In zh, this message translates to:
@@ -932,6 +962,54 @@ abstract class AppLocalizations {
   /// **'删除 {tenantName}？本机数据会保留，但这个租户不会再出现在切换列表中。'**
   String tenantDeleteContent(Object tenantName);
 
+  /// No description provided for @tenantMenuHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'切换这个 App 使用的后端和 DID Host'**
+  String get tenantMenuHint;
+
+  /// No description provided for @tenantBuiltinTag.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认配置'**
+  String get tenantBuiltinTag;
+
+  /// No description provided for @tenantCreateAndUse.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加并使用'**
+  String get tenantCreateAndUse;
+
+  /// No description provided for @tenantDidHostCreateHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'DID Host 与租户的本地身份和存储作用域绑定，保存后不能修改。'**
+  String get tenantDidHostCreateHint;
+
+  /// No description provided for @tenantDeleteConfirmTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除租户配置？'**
+  String get tenantDeleteConfirmTitle;
+
+  /// No description provided for @tenantDeleteConfirmMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定要删除 {tenantName}（{didHost}）吗？本机数据会保留，但这个租户不会再出现在切换列表中。'**
+  String tenantDeleteConfirmMessage(Object tenantName, Object didHost);
+
+  /// No description provided for @tenantDeleteAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除租户'**
+  String get tenantDeleteAction;
+
+  /// No description provided for @tenantDeleteSemantic.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除租户 {tenantName}'**
+  String tenantDeleteSemantic(Object tenantName);
+
   /// No description provided for @tenantCannotEditDefault.
   ///
   /// In zh, this message translates to:
@@ -1271,7 +1349,7 @@ abstract class AppLocalizations {
   /// No description provided for @shellNavMe.
   ///
   /// In zh, this message translates to:
-  /// **'我'**
+  /// **'我的'**
   String get shellNavMe;
 
   /// No description provided for @shellTasksPlaceholderTitle.
@@ -1597,6 +1675,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'搜索群组'**
   String get friendsSearchGroupsPlaceholder;
+
+  /// No description provided for @conversationsFilterUnread.
+  ///
+  /// In zh, this message translates to:
+  /// **'未读'**
+  String get conversationsFilterUnread;
 
   /// No description provided for @friendsTabAll.
   ///
@@ -2745,13 +2829,13 @@ abstract class AppLocalizations {
   /// No description provided for @quickActionStartConversation.
   ///
   /// In zh, this message translates to:
-  /// **'发起新消息'**
+  /// **'发起聊天'**
   String get quickActionStartConversation;
 
   /// No description provided for @quickActionCreateGroup.
   ///
   /// In zh, this message translates to:
-  /// **'创建群聊'**
+  /// **'发起群聊'**
   String get quickActionCreateGroup;
 
   /// No description provided for @quickActionJoinGroup.
@@ -2841,13 +2925,13 @@ abstract class AppLocalizations {
   /// No description provided for @identityInputPlaceholder.
   ///
   /// In zh, this message translates to:
-  /// **'输入 @handle / DID / Agent 地址'**
+  /// **'搜索用户名或 DID'**
   String get identityInputPlaceholder;
 
   /// No description provided for @identitySearchLabel.
   ///
   /// In zh, this message translates to:
-  /// **'匹配身份'**
+  /// **'搜索'**
   String get identitySearchLabel;
 
   /// No description provided for @identityResolving.
@@ -3093,7 +3177,7 @@ abstract class AppLocalizations {
   /// No description provided for @groupCreateTitle.
   ///
   /// In zh, this message translates to:
-  /// **'创建群聊'**
+  /// **'发起群聊'**
   String get groupCreateTitle;
 
   /// No description provided for @groupCreateAction.
@@ -3101,6 +3185,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'创建'**
   String get groupCreateAction;
+
+  /// No description provided for @groupCreateSubmit.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建群聊'**
+  String get groupCreateSubmit;
 
   /// No description provided for @groupRecoveryCompleted.
   ///
@@ -7323,6 +7413,120 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'请选择 5 MB 内的 GIF 动图、PNG、JPEG 或静态 WebP。'**
   String get agentAvatarImageRejected;
+
+  /// No description provided for @profileDevicePendingCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 个待审批'**
+  String profileDevicePendingCount(int count);
+
+  /// No description provided for @peerProfileDetailsSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'资料'**
+  String get peerProfileDetailsSection;
+
+  /// No description provided for @deviceJoinIssuedAtLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'发起时间'**
+  String get deviceJoinIssuedAtLabel;
+
+  /// No description provided for @deviceJoinExpiresAtLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'过期时间'**
+  String get deviceJoinExpiresAtLabel;
+
+  /// No description provided for @deviceJoinFingerprintLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'密钥指纹'**
+  String get deviceJoinFingerprintLabel;
+
+  /// No description provided for @deviceJoinRequestAsMember.
+  ///
+  /// In zh, this message translates to:
+  /// **'请求以普通设备加入'**
+  String get deviceJoinRequestAsMember;
+
+  /// No description provided for @deviceJoinOpenHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开请求不会授权。点击「开始验证」后，两台设备会各自显示 6 位验证码。'**
+  String get deviceJoinOpenHint;
+
+  /// No description provided for @deviceJoinCompareTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'核对验证码'**
+  String get deviceJoinCompareTitle;
+
+  /// No description provided for @deviceJoinLocalSasLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机显示'**
+  String get deviceJoinLocalSasLabel;
+
+  /// No description provided for @commonLater.
+  ///
+  /// In zh, this message translates to:
+  /// **'稍后'**
+  String get commonLater;
+
+  /// No description provided for @deviceJoinNoticeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'{device} 请求加入你的账户'**
+  String deviceJoinNoticeTitle(String device);
+
+  /// No description provided for @deviceJoinNoticeExpiry.
+  ///
+  /// In zh, this message translates to:
+  /// **'{time} 前有效'**
+  String deviceJoinNoticeExpiry(String time);
+
+  /// No description provided for @deviceJoinStepRequest.
+  ///
+  /// In zh, this message translates to:
+  /// **'发起关联请求'**
+  String get deviceJoinStepRequest;
+
+  /// No description provided for @deviceJoinStepRequestSub.
+  ///
+  /// In zh, this message translates to:
+  /// **'已发送给你的管理设备'**
+  String get deviceJoinStepRequestSub;
+
+  /// No description provided for @deviceJoinStepVerify.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理设备验证'**
+  String get deviceJoinStepVerify;
+
+  /// No description provided for @deviceJoinStepVerifyWaiting.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待对方点击「开始验证」'**
+  String get deviceJoinStepVerifyWaiting;
+
+  /// No description provided for @deviceJoinStepVerifySas.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认两端 6 位验证码一致'**
+  String get deviceJoinStepVerifySas;
+
+  /// No description provided for @deviceJoinStepJoin.
+  ///
+  /// In zh, this message translates to:
+  /// **'加入账户'**
+  String get deviceJoinStepJoin;
+
+  /// No description provided for @deviceJoinStepJoinSub.
+  ///
+  /// In zh, this message translates to:
+  /// **'作为普通设备加入，之后可由管理设备授予管理权限'**
+  String get deviceJoinStepJoinSub;
 }
 
 class _AppLocalizationsDelegate

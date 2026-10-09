@@ -61,9 +61,13 @@ class InviteSupport extends FakeOnboardingSupportService {
   }
 }
 
+// The unified onboarding form uses its own outlined field, so fields are
+// located by their stable semantics identifier rather than widget type.
 Finder field(String id) => find.descendant(
   of: find.byWidgetPredicate(
-    (w) => w is AppTextField && w.semanticsIdentifier == id,
+    (w) =>
+        (w is AppTextField && w.semanticsIdentifier == id) ||
+        (w is Semantics && w.properties.identifier == id),
   ),
   matching: find.byType(CupertinoTextField),
 );
@@ -339,7 +343,7 @@ void main() {
     },
   );
   testWidgets(
-    'existing account keeps recovery available inside the fixed form',
+    'existing account OTP keeps the form without an account notice or early recovery',
     (tester) async {
       tester.view.physicalSize = const Size(390, 1000);
       tester.view.devicePixelRatio = 1;
@@ -367,10 +371,22 @@ void main() {
             w is AppSecondaryButton &&
             w.semanticsIdentifier == 'e2e-existing-recovery',
       );
-      await tapVisible(tester, recovery);
-      expect(find.byType(HandleRecoveryPage), findsOneWidget);
+      expect(recovery, findsNothing);
+      expect(find.textContaining('已有账号'), findsNothing);
+      expect(find.text('恢复 Handle'), findsNothing);
+      expect(find.byType(HandleRecoveryPage), findsNothing);
+      expect(field('e2e-otp-input'), findsOneWidget);
+      expect(find.text('登录/注册'), findsOneWidget);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
+      );
+      expect(
+        container.read(registrationEntryProvider).check?.isExisting,
+        isTrue,
+      );
       expect(gateway.sendOtpCalls, 1);
       expect(gateway.registerHandleCalls, 0);
+      expect(tester.takeException(), isNull);
     },
   );
 }

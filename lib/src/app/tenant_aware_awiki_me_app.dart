@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'app_appearance.dart';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -230,6 +231,7 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
         setState(() => _bootstrapProgress = progress);
       },
     );
+    final appearance = await bootstrap.appearancePreferenceService.load();
     final localeMode = await bootstrap.localePreferenceService.loadMode();
     final displayScale = await bootstrap.displayScalePreferenceService
         .loadScale();
@@ -237,6 +239,7 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
       registry: registry,
       bootstrap: bootstrap,
       localeMode: localeMode,
+      appearance: appearance,
       displayScale: displayScale,
     );
   }
@@ -478,6 +481,7 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
           initialDisplayScale: runtime.displayScale,
           providerOverrides: <Override>[
             appLocaleModeProvider.overrideWith((ref) => runtime.localeMode),
+            initialAppAppearanceProvider.overrideWithValue(runtime.appearance),
             appTenantRegistryProvider.overrideWithValue(runtime.registry),
             activeAppTenantProvider.overrideWithValue(
               runtime.registry.activeTenant,
@@ -766,12 +770,14 @@ class _TenantRuntime {
     required this.registry,
     required this.bootstrap,
     required this.localeMode,
+    required this.appearance,
     required this.displayScale,
   });
 
   final AppTenantRegistry registry;
   final AppBootstrap bootstrap;
   final AppLocaleMode localeMode;
+  final AppAppearance appearance;
   final double displayScale;
 
   _TenantRuntime copyWith({AppTenantRegistry? registry}) {
@@ -779,6 +785,7 @@ class _TenantRuntime {
       registry: registry ?? this.registry,
       bootstrap: bootstrap,
       localeMode: localeMode,
+      appearance: appearance,
       displayScale: displayScale,
     );
   }
