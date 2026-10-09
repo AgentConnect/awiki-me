@@ -163,9 +163,9 @@ Future<void> _verifyAgentAvatarEditing(
     );
     await openEditor();
     await tester.ensureVisible(
-      find.byKey(const Key('agent-avatar-preset-research')),
+      find.byKey(Key('agent-avatar-preset-${preset.id}')),
     );
-    await tap('agent-avatar-preset-research');
+    await tap('agent-avatar-preset-${preset.id}');
     changed = true;
     await save();
     final selected = (await port.loadAgentAvatar(did)).avatar;
