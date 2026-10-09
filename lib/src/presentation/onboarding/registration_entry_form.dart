@@ -1,20 +1,17 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/app_router.dart';
 import '../../core/app_transport_failure.dart';
 import '../shared/awiki_me_feedback.dart';
-import '../../domain/entities/identity_method.dart';
 import '../../l10n/l10n.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../recovery/pending_handle_recovery_entry.dart';
-import '../recovery/handle_recovery_page.dart';
 import 'onboarding_provider.dart';
 import 'registration_entry_provider.dart';
 
-/// Inline invitation and account status details for the fixed auth form.
+/// Inline invitation and validation details for the fixed auth form.
 class RegistrationEntryForm extends ConsumerWidget {
   const RegistrationEntryForm({
     super.key,
@@ -93,31 +90,6 @@ class RegistrationEntryForm extends ConsumerWidget {
         ],
         if (state.check?.decision == 'unavailable')
           Text(l10n.onboardingAccountUnavailable),
-        if (state.check?.isExisting == true || state.existingAccountPath) ...[
-          Text(l10n.onboardingExistingAccount),
-          if (ref.watch(onboardingProvider).didMethod ==
-                  IdentityDidMethod.wba &&
-              ref
-                      .watch(onboardingProvider)
-                      .serverInfo
-                      ?.supportsPhoneHandleRecovery ==
-                  true)
-            AppSecondaryButton(
-              label: l10n.handleRecoveryTitle,
-              semanticsIdentifier: 'e2e-existing-recovery',
-              onPressed: () => AppNavigator.push<void>(
-                context,
-                (_) => HandleRecoveryPage(
-                  startNew: true,
-                  initialHandle: '${state.handle}.${state.domain}',
-                  initialPhone: phoneController.text.trim(),
-                  allowPhoneInput: true,
-                  autoRequestOtp: false,
-                ),
-              ),
-            ),
-          const SizedBox(height: 12),
-        ],
         PendingHandleRecoveryEntry(
           handleController: handleController,
           phoneController: phoneController,
