@@ -230,7 +230,10 @@ class _DesktopAppRobot {
     return selected;
   }
 
-  Future<void> sendText(String content, {bool expectRetainedDraft = false}) async {
+  Future<void> sendText(
+    String content, {
+    bool expectRetainedDraft = false,
+  }) async {
     final input = find.bySemanticsIdentifier('e2e-chat-input');
     await pumpUntilFinder(input, description: 'chat input');
     final inputField = find.descendant(
@@ -2028,6 +2031,7 @@ class _FailOnceMessagingService
         createdAt: DateTime.now(),
         isMine: true,
         sendState: MessageSendState.failed,
+        encryptionRequired: secure,
       );
       _injectedFailedMessages.putIfAbsent(
         presentationConversationId,
@@ -2057,6 +2061,7 @@ class _FailOnceMessagingService
     lastConversationTextFailureDetail = null;
     try {
       final sent = await _delegate.sendConversationText(
+        secure: secure,
         conversation: conversation,
         content: content,
         clientMessageId: clientMessageId,
@@ -2199,7 +2204,7 @@ class _FailOnceMessagingService
     bool secure = false,
     required AppThreadRef thread,
     required String content,
-  }) => _delegate.sendText(thread: thread, content: content);
+  }) => _delegate.sendText(thread: thread, content: content, secure: secure);
 
   @override
   Future<ChatMessage> sendAttachment({
@@ -2210,6 +2215,7 @@ class _FailOnceMessagingService
     List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? idempotencyKey,
   }) => _delegate.sendAttachment(
+    secure: secure,
     thread: thread,
     attachment: attachment,
     caption: caption,
@@ -2227,6 +2233,7 @@ class _FailOnceMessagingService
     String? clientMessageId,
     String? idempotencyKey,
   }) => _delegate.sendConversationAttachment(
+    secure: secure,
     conversation: conversation,
     attachment: attachment,
     caption: caption,
@@ -2256,6 +2263,7 @@ class _FailOnceMessagingService
     required List<ChatMentionDraft> mentions,
     String? idempotencyKey,
   }) => _delegate.sendMentionText(
+    secure: secure,
     thread: thread,
     text: text,
     mentions: mentions,
@@ -2271,6 +2279,7 @@ class _FailOnceMessagingService
     String? clientMessageId,
     String? idempotencyKey,
   }) => _delegate.sendConversationMentionText(
+    secure: secure,
     conversation: conversation,
     text: text,
     mentions: mentions,
