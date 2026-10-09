@@ -29,6 +29,7 @@ import 'dart:io';
   targets.addAll([
     'tests/unit/chat_composer_paste_test.dart',
     'tests/unit/chat_page_test.dart',
+    'tests/unit/chat_agent_avatar_test.dart',
     'tests/unit/group_flow_test.dart',
     'tests/unit/agents/runtime_client_inspection_test.dart',
     'tests/unit/agents/acp_migration_test.dart',

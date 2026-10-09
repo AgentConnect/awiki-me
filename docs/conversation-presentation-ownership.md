@@ -576,6 +576,15 @@ Peer 名称只由纯 `PeerDisplayNameResolver` 和 `peerDisplayNameProvider`
 同一 ID-scoped provider，并通过 `peerAvatarUri` 复用相同头像投影；Widget 不得直接显示历史 `senderName`、credential alias、`customTitle`，也不得自己重写 DID/Handle 回退或使用脱离 Persona 的候选头像。会话本地 bundle
 与 cached Persona profile 完成后才发布首个内容帧，避免
 `Unknown/Handle -> 昵称` 闪烁。
+
+聊天消息头像必须把发送者 DID 传给 `AvatarBadge.userId`，ACP 执行预览必须传入
+该 task 的 Agent DID；不能仅传展示名称或头像 URI，否则头像组件无法按身份读取
+当前权威头像。群聊使用逐条消息的发送者身份，不能使用群会话或其他 Agent 的身份。
+
+`tests/unit/chat_agent_avatar_test.dart` 覆盖移动端和桌面 Direct/Group 中的
+普通消息、ACP 流式回复、同名多 Agent 与人类发送者，验证 Inventory 头像变更后
+已有消息和执行预览立即复用相同的预设图像，且不改写消息历史。
+
 身份查找结果使用短主名称并在第二身份行保留完整 Handle；群系统事件等单行公共身份场景使用“当前昵称 > 完整 Handle > DID”。DID 在 UI 中可紧凑显示，但只能作为最后 fallback。
 
 公开资料只能装饰 Core 已返回的身份：Lookup 的 DID/Handle 与嵌套 Profile 不一致时，

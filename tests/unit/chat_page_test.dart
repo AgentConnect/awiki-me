@@ -9534,12 +9534,16 @@ void main() {
     expect(senderAvatar, findsOneWidget);
     expect(tester.widget<AvatarBadge>(senderAvatar).seed, '卓诚');
     expect(tester.widget<AvatarBadge>(senderAvatar).avatarUri, avatarUri);
+    expect(tester.widget<AvatarBadge>(senderAvatar).userId, senderDid);
 
     await tester.tap(senderAvatar);
     await tester.pumpAndSettle();
 
     final peerInfoAvatar = tester.widget<AvatarBadge>(
-      find.byKey(const Key('peer-profile-avatar')),
+      find.descendant(
+        of: find.byKey(const Key('peer-profile-avatar')),
+        matching: find.byType(AvatarBadge),
+      ),
     );
     expect(peerInfoAvatar.seed, '卓诚');
     expect(peerInfoAvatar.avatarUri, avatarUri);

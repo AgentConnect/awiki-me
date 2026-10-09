@@ -1425,7 +1425,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                 );
                           final senderAvatarUserId = message.isMine
                               ? ownProfile?.did ?? currentSessionDid
-                              : null;
+                              : message.senderDid.trim();
                           final showSenderLabel = _shouldShowSenderLabel(
                             previous,
                             message,

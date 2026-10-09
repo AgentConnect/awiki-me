@@ -50,6 +50,7 @@ class _AcpReplyPreview extends StatelessWidget {
                   messageId: 'acp:${task.runId}',
                   label: senderLabel,
                   avatarUri: avatarUri,
+                  userId: task.agentDid,
                   isMine: false,
                   size: responsive.displayScaled(macStyle ? 30 : 32),
                 ),
