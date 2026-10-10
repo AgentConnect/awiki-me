@@ -704,7 +704,7 @@ void main() {
     ]);
   });
 
-  test('两条权威消息即使发送时间倒置也按 serverSequence 排序', () {
+  test('普通与 P5 加密消息按时间排序，不比较不同域的序号', () {
     final first = ChatMessage(
       localId: 'same-body-first',
       remoteId: 'same-body-first',
@@ -715,7 +715,8 @@ void main() {
       content: 'same body',
       createdAt: DateTime.utc(2026, 7, 17, 5, 20, 32),
       isMine: false,
-      serverSequence: 21263,
+      serverSequence: 39758,
+      isEncrypted: true,
       sendState: MessageSendState.sent,
     );
     final second = ChatMessage(
@@ -728,7 +729,7 @@ void main() {
       content: 'same body',
       createdAt: DateTime.utc(2026, 7, 17, 5, 20, 31),
       isMine: false,
-      serverSequence: 21264,
+      serverSequence: 40766,
       sendState: MessageSendState.sent,
     );
 
@@ -742,7 +743,7 @@ void main() {
           .read(chatThreadProvider(conversation.conversationId))
           .messages
           .map((item) => item.remoteId),
-      <String?>['same-body-first', 'same-body-second'],
+      <String?>['same-body-second', 'same-body-first'],
     );
   });
 
@@ -7399,7 +7400,7 @@ void main() {
         ),
         caption: 'attachment alias',
       );
-      final pending = controller.thread(group.conversationId).messages.single;
+      final pending = controller.thread(group.conversationId).displayMessages.single;
       final canonical =
           _mappedGroupReceipt(
             group,

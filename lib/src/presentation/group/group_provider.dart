@@ -615,6 +615,7 @@ class GroupController extends StateNotifier<GroupState> {
       groupStackTrace = stackTrace;
     }
     _requireCurrentOwnerOperation(ownerOperation);
+    if (groupError == null) upsertGroup(group);
     if (refreshMembers) {
       await _loadGroupMembers(
         groupId.trim(),
@@ -832,6 +833,9 @@ GroupSummary _mergeGroupSummary({
     return local;
   }
   return GroupSummary(
+    encrypted: incoming.encrypted ?? local.encrypted,
+    canSendSecure: incoming.canSendSecure ?? local.canSendSecure,
+    secureState: incoming.secureState ?? local.secureState,
     avatarUri: incoming.avatarUri ?? local.avatarUri,
     avatarMembers: incoming.avatarMembers,
     groupStateVersion: incoming.groupStateVersion,

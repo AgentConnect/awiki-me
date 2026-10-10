@@ -13,6 +13,7 @@ class _ChatHeader extends StatelessWidget {
     this.onBack,
     this.onAddGroupMemberTap,
     this.isAddGroupMemberLoading = false,
+    this.encryptedGroup = false,
   });
 
   final ConversationSummary conversation;
@@ -26,6 +27,7 @@ class _ChatHeader extends StatelessWidget {
   final VoidCallback onChatInformationTap;
   final VoidCallback? onAddGroupMemberTap;
   final bool isAddGroupMemberLoading;
+  final bool encryptedGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -77,14 +79,19 @@ class _ChatHeader extends StatelessWidget {
                     seed: compactName,
                     size: avatarSize,
                     avatarUri: conversation.avatarUri,
-                    userId: conversation.isGroup ? null : conversation.targetDid,
-                    groupId: conversation.isGroup ? conversation.conversationId : null,
+                    userId: conversation.isGroup
+                        ? null
+                        : conversation.targetDid,
+                    groupId: conversation.isGroup
+                        ? conversation.conversationId
+                        : null,
                   ),
                 ),
                 SizedBox(width: responsive.displayScaled(8)),
                 Expanded(
                   child: _MacHeaderIdentityText(
                     compactName: compactName,
+                    encryptedGroup: encryptedGroup,
                     agentBadgeLabel: agentBadgeLabel,
                     isDeletedAgentConversation: isDeletedAgentConversation,
                     showAgentBadge: width >= 500,
@@ -138,17 +145,34 @@ class _ChatHeader extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: Text(
-                  compactName,
-                  key: const Key('chat-header-title'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w400,
-                    color: theme.title,
-                  ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        compactName,
+                        key: const Key('chat-header-title'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                          color: theme.title,
+                        ),
+                      ),
+                    ),
+                    if (encryptedGroup)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: Icon(
+                          CupertinoIcons.lock,
+                          size: 14,
+                          color: theme.secondaryText,
+                          semanticLabel: '加密群',
+                        ),
+                      ),
+                  ],
                 ),
               ),
               SizedBox(
@@ -225,6 +249,7 @@ class _ChatHeaderIdentityTapTarget extends StatelessWidget {
 class _MacHeaderIdentityText extends StatelessWidget {
   const _MacHeaderIdentityText({
     required this.compactName,
+    this.encryptedGroup = false,
     required this.agentBadgeLabel,
     required this.isDeletedAgentConversation,
     required this.showAgentBadge,
@@ -233,6 +258,7 @@ class _MacHeaderIdentityText extends StatelessWidget {
   });
 
   final String compactName;
+  final bool encryptedGroup;
   final String? agentBadgeLabel;
   final bool isDeletedAgentConversation;
   final bool showAgentBadge;
@@ -261,6 +287,11 @@ class _MacHeaderIdentityText extends StatelessWidget {
             ),
           ),
         ),
+        if (encryptedGroup)
+          const Padding(
+            padding: EdgeInsets.only(left: 6),
+            child: Icon(CupertinoIcons.lock, size: 14, semanticLabel: '加密群'),
+          ),
         if (agentBadgeLabel != null && showAgentBadge) ...<Widget>[
           SizedBox(width: responsive.displayScaled(8)),
           _MacChatPill(

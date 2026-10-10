@@ -49,7 +49,7 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
         ),
       ),
     );
-    return _groupFromResult(result);
+    return _groupFromResult(result).withSecurity(encrypted: secureRequired);
   }
 
   @override
@@ -172,7 +172,13 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
   GroupSummary _groupFromResult(core.GroupReadResult result) {
     final snapshot = result.group;
     if (snapshot != null) {
-      return _mappers.groupFromCoreSnapshot(snapshot);
+      return _mappers
+          .groupFromCoreSnapshot(snapshot)
+          .withSecurity(
+            encrypted: result.encrypted,
+            canSendSecure: result.secureStatus?.canSendSecure,
+            secureState: result.secureStatus?.state.name,
+          );
     }
     if (result.groups.isNotEmpty) {
       return _mappers.groupFromCoreSummary(result.groups.first);

@@ -181,6 +181,8 @@ class AwikiImCoreMappers {
       serverSequence: message.metadata.serverSequence,
       notifyLevel: _attribute(message.metadata, 'notify_level'),
       isEncrypted: message.metadata.isEndToEndEncrypted,
+      encryptionRequired:
+          _attribute(message.metadata, 'encryption_required') == 'true',
       attachment: encryptedUnavailable ? null : attachment,
       payloadJson: encryptedUnavailable ? null : payloadJson,
       mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],
@@ -266,9 +268,17 @@ class AwikiImCoreMappers {
           : 'application/json',
       createdAt: _parseDateTime(message.sentAt ?? message.receivedAt),
       isMine: isMine,
-      sendState: MessageSendState.sent,
+      sendState: isMine
+          ? switch (_snapshotAttribute(message, 'delivery_state')) {
+              'pending' || 'sending' => MessageSendState.sending,
+              'failed' => MessageSendState.failed,
+              _ => MessageSendState.sent,
+            }
+          : MessageSendState.sent,
       serverSequence: message.serverSequence,
       isEncrypted: message.isEndToEndEncrypted,
+      encryptionRequired:
+          _snapshotAttribute(message, 'encryption_required') == 'true',
       attachment: encryptedUnavailable ? null : attachment,
       payloadJson: encryptedUnavailable ? null : payloadJson,
       mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],

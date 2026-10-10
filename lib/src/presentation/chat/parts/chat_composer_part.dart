@@ -103,43 +103,58 @@ class _ComposerState extends ConsumerState<_Composer> {
         ref.watch(agentsProvider).agents,
       );
 
-  Widget _securitySelector() {
-    final mode = ref.watch(
-      messageSecurityProvider(widget.conversation.conversationId),
-    );
-    return CupertinoButton(
-      key: const Key('chat-message-security'),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      minimumSize: const Size(0, 28),
-      onPressed: mode.isLoading
-          ? null
-          : () async {
-              try {
-                await setMessageSecurity(
-                  ref,
-                  widget.conversation.conversationId,
-                  mode.hasError ? true : !mode.requireValue,
-                );
-              } catch (error) {
-                if (mounted) {
-                  ref
-                      .read(uiFeedbackProvider.notifier)
-                      .showError(AppMessage.fromError(error));
+  Widget _securitySelector() => Consumer(
+    builder: (context, ref, _) {
+      final provider = messageSecurityProvider(
+        widget.conversation.conversationId,
+      );
+      final mode = ref.watch(provider);
+      final encrypted = mode.valueOrNull ?? false;
+      final label = mode.isLoading
+          ? '正在读取消息模式'
+          : mode.hasError
+          ? '消息模式读取失败，点击重试'
+          : encrypted
+          ? '端到端加密，点击关闭'
+          : '普通消息，点击开启端到端加密';
+      return AppIconButton(
+        key: const Key('chat-message-security'),
+        semanticLabel: label,
+        tooltip: label,
+        size: context.awikiResponsive.displayScaled(30),
+        borderRadius: BorderRadius.circular(7),
+        isActive: encrypted,
+        onPressed: mode.isLoading
+            ? null
+            : () async {
+                if (mode.hasError) {
+                  ref.invalidate(provider);
+                  return;
                 }
-              }
-            },
-      child: Text(
-        mode.isLoading
-            ? '准备中'
-            : mode.hasError
-            ? '重试加密模式'
-            : mode.requireValue
-            ? '加密消息'
-            : '普通消息',
-        style: TextStyle(fontSize: 12, color: context.awikiTheme.secondaryText),
-      ),
-    );
-  }
+                try {
+                  await setMessageSecurity(
+                    ref,
+                    widget.conversation.conversationId,
+                    !encrypted,
+                  );
+                } catch (error) {
+                  if (mounted) {
+                    ref
+                        .read(uiFeedbackProvider.notifier)
+                        .showError(AppMessage.fromError(error));
+                  }
+                }
+              },
+        child: mode.isLoading
+            ? const CupertinoActivityIndicator(radius: 7)
+            : Icon(
+                encrypted ? CupertinoIcons.lock : CupertinoIcons.lock_open,
+                size: 17,
+                color: context.awikiTheme.secondaryText,
+              ),
+      );
+    },
+  );
 
   void _handleTextChanged() {
     if (mounted) {
@@ -585,6 +600,7 @@ class _ComposerState extends ConsumerState<_Composer> {
     });
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    final showSecuritySelector = _showSecuritySelector;
     final canSubmit = _canSubmit;
     final canUseSendButton = canSubmit && !_isSending && !_isComposingInput;
     final highlightSendButton = canSubmit && !_isSending;
@@ -693,7 +709,6 @@ class _ComposerState extends ConsumerState<_Composer> {
                       Row(
                         key: const Key('chat-composer-tool-row'),
                         children: <Widget>[
-                          if (_showSecuritySelector) _securitySelector(),
                           if (showAttachment) ...<Widget>[
                             AppIconButton(
                               key: const Key('chat-attachment-button'),
@@ -751,6 +766,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                               ),
                             ],
                           ],
+                          if (showSecuritySelector) _securitySelector(),
                           const Spacer(),
                           AppPressable(
                             key: const Key('chat-send-button'),
@@ -861,7 +877,6 @@ class _ComposerState extends ConsumerState<_Composer> {
                 height: responsive.displayScaled(44),
                 child: Row(
                   children: <Widget>[
-                    if (_showSecuritySelector) _securitySelector(),
                     _emojiTapRegion(
                       child: AppIconButton(
                         key: const Key('chat-emoji-button'),
@@ -878,6 +893,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                         ),
                       ),
                     ),
+                    if (showSecuritySelector) _securitySelector(),
                     SizedBox(width: responsive.spacing(6)),
                     Expanded(
                       child: Container(

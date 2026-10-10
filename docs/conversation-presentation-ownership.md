@@ -191,7 +191,7 @@ Flutter SDK conversation DTO 必须保持 core-only。以下字段不得加入 S
 | attachment manifest | `ChatMessage.attachment`；caption 优先成为 `content` / preview 文本 |
 | `metadata.contentType` / `body.kind` | `ChatMessage.originalType` |
 | encrypted content type | `ChatMessage.isEncrypted` |
-| server sequence | `ChatMessage.serverSequence`，用于排序、thread-after 和 first-paint 判断；两条消息都具备 sequence 时它优先于 `createdAt`，混合/legacy row 才回退时间 |
+| server sequence | `ChatMessage.serverSequence`，用于所属序列的 thread-after 和 first-paint 判断；时间线先比较 Core 消息时间，不跨普通线程/P5 inbox/P6 群事件比较裸 sequence |
 
 `sendConversation*`、conversation timeline load/repair 和 timeline patch stream
 在 adapter 边界还会校验返回的每条消息与 patch 的 `conversationId` 必须非空且
@@ -825,3 +825,9 @@ Web 仍沿用既有无原生缓存的占位实现；本轮不宣称 Web native C
 ### 加密消息显示与发送意图（2026-10-09 候选）
 
 私聊模式按当前 storage scope、owner、canonical conversation 存入 ProductLocalStore；个人助理沿用原入口。每次发送捕获模式，ChatMessage.encryptionRequired 仅记录待发/失败重试意图，ChatMessage.isEncrypted 只来自 SDK 实际属性。加密消息在现有信息区域显示 12px 次要文字色小锁，提示和读屏为“端到端加密”。缺少成功解密证明的入站内容展示占位，不把密文当文本或附件。已解密加密消息的本地通知同样只显示“收到一条加密消息”。账号/会话变化取消旧的异步 composer 操作，失败恢复草稿不得覆盖新草稿。建群对话框保存未完成操作的名称、固定类型和 slug，重开后复用，成功后清除产品恢复记录。
+
+### 消息安全展示补充（2026-10-10）
+
+私聊模式选择为工具栏的开锁/闭锁图标，独立订阅本设备当前租户、账号及会话的偏好。
+消息锁位于气泡外侧底部：本机消息左侧、对方消息右侧。待发送/失败消息使用冻结的加密意图，已完成/收到消息使用 Core 实际安全属性；不新增加密专属发送状态。
+加密群只在标题显示锁，并消费权威群策略及 Core 就绪状态。头像编辑器取消草稿沿用通用蒙版/Esc关闭，提交保存期间禁止关闭。

@@ -733,6 +733,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   bool _isDraggingExternalAttachment = false;
   bool _screenshotOperationInProgress = false;
   final Set<String> _requestedGroupRoleIds = <String>{};
+  bool _groupSecurityBusy = false;
   final Set<String> _downloadingAttachmentMessageIds = <String>{};
   final Set<String> _activeImageAttachmentActions = <String>{};
   static const double _nearBottomExtent = 96;
@@ -1207,6 +1208,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
           _ChatHeader(
             conversation: currentConversation,
             nickname: headerNickname,
+            encryptedGroup: ref
+                .watch(groupProvider)
+                .groups
+                .any(
+                  (g) =>
+                      g.groupId == currentConversation.groupId &&
+                      g.encrypted == true,
+                ),
             embedded: widget.embedded,
             macStyle: macStyle,
             classification: peerClassification,
@@ -1792,6 +1801,39 @@ class _ChatViewState extends ConsumerState<ChatView> {
                   ),
                 ),
               ),
+            ),
+          if (currentConversation.isGroup && groupSendDisabledReason != null)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (_groupSecurityBusy)
+                  const CupertinoActivityIndicator(radius: 7),
+                CupertinoButton(
+                  onPressed: _groupSecurityBusy
+                      ? null
+                      : () => _refreshGroupSecurity(currentConversation),
+                  child: const Text('刷新群状态'),
+                ),
+                if (ref
+                    .watch(groupProvider)
+                    .groups
+                    .any(
+                      (g) =>
+                          g.groupId == currentConversation.groupId &&
+                          g.encrypted == true &&
+                          g.myRole == 'owner' &&
+                          g.membershipStatus == 'active',
+                    ))
+                  CupertinoButton(
+                    onPressed: _groupSecurityBusy
+                        ? null
+                        : () => _refreshGroupSecurity(
+                            currentConversation,
+                            repair: true,
+                          ),
+                    child: const Text('重试加密准备'),
+                  ),
+              ],
             ),
           _Composer(
             conversation: currentConversation,
@@ -3698,6 +3740,36 @@ class _ChatViewState extends ConsumerState<ChatView> {
     return null;
   }
 
+  Future<void> _refreshGroupSecurity(
+    ConversationSummary conversation, {
+    bool repair = false,
+  }) async {
+    final groupId = conversation.groupId;
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (groupId == null || epoch == null || _groupSecurityBusy) return;
+    setState(() => _groupSecurityBusy = true);
+    try {
+      if (repair) {
+        await ref.read(groupEncryptionCorePortProvider).retry(groupId);
+      }
+      if (!mounted || !epoch.matches(ref.read(sessionProvider))) return;
+      final group = await ref
+          .read(groupApplicationServiceProvider)
+          .getGroup(groupId);
+      if (mounted && epoch.matches(ref.read(sessionProvider))) {
+        ref.read(groupProvider.notifier).upsertGroup(group);
+      }
+    } catch (error) {
+      if (mounted && epoch.matches(ref.read(sessionProvider))) {
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.fromError(error));
+      }
+    } finally {
+      if (mounted) setState(() => _groupSecurityBusy = false);
+    }
+  }
+
   String? _groupSendDisabledReason(ConversationSummary conversation) {
     if (!conversation.isGroup) {
       return null;
@@ -3712,6 +3784,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
       }
       final status = group.membershipStatus?.trim();
       if (status == null || status.isEmpty || status == 'active') {
+        if (group.encrypted == true && group.canSendSecure != true) {
+          return group.myRole == 'owner'
+              ? '群加密准备未完成，请重试修复'
+              : '群加密准备中，请等待群主完成准备';
+        }
         return null;
       }
       if (status == 'left' || status == 'removed') {
@@ -3755,7 +3832,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
     final groups = ref.read(groupProvider).groups;
     for (final group in groups) {
-      if (group.groupId == groupId && hasKnownGroupRole(group)) {
+      if (group.groupId == groupId &&
+          hasKnownGroupRole(group) &&
+          group.encrypted != null) {
         return;
       }
     }

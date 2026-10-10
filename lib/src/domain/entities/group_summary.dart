@@ -12,6 +12,9 @@ class GroupSummary {
     this.groupStateVersion,
     this.myRole,
     this.membershipStatus,
+    this.encrypted,
+    this.canSendSecure,
+    this.secureState,
   }) : displayName = displayName ?? name ?? groupId;
 
   final String conversationId;
@@ -25,6 +28,31 @@ class GroupSummary {
   final String? groupStateVersion;
   final String? myRole;
   final String? membershipStatus;
+
+  final bool? encrypted;
+  final bool? canSendSecure;
+  final String? secureState;
+
+  GroupSummary withSecurity({
+    bool? encrypted,
+    bool? canSendSecure,
+    String? secureState,
+  }) => GroupSummary(
+    conversationId: conversationId,
+    groupId: groupId,
+    displayName: displayName,
+    description: description,
+    memberCount: memberCount,
+    lastMessageAt: lastMessageAt,
+    avatarUri: avatarUri,
+    avatarMembers: avatarMembers,
+    groupStateVersion: groupStateVersion,
+    myRole: myRole,
+    membershipStatus: membershipStatus,
+    encrypted: encrypted ?? this.encrypted,
+    canSendSecure: canSendSecure ?? this.canSendSecure,
+    secureState: secureState ?? this.secureState,
+  );
 
   String get name => displayName;
 }

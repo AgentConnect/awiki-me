@@ -6,6 +6,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
+import '../../app/app_router.dart';
 import '../../application/account_state_sync_request_bus.dart';
 import '../../application/models/product_local_models.dart';
 import '../../application/ports/agent_avatar_port.dart';
@@ -24,10 +25,9 @@ import '../shared/awiki_me_design.dart';
 import 'agents_provider.dart';
 
 Future<void> showAgentAvatarEditor(BuildContext context, AgentSummary agent) =>
-    showCupertinoDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AgentAvatarEditor(agent: agent),
+    AppNavigator.showDialog<void>(
+      context,
+      (_) => AgentAvatarEditor(agent: agent),
     );
 
 final agentAvatarPortProvider = Provider<AgentAvatarPort?>((ref) {
@@ -58,6 +58,7 @@ class _AgentAvatarEditorState extends ConsumerState<AgentAvatarEditor> {
   String? _error;
   bool _busy = true;
   bool _committed = false;
+  bool _saving = false;
   bool _cropReady = false;
   bool get _current =>
       mounted && ref.read(sessionProvider).activeEpoch == _epoch;
@@ -205,6 +206,7 @@ class _AgentAvatarEditorState extends ConsumerState<AgentAvatarEditor> {
     if (port == null || avatar == null || _action == null || _busy) return;
     setState(() {
       _busy = true;
+      _saving = true;
       _error = null;
     });
     _poll?.cancel();
@@ -275,6 +277,7 @@ class _AgentAvatarEditorState extends ConsumerState<AgentAvatarEditor> {
         if (_committed) {
           setState(() {
             _busy = false;
+            _saving = false;
             _error = context.l10n.agentAvatarSavedRefreshFailed;
           });
           return;
@@ -294,6 +297,7 @@ class _AgentAvatarEditorState extends ConsumerState<AgentAvatarEditor> {
         if (_current) {
           setState(() {
             _busy = false;
+            _saving = false;
             _error = conflict
                 ? context.l10n.agentAvatarVersionConflict
                 : context.l10n.avatarSaveFailed;
@@ -351,220 +355,227 @@ class _AgentAvatarEditorState extends ConsumerState<AgentAvatarEditor> {
         ),
       );
     }
-    return Center(
-      child: CupertinoPopupSurface(
-        child: SizedBox(
-          width: width,
-          height: height,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(child: Text(l10n.profileAvatarChange)),
-                    CupertinoButton(
-                      key: const Key('agent-avatar-cancel'),
-                      padding: const EdgeInsets.all(8),
-                      onPressed: _busy
-                          ? null
-                          : () => Navigator.of(context).pop(),
-                      child: const Icon(CupertinoIcons.xmark),
-                    ),
-                  ],
-                ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(
-                      _error!,
-                      style: const TextStyle(color: CupertinoColors.systemRed),
-                    ),
+    return PopScope(
+      canPop: !_saving,
+      child: Center(
+        child: CupertinoPopupSurface(
+          child: SizedBox(
+            width: width,
+            height: height,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: Text(l10n.profileAvatarChange)),
+                      CupertinoButton(
+                        key: const Key('agent-avatar-cancel'),
+                        padding: const EdgeInsets.all(8),
+                        onPressed: _saving
+                            ? null
+                            : () => Navigator.of(context).maybePop(),
+                        child: const Icon(CupertinoIcons.xmark),
+                      ),
+                    ],
                   ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        if (_preview != null)
-                          AvatarCropEditor(
-                            isAgent: true,
-                            bytes: _preview!,
-                            controller: _crop,
-                            onCropped: _cropped,
-                            onReady: (value) {
-                              if (mounted) setState(() => _cropReady = value);
-                            },
-                            currentAvatar: preview,
-                            enabled: !_busy,
-                          )
-                        else ...[
-                          if (_action != null) ...[
-                            Text(l10n.agentAvatarCurrent),
-                            AvatarBadge(
-                              seed: widget.agent.displayName,
-                              size: 48,
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(
+                          color: CupertinoColors.systemRed,
+                        ),
+                      ),
+                    ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          if (_preview != null)
+                            AvatarCropEditor(
                               isAgent: true,
-                              staticOnly: true,
-                              avatarUri: avatar?.animatedUri,
-                              avatarThumbnailUri: avatar?.posterUri,
-                            ),
-                            Text(l10n.agentAvatarDraft),
-                          ],
-                          preview,
-                          const SizedBox(height: 12),
-                          if (avatar?.isGenerating == true)
-                            Text(l10n.agentAvatarGenerating),
-                          if (avatar?.status == 'failed')
-                            Text(switch (avatar?.errorCode) {
-                              'agent_avatar.generation_timeout' =>
-                                l10n.agentAvatarGenerationTimeout,
-                              'agent_avatar.generation_interrupted' =>
-                                l10n.agentAvatarGenerationInterrupted,
-                              'agent_avatar.generated_image_invalid' =>
-                                l10n.agentAvatarGeneratedImageInvalid,
-                              _ => l10n.agentAvatarGenerationFailed,
-                            }),
-                          if (_capabilities != null)
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                for (final preset
-                                    in _capabilities!.presetCatalog)
-                                  CupertinoButton(
-                                    key: ValueKey(
-                                      'agent-avatar-preset-${preset.id}',
-                                    ),
-                                    padding: const EdgeInsets.all(4),
-                                    onPressed: _busy || !preset.selectable
-                                        ? null
-                                        : () => _draft(
-                                            'preset',
-                                            preset: preset.id,
+                              bytes: _preview!,
+                              controller: _crop,
+                              onCropped: _cropped,
+                              onReady: (value) {
+                                if (mounted) setState(() => _cropReady = value);
+                              },
+                              currentAvatar: preview,
+                              enabled: !_busy,
+                            )
+                          else ...[
+                            if (_action != null) ...[
+                              Text(l10n.agentAvatarCurrent),
+                              AvatarBadge(
+                                seed: widget.agent.displayName,
+                                size: 48,
+                                isAgent: true,
+                                staticOnly: true,
+                                avatarUri: avatar?.animatedUri,
+                                avatarThumbnailUri: avatar?.posterUri,
+                              ),
+                              Text(l10n.agentAvatarDraft),
+                            ],
+                            preview,
+                            const SizedBox(height: 12),
+                            if (avatar?.isGenerating == true)
+                              Text(l10n.agentAvatarGenerating),
+                            if (avatar?.status == 'failed')
+                              Text(switch (avatar?.errorCode) {
+                                'agent_avatar.generation_timeout' =>
+                                  l10n.agentAvatarGenerationTimeout,
+                                'agent_avatar.generation_interrupted' =>
+                                  l10n.agentAvatarGenerationInterrupted,
+                                'agent_avatar.generated_image_invalid' =>
+                                  l10n.agentAvatarGeneratedImageInvalid,
+                                _ => l10n.agentAvatarGenerationFailed,
+                              }),
+                            if (_capabilities != null)
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  for (final preset
+                                      in _capabilities!.presetCatalog)
+                                    CupertinoButton(
+                                      key: ValueKey(
+                                        'agent-avatar-preset-${preset.id}',
+                                      ),
+                                      padding: const EdgeInsets.all(4),
+                                      onPressed: _busy || !preset.selectable
+                                          ? null
+                                          : () => _draft(
+                                              'preset',
+                                              preset: preset.id,
+                                            ),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color:
+                                                (_preset ??
+                                                        (_action == null
+                                                            ? avatar?.presetId
+                                                            : null)) ==
+                                                    preset.id
+                                                ? theme.primaryDark
+                                                : theme.border,
                                           ),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        border: Border.all(
-                                          color:
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                        ),
+                                        child: Semantics(
+                                          label: preset.displayName,
+                                          selected:
                                               (_preset ??
-                                                      (_action == null
-                                                          ? avatar?.presetId
-                                                          : null)) ==
-                                                  preset.id
-                                              ? theme.primaryDark
-                                              : theme.border,
-                                        ),
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      child: Semantics(
-                                        selected:
-                                            (_preset ??
-                                                (_action == null
-                                                    ? avatar?.presetId
-                                                    : null)) ==
-                                            preset.id,
-                                        child: SizedBox(
-                                          width: 84,
-                                          child: Column(
-                                            children: [
-                                              AgentAvatarImage(
-                                                uri: null,
-                                                posterUri: preset.posterUri,
-                                                size: 56,
-                                                staticOnly: true,
-                                                fallback: const Icon(
-                                                  CupertinoIcons.person,
+                                                  (_action == null
+                                                      ? avatar?.presetId
+                                                      : null)) ==
+                                              preset.id,
+                                          child: SizedBox(
+                                            width: 72,
+                                            height: 72,
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                AgentAvatarImage(
+                                                  uri: null,
+                                                  posterUri: preset.posterUri,
+                                                  size: 56,
+                                                  staticOnly: true,
+                                                  fallback: const Icon(
+                                                    CupertinoIcons.person,
+                                                  ),
                                                 ),
-                                              ),
-                                              Text(
-                                                preset.displayName,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ],
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                              ],
-                            ),
-                          if (_capabilities?.uploadEnabled == true)
-                            CupertinoButton(
-                              key: const Key('agent-avatar-upload'),
-                              onPressed: _busy ? null : _pick,
-                              child: Text(l10n.avatarChoose),
-                            ),
-                          if (_capabilities != null)
-                            CupertinoButton(
-                              key: const Key('agent-avatar-reset'),
-                              onPressed:
-                                  _busy || _capabilities?.defaultAvatar == null
-                                  ? null
-                                  : () => _draft('reset'),
-                              child: Text(l10n.avatarReset),
-                            ),
-                          if (_capabilities?.generationEnabled == true) ...[
-                            Text(l10n.agentAvatarGenerationPrivacy),
-                            CupertinoTextField(
-                              controller: _responsibility,
-                              onChanged: (_) => _requestId = null,
-                              enabled: !_busy,
-                              maxLength: 512,
-                              placeholder: l10n.agentAvatarResponsibility,
-                            ),
-                            const SizedBox(height: 8),
-                            CupertinoTextField(
-                              controller: _description,
-                              onChanged: (_) => _requestId = null,
-                              enabled: !_busy,
-                              maxLength: 512,
-                              placeholder: l10n.agentAvatarDescription,
-                            ),
-                            CupertinoButton(
-                              key: const Key('agent-avatar-generate'),
-                              onPressed: _busy
-                                  ? null
-                                  : () => _draft('generate'),
-                              child: Text(l10n.agentAvatarRegenerate),
-                            ),
+                                ],
+                              ),
+                            if (_capabilities?.uploadEnabled == true)
+                              CupertinoButton(
+                                key: const Key('agent-avatar-upload'),
+                                onPressed: _busy ? null : _pick,
+                                child: Text(l10n.avatarChoose),
+                              ),
+                            if (_capabilities != null)
+                              CupertinoButton(
+                                key: const Key('agent-avatar-reset'),
+                                onPressed:
+                                    _busy ||
+                                        _capabilities?.defaultAvatar == null
+                                    ? null
+                                    : () => _draft('reset'),
+                                child: Text(l10n.avatarReset),
+                              ),
+                            if (_capabilities?.generationEnabled == true) ...[
+                              Text(l10n.agentAvatarGenerationPrivacy),
+                              CupertinoTextField(
+                                controller: _responsibility,
+                                onChanged: (_) => _requestId = null,
+                                enabled: !_busy,
+                                maxLength: 512,
+                                placeholder: l10n.agentAvatarResponsibility,
+                              ),
+                              const SizedBox(height: 8),
+                              CupertinoTextField(
+                                controller: _description,
+                                onChanged: (_) => _requestId = null,
+                                enabled: !_busy,
+                                maxLength: 512,
+                                placeholder: l10n.agentAvatarDescription,
+                              ),
+                              CupertinoButton(
+                                key: const Key('agent-avatar-generate'),
+                                onPressed: _busy
+                                    ? null
+                                    : () => _draft('generate'),
+                                child: Text(l10n.agentAvatarRegenerate),
+                              ),
+                            ],
                           ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
-                ),
-                if (_busy) const CupertinoActivityIndicator(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (_error != null && _capabilities == null)
+                  if (_busy) const CupertinoActivityIndicator(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (_error != null && _capabilities == null)
+                        CupertinoButton(
+                          key: const Key('agent-avatar-retry-load'),
+                          onPressed: _busy ? null : _load,
+                          child: Text(l10n.commonRetry),
+                        ),
                       CupertinoButton(
-                        key: const Key('agent-avatar-retry-load'),
-                        onPressed: _busy ? null : _load,
-                        child: Text(l10n.commonRetry),
+                        key: const Key('agent-avatar-save'),
+                        onPressed: _busy
+                            ? null
+                            : _preview != null
+                            ? (_cropReady
+                                  ? () {
+                                      setState(() => _busy = true);
+                                      _crop.crop();
+                                    }
+                                  : null)
+                            : _action == null
+                            ? null
+                            : _save,
+                        child: Text(
+                          _preview != null ? l10n.commonNext : l10n.commonSave,
+                        ),
                       ),
-                    CupertinoButton(
-                      key: const Key('agent-avatar-save'),
-                      onPressed: _busy
-                          ? null
-                          : _preview != null
-                          ? (_cropReady
-                                ? () {
-                                    setState(() => _busy = true);
-                                    _crop.crop();
-                                  }
-                                : null)
-                          : _action == null
-                          ? null
-                          : _save,
-                      child: Text(
-                        _preview != null ? l10n.commonNext : l10n.commonSave,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

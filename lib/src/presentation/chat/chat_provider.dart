@@ -107,9 +107,27 @@ class ChatThreadState {
     List<PersonalAgentSyncRecord>? personalAgentSyncs,
     Map<String, AppActionRecord>? appActionRecords,
   }) {
+    final intents = localSendIntents ?? this.localSendIntents;
+    final projected = (messages ?? this.messages)
+        .map((message) {
+          if (message.sendState == MessageSendState.sent) return message;
+          final matchingIntent = intents.values
+              .where(
+                (intent) => _messageIdentityKeys(
+                  intent,
+                ).intersection(_messageIdentityKeys(message)).isNotEmpty,
+              )
+              .firstOrNull;
+          return matchingIntent == null
+              ? message
+              : message.copyWith(
+                  encryptionRequired: matchingIntent.encryptionRequired,
+                );
+        })
+        .toList(growable: false);
     return ChatThreadState(
       threadId: threadId,
-      messages: messages ?? this.messages,
+      messages: projected,
       localSendIntents: _remainingSendIntents(
         localSendIntents ?? this.localSendIntents,
         messages ?? this.messages,
@@ -3446,9 +3464,7 @@ class ChatThreadsController
           ChatMessageMention.fromDraft(mention),
       ],
     );
-    final current = List<ChatMessage>.from(thread(targetThreadId).messages)
-      ..add(pending);
-    _setMessages(targetThreadId, current);
+    _setLocalSendIntent(targetThreadId, pending);
     onSendStarted?.call();
     try {
       final sent = await ref
@@ -7674,15 +7690,14 @@ final chatThreadProvider = Provider.family<ChatThreadState, String>((
 });
 
 int _compareMessagesForTimeline(ChatMessage a, ChatMessage b) {
-  final aSeq = a.serverSequence;
-  final bSeq = b.serverSequence;
-  if (aSeq != null && bSeq != null && aSeq != bSeq) {
-    return aSeq.compareTo(bSeq);
-  }
   final timeCompare = a.createdAt.compareTo(b.createdAt);
-  if (timeCompare != 0) {
-    return timeCompare;
-  }
+  if (timeCompare != 0) return timeCompare;
+  final laneCompare = (a.isEncrypted ? 1 : 0).compareTo(b.isEncrypted ? 1 : 0);
+  if (laneCompare != 0) return laneCompare;
+  final aSeq = a.isEncrypted && a.groupId == null ? 0 : a.serverSequence ?? 0;
+  final bSeq = b.isEncrypted && b.groupId == null ? 0 : b.serverSequence ?? 0;
+  final seqCompare = aSeq.compareTo(bSeq);
+  if (seqCompare != 0) return seqCompare;
   final idCompare = (a.remoteId ?? a.localId).compareTo(
     b.remoteId ?? b.localId,
   );

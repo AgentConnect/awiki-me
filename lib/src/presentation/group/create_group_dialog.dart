@@ -165,7 +165,6 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
         ),
       );
       if (!mounted || !epoch.matches(ref.read(sessionProvider))) return;
-      await ref.read(groupProvider.notifier).loadGroupMembers(group.groupId);
       if (!mounted) {
         return;
       }
@@ -204,6 +203,13 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          AppDialogHeader(
+            title: context.l10n.groupCreateTitle,
+            closeLabel: context.l10n.commonCancel,
+            onClose: () => Navigator.of(context).pop(),
+            isCloseEnabled: !_isLoading,
+          ),
+          SizedBox(height: responsive.spacing(18)),
           CupertinoSlidingSegmentedControl<bool>(
             groupValue: _encrypted,
             children: const {false: Text('普通群'), true: Text('加密群')},
@@ -213,13 +219,6 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
             },
           ),
           const SizedBox(height: 12),
-          AppDialogHeader(
-            title: context.l10n.groupCreateTitle,
-            closeLabel: context.l10n.commonCancel,
-            onClose: () => Navigator.of(context).pop(),
-            isCloseEnabled: !_isLoading,
-          ),
-          SizedBox(height: responsive.spacing(18)),
           _GroupNameInput(
             controller: _nameController,
             focusNode: _nameFocusNode,

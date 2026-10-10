@@ -1,4 +1,5 @@
-import 'dart:typed_data';
+import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/account_state_sync_request_bus.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
@@ -30,6 +31,7 @@ const agent = AgentSummary(
 );
 
 class Avatars implements AgentAvatarPort {
+  Completer<void>? saveGate;
   bool failSave = false;
   bool failLoad = false;
   bool generation = false;
@@ -74,6 +76,7 @@ class Avatars implements AgentAvatarPort {
       action: action,
       preset: presetId,
     ));
+    await saveGate?.future;
     if (conflict) {
       version = '5';
       throw const AwikiOnboardingUtilityError(
@@ -133,6 +136,35 @@ void main() {
     expect(find.byType(AgentAvatarEditor), findsNothing);
   });
 
+  testWidgets('backdrop and Escape discard edits; saving blocks dismissal', (
+    tester,
+  ) async {
+    final avatars = Avatars();
+    await open(tester, avatars);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    expect(find.byType(AgentAvatarEditor), findsNothing);
+    await open(tester, avatars);
+    await tester.tap(find.byKey(const Key('agent-avatar-preset-financing')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(AgentAvatarEditor), findsNothing);
+    expect(avatars.requests, isEmpty);
+    await open(tester, avatars);
+    await tester.tap(find.byKey(const Key('agent-avatar-preset-financing')));
+    await tester.pump();
+    avatars.saveGate = Completer<void>();
+    await tester.tap(find.byKey(const Key('agent-avatar-save')));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pump();
+    expect(find.byType(AgentAvatarEditor), findsOneWidget);
+    avatars.saveGate!.complete();
+    await tester.pumpAndSettle();
+    expect(find.byType(AgentAvatarEditor), findsNothing);
+  });
+
   testWidgets('save failure preserves draft and request for safe retry', (
     tester,
   ) async {
@@ -181,7 +213,8 @@ void main() {
     (tester) async {
       final avatars = Avatars()..conflict = true;
       await open(tester, avatars);
-      expect(find.text('服务器预设'), findsOneWidget);
+      expect(find.text('服务器预设'), findsNothing);
+      expect(find.bySemanticsLabel('服务器预设'), findsOneWidget);
       await tester.tap(find.byKey(const Key('agent-avatar-preset-financing')));
       await tester.pump();
       await tester.tap(find.byKey(const Key('agent-avatar-save')));
