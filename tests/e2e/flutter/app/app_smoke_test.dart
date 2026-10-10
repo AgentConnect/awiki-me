@@ -61,6 +61,7 @@ import '../../../unit/test_support.dart' as test_support;
 import '../../../unit/app_update_provider_test.dart' show buildManifest;
 import '../../case_attestation.dart';
 import '../support/fake_app_bootstrap.dart';
+import 'onboarding_invite_surface_smoke.dart';
 
 final class _RecordingDesktopStartupPresentationService
     implements DesktopStartupPresentationService {
@@ -2209,6 +2210,7 @@ void main() {
       }
     },
   );
+  registerInvitationSurfaceSmoke();
 }
 
 class _SmokeSkillOnboardingPort implements SkillOnboardingPort {
