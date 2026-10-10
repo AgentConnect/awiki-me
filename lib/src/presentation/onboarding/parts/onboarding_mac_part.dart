@@ -27,7 +27,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.activeTenant,
     required this.localeMode,
     required this.onLanguagePressed,
-    required this.onTenantPressed,
   });
 
   final OnboardingState onboarding;
@@ -51,7 +50,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final AppTenantProfile activeTenant;
   final AppLocaleMode localeMode;
   final ValueChanged<BuildContext> onLanguagePressed;
-  final VoidCallback onTenantPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -438,7 +436,7 @@ class _MacAuthCard extends ConsumerWidget {
               identityLabel: context.l10n.onboardingLogin,
               onChanged: (value) => ref
                   .read(onboardingProvider.notifier)
-                  .setEntryMode(value ? 'login' : 'register'),
+                  .setVisibleEntryMode(value ? 'login' : 'register'),
             ),
             const SizedBox(height: 16),
             if (showIdentities)

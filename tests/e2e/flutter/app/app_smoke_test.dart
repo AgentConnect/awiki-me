@@ -35,7 +35,7 @@ import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/startup_splash.dart';
-import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
@@ -448,33 +448,33 @@ void main() {
         (tenant) => tenant.officialKey == AppTenantOfficialKey.secondary,
       );
       final secondaryRow = find.byKey(
-        Key('settings-tenant-option:${secondary.id}'),
+        Key('tenant-menu-option:${secondary.id}'),
       );
-      expect(find.byType(TenantManagementDialog), findsOneWidget);
-      expect(
-        find.descendant(
-          of: secondaryRow,
-          matching: find.byKey(Key('tenant-primary-managed:${secondary.id}')),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: secondaryRow, matching: find.byTooltip('编辑租户')),
-        findsNothing,
-      );
-      expect(
-        find.descendant(of: secondaryRow, matching: find.byTooltip('删除')),
-        findsNothing,
-      );
+      final menu = find.byKey(const Key('tenant-switcher-menu'));
+      expect(menu, findsOneWidget);
+      for (final tenant in initialRegistry.tenants.where(
+        (tenant) => tenant.isPrimaryTenant,
+      )) {
+        final row = find.byKey(Key('tenant-menu-option:${tenant.id}'));
+        expect(row, findsOneWidget);
+        expect(
+          find.descendant(of: row, matching: find.text(tenant.name)),
+          findsOneWidget,
+        );
+        expect(tester.widget<AppPressable>(row).onLongPress, isNull);
+        expect(
+          find.byKey(Key('tenant-menu-delete:${tenant.id}')),
+          findsNothing,
+        );
+      }
+      expect(find.byKey(const Key('tenant-name-field')), findsNothing);
 
-      await tester.tap(
-        find.descendant(of: secondaryRow, matching: find.byTooltip('使用')),
-      );
+      await tester.tap(secondaryRow);
       await tester.pumpAndSettle();
 
       expect(actions.useTenantCalls, 1);
       expect(actions.registry.activeTenant.id, secondary.id);
-      expect(find.byType(TenantManagementDialog), findsNothing);
+      expect(menu, findsNothing);
 
       await tester.pumpWidget(Container());
       await tester.pumpAndSettle();

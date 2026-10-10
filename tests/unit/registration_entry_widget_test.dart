@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
+import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/onboarding/registration_entry_provider.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Theme;
 import 'package:awiki_me/src/core/app_error_classifier.dart';
 import 'package:awiki_me/src/core/app_transport_failure.dart';
 import 'package:flutter/foundation.dart';
@@ -102,6 +105,161 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  for (final size in [const Size(390, 1200), const Size(1100, 900)]) {
+    testWidgets('browsing identities preserves an issued OTP at $size', (
+      tester,
+    ) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final gateway = FakeAwikiGateway();
+      final support = InviteSupport(gateway);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const OnboardingPage(),
+          gateway: gateway,
+          providerOverrides: [
+            onboardingSupportServiceProvider.overrideWithValue(support),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(field('e2e-handle-input'), 'alice');
+      await tester.enterText(field('e2e-phone-input'), '13800138000');
+      await tapVisible(tester, find.text('发送验证码'));
+      await tester.enterText(field('e2e-otp-input'), '123456');
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
+      );
+      final issued = container.read(onboardingProvider);
+      expect(issued.canSubmitPhoneOtp, isTrue);
+      await tapVisible(tester, find.text('切换身份'));
+      expect(container.read(onboardingProvider).entryMode, 'login');
+      await tapVisible(tester, find.text('登录或注册'));
+      final restored = container.read(onboardingProvider);
+      expect(restored.otpTargetFullHandle, issued.otpTargetFullHandle);
+      expect(restored.otpTargetPhone, issued.otpTargetPhone);
+      expect(restored.canSubmitPhoneOtp, isTrue);
+      expect(
+        tester
+            .widget<CupertinoTextField>(field('e2e-otp-input'))
+            .controller!
+            .text,
+        '123456',
+      );
+      await tapVisible(tester, find.text('登录/注册'));
+      expect(gateway.registerHandleCalls, 1);
+      expect(gateway.sendOtpCalls, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final size in [const Size(390, 1200), const Size(1100, 900)]) {
+    testWidgets('browsing identities preserves email activation at $size', (
+      tester,
+    ) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final gateway = FakeAwikiGateway()..emailVerificationResult = true;
+      await tester.pumpWidget(
+        buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+      );
+      await tester.pumpAndSettle();
+      await tapVisible(tester, find.byKey(const Key('auth-mode-email')));
+      await tester.enterText(field('e2e-handle-input'), 'alice');
+      await tester.enterText(field('e2e-email-input'), 'fixture@example.com');
+      await tapVisible(tester, find.text('发送激活邮件'));
+      await tapVisible(tester, find.text('我已激活，检查状态'));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
+      );
+      expect(container.read(onboardingProvider).emailVerified, isTrue);
+      expect(
+        container.read(onboardingProvider).emailResendCountdown,
+        greaterThan(0),
+      );
+      await tapVisible(tester, find.text('切换身份'));
+      await tapVisible(tester, find.text('登录或注册'));
+      expect(container.read(onboardingProvider).emailVerified, isTrue);
+      expect(
+        container.read(onboardingProvider).emailResendCountdown,
+        greaterThan(0),
+      );
+      expect(
+        tester
+            .widget<CupertinoTextField>(field('e2e-email-input'))
+            .controller!
+            .text,
+        'fixture@example.com',
+      );
+      expect(gateway.checkEmailVerifiedCalls, 1);
+      await tapVisible(tester, find.text('完成注册'));
+      expect(gateway.registerHandleWithEmailCalls, 1);
+      // Submission performs the existing authoritative verification recheck.
+      expect(gateway.checkEmailVerifiedCalls, 2);
+      expect(gateway.sendEmailVerificationCalls, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final brightness in Brightness.values) {
+    testWidgets('desktop invite input remains readable in $brightness', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1100, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final gateway = FakeAwikiGateway();
+      final support = InviteSupport(gateway);
+      final theme = AwikiMeTheme.forPlatform(
+        TargetPlatform.macOS,
+        brightness: brightness,
+      );
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: Theme(data: theme.materialTheme, child: const OnboardingPage()),
+          gateway: gateway,
+          providerOverrides: [
+            onboardingSupportServiceProvider.overrideWithValue(support),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(field('e2e-handle-input'), 'abcd');
+      await tester.enterText(field('e2e-phone-input'), '13800138000');
+      await tapVisible(tester, find.text('发送验证码'));
+      final invite = field('e2e-invite-input');
+      await tester.enterText(invite, 'ABC123');
+      final input = tester.widget<CupertinoTextField>(invite);
+      final surface = tester.widget<Container>(
+        find
+            .ancestor(
+              of: invite,
+              matching: find.byWidgetPredicate(
+                (widget) =>
+                    widget is Container && widget.decoration is BoxDecoration,
+              ),
+            )
+            .first,
+      );
+      final fill = (surface.decoration! as BoxDecoration).color!;
+      final luminances = [
+        input.style!.color!.computeLuminance(),
+        fill.computeLuminance(),
+      ]..sort();
+      expect(
+        (luminances.last + .05) / (luminances.first + .05),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(input.controller!.text, 'ABC123');
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final size in <Size>[const Size(390, 1200), const Size(1100, 900)]) {
     for (final outcome in ['precheck_failure', 'send_failure', 'success']) {
       testWidgets('send-code loading stays inside control at $size: $outcome', (

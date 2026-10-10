@@ -30,14 +30,18 @@ glass local-identity rows without the inner divider, and 50-unit pill buttons.
 Narrow desktop windows keep the flat compact layout.
 
 The two entry segments show either the capability-driven registration form or
-the local identity list. They use `OnboardingState.entryMode` and the existing
-`setEntryMode` transition, including its OTP/email target invalidation rules.
+the local identity list. They use `OnboardingState.entryMode` and
+`setVisibleEntryMode` for presentation-only browsing. Explicit reset transitions
+continue to use `setEntryMode` and its OTP/email target invalidation rules.
 The UI does not maintain a parallel identity/login state. A committed
 registration requiring a local activation retry can therefore still select
 the local identity entry through the existing provider transition.
 
 Phone, Handle and email text controllers remain owned by `OnboardingPage`;
 switching visible entry or responsive layout does not recreate their values.
+Browsing local identities changes only the visible entry pane, retaining the
+issued OTP target and email verification state. Explicit authentication-method,
+contact, Handle, tenant and session transitions still invalidate verification.
 Busy entry segments and authentication methods cannot be switched. Empty local
 identity lists show the localized empty state. Local login and deletion retain
 the existing callbacks, confirmation, busy state and legacy-upgrade handling.
@@ -82,11 +86,13 @@ Desktop chat uses a 48-unit header and a flat composer separated by a top
 hairline. Its tools, text field and text-labelled send action occupy separate
 rows; the empty composer has a nominal minimum height of 148. Existing keyboard,
 IME, mention, emoji, screenshot and attachment callbacks retain their owners.
-Desktop message bubbles use symmetric 12/8-unit insets, 6-unit rounded
-corners and 1.6 line height. Phone bubbles use 14/9-unit insets and 20-unit
-corners that tighten to 8 units at the sender-side top. Incoming text uses the reference's light neutral
-surface, while outgoing messages retain the brand blue. Attachments retain
-their own content sizing and interaction boundaries.
+Following the 2026-10-08 monochrome reference revision, text bubbles use
+14px horizontal and 9px vertical insets and 1.55 line height. Desktop corners
+are 18px, tightening to 6px at the sender-side top; phone corners are 20px,
+tightening to 8px. Reference pixels are converted through the existing display
+scale. Incoming bubbles use the neutral message surface; outgoing bubbles use
+ink in light mode and near-white in dark mode, with `onOutgoingMessage` text.
+Attachments retain their own content sizing and interaction boundaries.
 
 The phone composer keeps a 44-unit minimum touch height. Attachment, emoji
 and (in groups) mention tools share one glass capsule on the left; the input is

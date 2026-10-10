@@ -524,7 +524,8 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
       ? const Color(0xFF493B22)
       : AwikiMePalette.warningContainer;
   Color get dangerContainer => colorScheme.errorContainer;
-  Color get infoAccent => AwikiMePalette.infoBlue;
+  Color get infoAccent =>
+      isDark ? const Color(0xFFCACACA) : AwikiMePalette.infoBlue;
 
   @override
   AwikiMeThemeTokens copyWith({

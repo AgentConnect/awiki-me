@@ -9,7 +9,7 @@
 - Riverpod
 - Sibling `awiki_im_core` Flutter/Dart SDK
 - Rust `awiki-im-core` with a native SQLite bridge
-- Android, iOS, and macOS platform runners
+- Android, iOS, and macOS platform runners (macOS 12.0 or later)
 
 ## 2. Layers
 
@@ -35,6 +35,17 @@ scripts/flutter/build-sdk-native.sh --macos-only
 
 cd ../awiki-me
 flutter pub get
+```
+
+The macOS runner and CocoaPods deployment target are both 12.0. The locked
+`flutter_secure_storage` dependency uses its Darwin implementation on macOS;
+its native Pod metadata does not imply a Dart dependency upgrade. Reproduce
+the checked-in Pod resolution without updating dependencies:
+
+```bash
+cd macos
+pod install --deployment
+cd ..
 ```
 
 For the two local Intel macOS Debug Apps, use

@@ -153,7 +153,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         activeTenant: activeTenant,
         localeMode: localeMode,
         onLanguagePressed: _showLanguageSheet,
-        onTenantPressed: _showTenantManagementDialog,
       ),
       onboarding,
     );
@@ -165,10 +164,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       ref,
       ref.read(appLocaleModeProvider),
     );
-  }
-
-  Future<void> _showTenantManagementDialog() async {
-    await showTenantManagementDialog(context);
   }
 
   Future<void> _submitRegister(BuildContext context) async {

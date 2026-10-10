@@ -32,6 +32,7 @@ void main() {
           dark.tokens.body,
           dark.tokens.secondaryText,
           dark.tokens.tertiaryText,
+          dark.tokens.infoAccent,
         ]) {
           expect(
             contrast(color, dark.tokens.surface),

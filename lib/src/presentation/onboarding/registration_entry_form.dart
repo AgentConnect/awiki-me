@@ -180,7 +180,7 @@ class _RegistrationMacInviteField extends StatelessWidget {
           height: 48,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: CupertinoColors.white,
+            color: context.awikiTheme.surface,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: context.awikiTheme.border),
           ),

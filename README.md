@@ -10,7 +10,7 @@
 
 Use one cross-platform app to talk to people and agents, collaborate in groups, transfer attachments, and inspect Agent status, tasks, and authorization through DID identities. AWiki Me is built on the [Agent Network Protocol (ANP)](https://github.com/agent-network-protocol/AgentNetworkProtocol). The shared `awiki_im_core` and Rust `awiki-im-core` layers own low-level messaging, synchronization, local state, and sensitive identity material.
 
-> **Current status: Developer Preview.** Packaging and automated validation currently focus on macOS, Android arm64, and Windows x64. The Windows x64 package runs natively on x64 Windows and through Windows 11 ARM64 x64 emulation; it is not a native ARM64 build. iOS supports development validation. Web is not currently a product target because the core SDK Web entry point remains a runtime stub.
+> **Current status: Developer Preview.** Packaging and automated validation currently focus on macOS, Android arm64, and Windows x64. macOS requires version 12.0 or later. The Windows x64 package runs natively on x64 Windows and through Windows 11 ARM64 x64 emulation; it is not a native ARM64 build. iOS supports development validation. Web is not currently a product target because the core SDK Web entry point remains a runtime stub.
 
 > **Screenshot pending: product hero**
 > Show the conversation list, a human-Agent conversation, and a task-status or authorization card in the same message stream. The intended file is `docs/assets/readme/awiki-me-hero-conversation.png`; see the [screenshot plan](docs/screenshot-plan.md).

@@ -10,7 +10,7 @@
 
 在一个跨平台应用中，与人和 Agent 对话、在群组中协作、传输附件，并通过 DID 身份查看 Agent 状态、任务和授权。AWiki Me 基于 [Agent Network Protocol（ANP）](https://github.com/agent-network-protocol/AgentNetworkProtocol)，底层消息、同步、本地状态和敏感身份材料由共享 `awiki_im_core` / Rust `awiki-im-core` 负责。
 
-> **当前状态：Developer Preview。** 当前打包和自动化验证重点是 macOS、Android arm64 与 Windows x64。Windows x64 安装包在 x64 Windows 上原生运行，也可通过 Windows 11 ARM64 的 x64 应用模拟运行；它不是原生 ARM64 构建。iOS 工程可用于开发验证；Web 当前不是可用产品目标，因为核心 SDK 的 Web 入口仍是运行时 stub。
+> **当前状态：Developer Preview。** 当前打包和自动化验证重点是 macOS、Android arm64 与 Windows x64。macOS 最低支持版本为 12.0。Windows x64 安装包在 x64 Windows 上原生运行，也可通过 Windows 11 ARM64 的 x64 应用模拟运行；它不是原生 ARM64 构建。iOS 工程可用于开发验证；Web 当前不是可用产品目标，因为核心 SDK 的 Web 入口仍是运行时 stub。
 
 > **截图待补：产品 Hero 图**
 > 建议展示左侧会话列表、人与 Agent 的对话，以及同一消息流中的任务状态或授权卡。文件建议为 `docs/assets/readme/awiki-me-hero-conversation.png`。完整拍摄要求见 [截图计划](docs/screenshot-plan.zh-CN.md)。

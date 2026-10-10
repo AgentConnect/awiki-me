@@ -339,6 +339,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
       final confirmed = await showAwikiGlassAlert<bool>(
         context,
         alertKey: const Key('device-root-transfer-confirm-dialog'),
+        dismissible: false,
         title: context.l10n.deviceRootTransferGrantManagement,
         content: Text(
           context.l10n.deviceRootTransferTarget(
