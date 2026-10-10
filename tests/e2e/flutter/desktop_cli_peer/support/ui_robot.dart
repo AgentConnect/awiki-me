@@ -1748,9 +1748,23 @@ class _DesktopAppRobot {
 
   Future<void> sendStagedAttachment({String? caption}) async {
     if (caption != null && caption.isNotEmpty) {
-      await tester.enterText(
-        find.bySemanticsIdentifier('e2e-chat-input'),
+      // Use the same exact-input contract as text sends: the native desktop
+      // input connection can replace the first edit after a focus/drop change.
+      await _enterExactComposerText(
+        find.descendant(
+          of: find.bySemanticsIdentifier('e2e-chat-input'),
+          matching: find.byType(CupertinoTextField),
+        ),
         caption,
+        description: 'attachment caption',
+      );
+      expect(
+        container
+            .read(chatComposerDraftsProvider.notifier)
+            .draftFor(selectedConversation)
+            .text,
+        caption,
+        reason: 'persisted attachment caption before send',
       );
     }
     await tapOne(
