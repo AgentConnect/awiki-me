@@ -82,7 +82,15 @@ Future<void> _verifyAttachmentRegression({
     expectedSenderDid: ownerDid,
     expectedReceiverDid: cliDid,
   );
-  expect(cliAppAttachment.digestB64u, appAttachmentDigestB64u);
+  if (!secure) {
+    expect(cliAppAttachment.digestB64u, appAttachmentDigestB64u);
+  } else {
+    expect(
+      (cliAppAttachment.attachment['encryption_info'] as Map)['plaintext_size'],
+      appAttachmentBytes.length.toString(),
+    );
+    expect(cliAppAttachment.digestB64u, isNotEmpty);
+  }
 
   final cliDownload = File('${downloadDir.path}/from-app-$nonce.txt');
   final cliDownloadResult = await _runCli(config, <String>[
@@ -115,7 +123,7 @@ Future<void> _verifyAttachmentRegression({
       'digest',
       'value_b64u',
     ]),
-    appAttachmentDigestB64u,
+    secure ? cliAppAttachment.digestB64u : appAttachmentDigestB64u,
   );
 
   await robot.navigateToContacts();
@@ -162,15 +170,17 @@ Future<void> _verifyAttachmentRegression({
   if (cliSentMessageId == null || cliSentAttachmentId == null) {
     fail('CLI attachment send returned incomplete canonical ids.');
   }
-  expect(
-    _jsonStringAt(cliAttachmentSend.stdout, const <Object>[
-      'data',
-      'attachment',
-      'digest',
-      'value_b64u',
-    ]),
-    cliAttachmentDigestB64u,
-  );
+  if (!secure) {
+    expect(
+      _jsonStringAt(cliAttachmentSend.stdout, const <Object>[
+        'data',
+        'attachment',
+        'digest',
+        'value_b64u',
+      ]),
+      cliAttachmentDigestB64u,
+    );
+  }
 
   await _waitForUiUnreadClosedLoop(
     robot: robot,

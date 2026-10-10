@@ -1401,6 +1401,13 @@ ChatAttachment? _attachmentFromManifest(Map<String, Object?>? manifest) {
         _stringFromJsonMap(attachment, 'content_type') ??
         'application/octet-stream',
     sizeBytes:
+        _intFromString(
+          _stringFromNestedJsonMap(
+            attachment,
+            'encryption_info',
+            'plaintext_size',
+          ),
+        ) ??
         _intFromJsonMap(attachment, 'size_bytes') ??
         _intFromString(_stringFromJsonMap(attachment, 'size')),
     caption: _stringFromJsonMap(manifest, 'caption'),
