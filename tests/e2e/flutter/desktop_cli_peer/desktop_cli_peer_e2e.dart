@@ -546,7 +546,9 @@ void runDesktopCliPeerE2e({
               'member_add_and_restart_preserved_exact_one_group',
               'duplicate_disappearing_or_changed_group_rejected',
             ],
-            'GROUP-E2E-001': const <String>[
+            'GROUP-E2E-001': <String>[
+              if (Platform.environment['AWIKI_E2E_ENCRYPTED_GROUP'] == '1')
+                'encrypted_group_text_and_structured_send_verified',
               'group_created_and_member_added_through_ui',
               'empty_group_survives_member_refresh_and_restart_exact_one',
               'member_added_system_event_uses_nickname_projection',

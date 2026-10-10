@@ -76,20 +76,41 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
           );
       if (!mounted || !epoch.matches(ref.read(sessionProvider))) return;
       final value = stored == null ? null : jsonDecode(stored.valueJson);
-      if (value != null) {
-        if (value is! Map<String, dynamic> ||
-            value['slug'] is! String ||
-            value['name'] is! String ||
-            value['encrypted'] is! bool) {
-          throw StateError('未完成的建群记录不可用');
-        }
-        _creationSlug = value['slug'] as String;
-        _nameController.text = value['name'] as String;
-        _encrypted = value['encrypted'] as bool;
+      if (value is Map<String, dynamic> &&
+          value['slug'] is String &&
+          value['name'] is String &&
+          value['encrypted'] is bool) {
+        // Migrate the operation independently; every dialog opens with a fresh form.
+        final groups = ref.read(groupProvider.notifier);
+        final store = ref.read(productLocalStoreProvider);
+        unawaited(() async {
+          try {
+            await groups.createGroup(
+              name: value['name'] as String,
+              slug: value['slug'] as String,
+              secureRequired: value['encrypted'] as bool,
+              description: '',
+              goal: '',
+              rules: '',
+              messagePrompt: '',
+              identity: const GroupIdentitySelection.didOnly(),
+            );
+            await store.saveUiPreference(
+              LocalUiPreference(
+                ownerDid: epoch.ownerDid,
+                key: 'pending_group_creation',
+                valueJson: 'null',
+                updatedAt: DateTime.now().toUtc(),
+              ),
+            );
+          } catch (_) {
+            /* Retain the exact legacy operation for the next continuation. */
+          }
+        }());
       }
     } catch (error) {
       if (mounted) {
-        _restoreFailed = true;
+        _restoreFailed = false;
         ref
             .read(uiFeedbackProvider.notifier)
             .showError(AppMessage.fromError(error));
@@ -127,23 +148,9 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
     }
     final epoch = ref.read(sessionProvider).activeEpoch;
     if (epoch == null) return;
-    final localStore = ref.read(productLocalStoreProvider);
     setState(() => _isLoading = true);
     try {
       _creationSlug ??= _generatedSlug();
-      await localStore.saveUiPreference(
-        LocalUiPreference(
-          ownerDid: epoch.ownerDid,
-          key: 'pending_group_creation',
-          valueJson: jsonEncode({
-            'slug': _creationSlug,
-            'name': name,
-            'encrypted': _encrypted,
-          }),
-          updatedAt: DateTime.now().toUtc(),
-        ),
-      );
-      if (!mounted || !epoch.matches(ref.read(sessionProvider))) return;
       final group = await ref
           .read(groupProvider.notifier)
           .createGroup(
@@ -156,20 +163,10 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
             messagePrompt: '',
             identity: const GroupIdentitySelection.didOnly(),
           );
-      await localStore.saveUiPreference(
-        LocalUiPreference(
-          ownerDid: epoch.ownerDid,
-          key: 'pending_group_creation',
-          valueJson: 'null',
-          updatedAt: DateTime.now().toUtc(),
-        ),
-      );
       if (!mounted || !epoch.matches(ref.read(sessionProvider))) return;
-      if (!mounted) {
-        return;
-      }
       Navigator.of(context).pop(group);
     } catch (error) {
+      if (!mounted || !epoch.matches(ref.read(sessionProvider))) return;
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));
@@ -207,7 +204,7 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
             title: context.l10n.groupCreateTitle,
             closeLabel: context.l10n.commonCancel,
             onClose: () => Navigator.of(context).pop(),
-            isCloseEnabled: !_isLoading,
+            isCloseEnabled: true,
           ),
           SizedBox(height: responsive.spacing(18)),
           CupertinoSlidingSegmentedControl<bool>(
@@ -233,9 +230,7 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
               Expanded(
                 child: AppSecondaryButton(
                   label: context.l10n.commonCancel,
-                  onPressed: _isLoading
-                      ? null
-                      : () => Navigator.of(context).pop(),
+                  onPressed: () => Navigator.of(context).pop(),
                 ),
               ),
               SizedBox(width: responsive.spacing(12)),

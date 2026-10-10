@@ -1347,7 +1347,10 @@ class _DesktopAppRobot {
     description: 'peer profile back button',
   );
 
-  Future<ConversationSummary> createGroup(String name) async {
+  Future<ConversationSummary> createGroup(
+    String name, {
+    bool encrypted = false,
+  }) async {
     final appContainer = container;
     await navigateToContacts();
     await pumpUntilFinder(
@@ -1374,6 +1377,9 @@ class _DesktopAppRobot {
       find.byKey(const Key('create-group-name-input')),
       name,
     );
+    if (encrypted) {
+      await tapOne(find.text('加密群'), description: 'encrypted group type');
+    }
     final feedbackBefore = appContainer.read(uiFeedbackProvider)?.id;
     await tapOne(
       find.byKey(const Key('create-group-submit-button')),

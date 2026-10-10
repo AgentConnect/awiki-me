@@ -687,9 +687,25 @@ class GroupController extends StateNotifier<GroupState> {
   }) async {
     final ownerOperation = _captureOwnerOperation();
     _requireCurrentOwnerOperation(ownerOperation);
-    final updated = await ref
-        .read(groupApplicationServiceProvider)
-        .addMember(groupDid: groupId, memberRef: memberRef, role: role);
+    for (final group in state.groups.where(
+      (g) => g.groupId == groupId && g.encrypted == true,
+    )) {
+      upsertGroup(group.withSecurity(canSendSecure: false));
+    }
+    late GroupSummary updated;
+    try {
+      updated = await ref
+          .read(groupApplicationServiceProvider)
+          .addMember(groupDid: groupId, memberRef: memberRef, role: role);
+    } catch (_) {
+      _requireCurrentOwnerOperation(ownerOperation);
+      try {
+        await refreshGroup(groupId);
+      } catch (_) {
+        /* Keep fail-closed state until sync succeeds. */
+      }
+      rethrow;
+    }
     _requireCurrentOwnerOperation(ownerOperation);
     upsertGroup(updated);
     await _loadGroupMembers(
@@ -834,8 +850,19 @@ GroupSummary _mergeGroupSummary({
   }
   return GroupSummary(
     encrypted: incoming.encrypted ?? local.encrypted,
-    canSendSecure: incoming.canSendSecure ?? local.canSendSecure,
+    canSendSecure:
+        incoming.canSendSecure ??
+        (newVersion != null &&
+                newVersion != oldVersion &&
+                (incoming.encrypted ?? local.encrypted) == true
+            ? false
+            : local.canSendSecure),
     secureState: incoming.secureState ?? local.secureState,
+    secureProblem: incoming.canSendSecure == true
+        ? null
+        : incoming.secureProblem,
+    secureRetryable: incoming.secureRetryable,
+    operation: incoming.operation,
     avatarUri: incoming.avatarUri ?? local.avatarUri,
     avatarMembers: incoming.avatarMembers,
     groupStateVersion: incoming.groupStateVersion,

@@ -10,6 +10,7 @@ class _Composer extends ConsumerStatefulWidget {
     required this.focusRequestId,
     this.enabled = true,
     this.disabledReason,
+    this.disabledStatus,
     required this.onSend,
     required this.onAttach,
     required this.onScreenshot,
@@ -25,6 +26,7 @@ class _Composer extends ConsumerStatefulWidget {
   final int focusRequestId;
   final bool enabled;
   final String? disabledReason;
+  final Widget? disabledStatus;
   final Future<void> Function() onSend;
   final Future<void> Function() onAttach;
   final Future<void> Function({required bool hideApp}) onScreenshot;
@@ -665,10 +667,11 @@ class _ComposerState extends ConsumerState<_Composer> {
                       SizedBox(height: responsive.displayScaled(6)),
                     ],
                     if (!widget.enabled)
-                      _DisabledComposerNotice(
-                        message: disabledReason,
-                        macStyle: true,
-                      )
+                      widget.disabledStatus ??
+                          _DisabledComposerNotice(
+                            message: disabledReason,
+                            macStyle: true,
+                          )
                     else if (widget.pendingAttachment != null) ...<Widget>[
                       _PendingAttachmentPreview(
                         attachment: widget.pendingAttachment!,
@@ -863,7 +866,11 @@ class _ComposerState extends ConsumerState<_Composer> {
               SizedBox(height: responsive.spacing(8)),
             ],
             if (!widget.enabled)
-              _DisabledComposerNotice(message: disabledReason, macStyle: false)
+              widget.disabledStatus ??
+                  _DisabledComposerNotice(
+                    message: disabledReason,
+                    macStyle: false,
+                  )
             else ...<Widget>[
               if (widget.pendingAttachment != null) ...<Widget>[
                 _PendingAttachmentPreview(

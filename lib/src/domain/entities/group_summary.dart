@@ -15,6 +15,9 @@ class GroupSummary {
     this.encrypted,
     this.canSendSecure,
     this.secureState,
+    this.operation,
+    this.secureProblem,
+    this.secureRetryable,
   }) : displayName = displayName ?? name ?? groupId;
 
   final String conversationId;
@@ -32,11 +35,17 @@ class GroupSummary {
   final bool? encrypted;
   final bool? canSendSecure;
   final String? secureState;
+  final GroupOperationSummary? operation;
+  final String? secureProblem;
+  final bool? secureRetryable;
 
   GroupSummary withSecurity({
     bool? encrypted,
     bool? canSendSecure,
     String? secureState,
+    GroupOperationSummary? operation,
+    String? secureProblem,
+    bool? secureRetryable,
   }) => GroupSummary(
     conversationId: conversationId,
     groupId: groupId,
@@ -52,6 +61,9 @@ class GroupSummary {
     encrypted: encrypted ?? this.encrypted,
     canSendSecure: canSendSecure ?? this.canSendSecure,
     secureState: secureState ?? this.secureState,
+    operation: operation ?? this.operation,
+    secureProblem: secureProblem ?? this.secureProblem,
+    secureRetryable: secureRetryable ?? this.secureRetryable,
   );
 
   String get name => displayName;
@@ -66,4 +78,17 @@ class GroupAvatarMember {
   final String memberKey;
   final String did;
   final String? handle;
+}
+
+class GroupOperationSummary {
+  const GroupOperationSummary({
+    required this.businessCommitted,
+    required this.encryptionReady,
+    required this.phase,
+    this.reason,
+  });
+  final bool businessCommitted;
+  final bool encryptionReady;
+  final String phase;
+  final String? reason;
 }

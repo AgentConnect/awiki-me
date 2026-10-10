@@ -741,10 +741,16 @@ class _ChatViewState extends ConsumerState<ChatView> {
   @override
   void initState() {
     super.initState();
-    _groupDisplayRefreshTimer = Timer.periodic(
-      const Duration(seconds: 10),
-      (_) => _refreshVisibleGroupProfiles(),
-    );
+    _groupDisplayRefreshTimer = Timer.periodic(const Duration(seconds: 10), (
+      _,
+    ) {
+      _refreshVisibleGroupProfiles();
+      if (mounted &&
+          _messagesDestinationActive &&
+          widget.conversation.isGroup) {
+        unawaited(_refreshGroupSecurity(widget.conversation));
+      }
+    });
     _displayThreadId = _timelineDisplayThreadId(widget.conversation);
     scrollController = _ChatTimelineScrollController(
       onUserScrollStart: _handleUserScrollStart,
@@ -1802,40 +1808,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
                 ),
               ),
             ),
-          if (currentConversation.isGroup && groupSendDisabledReason != null)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (_groupSecurityBusy)
-                  const CupertinoActivityIndicator(radius: 7),
-                CupertinoButton(
-                  onPressed: _groupSecurityBusy
-                      ? null
-                      : () => _refreshGroupSecurity(currentConversation),
-                  child: const Text('刷新群状态'),
-                ),
-                if (ref
-                    .watch(groupProvider)
-                    .groups
-                    .any(
-                      (g) =>
-                          g.groupId == currentConversation.groupId &&
-                          g.encrypted == true &&
-                          g.myRole == 'owner' &&
-                          g.membershipStatus == 'active',
-                    ))
-                  CupertinoButton(
-                    onPressed: _groupSecurityBusy
-                        ? null
-                        : () => _refreshGroupSecurity(
-                            currentConversation,
-                            repair: true,
-                          ),
-                    child: const Text('重试加密准备'),
-                  ),
-              ],
-            ),
           _Composer(
+            disabledStatus:
+                currentConversation.isGroup && groupSendDisabledReason != null
+                ? _groupSecurityCard(
+                    currentConversation,
+                    groupSendDisabledReason,
+                  )
+                : null,
             conversation: currentConversation,
             embedded: widget.embedded,
             macStyle: macStyle,
@@ -3740,6 +3720,49 @@ class _ChatViewState extends ConsumerState<ChatView> {
     return null;
   }
 
+  Widget _groupSecurityCard(ConversationSummary conversation, String reason) {
+    final group = ref
+        .watch(groupProvider)
+        .groups
+        .where((g) => g.groupId == conversation.groupId)
+        .firstOrNull;
+    final theme = context.awikiTheme;
+    final retryable =
+        group?.myRole == 'owner' && group?.secureRetryable == true;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          if (_groupSecurityBusy)
+            const CupertinoActivityIndicator(radius: 8)
+          else
+            Icon(
+              CupertinoIcons.lock_shield,
+              size: 18,
+              color: theme.secondaryText,
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _groupSecurityBusy
+                  ? '正在准备加密聊天…'
+                  : (group?.secureProblem ?? reason),
+              style: TextStyle(fontSize: 13, color: theme.secondaryText),
+            ),
+          ),
+          if (retryable && !_groupSecurityBusy)
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              minimumSize: const Size(44, 32),
+              onPressed: () =>
+                  _refreshGroupSecurity(conversation, repair: true),
+              child: const Text('重试', style: TextStyle(fontSize: 13)),
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _refreshGroupSecurity(
     ConversationSummary conversation, {
     bool repair = false,
@@ -3750,7 +3773,25 @@ class _ChatViewState extends ConsumerState<ChatView> {
     setState(() => _groupSecurityBusy = true);
     try {
       if (repair) {
-        await ref.read(groupEncryptionCorePortProvider).retry(groupId);
+        final previous = ref
+            .read(groupProvider)
+            .groups
+            .where((g) => g.groupId == groupId)
+            .firstOrNull;
+        if (previous != null) {
+          ref
+              .read(groupProvider.notifier)
+              .upsertGroup(previous.withSecurity(canSendSecure: false));
+        }
+        try {
+          await ref.read(groupEncryptionCorePortProvider).retry(groupId);
+        } finally {
+          if (mounted && epoch.matches(ref.read(sessionProvider))) {
+            await ref
+                .read(groupProvider.notifier)
+                .refreshGroup(groupId, refreshMembers: false);
+          }
+        }
       }
       if (!mounted || !epoch.matches(ref.read(sessionProvider))) return;
       final group = await ref
@@ -3786,8 +3827,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (status == null || status.isEmpty || status == 'active') {
         if (group.encrypted == true && group.canSendSecure != true) {
           return group.myRole == 'owner'
-              ? '群加密准备未完成，请重试修复'
-              : '群加密准备中，请等待群主完成准备';
+              ? (group.secureState == 'waitingForMembershipUpdate'
+                    ? '等待成员完成加密准备'
+                    : '正在准备加密聊天…')
+              : '等待群主设备完成加密准备';
         }
         return null;
       }
@@ -3834,7 +3877,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     for (final group in groups) {
       if (group.groupId == groupId &&
           hasKnownGroupRole(group) &&
-          group.encrypted != null) {
+          group.encrypted == false) {
         return;
       }
     }

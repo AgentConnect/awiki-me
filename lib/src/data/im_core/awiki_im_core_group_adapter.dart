@@ -143,8 +143,9 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     required String memberRef,
     String role = 'member',
   }) async {
+    core.GroupReadResult? result;
     try {
-      await _runtime.withCurrentClient(
+      result = await _runtime.withCurrentClient(
         (client) =>
             client.groups.addMember(groupDid, memberRef: memberRef, role: role),
       );
@@ -155,7 +156,8 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
       }
       rethrow;
     }
-    return getGroup(groupDid);
+    final refreshed = await getGroup(groupDid);
+    return refreshed.withSecurity(operation: _operationFromResult(result));
   }
 
   @override
@@ -175,9 +177,12 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
       return _mappers
           .groupFromCoreSnapshot(snapshot)
           .withSecurity(
+            operation: _operationFromResult(result),
             encrypted: result.encrypted,
             canSendSecure: result.secureStatus?.canSendSecure,
             secureState: result.secureStatus?.state.name,
+            secureProblem: _safeGroupProblem(result.secureStatus?.problem),
+            secureRetryable: result.secureStatus?.problem?.retryable,
           );
     }
     if (result.groups.isNotEmpty) {
@@ -188,6 +193,12 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
 }
 
 GroupMemberAdmissionException? mapCoreGroupMemberAdmissionError(Object error) {
+  if (error is core.AwikiImCoreException &&
+      error.serviceCode == 'group.member_encryption_not_ready') {
+    return const GroupMemberAdmissionException(
+      GroupMemberAdmissionDenialReason.encryptionNotReady,
+    );
+  }
   if (error is! core.AwikiImCoreException ||
       error.serviceCode?.trim().toLowerCase() !=
           'group.admission_not_allowed') {
@@ -259,4 +270,27 @@ core.GroupIdentityMode _coreIdentityMode(GroupIdentityMode mode) {
     GroupIdentityMode.handle => core.GroupIdentityMode.handle,
     GroupIdentityMode.didOnly => core.GroupIdentityMode.didOnly,
   };
+}
+
+GroupOperationSummary? _operationFromResult(core.GroupReadResult? result) {
+  final raw = result?.operationJson;
+  if (raw == null) return null;
+  try {
+    final value = jsonDecode(raw);
+    if (value is! Map) return null;
+    return GroupOperationSummary(
+      businessCommitted: value['business_committed'] == true,
+      encryptionReady: value['encryption_ready'] == true,
+      phase: value['phase'] as String? ?? 'preparing',
+      reason: value['reason'] as String?,
+    );
+  } on FormatException {
+    return null;
+  }
+}
+
+String? _safeGroupProblem(core.SecureProblem? problem) {
+  if (problem == null) return null;
+  const safeMessages = {'请在原群主设备上完成加密准备', '等待成员完成加密准备', '加密准备未完成，请检查连接后重试'};
+  return safeMessages.contains(problem.message) ? problem.message : null;
 }

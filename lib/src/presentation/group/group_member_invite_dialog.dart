@@ -236,6 +236,7 @@ class _GroupMemberInviteDialogState
     });
 
     final failed = <String>[];
+    final outcomes = <String>[];
     GroupSummary? latestGroup;
     for (final candidate in selected) {
       try {
@@ -245,6 +246,12 @@ class _GroupMemberInviteDialogState
               groupId: widget.groupId,
               memberRef: candidate.memberRef,
             );
+        final preparing =
+            latestGroup.operation?.businessCommitted == true &&
+            latestGroup.operation?.encryptionReady != true;
+        outcomes.add(
+          '${candidate.localizedDisplayName(l10n)}：${preparing ? '已加入，正在完成加密准备' : '已加入'}',
+        );
         _selectedRefs.remove(candidate.selectionKey);
       } catch (error) {
         failed.add(
@@ -269,13 +276,13 @@ class _GroupMemberInviteDialogState
     if (!mounted) {
       return;
     }
-    if (failed.isEmpty) {
+    if (failed.isEmpty && !outcomes.any((value) => value.contains('正在完成'))) {
       Navigator.of(context).pop();
       return;
     }
     setState(() {
       _isSubmitting = false;
-      _errorText = failed.join('\n');
+      _errorText = [...outcomes, ...failed].join('\n');
     });
   }
 
@@ -1500,6 +1507,8 @@ String _groupInviteFailureText(
     return switch (error.reason) {
       GroupMemberAdmissionDenialReason.federatedGroupDenied =>
         l10n.groupInviteFederatedDenied,
+      GroupMemberAdmissionDenialReason.encryptionNotReady =>
+        '尚未加入：对方尚未完成加密准备，请对方打开客户端后重试',
       GroupMemberAdmissionDenialReason.identityUnavailable =>
         l10n.groupInviteIdentityUnavailable,
       _ => l10n.groupInviteAdmissionDenied,
