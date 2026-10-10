@@ -100,9 +100,10 @@ Future<PreparedIntegrationExecution> runPreparedIntegrationExecutable({
       // Flutter frame. It never changes application lifecycle facts in Dart.
       foregroundKeeper = await Process.start('/usr/bin/swift', <String>[
         '-e',
-        'import AppKit; '
-            'while let app = NSRunningApplication(processIdentifier: ${process.pid}), !app.isTerminated { '
-            '_ = app.unhide(); _ = app.activate(options: [.activateAllWindows]); '
+        'import AppKit; import Darwin; '
+            'while kill(${process.pid}, 0) == 0 { '
+            'if let app = NSRunningApplication(processIdentifier: ${process.pid}) { '
+            '_ = app.unhide(); _ = app.activate(options: [.activateAllWindows]) }; '
             'Thread.sleep(forTimeInterval: 1) }',
       ], mode: ProcessStartMode.normal);
       unawaited(foregroundKeeper.stdout.drain<void>());

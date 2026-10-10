@@ -767,6 +767,22 @@ class AwikiImCoreMappers {
         hasUnknownDomain: event.sync?.hasUnknownDomain ?? false,
       );
     }
+    // A wire arrival can precede Core's canonical conversation projection.
+    // Pull committed facts instead of creating an unroutable notification or
+    // inventing a conversation ID from a group DID/thread alias.
+    if (message.conversationId.trim().isEmpty) {
+      return RealtimeUpdate(
+        ownerDid: ownerDid,
+        domains: _syncDomainsFromCore(
+          event.sync?.domains,
+        ).union(const <SyncDomain>{SyncDomain.message}),
+        reason:
+            _nonEmpty(event.sync?.reason) ?? 'canonical_conversation_pending',
+        syncDirty: true,
+        gapDetected: event.sync?.gapDetected ?? false,
+        hasUnknownDomain: event.sync?.hasUnknownDomain ?? false,
+      );
+    }
     return RealtimeUpdate(
       ownerDid: ownerDid,
       message: chatMessage,

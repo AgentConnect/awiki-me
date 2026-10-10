@@ -1058,6 +1058,32 @@ void main() {
     },
   );
 
+  test('uncommitted encrypted group arrival only requests canonical sync', () {
+    const event = core.RealtimeEvent(
+      kind: 'message_received',
+      message: core.Message(
+        conversationId: '',
+        senderDidSnapshot: 'did:peer',
+        id: 'did:group:7',
+        threadKind: 'group',
+        threadId: 'did:group',
+        direction: core.MessageDirection.incoming,
+        sender: 'did:peer',
+        receiver: 'did:me',
+        body: core.MessageBodyView(text: 'decrypted group message'),
+        sentAt: '2026-10-11T00:00:00Z',
+        metadata: core.MessageMetadata(),
+      ),
+    );
+    final update = mapper.realtimeUpdateFromCore(event, ownerDid: 'did:me')!;
+    expect(update.message, isNull);
+    expect(update.conversationHint, isNull);
+    expect(update.group, isNull);
+    expect(update.syncDirty, isTrue);
+    expect(update.reason, 'canonical_conversation_pending');
+    expect(update.domains.map((domain) => domain.name), contains('message'));
+  });
+
   test('system notification event is a sync-only realtime signal', () {
     const event = core.RealtimeEvent(
       kind: 'system_notification_changed',

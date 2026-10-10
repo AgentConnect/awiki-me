@@ -843,3 +843,5 @@ Web 仍沿用既有无原生缓存的占位实现；本轮不宣称 Web native C
 定向产品复验可设置 `AWIKI_E2E_ENCRYPTED_GROUP=1` 运行拥有方 `--case group`：真实 UI 选择加密群，复用群创建/邀请、文本与结构化 mention、重启用例，并断言实际加密属性及额外 attestation。默认 group 仍验证普通群，不混用两种通过记录。
 
 联合产品验收：在两端拥有方 runner 同时设置同一个新建目录 `AWIKI_E2E_PRODUCT_PAIR_DIR`，APP 另设 `AWIKI_E2E_ENCRYPTED_GROUP=1` 运行 group；DSH 运行 ENCRYPTED-001。桥接仅交换公开测试 DID/Handle、群 ID、固定消息标记及完成标志；账号凭据和数据库不共享。APP UI 建群邀请已有 DSH，双向文本/附件下载验证明文，CLI 作为第三成员作确定性脚本回复（不调用真实模型），DSH 重启并反向建群邀请 APP。桥接目录必须按运行新建，不能复用旧完成标志。联合结果仅在两端 runner、桥接完成和各自清理记录均核验后计为通过。
+
+群消息的原始 realtime arrival 若尚无 Core canonical `conversationId`，adapter 只产生 message-domain dirty hint，等待 committed sync 投影；不得按群 DID/thread 补造路由，亦不得创建空 conversation 的系统通知。合法 canonical arrival 的通知语义保持不变。
