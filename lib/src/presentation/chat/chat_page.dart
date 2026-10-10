@@ -2459,6 +2459,19 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
 
     void restoreSubmittedDraft() {
+      if (stillCurrent() && conversation.isGroup) {
+        final group = ref
+            .read(groupProvider)
+            .groups
+            .where((g) => g.groupId == conversation.groupId)
+            .firstOrNull;
+        if (group?.encrypted == true) {
+          ref
+              .read(groupProvider.notifier)
+              .upsertGroup(group!.withSecurity(canSendSecure: false));
+          unawaited(_refreshGroupSecurity(conversation));
+        }
+      }
       if (!stillCurrent() ||
           textController.text.isNotEmpty ||
           _pendingAttachment != null) {
