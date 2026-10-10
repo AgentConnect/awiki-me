@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
@@ -10,6 +11,7 @@ import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Theme;
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:awiki_me/src/core/app_error_classifier.dart';
 import 'package:awiki_me/src/core/app_transport_failure.dart';
 import 'package:flutter/foundation.dart';
@@ -205,59 +207,86 @@ void main() {
     });
   }
 
-  for (final brightness in Brightness.values) {
-    testWidgets('desktop invite input remains readable in $brightness', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(1100, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final gateway = FakeAwikiGateway();
-      final support = InviteSupport(gateway);
-      final theme = AwikiMeTheme.forPlatform(
-        TargetPlatform.macOS,
-        brightness: brightness,
-      );
-      await tester.pumpWidget(
-        buildLocalizedTestApp(
-          home: Theme(data: theme.materialTheme, child: const OnboardingPage()),
-          gateway: gateway,
-          providerOverrides: [
-            onboardingSupportServiceProvider.overrideWithValue(support),
-          ],
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.enterText(field('e2e-handle-input'), 'abcd');
-      await tester.enterText(field('e2e-phone-input'), '13800138000');
-      await tapVisible(tester, find.text('发送验证码'));
-      final invite = field('e2e-invite-input');
-      await tester.enterText(invite, 'ABC123');
-      final input = tester.widget<CupertinoTextField>(invite);
-      final surface = tester.widget<Container>(
-        find
-            .ancestor(
-              of: invite,
-              matching: find.byWidgetPredicate(
-                (widget) =>
-                    widget is Container && widget.decoration is BoxDecoration,
+  for (final size in [const Size(390, 900), const Size(1100, 900)]) {
+    for (final brightness in Brightness.values) {
+      testWidgets(
+        'focused invite input remains readable in $brightness at $size',
+        (tester) async {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final gateway = FakeAwikiGateway();
+          final support = InviteSupport(gateway);
+          final theme = AwikiMeTheme.forPlatform(
+            TargetPlatform.macOS,
+            brightness: brightness,
+          );
+          await tester.pumpWidget(
+            buildLocalizedTestApp(
+              home: Theme(
+                data: theme.materialTheme,
+                child: const RepaintBoundary(
+                  key: Key('invite-capture'),
+                  child: OnboardingPage(),
+                ),
               ),
-            )
-            .first,
+              gateway: gateway,
+              providerOverrides: [
+                onboardingSupportServiceProvider.overrideWithValue(support),
+              ],
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.enterText(field('e2e-handle-input'), 'abcd');
+          await tester.enterText(field('e2e-phone-input'), '13800138000');
+          await tapVisible(tester, find.text('发送验证码'));
+          final invite = field('e2e-invite-input');
+          await tester.ensureVisible(invite);
+          await tester.pumpAndSettle();
+          final beforeFocus = tester.getRect(invite);
+          await tester.enterText(invite, 'ABC123');
+          await tester.pumpAndSettle();
+          expect(tester.getRect(invite), beforeFocus);
+          final input = tester.widget<CupertinoTextField>(invite);
+          final boundary = tester.renderObject<RenderRepaintBoundary>(
+            find.byKey(const Key('invite-capture')),
+          );
+          final rect = tester.getRect(invite);
+          final point = boundary.globalToLocal(
+            Offset(rect.right - 8, rect.center.dy),
+          );
+          final fill = await tester.runAsync(() async {
+            final image = await boundary.toImage(pixelRatio: 1);
+            try {
+              final pixels = await image.toByteData(
+                format: ui.ImageByteFormat.rawRgba,
+              );
+              final offset =
+                  (point.dy.floor() * image.width + point.dx.floor()) * 4;
+              return Color.fromARGB(
+                pixels!.getUint8(offset + 3),
+                pixels.getUint8(offset),
+                pixels.getUint8(offset + 1),
+                pixels.getUint8(offset + 2),
+              );
+            } finally {
+              image.dispose();
+            }
+          });
+          final luminances = [
+            input.style!.color!.computeLuminance(),
+            fill!.computeLuminance(),
+          ]..sort();
+          expect(
+            (luminances.last + .05) / (luminances.first + .05),
+            greaterThanOrEqualTo(4.5),
+          );
+          expect(input.controller!.text, 'ABC123');
+          expect(tester.takeException(), isNull);
+        },
       );
-      final fill = (surface.decoration! as BoxDecoration).color!;
-      final luminances = [
-        input.style!.color!.computeLuminance(),
-        fill.computeLuminance(),
-      ]..sort();
-      expect(
-        (luminances.last + .05) / (luminances.first + .05),
-        greaterThanOrEqualTo(4.5),
-      );
-      expect(input.controller!.text, 'ABC123');
-      expect(tester.takeException(), isNull);
-    });
+    }
   }
 
   for (final size in <Size>[const Size(390, 1200), const Size(1100, 900)]) {

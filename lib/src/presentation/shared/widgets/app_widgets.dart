@@ -1185,7 +1185,9 @@ class _AppTextFieldSurface extends StatelessWidget {
       duration: const Duration(milliseconds: 120),
       padding: padding,
       decoration: BoxDecoration(
-        color: focused ? theme.glassLens : theme.glass,
+        // The focus shadow sits behind the field. Composite an opaque fill so
+        // the ring cannot bleed through the glass and hide the input text.
+        color: focused ? Color.alphaBlend(theme.glassLens, color) : theme.glass,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: focused ? theme.primary : theme.glassEdge,

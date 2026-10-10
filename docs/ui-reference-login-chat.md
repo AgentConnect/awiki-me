@@ -28,6 +28,9 @@ a glass entry track whose chosen segment is a lens, 50-unit glass fields with
 a 2-unit accent focus ring, a glass "send code" pill inside the OTP field,
 glass local-identity rows without the inner divider, and 50-unit pill buttons.
 Narrow desktop windows keep the flat compact layout.
+Focused shared glass fields composite their lens tint onto the field surface
+before painting the outer focus ring. The ring must not tint the field interior
+or obscure input text in either appearance; focusing preserves field bounds.
 
 The two entry segments show either the capability-driven registration form or
 the local identity list. They use `OnboardingState.entryMode` and
