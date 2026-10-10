@@ -63,7 +63,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
   final ownerMember = await _findGroupMember(
     groups: groups,
     groupDid: groupDid,
-    memberRef: appFullHandle,
+    memberRef: ownerDid,
   );
   expect(
     _normalizeIdentityRef(ownerMember.did),
@@ -89,7 +89,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
   final cliMember = await _findGroupMember(
     groups: groups,
     groupDid: groupDid,
-    memberRef: cliFullHandle,
+    memberRef: canonicalCliDid,
   );
   final cliMemberDid = requireMatchingCliPeerDid(
     canonicalCliDid: canonicalCliDid,
