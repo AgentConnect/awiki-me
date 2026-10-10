@@ -182,6 +182,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     expectedContentType: 'text/plain',
   );
 
+  await E2eScenarioProgressWriter.record('group_text_both_peers_confirmed');
   final appMentionText = await robot.sendMention(
     handle: config.cliHandle,
     expectedFullHandle: cliFullHandle,
@@ -189,6 +190,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     expectedDisplayName: expectedCliMemberName,
     suffix: 'e2e app group mention ${config.runId} $nonce',
   );
+  await E2eScenarioProgressWriter.record('group_mention_composer_cleared');
   final appMention = await _waitForUiMessage(
     robot: robot,
     conversationId: conversation.conversationId,
@@ -196,10 +198,12 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     senderDid: ownerDid,
     sendState: MessageSendState.sent,
   );
+  await E2eScenarioProgressWriter.record('group_mention_sent_projected');
   requireSingleMentionTarget(message: appMention, targetDid: cliMemberDid);
   if (encrypted) expect(appMention.isEncrypted, isTrue);
   final appMentionId = appMention.remoteId!;
   await robot.expectMessageContentVisible(appMention);
+  await E2eScenarioProgressWriter.record('group_mention_visible');
   await _waitForCliGroupMessages(
     config: config,
     groupDid: groupDid,
