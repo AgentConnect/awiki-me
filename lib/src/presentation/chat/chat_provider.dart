@@ -7115,7 +7115,9 @@ class ChatThreadsController
 
   AppThreadReadWatermark _readWatermarkForMessage(ChatMessage message) {
     final remoteId = message.remoteId?.trim();
-    final serverSequence = message.serverSequence;
+    // Encrypted Direct inbox sequences do not share the ordinary thread clock.
+    // Core resolves the authenticated message anchor to each lane's read state.
+    final serverSequence = message.isEncrypted ? null : message.serverSequence;
     return AppThreadReadWatermark(
       lastReadMessageId: remoteId?.isNotEmpty ?? false ? remoteId : null,
       lastReadThreadSeq: serverSequence?.toString(),
@@ -7232,6 +7234,12 @@ bool _readWatermarkCovers(
 int _compareReadWatermarks(AppThreadReadWatermark a, AppThreadReadWatermark b) {
   final aSequence = _readWatermarkSequence(a);
   final bSequence = _readWatermarkSequence(b);
+  if ((aSequence == null || bSequence == null) &&
+      a.readAt != null &&
+      b.readAt != null) {
+    final time = a.readAt!.toUtc().compareTo(b.readAt!.toUtc());
+    if (time != 0) return time;
+  }
   if (aSequence != null || bSequence != null) {
     if (aSequence == null) {
       return -1;

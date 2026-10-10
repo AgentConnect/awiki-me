@@ -3486,6 +3486,91 @@ void main() {
     );
   });
 
+  test('普通已读之后较低 inbox 序号的加密附件仍提交独立可见锚点', () async {
+    final first = ChatMessage(
+      localId: 'visible-text-24',
+      remoteId: 'visible-text-24',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'before image',
+      createdAt: DateTime(2026, 5, 8, 10, 7),
+      isMine: false,
+      serverSequence: 24,
+      sendState: MessageSendState.sent,
+    );
+    final image = ChatMessage(
+      localId: 'visible-image-25',
+      remoteId: 'visible-image-25',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: '',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime(2026, 5, 8, 10, 8),
+      isMine: false,
+      serverSequence: 3,
+      isEncrypted: true,
+      sendState: MessageSendState.sent,
+      attachment: const ChatAttachment(
+        attachmentId: 'coalesced-image-attachment',
+        filename: 'coalesced-image.png',
+        mimeType: 'image/png',
+      ),
+    );
+    final firstUnread = conversation.copyWith(
+      lastMessagePreview: first.previewText,
+      lastMessageAt: first.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: first,
+    );
+    final firstCommit = Completer<void>();
+    gateway.markConversationReadCompleter = firstCommit;
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(firstUnread);
+    controller.debugSeedMessageForTesting(
+      first,
+      threadId: _timelineThreadId(firstUnread),
+    );
+    controller.markConversationVisible(
+      firstUnread,
+      displayThreadId: _timelineThreadId(firstUnread),
+    );
+    await pumpEventQueue();
+    expect(gateway.markConversationReadCalls, 1);
+
+    final imageUnread = firstUnread.copyWith(
+      lastMessagePreview: image.previewText,
+      lastMessageAt: image.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: image,
+    );
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(imageUnread);
+    controller.debugSeedMessageForTesting(
+      image,
+      threadId: _timelineThreadId(imageUnread),
+    );
+    await pumpEventQueue();
+    expect(gateway.markConversationReadCalls, 1);
+
+    firstCommit.complete();
+    await pumpEventQueue();
+
+    expect(gateway.markConversationReadCalls, 2);
+    expect(
+      gateway.markConversationReadWatermarks.map(
+        (item) => item?.lastReadThreadSeq,
+      ),
+      <String?>['24', null],
+    );
+  });
+
   test('Core 已提交本地图片水位时接受 pending remote ACK', () async {
     final image = ChatMessage(
       localId: 'pending-remote-image-26',
@@ -7400,7 +7485,10 @@ void main() {
         ),
         caption: 'attachment alias',
       );
-      final pending = controller.thread(group.conversationId).displayMessages.single;
+      final pending = controller
+          .thread(group.conversationId)
+          .displayMessages
+          .single;
       final canonical =
           _mappedGroupReceipt(
             group,
