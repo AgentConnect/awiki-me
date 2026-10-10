@@ -774,7 +774,19 @@ Future<ChatMessage> _waitForUiMessage({
             candidate.sendState == MessageSendState.sending) {
           return const E2eObservation.pending('terminal_send_state_pending');
         }
-        return const E2eObservation.fatal('wrong_message_send_state');
+        final service = robot.container.read(messagingServiceProvider);
+        final code = service is _FailOnceMessagingService
+            ? service.lastConversationTextFailureCode ?? 'no_core_error'
+            : 'unobserved';
+        final detail = service is _FailOnceMessagingService
+            ? service.lastConversationTextFailureDetail ?? ''
+            : '';
+        final pendingMembership = detail.contains(
+          'group_membership_change_pending',
+        );
+        return E2eObservation.fatal(
+          'wrong_message_send_state_${candidate.sendState.name}_${code}_membership_pending_$pendingMembership',
+        );
       }
       matched = requireExactlyOneMessage(
         messages: messages,
