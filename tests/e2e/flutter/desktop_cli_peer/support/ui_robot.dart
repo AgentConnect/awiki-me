@@ -1839,6 +1839,12 @@ class _DesktopAppRobot {
       );
     }
     final tapTarget = pressableCount == 1 ? pressableDescendant : finder;
+    // Navigation can build the destination before its transition accepts hits.
+    // Wait for the actual visible target instead of dropping the first tap.
+    await pumpUntilFinder(
+      tapTarget.hitTestable(),
+      description: '$description accepts pointer input',
+    );
     await tester.tap(tapTarget);
     await tester.pump();
   }

@@ -100,6 +100,7 @@ part 'flows/contact_flow.dart';
 part 'flows/conversation_correctness_flow.dart';
 part 'flows/direct_message_flow.dart';
 part 'flows/group_message_flow.dart';
+part 'flows/dsh_group_pair_flow.dart';
 part 'flows/inbound_first_flow.dart';
 part 'flows/identity_switch_flow.dart';
 part 'flows/performance_flow.dart';
@@ -538,6 +539,13 @@ void runDesktopCliPeerE2e({
           canonicalCliDid: canonicalCliDid!,
           config: config,
           nonce: messageNonce,
+        );
+        await _verifyDshGroupPair(
+          robot: robot,
+          group: groupResult,
+          config: config,
+          ownerDid: session.did,
+          attachmentOpenRecorder: attachmentOpenRecorder,
         );
         if (!selectedCase.runsDisplayNameFallback) {
           await _attestPassedCases(<String, List<String>>{

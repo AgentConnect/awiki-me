@@ -841,3 +841,5 @@ Web 仍沿用既有无原生缓存的占位实现；本轮不宣称 Web native C
 创建返回后进入既有群，按 Core `secureStatus` 自动刷新。输入区内部的紧凑状态卡展示准备、等待成员/原群主、可恢复失败；就绪移除卡片，正常过程不显示刷新按钮。成员变更使旧发送许可立即失效，即使随后列表只带新成员版本而未带 secureStatus，也不能沿用旧许可。邀请 `operationJson` 映射为脱敏 GroupOperationSummary，用于区分尚未加入与已加入仍在准备；UI 不处理 MLS。
 
 定向产品复验可设置 `AWIKI_E2E_ENCRYPTED_GROUP=1` 运行拥有方 `--case group`：真实 UI 选择加密群，复用群创建/邀请、文本与结构化 mention、重启用例，并断言实际加密属性及额外 attestation。默认 group 仍验证普通群，不混用两种通过记录。
+
+联合产品验收：在两端拥有方 runner 同时设置同一个新建目录 `AWIKI_E2E_PRODUCT_PAIR_DIR`，APP 另设 `AWIKI_E2E_ENCRYPTED_GROUP=1` 运行 group；DSH 运行 ENCRYPTED-001。桥接仅交换公开测试 DID/Handle、群 ID、固定消息标记及完成标志；账号凭据和数据库不共享。APP UI 建群邀请已有 DSH，双向文本/附件下载验证明文，CLI 作为第三成员作确定性脚本回复（不调用真实模型），DSH 重启并反向建群邀请 APP。桥接目录必须按运行新建，不能复用旧完成标志。联合结果仅在两端 runner、桥接完成和各自清理记录均核验后计为通过。
