@@ -210,7 +210,7 @@ void main() {
   for (final size in [const Size(390, 900), const Size(1100, 900)]) {
     for (final brightness in Brightness.values) {
       testWidgets(
-        'focused invite input remains readable in $brightness at $size',
+        'invite matches auth field style and stays readable in $brightness at $size',
         (tester) async {
           tester.view.physicalSize = size;
           tester.view.devicePixelRatio = 1;
@@ -244,6 +244,22 @@ void main() {
           final invite = field('e2e-invite-input');
           await tester.ensureVisible(invite);
           await tester.pumpAndSettle();
+          Container surface(Finder input) => tester
+              .widgetList<Container>(
+                find.ancestor(of: input, matching: find.byType(Container)),
+              )
+              .firstWhere(
+                (widget) =>
+                    widget.decoration is BoxDecoration &&
+                    (widget.decoration! as BoxDecoration).border != null,
+              );
+          final idleSurface = surface(invite);
+          final handle = field('e2e-handle-input');
+          // Invitation and Handle share the actual field surface and geometry,
+          // including desktop/mobile sizing, rather than just matching tokens.
+          expect(idleSurface.decoration, surface(handle).decoration);
+          expect(idleSurface.constraints, surface(handle).constraints);
+          expect(idleSurface.padding, surface(handle).padding);
           final beforeFocus = tester.getRect(invite);
           await tester.enterText(invite, 'ABC123');
           await tester.pumpAndSettle();
@@ -282,6 +298,17 @@ void main() {
             (luminances.last + .05) / (luminances.first + .05),
             greaterThanOrEqualTo(4.5),
           );
+          expect(input.controller!.text, 'ABC123');
+          final focusedSurface = surface(invite);
+          expect(
+            (focusedSurface.decoration! as BoxDecoration).color,
+            (idleSurface.decoration! as BoxDecoration).color,
+          );
+          await tester.ensureVisible(handle);
+          await tester.showKeyboard(handle);
+          await tester.pumpAndSettle();
+          expect(focusedSurface.decoration, surface(handle).decoration);
+          expect(input.style, tester.widget<CupertinoTextField>(handle).style);
           expect(input.controller!.text, 'ABC123');
           expect(tester.takeException(), isNull);
         },

@@ -21,16 +21,16 @@ scrolls independently when height, the keyboard or enlarged text requires it.
 The language action remains outside that scroll area. Platform safe areas and
 the existing Android system-navigation clearance remain applied.
 
-On phones the login page uses the same flat liquid glass as the app shell
-(reference revision of 2026-09-29, 20:37): the glow canvas, a divider-free
-header with the brand and a glass tenant pill (租户 above the active name),
-a glass entry track whose chosen segment is a lens, 50-unit glass fields with
-a 2-unit accent focus ring, a glass "send code" pill inside the OTP field,
-glass local-identity rows without the inner divider, and 50-unit pill buttons.
-Narrow desktop windows keep the flat compact layout.
-Focused shared glass fields composite their lens tint onto the field surface
-before painting the outer focus ring. The ring must not tint the field interior
-or obscure input text in either appearance; focusing preserves field bounds.
+On phones the login header and navigation retain the app shell's flat liquid
+glass: a divider-free brand/tenant header, lens entry track, local-identity rows
+and pill actions. Phone, Handle, email, OTP and invitation inputs all reuse
+`OnboardingOutlinedField`: labels and optional invitation hints sit above the
+field, with a 50-unit minimum height and 16-unit radius on phones (38 and 6 on
+wider layouts). The theme surface remains opaque and unchanged on focus; only
+the themed border becomes stronger. Invitation input has the same text size,
+spacing, fill and focus treatment as the other authentication fields. The
+send-code action remains inside the OTP field. Field bounds stay stable when
+focused, and text remains readable in both appearances.
 
 The two entry segments show either the capability-driven registration form or
 the local identity list. They use `OnboardingState.entryMode` and

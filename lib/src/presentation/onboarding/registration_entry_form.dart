@@ -4,11 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/app_transport_failure.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../../l10n/l10n.dart';
-import '../shared/awiki_me_design.dart';
-import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../recovery/pending_handle_recovery_entry.dart';
 import 'onboarding_provider.dart';
+import 'onboarding_outlined_field.dart';
 import 'registration_entry_provider.dart';
 
 /// Inline invitation and validation details for the fixed auth form.
@@ -62,32 +61,15 @@ class RegistrationEntryForm extends ConsumerWidget {
             Text(l10n.onboardingInviteHandleHint),
             const SizedBox(height: 8),
           ],
-          context.awikiResponsive.usesDesktopLayout
-              ? _RegistrationMacInviteField(
-                  controller: inviteController,
-                  label: l10n.onboardingInviteCode,
-                  placeholder: l10n.onboardingInviteCode,
-                  labelHint: showInviteHandleHint
-                      ? null
-                      : l10n.onboardingShortHandleInviteHint,
-                )
-              : AppTextField(
-                  controller: inviteController,
-                  label: l10n.onboardingInviteCode,
-                  labelTrailing: showInviteHandleHint
-                      ? null
-                      : Text(
-                          l10n.onboardingShortHandleInviteHint,
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                            color: context.awikiTheme.secondaryText,
-                            fontSize: context.awikiResponsive.metaSm,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                  placeholder: l10n.onboardingInviteCode,
-                  semanticsIdentifier: 'e2e-invite-input',
-                ),
+          OnboardingOutlinedField(
+            controller: inviteController,
+            label: l10n.onboardingInviteCode,
+            placeholder: l10n.onboardingInviteCode,
+            labelHint: showInviteHandleHint
+                ? null
+                : l10n.onboardingShortHandleInviteHint,
+            semanticsIdentifier: 'e2e-invite-input',
+          ),
           const SizedBox(height: 4),
         ],
         if (state.check?.decision == 'unavailable')
@@ -127,85 +109,6 @@ class RegistrationEntryForm extends ConsumerWidget {
               style: const TextStyle(color: CupertinoColors.systemRed),
             ),
           ),
-      ],
-    );
-  }
-}
-
-class _RegistrationMacInviteField extends StatelessWidget {
-  const _RegistrationMacInviteField({
-    required this.controller,
-    required this.label,
-    required this.placeholder,
-    this.labelHint,
-  });
-
-  final TextEditingController controller;
-  final String label;
-  final String placeholder;
-  final String? labelHint;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: context.awikiTheme.title,
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-            if (labelHint != null)
-              Flexible(
-                child: Text(
-                  labelHint!,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    color: context.awikiTheme.secondaryText,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 9),
-        Container(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: context.awikiTheme.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: context.awikiTheme.border),
-          ),
-          alignment: Alignment.center,
-          child: Semantics(
-            identifier: 'e2e-invite-input',
-            textField: true,
-            child: CupertinoTextField(
-              controller: controller,
-              placeholder: placeholder,
-              decoration: null,
-              padding: EdgeInsets.zero,
-              style: TextStyle(
-                color: context.awikiTheme.title,
-                fontSize: 14,
-                height: 1.2,
-              ),
-              placeholderStyle: TextStyle(
-                color: context.awikiTheme.tertiaryText,
-                fontSize: 14,
-                height: 1.2,
-              ),
-            ),
-          ),
-        ),
       ],
     );
   }

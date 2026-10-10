@@ -31,6 +31,7 @@ import '../shared/widgets/app_widgets.dart';
 import '../shared/widgets/awiki_glass_controls.dart';
 import '../recovery/pending_handle_recovery_entry.dart';
 import 'onboarding_provider.dart';
+import 'onboarding_outlined_field.dart';
 import 'registration_entry_provider.dart';
 import 'registration_entry_form.dart';
 import 'identity_method_picker.dart';

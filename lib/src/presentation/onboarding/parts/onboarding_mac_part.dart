@@ -934,7 +934,7 @@ class _MacRegisterForm extends StatelessWidget {
         children: <Widget>[
           _MacAuthHint(text: context.l10n.onboardingNoVerificationHint),
           const SizedBox(height: 18),
-          _MacOutlinedField(
+          OnboardingOutlinedField(
             controller: phoneController,
             semanticsIdentifier: 'e2e-phone-input',
             label: context.l10n.onboardingPhone,
@@ -943,7 +943,7 @@ class _MacRegisterForm extends StatelessWidget {
             prefix: const _MacPhonePrefix(),
           ),
           const SizedBox(height: 16),
-          _MacOutlinedField(
+          OnboardingOutlinedField(
             controller: handleController,
             semanticsIdentifier: 'e2e-handle-input',
             label: context.l10n.onboardingHandle,
@@ -966,7 +966,7 @@ class _MacRegisterForm extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          _MacOutlinedField(
+          OnboardingOutlinedField(
             controller: phoneController,
             semanticsIdentifier: 'e2e-phone-input',
             label: context.l10n.onboardingPhone,
@@ -975,7 +975,7 @@ class _MacRegisterForm extends StatelessWidget {
             prefix: const _MacPhonePrefix(),
           ),
           const SizedBox(height: 16),
-          _MacOutlinedField(
+          OnboardingOutlinedField(
             controller: handleController,
             semanticsIdentifier: 'e2e-handle-input',
             label: context.l10n.onboardingHandle,
@@ -983,7 +983,7 @@ class _MacRegisterForm extends StatelessWidget {
             icon: CupertinoIcons.at,
           ),
           const SizedBox(height: 16),
-          _MacOutlinedField(
+          OnboardingOutlinedField(
             controller: otpController,
             semanticsIdentifier: 'e2e-otp-input',
             label: context.l10n.onboardingOtp,
@@ -1033,7 +1033,7 @@ class _MacRegisterForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        _MacOutlinedField(
+        OnboardingOutlinedField(
           controller: handleController,
           semanticsIdentifier: 'e2e-handle-input',
           label: context.l10n.onboardingHandle,
@@ -1041,7 +1041,7 @@ class _MacRegisterForm extends StatelessWidget {
           icon: CupertinoIcons.at,
         ),
         const SizedBox(height: 16),
-        _MacOutlinedField(
+        OnboardingOutlinedField(
           controller: emailController,
           semanticsIdentifier: 'e2e-email-input',
           label: context.l10n.onboardingEmail,
@@ -1103,134 +1103,6 @@ class _MacAuthHint extends StatelessWidget {
   }
 }
 
-class _MacOutlinedField extends StatefulWidget {
-  const _MacOutlinedField({
-    required this.controller,
-    required this.label,
-    required this.placeholder,
-    this.semanticsIdentifier,
-    this.icon,
-    this.keyboardType,
-    this.prefix,
-    this.suffix,
-  });
-
-  final TextEditingController controller;
-  final String label;
-  final String placeholder;
-  final String? semanticsIdentifier;
-  final IconData? icon;
-  final TextInputType? keyboardType;
-  final Widget? prefix;
-  final Widget? suffix;
-
-  @override
-  State<_MacOutlinedField> createState() => _MacOutlinedFieldState();
-}
-
-class _MacOutlinedFieldState extends State<_MacOutlinedField> {
-  bool _focused = false;
-  final FocusNode _focusNode = FocusNode();
-
-  @override
-  void dispose() {
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final phone = context.awikiResponsive.isPhone;
-    final fontSize = phone ? 16.0 : 14.0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        _MacFieldLabel(widget.label),
-        const SizedBox(height: 6),
-        Focus(
-          onFocusChange: (value) => setState(() => _focused = value),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _focusNode.requestFocus,
-            child: Container(
-              constraints: BoxConstraints(minHeight: phone ? 50 : 38),
-              padding: phone
-                  ? const EdgeInsets.fromLTRB(14, 7, 7, 7)
-                  : const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              // Focus draws an ink edge; the fill stays paper.
-              decoration: _loginPaperDecoration(
-                context,
-                radius: phone ? 16 : 6,
-                edge: _focused ? theme.title : null,
-                edgeWidth: _focused && phone ? 1.5 : 1,
-              ),
-              child: Row(
-                children: <Widget>[
-                  if (widget.prefix != null) ...<Widget>[
-                    widget.prefix!,
-                    const SizedBox(width: 8),
-                    Container(
-                      width: phone ? 0.5 : 1,
-                      height: 16,
-                      color: theme.border,
-                    ),
-                    const SizedBox(width: 8),
-                  ] else if (!phone &&
-                      widget.icon == CupertinoIcons.at) ...<Widget>[
-                    // Reference desktop fields: a small quiet "@" for the
-                    // handle and no glyph for code or email.
-                    Text(
-                      '@',
-                      style: TextStyle(
-                        color: theme.secondaryText,
-                        fontSize: 13,
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(width: 2),
-                  ] else if (phone && widget.icon != null) ...<Widget>[
-                    Icon(widget.icon, size: 18, color: theme.secondaryText),
-                    const SizedBox(width: 6),
-                  ],
-                  Expanded(
-                    child: Semantics(
-                      identifier: widget.semanticsIdentifier,
-                      child: CupertinoTextField(
-                        controller: widget.controller,
-                        focusNode: _focusNode,
-                        keyboardType: widget.keyboardType,
-                        placeholder: widget.placeholder,
-                        decoration: null,
-                        padding: EdgeInsets.zero,
-                        textAlignVertical: TextAlignVertical.center,
-                        style: TextStyle(
-                          color: theme.title,
-                          fontSize: fontSize,
-                          height: 1.2,
-                        ),
-                        placeholderStyle: TextStyle(
-                          color: theme.secondaryText,
-                          fontSize: fontSize,
-                          height: 1.2,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (widget.suffix != null) ...<Widget>[
-                    const SizedBox(width: 8),
-                    widget.suffix!,
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _MacPhonePrefix extends StatelessWidget {
   const _MacPhonePrefix();
 
@@ -1244,27 +1116,6 @@ class _MacPhonePrefix extends StatelessWidget {
             ? context.awikiTheme.title
             : context.awikiTheme.secondaryText,
         fontSize: phone ? 14 : 13,
-        fontWeight: FontWeight.w400,
-      ),
-    );
-  }
-}
-
-class _MacFieldLabel extends StatelessWidget {
-  const _MacFieldLabel(this.label);
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final phone = context.awikiResponsive.isPhone;
-    return Text(
-      label,
-      style: TextStyle(
-        color: phone
-            ? context.awikiTheme.title
-            : context.awikiTheme.secondaryText,
-        fontSize: phone ? 13 : 12,
         fontWeight: FontWeight.w400,
       ),
     );
