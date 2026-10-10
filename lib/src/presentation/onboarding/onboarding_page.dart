@@ -52,6 +52,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   bool _checkingLocalRecovery = false;
   bool _submittingRegistration = false;
   int _registrationSubmissionGeneration = 0;
+  bool _requestingOtp = false;
+  int _otpRequestGeneration = 0;
   int _recoveryLookupGeneration = 0;
   (String, String, String) _lastRecoveryLookupInputs = ('', '', '');
 
@@ -132,6 +134,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         registrationEntry: _registrationEntryForm(),
         registrationReady: true,
         registrationSubmitting: _submittingRegistration,
+        otpRequesting: _requestingOtp || otpCooldown.isSending,
         onboarding: onboarding,
         otpCooldown: otpCooldown,
         credentials: credentials,
@@ -169,7 +172,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   }
 
   Future<void> _submitRegister(BuildContext context) async {
-    if (_submittingRegistration) return;
+    if (_submittingRegistration || _requestingOtp) return;
     final generation = ++_registrationSubmissionGeneration;
     setState(() => _submittingRegistration = true);
     try {
@@ -283,6 +286,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     if (_submittingRegistration && !ref.read(onboardingProvider).isBusy) {
       _finishRegistrationSubmission(_registrationSubmissionGeneration);
       _registrationSubmissionGeneration++;
+    }
+    if (_requestingOtp && !ref.read(onboardingProvider).isBusy) {
+      _finishOtpRequest(_otpRequestGeneration);
+      _otpRequestGeneration++;
     }
   }
 
@@ -441,7 +448,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     handleController: handleController,
     inviteController: inviteController,
     phoneController: phoneController,
-    showLoading: !_submittingRegistration,
+    showLoading: !_submittingRegistration && !_requestingOtp,
   );
 
   void _onHandleChanged() {
@@ -477,21 +484,36 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         );
   }
 
-  void _requestOtp() async {
-    if (!await _prepareRegistrationVerification() || !mounted) return;
-    if (!awikiE2eEnabled) {
-      unawaited(
-        ref
+  Future<void> _requestOtp() async {
+    if (_requestingOtp || _submittingRegistration) return;
+    final generation = ++_otpRequestGeneration;
+    setState(() => _requestingOtp = true);
+    try {
+      if (!await _prepareRegistrationVerification() ||
+          !mounted ||
+          generation != _otpRequestGeneration) {
+        return;
+      }
+      if (!awikiE2eEnabled) {
+        await ref
             .read(onboardingProvider.notifier)
             .requestOtp(
               phone: _normalizedPhone,
               handle: _normalizedHandle,
               handleDomain: ref.read(activeAppTenantProvider).didHost,
-            ),
-      );
-      return;
+            );
+      } else {
+        _startE2eOtpRequestLoop();
+      }
+    } finally {
+      _finishOtpRequest(generation);
     }
-    _startE2eOtpRequestLoop();
+  }
+
+  void _finishOtpRequest(int generation) {
+    if (mounted && generation == _otpRequestGeneration && _requestingOtp) {
+      setState(() => _requestingOtp = false);
+    }
   }
 
   void _requestEmailActivation() async {

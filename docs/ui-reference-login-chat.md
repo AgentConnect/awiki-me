@@ -48,7 +48,10 @@ The login/register submit action keeps its loading indicator inside the button
 through both account precheck and the registration request. The button retains
 its label and dimensions, disables repeated submissions while waiting, and
 returns to an actionable state after a failed attempt. Loading for other form
-actions continues to follow their existing state.
+actions continues to follow their existing state. Sending an SMS code places
+its indicator inside the send-code control during account precheck and the
+send request. The control retains its dimensions and rejects repeated taps;
+success starts the existing resend countdown, while failure permits retry.
 
 ## Chat navigation and list
 

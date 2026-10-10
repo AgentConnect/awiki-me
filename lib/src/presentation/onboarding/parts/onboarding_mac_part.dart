@@ -10,6 +10,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.registrationEntry,
     required this.registrationReady,
     required this.registrationSubmitting,
+    required this.otpRequesting,
     required this.otpCooldown,
     required this.credentials,
     required this.phoneController,
@@ -33,6 +34,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final Widget registrationEntry;
   final bool registrationReady;
   final bool registrationSubmitting;
+  final bool otpRequesting;
   final SmsOtpCooldownState otpCooldown;
   final List<SessionIdentity> credentials;
   final TextEditingController phoneController;
@@ -103,6 +105,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
                           registrationEntry: registrationEntry,
                           registrationReady: registrationReady,
                           registrationSubmitting: registrationSubmitting,
+                          otpRequesting: otpRequesting,
                           otpCooldown: otpCooldown,
                           credentials: credentials,
                           phoneController: phoneController,
@@ -377,6 +380,7 @@ class _MacAuthCard extends ConsumerWidget {
     required this.registrationEntry,
     required this.registrationReady,
     required this.registrationSubmitting,
+    required this.otpRequesting,
     required this.otpCooldown,
     required this.credentials,
     required this.phoneController,
@@ -397,6 +401,7 @@ class _MacAuthCard extends ConsumerWidget {
   final Widget registrationEntry;
   final bool registrationReady;
   final bool registrationSubmitting;
+  final bool otpRequesting;
   final SmsOtpCooldownState otpCooldown;
   final List<SessionIdentity> credentials;
   final TextEditingController phoneController;
@@ -425,7 +430,10 @@ class _MacAuthCard extends ConsumerWidget {
           children: <Widget>[
             _LoginEntryTabs(
               showIdentities: showIdentities,
-              enabled: !onboarding.isBusy && !registrationSubmitting,
+              enabled:
+                  !onboarding.isBusy &&
+                  !registrationSubmitting &&
+                  !otpRequesting,
               registerLabel: context.l10n.onboardingRegister,
               identityLabel: context.l10n.onboardingLogin,
               onChanged: (value) => ref
@@ -454,7 +462,7 @@ class _MacAuthCard extends ConsumerWidget {
                   onboarding.hasRegistrationMethods) ...<Widget>[
                 _MacAuthMethodSelector(
                   onboarding: onboarding,
-                  enabled: !registrationSubmitting,
+                  enabled: !registrationSubmitting && !otpRequesting,
                   onAuthModeChanged: onAuthModeChanged,
                 ),
                 const SizedBox(height: 16),
@@ -464,6 +472,7 @@ class _MacAuthCard extends ConsumerWidget {
                 onboarding: onboarding,
                 registrationEntry: registrationEntry,
                 registrationSubmitting: registrationSubmitting,
+                otpRequesting: otpRequesting,
                 otpCooldown: otpCooldown,
                 phoneController: phoneController,
                 otpController: otpController,
@@ -864,6 +873,7 @@ class _MacRegisterForm extends StatelessWidget {
     required this.onboarding,
     required this.registrationEntry,
     required this.registrationSubmitting,
+    required this.otpRequesting,
     required this.otpCooldown,
     required this.phoneController,
     required this.otpController,
@@ -878,6 +888,7 @@ class _MacRegisterForm extends StatelessWidget {
   final OnboardingState onboarding;
   final Widget registrationEntry;
   final bool registrationSubmitting;
+  final bool otpRequesting;
   final SmsOtpCooldownState otpCooldown;
   final TextEditingController phoneController;
   final TextEditingController otpController;
@@ -983,6 +994,7 @@ class _MacRegisterForm extends StatelessWidget {
             icon: CupertinoIcons.number,
             suffix: _MacInlineAction(
               semanticsIdentifier: 'e2e-send-otp-button',
+              loading: otpRequesting,
               label: otpCooldown.isCoolingDown
                   ? context.l10n.onboardingResendOtpIn(
                       otpCooldown.remainingSeconds,
@@ -990,6 +1002,7 @@ class _MacRegisterForm extends StatelessWidget {
                   : context.l10n.onboardingSendOtp,
               onPressed:
                   onboarding.isBusy ||
+                      otpRequesting ||
                       registrationSubmitting ||
                       !otpCooldown.canSend
                   ? null
@@ -1007,7 +1020,10 @@ class _MacRegisterForm extends StatelessWidget {
             child: _MacPrimaryAction(
               label: context.l10n.onboardingPhoneLoginOrRegisterAction,
               loading: registrationSubmitting,
-              onPressed: onboarding.isBusy || !onboarding.canSubmitPhoneOtp
+              onPressed:
+                  onboarding.isBusy ||
+                      otpRequesting ||
+                      !onboarding.canSubmitPhoneOtp
                   ? null
                   : onSubmitRegister,
             ),
@@ -1262,25 +1278,27 @@ class _MacInlineAction extends StatelessWidget {
     required this.label,
     this.semanticsIdentifier,
     this.onPressed,
+    this.loading = false,
   });
 
   final String label;
   final String? semanticsIdentifier;
   final VoidCallback? onPressed;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
     return AppPressable(
-      onTap: onPressed,
+      onTap: loading ? null : onPressed,
       semanticLabel: label,
       semanticsIdentifier: semanticsIdentifier,
       tooltip: label,
-      enabled: onPressed != null,
+      enabled: !loading && onPressed != null,
       scaleOnPress: true,
       pressedScale: 0.98,
       borderRadius: BorderRadius.circular(7),
       builder: (context, state, child) => AnimatedOpacity(
-        opacity: !state.enabled
+        opacity: !state.enabled && !loading
             ? 0.48
             : state.pressed
             ? 0.72
@@ -1295,43 +1313,45 @@ class _MacInlineAction extends StatelessWidget {
                 height: 36,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 alignment: Alignment.center,
-                decoration: onPressed == null
+                decoration: onPressed == null && !loading
                     ? null
                     : _loginPaperDecoration(
                         context,
                         radius: 18,
                         edge: context.awikiTheme.title,
                       ),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    style: TextStyle(
-                      color: context.awikiTheme.title,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
-                      height: 1,
-                    ),
-                  ),
-                ),
+                child: FittedBox(fit: BoxFit.scaleDown, child: _label(context)),
               )
-            : FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  style: TextStyle(
-                    color: context.awikiTheme.title,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                    height: 1,
-                  ),
-                ),
-              ),
+            : FittedBox(fit: BoxFit.scaleDown, child: _label(context)),
       ),
     );
   }
+
+  Widget _label(BuildContext context) => Stack(
+    alignment: Alignment.center,
+    children: [
+      // Reserve the idle label's space so loading cannot resize the OTP field.
+      Opacity(
+        opacity: loading ? 0 : 1,
+        child: Text(
+          label,
+          maxLines: 1,
+          style: TextStyle(
+            color: context.awikiTheme.title,
+            fontSize: 13,
+            fontWeight: FontWeight.w400,
+            height: 1,
+          ),
+        ),
+      ),
+      if (loading)
+        CupertinoActivityIndicator(
+          key: const Key('onboarding-send-otp-loading'),
+          radius: context.awikiResponsive.isPhone ? 7 : 6,
+          color: context.awikiTheme.title,
+        ),
+    ],
+  );
 }
 
 class _MacPrimaryAction extends StatelessWidget {

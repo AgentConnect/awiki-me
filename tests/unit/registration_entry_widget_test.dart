@@ -26,6 +26,25 @@ class InviteSupport extends FakeOnboardingSupportService {
   Object? failure;
   String? boundPhone;
   Completer<void>? checkGate;
+  Completer<void>? otpGate;
+  int otpRequests = 0;
+
+  @override
+  Future<RegistrationOtpSendReceipt> sendRegistrationOtp({
+    required String phone,
+    required String handle,
+    required String domain,
+    required String fullHandle,
+  }) async {
+    otpRequests++;
+    await otpGate?.future;
+    return super.sendRegistrationOtp(
+      phone: phone,
+      handle: handle,
+      domain: domain,
+      fullHandle: fullHandle,
+    );
+  }
 
   @override
   Future<RegistrationCheck> checkRegistration({
@@ -83,6 +102,125 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  for (final size in <Size>[const Size(390, 1200), const Size(1100, 900)]) {
+    for (final outcome in ['precheck_failure', 'send_failure', 'success']) {
+      testWidgets('send-code loading stays inside control at $size: $outcome', (
+        tester,
+      ) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+        final gateway = FakeAwikiGateway()
+          ..failNextSendOtp = outcome == 'send_failure';
+        final support = InviteSupport(gateway)
+          ..checkGate = Completer<void>()
+          ..otpGate = Completer<void>()
+          ..fail = outcome == 'precheck_failure';
+        await tester.pumpWidget(
+          buildLocalizedTestApp(
+            home: const OnboardingPage(),
+            gateway: gateway,
+            providerOverrides: [
+              onboardingSupportServiceProvider.overrideWithValue(support),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.enterText(field('e2e-handle-input'), 'fixture');
+        await tester.enterText(field('e2e-phone-input'), '13800138000');
+        final button = find.byWidgetPredicate(
+          (w) =>
+              w is AppPressable &&
+              w.semanticsIdentifier == 'e2e-send-otp-button',
+        );
+        await tester.ensureVisible(button);
+        await tester.pumpAndSettle();
+        final originalRect = tester.getRect(button);
+        final send = tester.widget<AppPressable>(button).onTap!;
+        await tester.tap(button);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        void expectLoading() {
+          final spinner = find.byKey(const Key('onboarding-send-otp-loading'));
+          expect(spinner, findsOneWidget);
+          expect(
+            find.descendant(of: button, matching: spinner),
+            findsOneWidget,
+          );
+          expect(tester.getRect(button), originalRect);
+          expect(
+            originalRect.contains(tester.getRect(spinner).topLeft),
+            isTrue,
+          );
+          expect(
+            originalRect.contains(tester.getRect(spinner).bottomRight),
+            isTrue,
+          );
+          expect(tester.widget<AppPressable>(button).enabled, isFalse);
+          expect(tester.widget<AppPressable>(button).onTap, isNull);
+          expect(
+            find.descendant(
+              of: find.byKey(const Key('registration-entry-form')),
+              matching: find.byType(CupertinoActivityIndicator),
+            ),
+            findsNothing,
+          );
+        }
+
+        expectLoading();
+        expect(support.checks, 1);
+        expect(support.otpRequests, 0);
+        send();
+        await tester.tap(button);
+        await tester.pump();
+        expect(support.checks, 1);
+        support.checkGate!.complete();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+        if (outcome != 'precheck_failure') {
+          expectLoading();
+          expect(support.otpRequests, 1);
+          send();
+          await tester.tap(button);
+          await tester.pump();
+          expect(support.otpRequests, 1);
+        }
+        support.otpGate!.complete();
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('onboarding-send-otp-loading')),
+          findsNothing,
+        );
+        if (outcome == 'success') {
+          expect(gateway.sendOtpCalls, 1);
+          expect(find.textContaining('重新发送'), findsOneWidget);
+          expect(tester.widget<AppPressable>(button).enabled, isFalse);
+        } else {
+          expect(tester.widget<AppPressable>(button).enabled, isTrue);
+          expect(gateway.sendOtpCalls, outcome == 'precheck_failure' ? 0 : 1);
+          support.checkGate = Completer<void>();
+          await tester.tap(button);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 200));
+          expectLoading();
+          expect(support.checks, 2);
+          support.fail = true;
+          support.checkGate!.complete();
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const Key('onboarding-send-otp-loading')),
+            findsNothing,
+          );
+        }
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
   for (final size in <Size>[const Size(390, 1200), const Size(1100, 900)]) {
     for (final failPrecheck in <bool>[true, false]) {
       testWidgets(
