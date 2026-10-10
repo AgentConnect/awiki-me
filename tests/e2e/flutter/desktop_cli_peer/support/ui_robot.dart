@@ -10,6 +10,43 @@ class _DesktopAppRobot {
   final WidgetTester tester;
   String? failureCaseId;
 
+  // macOS disables Flutter frames when the test window is occluded. Bring
+  // only this test process forward; do not synthesize lifecycle transitions or
+  // allow a pending frame to bypass the observation deadline.
+  Future<void> _pumpFrame([Duration? duration]) async {
+    var activating = false;
+    Future<void> activateIfOccluded() async {
+      if (!Platform.isMacOS || tester.binding.framesEnabled || activating)
+        return;
+      activating = true;
+      try {
+        await Process.run('/usr/bin/swift', <String>[
+          '-e',
+          'import AppKit; if let app = NSRunningApplication(processIdentifier: $pid) { '
+              '_ = app.unhide(); _ = app.activate(options: [.activateAllWindows]) }',
+        ]).timeout(const Duration(seconds: 5));
+      } finally {
+        activating = false;
+      }
+    }
+
+    await activateIfOccluded();
+    final foreground = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      unawaited(activateIfOccluded().catchError((Object _) {}));
+    });
+    try {
+      await tester.pump(duration).timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      fail(
+        'Desktop frame did not arrive; lifecycle='
+        '${tester.binding.lifecycleState?.name} '
+        'frames_enabled=${tester.binding.framesEnabled}.',
+      );
+    } finally {
+      foreground.cancel();
+    }
+  }
+
   ProviderContainer get container => ProviderScope.containerOf(
     tester.element(find.byType(AppShell, skipOffstage: false)),
   );
@@ -287,7 +324,7 @@ class _DesktopAppRobot {
       description: 'chat message input',
     );
     await tester.testTextInput.receiveAction(TextInputAction.send);
-    await tester.pump();
+    await _pumpFrame();
     await _waitForComposerClear(input, description: 'text send completion');
   }
 
@@ -412,7 +449,7 @@ class _DesktopAppRobot {
       description: 'group sender-label anchor ${anchor.localId}',
     );
     await tester.ensureVisible(anchorContent);
-    await tester.pump();
+    await _pumpFrame();
 
     E2eObservation observe() {
       final sender = find.byKey(Key('chat-message-sender:${anchor.localId}'));
@@ -655,7 +692,7 @@ class _DesktopAppRobot {
       );
     }
     tester.testTextInput.enterText('@$handle');
-    await tester.pump();
+    await _pumpFrame();
     final filteredPanel = find.byKey(const Key('chat-mention-candidate-panel'));
     final filteredField = tester.widget<CupertinoTextField>(inputField);
     final candidate = find.byKey(
@@ -692,7 +729,7 @@ class _DesktopAppRobot {
           '@$expectedFullHandle · ${_compactMentionDid(expectedDid)}',
     );
     await tester.tap(candidate.first);
-    await tester.pump();
+    await _pumpFrame();
     final field = tester.widget<CupertinoTextField>(
       find.byType(CupertinoTextField).last,
     );
@@ -706,7 +743,7 @@ class _DesktopAppRobot {
       description: 'mention message input',
     );
     await tester.testTextInput.receiveAction(TextInputAction.send);
-    await tester.pump();
+    await _pumpFrame();
     await _waitForComposerClear(input, description: 'mention send completion');
     return '$selectedSurface $suffix';
   }
@@ -745,16 +782,16 @@ class _DesktopAppRobot {
         enabled: true,
       );
       await tester.tap(field);
-      await tester.pump();
+      await _pumpFrame();
       await tester.showKeyboard(field);
       tester.testTextInput.enterText(value);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
+      await _pumpFrame();
+      await _pumpFrame(const Duration(milliseconds: 200));
       final widget = tester.widget<CupertinoTextField>(field);
       if (widget.controller?.text == value) {
         return;
       }
-      await tester.pump(Duration(milliseconds: 150 * (attempt + 1)));
+      await _pumpFrame(Duration(milliseconds: 150 * (attempt + 1)));
     }
     final widget = tester.widget<CupertinoTextField>(field);
     final observed = widget.controller?.value ?? const TextEditingValue();
@@ -1032,7 +1069,7 @@ class _DesktopAppRobot {
       enabled: true,
     );
     await tester.enterText(input, query);
-    await tester.pump();
+    await _pumpFrame();
     final row = find.byKey(Key('conversation-row:$conversationId'));
     await pumpUntilFinder(row, description: 'exact searched conversation row');
     expect(
@@ -1052,7 +1089,7 @@ class _DesktopAppRobot {
       fail('Local conversation search opened a different canonical row.');
     }
     await tester.enterText(input, '');
-    await tester.pump();
+    await _pumpFrame();
     return selected;
   }
 
@@ -1065,7 +1102,7 @@ class _DesktopAppRobot {
     final appContainer = container;
     await navigateToContacts();
     await appContainer.read(friendsProvider.notifier).refresh();
-    await tester.pump();
+    await _pumpFrame();
     final rowKey = Key('contact-row:${peerDid.trim()}');
     final friendsPage = find.byType(FriendsPage);
     await pumpUntilFinder(friendsPage, description: 'contacts sidebar page');
@@ -1755,7 +1792,7 @@ class _DesktopAppRobot {
     ]) {
       tester.binding.handleAppLifecycleStateChanged(state);
     }
-    await tester.pump();
+    await _pumpFrame();
     await pumpUntilFinder(
       find.bySemanticsIdentifier('e2e-authenticated'),
       description: 'App shell after lifecycle reconnect',
@@ -1767,7 +1804,7 @@ class _DesktopAppRobot {
       transition: tester.binding.handleAppLifecycleStateChanged,
       action: action,
     );
-    await tester.pump();
+    await _pumpFrame();
     await pumpUntilFinder(
       find.bySemanticsIdentifier('e2e-authenticated'),
       description: 'App shell after hidden burst resume',
@@ -1782,7 +1819,7 @@ class _DesktopAppRobot {
     required AppSession session,
   }) async {
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
+    await _pumpFrame();
     await tester.pumpWidget(
       AwikiMeApp(bootstrap: bootstrap, providerOverrides: providerOverrides),
     );
@@ -1808,7 +1845,7 @@ class _DesktopAppRobot {
           ),
           (_) {},
         );
-    await tester.pump();
+    await _pumpFrame();
   }
 
   Future<void> tapOne(Finder finder, {required String description}) async {
@@ -1846,7 +1883,7 @@ class _DesktopAppRobot {
       description: '$description accepts pointer input',
     );
     await tester.tap(tapTarget);
-    await tester.pump();
+    await _pumpFrame();
   }
 
   Future<void> pumpUntilFinder(
@@ -1899,7 +1936,7 @@ class _DesktopAppRobot {
     Object? lastError;
     while (DateTime.now().isBefore(deadline)) {
       try {
-        await tester.pump(const Duration(milliseconds: 200));
+        await _pumpFrame(const Duration(milliseconds: 200));
         if (condition()) {
           return;
         }
@@ -1922,7 +1959,7 @@ class _DesktopAppRobot {
     final deadline = DateTime.now().add(timeout);
     String? lastPendingCode;
     while (DateTime.now().isBefore(deadline)) {
-      await tester.pump(const Duration(milliseconds: 200));
+      await _pumpFrame(const Duration(milliseconds: 200));
       final observation = observe();
       switch (observation.status) {
         case E2eObservationStatus.pass:
@@ -1963,7 +2000,7 @@ class _DesktopAppRobot {
   }) async {
     final deadline = DateTime.now().add(duration);
     while (DateTime.now().isBefore(deadline)) {
-      await tester.pump(const Duration(milliseconds: 200));
+      await _pumpFrame(const Duration(milliseconds: 200));
       final observation = observe();
       if (observation.status != E2eObservationStatus.pass) {
         await E2eFailureObservationWriter.recordFirst(
