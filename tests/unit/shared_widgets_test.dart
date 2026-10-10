@@ -1,5 +1,7 @@
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_top_bar.dart';
+import 'package:flutter/material.dart' show Theme;
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
@@ -10,6 +12,92 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
+  testWidgets('secondary and inline buttons use readable dark foregrounds', (
+    tester,
+  ) async {
+    final theme = AwikiMeTheme.forPlatform(
+      TargetPlatform.android,
+      brightness: Brightness.dark,
+    );
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: Theme(
+          data: theme.materialTheme,
+          child: CupertinoPageScaffold(
+            child: Column(
+              children: [
+                AppSecondaryButton(label: '次要操作', onPressed: () {}),
+                AppInlineActionButton(label: '行内操作', onPressed: () {}),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    for (final entry in [
+      ('次要操作', theme.tokens.title, theme.tokens.surface),
+      ('行内操作', theme.tokens.primary, theme.tokens.primarySoft),
+    ]) {
+      final label = find.text(entry.$1);
+      final foreground = tester.widget<Text>(label).style!.color!;
+      expect(foreground, entry.$2);
+      final container = tester.widget<Container>(
+        find.ancestor(of: label, matching: find.byType(Container)).first,
+      );
+      final background = (container.decoration! as BoxDecoration).color!;
+      expect(background, entry.$3);
+      final luminances = [
+        foreground.computeLuminance(),
+        background.computeLuminance(),
+      ]..sort();
+      expect(
+        (luminances.last + 0.05) / (luminances.first + 0.05),
+        greaterThan(4.5),
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shell and generic top bars use readable dark titles', (
+    tester,
+  ) async {
+    final theme = AwikiMeTheme.forPlatform(
+      TargetPlatform.android,
+      brightness: Brightness.dark,
+    );
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: Theme(
+          data: theme.materialTheme,
+          child: CupertinoPageScaffold(
+            child: Column(
+              children: [
+                AwikiMeShellTopBar(title: '消息', onQuickActionsTap: (_) {}),
+                const AwikiMeTopBar(title: '外观', leading: SizedBox.shrink()),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    for (final title in ['消息', '外观']) {
+      final color = tester.widget<Text>(find.text(title)).style!.color!;
+      expect(color, theme.tokens.title);
+      expect(
+        (color.computeLuminance() + 0.05) /
+            (theme.tokens.surface.computeLuminance() + 0.05),
+        greaterThan(4.5),
+      );
+    }
+    final icon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byKey(const Key('shell-quick-actions-button')),
+        matching: find.byType(Icon),
+      ),
+    );
+    expect(icon.color, theme.tokens.primary);
+  });
+
   testWidgets('AppListTile 默认使用资源右箭头图标', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(

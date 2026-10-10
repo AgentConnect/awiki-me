@@ -3,10 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 
 import '../../l10n/l10n.dart';
-import 'adaptive_overlays.dart';
 import 'awiki_me_design.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
+import 'widgets/awiki_glass_controls.dart';
 
 class AppDialogScaffold extends StatelessWidget {
   const AppDialogScaffold({
@@ -62,17 +62,11 @@ class AppDialogScaffold extends StatelessWidget {
         effectiveHeightFraction;
     final effectiveBorderRadius =
         borderRadius ??
-        BorderRadius.circular(responsive.radius(responsive.isCompact ? 14 : 8));
-    if (responsive.isCompact && !compactCentered) {
-      return CompactBottomSheet(
-        maxWidth: maxWidth,
-        maxHeightFraction: effectiveHeightFraction,
-        horizontalMargin: horizontalPadding,
-        avoidKeyboard: avoidViewInsets,
-        surfaceColor: surfaceColor,
-        child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
-      );
-    }
+        BorderRadius.circular(
+          responsive.isPhone
+              ? 28
+              : responsive.radius(responsive.isCompact ? 14 : 8),
+        );
     return SafeArea(
       minimum: EdgeInsets.symmetric(
         horizontal: horizontalPadding,
@@ -90,21 +84,29 @@ class AppDialogScaffold extends StatelessWidget {
               maxWidth: maxDialogWidth,
               maxHeight: maxDialogHeight,
             ),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: surfaceColor ?? theme.surface,
-                borderRadius: effectiveBorderRadius,
-                boxShadow: theme.overlayShadow,
-              ),
-              child: ClipRRect(
-                borderRadius: effectiveBorderRadius,
-                clipBehavior: clipBehavior,
-                child: Padding(
-                  padding: padding ?? EdgeInsets.zero,
-                  child: child,
-                ),
-              ),
-            ),
+            child: responsive.isPhone
+                ? AwikiFrostedSurface(
+                    borderRadius: effectiveBorderRadius,
+                    child: Padding(
+                      padding: padding ?? EdgeInsets.zero,
+                      child: child,
+                    ),
+                  )
+                : DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: surfaceColor ?? theme.surface,
+                      borderRadius: effectiveBorderRadius,
+                      boxShadow: theme.overlayShadow,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: effectiveBorderRadius,
+                      clipBehavior: clipBehavior,
+                      child: Padding(
+                        padding: padding ?? EdgeInsets.zero,
+                        child: child,
+                      ),
+                    ),
+                  ),
           ),
         ),
       ),
@@ -184,9 +186,15 @@ class AppDialogHeader extends StatelessWidget {
           semanticLabel: effectiveCloseLabel,
           tooltip: effectiveCloseLabel,
           size: responsive.displayScaled(responsive.isCompact ? 44 : 32),
-          backgroundColor: theme.subtleSurface,
-          borderColor: theme.border,
-          borderRadius: BorderRadius.circular(responsive.radius(10)),
+          backgroundColor: responsive.isPhone
+              ? theme.glassLens
+              : theme.subtleSurface,
+          borderColor: responsive.isPhone
+              ? theme.glassEdgeActive
+              : theme.border,
+          borderRadius: BorderRadius.circular(
+            responsive.isPhone ? 22 : responsive.radius(10),
+          ),
           child: Icon(
             CupertinoIcons.xmark,
             color: theme.secondaryText,
@@ -245,7 +253,9 @@ class AppConfirmationDialog extends StatelessWidget {
           ? const Alignment(0, -0.08)
           : Alignment.center,
       borderRadius: BorderRadius.circular(
-        responsive.radius(responsive.isCompact ? 20 : 8),
+        responsive.isPhone
+            ? 28
+            : responsive.radius(responsive.isCompact ? 20 : 8),
       ),
       child: Padding(
         padding: EdgeInsets.fromLTRB(

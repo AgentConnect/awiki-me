@@ -26,6 +26,21 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get chatMentionMember => '提及群成员';
+
+  @override
+  String get settingsAppearance => '外观';
+
+  @override
+  String get appearanceSystem => '跟随系统';
+
+  @override
+  String get appearanceLight => '浅色';
+
+  @override
+  String get appearanceDark => '深色';
+
+  @override
   String get identityMethodLabel => '身份方法';
 
   @override
@@ -454,6 +469,34 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get tenantMenuHint => '切换这个 App 使用的后端和 DID Host';
+
+  @override
+  String get tenantBuiltinTag => '默认配置';
+
+  @override
+  String get tenantCreateAndUse => '添加并使用';
+
+  @override
+  String get tenantDidHostCreateHint => 'DID Host 与租户的本地身份和存储作用域绑定，保存后不能修改。';
+
+  @override
+  String get tenantDeleteConfirmTitle => '删除租户配置？';
+
+  @override
+  String tenantDeleteConfirmMessage(Object tenantName, Object didHost) {
+    return '确定要删除 $tenantName（$didHost）吗？本机数据会保留，但这个租户不会再出现在切换列表中。';
+  }
+
+  @override
+  String get tenantDeleteAction => '删除租户';
+
+  @override
+  String tenantDeleteSemantic(Object tenantName) {
+    return '删除租户 $tenantName';
+  }
+
+  @override
   String get tenantCannotEditDefault => '默认 AWiki 租户不能编辑。接入其他后端请添加租户配置。';
 
   @override
@@ -630,7 +673,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shellNavSettings => '设置';
 
   @override
-  String get shellNavMe => '我';
+  String get shellNavMe => '我的';
 
   @override
   String get shellTasksPlaceholderTitle => '任务';
@@ -799,6 +842,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get friendsSearchGroupsPlaceholder => '搜索群组';
+
+  @override
+  String get conversationsFilterUnread => '未读';
 
   @override
   String get friendsTabAll => '全部';
@@ -1413,10 +1459,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get quickActionsTitle => '更多操作';
 
   @override
-  String get quickActionStartConversation => '发起新消息';
+  String get quickActionStartConversation => '发起聊天';
 
   @override
-  String get quickActionCreateGroup => '创建群聊';
+  String get quickActionCreateGroup => '发起群聊';
 
   @override
   String get quickActionJoinGroup => '加入群聊';
@@ -1463,10 +1509,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get identityInputSemantics => '输入 handle 或 DID';
 
   @override
-  String get identityInputPlaceholder => '输入 @handle / DID / Agent 地址';
+  String get identityInputPlaceholder => '搜索用户名或 DID';
 
   @override
-  String get identitySearchLabel => '匹配身份';
+  String get identitySearchLabel => '搜索';
 
   @override
   String get identityResolving => '匹配中...';
@@ -1598,10 +1644,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get groupMembersEmpty => '暂无成员快照，先执行一次刷新群详情与成员。';
 
   @override
-  String get groupCreateTitle => '创建群聊';
+  String get groupCreateTitle => '发起群聊';
 
   @override
   String get groupCreateAction => '创建';
+
+  @override
+  String get groupCreateSubmit => '创建群聊';
 
   @override
   String get groupRecoveryCompleted => '群身份已恢复';
@@ -3897,4 +3946,67 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get agentAvatarImageRejected =>
       '请选择 5 MB 内的 GIF 动图、PNG、JPEG 或静态 WebP。';
+
+  @override
+  String profileDevicePendingCount(int count) {
+    return '$count 个待审批';
+  }
+
+  @override
+  String get peerProfileDetailsSection => '资料';
+
+  @override
+  String get deviceJoinIssuedAtLabel => '发起时间';
+
+  @override
+  String get deviceJoinExpiresAtLabel => '过期时间';
+
+  @override
+  String get deviceJoinFingerprintLabel => '密钥指纹';
+
+  @override
+  String get deviceJoinRequestAsMember => '请求以普通设备加入';
+
+  @override
+  String get deviceJoinOpenHint => '打开请求不会授权。点击「开始验证」后，两台设备会各自显示 6 位验证码。';
+
+  @override
+  String get deviceJoinCompareTitle => '核对验证码';
+
+  @override
+  String get deviceJoinLocalSasLabel => '本机显示';
+
+  @override
+  String get commonLater => '稍后';
+
+  @override
+  String deviceJoinNoticeTitle(String device) {
+    return '$device 请求加入你的账户';
+  }
+
+  @override
+  String deviceJoinNoticeExpiry(String time) {
+    return '$time 前有效';
+  }
+
+  @override
+  String get deviceJoinStepRequest => '发起关联请求';
+
+  @override
+  String get deviceJoinStepRequestSub => '已发送给你的管理设备';
+
+  @override
+  String get deviceJoinStepVerify => '管理设备验证';
+
+  @override
+  String get deviceJoinStepVerifyWaiting => '等待对方点击「开始验证」';
+
+  @override
+  String get deviceJoinStepVerifySas => '确认两端 6 位验证码一致';
+
+  @override
+  String get deviceJoinStepJoin => '加入账户';
+
+  @override
+  String get deviceJoinStepJoinSub => '作为普通设备加入，之后可由管理设备授予管理权限';
 }

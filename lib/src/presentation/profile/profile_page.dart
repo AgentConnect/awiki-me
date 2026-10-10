@@ -23,10 +23,11 @@ import '../shared/formatters/display_formatters.dart';
 import '../shared/identity_profile_surface.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass.dart';
+import '../devices/devices_page.dart';
+import '../devices/devices_provider.dart';
 import 'profile_edit_page.dart';
 import 'profile_provider.dart';
-
-enum _CompactProfileSection { did, homepage }
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({
@@ -59,7 +60,6 @@ class ProfilePage extends ConsumerStatefulWidget {
 class _ProfilePageState extends ConsumerState<ProfilePage> {
   String? _loadedHomepageUrl;
   bool _requestedRelationshipCounts = false;
-  _CompactProfileSection? _compactExpandedSection;
 
   @override
   Widget build(BuildContext context) {
@@ -103,15 +103,22 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final responsive = context.awikiResponsive;
     final pageTitle = widget.title ?? context.l10n.profileMeTitle;
     final friendsState = ref.watch(friendsProvider);
+    final pendingDeviceRequests = ref.watch(
+      devicesProvider.select(
+        (state) =>
+            state.currentDeviceCanManage ? state.visibleJoinRequests.length : 0,
+      ),
+    );
     final profileBody = SelectionArea(
       child: ListView(
         shrinkWrap: widget.shrinkWrap,
         padding: responsive.isCompact
             ? EdgeInsets.fromLTRB(
-                0,
-                0,
-                0,
-                widget.embedded ? widget.bottomInset : 88,
+                16,
+                widget.onBack == null ? 16 : 4,
+                16,
+                (widget.embedded ? widget.bottomInset : 24) +
+                    AwikiFloatingTabBarInset.of(context),
               )
             : EdgeInsets.fromLTRB(
                 IdentityProfileLayout.contentInset(context),
@@ -128,42 +135,30 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   if (responsive.isCompact) ...<Widget>[
-                    _CompactProfileSummary(
-                      displayName: displayName,
-                      bio: profile.bio,
-                      tags: profile.tags,
-                      avatarUri: profile.avatarUri,
-                      userId: profile.did,
-                      isSaving: state.isSaving,
-                      onEdit: () => _showEditProfileDialog(context, profile),
-                      onAvatarEdit: () => showAvatarEditor(context),
-                      followersCount: friendsState.followers.length,
-                      followingCount: friendsState.following.length,
-                      onFollowingTap: widget.onFollowingTap,
-                      onFollowersTap: widget.onFollowersTap,
-                    ),
-                    const SizedBox(height: 8),
                     SelectionContainer.disabled(
-                      child: _CompactProfileNavigationGroup(
-                        did: profile.did,
+                      child: _CompactMeCard(
+                        displayName: displayName,
+                        handle: handleLabel,
+                        bio: profile.bio,
+                        avatarUri: profile.avatarUri,
+                        userId: profile.did,
+                        isSaving: state.isSaving,
+                        onEdit: () => _showEditProfileDialog(context, profile),
+                        onAvatarEdit: () => showAvatarEditor(context),
+                        followersCount: friendsState.followers.length,
+                        followingCount: friendsState.following.length,
+                        onFollowingTap: widget.onFollowingTap,
+                        onFollowersTap: widget.onFollowersTap,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    SelectionContainer.disabled(
+                      child: _CompactMeLinks(
                         homepageUrl: homepageUrl,
-                        didTitle: 'DID',
-                        homepageTitle: context.l10n.profileHomepageLabel,
-                        settingsTitle: context.l10n.settingsTitle,
-                        expandedSection: _compactExpandedSection,
-                        onDidTap: () => setState(
-                          () => _compactExpandedSection =
-                              _compactExpandedSection ==
-                                  _CompactProfileSection.did
-                              ? null
-                              : _CompactProfileSection.did,
-                        ),
-                        onHomepageTap: () => setState(
-                          () => _compactExpandedSection =
-                              _compactExpandedSection ==
-                                  _CompactProfileSection.homepage
-                              ? null
-                              : _CompactProfileSection.homepage,
+                        pendingDeviceRequests: pendingDeviceRequests,
+                        onDevicesTap: () => AppNavigator.push<void>(
+                          context,
+                          (_) => const DevicesPage(),
                         ),
                         onOpenHomepage: () => _openHomepage(homepageUrl),
                         onSettingsTap: () => _openSettings(context),
@@ -292,7 +287,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                           child: Icon(
                             CupertinoIcons.chevron_left,
                             size: responsive.iconMd,
-                            color: theme.secondaryText,
+                            color: context.awikiTheme.title,
                           ),
                         ),
                       ),
@@ -425,228 +420,31 @@ class _CompactProfileFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
-    return ColoredBox(
+    // The root Me tab has no title bar: the profile card is the header.
+    return AwikiGlassBackdrop(
       key: const Key('shell-tab-page-surface'),
-      color: theme.background,
+      color: awikiCompactListBackground(context),
       child: Column(
         children: <Widget>[
-          DecoratedBox(
-            key: const Key('profile-compact-header'),
-            decoration: BoxDecoration(color: theme.surface),
-            child: AwikiMeTopBar(
-              title: title,
-              padding: EdgeInsets.symmetric(
-                horizontal: onBack == null ? 14 : 24,
-                vertical: 6,
+          if (onBack != null)
+            Padding(
+              key: const Key('profile-compact-header'),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: AwikiMeTopBar(
+                title: title,
+                padding: EdgeInsets.zero,
+                titleFontSize: awikiMeCompactTopBarTitleFontSize,
+                titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
+                titleHeight: awikiMeCompactTopBarTitleHeight,
+                leading: AwikiBackButton(
+                  key: const Key('profile-back-button'),
+                  onTap: onBack,
+                  semanticsLabel: context.l10n.commonBack,
+                ),
               ),
-              titleFontSize: awikiMeCompactTopBarTitleFontSize,
-              titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
-              titleHeight: awikiMeCompactTopBarTitleHeight,
-              leading: onBack == null
-                  ? const SizedBox.shrink()
-                  : TopBarActionButton(
-                      key: const Key('profile-back-button'),
-                      onTap: onBack,
-                      semanticsLabel: context.l10n.commonBack,
-                      tooltip: context.l10n.commonBack,
-                      child: Icon(
-                        CupertinoIcons.chevron_left,
-                        size: responsive.iconMd,
-                        color: theme.secondaryText,
-                      ),
-                    ),
             ),
-          ),
           Expanded(child: child),
         ],
-      ),
-    );
-  }
-}
-
-class _CompactProfileSummary extends StatelessWidget {
-  const _CompactProfileSummary({
-    required this.displayName,
-    required this.bio,
-    required this.tags,
-    required this.avatarUri,
-    required this.userId,
-    required this.isSaving,
-    required this.onEdit,
-    required this.onAvatarEdit,
-    required this.followersCount,
-    required this.followingCount,
-    required this.onFollowingTap,
-    required this.onFollowersTap,
-  });
-
-  final String displayName;
-  final String bio;
-  final List<String> tags;
-  final String? avatarUri;
-  final String userId;
-  final bool isSaving;
-  final VoidCallback onEdit;
-  final VoidCallback onAvatarEdit;
-  final int followersCount;
-  final int followingCount;
-  final VoidCallback? onFollowingTap;
-  final VoidCallback? onFollowersTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final visibleTags = tags
-        .map((tag) => tag.trim())
-        .where((tag) => tag.isNotEmpty)
-        .take(3)
-        .toList(growable: false);
-    return Container(
-      key: const Key('profile-compact-summary'),
-      color: theme.surface,
-      child: Column(
-        children: <Widget>[
-          SelectionContainer.disabled(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(32, 16, 16, 16),
-              child: Row(
-                children: [
-                  ProfileAvatar(
-                    key: const Key('profile-avatar'),
-                    onEdit: onAvatarEdit,
-                    seed: displayName,
-                    size: 72,
-                    avatarUri: avatarUri,
-                    userId: userId,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: AppPressable(
-                      key: const Key('profile-edit-button'),
-                      onTap: isSaving ? null : onEdit,
-                      semanticLabel: context.l10n.profileEditTitle,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  displayName,
-                                  key: const Key('profile-display-name'),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: theme.title,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w400,
-                                    height: 1.25,
-                                  ),
-                                ),
-                                if (bio.trim().isNotEmpty) ...<Widget>[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    bio.trim(),
-                                    key: const Key('profile-bio'),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: theme.secondaryText,
-                                      fontSize: 14,
-                                      height: 1.45,
-                                    ),
-                                  ),
-                                ],
-                                if (visibleTags.isNotEmpty) ...<Widget>[
-                                  const SizedBox(height: 10),
-                                  Wrap(
-                                    key: const Key('profile-tags'),
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: visibleTags
-                                        .map(
-                                          (tag) =>
-                                              _CompactProfileTag(label: tag),
-                                        )
-                                        .toList(growable: false),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          SizedBox(
-                            width: 44,
-                            height: 44,
-                            child: Center(
-                              child: Icon(
-                                CupertinoIcons.chevron_right,
-                                key: const Key('profile-edit-chevron'),
-                                size: 20,
-                                color: theme.secondaryText,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Container(
-            key: const Key('profile-statistics-top-divider'),
-            height: 1,
-            margin: const EdgeInsets.symmetric(horizontal: 24),
-            color: theme.border,
-          ),
-          SelectionContainer.disabled(
-            child: SizedBox(
-              height: 50,
-              child: _CompactProfileStatistics(
-                followersCount: followersCount,
-                followingCount: followingCount,
-                onFollowingTap: onFollowingTap,
-                onFollowersTap: onFollowersTap,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CompactProfileTag extends StatelessWidget {
-  const _CompactProfileTag({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: CupertinoColors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AwikiMePalette.actionBlue.withValues(alpha: 0.42),
-        ),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: theme.secondaryText,
-          fontSize: 12,
-          fontWeight: FontWeight.w400,
-          height: 1,
-        ),
       ),
     );
   }
@@ -719,292 +517,6 @@ String _compactCountWithSuffix(double value, String suffix) {
       ? fixed.substring(0, fixed.length - 2)
       : fixed;
   return '$compact$suffix';
-}
-
-class _CompactProfileNavigationGroup extends StatelessWidget {
-  const _CompactProfileNavigationGroup({
-    required this.did,
-    required this.homepageUrl,
-    required this.didTitle,
-    required this.homepageTitle,
-    required this.settingsTitle,
-    required this.expandedSection,
-    required this.onDidTap,
-    required this.onHomepageTap,
-    required this.onOpenHomepage,
-    required this.onSettingsTap,
-  });
-
-  final String did;
-  final String homepageUrl;
-  final String didTitle;
-  final String homepageTitle;
-  final String settingsTitle;
-  final _CompactProfileSection? expandedSection;
-  final VoidCallback onDidTap;
-  final VoidCallback onHomepageTap;
-  final VoidCallback onOpenHomepage;
-  final VoidCallback onSettingsTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final hasHomepage = homepageUrl.trim().isNotEmpty;
-    final didExpanded = expandedSection == _CompactProfileSection.did;
-    final homepageExpanded =
-        hasHomepage && expandedSection == _CompactProfileSection.homepage;
-    return SizedBox(
-      key: const Key('profile-navigation-group'),
-      width: double.infinity,
-      child: Column(
-        children: <Widget>[
-          Container(
-            key: const Key('profile-navigation-top-divider'),
-            height: 1,
-            color: theme.border,
-          ),
-          _CompactProfileNavigationRow(
-            key: const Key('profile-did-row'),
-            iconBoxKey: const Key('profile-did-icon-box'),
-            iconTargetKey: const Key('profile-did-icon-target'),
-            arrowKey: const Key('profile-did-arrow'),
-            icon: CupertinoIcons.link,
-            iconColor: AwikiMePalette.actionBlue,
-            title: didTitle,
-            arrowIcon: didExpanded
-                ? CupertinoIcons.chevron_down
-                : CupertinoIcons.chevron_right,
-            isExpanded: didExpanded,
-            onTap: onDidTap,
-          ),
-          if (didExpanded) _CompactProfileDidDetails(did: did),
-          Container(
-            key: const Key('profile-did-divider'),
-            height: 1,
-            color: theme.border,
-          ),
-          if (hasHomepage) ...<Widget>[
-            _CompactProfileNavigationRow(
-              key: const Key('profile-homepage-row'),
-              iconBoxKey: const Key('profile-homepage-icon-box'),
-              iconTargetKey: const Key('profile-homepage-icon-target'),
-              arrowKey: const Key('profile-homepage-arrow'),
-              icon: CupertinoIcons.globe,
-              iconColor: AwikiMePalette.actionBlue,
-              title: homepageTitle,
-              arrowIcon: homepageExpanded
-                  ? CupertinoIcons.chevron_down
-                  : CupertinoIcons.chevron_right,
-              isExpanded: homepageExpanded,
-              onTap: onHomepageTap,
-            ),
-            if (homepageExpanded)
-              _CompactProfileHomepageDetails(
-                homepageUrl: homepageUrl,
-                onOpenHomepage: onOpenHomepage,
-              ),
-            const SizedBox(
-              key: Key('profile-homepage-settings-gap'),
-              height: 8,
-            ),
-          ],
-          _CompactProfileNavigationRow(
-            key: const Key('profile-settings-row'),
-            iconBoxKey: const Key('profile-settings-icon-box'),
-            iconTargetKey: const Key('profile-settings-icon-target'),
-            arrowKey: const Key('profile-settings-arrow'),
-            icon: CupertinoIcons.gear,
-            iconColor: theme.secondaryText,
-            title: settingsTitle,
-            arrowIcon: CupertinoIcons.chevron_right,
-            onTap: onSettingsTap,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CompactProfileDidDetails extends StatelessWidget {
-  const _CompactProfileDidDetails({required this.did});
-
-  final String did;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    return ColoredBox(
-      key: const Key('profile-did-details'),
-      color: theme.subtleSurface,
-      child: SizedBox(
-        height: 84,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-          child: CopyableDidLine(
-            value: did,
-            displayValue: did,
-            maxLines: 4,
-            overflow: TextOverflow.ellipsis,
-            copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
-            copiedMessage: context.l10n.chatPeerInfoDidCopied,
-            textKey: const Key('profile-did-value'),
-            buttonKey: const Key('profile-copy-did-button'),
-            textStyle: TextStyle(
-              color: theme.title,
-              fontSize: 12,
-              height: 16 / 12,
-            ),
-            gap: 4,
-            buttonSize: 44,
-            iconSize: 20,
-            showButtonChrome: false,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CompactProfileHomepageDetails extends StatelessWidget {
-  const _CompactProfileHomepageDetails({
-    required this.homepageUrl,
-    required this.onOpenHomepage,
-  });
-
-  final String homepageUrl;
-  final VoidCallback onOpenHomepage;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    return ColoredBox(
-      key: const Key('profile-homepage-details'),
-      color: theme.subtleSurface,
-      child: SizedBox(
-        height: 64,
-        child: AppPressable(
-          onTap: onOpenHomepage,
-          semanticLabel: context.l10n.profileOpenHomepage,
-          borderRadius: BorderRadius.zero,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(36, 10, 16, 10),
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    homepageUrl,
-                    key: const Key('profile-homepage-value'),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: theme.primary,
-                      fontSize: 13,
-                      height: 20 / 13,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox.square(
-                  key: const Key('profile-homepage-action-target'),
-                  dimension: 44,
-                  child: Icon(
-                    CupertinoIcons.arrow_up_right_square,
-                    key: const Key('profile-homepage-action-icon'),
-                    color: theme.primary,
-                    size: 20,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CompactProfileNavigationRow extends StatelessWidget {
-  const _CompactProfileNavigationRow({
-    super.key,
-    required this.iconBoxKey,
-    required this.iconTargetKey,
-    required this.arrowKey,
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.arrowIcon,
-    required this.onTap,
-    this.isExpanded,
-  });
-
-  final Key iconBoxKey;
-  final Key iconTargetKey;
-  final Key arrowKey;
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final IconData arrowIcon;
-  final VoidCallback onTap;
-  final bool? isExpanded;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    return Semantics(
-      expanded: isExpanded,
-      child: ColoredBox(
-        color: theme.surface,
-        child: SizedBox(
-          height: 52,
-          child: AppPressable(
-            onTap: onTap,
-            semanticLabel: title,
-            borderRadius: BorderRadius.zero,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: <Widget>[
-                  SizedBox.square(
-                    key: iconTargetKey,
-                    dimension: 44,
-                    child: Center(
-                      child: Icon(
-                        icon,
-                        key: iconBoxKey,
-                        size: 22,
-                        color: iconColor,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: theme.title,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w400,
-                        height: 1.25,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    arrowIcon,
-                    key: arrowKey,
-                    size: 18,
-                    color: theme.tertiaryText,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _ProfileEditDialog extends StatelessWidget {
@@ -1217,6 +729,268 @@ class _ProfileStat extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Phone Me tab identity card: avatar, name, handle and bio, with the
+/// relationship counts kept as the card's footer.
+class _CompactMeCard extends StatelessWidget {
+  const _CompactMeCard({
+    required this.displayName,
+    required this.handle,
+    required this.bio,
+    required this.avatarUri,
+    required this.userId,
+    required this.isSaving,
+    required this.onEdit,
+    required this.onAvatarEdit,
+    required this.followersCount,
+    required this.followingCount,
+    required this.onFollowingTap,
+    required this.onFollowersTap,
+  });
+
+  final String displayName;
+  final String handle;
+  final String bio;
+  final String? avatarUri;
+  final String userId;
+  final bool isSaving;
+  final VoidCallback onEdit;
+
+  /// Tapping the avatar itself opens the avatar editor; the rest of the
+  /// card edits the profile.
+  final VoidCallback onAvatarEdit;
+  final int followersCount;
+  final int followingCount;
+  final VoidCallback? onFollowingTap;
+  final VoidCallback? onFollowersTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return AwikiGlassSurface(
+      key: const Key('profile-compact-summary'),
+      child: Column(
+        children: <Widget>[
+          AppPressable(
+            key: const Key('profile-edit-button'),
+            onTap: isSaving ? null : onEdit,
+            semanticLabel: context.l10n.profileEditTitle,
+            borderRadius: BorderRadius.circular(24),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 20, 10, 20),
+              child: Row(
+                children: <Widget>[
+                  ProfileAvatar(
+                    key: const Key('profile-avatar'),
+                    onEdit: onAvatarEdit,
+                    seed: displayName,
+                    size: 64,
+                    avatarUri: avatarUri,
+                    userId: userId,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          displayName,
+                          key: const Key('profile-display-name'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: theme.title,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w400,
+                            height: 1.3,
+                          ),
+                        ),
+                        if (handle.trim().isNotEmpty) ...<Widget>[
+                          const SizedBox(height: 2),
+                          Text(
+                            handle.startsWith('@') ? handle : '@$handle',
+                            key: const Key('profile-handle-value'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: theme.secondaryText,
+                              fontSize: 14,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                        if (bio.trim().isNotEmpty) ...<Widget>[
+                          const SizedBox(height: 2),
+                          Text(
+                            bio.trim(),
+                            key: const Key('profile-bio'),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: theme.secondaryText,
+                              fontSize: 14,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  SizedBox.square(
+                    dimension: 36,
+                    child: Icon(
+                      CupertinoIcons.chevron_right,
+                      key: const Key('profile-edit-chevron'),
+                      size: 18,
+                      color: theme.secondaryText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Container(
+            key: const Key('profile-statistics-top-divider'),
+            height: 0.5,
+            margin: const EdgeInsets.symmetric(horizontal: 18),
+            color: theme.glassEdgeActive,
+          ),
+          SizedBox(
+            height: 50,
+            child: _CompactProfileStatistics(
+              followersCount: followersCount,
+              followingCount: followingCount,
+              onFollowingTap: onFollowingTap,
+              onFollowersTap: onFollowersTap,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactMeLinks extends StatelessWidget {
+  const _CompactMeLinks({
+    required this.homepageUrl,
+    required this.pendingDeviceRequests,
+    required this.onDevicesTap,
+    required this.onOpenHomepage,
+    required this.onSettingsTap,
+  });
+
+  final String homepageUrl;
+  final int pendingDeviceRequests;
+  final VoidCallback onDevicesTap;
+  final VoidCallback onOpenHomepage;
+  final VoidCallback onSettingsTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return AwikiGlassSurface(
+      key: const Key('profile-navigation-group'),
+      padding: const EdgeInsets.all(4),
+      child: Column(
+        children: <Widget>[
+          _CompactMeLink(
+            key: const Key('profile-devices-row'),
+            icon: CupertinoIcons.device_laptop,
+            title: l10n.devicesTitle,
+            meta: pendingDeviceRequests > 0
+                ? l10n.profileDevicePendingCount(pendingDeviceRequests)
+                : null,
+            onTap: onDevicesTap,
+          ),
+          if (homepageUrl.isNotEmpty)
+            _CompactMeLink(
+              key: const Key('profile-homepage-row'),
+              icon: CupertinoIcons.globe,
+              title: l10n.profileHomepageLabel,
+              onTap: onOpenHomepage,
+            ),
+          _CompactMeLink(
+            key: const Key('profile-settings-row'),
+            icon: CupertinoIcons.gear,
+            title: l10n.settingsTitle,
+            onTap: onSettingsTap,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactMeLink extends StatelessWidget {
+  const _CompactMeLink({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.meta,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? meta;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return AppPressable(
+      onTap: onTap,
+      semanticLabel: title,
+      borderRadius: BorderRadius.circular(18),
+      builder: (context, state, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          color: state.pressed || state.hovered
+              ? theme.glassLens
+              : theme.glassLens.withValues(alpha: 0),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: child,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: SizedBox(
+          height: 52,
+          child: Row(
+            children: <Widget>[
+              Icon(icon, size: 20, color: theme.title),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: theme.title,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ),
+              if (meta != null) ...<Widget>[
+                Text(
+                  meta!,
+                  style: TextStyle(color: theme.secondaryText, fontSize: 13),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Icon(
+                CupertinoIcons.chevron_right,
+                size: 16,
+                color: theme.secondaryText,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

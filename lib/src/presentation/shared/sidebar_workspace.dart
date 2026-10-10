@@ -40,6 +40,8 @@ class AwikiSidebarWorkspace extends StatelessWidget {
   }
 }
 
+/// Reference desktop `.col-head`: a divider-free 52-unit row with a 16-unit
+/// title and the pane's action on the right.
 class AwikiSidebarHeader extends StatelessWidget {
   const AwikiSidebarHeader({super.key, required this.title, this.trailing});
 
@@ -50,14 +52,15 @@ class AwikiSidebarHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final type = theme.typographyFor(AwikiMeTypographyMode.expanded);
     return Container(
-      height: responsive.displayScaled(56),
-      padding: EdgeInsets.symmetric(horizontal: responsive.spacing(14)),
-      decoration: BoxDecoration(
-        color: theme.surface,
-        border: Border(bottom: BorderSide(color: theme.border)),
+      height: responsive.displayScaled(52),
+      padding: EdgeInsets.fromLTRB(
+        responsive.spacing(14),
+        responsive.displayScaled(6),
+        responsive.spacing(12),
+        0,
       ),
+      color: theme.surface,
       child: Row(
         children: <Widget>[
           Expanded(
@@ -65,7 +68,12 @@ class AwikiSidebarHeader extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: type.navTitle.copyWith(color: theme.title),
+              style: TextStyle(
+                color: theme.title,
+                fontSize: 16,
+                height: 1.3,
+                fontWeight: FontWeight.w400,
+              ),
             ),
           ),
           if (trailing != null) trailing!,

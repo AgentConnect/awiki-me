@@ -36,6 +36,9 @@ import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_desktop.dart';
+import '../shared/widgets/awiki_glass.dart';
+import '../shared/widgets/awiki_glass_controls.dart';
 import '../chat/chat_provider.dart';
 import 'agent_rename_dialog.dart';
 import 'agent_runtime_display.dart';
@@ -287,7 +290,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
                       child: Icon(
                         CupertinoIcons.chevron_left,
                         size: responsive.iconMd,
-                        color: theme.secondaryText,
+                        color: context.awikiTheme.title,
                       ),
                     ),
                     trailing: selected.isDaemon

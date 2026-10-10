@@ -58,37 +58,38 @@ class AwikiMeIconDefinition {
       selected ? selectedAssetName ?? assetName : assetName;
 }
 
+/// Navigation roles use the reference's own 24-unit line glyphs
+/// (`assets/icons/nav_*.svg`, 1.5 stroke) on both the desktop rail and the
+/// phone tab bar.
 class AwikiMeIconRegistry {
   static const Map<AwikiMeIconRole, AwikiMeIconDefinition> _definitions =
       <AwikiMeIconRole, AwikiMeIconDefinition>{
         AwikiMeIconRole.messages: AwikiMeIconDefinition(
-          fallback: CupertinoIcons.chat_bubble_2,
-          assetName: 'assets/icons/message_Inactive.svg',
-          opticalScale: 2.05,
+          fallback: CupertinoIcons.chat_bubble,
+          assetName: 'assets/icons/nav_chat.svg',
         ),
         AwikiMeIconRole.agents: AwikiMeIconDefinition(
-          fallback: CupertinoIcons.square_stack_3d_up_fill,
-          opticalScale: 0.92,
+          fallback: CupertinoIcons.square_stack_3d_up,
+          assetName: 'assets/icons/nav_agents.svg',
         ),
         AwikiMeIconRole.contacts: AwikiMeIconDefinition(
-          fallback: CupertinoIcons.person_2,
-          assetName: 'assets/icons/friend_Inactive.svg',
-          opticalScale: 1.9,
+          fallback: CupertinoIcons.person,
+          assetName: 'assets/icons/nav_contacts.svg',
         ),
         AwikiMeIconRole.tasks: AwikiMeIconDefinition(
           fallback: CupertinoIcons.checkmark_square,
+          assetName: 'assets/icons/nav_tasks.svg',
         ),
         AwikiMeIconRole.workbench: AwikiMeIconDefinition(
           fallback: CupertinoIcons.square_grid_2x2,
         ),
         AwikiMeIconRole.profile: AwikiMeIconDefinition(
-          fallback: CupertinoIcons.person,
-          assetName: 'assets/icons/me_Inactive.svg',
-          opticalScale: 2.6,
+          fallback: CupertinoIcons.person_crop_circle,
+          assetName: 'assets/icons/nav_me.svg',
         ),
         AwikiMeIconRole.settings: AwikiMeIconDefinition(
           fallback: CupertinoIcons.gear,
-          assetName: 'assets/icons/icon_settings.svg',
+          assetName: 'assets/icons/nav_settings.svg',
         ),
         AwikiMeIconRole.search: AwikiMeIconDefinition(
           fallback: CupertinoIcons.search,

@@ -282,6 +282,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     _setEntryMode(value);
   }
 
+  /// Browsing local identities only changes the visible pane. Verification
+  /// remains bound to the current registration target until an explicit reset.
+  void setVisibleEntryMode(String value) {
+    state = state.copyWith(entryMode: value);
+  }
+
   void setEntryModeFromLocalCredentials(List<SessionIdentity> credentials) {
     final nextMode = credentials.isEmpty ? 'register' : 'login';
     if (state.entryMode == nextMode) {

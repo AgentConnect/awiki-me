@@ -8,6 +8,7 @@ import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
 import 'package:awiki_me/src/presentation/recovery/pending_handle_recovery_entry.dart';
 import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +23,54 @@ final _continue = find.byKey(const Key('onboarding-continue-recovery'));
 final _retry = find.byKey(const Key('onboarding-recovery-lookup-retry'));
 
 void main() {
+  for (final size in [const Size(390, 1000), const Size(1100, 900)]) {
+    for (final action in [
+      HandleRecoveryAction.resume,
+      HandleRecoveryAction.activateIdentity,
+    ]) {
+      testWidgets('pending recovery $action is a secondary link at $size', (
+        tester,
+      ) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final run = await _LookupRun.open(tester);
+        run.core.results[_alice] = [_operation(_alice, action: action)];
+        await tester.enterText(run.handleField, 'alice');
+        await run.settleLookup();
+
+        final label = action == HandleRecoveryAction.activateIdentity
+            ? '继续进入消息'
+            : '继续上次恢复';
+        expect(_continue, findsOneWidget);
+        expect(tester.widget<AppPressableText>(_continue).semanticLabel, label);
+        expect(
+          find.descendant(
+            of: _continue,
+            matching: find.byType(AppPrimaryButton),
+          ),
+          findsNothing,
+        );
+        expect(tester.getSize(_continue).height, greaterThanOrEqualTo(44));
+        expect(tester.getSize(_continue).width, lessThan(300));
+        expect(find.text('登录/注册'), findsOneWidget);
+        expect(run.core.mutations, 0);
+
+        await run.tap(_continue);
+        await tester.pumpAndSettle();
+        final page = tester.widget<HandleRecoveryPage>(
+          find.byType(HandleRecoveryPage),
+        );
+        expect(page.initialHandle, _alice);
+        expect(page.autoRequestOtp, isFalse);
+        expect(run.core.mutations, 0);
+        expect(run.gateway.registerHandleCalls, 0);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
   test('terminal start-new-only history is not a pending resume entry', () {
     final progress = _operation(_alice);
     expect(
@@ -281,8 +330,15 @@ void main() {
       );
 
       old.complete([]);
-      await tester.pumpAndSettle();
-      await run.tap(find.text('登录/注册'));
+      // The newer target is still pending, so its button animation must remain
+      // active after the obsolete result arrives.
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+        find.byKey(const Key('onboarding-submit-loading')),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(find.text('登录/注册'));
+      await tester.tap(find.text('登录/注册'));
       await tester.pump();
       expect(
         run.core.lookups.where((handle) => handle == 'bob.awiki.me'),
@@ -455,13 +511,18 @@ class _LookupCore implements HandleRecoveryCorePort {
   }
 }
 
-HandleRecoveryProgress _operation(String handle) => HandleRecoveryProgress(
-  allowedActions: const [HandleRecoveryAction.resume],
+HandleRecoveryProgress _operation(
+  String handle, {
+  HandleRecoveryAction action = HandleRecoveryAction.resume,
+}) => HandleRecoveryProgress(
+  allowedActions: [action],
   operationId: 'operation-$handle',
   ownerIdentityId: 'owner-$handle',
   accountUserId: 'account-$handle',
   handle: handle,
-  lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+  lifecycleClass: action == HandleRecoveryAction.activateIdentity
+      ? HandleRecoveryLifecycleClass.applied
+      : HandleRecoveryLifecycleClass.localTransitionPending,
   impact: const HandleRecoveryImpact(
     localOrdinaryDataWillMigrate: true,
     otherDevicesMustRejoin: true,

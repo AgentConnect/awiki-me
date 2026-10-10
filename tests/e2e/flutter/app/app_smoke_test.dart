@@ -35,7 +35,7 @@ import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/startup_splash.dart';
-import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
@@ -61,6 +61,7 @@ import '../../../unit/test_support.dart' as test_support;
 import '../../../unit/app_update_provider_test.dart' show buildManifest;
 import '../../case_attestation.dart';
 import '../support/fake_app_bootstrap.dart';
+import 'onboarding_invite_surface_smoke.dart';
 
 final class _RecordingDesktopStartupPresentationService
     implements DesktopStartupPresentationService {
@@ -364,62 +365,36 @@ void main() {
     expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(OnboardingPage), findsOneWidget);
     expect(find.text('登录或注册'), findsWidgets);
+    expect(find.byKey(const Key('onboarding-entry-tabs')), findsOneWidget);
+    expect(
+      find.byKey(const Key('onboarding-mac-auth-method-tabs')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('auth-mode-phone')), findsOneWidget);
+    expect(find.byKey(const Key('auth-mode-email')), findsOneWidget);
+    expect(
+      find.byKey(const Key('onboarding-mac-credential-mode')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('onboarding-mac-phone-submit-action')),
+      findsOneWidget,
+    );
+    expect(find.text('登录/注册'), findsOneWidget);
     expect(find.text('下一步'), findsNothing);
-    expect(find.byType(CupertinoTextField), findsNWidgets(3));
-    expect(find.text('发送验证码'), findsOneWidget);
-    expect(harness.gateway.lastRegistrationOtpPhone, isNull);
-    if (find
-        .byKey(const Key('onboarding-mac-auth-method-tabs'))
-        .evaluate()
-        .isNotEmpty) {
-      expect(
-        find.byKey(const Key('onboarding-mac-auth-method-tabs')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const Key('auth-mode-phone')), findsOneWidget);
-      expect(find.byKey(const Key('auth-mode-email')), findsOneWidget);
-      expect(
-        find.byKey(const Key('onboarding-mac-credential-mode')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const Key('onboarding-mac-phone-submit-action')),
-        findsOneWidget,
-      );
-      expect(find.text('登录/注册'), findsOneWidget);
-      expect(find.text('下一步'), findsNothing);
-      final fields = find.byType(CupertinoTextField);
-      expect(fields, findsNWidgets(3));
-      await tester.enterText(fields.at(0), '13800138000');
-      await tester.enterText(fields.at(1), 'smoke-otp');
-      await tester.ensureVisible(find.text('发送验证码'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('发送验证码'));
-      await tester.pumpAndSettle();
-      expect(harness.gateway.lastRegistrationOtpPhone, '13800138000');
-      expect(harness.gateway.lastRegistrationOtpHandle, 'smoke-otp');
-      expect(harness.gateway.lastRegistrationOtpDomain, primaryTenantDomain);
-      expect(
-        harness.gateway.lastRegistrationOtpFullHandle,
-        'smoke-otp.$primaryTenantDomain',
-      );
-    } else {
-      expect(
-        find.byKey(const Key('onboarding-compact-auth-card')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const Key('onboarding-entry-tabs')), findsNothing);
-      expect(
-        find.byKey(const Key('onboarding-auth-mode-tabs')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const Key('onboarding-phone-submit-action')),
-        findsOneWidget,
-      );
-      expect(find.text('登录/注册'), findsOneWidget);
-      expect(find.text('下一步'), findsNothing);
-    }
+    final fields = find.byType(CupertinoTextField);
+    expect(fields, findsNWidgets(3));
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'smoke-otp');
+    await tester.tap(find.text('发送验证码'));
+    await tester.pump();
+    expect(harness.gateway.lastRegistrationOtpPhone, '13800138000');
+    expect(harness.gateway.lastRegistrationOtpHandle, 'smoke-otp');
+    expect(harness.gateway.lastRegistrationOtpDomain, primaryTenantDomain);
+    expect(
+      harness.gateway.lastRegistrationOtpFullHandle,
+      'smoke-otp.$primaryTenantDomain',
+    );
     expect(harness.gateway.listLocalCredentialsCalls, greaterThanOrEqualTo(1));
     expect(harness.realtimeGateway.isConnected, isFalse);
     await E2eCaseAttestationWriter.markPassed(
@@ -474,33 +449,33 @@ void main() {
         (tenant) => tenant.officialKey == AppTenantOfficialKey.secondary,
       );
       final secondaryRow = find.byKey(
-        Key('settings-tenant-option:${secondary.id}'),
+        Key('tenant-menu-option:${secondary.id}'),
       );
-      expect(find.byType(TenantManagementDialog), findsOneWidget);
-      expect(
-        find.descendant(
-          of: secondaryRow,
-          matching: find.byKey(Key('tenant-primary-managed:${secondary.id}')),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: secondaryRow, matching: find.byTooltip('编辑租户')),
-        findsNothing,
-      );
-      expect(
-        find.descendant(of: secondaryRow, matching: find.byTooltip('删除')),
-        findsNothing,
-      );
+      final menu = find.byKey(const Key('tenant-switcher-menu'));
+      expect(menu, findsOneWidget);
+      for (final tenant in initialRegistry.tenants.where(
+        (tenant) => tenant.isPrimaryTenant,
+      )) {
+        final row = find.byKey(Key('tenant-menu-option:${tenant.id}'));
+        expect(row, findsOneWidget);
+        expect(
+          find.descendant(of: row, matching: find.text(tenant.name)),
+          findsOneWidget,
+        );
+        expect(tester.widget<AppPressable>(row).onLongPress, isNull);
+        expect(
+          find.byKey(Key('tenant-menu-delete:${tenant.id}')),
+          findsNothing,
+        );
+      }
+      expect(find.byKey(const Key('tenant-name-field')), findsNothing);
 
-      await tester.tap(
-        find.descendant(of: secondaryRow, matching: find.byTooltip('使用')),
-      );
+      await tester.tap(secondaryRow);
       await tester.pumpAndSettle();
 
       expect(actions.useTenantCalls, 1);
       expect(actions.registry.activeTenant.id, secondary.id);
-      expect(find.byType(TenantManagementDialog), findsNothing);
+      expect(menu, findsNothing);
 
       await tester.pumpWidget(Container());
       await tester.pumpAndSettle();
@@ -1384,6 +1359,8 @@ void main() {
       expect(find.text('Hermes Personal Agent'), findsNothing);
       expect(find.byKey(const Key('mac-messages-unread-badge')), findsNothing);
       await _tapFirstFound(tester, <Finder>[
+        find.byKey(const Key('compact-nav-agents')),
+        find.byKey(const Key('desktop-rail-agents')),
         find.bySemanticsIdentifier('e2e-agents-tab'),
         find.bySemanticsLabel('智能体'),
         find.bySemanticsLabel('Agents'),
@@ -1465,6 +1442,8 @@ void main() {
       );
       await _pumpSmokeFrame(tester);
       await _tapFirstFound(tester, <Finder>[
+        find.byKey(const Key('compact-nav-agents')),
+        find.byKey(const Key('desktop-rail-agents')),
         find.bySemanticsIdentifier('e2e-agents-tab'),
         find.bySemanticsLabel('智能体'),
         find.bySemanticsLabel('Agents'),
@@ -1559,6 +1538,8 @@ void main() {
       await _pumpSmokeFrame(tester);
 
       await _tapFirstFound(tester, <Finder>[
+        find.byKey(const Key('compact-nav-agents')),
+        find.byKey(const Key('desktop-rail-agents')),
         find.bySemanticsIdentifier('e2e-agents-tab'),
         find.bySemanticsLabel('智能体'),
         find.bySemanticsLabel('Agents'),
@@ -1639,6 +1620,8 @@ void main() {
 
       expect(find.byType(AppShell), findsOneWidget);
       await _tapFirstFound(tester, <Finder>[
+        find.byKey(const Key('compact-nav-agents')),
+        find.byKey(const Key('desktop-rail-agents')),
         find.bySemanticsIdentifier('e2e-agents-tab'),
         find.bySemanticsLabel('智能体'),
         find.bySemanticsLabel('Agents'),
@@ -1658,6 +1641,8 @@ void main() {
       ]);
       await _pumpSmokeFrame(tester);
       await _tapFirstFound(tester, <Finder>[
+        find.byKey(const Key('compact-nav-agents')),
+        find.byKey(const Key('desktop-rail-agents')),
         find.bySemanticsIdentifier('e2e-agents-tab'),
         find.bySemanticsLabel('智能体'),
         find.bySemanticsLabel('Agents'),
@@ -2225,6 +2210,7 @@ void main() {
       }
     },
   );
+  registerInvitationSurfaceSmoke();
 }
 
 class _SmokeSkillOnboardingPort implements SkillOnboardingPort {

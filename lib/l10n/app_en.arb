@@ -174,6 +174,25 @@
       "tenantName": {}
     }
   },
+  "tenantMenuHint": "Switch the backend and DID host this app uses",
+  "tenantBuiltinTag": "Default",
+  "tenantCreateAndUse": "Add and use",
+  "tenantDidHostCreateHint": "The DID host is bound to this tenant's local identities and storage scope and can't be changed after saving.",
+  "tenantDeleteConfirmTitle": "Delete tenant configuration?",
+  "tenantDeleteConfirmMessage": "Delete {tenantName} ({didHost})? Local data stays on this device, but this tenant will no longer appear in the switcher.",
+  "@tenantDeleteConfirmMessage": {
+    "placeholders": {
+      "tenantName": {},
+      "didHost": {}
+    }
+  },
+  "tenantDeleteAction": "Delete tenant",
+  "tenantDeleteSemantic": "Delete tenant {tenantName}",
+  "@tenantDeleteSemantic": {
+    "placeholders": {
+      "tenantName": {}
+    }
+  },
   "tenantCannotEditDefault": "The default AWiki tenant cannot be edited. Add a tenant configuration for another backend.",
   "tenantCannotEditWithData": "This tenant already has local data. You can rename it, but the backend URL and DID host cannot be changed.",
   "tenantDidHostImmutable": "The DID host is bound to this tenant's local identities and storage scope. It cannot be changed for an existing tenant; add a new tenant configuration instead.",
@@ -302,6 +321,7 @@
   "friendsTitle": "Contacts",
   "friendsSearchPlaceholder": "Search contacts",
   "friendsSearchGroupsPlaceholder": "Search groups",
+  "conversationsFilterUnread": "Unread",
   "friendsTabAll": "All",
   "friendsTabFollowing": "Following",
   "friendsTabFollowers": "Followers",
@@ -492,6 +512,10 @@
   "settingsLanguageZhHans": "简体中文",
   "settingsLanguageEnglish": "English",
   "settingsDisplayAndWindow": "Display & window",
+  "settingsAppearance": "Appearance",
+  "appearanceSystem": "Follow system",
+  "appearanceLight": "Light",
+  "appearanceDark": "Dark",
   "settingsDisplayScale": "Interface scale",
   "settingsDisplayScaleReset": "Reset to 100%",
   "settingsWindowPlacementReset": "Reset window size and position",
@@ -590,8 +614,8 @@
   "settingsDeleteCredentialConfirmHint": "This does not delete the online identity or affect other devices. Deleted local history and end-to-end encryption keys cannot be restored by recovery or device join.",
   "settingsDeleteCredentialConfirmAction": "Sign out and delete data",
   "quickActionsTitle": "More actions",
-  "quickActionStartConversation": "New message",
-  "quickActionCreateGroup": "Create group chat",
+  "quickActionStartConversation": "Start chat",
+  "quickActionCreateGroup": "New group chat",
   "quickActionJoinGroup": "Join group chat",
   "quickActionFollowContact": "Follow contact",
   "followContactTitle": "Follow contact",
@@ -606,8 +630,8 @@
   "identityFollowContactAction": "Follow",
   "identityFollowContactNotice": "Confirm the identity to follow this contact or Agent.",
   "identityInputSemantics": "Enter a handle or DID",
-  "identityInputPlaceholder": "Enter @handle, DID, or Agent address",
-  "identitySearchLabel": "Resolve identity",
+  "identityInputPlaceholder": "Search username or DID",
+  "identitySearchLabel": "Search",
   "identityResolving": "Resolving...",
   "identitySubmitting": "Processing...",
   "identityQueryRequired": "Enter a handle or DID.",
@@ -674,8 +698,9 @@
   "groupRefreshSnapshot": "Refresh group details and members",
   "groupMembersTitle": "Members",
   "groupMembersEmpty": "No member snapshot yet. Refresh group details and members first.",
-  "groupCreateTitle": "Create group chat",
+  "groupCreateTitle": "New group chat",
   "groupCreateAction": "Create",
+  "groupCreateSubmit": "Create group",
   "groupRecoveryCompleted": "Group identity restored",
   "groupRecoveryPending": "Identity restored; {count} group updates are pending",
   "@groupRecoveryPending": {
@@ -847,6 +872,7 @@
   "chatViewAttachment": "View attachment",
   "chatAttachmentFileFallback": "File",
   "chatLoadingMentionCandidates": "Loading mention candidates...",
+  "chatMentionMember": "Mention a group member",
   "mentionCandidateBadgeUser": "User",
   "mentionCandidateBadgeAgent": "Agent",
   "mentionCandidateBadgeUnknown": "Unknown",
@@ -1708,5 +1734,33 @@
   "agentAvatarResponsibility": "Agent responsibility",
   "agentAvatarDescription": "Appearance description",
   "agentAvatarRegenerate": "Regenerate avatar",
-  "agentAvatarImageRejected": "Choose a GIF animation, PNG, JPEG or static WebP up to 5 MB."
+  "agentAvatarImageRejected": "Choose a GIF animation, PNG, JPEG or static WebP up to 5 MB.",
+  "profileDevicePendingCount": "{count} pending",
+  "@profileDevicePendingCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "peerProfileDetailsSection": "Details",
+  "deviceJoinIssuedAtLabel": "Requested",
+  "deviceJoinExpiresAtLabel": "Expires",
+  "deviceJoinFingerprintLabel": "Key fingerprint",
+  "deviceJoinRequestAsMember": "Requests to join as a regular device",
+  "deviceJoinOpenHint": "Opening a request does not authorize it. After you start verification, both devices show a 6-digit code.",
+  "deviceJoinCompareTitle": "Compare codes",
+  "deviceJoinLocalSasLabel": "Shown on this device",
+  "commonLater": "Later",
+  "deviceJoinNoticeTitle": "{device} wants to join your account",
+  "@deviceJoinNoticeTitle": {"placeholders": {"device": {"type": "String"}}},
+  "deviceJoinNoticeExpiry": "Valid until {time}",
+  "@deviceJoinNoticeExpiry": {"placeholders": {"time": {"type": "String"}}},
+  "deviceJoinStepRequest": "Send join request",
+  "deviceJoinStepRequestSub": "Sent to your managing device",
+  "deviceJoinStepVerify": "Managing device verifies",
+  "deviceJoinStepVerifyWaiting": "Waiting for “Start verification”",
+  "deviceJoinStepVerifySas": "Confirm both 6-digit codes match",
+  "deviceJoinStepJoin": "Join the account",
+  "deviceJoinStepJoinSub": "Joins as a regular device; a managing device can grant management later"
 }

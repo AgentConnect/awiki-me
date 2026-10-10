@@ -21,7 +21,7 @@
 | Handle | 账号用户名 / 用户名 handle | `e2e-handle-input` |
 | 验证码 | 验证码 / 输入验证码 | `e2e-otp-input` |
 | 发码 | 发送验证码；冷却中为「重新发送（Ns）」 | `e2e-send-otp-button` |
-| 提交 | 登录/注册 | `e2e-complete-login-button`（移动布局）；macOS 主按钮文案是「登录/注册」 |
+| 提交 | 登录/注册 | `onboarding-mac-phone-submit-action`（手机和桌面共享） |
 | 已有 Handle | 这个 Handle 已经存在 | |
 | 加入已有账户 | 将此设备加入已有账户 | |
 | 恢复 | 恢复 Handle | |
@@ -39,7 +39,6 @@
 | 智能体 | 智能体 | `e2e-agents-tab` / `desktop-rail-agents` |
 | 联系人 | 联系人 | `e2e-contacts-tab` / `desktop-rail-contacts` |
 | 任务 | 任务 | `desktop-rail-tasks` |
-| 工作台 | 工作台 | `desktop-rail-workbench` |
 | 设置 | 设置 | `e2e-settings-tab` / `desktop-rail-settings` |
 | 头像 | 左上头像 | `mac-me-rail-avatar` |
 | 退出当前测试身份 | 设置 → 退出登录 → 确认退出 | `settings-logout-row` |

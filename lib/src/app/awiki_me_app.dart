@@ -1,4 +1,6 @@
 import 'dart:async';
+
+import 'app_appearance.dart';
 import '../application/ports/agent_availability_port.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -85,6 +87,9 @@ class AwikiMeApp extends StatelessWidget {
         ),
         localePreferenceServiceProvider.overrideWithValue(
           bootstrap.localePreferenceService,
+        ),
+        appearancePreferenceServiceProvider.overrideWithValue(
+          bootstrap.appearancePreferenceService,
         ),
         displayScalePreferenceServiceProvider.overrideWithValue(
           bootstrap.displayScalePreferenceService,
@@ -388,21 +393,35 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
   }
 
   @override
+  void didChangePlatformBrightness() {
+    setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     final localeMode = ref.watch(appLocaleModeProvider);
     final displayScale = ref.watch(displayScaleProvider);
+    final brightness = resolveAppBrightness(
+      ref.watch(appAppearanceProvider),
+      WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    );
     final appTheme = AwikiMeTheme.forPlatform(
       defaultTargetPlatform,
       fontFamilyOverride: widget.testFontFamily,
+      brightness: brightness,
     );
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: AwikiMePalette.canvas,
-        statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: AwikiMePalette.canvas,
-        systemNavigationBarIconBrightness: Brightness.dark,
-        systemNavigationBarDividerColor: AwikiMePalette.canvas,
+      value: SystemUiOverlayStyle(
+        statusBarColor: appTheme.tokens.background,
+        statusBarIconBrightness: brightness == Brightness.dark
+            ? Brightness.light
+            : Brightness.dark,
+        statusBarBrightness: brightness,
+        systemNavigationBarColor: appTheme.tokens.background,
+        systemNavigationBarIconBrightness: brightness == Brightness.dark
+            ? Brightness.light
+            : Brightness.dark,
+        systemNavigationBarDividerColor: appTheme.tokens.background,
       ),
       child: CupertinoApp(
         navigatorKey: ref.watch(appNavigatorKeyProvider),

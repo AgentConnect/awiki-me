@@ -49,6 +49,7 @@ import '../../app/app_router.dart';
 import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
 import '../../application/attachment_preview_service.dart';
+import '../../application/display_scale_preference_service.dart';
 import '../../application/agent/group_agent_availability.dart';
 import '../../application/screenshot_failure.dart';
 import 'screenshot_permission_dialog.dart';
@@ -114,9 +115,11 @@ import '../shared/identity_profile_surface.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass.dart';
 import 'chat_mention_presentation.dart';
 import 'chat_provider.dart';
 import 'message_actions.dart';
+import '../shared/widgets/awiki_glass_controls.dart';
 
 part 'parts/chat_header_part.dart';
 part 'parts/chat_information_part.dart';
@@ -232,9 +235,9 @@ class _AttachmentDropOverlay extends StatelessWidget {
     return IgnorePointer(
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: AwikiMePalette.brandAccent.withValues(alpha: 0.20),
+          color: context.awikiTheme.primary.withValues(alpha: 0.20),
           border: Border.all(
-            color: AwikiMePalette.brandAccent,
+            color: context.awikiTheme.primary,
             width: macStyle ? 1.4 : 1.8,
           ),
           borderRadius: BorderRadius.circular(radius),
@@ -251,7 +254,7 @@ class _AttachmentDropOverlay extends StatelessWidget {
                   : responsive.spacing(12),
             ),
             decoration: BoxDecoration(
-              color: CupertinoColors.white,
+              color: context.awikiTheme.surface,
               borderRadius: BorderRadius.circular(
                 macStyle ? responsive.displayScaled(14) : responsive.radius(18),
               ),
@@ -268,7 +271,7 @@ class _AttachmentDropOverlay extends StatelessWidget {
               children: <Widget>[
                 Icon(
                   CupertinoIcons.paperclip,
-                  color: AwikiMePalette.brandAccent,
+                  color: context.awikiTheme.primary,
                   size: macStyle
                       ? responsive.displayScaled(20)
                       : responsive.iconMd,
@@ -281,7 +284,7 @@ class _AttachmentDropOverlay extends StatelessWidget {
                 Text(
                   context.l10n.chatAddAttachment,
                   style: TextStyle(
-                    color: AwikiMePalette.inkNeutral,
+                    color: context.awikiTheme.title,
                     fontWeight: FontWeight.w400,
                     fontSize: macStyle
                         ? responsive.displayScaled(14)
@@ -1425,8 +1428,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                 );
                           final senderAvatarUserId = message.isMine
                               ? ownProfile?.did ?? currentSessionDid
-                              : null;
+                              : message.senderDid.trim();
                           final showSenderLabel = _shouldShowSenderLabel(
+                            previous,
+                            message,
+                          );
+                          final continuesGroup = _continuesSenderGroup(
                             previous,
                             message,
                           );
@@ -1476,6 +1483,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                         senderAvatarUri: senderAvatarUri,
                                         senderAvatarUserId: senderAvatarUserId,
                                         showSenderLabel: showSenderLabel,
+                                        showAvatar: !continuesGroup,
                                         header: acpFinalTasks.isEmpty
                                             ? null
                                             : Column(
@@ -2369,17 +2377,17 @@ class _ChatViewState extends ConsumerState<ChatView> {
         : const <ChatMentionDraft>[];
     final block = _acpComposerBlock(conversation, validMentionDrafts);
     if (block != null) {
-      await showCupertinoDialog<void>(
-        context: context,
-        builder: (dialogContext) => CupertinoAlertDialog(
-          content: Text(acpBlockText(context, block)),
-          actions: [
-            CupertinoDialogAction(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(acpText(context, '知道了', 'OK')),
-            ),
-          ],
-        ),
+      await showAwikiGlassAlert<void>(
+        context,
+        alertKey: const Key('acp-composer-block-alert'),
+        message: acpBlockText(context, block),
+        actions: <AwikiAlertAction<void>>[
+          AwikiAlertAction<void>(
+            label: acpText(context, '知道了', 'OK'),
+            value: null,
+            tone: AwikiPillTone.primary,
+          ),
+        ],
       );
       return;
     }
@@ -3734,6 +3742,20 @@ class _ChatViewState extends ConsumerState<ChatView> {
         30;
   }
 
+  /// Reference `.msg.cont`: the same sender on the same side, with no time
+  /// divider between, continues the previous message's group.
+  bool _continuesSenderGroup(ChatMessage? previous, ChatMessage current) {
+    if (previous == null ||
+        previous.isGroupSystemEvent ||
+        current.isGroupSystemEvent ||
+        previous.isMine != current.isMine ||
+        _shouldShowDivider(previous, current)) {
+      return false;
+    }
+    return current.isMine ||
+        previous.senderDid.trim() == current.senderDid.trim();
+  }
+
   bool _shouldShowSenderLabel(ChatMessage? previous, ChatMessage current) {
     if (current.isGroupSystemEvent) {
       return false;
@@ -3762,9 +3784,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (isLastItem) {
       return 0;
     }
-    final defaultSpacing = macStyle
-        ? responsive.displayScaled(6)
-        : responsive.spacing(6);
+    // Reference `.stream` gap is 14; a same-sender follow-up (`.msg.cont`)
+    // tucks up to 6.
+    final defaultSpacing = _chatDesignPx(
+      responsive,
+      next != null && _continuesSenderGroup(current, next) ? 6 : 14,
+    );
     if (hasAgentProcessing) {
       return macStyle ? responsive.displayScaled(10) : responsive.spacing(10);
     }

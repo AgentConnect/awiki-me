@@ -981,6 +981,61 @@ void main() {
   });
 
   test(
+    'a delivered image showing the same file starts with its measured size',
+    () async {
+      final root = await Directory.systemTemp.createTemp('awiki-preview-');
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final image = File('${root.path}/sent.png');
+      await image.writeAsBytes(<int>[1, 2, 3]);
+      final probe = _ControlledImageDimensionProbe();
+      final service = AttachmentPreviewService(
+        cache: FileAttachmentCacheService(rootDirectory: () async => root),
+        imageDimensionProbe: probe,
+      );
+      addTearDown(service.dispose);
+      final pending = _message(
+        localPath: image.path,
+        localId: 'msg-awiki-me-1',
+        remoteId: 'msg-awiki-me-1',
+        attachmentId: 'msg-awiki-me-1',
+        filename: 'sent.png',
+        mimeType: 'image/png',
+      );
+      final pendingHandle = service.previewHandleFor(pending);
+      final measured = pendingHandle.changes.firstWhere(
+        (snapshot) => snapshot.dimensions != null,
+      );
+      probe.complete(
+        image.path,
+        AttachmentImageDimensions(pixelWidth: 1200, pixelHeight: 800),
+      );
+      await measured;
+
+      // Delivery swaps in the server attachment id but keeps the same file.
+      final delivered = _message(
+        localPath: image.path,
+        localId: 'msg-awiki-me-1',
+        remoteId: 'server-1',
+        attachmentId: 'server-attachment-1',
+        filename: 'sent.png',
+        mimeType: 'image/png',
+      );
+      final deliveredHandle = service.previewHandleFor(delivered);
+
+      expect(identical(deliveredHandle, pendingHandle), isFalse);
+      expect(deliveredHandle.snapshot.phase, AttachmentPreviewPhase.ready);
+      expect(
+        deliveredHandle.snapshot.dimensions,
+        AttachmentImageDimensions(pixelWidth: 1200, pixelHeight: 800),
+      );
+    },
+  );
+
+  test(
     'downloaded image is probed once after the local path is ready',
     () async {
       final root = await Directory.systemTemp.createTemp('awiki-preview-');

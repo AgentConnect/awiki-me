@@ -132,6 +132,7 @@ Rust im-core
 | conversation preview | Rust `im-core` conversation summary + `awiki-me` mapper/overlay | SDK snapshot、conversation patch、latest renderable core message projection | `ConversationListProvider`、conversation workspace |
 | control payload 会话预览可见性 | `awiki-me` mapper / realtime projection | SDK message 的 `body.text` + `payloadJson` | 只允许带显式可见文本的 control payload 更新 recents 预览；payload-only control 继续隐藏 |
 | `hidden`、`pinned`、`muted` | `awiki-me` `ProductLocalStore` | `ConversationService.setThreadHidden`、`hideConversationFromRecents`、`restoreConversationToRecents` | `ImCoreConversationService` 加载 overlay 后过滤、排序和展示 |
+| 会话列表类别筛选与搜索 | App 列表组件的临时展示状态 | 全部/未读/智能体/群组按钮与搜索输入 | 在现有会话集合上取交集后排序；未读只读 projected count，智能体复用 peer classifier，群组读取 canonical kind。不得删除 base row、写 hidden overlay 或改变 read state；筛选隐藏行不清除已打开详情的 canonical selection |
 | Direct `customTitle`、`avatarSeed` | `awiki-me` `ProductLocalStore` | `ProductLocalStore.upsertConversationOverlay` | `customTitle` 仅作为旧本地备注数据保留，不参与当前身份主名称解析；未来如恢复备注功能必须作为显式次级信息展示。`avatarSeed` 仍为 App overlay |
 | 当前账号 Agent inventory topology | User Service 权威、AWiki Me `ProductLocalStore` v4 展示 cache | 版本化完整快照；App 只通过 `replaceAgentInventorySnapshot` 单事务替换 | Agent 页面；topology 不覆盖独立 status，也不替代 Core committed Agent control projection |
 | 当前账号 Agent latest status | User Service 权威、AWiki Me `ProductLocalStore` v4 展示 cache | 独立 status version；`replaceAgentStatusSnapshot` 单事务替换 | Agent 页面将 status 按 `agentDid` 叠加到 topology；status 不能改变 `activeState` 或重新激活 Agent |
@@ -232,7 +233,7 @@ Handle 或 thread 进行猜测合并。snapshot message 自身不再独立推断
 
 内联图片统一使用附件卡片外框；没有 caption 时只省略文本和分隔线，不允许退化为直接叠在聊天背景上的透明裸图。图片解码后的像素宽高必须先按当前屏幕 device pixel ratio 换算为自然逻辑尺寸，在 `compact 300 / desktop 320` 的媒体上限和实际父约束内等比缩小，不得为了占满上限而无条件放大。只有图片最长边小于 `120` 逻辑像素时才允许等比补到最小预览尺寸；极端长宽比继续保留完整内容，并由至少 `44×44` 的媒体外框保证可操作性。尺寸尚未探测完成时使用 `240×180` 的稳定占位。带 caption 的附件宽度由 caption 与媒体各自的自然宽度取较大值，分隔线只跟随最终宽度，不得参与或强制扩大宽度。
 
-图片与文字的操作所有权必须分离：桌面端在图片命中区右键打开指针位置菜单，compact 端在图片命中区长按打开 `CompactActionSheet`，两端都只提供复制图片和另存为；单击图片仍沿用原附件预览/打开链路。复制和另存为只能读取 `AttachmentPreviewService` 已解析出的本地预览资源，不允许绕过 core/cache 根据 object URI 直接联网。图片区域继续由 `SelectionContainer.disabled` 排除，不能进入消息文字选区或文字菜单。
+图片与文字的操作所有权必须分离：桌面端在图片命中区右键打开指针位置菜单，compact 端在图片命中区长按打开居中的玻璃操作菜单（`AppDropMenu`），两端都只提供复制图片和另存为；单击图片仍沿用原附件预览/打开链路。复制和另存为只能读取 `AttachmentPreviewService` 已解析出的本地预览资源，不允许绕过 core/cache 根据 object URI 直接联网。图片区域继续由 `SelectionContainer.disabled` 排除，不能进入消息文字选区或文字菜单。
 
 每条普通消息气泡使用一个消息级 `SelectionArea` 统一拥有纯文本、Mention、跨段 Markdown、附件 caption 和文件名的连续选择与高亮，App 不维护第二套选区。消息操作框架拥有动作目录、菜单打开时冻结的真实消息/会话/选区上下文、异步执行防重、菜单关闭策略与成功/失败反馈；桌面紧凑菜单和移动端自适应工具栏只是同一动作目录的平台适配器。新增回复、引用、转发、收藏、撤回或删除时必须扩展该目录和执行边界，不得在消息 Widget 中再建立独立菜单链路。
 
@@ -576,6 +577,15 @@ Peer 名称只由纯 `PeerDisplayNameResolver` 和 `peerDisplayNameProvider`
 同一 ID-scoped provider，并通过 `peerAvatarUri` 复用相同头像投影；Widget 不得直接显示历史 `senderName`、credential alias、`customTitle`，也不得自己重写 DID/Handle 回退或使用脱离 Persona 的候选头像。会话本地 bundle
 与 cached Persona profile 完成后才发布首个内容帧，避免
 `Unknown/Handle -> 昵称` 闪烁。
+
+聊天消息头像必须把发送者 DID 传给 `AvatarBadge.userId`，ACP 执行预览必须传入
+该 task 的 Agent DID；不能仅传展示名称或头像 URI，否则头像组件无法按身份读取
+当前权威头像。群聊使用逐条消息的发送者身份，不能使用群会话或其他 Agent 的身份。
+
+`tests/unit/chat_agent_avatar_test.dart` 覆盖移动端和桌面 Direct/Group 中的
+普通消息、ACP 流式回复、同名多 Agent 与人类发送者，验证 Inventory 头像变更后
+已有消息和执行预览立即复用相同的预设图像，且不改写消息历史。
+
 身份查找结果使用短主名称并在第二身份行保留完整 Handle；群系统事件等单行公共身份场景使用“当前昵称 > 完整 Handle > DID”。DID 在 UI 中可紧凑显示，但只能作为最后 fallback。
 
 公开资料只能装饰 Core 已返回的身份：Lookup 的 DID/Handle 与嵌套 Profile 不一致时，

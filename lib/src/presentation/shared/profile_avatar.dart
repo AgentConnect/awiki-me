@@ -149,10 +149,10 @@ class _ProfileAvatarState extends ConsumerState<ProfileAvatar> {
                             color: theme.primaryDark,
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: Icon(
                             CupertinoIcons.camera_fill,
                             size: 14,
-                            color: CupertinoColors.white,
+                            color: theme.primaryForeground,
                           ),
                         ),
                       ),

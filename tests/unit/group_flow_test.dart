@@ -215,7 +215,7 @@ void main() {
         .secondaryText;
     const actions = <(String, String, IconData)>[
       ('group-list-refresh-button', '刷新', CupertinoIcons.refresh),
-      ('group-list-create-button', '创建群聊', CupertinoIcons.person_2),
+      ('group-list-create-button', '发起群聊', CupertinoIcons.person_2),
       ('group-list-join-button', '加入群聊', CupertinoIcons.plus),
     ];
     double? iconSize;
@@ -348,7 +348,7 @@ void main() {
       await tester.tap(find.byKey(const Key('group-list-create-button')));
       await tester.pumpAndSettle();
 
-      expect(find.text('创建群聊'), findsOneWidget);
+      expect(find.text('发起群聊'), findsOneWidget);
       expect(find.text('名称'), findsOneWidget);
       expect(find.text('短链接'), findsNothing);
       expect(find.text('介绍'), findsNothing);
