@@ -100,9 +100,12 @@ void main() {
                 child: CupertinoTheme(
                   data: theme.cupertinoTheme.copyWith(brightness: brightness),
                   child: CupertinoPageScaffold(
-                    child: ChatView(
-                      conversation: conversation,
-                      embedded: false,
+                    child: DefaultTextStyle(
+                      style: theme.cupertinoTheme.textTheme.textStyle,
+                      child: ChatView(
+                        conversation: conversation,
+                        embedded: false,
+                      ),
                     ),
                   ),
                 ),
