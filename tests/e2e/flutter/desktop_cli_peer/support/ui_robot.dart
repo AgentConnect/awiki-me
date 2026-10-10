@@ -1464,7 +1464,7 @@ class _DesktopAppRobot {
 
   Future<void> addGroupMember(
     String handle, {
-    required String expectedDisplayName,
+    String? expectedDisplayName,
   }) async {
     final preflight = await container
         .read(directoryApplicationServiceProvider)
@@ -1576,7 +1576,16 @@ class _DesktopAppRobot {
     }
     _expectIdentityCandidatePresentation(
       candidate: candidateTile,
-      expectedDisplayName: expectedDisplayName,
+      expectedDisplayName:
+          expectedDisplayName ??
+          resolvePeerDisplayName(
+            container.read(peerDisplayProfileProvider),
+            PeerDisplayNameRequest(
+              did: preflight.did,
+              nickname: preflight.profile?.displayName,
+              fullHandle: preflight.handle ?? handle,
+            ),
+          ),
       expectedAvatarUri: container
           .read(peerDisplayProfileProvider)
           .forDid(preflight.did)

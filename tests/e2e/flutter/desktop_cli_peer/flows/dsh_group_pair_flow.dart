@@ -36,14 +36,9 @@ Future<void> _verifyDshGroupPair({
       .resolvePeer(dshHandle);
   expect(peer.did, dshDid);
   await robot.openConversationRow(group.conversationId);
-  await robot.addGroupMember(
-    dshHandle,
-    expectedDisplayName: const PeerDisplayNameResolver().resolve(
-      nickname: peer.profile?.displayName,
-      fullHandle: peer.handle ?? dshHandle,
-      did: dshDid,
-    ),
-  );
+  // Search refreshes the canonical peer display profile. Assert that projection
+  // after lookup, including its compact Handle fallback and avatar seed.
+  await robot.addGroupMember(dshHandle);
   await publish('app.json', {
     'did': ownerDid,
     'handle': groupHandleForDid(handle: config.appHandle, did: ownerDid),
