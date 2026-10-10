@@ -596,7 +596,10 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
     description: 'encrypted draft',
   );
   await robot.tapOne(mode, description: 'select encrypted message');
-  await robot.pumpUntilFinder(find.text('加密消息'), description: 'encrypted mode');
+  await robot.pumpUntilFinder(
+    find.descendant(of: mode, matching: find.byIcon(CupertinoIcons.lock)),
+    description: 'encrypted mode',
+  );
   expect(
     robot.tester.widget<CupertinoTextField>(input).controller!.text,
     secret,
@@ -649,7 +652,7 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
     expectedTitle: expectedPeerName,
   );
   await robot.pumpUntilFinder(
-    find.text('加密消息'),
+    find.descendant(of: mode, matching: find.byIcon(CupertinoIcons.lock)),
     description: 'restored encrypted mode',
   );
   final restored = await _waitForUiMessage(
@@ -663,7 +666,10 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
   await robot.expectMessageContentVisible(restored);
   expect(find.byTooltip('端到端加密'), findsWidgets);
   await robot.tapOne(mode, description: 'restore ordinary mode');
-  await robot.pumpUntilFinder(find.text('普通消息'), description: 'ordinary mode');
+  await robot.pumpUntilFinder(
+    find.descendant(of: mode, matching: find.byIcon(CupertinoIcons.lock_open)),
+    description: 'ordinary mode',
+  );
   final reply = 'e2e encrypted reply ${config.runId} $nonce';
   final replyId = await _cliSendDirectText(
     config: config,

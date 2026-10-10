@@ -67,7 +67,11 @@ import 'package:awiki_me/src/presentation/profile/avatar_crop_editor.dart';
 import 'package:awiki_me/src/presentation/shared/profile_avatar.dart';
 import 'package:crop_your_image/crop_your_image.dart';
 import 'package:flutter/cupertino.dart'
-    show CupertinoActivityIndicator, CupertinoTextField, CupertinoButton;
+    show
+        CupertinoActivityIndicator,
+        CupertinoTextField,
+        CupertinoButton,
+        CupertinoIcons;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart'
     show
@@ -617,19 +621,22 @@ void runDesktopCliPeerE2e({
       }
 
       if (selectedCase.runsAttachment) {
-        await _verifyAttachmentRegression(
-          robot: robot,
-          messaging: faultMessaging!,
-          attachmentOpenRecorder: attachmentOpenRecorder,
-          bootstrap: bootstrap,
-          providerOverrides: appProviderOverrides,
-          session: session,
-          ownerDid: session.did,
-          thread: directThread,
-          canonicalCliDid: canonicalCliDid!,
-          config: config,
-          nonce: messageNonce,
-        );
+        for (final secure in [false, true]) {
+          await _verifyAttachmentRegression(
+            robot: robot,
+            messaging: faultMessaging!,
+            attachmentOpenRecorder: attachmentOpenRecorder,
+            bootstrap: bootstrap,
+            providerOverrides: appProviderOverrides,
+            session: session,
+            ownerDid: session.did,
+            thread: directThread,
+            canonicalCliDid: canonicalCliDid!,
+            config: config,
+            nonce: '$messageNonce-${secure ? "encrypted" : "plain"}',
+            secure: secure,
+          );
+        }
         await _attestPassedCases(<String, List<String>>{
           'ATTACH-E2E-001': const <String>[
             'app_attachment_staged_and_sent_through_drop_ui',

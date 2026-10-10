@@ -12,9 +12,24 @@ Future<void> _verifyAttachmentRegression({
   required String canonicalCliDid,
   required _DesktopCliPeerSmokeConfig config,
   required String nonce,
+  bool secure = false,
 }) async {
   final conversation = await robot.startDirectConversation(config.cliHandle);
   final conversationId = conversation.conversationId;
+  final mode = find.byKey(const Key('chat-message-security'));
+  await robot.pumpUntilFinder(mode, description: 'attachment security control');
+  final desired = secure ? CupertinoIcons.lock : CupertinoIcons.lock_open;
+  if (find
+      .descendant(of: mode, matching: find.byIcon(desired))
+      .evaluate()
+      .isEmpty) {
+    await robot.tapOne(mode, description: 'select attachment security');
+  }
+  await robot.pumpUntilFinder(
+    find.descendant(of: mode, matching: find.byIcon(desired)),
+    description: 'attachment security ready',
+  );
+
   final cliDid = requireMatchingCliPeerDid(
     canonicalCliDid: canonicalCliDid,
     observedPeerDid: conversation.targetDid ?? '',
@@ -45,6 +60,7 @@ Future<void> _verifyAttachmentRegression({
     senderDid: ownerDid,
     sendState: MessageSendState.sent,
   );
+  expect(appAttachmentMessage.isEncrypted, secure);
   final appAttachment = appAttachmentMessage.attachment;
   expect(appAttachment, isNotNull);
   expect(appAttachment!.filename, appAttachmentFilename);
@@ -126,6 +142,7 @@ Future<void> _verifyAttachmentRegression({
     cliAttachmentCaption,
     '--file',
     cliAttachmentFile.path,
+    if (secure) ...['--secure', 'required'],
     '--mime-type',
     'text/plain',
   ], timeout: const Duration(minutes: 2));
@@ -221,6 +238,7 @@ Future<void> _verifyAttachmentRegression({
   final openButton = find.byKey(
     Key('chat-open-attachment:${cliAttachmentMessage.localId}'),
   );
+  attachmentOpenRecorder.lastOpenedPath = null;
   final feedbackBefore = robot.container.read(uiFeedbackProvider)?.id;
   await robot.tapOne(
     openButton,
