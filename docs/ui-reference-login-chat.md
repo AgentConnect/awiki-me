@@ -53,6 +53,11 @@ its indicator inside the send-code control during account precheck and the
 send request. The control retains its dimensions and rejects repeated taps;
 success starts the existing resend countdown, while failure permits retry.
 
+Resumable Handle recovery appears as a right-aligned secondary text link with
+a chevron and a minimum 44px hit area. It keeps the existing recovery route and
+labels, including "Continue to messages" after remote completion, without
+adding another filled primary button above login/register.
+
 ## Chat navigation and list
 
 The desktop rail uses a nominal width of 68, icon buttons of 44 and icons of 22.
