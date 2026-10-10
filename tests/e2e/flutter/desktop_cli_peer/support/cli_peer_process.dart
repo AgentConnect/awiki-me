@@ -169,6 +169,20 @@ Future<_CliAttachmentMessage> _waitForCliAttachmentMessage({
     description:
         'CLI history contains attachment "$expectedFilename" on message "$expectedMessageId"',
     action: () async {
+      // P5 ciphertext must pass through the real receive/decrypt path before
+      // local history can expose its attachment manifest.
+      final received = await _runCli(config, <String>[
+        '--format',
+        'json',
+        'msg',
+        'inbox',
+        '--scope',
+        'direct',
+        '--limit',
+        '100',
+      ]);
+      if (received.exitCode != 0) return false;
+
       final result = await _runCli(config, <String>[
         '--format',
         'json',
