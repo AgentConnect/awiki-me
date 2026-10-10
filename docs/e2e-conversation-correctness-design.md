@@ -431,3 +431,7 @@ System Test 现有 exact ID、唯一字段、严格数字递增和 stability-win
 6. nickname 已缓存时任一观测帧出现 Unknown/Handle/DID 作为主名称，测试必须失败。
 7. Catalog 中的每个 exact oracle/negative guard 都有对应的已执行 assertion evidence，不再允许只靠 phase 字符串证明。
 8. 所有 P0 用例在远程 `awiki.info` 上通过，且失败报告能区分 UI 绑定、App projection、Core canonical 和远程服务问题。
+
+### macOS 前台实机验证
+
+设置 `AWIKI_E2E_MACOS_FOREGROUND=1` 时，prepared integration 拥有方 runner 只持续激活其启动的测试 App PID，结束时停止辅助进程。适用于窗口遮挡导致 Flutter `hidden`、帧停止的桌面环境；会占用前台，不建议同时操作其他窗口。未设置时不改变前台。UI 帧等待有独立时限，不能用伪造 resumed 生命周期或放宽业务断言掩盖停帧。后台/重启专门用例继续使用各自明确的生命周期操作。

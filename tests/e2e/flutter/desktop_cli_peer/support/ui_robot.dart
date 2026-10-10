@@ -10,30 +10,10 @@ class _DesktopAppRobot {
   final WidgetTester tester;
   String? failureCaseId;
 
-  // macOS disables Flutter frames when the test window is occluded. Bring
-  // only this test process forward; do not synthesize lifecycle transitions or
-  // allow a pending frame to bypass the observation deadline.
+  // A hidden native window stops Flutter frames. Report that boundary instead
+  // of letting an individual frame outlive the observation timeout. The owning
+  // process runner can explicitly keep this test window in the foreground.
   Future<void> _pumpFrame([Duration? duration]) async {
-    var activating = false;
-    Future<void> activateIfOccluded() async {
-      if (!Platform.isMacOS || tester.binding.framesEnabled || activating)
-        return;
-      activating = true;
-      try {
-        await Process.run('/usr/bin/swift', <String>[
-          '-e',
-          'import AppKit; if let app = NSRunningApplication(processIdentifier: $pid) { '
-              '_ = app.unhide(); _ = app.activate(options: [.activateAllWindows]) }',
-        ]).timeout(const Duration(seconds: 5));
-      } finally {
-        activating = false;
-      }
-    }
-
-    await activateIfOccluded();
-    final foreground = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      unawaited(activateIfOccluded().catchError((Object _) {}));
-    });
     try {
       await tester.pump(duration).timeout(const Duration(seconds: 10));
     } on TimeoutException {
@@ -42,8 +22,6 @@ class _DesktopAppRobot {
         '${tester.binding.lifecycleState?.name} '
         'frames_enabled=${tester.binding.framesEnabled}.',
       );
-    } finally {
-      foreground.cancel();
     }
   }
 

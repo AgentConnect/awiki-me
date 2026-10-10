@@ -89,9 +89,25 @@ Future<PreparedIntegrationExecution> runPreparedIntegrationExecutable({
         .transform(const LineSplitter())
         .listen(recordOutput),
   ];
+  Process? foregroundKeeper;
   final watch = Stopwatch()..start();
   final exitFuture = process.exitCode;
   try {
+    if (operatingSystem == 'macos' &&
+        Platform.environment['AWIKI_E2E_MACOS_FOREGROUND'] == '1') {
+      // This is a headed verification option, scoped to the child we own.
+      // The runner owns activation so it cannot be stranded behind a pending
+      // Flutter frame. It never changes application lifecycle facts in Dart.
+      foregroundKeeper = await Process.start('/usr/bin/swift', <String>[
+        '-e',
+        'import AppKit; '
+            'while let app = NSRunningApplication(processIdentifier: ${process.pid}), !app.isTerminated { '
+            '_ = app.unhide(); _ = app.activate(options: [.activateAllWindows]); '
+            'Thread.sleep(forTimeInterval: 1) }',
+      ], mode: ProcessStartMode.normal);
+      unawaited(foregroundKeeper.stdout.drain<void>());
+      unawaited(foregroundKeeper.stderr.drain<void>());
+    }
     while (watch.elapsed < timeout) {
       if (completionFile.existsSync()) {
         final completion = E2eInvocationCompletion.read(completionFile);
@@ -153,6 +169,16 @@ Future<PreparedIntegrationExecution> runPreparedIntegrationExecutable({
       'Prepared integration process timed out before completion.',
     );
   } finally {
+    foregroundKeeper?.kill(ProcessSignal.sigterm);
+    if (foregroundKeeper != null) {
+      await foregroundKeeper.exitCode.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () {
+          foregroundKeeper?.kill(ProcessSignal.sigkill);
+          return -1;
+        },
+      );
+    }
     watch.stop();
     if (await _processStillRunning(exitFuture)) {
       await _terminatePreparedIntegrationProcess(
