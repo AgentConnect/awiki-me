@@ -38,9 +38,11 @@ Future<void> _verifyDshGroupPair({
   await robot.openConversationRow(group.conversationId);
   await robot.addGroupMember(
     dshHandle,
-    expectedDisplayName: peer.profile?.displayName?.trim().isNotEmpty == true
-        ? peer.profile!.displayName!.trim()
-        : PeerDisplayNameResolver.compactHandle(dshHandle),
+    expectedDisplayName: const PeerDisplayNameResolver().resolve(
+      nickname: peer.profile?.displayName,
+      fullHandle: peer.handle ?? dshHandle,
+      did: dshDid,
+    ),
   );
   await publish('app.json', {
     'did': ownerDid,
