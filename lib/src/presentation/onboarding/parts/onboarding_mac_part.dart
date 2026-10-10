@@ -9,6 +9,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.onboarding,
     required this.registrationEntry,
     required this.registrationReady,
+    required this.registrationSubmitting,
     required this.otpCooldown,
     required this.credentials,
     required this.phoneController,
@@ -31,6 +32,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final OnboardingState onboarding;
   final Widget registrationEntry;
   final bool registrationReady;
+  final bool registrationSubmitting;
   final SmsOtpCooldownState otpCooldown;
   final List<SessionIdentity> credentials;
   final TextEditingController phoneController;
@@ -100,6 +102,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
                           onboarding: onboarding,
                           registrationEntry: registrationEntry,
                           registrationReady: registrationReady,
+                          registrationSubmitting: registrationSubmitting,
                           otpCooldown: otpCooldown,
                           credentials: credentials,
                           phoneController: phoneController,
@@ -373,6 +376,7 @@ class _MacAuthCard extends ConsumerWidget {
     required this.onboarding,
     required this.registrationEntry,
     required this.registrationReady,
+    required this.registrationSubmitting,
     required this.otpCooldown,
     required this.credentials,
     required this.phoneController,
@@ -392,6 +396,7 @@ class _MacAuthCard extends ConsumerWidget {
   final OnboardingState onboarding;
   final Widget registrationEntry;
   final bool registrationReady;
+  final bool registrationSubmitting;
   final SmsOtpCooldownState otpCooldown;
   final List<SessionIdentity> credentials;
   final TextEditingController phoneController;
@@ -420,7 +425,7 @@ class _MacAuthCard extends ConsumerWidget {
           children: <Widget>[
             _LoginEntryTabs(
               showIdentities: showIdentities,
-              enabled: !onboarding.isBusy,
+              enabled: !onboarding.isBusy && !registrationSubmitting,
               registerLabel: context.l10n.onboardingRegister,
               identityLabel: context.l10n.onboardingLogin,
               onChanged: (value) => ref
@@ -449,6 +454,7 @@ class _MacAuthCard extends ConsumerWidget {
                   onboarding.hasRegistrationMethods) ...<Widget>[
                 _MacAuthMethodSelector(
                   onboarding: onboarding,
+                  enabled: !registrationSubmitting,
                   onAuthModeChanged: onAuthModeChanged,
                 ),
                 const SizedBox(height: 16),
@@ -457,6 +463,7 @@ class _MacAuthCard extends ConsumerWidget {
                 key: ValueKey<String>('mac-register-${onboarding.authMode}'),
                 onboarding: onboarding,
                 registrationEntry: registrationEntry,
+                registrationSubmitting: registrationSubmitting,
                 otpCooldown: otpCooldown,
                 phoneController: phoneController,
                 otpController: otpController,
@@ -581,10 +588,12 @@ class _MacCompactBrand extends StatelessWidget {
 class _MacAuthMethodSelector extends StatelessWidget {
   const _MacAuthMethodSelector({
     required this.onboarding,
+    required this.enabled,
     required this.onAuthModeChanged,
   });
 
   final OnboardingState onboarding;
+  final bool enabled;
   final ValueChanged<String> onAuthModeChanged;
 
   @override
@@ -604,7 +613,7 @@ class _MacAuthMethodSelector extends StatelessWidget {
                 key: Key('auth-mode-${method.id.wireName}'),
                 semanticLabel: _authModeLabel(context, method.id),
                 selected: onboarding.authMode == method.id.wireName,
-                onTap: onboarding.isBusy
+                onTap: onboarding.isBusy || !enabled
                     ? null
                     : () => onAuthModeChanged(method.id.wireName),
                 borderRadius: BorderRadius.circular(4),
@@ -854,6 +863,7 @@ class _MacRegisterForm extends StatelessWidget {
     super.key,
     required this.onboarding,
     required this.registrationEntry,
+    required this.registrationSubmitting,
     required this.otpCooldown,
     required this.phoneController,
     required this.otpController,
@@ -867,6 +877,7 @@ class _MacRegisterForm extends StatelessWidget {
 
   final OnboardingState onboarding;
   final Widget registrationEntry;
+  final bool registrationSubmitting;
   final SmsOtpCooldownState otpCooldown;
   final TextEditingController phoneController;
   final TextEditingController otpController;
@@ -935,6 +946,7 @@ class _MacRegisterForm extends StatelessWidget {
           SizedBox(height: context.awikiResponsive.isPhone ? 22 : 8),
           _MacPrimaryAction(
             label: context.l10n.onboardingCompleteRegister,
+            loading: registrationSubmitting,
             onPressed: onboarding.isBusy ? null : onSubmitRegister,
           ),
         ],
@@ -976,7 +988,10 @@ class _MacRegisterForm extends StatelessWidget {
                       otpCooldown.remainingSeconds,
                     )
                   : context.l10n.onboardingSendOtp,
-              onPressed: onboarding.isBusy || !otpCooldown.canSend
+              onPressed:
+                  onboarding.isBusy ||
+                      registrationSubmitting ||
+                      !otpCooldown.canSend
                   ? null
                   : onRequestOtp,
             ),
@@ -991,6 +1006,7 @@ class _MacRegisterForm extends StatelessWidget {
             width: double.infinity,
             child: _MacPrimaryAction(
               label: context.l10n.onboardingPhoneLoginOrRegisterAction,
+              loading: registrationSubmitting,
               onPressed: onboarding.isBusy || !onboarding.canSubmitPhoneOtp
                   ? null
                   : onSubmitRegister,
@@ -1024,7 +1040,10 @@ class _MacRegisterForm extends StatelessWidget {
                     onboarding.emailResendCountdown,
                   )
                 : context.l10n.onboardingSendActivationEmail,
-            onPressed: onboarding.isBusy || onboarding.isEmailResendCoolingDown
+            onPressed:
+                onboarding.isBusy ||
+                    registrationSubmitting ||
+                    onboarding.isEmailResendCoolingDown
                 ? null
                 : onRequestEmailActivation,
           ),
@@ -1038,6 +1057,7 @@ class _MacRegisterForm extends StatelessWidget {
           child: onboarding.emailVerified
               ? _MacPrimaryAction(
                   label: context.l10n.onboardingCompleteEmailRegister,
+                  loading: registrationSubmitting,
                   onPressed: onboarding.isBusy ? null : onSubmitRegister,
                 )
               : _MacSecondaryAction(
@@ -1315,18 +1335,23 @@ class _MacInlineAction extends StatelessWidget {
 }
 
 class _MacPrimaryAction extends StatelessWidget {
-  const _MacPrimaryAction({required this.label, this.onPressed});
+  const _MacPrimaryAction({
+    required this.label,
+    this.onPressed,
+    this.loading = false,
+  });
 
   final String label;
   final VoidCallback? onPressed;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
     return AppPressable(
-      onTap: onPressed,
+      onTap: loading ? null : onPressed,
       semanticLabel: label,
       tooltip: label,
-      enabled: onPressed != null,
+      enabled: !loading && onPressed != null,
       scaleOnPress: true,
       pressedScale: 0.985,
       borderRadius: BorderRadius.circular(6),
@@ -1348,6 +1373,14 @@ class _MacPrimaryAction extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
+            if (loading) ...<Widget>[
+              CupertinoActivityIndicator(
+                key: const Key('onboarding-submit-loading'),
+                radius: 8,
+                color: context.awikiTheme.primaryForeground,
+              ),
+              const SizedBox(width: 8),
+            ],
             Flexible(
               child: FittedBox(
                 fit: BoxFit.scaleDown,
@@ -1356,7 +1389,7 @@ class _MacPrimaryAction extends StatelessWidget {
                   maxLines: 1,
                   style: TextStyle(
                     color: context.awikiTheme.primaryForeground.withValues(
-                      alpha: onPressed == null ? 0.5 : 1,
+                      alpha: onPressed == null && !loading ? 0.5 : 1,
                     ),
                     fontSize: 14,
                     fontWeight: FontWeight.w400,

@@ -281,8 +281,15 @@ void main() {
       );
 
       old.complete([]);
-      await tester.pumpAndSettle();
-      await run.tap(find.text('登录/注册'));
+      // The newer target is still pending, so its button animation must remain
+      // active after the obsolete result arrives.
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+        find.byKey(const Key('onboarding-submit-loading')),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(find.text('登录/注册'));
+      await tester.tap(find.text('登录/注册'));
       await tester.pump();
       expect(
         run.core.lookups.where((handle) => handle == 'bob.awiki.me'),

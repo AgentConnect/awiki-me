@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
@@ -23,6 +25,7 @@ class InviteSupport extends FakeOnboardingSupportService {
   bool fail = false;
   Object? failure;
   String? boundPhone;
+  Completer<void>? checkGate;
 
   @override
   Future<RegistrationCheck> checkRegistration({
@@ -34,6 +37,7 @@ class InviteSupport extends FakeOnboardingSupportService {
     bool checkInvite = false,
   }) async {
     checks++;
+    await checkGate?.future;
     if (failure != null) throw failure!;
     if (fail) throw StateError('network');
     lastInvite = inviteCode;
@@ -79,6 +83,149 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  for (final size in <Size>[const Size(390, 1200), const Size(1100, 900)]) {
+    for (final failPrecheck in <bool>[true, false]) {
+      testWidgets(
+        'submit loading stays inside button at $size through '
+        '${failPrecheck ? 'failed precheck' : 'precheck and failed registration'}',
+        (tester) async {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(() {
+            tester.view.resetPhysicalSize();
+            tester.view.resetDevicePixelRatio();
+          });
+          final registrationGate = Completer<void>();
+          final gateway = FakeAwikiGateway()
+            ..onboardingPhoneRegistrationCompleter = registrationGate
+            ..nextOnboardingPhoneRegistrationError = StateError('network');
+          final support = InviteSupport(gateway);
+          await tester.pumpWidget(
+            buildLocalizedTestApp(
+              home: const OnboardingPage(),
+              gateway: gateway,
+              providerOverrides: [
+                onboardingSupportServiceProvider.overrideWithValue(support),
+              ],
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.enterText(field('e2e-handle-input'), 'fixture');
+          await tester.enterText(field('e2e-phone-input'), '13800138000');
+          await tapVisible(tester, find.text('发送验证码'));
+          await tester.enterText(field('e2e-otp-input'), '123456');
+          final button = find.byKey(
+            const Key('onboarding-mac-phone-submit-action'),
+          );
+          final pressable = find.descendant(
+            of: button,
+            matching: find.byType(AppPressable),
+          );
+          await tester.ensureVisible(button);
+          await tester.pumpAndSettle();
+          final originalRect = tester.getRect(button);
+          final submit = tester.widget<AppPressable>(pressable).onTap!;
+          support.checkGate = Completer<void>();
+          support.fail = failPrecheck;
+          await tester.tap(button);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 200));
+
+          void expectLoading() {
+            final spinner = find.byKey(const Key('onboarding-submit-loading'));
+            expect(spinner, findsOneWidget);
+            expect(
+              find.descendant(of: button, matching: spinner),
+              findsOneWidget,
+            );
+            expect(
+              find.descendant(
+                of: find.byKey(const Key('registration-entry-form')),
+                matching: find.byType(CupertinoActivityIndicator),
+              ),
+              findsNothing,
+            );
+            expect(tester.getRect(button), originalRect);
+            expect(
+              originalRect.contains(tester.getRect(spinner).topLeft),
+              isTrue,
+            );
+            expect(
+              originalRect.contains(tester.getRect(spinner).bottomRight),
+              isTrue,
+            );
+            expect(tester.widget<AppPressable>(pressable).enabled, isFalse);
+            expect(tester.widget<AppPressable>(pressable).onTap, isNull);
+            expect(find.text('登录/注册'), findsOneWidget);
+          }
+
+          expectLoading();
+          expect(support.checks, 2);
+          expect(gateway.onboardingPhoneRegistrationCalls, 0);
+          // Also protect two callbacks fired before the first frame disables
+          // the control, rather than relying only on disabled hit testing.
+          submit();
+          await tester.tap(button);
+          await tester.pump();
+          expect(support.checks, 2);
+
+          support.checkGate!.complete();
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 200));
+          if (!failPrecheck) {
+            expectLoading();
+            expect(gateway.onboardingPhoneRegistrationCalls, 1);
+            submit();
+            await tester.pump();
+            expect(gateway.onboardingPhoneRegistrationCalls, 1);
+          }
+          registrationGate.complete();
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const Key('onboarding-submit-loading')),
+            findsNothing,
+          );
+          expect(tester.widget<AppPressable>(pressable).enabled, isTrue);
+          expect(field('e2e-handle-input'), findsOneWidget);
+          expect(
+            tester
+                .widget<CupertinoTextField>(field('e2e-handle-input'))
+                .controller!
+                .text,
+            'fixture',
+          );
+          if (failPrecheck) {
+            expect(
+              find.byKey(const Key('registration-entry-error')),
+              findsOneWidget,
+            );
+            expect(gateway.onboardingPhoneRegistrationCalls, 0);
+          } else {
+            expect(gateway.onboardingPhoneRegistrationCalls, 1);
+          }
+          // A completed failed attempt must release the submission guard.
+          support.checkGate = Completer<void>();
+          await tester.tap(button);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 200));
+          expect(
+            find.byKey(const Key('onboarding-submit-loading')),
+            findsOneWidget,
+          );
+          expect(support.checks, 3);
+          support.fail = true;
+          support.checkGate!.complete();
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const Key('onboarding-submit-loading')),
+            findsNothing,
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
   testWidgets('TLS guidance retains form input and opens redacted details', (
     tester,
   ) async {

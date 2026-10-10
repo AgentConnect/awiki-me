@@ -18,11 +18,13 @@ class RegistrationEntryForm extends ConsumerWidget {
     required this.handleController,
     required this.inviteController,
     required this.phoneController,
+    this.showLoading = true,
   });
 
   final TextEditingController handleController;
   final TextEditingController inviteController;
   final TextEditingController phoneController;
+  final bool showLoading;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -115,7 +117,7 @@ class RegistrationEntryForm extends ConsumerWidget {
               detail: state.errorDetail!,
             ),
           ),
-        if (state.busy) const CupertinoActivityIndicator(),
+        if (state.busy && showLoading) const CupertinoActivityIndicator(),
         if (error != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),

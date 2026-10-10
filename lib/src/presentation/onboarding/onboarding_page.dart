@@ -50,6 +50,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   static const Duration _e2eOtpRetryInterval = Duration(seconds: 5);
 
   bool _checkingLocalRecovery = false;
+  bool _submittingRegistration = false;
+  int _registrationSubmissionGeneration = 0;
   int _recoveryLookupGeneration = 0;
   (String, String, String) _lastRecoveryLookupInputs = ('', '', '');
 
@@ -129,6 +131,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       _MacOnboardingScaffold(
         registrationEntry: _registrationEntryForm(),
         registrationReady: true,
+        registrationSubmitting: _submittingRegistration,
         onboarding: onboarding,
         otpCooldown: otpCooldown,
         credentials: credentials,
@@ -166,11 +169,39 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   }
 
   Future<void> _submitRegister(BuildContext context) async {
+    if (_submittingRegistration) return;
+    final generation = ++_registrationSubmissionGeneration;
+    setState(() => _submittingRegistration = true);
+    try {
+      await _performSubmitRegister(context, generation);
+    } finally {
+      _finishRegistrationSubmission(generation);
+    }
+  }
+
+  void _finishRegistrationSubmission(int generation) {
+    if (mounted &&
+        generation == _registrationSubmissionGeneration &&
+        _submittingRegistration) {
+      setState(() => _submittingRegistration = false);
+    }
+  }
+
+  Future<void> _performSubmitRegister(
+    BuildContext context,
+    int generation,
+  ) async {
     final notifier = ref.read(onboardingProvider.notifier);
     final handle = handleController.text.trim();
     if (_checkingLocalRecovery) return;
-    if (handle.isNotEmpty && await _openPendingRecovery(handle)) return;
-    if (!mounted) return;
+    if (handle.isNotEmpty &&
+        await _openPendingRecovery(
+          handle,
+          onHandoff: () => _finishRegistrationSubmission(generation),
+        )) {
+      return;
+    }
+    if (!mounted || generation != _registrationSubmissionGeneration) return;
     final tenant = ref.read(activeAppTenantProvider);
     final phone = _normalizedPhone;
     final profileMarkdown = '# $handle\n\n';
@@ -178,7 +209,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     if (!await _prepareRegistrationVerification(requireInvite: true)) {
       return;
     }
-    if (!mounted) return;
+    if (!mounted || generation != _registrationSubmissionGeneration) return;
     IdentityRegistrationStatus? result;
     if (onboarding.usesNoVerificationRegistration) {
       result = await notifier.registerWithoutContactVerification(
@@ -210,6 +241,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     if (!mounted) {
       return;
     }
+    _finishRegistrationSubmission(generation);
     if (ref.read(onboardingProvider).isPhoneOtpConsumed) {
       otpController.clear();
     }
@@ -246,6 +278,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   void _invalidateRecoveryLookup() {
     _recoveryLookupGeneration++;
     _checkingLocalRecovery = false;
+    // Inputs can supersede a pending lookup/precheck. Its late completion must
+    // neither keep the new target disabled nor clear a newer submission.
+    if (_submittingRegistration && !ref.read(onboardingProvider).isBusy) {
+      _finishRegistrationSubmission(_registrationSubmissionGeneration);
+      _registrationSubmissionGeneration++;
+    }
   }
 
   void _onRecoveryLookupInputsChanged() {
@@ -267,7 +305,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     _invalidateRecoveryLookup();
   }
 
-  Future<bool> _openPendingRecovery(String handle) async {
+  Future<bool> _openPendingRecovery(
+    String handle, {
+    required VoidCallback onHandoff,
+  }) async {
     if (ref.read(onboardingProvider).didMethod != IdentityDidMethod.wba) {
       return false;
     }
@@ -291,6 +332,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           .inspectContext(handle: fullHandle);
       if (!mounted || !current()) return true;
       if (!hasPendingHandleRecovery(pending)) return false;
+      onHandoff();
       otpController.clear();
       await AppNavigator.push<void>(
         context,
@@ -305,6 +347,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       return true;
     } catch (_) {
       if (mounted && current()) {
+        onHandoff();
         await showAwikiMeErrorDetailDialog(
           context,
           message: context.l10n.handleRecoveryErrorLocalStateUnavailable,
@@ -398,6 +441,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     handleController: handleController,
     inviteController: inviteController,
     phoneController: phoneController,
+    showLoading: !_submittingRegistration,
   );
 
   void _onHandleChanged() {

@@ -44,6 +44,12 @@ the existing callbacks, confirmation, busy state and legacy-upgrade handling.
 The reference's placeholder import/rescan controls are not exposed as working
 features without an owning product implementation.
 
+The login/register submit action keeps its loading indicator inside the button
+through both account precheck and the registration request. The button retains
+its label and dimensions, disables repeated submissions while waiting, and
+returns to an actionable state after a failed attempt. Loading for other form
+actions continues to follow their existing state.
+
 ## Chat navigation and list
 
 The desktop rail uses a nominal width of 68, icon buttons of 44 and icons of 22.

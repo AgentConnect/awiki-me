@@ -8,6 +8,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/models/onboarding_server_info.dart';
+import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
@@ -69,6 +70,28 @@ const _committedPhoneRegistrationIdentity = SessionIdentity(
     deviceAuthGeneration: '1',
   ),
 );
+
+class _ReadyConversationService extends FakeConversationService {
+  _ReadyConversationService(super.gateway);
+
+  @override
+  Stream<ConversationListPatch> watchConversationPatches({
+    required String ownerDid,
+  }) {
+    final controller = StreamController<ConversationListPatch>();
+    controller.onListen = () => controller.add(
+      ConversationListPatch(
+        kind: ConversationListPatchKind.reset,
+        ownerIdentityId: _committedPhoneRegistrationIdentity.localIdentityId!,
+        ownerDid: ownerDid,
+        version: 1,
+        unreadTotal: 0,
+      ),
+    );
+    controller.onCancel = controller.close;
+    return controller.stream;
+  }
+}
 
 void main() {
   testWidgets('参考稿登录入口切换保留输入且空身份页可返回注册', (tester) async {
@@ -2265,7 +2288,17 @@ void main() {
       ..loginResult = _committedPhoneRegistrationIdentity;
 
     await tester.pumpWidget(
-      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        gateway: gateway,
+        providerOverrides: [
+          // Activation must receive the initial conversation patch before the
+          // submit animation can stop. An empty stream leaves it unfinished.
+          conversationServiceProvider.overrideWithValue(
+            _ReadyConversationService(gateway),
+          ),
+        ],
+      ),
     );
     await _settleVerificationStep(tester);
 
@@ -2285,6 +2318,12 @@ void main() {
     expect(gateway.loginCalls, 1);
     expect(gateway.lastLoginCredentialName, 'identity-alice');
     expect(container.read(onboardingProvider).isPhoneOtpConsumed, isTrue);
+    expect(container.read(onboardingProvider).isBusy, isFalse);
+    expect(
+      container.read(appRuntimeProvider).activatedDid,
+      _committedPhoneRegistrationIdentity.did,
+    );
+    expect(find.byKey(const Key('onboarding-submit-loading')), findsNothing);
     expect(
       container.read(sessionProvider).session?.localIdentityId,
       'identity-alice',
