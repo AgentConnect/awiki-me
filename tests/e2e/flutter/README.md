@@ -9,7 +9,12 @@ Current groups:
 
 - `app/`: App shell smoke with fake bootstrap, onboarding/authenticated shell,
   basic profile/settings navigation, Personal Agent full-UI harness, Codex
-  Agent, and Claude Code Agent user-visible reply acceptance.
+  Agent, and Claude Code Agent user-visible reply acceptance. The App smoke also
+  renders invitation inputs through the native Flutter engine at phone/desktop
+  widths in light/dark appearances: actual painted text contrast >= 4.5, matching
+  auth-field geometry/style, stable focus bounds and retained values after
+  refocus. It saves synthetic-fixture screenshots alongside case attestations;
+  fake account/OTP services do not establish remote registration acceptance.
 - `desktop_cli_peer/`: real desktop App + `awiki-cli-rs2` product E2E for
   UI-driven direct/unread/read/retry, group/mention, attachment, and
   follow/contact flows, plus strict read-only App/CLI oracles. The maintained

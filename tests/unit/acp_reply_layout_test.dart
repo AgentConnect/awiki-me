@@ -8,6 +8,7 @@ import 'package:awiki_me/src/presentation/agents/acp_execution_record.dart';
 import 'package:awiki_me/src/presentation/agents/acp_session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
+import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -218,6 +219,17 @@ void main() {
           final preview = find.byKey(const ValueKey('acp-reply-bubble:run'));
           final avatar = find.byKey(
             const Key('chat-message-avatar:acp:run:peer'),
+          );
+          expect(
+            tester
+                .widget<AvatarBadge>(
+                  find.descendant(
+                    of: avatar,
+                    matching: find.byType(AvatarBadge),
+                  ),
+                )
+                .userId,
+            'did:agent',
           );
           final record = find.byKey(const ValueKey('acp-record-toggle:run'));
           final promptBubble = find.byKey(

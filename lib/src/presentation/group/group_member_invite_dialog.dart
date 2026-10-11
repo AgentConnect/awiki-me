@@ -978,15 +978,15 @@ class _InviteSearchInputState extends State<_InviteSearchInput> {
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: AwikiMePalette.content,
+        color: context.awikiTheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AwikiMePalette.hairline),
+        border: Border.all(color: context.awikiTheme.border),
       ),
       child: Row(
         children: <Widget>[
-          const Icon(
+          Icon(
             CupertinoIcons.search,
-            color: AwikiMePalette.mutedNeutral,
+            color: context.awikiTheme.secondaryText,
             size: 20,
           ),
           const SizedBox(width: 10),
@@ -1008,12 +1008,9 @@ class _InviteSearchInputState extends State<_InviteSearchInput> {
                 },
                 decoration: null,
                 padding: EdgeInsets.zero,
-                style: const TextStyle(
-                  color: AwikiMePalette.inkNeutral,
-                  fontSize: 14,
-                ),
-                placeholderStyle: const TextStyle(
-                  color: AwikiMePalette.messagePreview,
+                style: TextStyle(color: context.awikiTheme.title, fontSize: 14),
+                placeholderStyle: TextStyle(
+                  color: context.awikiTheme.tertiaryText,
                   fontSize: 14,
                 ),
               ),
@@ -1027,13 +1024,13 @@ class _InviteSearchInputState extends State<_InviteSearchInput> {
               tooltip: context.l10n.identityClearInput,
               onPressed: widget.controller.clear,
               size: 28,
-              backgroundColor: AwikiMePalette.cloud,
-              activeBackgroundColor: AwikiMePalette.cloud,
+              backgroundColor: context.awikiTheme.mutedSurface,
+              activeBackgroundColor: context.awikiTheme.mutedSurface,
               borderColor: CupertinoColors.transparent,
               borderRadius: BorderRadius.circular(999),
-              child: const Icon(
+              child: Icon(
                 CupertinoIcons.xmark,
-                color: AwikiMePalette.mutedNeutral,
+                color: context.awikiTheme.secondaryText,
                 size: 15,
               ),
             ),
@@ -1087,13 +1084,13 @@ class _SelectedInviteStrip extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: AwikiMePalette.brandAccentSoft,
+          color: context.awikiTheme.primarySoft,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
           context.l10n.groupInviteSelectHint,
-          style: const TextStyle(
-            color: AwikiMePalette.brandAccent,
+          style: TextStyle(
+            color: context.awikiTheme.primary,
             fontSize: 12,
             height: 1.35,
           ),
@@ -1130,9 +1127,9 @@ class _SelectedInviteChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
       decoration: BoxDecoration(
-        color: AwikiMePalette.mist,
+        color: context.awikiTheme.subtleSurface,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AwikiMePalette.hairline),
+        border: Border.all(color: context.awikiTheme.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1141,8 +1138,8 @@ class _SelectedInviteChip extends StatelessWidget {
             displayName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AwikiMePalette.inkNeutral,
+            style: TextStyle(
+              color: context.awikiTheme.title,
               fontSize: 12,
               fontWeight: FontWeight.w400,
             ),
@@ -1151,12 +1148,12 @@ class _SelectedInviteChip extends StatelessWidget {
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onRemove,
-            child: const Padding(
-              padding: EdgeInsets.all(2),
+            child: Padding(
+              padding: const EdgeInsets.all(2),
               child: Icon(
                 CupertinoIcons.xmark_circle_fill,
                 size: 16,
-                color: AwikiMePalette.messagePreview,
+                color: context.awikiTheme.tertiaryText,
               ),
             ),
           ),
@@ -1193,9 +1190,9 @@ class _InviteCandidateList extends ConsumerWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: AwikiMePalette.content,
+          color: context.awikiTheme.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AwikiMePalette.hairline),
+          border: Border.all(color: context.awikiTheme.border),
         ),
         child: Text(
           query.isEmpty
@@ -1208,9 +1205,9 @@ class _InviteCandidateList extends ConsumerWidget {
     }
     return Container(
       decoration: BoxDecoration(
-        color: AwikiMePalette.content,
+        color: context.awikiTheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AwikiMePalette.hairline),
+        border: Border.all(color: context.awikiTheme.border),
       ),
       child: CupertinoScrollbar(
         controller: controller,
@@ -1219,12 +1216,12 @@ class _InviteCandidateList extends ConsumerWidget {
           controller: controller,
           padding: const EdgeInsets.symmetric(vertical: 6),
           itemCount: candidates.length,
-          separatorBuilder: (_, _) => const Padding(
-            padding: EdgeInsets.only(left: 64),
+          separatorBuilder: (_, _) => Padding(
+            padding: const EdgeInsets.only(left: 64),
             child: SizedBox(
               height: 1,
               child: DecoratedBox(
-                decoration: BoxDecoration(color: AwikiMePalette.hairline),
+                decoration: BoxDecoration(color: context.awikiTheme.border),
               ),
             ),
           ),
@@ -1306,7 +1303,7 @@ class _InviteCandidateTile extends StatelessWidget {
           vertical: responsive.spacing(10),
         ),
         color: selected
-            ? AwikiMePalette.brandAccentSoft
+            ? context.awikiTheme.primarySoft
             : CupertinoColors.transparent,
         child: Opacity(
           opacity: isDisabled ? 0.58 : 1,
@@ -1329,8 +1326,8 @@ class _InviteCandidateTile extends StatelessWidget {
                             displayName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AwikiMePalette.inkNeutral,
+                            style: TextStyle(
+                              color: context.awikiTheme.title,
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
                             ),
@@ -1348,8 +1345,8 @@ class _InviteCandidateTile extends StatelessWidget {
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AwikiMePalette.mutedNeutral,
+                      style: TextStyle(
+                        color: context.awikiTheme.secondaryText,
                         fontSize: 12,
                       ),
                     ),
@@ -1402,14 +1399,16 @@ class _SourceBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: muted ? AwikiMePalette.mist : const Color(0xFFFFF4D6),
+        color: muted
+            ? context.awikiTheme.subtleSurface
+            : const Color(0xFFFFF4D6),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
         style: TextStyle(
           color: muted
-              ? AwikiMePalette.messagePreview
+              ? context.awikiTheme.tertiaryText
               : const Color(0xFF7A4E00),
           fontSize: 11,
           fontWeight: FontWeight.w400,
@@ -1429,10 +1428,10 @@ class _SelectionMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = disabled
-        ? AwikiMePalette.hairline
+        ? context.awikiTheme.border
         : selected
-        ? AwikiMePalette.brandAccent
-        : AwikiMePalette.messagePreview;
+        ? context.awikiTheme.primary
+        : context.awikiTheme.tertiaryText;
     return AnimatedContainer(
       key: const Key('group-invite-selection-mark'),
       duration: const Duration(milliseconds: 140),
@@ -1444,9 +1443,9 @@ class _SelectionMark extends StatelessWidget {
         border: Border.all(color: color, width: 1.2),
       ),
       child: selected
-          ? const Icon(
+          ? Icon(
               CupertinoIcons.check_mark,
-              color: CupertinoColors.white,
+              color: context.awikiTheme.primaryForeground,
               size: 11,
             )
           : null,

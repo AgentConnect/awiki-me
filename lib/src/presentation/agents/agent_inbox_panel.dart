@@ -22,7 +22,7 @@ class AgentInboxPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
-      backgroundColor: AwikiMePalette.mist,
+      backgroundColor: context.awikiTheme.subtleSurface,
       child: AgentInboxPanel(
         conversation: conversation,
         useBackButton: true,
@@ -93,8 +93,8 @@ class _AgentInboxPanelState extends ConsumerState<AgentInboxPanel> {
           ? Center(
               child: Text(
                 context.l10n.agentInboxNotRuntimeConversation,
-                style: const TextStyle(
-                  color: AwikiMePalette.mutedNeutral,
+                style: TextStyle(
+                  color: context.awikiTheme.secondaryText,
                   fontSize: 13,
                 ),
               ),
@@ -106,8 +106,8 @@ class _AgentInboxPanelState extends ConsumerState<AgentInboxPanel> {
                 child: Text(
                   context.l10n.agentInboxDaemonMissing,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AwikiMePalette.mutedNeutral,
+                  style: TextStyle(
+                    color: context.awikiTheme.secondaryText,
                     fontSize: 13,
                   ),
                 ),
@@ -275,8 +275,8 @@ class _AgentInboxListView extends StatelessWidget {
               ? Center(
                   child: Text(
                     context.l10n.agentInboxEmpty,
-                    style: const TextStyle(
-                      color: AwikiMePalette.mutedNeutral,
+                    style: TextStyle(
+                      color: context.awikiTheme.secondaryText,
                       fontSize: 13,
                     ),
                   ),
@@ -372,12 +372,14 @@ class _ScopeButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(7),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: selected ? AwikiMePalette.hairline : CupertinoColors.white,
+          color: selected
+              ? context.awikiTheme.border
+              : context.awikiTheme.surface,
           borderRadius: BorderRadius.circular(7),
           border: Border.all(
             color: selected
-                ? AwikiMePalette.brandAccent
-                : AwikiMePalette.hairline,
+                ? context.awikiTheme.primary
+                : context.awikiTheme.border,
           ),
         ),
         child: Padding(
@@ -386,8 +388,8 @@ class _ScopeButton extends StatelessWidget {
             label,
             style: TextStyle(
               color: selected
-                  ? AwikiMePalette.brandAccent
-                  : AwikiMePalette.mutedNeutral,
+                  ? context.awikiTheme.primary
+                  : context.awikiTheme.secondaryText,
               fontSize: 12,
               fontWeight: selected ? FontWeight.w400 : FontWeight.w400,
             ),
@@ -413,8 +415,8 @@ class _AgentInboxRow extends StatelessWidget {
       onTap: onTap,
       semanticLabel: title,
       borderRadius: BorderRadius.circular(8),
-      backgroundColor: CupertinoColors.white,
-      border: Border.all(color: AwikiMePalette.hairline),
+      backgroundColor: context.awikiTheme.surface,
+      border: Border.all(color: context.awikiTheme.border),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
@@ -425,15 +427,15 @@ class _AgentInboxRow extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: isGroup
-                    ? const Color(0xFFEAF8EF)
-                    : AwikiMePalette.brandAccentSoft,
+                    ? context.awikiTheme.success.withValues(alpha: 0.12)
+                    : context.awikiTheme.primarySoft,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 isGroup ? CupertinoIcons.person_2 : CupertinoIcons.person,
                 color: isGroup
-                    ? AwikiMePalette.successGreen
-                    : AwikiMePalette.brandAccent,
+                    ? context.awikiTheme.success
+                    : context.awikiTheme.primary,
                 size: 17,
               ),
             ),
@@ -449,8 +451,8 @@ class _AgentInboxRow extends StatelessWidget {
                           title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AwikiMePalette.inkNeutral,
+                          style: TextStyle(
+                            color: context.awikiTheme.title,
                             fontSize: 13,
                             fontWeight: FontWeight.w400,
                           ),
@@ -462,8 +464,8 @@ class _AgentInboxRow extends StatelessWidget {
                           timeLabel,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AwikiMePalette.messagePreview,
+                          style: TextStyle(
+                            color: context.awikiTheme.tertiaryText,
                             fontSize: 11,
                             fontWeight: FontWeight.w400,
                           ),
@@ -475,10 +477,10 @@ class _AgentInboxRow extends StatelessWidget {
                   Row(
                     children: <Widget>[
                       if (item.hasAttachments) ...<Widget>[
-                        const Icon(
+                        Icon(
                           CupertinoIcons.paperclip,
                           size: 12,
-                          color: AwikiMePalette.mutedNeutral,
+                          color: context.awikiTheme.secondaryText,
                         ),
                         const SizedBox(width: 4),
                       ],
@@ -493,8 +495,8 @@ class _AgentInboxRow extends StatelessWidget {
                                 ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AwikiMePalette.mutedNeutral,
+                          style: TextStyle(
+                            color: context.awikiTheme.secondaryText,
                             fontSize: 12,
                           ),
                         ),
@@ -509,14 +511,14 @@ class _AgentInboxRow extends StatelessWidget {
                 constraints: const BoxConstraints(minWidth: 22),
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AwikiMePalette.dangerRed,
+                  color: context.awikiTheme.danger,
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: Text(
                   item.unreadCount > 99 ? '99+' : item.unreadCount.toString(),
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: CupertinoColors.white,
+                  style: TextStyle(
+                    color: context.awikiTheme.surface,
                     fontSize: 11,
                     fontWeight: FontWeight.w400,
                   ),
@@ -556,8 +558,8 @@ class _AgentInboxThreadView extends StatelessWidget {
               Expanded(
                 child: Text(
                   context.l10n.agentInboxReadOnly,
-                  style: const TextStyle(
-                    color: AwikiMePalette.mutedNeutral,
+                  style: TextStyle(
+                    color: context.awikiTheme.secondaryText,
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
                   ),
@@ -582,8 +584,8 @@ class _AgentInboxThreadView extends StatelessWidget {
               ? Center(
                   child: Text(
                     context.l10n.agentInboxThreadEmpty,
-                    style: const TextStyle(
-                      color: AwikiMePalette.mutedNeutral,
+                    style: TextStyle(
+                      color: context.awikiTheme.secondaryText,
                       fontSize: 13,
                     ),
                   ),
@@ -640,10 +642,10 @@ class _AgentInboxMessageRow extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: outgoing
-              ? AwikiMePalette.brandAccentSoft
-              : CupertinoColors.white,
+              ? context.awikiTheme.primarySoft
+              : context.awikiTheme.surface,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AwikiMePalette.hairline),
+          border: Border.all(color: context.awikiTheme.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -658,8 +660,8 @@ class _AgentInboxMessageRow extends StatelessWidget {
                               DidDisplayFormatter.compactDid(message.senderDid),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AwikiMePalette.mutedNeutral,
+                    style: TextStyle(
+                      color: context.awikiTheme.secondaryText,
                       fontSize: 11,
                       fontWeight: FontWeight.w400,
                     ),
@@ -671,8 +673,8 @@ class _AgentInboxMessageRow extends StatelessWidget {
                     timeLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AwikiMePalette.messagePreview,
+                    style: TextStyle(
+                      color: context.awikiTheme.tertiaryText,
                       fontSize: 10.5,
                       fontWeight: FontWeight.w400,
                     ),
@@ -684,8 +686,8 @@ class _AgentInboxMessageRow extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 message.text,
-                style: const TextStyle(
-                  color: AwikiMePalette.inkNeutral,
+                style: TextStyle(
+                  color: context.awikiTheme.title,
                   fontSize: 13,
                   height: 1.35,
                 ),
@@ -695,8 +697,8 @@ class _AgentInboxMessageRow extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 context.l10n.agentInboxContentTruncated,
-                style: const TextStyle(
-                  color: AwikiMePalette.messagePreview,
+                style: TextStyle(
+                  color: context.awikiTheme.tertiaryText,
                   fontSize: 11,
                 ),
               ),
@@ -723,16 +725,16 @@ class _AgentInboxAttachmentRow extends StatelessWidget {
       margin: const EdgeInsets.only(top: 6),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: AwikiMePalette.mist,
+        color: context.awikiTheme.subtleSurface,
         borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: AwikiMePalette.hairline),
+        border: Border.all(color: context.awikiTheme.border),
       ),
       child: Row(
         children: <Widget>[
-          const Icon(
+          Icon(
             CupertinoIcons.paperclip,
             size: 15,
-            color: AwikiMePalette.mutedNeutral,
+            color: context.awikiTheme.secondaryText,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -746,8 +748,8 @@ class _AgentInboxAttachmentRow extends StatelessWidget {
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AwikiMePalette.inkNeutral,
+                  style: TextStyle(
+                    color: context.awikiTheme.title,
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
                   ),
@@ -757,8 +759,8 @@ class _AgentInboxAttachmentRow extends StatelessWidget {
                   _attachmentSubtitle(attachment),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AwikiMePalette.mutedNeutral,
+                  style: TextStyle(
+                    color: context.awikiTheme.secondaryText,
                     fontSize: 11,
                   ),
                 ),
@@ -796,8 +798,8 @@ class _LoadMoreButton extends StatelessWidget {
             ? const CupertinoActivityIndicator()
             : Text(
                 label,
-                style: const TextStyle(
-                  color: AwikiMePalette.brandAccent,
+                style: TextStyle(
+                  color: context.awikiTheme.primary,
                   fontSize: 13,
                   fontWeight: FontWeight.w400,
                 ),
@@ -830,7 +832,7 @@ class _AgentInboxError extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
-                color: AwikiMePalette.brandAccent,
+                color: context.awikiTheme.primary,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -868,8 +870,8 @@ class _AgentInboxInlineError extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Text(
             context.l10n.commonRetry,
-            style: const TextStyle(
-              color: AwikiMePalette.brandAccent,
+            style: TextStyle(
+              color: context.awikiTheme.primary,
               fontSize: 12,
               fontWeight: FontWeight.w400,
             ),
@@ -904,7 +906,7 @@ class _AgentInboxShell extends StatelessWidget {
     final resolvedCloseLabel =
         closeSemanticLabel ?? context.l10n.agentInboxClose;
     return DecoratedBox(
-      decoration: const BoxDecoration(color: AwikiMePalette.mist),
+      decoration: BoxDecoration(color: context.awikiTheme.subtleSurface),
       child: SafeArea(
         bottom: false,
         child: Column(
@@ -912,9 +914,9 @@ class _AgentInboxShell extends StatelessWidget {
             Container(
               height: 60,
               padding: const EdgeInsets.fromLTRB(18, 0, 12, 0),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(
-                  bottom: BorderSide(color: AwikiMePalette.hairline),
+                  bottom: BorderSide(color: context.awikiTheme.border),
                 ),
               ),
               child: Row(
@@ -935,8 +937,8 @@ class _AgentInboxShell extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AwikiMePalette.inkNeutral,
+                      style: TextStyle(
+                        color: context.awikiTheme.title,
                         fontSize: 16,
                         fontWeight: FontWeight.w400,
                       ),
@@ -985,12 +987,12 @@ class _AgentInboxIconButton extends StatelessWidget {
       tooltip: semanticLabel,
       isLoading: isLoading,
       size: responsive.displayScaled(32),
-      backgroundColor: CupertinoColors.white,
-      borderColor: AwikiMePalette.hairline,
+      backgroundColor: context.awikiTheme.surface,
+      borderColor: context.awikiTheme.border,
       borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
       child: Icon(
         icon,
-        color: AwikiMePalette.mutedNeutral,
+        color: context.awikiTheme.secondaryText,
         size: responsive.displayScaled(16),
       ),
     );

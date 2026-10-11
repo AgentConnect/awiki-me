@@ -25,10 +25,15 @@ import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Theme;
+import 'package:flutter/services.dart'
+    show LogicalKeyboardKey, JSONMethodCodec, MethodCall;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass_controls.dart';
 
 import '../test_support.dart';
 import 'device_test_support.dart';
@@ -41,6 +46,91 @@ const _session = SessionIdentity(
 );
 
 void main() {
+  for (final confirm in [false, true]) {
+    testWidgets(
+      'root preparation survives outside, Escape and back before explicit $confirm',
+      (tester) async {
+        final core = FakeDeviceManagementCore()
+          ..registry = _laterGrantRegistry();
+        final transfer = FakeRootKeyTransferPort();
+        final presence = FakeUserPresence();
+        final theme = AwikiMeTheme.forPlatform(
+          TargetPlatform.macOS,
+          brightness: Brightness.dark,
+        );
+        await tester.pumpWidget(
+          _app(
+            Theme(data: theme.materialTheme, child: const DevicesPage()),
+            core,
+            rootTransfer: transfer,
+            presence: presence,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final grant = find.byKey(
+          const Key('device-grant-management-member-later'),
+        );
+        final label = tester.widget<Text>(
+          find.descendant(of: grant, matching: find.byType(Text)),
+        );
+        final luminances = [
+          label.style!.color!.computeLuminance(),
+          theme.tokens.surface.computeLuminance(),
+        ]..sort();
+        expect(
+          (luminances.last + .05) / (luminances.first + .05),
+          greaterThanOrEqualTo(4.5),
+        );
+        await tester.tap(grant);
+        await tester.pumpAndSettle();
+        final container = ProviderScope.containerOf(tester.element(grant));
+        final preparation = container
+            .read(devicesProvider)
+            .rootTransfer
+            .preparation;
+        expect(preparation, isNotNull);
+        final dialog = find.byKey(
+          const Key('device-root-transfer-confirm-dialog'),
+        );
+        await tester.tapAt(const Offset(4, 4));
+        await tester.pumpAndSettle();
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        tester.binding.channelBuffers.push(
+          'flutter/navigation',
+          const JSONMethodCodec().encodeMethodCall(
+            const MethodCall('popRoute'),
+          ),
+          (_) {},
+        );
+        await tester.pumpAndSettle();
+        expect(dialog, findsOneWidget);
+        expect(
+          container.read(devicesProvider).rootTransfer.preparation,
+          same(preparation),
+        );
+        expect(
+          container.read(devicesProvider).rootTransfer.phase,
+          RootKeyTransferPhase.awaitingConfirmation,
+        );
+        expect(transfer.prepareCalls, 1);
+        expect(transfer.confirmCalls, 0);
+        expect(presence.calls, 0);
+        await tester.tap(
+          confirm
+              ? find.byKey(const Key('device-root-transfer-confirm-action'))
+              : find.text('取消').last,
+        );
+        await tester.pumpAndSettle();
+        expect(dialog, findsNothing);
+        expect(transfer.confirmCalls, 1);
+        expect(transfer.lastUserPresenceConfirmed, confirm);
+        expect(presence.calls, confirm ? 1 : 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   test(
     'Registry registration alone cannot expose current-device management readiness',
     () {
@@ -227,7 +317,7 @@ void main() {
       tester.element(find.byKey(const Key('device-join-approval-sheet'))),
     );
     await container.read(devicesProvider.notifier).loadManagement();
-    await tester.tap(find.byType(CupertinoSwitch).first);
+    await tester.tap(find.byKey(const Key('device-sas-confirmation')));
     await tester.pump();
     await tester.tap(find.text('允许加入并成为管理设备'));
     await tester.pump();
@@ -246,7 +336,7 @@ void main() {
     expect(find.byKey(const Key('device-join-finalizing')), findsOneWidget);
     expect(
       tester
-          .widget<AppPrimaryButton>(
+          .widget<AwikiPillButton>(
             find.byKey(const Key('device-join-finalizing')),
           )
           .onPressed,
@@ -318,7 +408,7 @@ void main() {
     final refresh = container.read(devicesProvider.notifier).refreshJoinInbox();
     await tester.pump();
     expect(core.started.isCompleted, isTrue);
-    await tester.tap(find.byType(CupertinoSwitch).first);
+    await tester.tap(find.byKey(const Key('device-sas-confirmation')));
     await tester.pump();
     await tester.tap(find.text('允许加入并成为管理设备'));
     await tester.pumpAndSettle();
@@ -703,7 +793,7 @@ void main() {
 
       final entry = find.bySemanticsIdentifier('device-join-request-entry');
       expect(entry, findsOneWidget);
-      expect(find.text('device-waiting'), findsOneWidget);
+      expect(find.textContaining('device-waiting'), findsOneWidget);
       expect(core.startVerificationCalls, 0);
       expect(core.rejectCalls, 0);
       expect(core.confirmCalls, 0);
@@ -1988,8 +2078,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('482917'), findsOneWidget);
-      final switches = find.byType(CupertinoSwitch);
+      expect(_sasDigits('482917'), findsOneWidget);
+      final switches = find.byKey(const Key('device-sas-confirmation'));
       expect(switches, findsOneWidget);
       expect(find.byKey(const Key('device-admin-toggle')), findsNothing);
       expect(find.textContaining('二维码'), findsNothing);
@@ -2083,7 +2173,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(CupertinoSwitch).first);
+      await tester.tap(find.byKey(const Key('device-sas-confirmation')));
       await tester.pump();
       await tester.tap(find.text('允许加入并成为管理设备'));
       await tester.pumpAndSettle();
@@ -2498,7 +2588,7 @@ void main() {
       expect(core.localVerificationCalls, 1);
       expect(find.byKey(const Key('device-approval-error')), findsNothing);
       expect(find.byKey(const Key('device-approval-sas')), findsOneWidget);
-      expect(find.text('482917'), findsOneWidget);
+      expect(_sasDigits('482917'), findsOneWidget);
     },
   );
 
@@ -2541,7 +2631,7 @@ void main() {
       _app(DeviceJoinApprovalSheet(request: request), core, presence: presence),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(CupertinoSwitch).first);
+    await tester.tap(find.byKey(const Key('device-sas-confirmation')));
     await tester.pump();
     await tester.tap(find.text('允许加入并成为管理设备'));
     await tester.pumpAndSettle();
@@ -2570,7 +2660,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('device-join-sas')), findsOneWidget);
-    expect(find.text('482917'), findsOneWidget);
+    expect(_sasDigits('482917'), findsOneWidget);
     expect(core.pollCalls, 1);
     expect(find.textContaining('服务器传输'), findsOneWidget);
     expect(find.textContaining('二维码'), findsNothing);
@@ -3194,3 +3284,8 @@ class _DelayedApprovalCore extends FakeDeviceManagementCore {
     return result;
   }
 }
+
+/// Six-digit verification codes render as individual tiles.
+Finder _sasDigits(String code) => find.byWidgetPredicate(
+  (widget) => widget is AwikiSasDigits && widget.code == code,
+);

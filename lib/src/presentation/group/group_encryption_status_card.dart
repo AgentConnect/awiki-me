@@ -89,10 +89,10 @@ class _GroupEncryptionStatusCardState
         context.l10n.groupEncryptionUnavailableDetail,
     };
     final accent = switch (readiness) {
-      GroupEncryptionReadiness.preparing => const Color(0xFF175CD3),
+      GroupEncryptionReadiness.preparing => context.awikiTheme.primary,
       GroupEncryptionReadiness.needsRetry => const Color(0xFFB54708),
       GroupEncryptionReadiness.ready => const Color(0xFF067647),
-      GroupEncryptionReadiness.unavailable => const Color(0xFF667085),
+      GroupEncryptionReadiness.unavailable => const Color(0xFF707070),
     };
     return AppCardSection(
       key: const Key('group-encryption-status-card'),

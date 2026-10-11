@@ -15,9 +15,11 @@ class _MacConversationWorkspace extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     return DecoratedBox(
-      decoration: const BoxDecoration(color: CupertinoColors.white),
+      decoration: BoxDecoration(color: context.awikiTheme.surface),
       child: AwikiPaneLayout(
-        listPaneWidth: responsive.displayScaled(272),
+        listPaneWidth: responsive.displayScaled(
+          responsive.width <= 920 ? 240 : 264,
+        ),
         minListPaneWidth: responsive.displayScaled(240),
         minDetailPaneWidth: responsive.displayScaled(360),
         listPane: SizedBox(
@@ -222,11 +224,11 @@ class _MacSidePanelDivider extends StatelessWidget {
           width: responsive.displayScaled(
             _MacConversationDetailAreaState._sidePanelDividerHitWidth,
           ),
-          child: const Center(
+          child: Center(
             child: SizedBox(
               width: 1,
               child: DecoratedBox(
-                decoration: BoxDecoration(color: AwikiMePalette.hairline),
+                decoration: BoxDecoration(color: context.awikiTheme.border),
               ),
             ),
           ),

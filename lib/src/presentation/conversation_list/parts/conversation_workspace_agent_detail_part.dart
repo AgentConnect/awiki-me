@@ -27,8 +27,8 @@ class _MacAgentDetailPanel extends ConsumerWidget {
       if (onBack == null) ...<Widget>[
         Text(
           context.l10n.conversationInfoTitle,
-          style: const TextStyle(
-            color: AwikiMePalette.inkNeutral,
+          style: TextStyle(
+            color: context.awikiTheme.title,
             fontSize: 16,
             fontWeight: FontWeight.w400,
           ),
@@ -39,16 +39,16 @@ class _MacAgentDetailPanel extends ConsumerWidget {
         label: context.l10n.conversationIdentityStatus,
         child: Row(
           children: <Widget>[
-            const Icon(
+            Icon(
               CupertinoIcons.checkmark_shield_fill,
-              color: AwikiMePalette.successGreen,
+              color: context.awikiTheme.success,
               size: 16,
             ),
             const SizedBox(width: 6),
             Text(
               context.l10n.conversationIdentityVerified,
-              style: const TextStyle(
-                color: AwikiMePalette.successGreen,
+              style: TextStyle(
+                color: context.awikiTheme.success,
                 fontSize: 12,
                 fontWeight: FontWeight.w400,
               ),
@@ -105,21 +105,21 @@ class _MacAgentDetailPanel extends ConsumerWidget {
             value: context.l10n.conversationUnreadMessagesValue(
               conversation.unreadCount,
             ),
-            color: AwikiMePalette.brandAccent,
+            color: context.awikiTheme.primary,
           ),
           _MacStatusLine(
             label: context.l10n.conversationLatestPreviewLabel,
             value: conversation.lastMessagePreview.trim().isEmpty
                 ? context.l10n.conversationsNoMessagePreview
                 : conversation.lastMessagePreview.trim(),
-            color: AwikiMePalette.mutedNeutral,
+            color: context.awikiTheme.secondaryText,
             indicatorKey: const Key('mac-conversation-preview-status-dot'),
             valueKey: const Key('mac-conversation-preview-status-value'),
           ),
           _MacStatusLine(
             label: context.l10n.conversationConnectionStatusLabel,
             value: context.l10n.conversationConnectionEstablished,
-            color: AwikiMePalette.successGreen,
+            color: context.awikiTheme.success,
           ),
         ],
       ),
@@ -139,7 +139,7 @@ class _MacAgentDetailPanel extends ConsumerWidget {
       );
     }
     return DecoratedBox(
-      decoration: const BoxDecoration(color: AwikiMePalette.mist),
+      decoration: BoxDecoration(color: context.awikiTheme.subtleSurface),
       child: SafeArea(
         bottom: false,
         child: ListView(
@@ -169,8 +169,8 @@ class _MacDetailRow extends StatelessWidget {
             width: 70,
             child: Text(
               label,
-              style: const TextStyle(
-                color: AwikiMePalette.mutedNeutral,
+              style: TextStyle(
+                color: context.awikiTheme.secondaryText,
                 fontSize: 12,
                 fontWeight: FontWeight.w400,
               ),
@@ -183,8 +183,8 @@ class _MacDetailRow extends StatelessWidget {
                   text ?? '',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AwikiMePalette.inkNeutral,
+                  style: TextStyle(
+                    color: context.awikiTheme.title,
                     fontSize: 12,
                     height: 1.35,
                   ),
@@ -207,17 +207,17 @@ class _MacDetailCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: CupertinoColors.white,
+        color: context.awikiTheme.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AwikiMePalette.hairline),
+        border: Border.all(color: context.awikiTheme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
             title,
-            style: const TextStyle(
-              color: AwikiMePalette.inkNeutral,
+            style: TextStyle(
+              color: context.awikiTheme.title,
               fontSize: 13,
               fontWeight: FontWeight.w400,
             ),
@@ -242,21 +242,21 @@ class _MacAbilityGridItem extends StatelessWidget {
       width: 96,
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
       decoration: BoxDecoration(
-        color: AwikiMePalette.content,
+        color: context.awikiTheme.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AwikiMePalette.hairline),
+        border: Border.all(color: context.awikiTheme.border),
       ),
       child: Row(
         children: <Widget>[
-          Icon(icon, size: 15, color: AwikiMePalette.mutedNeutral),
+          Icon(icon, size: 15, color: context.awikiTheme.secondaryText),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AwikiMePalette.mutedNeutral,
+              style: TextStyle(
+                color: context.awikiTheme.secondaryText,
                 fontSize: 10.5,
                 fontWeight: FontWeight.w400,
               ),
@@ -296,8 +296,8 @@ class _MacStatusLine extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AwikiMePalette.mutedNeutral,
+              style: TextStyle(
+                color: context.awikiTheme.secondaryText,
                 fontSize: 12,
                 height: 1.35,
               ),
@@ -320,8 +320,8 @@ class _MacStatusLine extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.left,
-              style: const TextStyle(
-                color: AwikiMePalette.inkNeutral,
+              style: TextStyle(
+                color: context.awikiTheme.title,
                 fontSize: 12,
                 height: 1.35,
                 fontWeight: FontWeight.w400,

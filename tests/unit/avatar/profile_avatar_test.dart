@@ -5,9 +5,11 @@ import 'package:awiki_me/src/presentation/profile/avatar_edit_dialog.dart';
 import 'package:awiki_me/src/presentation/profile/profile_page.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/profile_avatar.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/material.dart' show Theme;
 import 'package:flutter_test/flutter_test.dart';
 import '../test_support.dart';
 
@@ -31,6 +33,50 @@ class PreviewCache implements AvatarImageCache {
 }
 
 void main() {
+  for (final brightness in Brightness.values) {
+    testWidgets(
+      'editable touch avatar camera is readable in $brightness',
+      (tester) async {
+        final theme = AwikiMeTheme.forPlatform(
+          TargetPlatform.android,
+          brightness: brightness,
+        );
+        var edits = 0;
+        await tester.pumpWidget(
+          buildLocalizedTestApp(
+            home: Theme(
+              data: theme.materialTheme,
+              child: Center(
+                child: ProfileAvatar(seed: 'Alice', onEdit: () => edits++),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final camera = find.byIcon(CupertinoIcons.camera_fill);
+        expect(camera, findsOneWidget);
+        final icon = tester.widget<Icon>(camera);
+        final badge = tester.widget<Container>(
+          find.ancestor(of: camera, matching: find.byType(Container)).first,
+        );
+        final fill = (badge.decoration! as BoxDecoration).color!;
+        final luminances = [
+          icon.color!.computeLuminance(),
+          fill.computeLuminance(),
+        ]..sort();
+        expect(
+          (luminances.last + .05) / (luminances.first + .05),
+          greaterThanOrEqualTo(3),
+        );
+        await tester.tap(camera);
+        await tester.pumpAndSettle();
+        expect(edits, 1);
+        expect(tester.takeException(), isNull);
+      },
+      variant: const TargetPlatformVariant({TargetPlatform.android}),
+    );
+  }
+
   for (final width in [390.0, 1100.0]) {
     testWidgets('own avatar opens separate editor at width $width', (
       tester,
