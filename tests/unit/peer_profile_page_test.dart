@@ -94,7 +94,8 @@ void main() {
 
     expect(gateway.lastFollowedDidOrHandle, did);
     expect(find.byKey(const Key('peer-profile-follow')), findsNothing);
-    expect(find.text('取关'), findsOneWidget);
+    expect(find.byKey(const Key('peer-profile-unfollow')), findsOneWidget);
+    expect(find.text('已关注'), findsOneWidget);
   });
 
   testWidgets('关注列表已有联系人时资料页显示取消关注而不是重复关注', (tester) async {
@@ -142,22 +143,19 @@ void main() {
 
     expect(find.byKey(const Key('peer-profile-follow')), findsNothing);
     expect(find.byKey(const Key('peer-profile-unfollow')), findsOneWidget);
-    expect(find.text('取关'), findsOneWidget);
+    expect(find.text('已关注'), findsOneWidget);
+    // Following keeps the same light-blue pill; only the label changes.
     final relationshipVisual = tester.widget<Container>(
       find.byKey(const Key('peer-profile-relationship-visual')),
     );
     final relationshipDecoration =
         relationshipVisual.decoration! as BoxDecoration;
-    expect(
-      (relationshipDecoration.border! as Border).top.color,
-      AwikiMePalette.dangerRed,
-    );
-    expect(
-      tester.widget<Text>(find.text('取关')).style?.color,
-      AwikiMePalette.dangerRed,
-    );
+    expect(relationshipDecoration.color, AwikiMePalette.brandAccentSoft);
 
     await tester.tap(find.byKey(const Key('peer-profile-unfollow')));
+    await tester.pumpAndSettle();
+    expect(gateway.lastUnfollowedDidOrHandle, isNull);
+    await tester.tap(find.byKey(const Key('confirm-unfollow-button')));
     await tester.pumpAndSettle();
 
     expect(gateway.lastUnfollowedDidOrHandle, did);
@@ -205,9 +203,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('peer-profile-summary-details')), findsNothing);
-    expect(find.byKey(const Key('peer-profile-did-value')), findsNothing);
-    expect(find.byKey(const Key('peer-profile-handle-value')), findsNothing);
     expect(
       tester
           .widget<Text>(find.byKey(const Key('peer-profile-display-name')))
@@ -215,26 +210,16 @@ void main() {
       'CGW Agent',
     );
     expect(find.text('CGW Agent'), findsOneWidget);
-    expect(find.text('融资协作 Agent'), findsNothing);
-    expect(find.text('Agent'), findsNothing);
     expect(find.text('身份卡'), findsNothing);
-
-    await tester.tap(find.byKey(const Key('peer-profile-summary-toggle')));
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const Key('peer-profile-summary-details')),
-      findsOneWidget,
-    );
+    // Bio, tags and the DID are shown up front; nothing needs expanding.
+    expect(find.byKey(const Key('peer-profile-details')), findsOneWidget);
     expect(find.text('融资协作 Agent'), findsOneWidget);
     expect(find.text('Agent'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('peer-profile-did-row')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('peer-profile-summary-details')), findsNothing);
     final didFinder = find.byKey(const Key('peer-profile-did-value'));
     expect(didFinder, findsOneWidget);
     final didText = tester.widget<Text>(didFinder);
-    expect(didText.data, longDid);
+    expect(didText.maxLines, 1);
+    expect(didText.data, isNot(longDid));
     expect(
       find.byKey(const Key('peer-profile-copy-did-button')),
       findsOneWidget,
@@ -278,9 +263,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(requestedHomepageUrl, 'https://zhuocheng.anpclaw.com');
-    expect(find.byKey(const Key('peer-profile-homepage-value')), findsNothing);
-    await tester.tap(find.byKey(const Key('peer-profile-homepage-row')));
-    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('peer-profile-homepage-row')), findsOneWidget);
     expect(
       tester
           .widget<Text>(find.byKey(const Key('peer-profile-homepage-value')))
@@ -289,7 +272,7 @@ void main() {
     );
   });
 
-  testWidgets('窄屏用户信息使用紧凑取关与全宽操作行', (tester) async {
+  testWidgets('窄屏个人资料使用玻璃资料卡、关注胶囊与纸飞机发消息', (tester) async {
     tester.view
       ..devicePixelRatio = 1
       ..physicalSize = const Size(390, 844);
@@ -320,9 +303,8 @@ void main() {
 
     expect(find.byType(IdentityProfileCard), findsNothing);
     expect(find.byType(IdentityDocumentCard), findsNothing);
-    expect(find.text('用户信息'), findsOneWidget);
+    expect(find.text('个人资料'), findsOneWidget);
     expect(find.byKey(const Key('peer-profile-details')), findsOneWidget);
-    expect(find.text('DID'), findsOneWidget);
     expect(find.text('主页'), findsOneWidget);
     expect(find.text('身份卡'), findsNothing);
     expect(
@@ -331,76 +313,62 @@ void main() {
           .data,
       'newhandle1',
     );
-    expect(find.byKey(const Key('peer-profile-handle-value')), findsNothing);
-
+    expect(
+      tester.widget<Text>(find.byKey(const Key('peer-profile-handle'))).data,
+      '@newhandle1.agent-connect.cn',
+    );
     expect(
       tester.getSize(find.byKey(const Key('peer-profile-avatar'))),
-      const Size(64, 64),
+      const Size(56, 56),
+    );
+    // Follow pill and paper-plane message button sit beside the name.
+    expect(
+      tester.getSize(find.byKey(const Key('peer-profile-send-message-visual'))),
+      const Size(32, 32),
     );
     expect(
-      tester.getSize(find.byKey(const Key('peer-profile-send-message'))).height,
-      56,
-    );
-    expect(
-      tester.getSize(find.byKey(const Key('peer-profile-follow'))).height,
-      greaterThanOrEqualTo(44),
-    );
-    expect(
-      tester
-          .getSize(find.byKey(const Key('peer-profile-send-message-visual')))
-          .height,
-      56,
+      find.descendant(
+        of: find.byKey(const Key('peer-profile-send-message')),
+        matching: find.byIcon(CupertinoIcons.paperplane),
+      ),
+      findsOneWidget,
     );
     expect(
       tester.getSize(find.byKey(const Key('peer-profile-relationship-visual'))),
-      const Size(48, 32),
+      const Size(64, 32),
     );
+    final followText = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const Key('peer-profile-relationship-visual')),
+        matching: find.text('关注'),
+      ),
+    );
+    expect(followText.style?.fontSize, 13);
+    expect(followText.textAlign, TextAlign.center);
+    final nameRect = tester.getRect(
+      find.byKey(const Key('peer-profile-display-name')),
+    );
+    final followRect = tester.getRect(
+      find.byKey(const Key('peer-profile-relationship-visual')),
+    );
+    final sendRect = tester.getRect(
+      find.byKey(const Key('peer-profile-send-message-visual')),
+    );
+    expect(followRect.left, greaterThan(nameRect.right));
+    expect(sendRect.left, greaterThan(followRect.right));
+    final clearText = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const Key('peer-profile-delete-thread-visual')),
+        matching: find.text('清空聊天记录'),
+      ),
+    );
+    expect(clearText.style?.fontSize, 16);
     expect(
       tester
           .getSize(find.byKey(const Key('peer-profile-delete-thread-visual')))
           .height,
-      56,
+      52,
     );
-
-    for (final entry in <(Key, String)>[
-      (const Key('peer-profile-send-message-visual'), '发消息'),
-      (const Key('peer-profile-delete-thread-visual'), '清空聊天记录'),
-    ]) {
-      final text = tester.widget<Text>(
-        find.descendant(
-          of: find.byKey(entry.$1),
-          matching: find.text(entry.$2),
-        ),
-      );
-      expect(text.style?.fontSize, 16);
-      expect(text.textAlign, TextAlign.center);
-      expect(
-        find.descendant(of: find.byKey(entry.$1), matching: find.byType(Icon)),
-        findsNothing,
-      );
-    }
-    expect(
-      tester
-          .widget<Text>(
-            find.descendant(
-              of: find.byKey(const Key('peer-profile-relationship-visual')),
-              matching: find.text('关注'),
-            ),
-          )
-          .style
-          ?.fontSize,
-      13,
-    );
-
-    final sendRect = tester.getRect(
-      find.byKey(const Key('peer-profile-send-message-visual')),
-    );
-    final clearRect = tester.getRect(
-      find.byKey(const Key('peer-profile-delete-thread-visual')),
-    );
-    expect(sendRect.left, clearRect.left);
-    expect(sendRect.right, clearRect.right);
-    expect(sendRect.bottom, lessThan(clearRect.top));
     expect(tester.takeException(), isNull);
   });
 
@@ -515,9 +483,7 @@ void main() {
         did: profile,
         'alice.awiki.info': profile,
       }
-      ..directoryConversationIdsByQuery = <String, String>{
-        did: conversationId,
-      };
+      ..directoryConversationIdsByQuery = <String, String>{did: conversationId};
     final chatThreads = _RecordingChatThreadsControllerPlaceholder();
     final conversation = ConversationSummary(
       conversationId: conversationId,

@@ -16,6 +16,7 @@ class AvatarCropEditor extends StatefulWidget {
     required this.onReady,
     required this.currentAvatar,
     this.enabled = true,
+    this.isAgent = false,
   });
   final Uint8List bytes;
   final CropController controller;
@@ -23,6 +24,7 @@ class AvatarCropEditor extends StatefulWidget {
   final ValueChanged<bool> onReady;
   final Widget currentAvatar;
   final bool enabled;
+  final bool isAgent;
   @override
   State<AvatarCropEditor> createState() => _AvatarCropEditorState();
 }
@@ -175,7 +177,10 @@ class _AvatarCropEditorState extends State<AvatarCropEditor> {
             const SizedBox(width: 32),
             Column(
               children: [
-                ClipOval(
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(
+                    widget.isAgent ? 72 * .24 : 36,
+                  ),
                   child: SizedBox(
                     width: 72,
                     height: 72,

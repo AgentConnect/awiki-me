@@ -9,19 +9,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/e2e_semantics.dart';
-import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../application/tenant/app_tenant.dart';
-import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/services/realtime_gateway.dart';
 import '../../l10n/l10n.dart';
 import '../conversation_list/conversation_workspace_page.dart';
 import '../conversation_list/conversation_provider.dart';
-import '../devices/device_join_approval_sheet.dart';
-import '../devices/devices_provider.dart';
+import '../devices/device_join_request_notice.dart';
 import '../agents/agents_page.dart';
 import '../agents/agents_provider.dart';
 import '../agents/personal_agent_feature_visibility.dart';
@@ -41,17 +38,16 @@ import '../shared/sidebar_workspace.dart';
 import '../shared/startup_splash.dart';
 import '../shared/tenant_management_dialog.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass.dart';
 import 'providers/app_update_provider.dart';
 import 'providers/app_runtime_provider.dart';
 import 'providers/message_sync_coordinator_provider.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/selected_conversation_provider.dart';
 import 'providers/session_provider.dart';
+import '../shared/widgets/awiki_glass_controls.dart';
 
-const _desktopRailActiveColor = AwikiMePalette.brandAccent;
-const _desktopRailInactiveColor = AwikiMePalette.mutedNeutral;
-const _desktopRailActiveBackground = AwikiMePalette.brandAccentSoft;
-const double _desktopRailWidth = 64;
+const double _desktopRailWidth = 68;
 const double _desktopRailMinWidth = 56;
 const MethodChannel _macWindowChromeChannel = MethodChannel(
   'ai.awiki.awikime/window_chrome',
@@ -166,15 +162,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       0,
       (sum, conversation) => sum + conversation.unreadCount,
     );
-    final pendingJoinRequest = ref.watch(
-      devicesProvider.select((state) {
-        if (!state.currentDeviceCanManage) {
-          return null;
-        }
-        final requests = state.visibleJoinRequests;
-        return requests.isEmpty ? null : requests.first;
-      }),
-    );
+    final pendingJoinRequest = ref.watch(pendingJoinRequestProvider);
 
     if (!session.isLoggedIn) {
       return DesktopStartupReadyBoundary(
@@ -274,16 +262,24 @@ class _AppShellState extends ConsumerState<AppShell> {
             unreadCount: unreadCount,
             session: session.session,
             profile: profile,
+            online: realtimeStatus == RealtimeConnectionStatus.connected,
             onTap: (next) {
               ref.read(shellDestinationProvider.notifier).selectExpanded(next);
             },
             onProfileTap: _showDesktopIdentityDialog,
             child: page,
           )
-        : Column(
+        : compactDetailVisible
+        ? page
+        : Stack(
             children: <Widget>[
-              Expanded(child: page),
-              if (!compactDetailVisible) bottomNav,
+              Positioned.fill(
+                child: AwikiFloatingTabBarInset(
+                  inset: _compactTabBarInset(context),
+                  child: page,
+                ),
+              ),
+              Positioned(left: 0, right: 0, bottom: 0, child: bottomNav),
             ],
           );
 
@@ -294,19 +290,52 @@ class _AppShellState extends ConsumerState<AppShell> {
           children: <Widget>[
             e2eSemantics(
               identifier: 'e2e-authenticated',
-              child: AwikiMeWidgets.pageBackground(
-                key: const Key('app-shell-page-background'),
-                color: expanded ? null : context.awikiTheme.surface,
-                child: SafeArea(
-                  bottom: false,
-                  child: AwikiSystemNavigationClearance(child: content),
-                ),
-              ),
+              child: expanded
+                  ? AwikiMeWidgets.pageBackground(
+                      key: const Key('app-shell-page-background'),
+                      child: SafeArea(
+                        bottom: false,
+                        child: AwikiSystemNavigationClearance(child: content),
+                      ),
+                    )
+                  : AwikiGlassBackdrop(
+                      key: const Key('app-shell-page-background'),
+                      color: awikiCompactListBackground(context),
+                      child: SafeArea(
+                        bottom: false,
+                        child: compactDetailVisible
+                            ? AwikiSystemNavigationClearance(child: content)
+                            : content,
+                      ),
+                    ),
             ),
-            if (pendingJoinRequest != null)
-              _DeviceJoinRequestBanner(
-                deviceId: pendingJoinRequest.protocolDeviceId,
-                onReview: () => _openDeviceJoinRequest(pendingJoinRequest),
+            // The messages list shows the notice inline (under the phone
+            // header, or under the desktop search); every other surface keeps
+            // it floating so review stays reachable.
+            if (pendingJoinRequest != null &&
+                !(destination == ShellDestination.messages &&
+                    (expanded || !compactDetailVisible)))
+              Positioned(
+                left: 16,
+                right: 16,
+                top: expanded ? 12 : 60,
+                child: SafeArea(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 520),
+                      child: DeviceJoinRequestNoticeCard(
+                        request: pendingJoinRequest,
+                        floating: true,
+                        onReview: () => reviewDeviceJoinRequest(
+                          context,
+                          ref,
+                          pendingJoinRequest,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             if (update.hasUpdate &&
                 !update.recommendationDismissed &&
@@ -378,25 +407,20 @@ class _AppShellState extends ConsumerState<AppShell> {
         context,
         rootNavigator: true,
       ).popUntil((route) => route.isFirst);
-      await showCupertinoDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        useRootNavigator: true,
-        builder: (dialogContext) => PopScope<void>(
-          canPop: false,
-          child: CupertinoAlertDialog(
-            key: const Key('auth-revoked-dialog'),
-            title: Text(context.l10n.authRevokedDialogTitle),
-            content: Text(context.l10n.authRevokedDialogMessage),
-            actions: <Widget>[
-              CupertinoDialogAction(
-                key: const Key('auth-revoked-dialog-confirm'),
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: Text(context.l10n.commonConfirm),
-              ),
-            ],
+      await showAwikiGlassAlert<void>(
+        context,
+        alertKey: const Key('auth-revoked-dialog'),
+        dismissible: false,
+        title: context.l10n.authRevokedDialogTitle,
+        message: context.l10n.authRevokedDialogMessage,
+        actions: <AwikiAlertAction<void>>[
+          AwikiAlertAction<void>(
+            key: const Key('auth-revoked-dialog-confirm'),
+            label: context.l10n.commonConfirm,
+            value: null,
+            tone: AwikiPillTone.primary,
           ),
-        ),
+        ],
       );
       if (!mounted) return;
       setState(() {
@@ -404,16 +428,6 @@ class _AppShellState extends ConsumerState<AppShell> {
         _authRevokedDialogAcknowledged = true;
       });
     });
-  }
-
-  Future<void> _openDeviceJoinRequest(DeviceJoinRequestNotice request) async {
-    await AppNavigator.push<void>(
-      context,
-      (_) => DeviceJoinApprovalSheet(request: request),
-    );
-    if (mounted) {
-      await ref.read(devicesProvider.notifier).refreshJoinInbox();
-    }
   }
 
   bool _shouldShowRealtimeToast(RealtimeConnectionStatus status) {
@@ -594,7 +608,7 @@ class _AppUpdateRecommendationBanner extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: context.awikiTheme.surface,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AwikiMePalette.brandAccentSoft),
+                border: Border.all(color: context.awikiTheme.primarySoft),
                 boxShadow: const <BoxShadow>[
                   BoxShadow(
                     color: Color(0x18000000),
@@ -607,9 +621,9 @@ class _AppUpdateRecommendationBanner extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
                 child: Row(
                   children: <Widget>[
-                    const Icon(
+                    Icon(
                       CupertinoIcons.arrow_down_circle,
-                      color: AwikiMePalette.brandAccent,
+                      color: context.awikiTheme.primary,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -715,102 +729,13 @@ class _RetainedDestinationPage extends StatelessWidget {
   }
 }
 
-class _DeviceJoinRequestBanner extends StatelessWidget {
-  const _DeviceJoinRequestBanner({
-    required this.deviceId,
-    required this.onReview,
-  });
-
-  final String deviceId;
-  final VoidCallback onReview;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    return Positioned(
-      left: 20,
-      right: 20,
-      top: 12,
-      child: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: Semantics(
-            identifier: 'device-join-request-entry',
-            button: true,
-            child: CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: onReview,
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 520),
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                decoration: BoxDecoration(
-                  color: theme.surface,
-                  borderRadius: BorderRadius.circular(AwikiMeRadii.lg),
-                  border: Border.all(
-                    color: AwikiMeColors.primary.withValues(alpha: 0.2),
-                  ),
-                  boxShadow: theme.overlayShadow,
-                ),
-                child: Row(
-                  children: <Widget>[
-                    const Icon(
-                      CupertinoIcons.device_phone_portrait,
-                      color: AwikiMeColors.primary,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Text(
-                            context.l10n.deviceJoinApprovalTitle,
-                            style: TextStyle(
-                              color: theme.title,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            deviceId,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: theme.secondaryText,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      context.l10n.deviceReviewAction,
-                      style: const TextStyle(
-                        color: AwikiMeColors.primary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _DesktopShell extends StatelessWidget {
   const _DesktopShell({
     required this.currentDestination,
     required this.unreadCount,
     required this.session,
     required this.profile,
+    required this.online,
     required this.onTap,
     required this.onProfileTap,
     required this.child,
@@ -820,6 +745,7 @@ class _DesktopShell extends StatelessWidget {
   final int unreadCount;
   final SessionIdentity? session;
   final UserProfile? profile;
+  final bool online;
   final ValueChanged<ShellDestination> onTap;
   final VoidCallback onProfileTap;
   final Widget child;
@@ -841,6 +767,7 @@ class _DesktopShell extends StatelessWidget {
             unreadCount: unreadCount,
             session: session,
             profile: profile,
+            online: online,
             onTap: onTap,
             onProfileTap: onProfileTap,
           ),
@@ -922,6 +849,7 @@ class _DesktopRail extends StatelessWidget {
     required this.unreadCount,
     required this.session,
     required this.profile,
+    required this.online,
     required this.onTap,
     required this.onProfileTap,
   });
@@ -930,104 +858,116 @@ class _DesktopRail extends StatelessWidget {
   final int unreadCount;
   final SessionIdentity? session;
   final UserProfile? profile;
+  final bool online;
   final ValueChanged<ShellDestination> onTap;
   final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    // The reference rail is glass over a wallpaper that glows blue at the
+    // top and warm at the bottom; paint that glow into the rail itself.
     return DecoratedBox(
-      decoration: const BoxDecoration(color: AwikiMePalette.navigationSurface),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxHeight < 760;
-          final gap = responsive.displayScaled(compact ? 7.0 : 10.0);
-          final avatar = _avatarForCurrentIdentity(session, profile);
-          return Column(
-            children: <Widget>[
-              SizedBox(height: responsive.displayScaled(compact ? 40 : 50)),
-              _DesktopRailAvatar(
-                key: const Key('mac-me-rail-avatar'),
-                seed: avatar.seed,
-                labelOverride: avatar.labelOverride,
-                avatarUri: avatar.avatarUri,
-                userId: avatar.userId,
-                onTap: onProfileTap,
+      key: const Key('mac-desktop-rail-surface'),
+      decoration: BoxDecoration(
+        color: theme.isDark ? theme.navigationSurface : theme.background,
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: <Color>[
+              theme.glowPrimary.withValues(alpha: theme.glowPrimary.a * 0.7),
+              theme.glowPrimary.withValues(alpha: 0),
+              theme.glowSecondary.withValues(alpha: 0),
+              theme.glowSecondary.withValues(
+                alpha: theme.glowSecondary.a * 0.8,
               ),
-              SizedBox(height: responsive.displayScaled(compact ? 10 : 12)),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.zero,
-                  child: Column(
-                    children: <Widget>[
-                      _DesktopRailItem(
-                        key: const Key('desktop-rail-messages'),
-                        role: AwikiMeIconRole.messages,
-                        label: context.l10n.shellNavMessages,
-                        semanticsIdentifier: 'e2e-messages-tab',
-                        selected:
-                            currentDestination == ShellDestination.messages,
-                        badge: _formatUnreadBadge(unreadCount),
-                        compact: compact,
-                        onTap: () => onTap(ShellDestination.messages),
-                      ),
-                      SizedBox(height: gap),
-                      _DesktopRailItem(
-                        key: const Key('desktop-rail-agents'),
-                        role: AwikiMeIconRole.agents,
-                        label: context.l10n.shellNavAgents,
-                        selected: currentDestination == ShellDestination.agents,
-                        compact: compact,
-                        semanticsIdentifier: 'e2e-agents-tab',
-                        onTap: () => onTap(ShellDestination.agents),
-                      ),
-                      SizedBox(height: gap),
-                      _DesktopRailItem(
-                        key: const Key('desktop-rail-contacts'),
-                        role: AwikiMeIconRole.contacts,
-                        label: context.l10n.shellNavContacts,
-                        semanticsIdentifier: 'e2e-contacts-tab',
-                        selected:
-                            currentDestination == ShellDestination.contacts,
-                        compact: compact,
-                        onTap: () => onTap(ShellDestination.contacts),
-                      ),
-                      SizedBox(height: gap),
-                      _DesktopRailItem(
-                        key: const Key('desktop-rail-tasks'),
-                        role: AwikiMeIconRole.tasks,
-                        label: context.l10n.shellNavTasks,
-                        selected: currentDestination == ShellDestination.tasks,
-                        compact: compact,
-                        onTap: () => onTap(ShellDestination.tasks),
-                      ),
-                      SizedBox(height: gap),
-                      _DesktopRailItem(
-                        key: const Key('desktop-rail-workbench'),
-                        role: AwikiMeIconRole.workbench,
-                        label: context.l10n.shellNavWorkspace,
-                        selected:
-                            currentDestination == ShellDestination.workbench,
-                        compact: compact,
-                        onTap: () => onTap(ShellDestination.workbench),
-                      ),
-                    ],
+            ],
+            stops: const <double>[0, 0.42, 0.6, 1],
+          ),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxHeight < 760;
+            final gap = responsive.displayScaled(4);
+            final avatar = _avatarForCurrentIdentity(session, profile);
+            return Column(
+              children: <Widget>[
+                SizedBox(height: responsive.displayScaled(compact ? 40 : 50)),
+                _DesktopRailAvatar(
+                  key: const Key('mac-me-rail-avatar'),
+                  seed: avatar.seed,
+                  labelOverride: avatar.labelOverride,
+                  avatarUri: avatar.avatarUri,
+                  userId: avatar.userId,
+                  online: online,
+                  onTap: onProfileTap,
+                ),
+                SizedBox(height: responsive.displayScaled(compact ? 10 : 12)),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: <Widget>[
+                        _DesktopRailItem(
+                          key: const Key('desktop-rail-messages'),
+                          role: AwikiMeIconRole.messages,
+                          label: context.l10n.shellNavMessages,
+                          semanticsIdentifier: 'e2e-messages-tab',
+                          selected:
+                              currentDestination == ShellDestination.messages,
+                          badge: _formatUnreadBadge(unreadCount),
+                          onTap: () => onTap(ShellDestination.messages),
+                        ),
+                        SizedBox(height: gap),
+                        _DesktopRailItem(
+                          key: const Key('desktop-rail-agents'),
+                          role: AwikiMeIconRole.agents,
+                          label: context.l10n.shellNavAgents,
+                          selected:
+                              currentDestination == ShellDestination.agents,
+                          semanticsIdentifier: 'e2e-agents-tab',
+                          onTap: () => onTap(ShellDestination.agents),
+                        ),
+                        SizedBox(height: gap),
+                        _DesktopRailItem(
+                          key: const Key('desktop-rail-contacts'),
+                          role: AwikiMeIconRole.contacts,
+                          label: context.l10n.shellNavContacts,
+                          semanticsIdentifier: 'e2e-contacts-tab',
+                          selected:
+                              currentDestination == ShellDestination.contacts,
+                          onTap: () => onTap(ShellDestination.contacts),
+                        ),
+                        SizedBox(height: gap),
+                        _DesktopRailItem(
+                          key: const Key('desktop-rail-tasks'),
+                          role: AwikiMeIconRole.tasks,
+                          label: context.l10n.shellNavTasks,
+                          selected:
+                              currentDestination == ShellDestination.tasks,
+                          onTap: () => onTap(ShellDestination.tasks),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              _DesktopRailItem(
-                key: const Key('desktop-rail-settings'),
-                role: AwikiMeIconRole.settings,
-                label: context.l10n.shellNavSettings,
-                semanticsIdentifier: 'e2e-settings-tab',
-                selected: currentDestination == ShellDestination.settings,
-                compact: compact,
-                onTap: () => onTap(ShellDestination.settings),
-              ),
-              SizedBox(height: responsive.displayScaled(compact ? 10 : 14)),
-            ],
-          );
-        },
+                _DesktopRailItem(
+                  key: const Key('desktop-rail-settings'),
+                  role: AwikiMeIconRole.settings,
+                  label: context.l10n.shellNavSettings,
+                  semanticsIdentifier: 'e2e-settings-tab',
+                  selected: currentDestination == ShellDestination.settings,
+                  onTap: () => onTap(ShellDestination.settings),
+                ),
+                SizedBox(height: responsive.displayScaled(compact ? 10 : 14)),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -1101,7 +1041,6 @@ class _DesktopRailItem extends StatelessWidget {
     required this.role,
     required this.label,
     required this.selected,
-    required this.compact,
     required this.onTap,
     this.badge,
     this.semanticsIdentifier,
@@ -1110,7 +1049,6 @@ class _DesktopRailItem extends StatelessWidget {
   final AwikiMeIconRole role;
   final String label;
   final bool selected;
-  final bool compact;
   final VoidCallback onTap;
   final String? badge;
   final String? semanticsIdentifier;
@@ -1119,13 +1057,14 @@ class _DesktopRailItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final foreground = selected
-        ? _desktopRailActiveColor
-        : _desktopRailInactiveColor;
-    final height = responsive.displayScaled(compact ? 56.0 : 58.0);
-    final width = responsive.displayScaled(54);
+        ? context.awikiTheme.primary
+        : context.awikiTheme.secondaryText;
+    final height = responsive.displayScaled(44);
+    final width = responsive.displayScaled(44);
     return AppPressable(
       onTap: onTap,
       semanticLabel: label,
+      tooltip: label,
       semanticsIdentifier: semanticsIdentifier,
       selected: selected,
       borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
@@ -1133,9 +1072,9 @@ class _DesktopRailItem extends StatelessWidget {
       scaleOnPress: true,
       builder: (context, state, child) {
         final overlay = state.pressed
-            ? _desktopRailActiveColor.withValues(alpha: 0.10)
+            ? context.awikiTheme.primary.withValues(alpha: 0.10)
             : state.hovered || state.focused
-            ? _desktopRailActiveColor.withValues(alpha: 0.06)
+            ? context.awikiTheme.primary.withValues(alpha: 0.06)
             : CupertinoColors.transparent;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 140),
@@ -1158,54 +1097,21 @@ class _DesktopRailItem extends StatelessWidget {
                 duration: const Duration(milliseconds: 140),
                 width: width,
                 height: height,
-                padding: EdgeInsets.symmetric(
-                  vertical: responsive.displayScaled(compact ? 6 : 8),
-                ),
                 decoration: BoxDecoration(
                   color: selected
-                      ? _desktopRailActiveBackground
+                      ? context.awikiTheme.primarySoft
                       : const Color(0x00FFFFFF),
                   borderRadius: BorderRadius.circular(
                     responsive.displayScaled(10),
                   ),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    SizedBox(
-                      width: responsive.displayScaled(30),
-                      height: responsive.displayScaled(24),
-                      child: Center(
-                        child: AwikiMeSemanticIcon(
-                          role: role,
-                          selected: selected,
-                          color: foreground,
-                          size: responsive.displayScaled(18),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: responsive.displayScaled(1)),
-                    SizedBox(
-                      width: width - responsive.displayScaled(6),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          softWrap: false,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: foreground,
-                            fontSize: 10.5,
-                            fontWeight: selected
-                                ? FontWeight.w400
-                                : FontWeight.w400,
-                            height: 1,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                child: Center(
+                  child: AwikiMeSemanticIcon(
+                    role: role,
+                    selected: selected,
+                    color: foreground,
+                    size: responsive.displayScaled(22),
+                  ),
                 ),
               ),
               if (badge != null)
@@ -1222,7 +1128,7 @@ class _DesktopRailItem extends StatelessWidget {
                       color: AwikiMePalette.unreadRed,
                       borderRadius: BorderRadius.circular(99),
                       border: Border.all(
-                        color: AwikiMePalette.navigationSurface,
+                        color: context.awikiTheme.navigationSurface,
                       ),
                     ),
                     child: Text(
@@ -1251,6 +1157,7 @@ class _DesktopRailAvatar extends StatelessWidget {
     this.labelOverride,
     this.avatarUri,
     this.userId,
+    this.online = false,
     required this.onTap,
   });
 
@@ -1258,6 +1165,9 @@ class _DesktopRailAvatar extends StatelessWidget {
   final String? labelOverride;
   final String? avatarUri;
   final String? userId;
+
+  /// Mirrors the realtime connection, not a presence claim to peers.
+  final bool online;
   final VoidCallback onTap;
 
   @override
@@ -1275,18 +1185,41 @@ class _DesktopRailAvatar extends StatelessWidget {
           width: responsive.displayScaled(38),
           height: responsive.displayScaled(38),
           decoration: BoxDecoration(
-            color: AwikiMePalette.content,
+            color: context.awikiTheme.surface,
             borderRadius: BorderRadius.circular(responsive.displayScaled(19)),
-            border: Border.all(color: AwikiMePalette.hairline),
+            border: Border.all(color: context.awikiTheme.border),
           ),
-          child: Center(
-            child: AvatarBadge(
-              seed: seed,
-              size: responsive.displayScaled(34),
-              labelOverride: labelOverride,
-              avatarUri: avatarUri,
-              userId: userId,
-            ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              Center(
+                child: AvatarBadge(
+                  seed: seed,
+                  size: responsive.displayScaled(34),
+                  labelOverride: labelOverride,
+                  avatarUri: avatarUri,
+                  userId: userId,
+                ),
+              ),
+              if (online)
+                Positioned(
+                  right: responsive.displayScaled(-1),
+                  bottom: responsive.displayScaled(-1),
+                  child: Container(
+                    key: const Key('mac-me-rail-online-dot'),
+                    width: responsive.displayScaled(10),
+                    height: responsive.displayScaled(10),
+                    decoration: BoxDecoration(
+                      color: context.awikiTheme.success,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: context.awikiTheme.navigationSurface,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -1350,6 +1283,18 @@ class _DesktopPlaceholderPage extends StatelessWidget {
   }
 }
 
+/// Reference `--tab-h`: the floating capsule's height.
+const double _compactTabBarHeight = 62;
+
+/// Space the floating bar reserves above the device's bottom inset.
+double _compactTabBarGap(BuildContext context) {
+  final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+  return safeBottom - 8 > 12 ? safeBottom - 8 : 12;
+}
+
+double _compactTabBarInset(BuildContext context) =>
+    _compactTabBarHeight + _compactTabBarGap(context) + 12;
+
 class _BottomNavBar extends StatelessWidget {
   const _BottomNavBar({
     required this.currentDestination,
@@ -1357,68 +1302,100 @@ class _BottomNavBar extends StatelessWidget {
     required this.onTap,
   });
 
+  static const List<ShellDestination> _order = <ShellDestination>[
+    ShellDestination.messages,
+    ShellDestination.agents,
+    ShellDestination.contacts,
+    ShellDestination.profile,
+  ];
+
   final ShellDestination currentDestination;
   final int unreadCount;
   final ValueChanged<ShellDestination> onTap;
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    return DecoratedBox(
-      key: const Key('compact-bottom-navigation'),
-      decoration: BoxDecoration(
-        color: AwikiMePalette.content,
-        border: Border(top: BorderSide(color: theme.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.fromLTRB(4, 2, 4, 0),
-        child: SizedBox(
-          height: 62,
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: _BottomNavItem(
-                  key: const Key('compact-nav-messages'),
-                  label: context.l10n.shellNavMessages,
-                  semanticsIdentifier: 'e2e-messages-tab',
-                  role: AwikiMeIconRole.messages,
-                  active: currentDestination == ShellDestination.messages,
-                  badge: _formatUnreadBadge(unreadCount),
-                  onTap: () => onTap(ShellDestination.messages),
-                ),
-              ),
-              Expanded(
-                child: _BottomNavItem(
-                  key: const Key('compact-nav-contacts'),
-                  label: context.l10n.shellNavContacts,
-                  semanticsIdentifier: 'e2e-contacts-tab',
-                  role: AwikiMeIconRole.contacts,
-                  active: currentDestination == ShellDestination.contacts,
-                  onTap: () => onTap(ShellDestination.contacts),
-                ),
-              ),
-              Expanded(
-                child: _BottomNavItem(
-                  key: const Key('compact-nav-agents'),
-                  label: context.l10n.shellNavAgents,
-                  semanticsIdentifier: 'e2e-agents-tab',
-                  role: AwikiMeIconRole.agents,
-                  active: currentDestination == ShellDestination.agents,
-                  onTap: () => onTap(ShellDestination.agents),
-                ),
-              ),
-              Expanded(
-                child: _BottomNavItem(
-                  key: const Key('compact-nav-profile'),
-                  label: context.l10n.shellNavMe,
-                  semanticsIdentifier: 'e2e-profile-tab',
-                  role: AwikiMeIconRole.profile,
-                  active: currentDestination == ShellDestination.profile,
-                  onTap: () => onTap(ShellDestination.profile),
-                ),
-              ),
-            ],
+    final l10n = context.l10n;
+    final selectedIndex = _order.indexOf(currentDestination);
+    const radius = BorderRadius.all(Radius.circular(_compactTabBarHeight / 2));
+    return Padding(
+      padding: EdgeInsets.fromLTRB(14, 0, 14, _compactTabBarGap(context)),
+      child: SizedBox(
+        key: const Key('compact-bottom-navigation'),
+        height: _compactTabBarHeight,
+        child: AwikiGlassSurface(
+          borderRadius: radius,
+          padding: const EdgeInsets.all(5),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final slot = constraints.maxWidth / _order.length;
+              return Stack(
+                children: <Widget>[
+                  if (selectedIndex >= 0)
+                    AnimatedPositioned(
+                      key: const Key('compact-nav-lens'),
+                      duration: const Duration(milliseconds: 450),
+                      curve: const Cubic(0.3, 1.35, 0.5, 1),
+                      top: 0,
+                      bottom: 0,
+                      left: slot * selectedIndex,
+                      width: slot,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: context.awikiTheme.glassLens,
+                          borderRadius: BorderRadius.circular(26),
+                          border: Border.all(
+                            color: context.awikiTheme.glassEdgeActive,
+                            width: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  Row(
+                    children: <Widget>[
+                      for (final destination in _order)
+                        Expanded(
+                          child: switch (destination) {
+                            ShellDestination.messages => _BottomNavItem(
+                              key: const Key('compact-nav-messages'),
+                              label: l10n.shellNavMessages,
+                              semanticsIdentifier: 'e2e-messages-tab',
+                              role: AwikiMeIconRole.messages,
+                              active: currentDestination == destination,
+                              badge: _formatUnreadBadge(unreadCount),
+                              onTap: () => onTap(destination),
+                            ),
+                            ShellDestination.agents => _BottomNavItem(
+                              key: const Key('compact-nav-agents'),
+                              label: l10n.shellNavAgents,
+                              semanticsIdentifier: 'e2e-agents-tab',
+                              role: AwikiMeIconRole.agents,
+                              active: currentDestination == destination,
+                              onTap: () => onTap(destination),
+                            ),
+                            ShellDestination.contacts => _BottomNavItem(
+                              key: const Key('compact-nav-contacts'),
+                              label: l10n.shellNavContacts,
+                              semanticsIdentifier: 'e2e-contacts-tab',
+                              role: AwikiMeIconRole.contacts,
+                              active: currentDestination == destination,
+                              onTap: () => onTap(destination),
+                            ),
+                            _ => _BottomNavItem(
+                              key: const Key('compact-nav-profile'),
+                              label: l10n.shellNavMe,
+                              semanticsIdentifier: 'e2e-profile-tab',
+                              role: AwikiMeIconRole.profile,
+                              active: currentDestination == destination,
+                              onTap: () => onTap(destination),
+                            ),
+                          },
+                        ),
+                    ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -1446,103 +1423,67 @@ class _BottomNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final iconSize = responsive.scaled(22);
-    final labelFontSize = responsive.scaled(10.5);
-    final iconSlotSize = responsive.scaled(30);
     final foreground = active
-        ? AwikiMePalette.brandAccent
-        : AwikiMePalette.mutedNeutral;
-    Widget buildNavIcon() {
-      final icon = AwikiMeSemanticIcon(
-        role: role,
-        selected: active,
-        color: foreground,
-        size: iconSize,
-      );
-      final badgeLabel = badge;
-      return SizedBox(
-        width: iconSlotSize,
-        height: iconSlotSize,
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: <Widget>[
-            icon,
-            if (badgeLabel != null)
-              Positioned(
-                top: 0,
-                right: responsive.scaled(-4),
-                child: _NavUnreadBadge(label: badgeLabel),
-              ),
-          ],
-        ),
-      );
-    }
-
-    return Stack(
-      fit: StackFit.expand,
-      children: <Widget>[
-        AppPressable(
-          onTap: onTap,
-          semanticLabel: label,
-          semanticsIdentifier: semanticsIdentifier,
-          selected: active,
-          scaleOnPress: true,
-          pressedScale: 0.96,
-          borderRadius: BorderRadius.circular(responsive.radius(10)),
-          child: ExcludeSemantics(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
-              curve: Curves.easeOut,
-              width: double.infinity,
-              height: double.infinity,
-              padding: EdgeInsets.fromLTRB(
-                responsive.spacing(4),
-                responsive.scaled(2),
-                responsive.spacing(4),
-                responsive.spacing(4),
-              ),
-              color: CupertinoColors.transparent,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: <Widget>[
-                  buildNavIcon(),
-                  SizedBox(height: responsive.scaled(2)),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      softWrap: false,
-                      style: TextStyle(
-                        color: foreground,
-                        fontSize: labelFontSize,
-                        fontWeight: active ? FontWeight.w400 : FontWeight.w400,
-                        height: 1,
-                      ),
+        ? context.awikiTheme.primaryDark
+        : context.awikiTheme.title;
+    final badgeLabel = badge;
+    return AppPressable(
+      onTap: onTap,
+      semanticLabel: label,
+      semanticsIdentifier: semanticsIdentifier,
+      selected: active,
+      scaleOnPress: true,
+      pressedScale: 0.92,
+      borderRadius: BorderRadius.circular(26),
+      child: ExcludeSemantics(
+        child: SizedBox.expand(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              SizedBox.square(
+                dimension: 26,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: <Widget>[
+                    AwikiMeSemanticIcon(
+                      role: role,
+                      selected: active,
+                      color: foreground,
+                      size: context.awikiResponsive.scaled(22),
                     ),
-                  ),
-                ],
+                    if (badgeLabel != null)
+                      Positioned(
+                        top: -3,
+                        left: 16,
+                        child: _NavUnreadBadge(label: badgeLabel),
+                      ),
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  key: active
+                      ? Key('compact-nav-active-indicator:${role.name}')
+                      : null,
+                  maxLines: 1,
+                  softWrap: false,
+                  textScaler: TextScaler.noScaling,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w400,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        if (active)
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              key: Key('compact-nav-active-indicator:${role.name}'),
-              width: responsive.scaled(28),
-              height: responsive.scaled(3),
-              decoration: const BoxDecoration(
-                color: AwikiMePalette.brandAccent,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(3)),
-              ),
-            ),
-          ),
-      ],
+      ),
     );
   }
 }

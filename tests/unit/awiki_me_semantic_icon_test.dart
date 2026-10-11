@@ -14,44 +14,22 @@ void main() {
     }
   });
 
-  test('selected navigation roles keep the same stable glyph assets', () {
-    expect(
-      AwikiMeIconRegistry.definition(
-        AwikiMeIconRole.messages,
-      ).assetFor(selected: true),
-      'assets/icons/message_Inactive.svg',
-    );
-    expect(
-      AwikiMeIconRegistry.definition(
-        AwikiMeIconRole.contacts,
-      ).assetFor(selected: true),
-      'assets/icons/friend_Inactive.svg',
-    );
-    expect(
-      AwikiMeIconRegistry.definition(
-        AwikiMeIconRole.profile,
-      ).assetFor(selected: true),
-      'assets/icons/me_Inactive.svg',
-    );
-  });
-
-  test('navigation optical calibration is centralized in the registry', () {
-    expect(
-      AwikiMeIconRegistry.definition(AwikiMeIconRole.messages).opticalScale,
-      greaterThan(1),
-    );
-    expect(
-      AwikiMeIconRegistry.definition(AwikiMeIconRole.contacts).opticalScale,
-      greaterThan(1),
-    );
-    expect(
-      AwikiMeIconRegistry.definition(AwikiMeIconRole.profile).opticalScale,
-      greaterThan(1),
-    );
-    expect(
-      AwikiMeIconRegistry.definition(AwikiMeIconRole.agents).opticalScale,
-      closeTo(0.92, 0.001),
-    );
+  test('navigation roles use the reference line glyphs in both states', () {
+    const expected = <AwikiMeIconRole, String>{
+      AwikiMeIconRole.messages: 'assets/icons/nav_chat.svg',
+      AwikiMeIconRole.agents: 'assets/icons/nav_agents.svg',
+      AwikiMeIconRole.contacts: 'assets/icons/nav_contacts.svg',
+      AwikiMeIconRole.tasks: 'assets/icons/nav_tasks.svg',
+      AwikiMeIconRole.profile: 'assets/icons/nav_me.svg',
+      AwikiMeIconRole.settings: 'assets/icons/nav_settings.svg',
+    };
+    for (final entry in expected.entries) {
+      final definition = AwikiMeIconRegistry.definition(entry.key);
+      expect(definition.assetFor(selected: false), entry.value);
+      expect(definition.assetFor(selected: true), entry.value);
+      // Drawn on the reference's 24-unit grid, so no optical correction.
+      expect(definition.opticalScale, 1);
+    }
   });
 
   testWidgets('asset-backed icon has stable dimensions and tint', (
@@ -88,13 +66,13 @@ void main() {
     await tester.pumpWidget(
       const CupertinoApp(
         home: Center(
-          child: AwikiMeSemanticIcon(role: AwikiMeIconRole.agents, size: 18),
+          child: AwikiMeSemanticIcon(role: AwikiMeIconRole.workbench, size: 18),
         ),
       ),
     );
 
     final icon = tester.widget<Icon>(find.byType(Icon));
-    expect(icon.icon, CupertinoIcons.square_stack_3d_up_fill);
+    expect(icon.icon, CupertinoIcons.square_grid_2x2);
     expect(icon.size, 18);
     final transform = tester.widget<Transform>(
       find.descendant(
@@ -102,8 +80,8 @@ void main() {
         matching: find.byType(Transform),
       ),
     );
-    expect(transform.transform.storage[0], closeTo(0.92, 0.001));
-    expect(transform.transform.storage[5], closeTo(0.92, 0.001));
+    expect(transform.transform.storage[0], closeTo(1, 0.001));
+    expect(transform.transform.storage[5], closeTo(1, 0.001));
     expect(
       tester.getSize(find.byType(AwikiMeSemanticIcon)),
       const Size.square(18),

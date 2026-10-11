@@ -9,8 +9,10 @@ import '../../../l10n/app_localizations.dart';
 import '../../l10n/l10n.dart';
 import 'app_dialog.dart';
 import 'awiki_me_design.dart';
+import 'awiki_me_feedback.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
+import 'widgets/awiki_glass_controls.dart';
 
 /// Opens the complete tenant-management surface using the app's adaptive
 /// dialog route on both compact and expanded layouts.
@@ -591,9 +593,12 @@ class _TenantStatusPill extends StatelessWidget {
 }
 
 class _TenantFormDialog extends ConsumerStatefulWidget {
-  const _TenantFormDialog({this.tenant});
+  const _TenantFormDialog({this.tenant, this.useAfterCreate = false});
 
   final AppTenantProfile? tenant;
+
+  /// Switches to the tenant right after creating it ("add and use").
+  final bool useAfterCreate;
 
   @override
   ConsumerState<_TenantFormDialog> createState() => _TenantFormDialogState();
@@ -662,27 +667,36 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     final renameOnly = _editing && (_hasData || _dataStateCheckFailed);
+    void cancel() => Navigator.of(context).pop();
     return AppDialogScaffold(
-      maxWidth: 520,
+      maxWidth: 440,
       maxHeightFraction: 0.92,
       avoidViewInsets: true,
+      compactCentered: true,
       child: SingleChildScrollView(
-        padding: EdgeInsets.all(responsive.spacing(18)),
+        padding: responsive.isPhone
+            ? const EdgeInsets.fromLTRB(22, 22, 20, 18)
+            : EdgeInsets.all(responsive.spacing(20)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            AppDialogHeader(
-              title: !_editing
+            Text(
+              !_editing
                   ? context.l10n.tenantCreateTitle
                   : renameOnly
                   ? context.l10n.tenantRenameTitle
                   : context.l10n.tenantEditTitle,
-              onClose: _submitting ? null : () => Navigator.of(context).pop(),
-              isCloseEnabled: !_submitting,
+              style: TextStyle(
+                color: theme.title,
+                fontSize: responsive.titleLg,
+                fontWeight: FontWeight.w400,
+                height: 1.2,
+              ),
             ),
-            SizedBox(height: responsive.spacing(18)),
+            SizedBox(height: responsive.spacing(16)),
             if (_checkingData)
               const Center(child: CupertinoActivityIndicator())
             else ...<Widget>[
@@ -697,8 +711,10 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
                 ),
                 SizedBox(height: responsive.spacing(14)),
               ],
+              _TenantFieldLabel(context.l10n.tenantName),
               AppTextField(
                 key: const Key('tenant-name-field'),
+                showLabel: false,
                 controller: _nameController,
                 label: context.l10n.tenantName,
                 placeholder: context.l10n.tenantNamePlaceholder,
@@ -711,15 +727,18 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
                   label: context.l10n.tenantBackendBaseUrl,
                   value: widget.tenant!.backendBaseUrl,
                 )
-              else
+              else ...<Widget>[
+                _TenantFieldLabel(context.l10n.tenantBackendBaseUrl),
                 AppTextField(
                   key: const Key('tenant-backend-field'),
+                  showLabel: false,
                   controller: _backendController,
                   label: context.l10n.tenantBackendBaseUrl,
                   placeholder: context.l10n.tenantBackendBaseUrlPlaceholder,
                   keyboardType: TextInputType.url,
                   enabled: !_submitting,
                 ),
+              ],
               SizedBox(height: responsive.spacing(12)),
               if (_editing)
                 _TenantReadOnlyField(
@@ -727,15 +746,27 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
                   label: context.l10n.tenantDidHost,
                   value: widget.tenant!.didHost,
                 )
-              else
+              else ...<Widget>[
+                _TenantFieldLabel(context.l10n.tenantDidHost),
                 AppTextField(
                   key: const Key('tenant-did-host-field'),
+                  showLabel: false,
                   controller: _didHostController,
                   label: context.l10n.tenantDidHost,
                   placeholder: context.l10n.tenantDidHostPlaceholder,
                   keyboardType: TextInputType.url,
                   enabled: !_submitting,
                 ),
+                SizedBox(height: responsive.spacing(10)),
+                Text(
+                  context.l10n.tenantDidHostCreateHint,
+                  style: TextStyle(
+                    color: theme.secondaryText,
+                    fontSize: responsive.bodySm,
+                    height: 1.45,
+                  ),
+                ),
+              ],
               if (_error != null) ...<Widget>[
                 SizedBox(height: responsive.spacing(12)),
                 _TenantInlineMessage(
@@ -743,41 +774,26 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
                   danger: true,
                 ),
               ],
-              SizedBox(height: responsive.spacing(18)),
-              if (responsive.isCompact) ...<Widget>[
-                AppPrimaryButton(
-                  key: const Key('tenant-form-submit-button'),
-                  label: _submitLabel(context),
-                  onPressed: _submitting ? null : _submit,
-                ),
-                SizedBox(height: responsive.spacing(10)),
-                AppSecondaryButton(
-                  label: context.l10n.commonCancel,
-                  onPressed: _submitting
-                      ? null
-                      : () => Navigator.of(context).pop(),
-                ),
-              ] else
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: AppSecondaryButton(
-                        label: context.l10n.commonCancel,
-                        onPressed: _submitting
-                            ? null
-                            : () => Navigator.of(context).pop(),
-                      ),
+              SizedBox(height: responsive.spacing(20)),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: AppSecondaryButton(
+                      key: const Key('tenant-form-cancel-button'),
+                      label: context.l10n.commonCancel,
+                      onPressed: _submitting ? null : cancel,
                     ),
-                    SizedBox(width: responsive.spacing(12)),
-                    Expanded(
-                      child: AppPrimaryButton(
-                        key: const Key('tenant-form-submit-button'),
-                        label: _submitLabel(context),
-                        onPressed: _submitting ? null : _submit,
-                      ),
+                  ),
+                  SizedBox(width: responsive.spacing(10)),
+                  Expanded(
+                    child: AppPrimaryButton(
+                      key: const Key('tenant-form-submit-button'),
+                      label: _submitLabel(context),
+                      onPressed: _submitting ? null : _submit,
                     ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
             ],
           ],
         ),
@@ -790,7 +806,9 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
       return context.l10n.tenantSaving;
     }
     if (!_editing) {
-      return context.l10n.tenantCreate;
+      return widget.useAfterCreate
+          ? context.l10n.tenantCreateAndUse
+          : context.l10n.tenantCreate;
     }
     return _hasData || _dataStateCheckFailed
         ? context.l10n.tenantSaveName
@@ -846,7 +864,17 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
             tenant.backendBaseUrl == normalizedBackend &&
             tenant.didHost == normalizedDidHost,
       );
-      Navigator.of(context).pop(created.id);
+      if (widget.useAfterCreate) {
+        await ref.read(appTenantActionsProvider).useTenant(created.id);
+        if (!mounted) {
+          return;
+        }
+      }
+      try {
+        Navigator.of(context).pop(created.id);
+      } catch (_) {
+        // Switching tenants rebuilds the scoped app and can dispose this route.
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -857,6 +885,28 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
         setState(() => _submitting = false);
       }
     }
+  }
+}
+
+/// Field caption shown above the tenant form's glass inputs.
+class _TenantFieldLabel extends StatelessWidget {
+  const _TenantFieldLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Padding(
+      padding: EdgeInsets.only(bottom: responsive.spacing(6)),
+      child: Text(
+        label,
+        style: AwikiMeTextStyles.fieldLabel.copyWith(
+          color: context.awikiTheme.secondaryText,
+          fontSize: responsive.metaSm,
+        ),
+      ),
+    );
   }
 }
 
@@ -958,6 +1008,426 @@ class _TenantInlineMessage extends StatelessWidget {
             fontWeight: FontWeight.w400,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Opens the reference's compact tenant menu anchored to [anchorContext]:
+/// a thick glass panel listing tenants (with a delete action on removable
+/// custom tenants) and an entry that adds a tenant and switches to it.
+/// Long-pressing a custom tenant opens its edit form. The menu flips above
+/// the anchor when there is no room below.
+Future<void> showTenantSwitcherMenu(BuildContext anchorContext) async {
+  final box = anchorContext.findRenderObject() as RenderBox?;
+  final overlay =
+      Navigator.of(
+            anchorContext,
+            rootNavigator: true,
+          ).overlay?.context.findRenderObject()
+          as RenderBox?;
+  if (box == null || overlay == null) {
+    return showTenantManagementDialog(anchorContext);
+  }
+  final anchor = Rect.fromPoints(
+    box.localToGlobal(Offset.zero, ancestor: overlay),
+    box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay),
+  );
+  final action = await showGeneralDialog<_TenantMenuAction>(
+    context: anchorContext,
+    useRootNavigator: true,
+    barrierDismissible: true,
+    barrierLabel: anchorContext.l10n.commonClose,
+    barrierColor: const Color(0x00000000),
+    transitionDuration: const Duration(milliseconds: 160),
+    pageBuilder: (menuContext, _, __) =>
+        _TenantMenuLayout(anchor: anchor, child: const _TenantSwitcherMenu()),
+    transitionBuilder: (_, animation, __, child) {
+      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          alignment: Alignment.topRight,
+          scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+  if (!anchorContext.mounted || action == null) {
+    return;
+  }
+  switch (action.kind) {
+    case _TenantMenuActionKind.create:
+      await AppNavigator.showDialog<String>(
+        anchorContext,
+        (_) => const _TenantFormDialog(useAfterCreate: true),
+      );
+    case _TenantMenuActionKind.edit:
+      await AppNavigator.showDialog<String>(
+        anchorContext,
+        (_) => _TenantFormDialog(tenant: action.tenant),
+      );
+    case _TenantMenuActionKind.delete:
+      await _confirmDeleteTenantFromMenu(anchorContext, action.tenant!);
+  }
+}
+
+Future<void> _confirmDeleteTenantFromMenu(
+  BuildContext context,
+  AppTenantProfile tenant,
+) async {
+  final container = ProviderScope.containerOf(context, listen: false);
+  final confirmed = await AppNavigator.showDialog<bool>(
+    context,
+    (dialogContext) => AppConfirmationDialog(
+      title: dialogContext.l10n.tenantDeleteConfirmTitle,
+      message: dialogContext.l10n.tenantDeleteConfirmMessage(
+        tenant.name,
+        tenant.didHost,
+      ),
+      confirmLabel: dialogContext.l10n.tenantDeleteAction,
+      confirmButtonKey: const Key('tenant-menu-delete-confirm'),
+      destructive: true,
+      onCancel: () => Navigator.of(dialogContext).pop(false),
+      onConfirm: () => Navigator.of(dialogContext).pop(true),
+    ),
+  );
+  if (confirmed != true || !context.mounted) {
+    return;
+  }
+  try {
+    await container.read(appTenantActionsProvider).deleteTenant(tenant.id);
+  } catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+    AwikiMeToast.show(
+      context,
+      _tenantErrorMessage(context.l10n, _tenantUiError(error)),
+      danger: true,
+    );
+  }
+}
+
+enum _TenantMenuActionKind { create, edit, delete }
+
+class _TenantMenuAction {
+  const _TenantMenuAction.create()
+    : kind = _TenantMenuActionKind.create,
+      tenant = null;
+  const _TenantMenuAction.edit(AppTenantProfile this.tenant)
+    : kind = _TenantMenuActionKind.edit;
+  const _TenantMenuAction.delete(AppTenantProfile this.tenant)
+    : kind = _TenantMenuActionKind.delete;
+
+  final _TenantMenuActionKind kind;
+  final AppTenantProfile? tenant;
+}
+
+class _TenantMenuLayout extends StatelessWidget {
+  const _TenantMenuLayout({required this.anchor, required this.child});
+
+  final Rect anchor;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    final padding = MediaQuery.paddingOf(context);
+    final width = (screen.width - 32).clamp(0.0, 272.0);
+    final left = (anchor.right - width).clamp(16.0, screen.width - width - 16);
+    final below = screen.height - padding.bottom - anchor.bottom - 16;
+    final above = anchor.top - padding.top - 16;
+    final openBelow = below >= 240 || below >= above;
+    return Stack(
+      children: <Widget>[
+        Positioned(
+          left: left,
+          width: width,
+          top: openBelow ? anchor.bottom + 4 : null,
+          bottom: openBelow ? null : screen.height - anchor.top + 4,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: (openBelow ? below : above).clamp(160.0, 520.0),
+            ),
+            child: child,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TenantSwitcherMenu extends ConsumerStatefulWidget {
+  const _TenantSwitcherMenu();
+
+  @override
+  ConsumerState<_TenantSwitcherMenu> createState() =>
+      _TenantSwitcherMenuState();
+}
+
+class _TenantSwitcherMenuState extends ConsumerState<_TenantSwitcherMenu> {
+  String? _busyTenantId;
+  _TenantUiError? _error;
+
+  Future<void> _use(AppTenantProfile tenant) async {
+    if (tenant.id == ref.read(activeAppTenantProvider).id) {
+      Navigator.of(context).pop();
+      return;
+    }
+    if (_busyTenantId != null) {
+      return;
+    }
+    setState(() {
+      _busyTenantId = tenant.id;
+      _error = null;
+    });
+    try {
+      await ref.read(appTenantActionsProvider).useTenant(tenant.id);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _busyTenantId = null;
+          _error = _tenantUiError(error);
+        });
+      }
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    try {
+      Navigator.of(context).pop();
+    } catch (_) {
+      // Switching tenants rebuilds the scoped app and can dispose this route.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final l10n = context.l10n;
+    final registry = ref.watch(appTenantRegistryProvider);
+    final activeId = registry.activeTenant.id;
+    final idle = _busyTenantId == null;
+    return AwikiGlassPanel(
+      key: const Key('tenant-switcher-menu'),
+      radius: 22,
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+            child: Text(
+              l10n.tenantMenuHint,
+              style: TextStyle(
+                color: theme.secondaryText,
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                children: <Widget>[
+                  for (final tenant in registry.visibleTenants)
+                    _TenantMenuRow(
+                      tenant: tenant,
+                      active: tenant.id == activeId,
+                      busy: _busyTenantId == tenant.id,
+                      onUse: idle ? () => _use(tenant) : null,
+                      onEdit: idle && !tenant.isPrimaryTenant
+                          ? () => Navigator.of(
+                              context,
+                            ).pop(_TenantMenuAction.edit(tenant))
+                          : null,
+                      // The active tenant owns the running runtime, so it is
+                      // switched away from before it can be deleted.
+                      onDelete:
+                          idle &&
+                              !tenant.isPrimaryTenant &&
+                              tenant.id != activeId
+                          ? () => Navigator.of(
+                              context,
+                            ).pop(_TenantMenuAction.delete(tenant))
+                          : null,
+                    ),
+                ],
+              ),
+            ),
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 2),
+              child: Text(
+                _tenantErrorMessage(l10n, _error!),
+                style: TextStyle(color: theme.danger, fontSize: 12),
+              ),
+            ),
+          Container(
+            height: 0.5,
+            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            color: theme.glassEdgeActive,
+          ),
+          AppPressable(
+            key: const Key('tenant-menu-create'),
+            onTap: () =>
+                Navigator.of(context).pop(const _TenantMenuAction.create()),
+            semanticLabel: l10n.tenantCreate,
+            borderRadius: BorderRadius.circular(14),
+            child: SizedBox(
+              height: 44,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  children: <Widget>[
+                    Icon(CupertinoIcons.plus, size: 16, color: theme.title),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        l10n.tenantCreate,
+                        style: TextStyle(color: theme.title, fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TenantMenuRow extends StatelessWidget {
+  const _TenantMenuRow({
+    required this.tenant,
+    required this.active,
+    required this.busy,
+    required this.onUse,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final AppTenantProfile tenant;
+  final bool active;
+  final bool busy;
+  final VoidCallback? onUse;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final l10n = context.l10n;
+    final option = AppPressable(
+      key: Key('tenant-menu-option:${tenant.id}'),
+      onTap: onUse,
+      onLongPress: onEdit,
+      selected: active,
+      semanticLabel: active
+          ? '${tenant.name}, ${l10n.tenantCurrent}'
+          : '${l10n.tenantUse}: ${tenant.name}',
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 52),
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Flexible(
+                        child: Text(
+                          tenant.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: theme.title, fontSize: 15),
+                        ),
+                      ),
+                      if (tenant.isPrimaryTenant) ...<Widget>[
+                        const SizedBox(width: 6),
+                        _TenantMenuTag(label: l10n.tenantBuiltinTag),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    tenant.didHost,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: theme.secondaryText,
+                      fontSize: 12,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (busy)
+              const CupertinoActivityIndicator(radius: 7)
+            else if (active)
+              Icon(CupertinoIcons.checkmark, size: 15, color: theme.title),
+          ],
+        ),
+      ),
+    );
+    if (onDelete == null) {
+      return option;
+    }
+    return Row(
+      children: <Widget>[
+        Expanded(child: option),
+        const SizedBox(width: 2),
+        AppPressable(
+          key: Key('tenant-menu-delete:${tenant.id}'),
+          onTap: onDelete,
+          semanticLabel: l10n.tenantDeleteSemantic(tenant.name),
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox.square(
+            dimension: 44,
+            child: Icon(
+              CupertinoIcons.trash,
+              size: 16,
+              color: theme.secondaryText,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TenantMenuTag extends StatelessWidget {
+  const _TenantMenuTag({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return Container(
+      height: 18,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: theme.glassEdgeActive),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: theme.secondaryText, fontSize: 11, height: 1),
       ),
     );
   }

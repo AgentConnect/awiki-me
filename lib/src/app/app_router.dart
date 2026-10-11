@@ -1,17 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show DialogRoute;
 import 'package:flutter/services.dart';
-
-import '../presentation/shared/awiki_me_design.dart';
-import '../presentation/shared/responsive_layout.dart';
 
 class AppNavigator {
   const AppNavigator._();
 
-  // The macOS window extends Flutter content behind the native traffic lights.
-  // Full-window routes need a top safe inset; the root shell reserves that
-  // corner separately for its rail and must not inherit this route-only inset.
+  // Full-window macOS routes extend behind the native traffic lights.
   static const double macWindowChromeTopInset = 52;
 
   static Widget _pageBelowMacWindowChrome(
@@ -30,24 +24,6 @@ class AppNavigator {
       child: Builder(builder: builder),
     );
   }
-
-  static const SystemUiOverlayStyle _defaultOverlayStyle = SystemUiOverlayStyle(
-    statusBarColor: AwikiMePalette.canvas,
-    statusBarIconBrightness: Brightness.dark,
-    statusBarBrightness: Brightness.light,
-    systemNavigationBarColor: AwikiMePalette.canvas,
-    systemNavigationBarIconBrightness: Brightness.dark,
-    systemNavigationBarDividerColor: AwikiMePalette.canvas,
-  );
-
-  static const SystemUiOverlayStyle _sheetOverlayStyle = SystemUiOverlayStyle(
-    statusBarColor: AwikiMePalette.navigationSurface,
-    statusBarIconBrightness: Brightness.dark,
-    statusBarBrightness: Brightness.light,
-    systemNavigationBarColor: AwikiMePalette.navigationSurface,
-    systemNavigationBarIconBrightness: Brightness.dark,
-    systemNavigationBarDividerColor: AwikiMePalette.navigationBorder,
-  );
 
   static Future<T?> push<T>(
     BuildContext context,
@@ -69,8 +45,8 @@ class AppNavigator {
   }) {
     return Navigator.of(context, rootNavigator: rootNavigator).push<T>(
       PageRouteBuilder<T>(
-        pageBuilder: (context, _, __) =>
-            _pageBelowMacWindowChrome(context, builder),
+        pageBuilder: (routeContext, _, __) =>
+            _pageBelowMacWindowChrome(routeContext, builder),
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
       ),
@@ -89,58 +65,42 @@ class AppNavigator {
     );
   }
 
+  /// Shows a modal dialog centered over a dimmed scrim on every layout,
+  /// fading and scaling it in rather than sliding a sheet up from the bottom.
   static Future<T?> showDialog<T>(
     BuildContext context,
     WidgetBuilder builder, {
     bool barrierDismissible = true,
-  }) async {
-    if (context.awikiResponsive.isCompact) {
-      SystemChrome.setSystemUIOverlayStyle(_sheetOverlayStyle);
-      try {
-        return await showCupertinoModalPopup<T>(
-          context: context,
-          barrierColor: const Color(0x66000000),
-          barrierDismissible: barrierDismissible,
-          semanticsDismissible: true,
-          useRootNavigator: true,
-          requestFocus: true,
-          builder: (dialogContext) =>
-              _AppDialogKeyboardDismissScope(child: builder(dialogContext)),
+  }) {
+    return showGeneralDialog<T>(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: barrierDismissible,
+      barrierLabel: 'Dismiss',
+      barrierColor: const Color(0x33161616),
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (dialogContext, _, __) =>
+          _AppDialogKeyboardDismissScope(child: builder(dialogContext)),
+      transitionBuilder: (_, animation, __, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
         );
-      } finally {
-        SystemChrome.setSystemUIOverlayStyle(_defaultOverlayStyle);
-      }
-    }
-    return Navigator.of(context, rootNavigator: true).push<T>(
-      DialogRoute<T>(
-        context: context,
-        barrierDismissible: barrierDismissible,
-        barrierColor: const Color(0x66000000),
-        builder: (dialogContext) =>
-            _AppDialogKeyboardDismissScope(child: builder(dialogContext)),
-      ),
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.94, end: 1).animate(curved),
+            child: child,
+          ),
+        );
+      },
     );
   }
 
-  static Future<T?> showSheet<T>(
-    BuildContext context,
-    WidgetBuilder builder,
-  ) async {
-    if (context.awikiResponsive.isExpanded) {
-      return showDialog<T>(context, builder);
-    }
-    SystemChrome.setSystemUIOverlayStyle(_sheetOverlayStyle);
-    try {
-      return await showCupertinoModalPopup<T>(
-        context: context,
-        barrierColor: const Color(0x57000000),
-        semanticsDismissible: true,
-        requestFocus: true,
-        builder: builder,
-      );
-    } finally {
-      SystemChrome.setSystemUIOverlayStyle(_defaultOverlayStyle);
-    }
+  /// Menus and pickers share the centered dialog presentation.
+  static Future<T?> showSheet<T>(BuildContext context, WidgetBuilder builder) {
+    return showDialog<T>(context, builder);
   }
 }
 

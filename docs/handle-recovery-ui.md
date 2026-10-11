@@ -7,6 +7,10 @@ AWiki Me 的基线能力，不使用 Debug/Release 或平台编译开关；当�
 声明 phone Recovery capability，避免向旧版或第三方租户发送其不支持的 V4 请求。租户未声明
 能力时，弹窗只展示加入设备和取消，并使用 join-only 文案，不显示无法点击的恢复按钮。
 
+点击发送注册验证码、账号预检查确认已有账号后，统一表单继续保留验证码输入和
+登录/注册动作，不显示“已有账号，继续验证后登录、加入设备或恢复。”提示，也不提供
+提前发起“恢复 Handle”的按钮。加入设备或恢复的选择在验证码验证后的已有身份流程中展示。
+
 选择 Recovery 后，Handle 和手机号以只读方式沿用已验证的 onboarding 上下文，页面不会
 要求再次输入；注册授权会被丢弃；页面先查询 Core 的 `inspectHandleRecoveryContext`，存在未完成操作时精确恢复，只有用户明确开始且 Core 允许时才请求 purpose 为
 `awiki.identity.handle-recovery.v1` 的独立 Recovery OTP。注册/Join 与 Recovery 的重发

@@ -9,7 +9,7 @@
 - Riverpod；
 - sibling `awiki_im_core` Flutter/Dart SDK；
 - Rust `awiki-im-core` 与 SQLite native bridge；
-- Android、iOS、macOS 平台 runner。
+- Android、iOS、macOS 平台 runner（macOS 12.0 及以上）。
 
 ## 2. 分层
 
@@ -35,6 +35,16 @@ scripts/flutter/build-sdk-native.sh --macos-only
 
 cd ../awiki-me
 flutter pub get
+```
+
+macOS runner 与 CocoaPods 的 deployment target 均为 12.0。锁定的
+`flutter_secure_storage` 在 macOS 上使用 Darwin 实现；原生 Pod 元数据变化
+不代表 Dart 依赖升级。使用以下命令复现已提交的 Pod 依赖解析，不更新依赖：
+
+```bash
+cd macos
+pod install --deployment
+cd ..
 ```
 
 在 Intel macOS 上构建两个本地 Debug App 时，使用

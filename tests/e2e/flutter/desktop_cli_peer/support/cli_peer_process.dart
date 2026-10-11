@@ -55,6 +55,21 @@ Future<void> _waitForCliGroupMessages({
   String? expectedContentType,
 }) async {
   Future<E2eObservation> observe() async {
+    if (Platform.environment['AWIKI_E2E_ENCRYPTED_GROUP'] == '1') {
+      // This peer is a command process, not a continuously running client.
+      // Receive its device-targeted Welcome before reading encrypted history.
+      final receive = await _runCli(config, const <String>[
+        '--format',
+        'json',
+        'msg',
+        'inbox',
+        '--limit',
+        '100',
+      ]);
+      if (receive.exitCode != 0) {
+        return const E2eObservation.pending('cli_group_device_receive_pending');
+      }
+    }
     final result = await _runCli(config, <String>[
       '--format',
       'json',
@@ -169,6 +184,20 @@ Future<_CliAttachmentMessage> _waitForCliAttachmentMessage({
     description:
         'CLI history contains attachment "$expectedFilename" on message "$expectedMessageId"',
     action: () async {
+      // P5 ciphertext must pass through the real receive/decrypt path before
+      // local history can expose its attachment manifest.
+      final received = await _runCli(config, <String>[
+        '--format',
+        'json',
+        'msg',
+        'inbox',
+        '--scope',
+        'direct',
+        '--limit',
+        '100',
+      ]);
+      if (received.exitCode != 0) return false;
+
       final result = await _runCli(config, <String>[
         '--format',
         'json',
@@ -253,6 +282,7 @@ Future<_CliResult> _runCli(
       ])
         if ((Platform.environment[name] ?? '').trim().isNotEmpty)
           name: Platform.environment[name]!,
+      'AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED': '1',
       'HOME': config.cliHome,
       'AWIKI_CLI_WORKSPACE_HOME_DIR': config.cliWorkspace,
     },

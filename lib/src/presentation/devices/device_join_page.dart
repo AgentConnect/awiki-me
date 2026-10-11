@@ -18,6 +18,8 @@ import '../shared/awiki_me_top_bar.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sms_otp_cooldown_provider.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass_controls.dart';
+import '../shared/widgets/awiki_glass.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
 import 'device_labels.dart';
 import 'devices_provider.dart';
@@ -79,61 +81,74 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
     final otpCooldown = ref.watch(smsOtpCooldownProvider);
     final progress = state.activeJoin;
     final theme = context.awikiTheme;
-    return CupertinoPageScaffold(
-      backgroundColor: theme.background,
-      child: AwikiAdaptiveScaffold(
-        maxWidth: 620,
-        includeBottomSafeArea: true,
-        child: ListView(
-          key: const Key('device-join-page'),
-          padding: const EdgeInsets.fromLTRB(0, 14, 0, 24),
-          children: <Widget>[
-            AwikiMeTopBar(
-              title: context.l10n.deviceJoinTitle,
-              padding: EdgeInsets.zero,
-              leading: TopBarActionButton(
-                onTap: () => Navigator.of(context).maybePop(),
-                semanticsLabel: context.l10n.commonBack,
-                tooltip: context.l10n.commonBack,
-                child: const AwikiAssetIcon(
-                  assetName: 'assets/icons/icon_left.svg',
-                  color: AwikiMeColors.primaryDark,
-                  size: 22,
-                ),
-              ),
+    final phone = context.awikiResponsive.isPhone;
+    final page = AwikiAdaptiveScaffold(
+      maxWidth: 620,
+      includeBottomSafeArea: true,
+      child: ListView(
+        key: const Key('device-join-page'),
+        padding: const EdgeInsets.fromLTRB(0, 14, 0, 24),
+        children: <Widget>[
+          AwikiMeTopBar(
+            title: context.l10n.deviceJoinTitle,
+            padding: EdgeInsets.zero,
+            titleFontSize: phone ? 16 : null,
+            leading: AwikiBackButton(
+              onTap: () => Navigator.of(context).maybePop(),
+              semanticsLabel: context.l10n.commonBack,
             ),
-            const SizedBox(height: 16),
-            if (state.error != null) ...<Widget>[
-              _DeviceJoinNotice(
-                key: const Key('device-join-error'),
-                message: deviceManagementErrorLabel(context.l10n, state.error!),
-                danger: true,
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (_otpRateLimited && otpCooldown.isCoolingDown) ...<Widget>[
-              _DeviceJoinNotice(
-                message: context.l10n.deviceJoinOtpRateLimited(
-                  otpCooldown.remainingSeconds,
-                ),
-                danger: true,
-              ),
-              const SizedBox(height: 12),
-            ] else if (_otpSendFailed) ...<Widget>[
-              _DeviceJoinNotice(
-                message: context.l10n.deviceJoinErrorFailed,
-                danger: true,
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (progress == null)
-              _buildStartForm(context, state, otpCooldown)
-            else
-              _buildProgress(context, state, progress),
+          ),
+          const SizedBox(height: 16),
+          if (state.error != null) ...<Widget>[
+            _DeviceJoinNotice(
+              key: const Key('device-join-error'),
+              message: deviceManagementErrorLabel(context.l10n, state.error!),
+              danger: true,
+            ),
+            const SizedBox(height: 12),
           ],
-        ),
+          if (_otpRateLimited && otpCooldown.isCoolingDown) ...<Widget>[
+            _DeviceJoinNotice(
+              message: context.l10n.deviceJoinOtpRateLimited(
+                otpCooldown.remainingSeconds,
+              ),
+              danger: true,
+            ),
+            const SizedBox(height: 12),
+          ] else if (_otpSendFailed) ...<Widget>[
+            _DeviceJoinNotice(
+              message: context.l10n.deviceJoinErrorFailed,
+              danger: true,
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (progress == null)
+            _buildStartForm(context, state, otpCooldown)
+          else
+            _buildProgress(context, state, progress),
+        ],
       ),
     );
+    return CupertinoPageScaffold(
+      backgroundColor: phone
+          ? awikiCompactListBackground(context)
+          : theme.background,
+      child: phone
+          ? AwikiGlassBackdrop(
+              color: awikiCompactListBackground(context),
+              child: page,
+            )
+          : page,
+    );
+  }
+
+  /// Phones lay the flow straight on the glow canvas; wider layouts keep
+  /// the card.
+  Widget _flowSurface(BuildContext context, Widget child) {
+    if (context.awikiResponsive.isPhone) {
+      return Padding(padding: const EdgeInsets.only(top: 4), child: child);
+    }
+    return AppCardSection(child: child);
   }
 
   Widget _buildStartForm(
@@ -142,8 +157,9 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
     SmsOtpCooldownState otpCooldown,
   ) {
     final responsive = context.awikiResponsive;
-    return AppCardSection(
-      child: Column(
+    return _flowSurface(
+      context,
+      Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
@@ -210,8 +226,22 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
     DeviceJoinProgress progress,
   ) {
     final sas = progress.sas;
-    return AppCardSection(
-      child: Column(
+    final l10n = context.l10n;
+    final theme = context.awikiTheme;
+    final sasPhase =
+        progress.phase == DeviceJoinPhase.responsePrepared ||
+        progress.phase == DeviceJoinPhase.responseVerified ||
+        progress.phase == DeviceJoinPhase.approvalPrepared;
+    final stepIndex = switch (progress.phase) {
+      DeviceJoinPhase.authorized => 3,
+      _ => 1,
+    };
+    final showSteps =
+        progress.phase != DeviceJoinPhase.cancelled &&
+        progress.phase != DeviceJoinPhase.expired;
+    return _flowSurface(
+      context,
+      Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
@@ -219,7 +249,8 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
             key: const Key('device-join-phase'),
             style: TextStyle(
               color: context.awikiTheme.title,
-              fontSize: 18,
+              fontSize: 22,
+              height: 1.3,
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -234,41 +265,85 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
             const SizedBox(height: 16),
             _HandleRecoveryJoinNotice(progress: progress),
           ],
-          if (sas != null) ...<Widget>[
-            const SizedBox(height: 24),
-            Text(
-              sas,
-              key: const Key('device-join-sas'),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: context.awikiTheme.title,
-                fontSize: 38,
-                fontWeight: FontWeight.w400,
-                letterSpacing: 8,
+          if (showSteps) ...<Widget>[
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: AwikiFlowSteps(
+                key: const Key('device-join-steps'),
+                current: stepIndex,
+                steps: <(String, String?)>[
+                  (l10n.deviceJoinStepRequest, l10n.deviceJoinStepRequestSub),
+                  (
+                    l10n.deviceJoinStepVerify,
+                    sasPhase
+                        ? l10n.deviceJoinStepVerifySas
+                        : l10n.deviceJoinStepVerifyWaiting,
+                  ),
+                  (l10n.deviceJoinStepJoin, l10n.deviceJoinStepJoinSub),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              context.l10n.deviceJoinSasHint,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: context.awikiTheme.secondaryText),
+          ],
+          if (sas != null) ...<Widget>[
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+              decoration: BoxDecoration(
+                color: theme.glass,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: theme.glassEdge, width: 0.5),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    l10n.deviceJoinSasTitle,
+                    style: TextStyle(color: theme.secondaryText, fontSize: 12),
+                  ),
+                  const SizedBox(height: 10),
+                  KeyedSubtree(
+                    key: const Key('device-join-sas'),
+                    child: AwikiSasDigits(code: sas),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    l10n.deviceJoinSasHint,
+                    style: TextStyle(
+                      color: theme.secondaryText,
+                      fontSize: 12,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
           const SizedBox(height: 20),
           if (!progress.isTerminal) ...<Widget>[
-            AppSecondaryButton(
-              label: context.l10n.deviceJoinRefresh,
-              semanticsIdentifier: 'multi-device-refresh-join',
-              onPressed: state.isActionPending ? null : _pollNow,
-            ),
-            const SizedBox(height: 10),
-            AppDangerButton(
-              label: context.l10n.deviceJoinCancel,
-              onPressed: state.isActionPending
-                  ? null
-                  : () => ref
-                        .read(devicesProvider.notifier)
-                        .cancelNewDeviceActive(),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: AwikiPillButton(
+                    label: context.l10n.deviceJoinRefresh,
+                    tone: AwikiPillTone.secondary,
+                    semanticsIdentifier: 'multi-device-refresh-join',
+                    onPressed: state.isActionPending ? null : _pollNow,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: AwikiPillButton(
+                    label: context.l10n.deviceJoinCancel,
+                    tone: AwikiPillTone.secondary,
+                    onPressed: state.isActionPending
+                        ? null
+                        : () => ref
+                              .read(devicesProvider.notifier)
+                              .cancelNewDeviceActive(),
+                  ),
+                ),
+              ],
             ),
           ] else if (progress.phase != DeviceJoinPhase.authorized)
             AppPrimaryButton(

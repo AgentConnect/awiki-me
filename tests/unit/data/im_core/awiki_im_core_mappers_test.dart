@@ -14,6 +14,65 @@ void main() {
   const mapper = AwikiImCoreMappers();
 
   test(
+    'SDK security provenance survives history and opaque content stays hidden',
+    () {
+      for (final state in <String?>[null, 'failed', 'decrypted']) {
+        final attrs = <core.MessageMetadataAttribute>[
+          const core.MessageMetadataAttribute(
+            key: 'security',
+            value: 'direct-e2ee',
+          ),
+          if (state != null)
+            core.MessageMetadataAttribute(
+              key: 'decryption_state',
+              value: state,
+            ),
+        ];
+        final live = mapper.chatMessageFromCore(
+          core.Message(
+            id: 'secure-message',
+            conversationId: 'dm:peer',
+            threadId: 'dm:peer',
+            threadKind: 'direct',
+            direction: core.MessageDirection.incoming,
+            sender: 'did:peer',
+            senderDidSnapshot: 'did:peer',
+            receiver: 'did:me',
+            body: const core.MessageBodyView(text: 'sensitive-content'),
+            metadata: core.MessageMetadata(attributes: attrs),
+          ),
+          ownerDid: 'did:me',
+        );
+        final history = mapper.chatMessageFromSnapshot(
+          core.ConversationSnapshotMessage(
+            id: 'secure-message',
+            threadId: 'dm:peer',
+            threadKind: 'direct',
+            direction: 'incoming',
+            sender: 'did:peer',
+            receiver: 'did:me',
+            body: const core.ConversationSnapshotMessageBody(
+              text: 'sensitive-content',
+            ),
+            attributes: attrs,
+          ),
+          ownerDid: 'did:me',
+          conversationId: 'dm:peer',
+        );
+        for (final message in [live, history]) {
+          expect(message.isEncrypted, isTrue);
+          if (state == 'decrypted') {
+            expect(message.content, 'sensitive-content');
+          } else {
+            expect(message.content, isNot(contains('sensitive-content')));
+            expect(message.payloadJson, isNull);
+          }
+        }
+      }
+    },
+  );
+
+  test(
     'Core and snapshot mapping preserve explicit aliases without replacing canonical IDs',
     () {
       const canonical = 'did:example:groups:test:42';
@@ -559,6 +618,46 @@ void main() {
     expect(mapped.previewText, '季度报告');
   });
 
+  test('encrypted attachment displays original byte count', () {
+    const manifest =
+        '{"attachments":[{"attachment_id":"att-1","filename":"report.pdf","mime_type":"application/pdf","size":"1040","encryption_info":{"mode":"object-e2ee","plaintext_size":"1024"},"access_info":{"object_uri":"https://objects.example/att-1"}}],"primary_attachment_id":"att-1","caption":"季度报告"}';
+    const message = core.Message(
+      conversationId: 'dm:peer-scope:v1:test',
+      senderDidSnapshot: 'did:bob',
+      id: 'msg-attachment',
+      threadKind: 'direct',
+      threadId: 'did:bob',
+      direction: core.MessageDirection.incoming,
+      sender: 'did:bob',
+      receiver: 'did:alice',
+      body: core.MessageBodyView(
+        unsupportedContentType: 'application/anp-attachment-manifest+json',
+      ),
+      sentAt: '2026-05-23T09:00:00Z',
+      metadata: core.MessageMetadata(
+        contentType: 'application/anp-attachment-manifest+json',
+        attributes: <core.MessageMetadataAttribute>[
+          core.MessageMetadataAttribute(
+            key: 'attachment_manifest',
+            value: manifest,
+          ),
+        ],
+      ),
+    );
+
+    final mapped = mapper.chatMessageFromCore(message, ownerDid: 'did:alice');
+
+    expect(mapped.hasRenderableContent, isTrue);
+    expect(mapped.hasDisplayableText, isFalse);
+    expect(mapped.attachment?.attachmentId, 'att-1');
+    expect(mapped.attachment?.filename, 'report.pdf');
+    expect(mapped.attachment?.mimeType, 'application/pdf');
+    expect(mapped.attachment?.sizeBytes, 1024);
+    expect(mapped.attachment?.caption, '季度报告');
+    expect(mapped.attachment?.objectUri, 'https://objects.example/att-1');
+    expect(mapped.previewText, '季度报告');
+  });
+
   test('attachment manifest mention payload maps into structured mentions', () {
     const manifest =
         '{"attachments":[{"attachment_id":"att-1","filename":"report.md","mime_type":"text/markdown","size":"1024"}],"primary_attachment_id":"att-1","caption":"@codex 看看这个文件","mention_payload":{"text":"@codex 看看这个文件","mentions":[{"id":"men_codex","range":{"start":0,"end":6,"unit":"unicode_code_point"},"target":{"kind":"agent","did":"did:agent:codex"},"mention_role":"addressee"}]}}';
@@ -958,6 +1057,32 @@ void main() {
       expect(update.conversationHint!.targetDid, 'did:cgw');
     },
   );
+
+  test('uncommitted encrypted group arrival only requests canonical sync', () {
+    const event = core.RealtimeEvent(
+      kind: 'message_received',
+      message: core.Message(
+        conversationId: '',
+        senderDidSnapshot: 'did:peer',
+        id: 'did:group:7',
+        threadKind: 'group',
+        threadId: 'did:group',
+        direction: core.MessageDirection.incoming,
+        sender: 'did:peer',
+        receiver: 'did:me',
+        body: core.MessageBodyView(text: 'decrypted group message'),
+        sentAt: '2026-10-11T00:00:00Z',
+        metadata: core.MessageMetadata(),
+      ),
+    );
+    final update = mapper.realtimeUpdateFromCore(event, ownerDid: 'did:me')!;
+    expect(update.message, isNull);
+    expect(update.conversationHint, isNull);
+    expect(update.group, isNull);
+    expect(update.syncDirty, isTrue);
+    expect(update.reason, 'canonical_conversation_pending');
+    expect(update.domains.map((domain) => domain.name), contains('message'));
+  });
 
   test('system notification event is a sync-only realtime signal', () {
     const event = core.RealtimeEvent(

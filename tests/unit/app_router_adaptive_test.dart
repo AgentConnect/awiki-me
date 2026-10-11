@@ -4,12 +4,11 @@ import 'package:awiki_me/src/app/app_router.dart';
 import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show DialogRoute;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('compact dialogs use a bottom Cupertino popup route', (
+  testWidgets('compact dialogs float centered instead of a bottom sheet', (
     tester,
   ) async {
     await _setViewSize(tester, const Size(390, 844));
@@ -19,15 +18,16 @@ void main() {
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
 
-    expect(observer.lastRoute, isA<CupertinoModalPopupRoute<void>>());
+    expect(observer.lastRoute, isA<RawDialogRoute<void>>());
+    expect(observer.lastRoute, isNot(isA<CupertinoModalPopupRoute<void>>()));
     final contentRect = tester.getRect(
       find.byKey(const Key('adaptive-dialog-content')),
     );
-    expect(contentRect.bottom, greaterThan(790));
-    expect(contentRect.center.dy, greaterThan(700));
+    expect(contentRect.center.dx, closeTo(195, 1));
+    expect(contentRect.center.dy, closeTo(422, 1));
     expect(
       find.byKey(const Key('compact-bottom-sheet-grab-handle')),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
@@ -49,7 +49,7 @@ void main() {
     expect(find.byKey(const Key('compact-action-sheet')), findsNothing);
   });
 
-  testWidgets('compact bottom sheet moves above the software keyboard', (
+  testWidgets('compact dialog moves above the software keyboard', (
     tester,
   ) async {
     await _setViewSize(tester, const Size(390, 844));
@@ -70,7 +70,7 @@ void main() {
     expect(contentRect.bottom, lessThanOrEqualTo(844 - 280));
   });
 
-  testWidgets('expanded dialogs use a centered desktop DialogRoute', (
+  testWidgets('expanded dialogs use the same centered dialog route', (
     tester,
   ) async {
     await _setViewSize(tester, const Size(1000, 700));
@@ -80,7 +80,7 @@ void main() {
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
 
-    expect(observer.lastRoute, isA<DialogRoute<void>>());
+    expect(observer.lastRoute, isA<RawDialogRoute<void>>());
     final contentRect = tester.getRect(
       find.byKey(const Key('adaptive-dialog-content')),
     );

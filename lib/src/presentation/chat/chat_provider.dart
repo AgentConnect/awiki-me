@@ -2,6 +2,7 @@
 // [OUTPUT]: Canonical chat thread state, including settled sends and monotonic visible-read intents.
 // [POS]: Riverpod presentation controller for chat history, sending, realtime patches, serialized read commits, and retries.
 import 'dart:async';
+import 'dart:io' show File;
 import 'dart:collection';
 import 'dart:convert';
 
@@ -107,9 +108,27 @@ class ChatThreadState {
     List<PersonalAgentSyncRecord>? personalAgentSyncs,
     Map<String, AppActionRecord>? appActionRecords,
   }) {
+    final intents = localSendIntents ?? this.localSendIntents;
+    final projected = (messages ?? this.messages)
+        .map((message) {
+          if (message.sendState == MessageSendState.sent) return message;
+          final matchingIntent = intents.values
+              .where(
+                (intent) => _messageIdentityKeys(
+                  intent,
+                ).intersection(_messageIdentityKeys(message)).isNotEmpty,
+              )
+              .firstOrNull;
+          return matchingIntent == null
+              ? message
+              : message.copyWith(
+                  encryptionRequired: matchingIntent.encryptionRequired,
+                );
+        })
+        .toList(growable: false);
     return ChatThreadState(
       threadId: threadId,
-      messages: messages ?? this.messages,
+      messages: projected,
       localSendIntents: _remainingSendIntents(
         localSendIntents ?? this.localSendIntents,
         messages ?? this.messages,
@@ -3238,11 +3257,13 @@ class ChatThreadsController
 
   Future<void> sendMessage({
     required ConversationSummary conversation,
+    bool secure = false,
     required String content,
     List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? expectedAgentReplyDid,
     String? displayThreadId,
     VoidCallback? onSendStarted,
+    VoidCallback? onSendFailed,
   }) async {
     if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
@@ -3292,6 +3313,7 @@ class ChatThreadsController
         createdAt: DateTime.now(),
         isMine: true,
         sendState: MessageSendState.sending,
+        encryptionRequired: secure,
         payloadJson: mentionPayload == null ? null : jsonEncode(mentionPayload),
         mentions: [
           for (final mention in validMentionDrafts)
@@ -3304,6 +3326,7 @@ class ChatThreadsController
       final messaging = ref.read(messagingServiceProvider);
       final sent = validMentionDrafts.isEmpty
           ? await _sendConversationText(
+              secure: secure,
               messaging: messaging,
               conversation: conversation,
               conversationRef: conversationRef,
@@ -3314,6 +3337,7 @@ class ChatThreadsController
             ).timeout(_sendTimeout)
           : await messaging
                 .sendConversationMentionText(
+                  secure: secure,
                   conversation: conversationRef,
                   text: content,
                   mentions: validMentionDrafts,
@@ -3344,6 +3368,10 @@ class ChatThreadsController
       if (!_isCurrentSessionEpoch(sessionEpoch)) {
         return;
       }
+      onSendFailed?.call();
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
       _chatProviderTrace(
         'send.conversation_failed',
         fields: <String, Object?>{
@@ -3364,12 +3392,14 @@ class ChatThreadsController
 
   Future<void> sendAttachment({
     required ConversationSummary conversation,
+    bool secure = false,
     required AttachmentDraft attachment,
     String? caption,
     List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? expectedAgentReplyDid,
     String? displayThreadId,
     VoidCallback? onSendStarted,
+    VoidCallback? onSendFailed,
   }) async {
     if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
@@ -3427,6 +3457,7 @@ class ChatThreadsController
       createdAt: DateTime.now(),
       isMine: true,
       sendState: MessageSendState.sending,
+      encryptionRequired: secure,
       attachment: pendingAttachment,
       payloadJson: mentionPayload == null ? null : jsonEncode(mentionPayload),
       mentions: <ChatMessageMention>[
@@ -3434,14 +3465,13 @@ class ChatThreadsController
           ChatMessageMention.fromDraft(mention),
       ],
     );
-    final current = List<ChatMessage>.from(thread(targetThreadId).messages)
-      ..add(pending);
-    _setMessages(targetThreadId, current);
+    _setLocalSendIntent(targetThreadId, pending);
     onSendStarted?.call();
     try {
       final sent = await ref
           .read(messagingServiceProvider)
           .sendConversationAttachment(
+            secure: secure,
             conversation: conversationRef,
             attachment: attachment,
             caption: normalizedCaption,
@@ -3480,6 +3510,10 @@ class ChatThreadsController
       if (!_isCurrentSessionEpoch(sessionEpoch)) {
         return;
       }
+      onSendFailed?.call();
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
       _chatProviderTrace(
         'send_attachment.conversation_failed',
         fields: <String, Object?>{
@@ -3591,6 +3625,7 @@ class ChatThreadsController
               message.mentions.isNotEmpty
           ? await messaging
                 .sendConversationMentionText(
+                  secure: message.encryptionRequired || message.isEncrypted,
                   conversation: conversationRef,
                   text: mentionPayload.text,
                   mentions: _messageMentionsToDrafts(message.mentions),
@@ -3599,6 +3634,7 @@ class ChatThreadsController
                 )
                 .timeout(_sendTimeout)
           : await _sendConversationText(
+              secure: message.encryptionRequired || message.isEncrypted,
               messaging: messaging,
               conversation: conversation,
               conversationRef: conversationRef,
@@ -3744,6 +3780,7 @@ class ChatThreadsController
       final retried = await ref
           .read(messagingServiceProvider)
           .sendConversationAttachment(
+            secure: message.encryptionRequired || message.isEncrypted,
             conversation: conversationRef,
             attachment: AttachmentDraft(
               filename: attachment.filename,
@@ -5229,13 +5266,22 @@ class ChatThreadsController
     } catch (_) {
       cachedPath = null;
     }
-    final resolvedPath = _normalizedOptionalText(cachedPath);
-    if (resolvedPath == null) {
+    // The durable cached copy backs later reloads, but while the picked
+    // source still exists this session keeps showing that exact file: the
+    // pending bubble already decoded it, so the delivered bubble renders from
+    // the image cache in the same frame instead of flashing a re-decode.
+    final displayPath =
+        sourcePath != null &&
+            sourcePath.isNotEmpty &&
+            File(sourcePath).existsSync()
+        ? sourcePath
+        : _normalizedOptionalText(cachedPath);
+    if (displayPath == null) {
       return sent;
     }
     return sent.copyWith(
       attachment: attachment.copyWith(
-        localPath: resolvedPath,
+        localPath: displayPath,
         hasLocalSource: true,
       ),
     );
@@ -5368,6 +5414,7 @@ class ChatThreadsController
 
   Future<ChatMessage> _sendConversationText({
     required MessagingService messaging,
+    required bool secure,
     required ConversationSummary conversation,
     required AppConversationReadRef conversationRef,
     required String content,
@@ -5378,8 +5425,9 @@ class ChatThreadsController
     final isDirectAgent =
         !conversation.isGroup &&
         expectedAgentReplyDid?.trim().isNotEmpty == true;
-    if (!isDirectAgent) {
+    if (!isDirectAgent || secure) {
       return messaging.sendConversationText(
+        secure: secure,
         conversation: conversationRef,
         content: content,
         clientMessageId: clientMessageId,
@@ -7077,7 +7125,9 @@ class ChatThreadsController
 
   AppThreadReadWatermark _readWatermarkForMessage(ChatMessage message) {
     final remoteId = message.remoteId?.trim();
-    final serverSequence = message.serverSequence;
+    // Encrypted Direct inbox sequences do not share the ordinary thread clock.
+    // Core resolves the authenticated message anchor to each lane's read state.
+    final serverSequence = message.isEncrypted ? null : message.serverSequence;
     return AppThreadReadWatermark(
       lastReadMessageId: remoteId?.isNotEmpty ?? false ? remoteId : null,
       lastReadThreadSeq: serverSequence?.toString(),
@@ -7194,6 +7244,12 @@ bool _readWatermarkCovers(
 int _compareReadWatermarks(AppThreadReadWatermark a, AppThreadReadWatermark b) {
   final aSequence = _readWatermarkSequence(a);
   final bSequence = _readWatermarkSequence(b);
+  if ((aSequence == null || bSequence == null) &&
+      a.readAt != null &&
+      b.readAt != null) {
+    final time = a.readAt!.toUtc().compareTo(b.readAt!.toUtc());
+    if (time != 0) return time;
+  }
   if (aSequence != null || bSequence != null) {
     if (aSequence == null) {
       return -1;
@@ -7554,6 +7610,7 @@ ChatMessage _withThreadId(ChatMessage message, String threadId) {
     sendState: message.sendState,
     serverSequence: message.serverSequence,
     isEncrypted: message.isEncrypted,
+    encryptionRequired: message.encryptionRequired,
     attachment: message.attachment,
     payloadJson: message.payloadJson,
     mentions: message.mentions,
@@ -7651,15 +7708,14 @@ final chatThreadProvider = Provider.family<ChatThreadState, String>((
 });
 
 int _compareMessagesForTimeline(ChatMessage a, ChatMessage b) {
-  final aSeq = a.serverSequence;
-  final bSeq = b.serverSequence;
-  if (aSeq != null && bSeq != null && aSeq != bSeq) {
-    return aSeq.compareTo(bSeq);
-  }
   final timeCompare = a.createdAt.compareTo(b.createdAt);
-  if (timeCompare != 0) {
-    return timeCompare;
-  }
+  if (timeCompare != 0) return timeCompare;
+  final laneCompare = (a.isEncrypted ? 1 : 0).compareTo(b.isEncrypted ? 1 : 0);
+  if (laneCompare != 0) return laneCompare;
+  final aSeq = a.isEncrypted && a.groupId == null ? 0 : a.serverSequence ?? 0;
+  final bSeq = b.isEncrypted && b.groupId == null ? 0 : b.serverSequence ?? 0;
+  final seqCompare = aSeq.compareTo(bSeq);
+  if (seqCompare != 0) return seqCompare;
   final idCompare = (a.remoteId ?? a.localId).compareTo(
     b.remoteId ?? b.localId,
   );

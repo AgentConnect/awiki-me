@@ -22,7 +22,7 @@ class _MacPanelShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(color: AwikiMePalette.mist),
+      decoration: BoxDecoration(color: context.awikiTheme.subtleSurface),
       child: SafeArea(
         bottom: false,
         child: Column(
@@ -30,9 +30,9 @@ class _MacPanelShell extends StatelessWidget {
             Container(
               height: 60,
               padding: const EdgeInsets.fromLTRB(18, 0, 12, 0),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(
-                  bottom: BorderSide(color: AwikiMePalette.hairline),
+                  bottom: BorderSide(color: context.awikiTheme.border),
                 ),
               ),
               child: Row(
@@ -54,8 +54,8 @@ class _MacPanelShell extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AwikiMePalette.inkNeutral,
+                      style: TextStyle(
+                        color: context.awikiTheme.title,
                         fontSize: 16,
                         fontWeight: FontWeight.w400,
                       ),
@@ -104,12 +104,12 @@ class _MacPanelIconButton extends StatelessWidget {
       semanticLabel: semanticLabel,
       tooltip: semanticLabel,
       size: responsive.displayScaled(32),
-      backgroundColor: CupertinoColors.white,
-      borderColor: AwikiMePalette.hairline,
+      backgroundColor: context.awikiTheme.surface,
+      borderColor: context.awikiTheme.border,
       borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
       child: Icon(
         icon,
-        color: enabled ? AwikiMePalette.mutedNeutral : theme.tertiaryText,
+        color: enabled ? context.awikiTheme.secondaryText : theme.tertiaryText,
         size: responsive.displayScaled(16),
       ),
     );

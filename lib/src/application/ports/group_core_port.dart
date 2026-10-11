@@ -8,6 +8,7 @@ enum GroupMemberAdmissionDenialReason {
   agentNotGroupInvitable,
   federatedGroupDenied,
   identityUnavailable,
+  encryptionNotReady,
   unspecified,
 }
 

@@ -7,6 +7,7 @@ import 'package:awiki_me/src/presentation/agents/acp_execution_record.dart';
 import 'package:awiki_me/src/presentation/agents/acp_session_provider.dart';
 import 'package:awiki_me/src/presentation/agents/acp_task_status.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass_controls.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Theme;
@@ -337,7 +338,10 @@ void main() {
             .applyConversation(control(value), 'conversation-1');
         await tester.tap(find.byKey(const Key('acp-model-menu')));
         await tester.pumpAndSettle();
-        expect(find.byType(CupertinoActionSheet), findsNothing);
+        expect(
+          find.byWidgetPredicate((w) => w is AwikiGlassAlert),
+          findsNothing,
+        );
         expect(find.byKey(const Key('acp-model-picker')), findsOneWidget);
         expect(tester.takeException(), isNull);
         await captureAcp(tester, 'models-${size.width.toInt()}-2');

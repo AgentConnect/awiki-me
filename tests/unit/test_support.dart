@@ -240,6 +240,7 @@ Widget buildLocalizedTestApp({
   final resolvedUpdateService = updateService ?? FakeUpdateService();
   return ProviderScope(
     overrides: <Override>[
+      avatarCacheCleanupProvider.overrideWithValue((_) async {}),
       awikiAccountGatewayProvider.overrideWithValue(resolvedGateway),
       realtimeGatewayProvider.overrideWithValue(resolvedRealtime),
       notificationFacadeProvider.overrideWithValue(resolvedNotification),
@@ -860,6 +861,7 @@ class FakeAwikiGateway implements AwikiAccountGateway {
   String? lastSentPeerDid;
   String? lastSentGroupId;
   String? lastSentContent;
+  bool? lastSentSecure;
   Map<String, Object?>? lastSentPayload;
   String? lastSentPayloadPeerDid;
   String? lastSentPayloadIdempotencyKey;
@@ -2211,6 +2213,10 @@ class FakeMessagingService
   int downloadAttachmentCalls = 0;
   AppThreadRef? lastDownloadedAttachmentThread;
   String? lastDownloadedAttachmentLocalPath;
+
+  /// When set, attachment sends wait for it, keeping the message in its
+  /// sending state until the test completes the gate.
+  Completer<void>? attachmentSendGate;
   AttachmentDownloadResult? nextAttachmentDownloadResult;
   AppConversationReadRef? lastAttachmentConversation;
   String? lastSentAttachmentClientMessageId;
@@ -2401,12 +2407,14 @@ class FakeMessagingService
 
   @override
   Future<ChatMessage> sendAttachment({
+    bool secure = false,
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
     List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? idempotencyKey,
   }) {
+    gateway.lastSentSecure = secure;
     gateway.lastSentAttachmentIdempotencyKey = idempotencyKey;
     final stableSentId = idempotencyKey?.trim();
     if (stableSentId != null &&
@@ -2449,6 +2457,7 @@ class FakeMessagingService
 
   @override
   Future<ChatMessage> sendConversationAttachment({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required AttachmentDraft attachment,
     String? caption,
@@ -2456,8 +2465,13 @@ class FakeMessagingService
     String? clientMessageId,
     String? idempotencyKey,
   }) async {
+    gateway.lastSentSecure = secure;
     sendConversationAttachmentCalls += 1;
     lastAttachmentConversation = conversation;
+    final gate = attachmentSendGate;
+    if (gate != null) {
+      await gate.future;
+    }
     lastSentAttachmentClientMessageId = clientMessageId;
     lastSentAttachmentIdempotencyKey = idempotencyKey;
     gateway.lastSentAttachmentIdempotencyKey = idempotencyKey;
@@ -2502,6 +2516,7 @@ class FakeMessagingService
     bool secure = true,
     String? idempotencyKey,
   }) {
+    gateway.lastSentSecure = secure;
     gateway.lastSentPayload = payload;
     gateway.lastSentPayloadIdempotencyKey = idempotencyKey;
     if (thread case AppDirectThreadRef(:final peerDidOrHandle)) {
@@ -2535,6 +2550,7 @@ class FakeMessagingService
 
   @override
   Future<ChatMessage> sendMentionText({
+    bool secure = false,
     required AppThreadRef thread,
     required String text,
     required List<ChatMentionDraft> mentions,
@@ -2543,13 +2559,14 @@ class FakeMessagingService
     return sendPayload(
       thread: thread,
       payload: ChatMentionPayload.toP9Json(text: text, draftMentions: mentions),
-      secure: false,
+      secure: secure,
       idempotencyKey: idempotencyKey,
     );
   }
 
   @override
   Future<ChatMessage> sendConversationMentionText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String text,
     required List<ChatMentionDraft> mentions,
@@ -2558,6 +2575,7 @@ class FakeMessagingService
   }) {
     return sendConversationPayload(
       conversation: conversation,
+      secure: secure,
       payload: ChatMentionPayload.toP9Json(text: text, draftMentions: mentions),
       clientMessageId: clientMessageId,
       idempotencyKey: idempotencyKey,
@@ -2566,11 +2584,13 @@ class FakeMessagingService
 
   @override
   Future<ChatMessage> sendConversationText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String content,
     String? clientMessageId,
     String? idempotencyKey,
   }) async {
+    gateway.lastSentSecure = secure;
     final sent = await gateway.sendTextMessage(
       threadId: conversation.conversationId,
       peerDid: _directPeerDidForConversationId(conversation.conversationId),
@@ -2601,11 +2621,13 @@ class FakeMessagingService
   }
 
   Future<ChatMessage> sendConversationPayload({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required Map<String, Object?> payload,
     String? clientMessageId,
     String? idempotencyKey,
   }) async {
+    gateway.lastSentSecure = secure;
     gateway.lastSentPayload = payload;
     gateway.lastSentPayloadIdempotencyKey = idempotencyKey;
     final payloadJson = jsonEncode(payload);
@@ -2630,9 +2652,11 @@ class FakeMessagingService
 
   @override
   Future<ChatMessage> sendText({
+    bool secure = false,
     required AppThreadRef thread,
     required String content,
   }) {
+    gateway.lastSentSecure = secure;
     return switch (thread) {
       AppDirectThreadRef(:final peerDidOrHandle) => gateway.sendTextMessage(
         threadId: _directThreadId(peerDidOrHandle),

@@ -15,11 +15,13 @@ void main() {
     expect(
       workflow,
       contains(
-        r'WINDOWS_CORE_REF: ${{ github.event.inputs.cli_ref || '
-        "(github.base_ref == 'release/0910' && '950487d61a7dee0ad5cb4910a86e73e5f91a8893') || "
-        "'d3289db6732f6028fa7e54909b768bd48838f7fb' }}",
+        RegExp(
+          r"WINDOWS_CORE_REF: \$\{\{ github\.event\.inputs\.cli_ref \|\| '[0-9a-f]{40}' \}\}",
+        ),
       ),
     );
+    expect(workflow, contains(r'ref: ${{ env.WINDOWS_CORE_REF }}'));
+    expect(workflow, contains(r'if ($actual -ne $env:WINDOWS_CORE_REF)'));
     expect(
       workflow,
       contains(

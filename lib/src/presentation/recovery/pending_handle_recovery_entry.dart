@@ -9,6 +9,7 @@ import '../../domain/entities/handle_recovery.dart';
 import '../../l10n/l10n.dart';
 import '../../domain/entities/identity_method.dart';
 import '../onboarding/onboarding_provider.dart';
+import '../shared/awiki_me_design.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'handle_recovery_page.dart';
 import 'handle_recovery_provider.dart';
@@ -93,32 +94,63 @@ class PendingHandleRecoveryEntry extends ConsumerWidget {
                         context.l10n.handleRecoveryErrorLocalStateUnavailable,
                     onPressed: () => ref.invalidate(provider),
                   ),
-                  data: (progress) => progress == null
-                      ? const SizedBox.shrink()
-                      : Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: AppPrimaryButton(
-                            key: const Key('onboarding-continue-recovery'),
-                            label:
-                                progress.allowedActions.contains(
-                                  HandleRecoveryAction.activateIdentity,
-                                )
-                                ? context.l10n.handleRecoveryEnterMessages
-                                : context.l10n.handleRecoveryContinueExisting,
-                            onPressed: () async {
-                              await AppNavigator.push<void>(
-                                context,
-                                (_) => HandleRecoveryPage(
-                                  initialHandle: target.handle,
-                                  initialPhone: phoneController.text.trim(),
-                                  allowPhoneInput: true,
-                                  autoRequestOtp: false,
+                  data: (progress) {
+                    if (progress == null) return const SizedBox.shrink();
+                    final label =
+                        progress.allowedActions.contains(
+                          HandleRecoveryAction.activateIdentity,
+                        )
+                        ? context.l10n.handleRecoveryEnterMessages
+                        : context.l10n.handleRecoveryContinueExisting;
+                    return Align(
+                      alignment: Alignment.centerRight,
+                      child: AppPressableText(
+                        key: const Key('onboarding-continue-recovery'),
+                        semanticLabel: label,
+                        onTap: () async {
+                          await AppNavigator.push<void>(
+                            context,
+                            (_) => HandleRecoveryPage(
+                              initialHandle: target.handle,
+                              initialPhone: phoneController.text.trim(),
+                              allowPhoneInput: true,
+                              autoRequestOtp: false,
+                            ),
+                          );
+                          if (context.mounted) ref.invalidate(provider);
+                        },
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 44),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    label,
+                                    style: TextStyle(
+                                      color: context.awikiTheme.secondaryText,
+                                      fontSize: 14,
+                                    ),
+                                  ),
                                 ),
-                              );
-                              if (context.mounted) ref.invalidate(provider);
-                            },
+                                const SizedBox(width: 6),
+                                Icon(
+                                  CupertinoIcons.chevron_right,
+                                  size: 12,
+                                  color: context.awikiTheme.secondaryText,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
+                      ),
+                    );
+                  },
                 );
           },
         );

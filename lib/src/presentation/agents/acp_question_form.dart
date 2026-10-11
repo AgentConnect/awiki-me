@@ -528,27 +528,24 @@ class _AcpQuestionFormState extends ConsumerState<AcpQuestionForm>
 
   Future<void> _showMore() async {
     final epoch = ref.read(sessionProvider).activeEpoch;
-    final cancel = await showCupertinoModalPopup<bool>(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        message: Text(
-          acpText(
-            context,
-            '取消本次询问，不会停止整个任务。',
-            'Dismiss this question without stopping the task.',
-          ),
-        ),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(acpText(context, '取消本次询问', 'Dismiss question')),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text(acpText(context, '返回', 'Back')),
-        ),
+    final cancel = await showAwikiGlassAlert<bool>(
+      context,
+      message: acpText(
+        context,
+        '取消本次询问，不会停止整个任务。',
+        'Dismiss this question without stopping the task.',
       ),
+      actions: <AwikiAlertAction<bool>>[
+        AwikiAlertAction<bool>(
+          label: acpText(context, '返回', 'Back'),
+          value: false,
+        ),
+        AwikiAlertAction<bool>(
+          label: acpText(context, '取消本次询问', 'Dismiss question'),
+          value: true,
+          tone: AwikiPillTone.danger,
+        ),
+      ],
     );
     if (cancel == true &&
         mounted &&
@@ -597,7 +594,7 @@ class _AcpQuestionFormState extends ConsumerState<AcpQuestionForm>
                 label,
                 style: TextStyle(
                   fontSize: primary ? 14 : 12,
-                  color: primary ? CupertinoColors.white : null,
+                  color: primary ? context.awikiTheme.primaryForeground : null,
                 ),
               ),
       );

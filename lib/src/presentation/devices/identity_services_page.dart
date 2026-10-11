@@ -6,6 +6,7 @@ import '../../domain/entities/identity_method.dart';
 import '../../l10n/l10n.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_glass_controls.dart';
 import 'devices_provider.dart';
 
 class IdentityServicesPage extends ConsumerStatefulWidget {
@@ -101,45 +102,44 @@ class _IdentityServicesPageState extends ConsumerState<IdentityServicesPage> {
     );
     final type = TextEditingController(text: original?.type ?? 'Website');
     final endpoint = TextEditingController(text: original?.endpoint ?? '');
-    final accepted = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: Text(context.l10n.identityServicesTitle),
-        content: Column(
-          children: [
-            const SizedBox(height: 12),
-            CupertinoTextField(
-              key: const Key('identity-service-id'),
-              controller: id,
-              placeholder: context.l10n.identityServiceId,
-            ),
-            const SizedBox(height: 8),
-            CupertinoTextField(
-              key: const Key('identity-service-type'),
-              controller: type,
-              placeholder: context.l10n.identityServiceType,
-            ),
-            const SizedBox(height: 8),
-            CupertinoTextField(
-              key: const Key('identity-service-endpoint'),
-              controller: endpoint,
-              placeholder: context.l10n.identityServiceEndpoint,
-              keyboardType: TextInputType.url,
-            ),
-          ],
-        ),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(context.l10n.commonCancel),
+    final accepted = await showAwikiGlassAlert<bool>(
+      context,
+      title: context.l10n.identityServicesTitle,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          AppTextField(
+            key: const Key('identity-service-id'),
+            controller: id,
+            label: context.l10n.identityServiceId,
+            placeholder: context.l10n.identityServiceId,
           ),
-          CupertinoDialogAction(
-            key: const Key('identity-service-save'),
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(context.l10n.commonSave),
+          const SizedBox(height: 10),
+          AppTextField(
+            key: const Key('identity-service-type'),
+            controller: type,
+            label: context.l10n.identityServiceType,
+            placeholder: context.l10n.identityServiceType,
+          ),
+          const SizedBox(height: 10),
+          AppTextField(
+            key: const Key('identity-service-endpoint'),
+            controller: endpoint,
+            label: context.l10n.identityServiceEndpoint,
+            placeholder: context.l10n.identityServiceEndpoint,
+            keyboardType: TextInputType.url,
           ),
         ],
       ),
+      actions: <AwikiAlertAction<bool>>[
+        AwikiAlertAction<bool>(label: context.l10n.commonCancel, value: false),
+        AwikiAlertAction<bool>(
+          key: const Key('identity-service-save'),
+          label: context.l10n.commonSave,
+          value: true,
+          tone: AwikiPillTone.primary,
+        ),
+      ],
     );
     final proposal = IdentityDocumentService(
       id: id.text.trim(),

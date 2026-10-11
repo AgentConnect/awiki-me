@@ -36,10 +36,61 @@ const List<String> reviewedLocalAccountStateOperatorCommand = <String>[
   '--apply',
 ];
 
+// Singapore uses the same closed actions with a pinned, root-owned operator.
+const List<String> reviewedSingaporeAccountStateOperatorCommand = <String>[
+  'ssh',
+  'singapore-dev',
+  '--',
+  'sudo',
+  '-n',
+  '/usr/bin/env',
+  'PYTHONDONTWRITEBYTECODE=1',
+  'PYTHONPATH=/opt/awiki/services/user-service/current/src',
+  '/opt/awiki/services/user-service/current/.venv/bin/python',
+  '/usr/local/libexec/awiki-system-test/user-operator-cf695ae189ee/'
+      'run_account_state_sync_test_action.py',
+  '--env-file',
+  '/etc/awiki/user-service.env',
+  '--apply',
+];
+
+({String target, String domain}) reviewedOperatorTargetForMode(String mode) =>
+    switch (mode) {
+      'ali' || 'local' => (target: 'awiki-info-testing', domain: 'awiki.info'),
+      'singapore' => (target: 'singapore-staging', domain: 'anpclaw.com'),
+      _ => throw const FormatException('The operator mode is not reviewed.'),
+    };
+
+bool reviewedOperatorMatchesTarget(String? mode, String? target) {
+  try {
+    return reviewedOperatorTargetForMode(mode ?? '').target == target;
+  } on FormatException {
+    return false;
+  }
+}
+
+void validateReviewedOperatorServiceTarget({
+  required String mode,
+  required String target,
+  required String didDomain,
+  required List<String> serviceUrls,
+}) {
+  final reviewed = reviewedOperatorTargetForMode(mode);
+  if (target != reviewed.target ||
+      didDomain != reviewed.domain ||
+      serviceUrls.isEmpty ||
+      serviceUrls.any((url) => url != 'https://${reviewed.domain}')) {
+    throw const FormatException(
+      'The operator and configured service target differ.',
+    );
+  }
+}
+
 List<String> reviewedAccountStateOperatorCommandForMode(String mode) =>
     switch (mode) {
       'ali' => reviewedAccountStateOperatorCommand,
       'local' => reviewedLocalAccountStateOperatorCommand,
+      'singapore' => reviewedSingaporeAccountStateOperatorCommand,
       _ => throw const FormatException(
         'The App-pair Account State operator mode is not reviewed.',
       ),

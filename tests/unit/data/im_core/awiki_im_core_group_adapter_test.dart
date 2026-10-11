@@ -6,6 +6,16 @@ import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('unprepared encrypted member remains unjoined with stable reason', () {
+    final mapped = mapCoreGroupMemberAdmissionError(
+      const core.AwikiImCoreException(
+        code: 'service_error',
+        message: 'ignored',
+        serviceCode: 'group.member_encryption_not_ready',
+      ),
+    );
+    expect(mapped?.reason, GroupMemberAdmissionDenialReason.encryptionNotReady);
+  });
   for (final entry in <String, GroupMemberAdmissionDenialReason>{
     'federated_group_denied':
         GroupMemberAdmissionDenialReason.federatedGroupDenied,

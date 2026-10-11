@@ -5,6 +5,63 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/account_state_operator_contract.dart';
 
 void main() {
+  test('Singapore target is bound to its fixed operator and exact origin', () {
+    expect(
+      parseAccountStateOperatorCommand(
+        jsonEncode(reviewedSingaporeAccountStateOperatorCommand),
+        mode: 'singapore',
+      ),
+      reviewedSingaporeAccountStateOperatorCommand,
+    );
+    validateReviewedOperatorServiceTarget(
+      mode: 'singapore',
+      target: 'singapore-staging',
+      didDomain: 'anpclaw.com',
+      serviceUrls: ['https://anpclaw.com'],
+    );
+    expect(reviewedOperatorMatchesTarget('ali', 'singapore-staging'), isFalse);
+    expect(
+      reviewedOperatorMatchesTarget('singapore', 'awiki-info-testing'),
+      isFalse,
+    );
+    expect(
+      reviewedOperatorMatchesTarget('unknown', 'singapore-staging'),
+      isFalse,
+    );
+    for (final url in [
+      'https://awiki.info',
+      'http://anpclaw.com',
+      'https://anpclaw.com/other',
+      'https://anpclaw.com:443',
+    ]) {
+      expect(
+        () => validateReviewedOperatorServiceTarget(
+          mode: 'singapore',
+          target: 'singapore-staging',
+          didDomain: 'anpclaw.com',
+          serviceUrls: [url],
+        ),
+        throwsFormatException,
+      );
+    }
+    final altered = [...reviewedSingaporeAccountStateOperatorCommand]
+      ..[1] = 'ali';
+    expect(
+      () => parseAccountStateOperatorCommand(
+        jsonEncode(altered),
+        mode: 'singapore',
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => parseAccountStateOperatorCommand(
+        jsonEncode(reviewedSingaporeAccountStateOperatorCommand),
+        mode: 'ali',
+      ),
+      throwsFormatException,
+    );
+  });
+
   test('accepts only the reviewed Mac-to-Ali managed-release argv', () {
     expect(
       parseAccountStateOperatorCommand(
@@ -43,7 +100,8 @@ void main() {
   });
 
   test('rejects mutable release scripts and unreviewed operator revisions', () {
-    const script = '/usr/local/libexec/awiki-system-test/'
+    const script =
+        '/usr/local/libexec/awiki-system-test/'
         'user-operator-aadcaa641890/run_account_state_sync_test_action.py';
     expect(reviewedLocalAccountStateOperatorCommand, contains(script));
     for (final replacement in [
@@ -55,7 +113,10 @@ void main() {
           .map((arg) => arg == script ? replacement : arg)
           .toList();
       expect(
-        () => parseAccountStateOperatorCommand(jsonEncode(command), mode: 'local'),
+        () => parseAccountStateOperatorCommand(
+          jsonEncode(command),
+          mode: 'local',
+        ),
         throwsFormatException,
       );
     }

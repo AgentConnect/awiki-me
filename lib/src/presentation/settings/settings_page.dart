@@ -24,8 +24,9 @@ import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../shared/widgets/awiki_desktop.dart';
+import '../shared/widgets/awiki_glass.dart';
 import 'language_selection_page.dart';
-import 'notify_settings.dart';
 import 'display_settings_page.dart';
 import '../shared/display_scale.dart';
 import '../shared/local_credential_delete_dialog.dart';
@@ -46,11 +47,6 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final session = ref.watch(sessionProvider).session;
-    final methodCapabilities = session == null
-        ? null
-        : ref
-              .watch(identityMethodCapabilitiesProvider(session.did))
-              .valueOrNull;
     final runtime = ref.read(appRuntimeProvider.notifier);
     final updateState = ref.watch(appUpdateProvider);
     final activeTenant = ref.watch(activeAppTenantProvider);
@@ -63,8 +59,6 @@ class SettingsPage extends ConsumerWidget {
     final responsive = context.awikiResponsive;
     Widget? leading(Widget icon) => responsive.usesDesktopLayout ? null : icon;
     final sections = <Widget>[
-      if (session != null && defaultTargetPlatform == TargetPlatform.android)
-        const NotifySettings(),
       if (!embedded && responsive.isCompact && session != null) ...<Widget>[
         _SettingsSection(
           key: const Key('settings-profile-section'),
@@ -188,11 +182,13 @@ class SettingsPage extends ConsumerWidget {
               (_) => const LanguageSelectionPage(),
             ),
           ),
-          if (isDesktopPlatform) ...<Widget>[
+          ...<Widget>[
             const AppSectionDivider(),
             AppListTile(
               key: const Key('settings-display-row'),
-              title: l10n.settingsDisplayAndWindow,
+              title: isDesktopPlatform
+                  ? l10n.settingsDisplayAndWindow
+                  : l10n.settingsAppearance,
               leading: leading(
                 const _SettingsIcon(icon: CupertinoIcons.textformat_size),
               ),
@@ -217,19 +213,16 @@ class SettingsPage extends ConsumerWidget {
       _SettingsSection(
         key: const Key('settings-session-section'),
         children: <Widget>[
-          if (methodCapabilities?.handleRecovery == true)
-            AppListTile(
-              key: const Key('settings-recover-handle-did-row'),
-              title: l10n.settingsRecoverHandleDid,
-              leading: leading(
-                const _SettingsIcon(
-                  icon: CupertinoIcons.arrow_counterclockwise,
-                ),
-              ),
-              onTap: _canRecoverHandleDid(session)
-                  ? () => _openHandleRecovery(context, session!)
-                  : null,
+          AppListTile(
+            key: const Key('settings-recover-handle-did-row'),
+            title: l10n.settingsRecoverHandleDid,
+            leading: leading(
+              const _SettingsIcon(icon: CupertinoIcons.arrow_counterclockwise),
             ),
+            onTap: _canRecoverHandleDid(session)
+                ? () => _openHandleRecovery(context, session!)
+                : null,
+          ),
           const AppSectionDivider(),
           AppListTile(
             title: l10n.settingsExportCredential,
@@ -268,6 +261,131 @@ class SettingsPage extends ConsumerWidget {
     ];
 
     if (embedded && responsive.usesDesktopLayout) {
+      // Reference desktop settings: flat groups with a quiet caption,
+      // title/subtitle rows and trailing values, split by hairlines.
+      final checkingUpdates = updateState.status == AppUpdateStatus.checking;
+      final desktopGroups = <Widget>[
+        if (session != null)
+          _DesktopSettingsGroup(
+            key: const Key('settings-devices-section'),
+            first: true,
+            title: l10n.settingsAccountDevicesSection,
+            children: <Widget>[
+              _DesktopSettingsProfileRow(session: session, onTap: onProfileTap),
+              _DesktopSettingsRow(
+                key: const Key('settings-devices-row'),
+                title: l10n.settingsDevices,
+                onTap: () => AppNavigator.push<void>(
+                  context,
+                  (_) => const DevicesPage(),
+                ),
+              ),
+            ],
+          ),
+        _DesktopSettingsGroup(
+          key: const Key('settings-general-section'),
+          first: session == null,
+          title: l10n.settingsAppSection,
+          children: <Widget>[
+            _DesktopSettingsRow(
+              key: const Key('settings-current-version-row'),
+              title: l10n.settingsCurrentVersion,
+              trailingText: updateState.currentVersion?.version ?? '--',
+            ),
+            _DesktopSettingsRow(
+              key: const Key('settings-check-updates-row'),
+              title: l10n.settingsCheckForUpdates,
+              trailingText: _updateStatusLabel(context, updateState),
+              onTap: checkingUpdates
+                  ? null
+                  : () => ref
+                        .read(appUpdateProvider.notifier)
+                        .checkForUpdates(force: true),
+            ),
+            if (!activeTenant.isOfficialTenant) ...<Widget>[
+              _DesktopSettingsRow(
+                key: const Key('settings-check-primary-update-source-row'),
+                title:
+                    '${l10n.settingsCheckForUpdates} · $primaryBuiltinTenantName',
+                onTap: checkingUpdates
+                    ? null
+                    : () => ref
+                          .read(appUpdateProvider.notifier)
+                          .checkOfficialSource(AppOfficialUpdateSource.primary),
+              ),
+              _DesktopSettingsRow(
+                key: const Key('settings-check-secondary-update-source-row'),
+                title:
+                    '${l10n.settingsCheckForUpdates} · $secondaryBuiltinTenantName',
+                onTap: checkingUpdates
+                    ? null
+                    : () => ref
+                          .read(appUpdateProvider.notifier)
+                          .checkOfficialSource(
+                            AppOfficialUpdateSource.secondary,
+                          ),
+              ),
+            ],
+            _DesktopSettingsRow(
+              key: const Key('settings-language-row'),
+              title: l10n.settingsLanguage,
+              trailingText: appLocaleModeLabel(context, localeMode),
+              onTap: () => AppNavigator.push<void>(
+                context,
+                (_) => const LanguageSelectionPage(),
+              ),
+            ),
+            _DesktopSettingsRow(
+              key: const Key('settings-display-row'),
+              title: isDesktopPlatform
+                  ? l10n.settingsDisplayAndWindow
+                  : l10n.settingsAppearance,
+              trailingText: '${(displayScale * 100).round()}%',
+              trailingTextKey: const Key('settings-display-value'),
+              onTap: () => AppNavigator.push<void>(
+                context,
+                (_) => const DisplaySettingsPage(),
+              ),
+            ),
+          ],
+        ),
+        _DesktopSettingsGroup(
+          key: const Key('settings-session-section'),
+          title: l10n.settingsSecuritySection,
+          children: <Widget>[
+            _DesktopSettingsRow(
+              key: const Key('settings-recover-handle-did-row'),
+              title: l10n.settingsRecoverHandleDid,
+              onTap: _canRecoverHandleDid(session)
+                  ? () => _openHandleRecovery(context, session!)
+                  : null,
+            ),
+            _DesktopSettingsRow(
+              key: const Key('settings-export-credential-row'),
+              title: l10n.settingsExportCredential,
+              onTap: session == null ? null : runtime.exportCurrentCredential,
+            ),
+            _DesktopSettingsRow(
+              key: const Key('settings-logout-row'),
+              title: l10n.settingsLogout,
+              onTap: () => _showLogoutDialog(context, runtime),
+            ),
+            _DesktopSettingsRow(
+              key: const Key('settings-delete-credential-row'),
+              title: l10n.settingsDeleteCredential,
+              destructive: true,
+              onTap: session == null
+                  ? null
+                  : () => _showDeleteCredentialDialog(
+                      context,
+                      ref,
+                      runtime,
+                      session,
+                    ),
+            ),
+          ],
+        ),
+      ];
       return CupertinoPageScaffold(
         key: const Key('settings-expanded-page-surface'),
         backgroundColor: theme.surface,
@@ -279,13 +397,8 @@ class SettingsPage extends ConsumerWidget {
             ),
             Expanded(
               child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                  0,
-                  responsive.spacing(10),
-                  0,
-                  responsive.spacing(24),
-                ),
-                children: sections,
+                padding: EdgeInsets.only(bottom: responsive.spacing(24)),
+                children: desktopGroups,
               ),
             ),
           ],
@@ -298,10 +411,12 @@ class SettingsPage extends ConsumerWidget {
           MediaQuery.sizeOf(context).height -
           MediaQuery.paddingOf(context).vertical;
       final useShortViewportMetrics = compactContentHeight < 820;
-      final profileHeight = useShortViewportMetrics ? 88.0 : 104.0;
-      final profileAvatarSize = useShortViewportMetrics ? 52.0 : 58.0;
-      final sectionTitleHeight = useShortViewportMetrics ? 32.0 : 40.0;
-      final optionRowHeight = useShortViewportMetrics ? 52.0 : 60.0;
+      // Glass groups add their own insets, so rows follow the reference's
+      // tighter 48-52 unit settings rhythm to keep every action on screen.
+      final profileHeight = useShortViewportMetrics ? 76.0 : 84.0;
+      final profileAvatarSize = useShortViewportMetrics ? 48.0 : 52.0;
+      final sectionTitleHeight = useShortViewportMetrics ? 30.0 : 34.0;
+      final optionRowHeight = useShortViewportMetrics ? 48.0 : 52.0;
       final accountRows = <Widget>[
         if (session != null)
           _QuietSettingsRow(
@@ -314,36 +429,38 @@ class SettingsPage extends ConsumerWidget {
                 AppNavigator.push<void>(context, (_) => const DevicesPage()),
           ),
       ];
+      final profileRow = session == null
+          ? null
+          : _QuietSettingsProfileRow(
+              session: session,
+              height: profileHeight,
+              avatarSize: profileAvatarSize,
+              onTap:
+                  onProfileTap ??
+                  () => AppNavigator.push(
+                    context,
+                    (_) =>
+                        ProfilePage(onBack: () => Navigator.of(context).pop()),
+                  ),
+            );
       final compactRows = <Widget>[
-        if (session != null) ...<Widget>[
-          _QuietSettingsProfileRow(
-            session: session,
-            height: profileHeight,
-            avatarSize: profileAvatarSize,
-            onTap:
-                onProfileTap ??
-                () => AppNavigator.push(
-                  context,
-                  (_) => ProfilePage(onBack: () => Navigator.of(context).pop()),
-                ),
-          ),
-        ],
-        _QuietSettingsSectionTitle(
-          l10n.settingsAccountDevicesSection,
-          key: const Key('settings-account-section-title'),
-          height: sectionTitleHeight,
-        ),
         _FlatSettingsGroup(
           key: const Key('settings-account-group'),
+          title: _QuietSettingsSectionTitle(
+            l10n.settingsAccountDevicesSection,
+            key: const Key('settings-account-section-title'),
+            height: sectionTitleHeight,
+          ),
+          leading: profileRow,
           children: accountRows,
-        ),
-        _QuietSettingsSectionTitle(
-          l10n.settingsAppSection,
-          key: const Key('settings-app-section-title'),
-          height: sectionTitleHeight,
         ),
         _FlatSettingsGroup(
           key: const Key('settings-app-group'),
+          title: _QuietSettingsSectionTitle(
+            l10n.settingsAppSection,
+            key: const Key('settings-app-section-title'),
+            height: sectionTitleHeight,
+          ),
           children: <Widget>[
             _QuietSettingsRow(
               key: const Key('settings-current-version-row'),
@@ -406,52 +523,40 @@ class SettingsPage extends ConsumerWidget {
                 (_) => const LanguageSelectionPage(),
               ),
             ),
-            if (session != null &&
-                defaultTargetPlatform == TargetPlatform.android)
-              _QuietSettingsRow(
-                key: const Key('settings-notify-row'),
-                icon: CupertinoIcons.bell,
-                title: '任务通知',
-                height: optionRowHeight,
-                onTap: () => AppNavigator.push<void>(
-                  context,
-                  (_) => const NotifySettingsPage(),
-                ),
+            _QuietSettingsRow(
+              key: const Key('settings-display-row'),
+              icon: CupertinoIcons.textformat_size,
+              iconKey: const Key('settings-display-icon'),
+              title: isDesktopPlatform
+                  ? l10n.settingsDisplayAndWindow
+                  : l10n.settingsAppearance,
+              trailingText: '${(displayScale * 100).round()}%',
+              height: optionRowHeight,
+              onTap: () => AppNavigator.push<void>(
+                context,
+                (_) => const DisplaySettingsPage(),
               ),
-            if (isDesktopPlatform)
-              _QuietSettingsRow(
-                key: const Key('settings-display-row'),
-                icon: CupertinoIcons.textformat_size,
-                iconKey: const Key('settings-display-icon'),
-                title: l10n.settingsDisplayAndWindow,
-                trailingText: '${(displayScale * 100).round()}%',
-                height: optionRowHeight,
-                onTap: () => AppNavigator.push<void>(
-                  context,
-                  (_) => const DisplaySettingsPage(),
-                ),
-              ),
+            ),
           ],
-        ),
-        _QuietSettingsSectionTitle(
-          l10n.settingsSecuritySection,
-          key: const Key('settings-security-section-title'),
-          height: sectionTitleHeight,
         ),
         _FlatSettingsGroup(
           key: const Key('settings-security-group'),
+          title: _QuietSettingsSectionTitle(
+            l10n.settingsSecuritySection,
+            key: const Key('settings-security-section-title'),
+            height: sectionTitleHeight,
+          ),
           children: <Widget>[
-            if (methodCapabilities?.handleRecovery == true)
-              _QuietSettingsRow(
-                key: const Key('settings-recover-handle-did-row'),
-                icon: CupertinoIcons.arrow_counterclockwise,
-                iconKey: const Key('settings-recover-handle-did-icon'),
-                title: l10n.settingsRecoverHandleDid,
-                height: optionRowHeight,
-                onTap: _canRecoverHandleDid(session)
-                    ? () => _openHandleRecovery(context, session!)
-                    : null,
-              ),
+            _QuietSettingsRow(
+              key: const Key('settings-recover-handle-did-row'),
+              icon: CupertinoIcons.arrow_counterclockwise,
+              iconKey: const Key('settings-recover-handle-did-icon'),
+              title: l10n.settingsRecoverHandleDid,
+              height: optionRowHeight,
+              onTap: _canRecoverHandleDid(session)
+                  ? () => _openHandleRecovery(context, session!)
+                  : null,
+            ),
             _QuietSettingsRow(
               key: const Key('settings-export-credential-row'),
               icon: CupertinoIcons.arrow_down_to_line,
@@ -489,41 +594,43 @@ class SettingsPage extends ConsumerWidget {
         ),
       ];
       return CupertinoPageScaffold(
-        backgroundColor: theme.background,
-        child: Column(
-          children: <Widget>[
-            Padding(
-              key: const Key('settings-compact-header'),
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: AwikiMeTopBar(
-                title: l10n.settingsTitle,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                titleFontSize: 16,
-                titleFontWeight: FontWeight.w400,
-                leading: TopBarActionButton(
-                  key: const Key('settings-back-button'),
-                  onTap: onBack ?? () => Navigator.of(context).pop(),
-                  semanticsLabel: l10n.commonBack,
-                  child: Icon(
-                    CupertinoIcons.chevron_left,
-                    size: responsive.iconMd,
-                    color: AwikiMePalette.actionBlue,
+        backgroundColor: awikiCompactListBackground(context),
+        child: AwikiGlassBackdrop(
+          color: awikiCompactListBackground(context),
+          child: Column(
+            children: <Widget>[
+              Padding(
+                key: const Key('settings-compact-header'),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: AwikiMeTopBar(
+                  title: l10n.settingsTitle,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  titleFontSize: 16,
+                  titleFontWeight: FontWeight.w400,
+                  leading: AwikiBackButton(
+                    key: const Key('settings-back-button'),
+                    onTap: onBack ?? () => Navigator.of(context).pop(),
+                    semanticsLabel: l10n.commonBack,
                   ),
                 ),
               ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                  0,
-                  0,
-                  0,
-                  useShortViewportMetrics ? 0 : 4,
+              Expanded(
+                child: ListView.separated(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    4,
+                    16,
+                    (useShortViewportMetrics ? 0 : 4) +
+                        20 +
+                        MediaQuery.paddingOf(context).bottom,
+                  ),
+                  itemCount: compactRows.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 14),
+                  itemBuilder: (_, index) => compactRows[index],
                 ),
-                children: compactRows,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }
@@ -552,9 +659,9 @@ class SettingsPage extends ConsumerWidget {
                     : TopBarActionButton(
                         key: const Key('settings-back-button'),
                         onTap: onBack ?? () => Navigator.of(context).pop(),
-                        child: const AwikiAssetIcon(
+                        child: AwikiAssetIcon(
                           assetName: 'assets/icons/icon_left.svg',
-                          color: AwikiMeColors.primaryDark,
+                          color: context.awikiTheme.title,
                           size: 22,
                         ),
                       ),
@@ -692,13 +799,13 @@ class _QuietSettingsProfileRow extends StatelessWidget {
       key: const Key('settings-profile-row'),
       onTap: onTap,
       semanticLabel: title,
-      borderRadius: BorderRadius.zero,
+      borderRadius: BorderRadius.circular(18),
       child: SizedBox(
         height: height,
         child: Stack(
           children: <Widget>[
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Row(
                 children: <Widget>[
                   AvatarBadge(
@@ -743,12 +850,6 @@ class _QuietSettingsProfileRow extends StatelessWidget {
                 ],
               ),
             ),
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: 0,
-              child: Container(height: 1, color: theme.border),
-            ),
           ],
         ),
       ),
@@ -767,9 +868,9 @@ class _QuietSettingsSectionTitle extends StatelessWidget {
     return SizedBox(
       height: height,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         child: Align(
-          alignment: Alignment.centerLeft,
+          alignment: Alignment.bottomLeft,
           child: Text(
             label,
             maxLines: 1,
@@ -786,34 +887,41 @@ class _QuietSettingsSectionTitle extends StatelessWidget {
   }
 }
 
+/// Phone settings group: one glass card carrying its own section label, an
+/// optional lead row (the account identity) and hairline-separated rows.
 class _FlatSettingsGroup extends StatelessWidget {
-  const _FlatSettingsGroup({super.key, required this.children});
+  const _FlatSettingsGroup({
+    super.key,
+    required this.children,
+    this.title,
+    this.leading,
+  });
 
+  final Widget? title;
+  final Widget? leading;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final items = <Widget>[?leading, ...children];
     final rows = <Widget>[];
-    for (var index = 0; index < children.length; index += 1) {
-      rows.add(children[index]);
-      rows.add(
-        Container(
-          key: index == children.length - 1
-              ? null
-              : ValueKey<String>('settings-row-divider-$index'),
-          height: 1,
-          margin: EdgeInsets.only(
-            left: index == children.length - 1 ? 20 : 68,
-            right: 20,
+    for (var index = 0; index < items.length; index += 1) {
+      rows.add(items[index]);
+      if (index != items.length - 1) {
+        rows.add(
+          Container(
+            key: ValueKey<String>('settings-row-divider-$index'),
+            height: 0.5,
+            margin: const EdgeInsets.symmetric(horizontal: 14),
+            color: theme.glassEdgeActive,
           ),
-          color: theme.border,
-        ),
-      );
+        );
+      }
     }
-    return ColoredBox(
-      color: theme.surface,
-      child: Column(children: rows),
+    return AwikiGlassSurface(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
+      child: Column(children: <Widget>[?title, ...rows]),
     );
   }
 }
@@ -843,23 +951,22 @@ class _QuietSettingsRow extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final trailingValue = trailingText?.trim() ?? '';
-    final foreground = destructive ? theme.danger : AwikiMePalette.actionBlue;
+    final foreground = destructive ? theme.danger : theme.title;
     return AppPressable(
       onTap: onTap,
       semanticLabel: title,
-      borderRadius: BorderRadius.zero,
+      borderRadius: BorderRadius.circular(18),
       child: Container(
         height: height,
-        padding: const EdgeInsets.symmetric(horizontal: 28),
-        color: theme.surface,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
             SizedBox.square(
               dimension: 24,
-              child: Icon(icon, key: iconKey, size: 24, color: foreground),
+              child: Icon(icon, key: iconKey, size: 20, color: foreground),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 title,
@@ -867,7 +974,7 @@ class _QuietSettingsRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: destructive ? theme.danger : theme.title,
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.w400,
                 ),
               ),
@@ -883,7 +990,7 @@ class _QuietSettingsRow extends StatelessWidget {
                   maxLines: 1,
                   softWrap: false,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: theme.secondaryText, fontSize: 12),
+                  style: TextStyle(color: theme.secondaryText, fontSize: 13),
                 ),
               ),
             if (onTap != null) ...<Widget>[
@@ -958,6 +1065,219 @@ class _SettingsIcon extends StatelessWidget {
               size: responsive.iconSm,
               color: color,
             ),
+    );
+  }
+}
+
+/// Reference desktop `.set-group`: a quiet 12-unit caption over its rows,
+/// separated from the previous group by a hairline.
+class _DesktopSettingsGroup extends StatelessWidget {
+  const _DesktopSettingsGroup({
+    super.key,
+    required this.title,
+    required this.children,
+    this.first = false,
+  });
+
+  final String title;
+  final List<Widget> children;
+  final bool first;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: first ? null : Border(top: BorderSide(color: theme.border)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          responsive.displayScaled(6),
+          responsive.displayScaled(10),
+          responsive.displayScaled(6),
+          responsive.displayScaled(4),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                responsive.displayScaled(8),
+                0,
+                responsive.displayScaled(8),
+                responsive.displayScaled(4),
+              ),
+              child: Text(
+                title,
+                style: TextStyle(color: theme.secondaryText, fontSize: 12),
+              ),
+            ),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A flat desktop settings row: 14-unit title and a trailing value;
+/// interactive rows show a soft hover fill and chevron.
+class _DesktopSettingsRow extends StatelessWidget {
+  const _DesktopSettingsRow({
+    super.key,
+    required this.title,
+    this.trailingText,
+    this.trailingTextKey,
+    this.destructive = false,
+    this.onTap,
+  });
+
+  final String title;
+  final String? trailingText;
+  final Key? trailingTextKey;
+  final bool destructive;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    final radius = BorderRadius.circular(responsive.displayScaled(8));
+    return AppPressable(
+      onTap: onTap,
+      enabled: onTap != null,
+      semanticLabel: title,
+      borderRadius: radius,
+      builder: (context, state, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          color: onTap != null && (state.hovered || state.pressed)
+              ? awikiDesktopHoverFill(context)
+              : awikiDesktopHoverFill(context).withValues(alpha: 0),
+          borderRadius: radius,
+        ),
+        child: child,
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: responsive.displayScaled(8),
+          vertical: responsive.displayScaled(9),
+        ),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: destructive ? theme.danger : theme.title,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (trailingText != null) ...<Widget>[
+              SizedBox(width: responsive.displayScaled(8)),
+              Text(
+                trailingText!,
+                key: trailingTextKey,
+                maxLines: 1,
+                style: TextStyle(color: theme.secondaryText, fontSize: 12),
+              ),
+            ],
+            if (onTap != null) ...<Widget>[
+              SizedBox(width: responsive.displayScaled(6)),
+              Icon(
+                CupertinoIcons.chevron_right,
+                size: responsive.displayScaled(13),
+                color: theme.tertiaryText,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The signed-in identity at the top of the desktop account group.
+class _DesktopSettingsProfileRow extends StatelessWidget {
+  const _DesktopSettingsProfileRow({required this.session, this.onTap});
+
+  final SessionIdentity session;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    final title = _sessionProfileTitle(session);
+    final subtitle = _sessionProfileSubtitle(session);
+    final radius = BorderRadius.circular(responsive.displayScaled(8));
+    return AppPressable(
+      key: const Key('settings-profile-row'),
+      onTap: onTap,
+      enabled: onTap != null,
+      semanticLabel: title,
+      borderRadius: radius,
+      builder: (context, state, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          color: onTap != null && (state.hovered || state.pressed)
+              ? awikiDesktopHoverFill(context)
+              : awikiDesktopHoverFill(context).withValues(alpha: 0),
+          borderRadius: radius,
+        ),
+        child: child,
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: responsive.displayScaled(8),
+          vertical: responsive.displayScaled(8),
+        ),
+        child: Row(
+          children: <Widget>[
+            AvatarBadge(
+              key: const Key('settings-profile-avatar'),
+              seed: title,
+              size: responsive.displayScaled(40),
+              userId: session.did,
+            ),
+            SizedBox(width: responsive.displayScaled(10)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: theme.title, fontSize: 14),
+                  ),
+                  if (subtitle.isNotEmpty)
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: theme.secondaryText,
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

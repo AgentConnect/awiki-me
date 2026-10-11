@@ -453,7 +453,7 @@
       "feature": "App to CLI attachment",
       "layer": "remote_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Stage an attachment through desktop drop UI and send it to CLI.",
+      "action": "Stage ordinary and encrypted attachments through desktop drop UI and send them to CLI.",
       "exactOracles": [
         "The desktop drop uses a real temporary filesystem source and both the staged draft model and visible preview preserve the exact filename.",
         "One canonical attachment message reaches terminal sent state.",
@@ -1600,13 +1600,14 @@
       "caseId": "MSG-REG-001",
       "feature": "Direct failure/retry/replay regression",
       "layer": "remote_product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "preconditions": "The explicitly reviewed remote target has Direct E2EE enabled; isolated App and CLI identities pass canonical preflight.",
       "action": "Inject the E2E transport failure, tap the visible retry action, reconnect, rebuild the App shell, and requery.",
       "exactOracles": [
         "The controlled failed row stays visible in the canonical conversation even when the write path uses a DID alias or a core reset arrives.",
         "The visible retry performs exactly one real remote transport attempt, reports a typed failure code if it fails, and reaches terminal sent state.",
         "The complete run-owned Direct sequence has the exact canonical IDs, contents, conversation ownership and visible order after reconnect and App-shell rebuild.",
-        "Two distinct canonical messages with the same body remain exactly two ordered messages during realtime delivery, converge to strictly increasing serverSequence values, and keep that order through the stability window and rebuild."
+        "Two distinct canonical messages with the same body remain exactly two ordered messages during realtime delivery, converge to strictly increasing serverSequence values, and keep that order through the stability window and rebuild.",
+        "Ordinary and encrypted messages share the canonical conversation; toggling preserves the draft, CLI confirms actual encrypted delivery, and restart preserves mode and actual lock metadata. An encrypted reply remains encrypted while the composer is ordinary."
       ],
       "negativeChecks": [
         "Silent success, duplicate/extra/missing/out-of-order message, non-increasing converged serverSequence, cross-conversation leakage, same-body collapse, new duplicate on retry/replay, lost message, or stale failed state fails immediately."
@@ -1626,7 +1627,8 @@
           "MSG-REG-001:failure_retry_ui_verified",
           "MSG-REG-001:lifecycle_and_widget_restart_exact_one_verified",
           "MSG-REG-001:complete_direct_message_sequence_ordered_and_stable",
-          "MSG-REG-001:same_body_distinct_canonical_messages_preserved"
+          "MSG-REG-001:same_body_distinct_canonical_messages_preserved",
+          "MSG-REG-001:mixed_encryption_draft_lock_and_restart_verified"
         ],
         "exactOracleAssertions": [
           [
@@ -1640,6 +1642,9 @@
           ],
           [
             "MSG-REG-001:same_body_distinct_canonical_messages_preserved"
+          ],
+          [
+            "MSG-REG-001:mixed_encryption_draft_lock_and_restart_verified"
           ]
         ],
         "negativeCheckAssertions": [
@@ -1647,7 +1652,8 @@
             "MSG-REG-001:failure_retry_ui_verified",
             "MSG-REG-001:lifecycle_and_widget_restart_exact_one_verified",
             "MSG-REG-001:complete_direct_message_sequence_ordered_and_stable",
-            "MSG-REG-001:same_body_distinct_canonical_messages_preserved"
+            "MSG-REG-001:same_body_distinct_canonical_messages_preserved",
+            "MSG-REG-001:mixed_encryption_draft_lock_and_restart_verified"
           ]
         ]
       }
@@ -6270,6 +6276,56 @@
           [
             "AVATAR-E2E-001:replacement_immutable_url_and_clear_fallback",
             "AVATAR-E2E-001:bounded_public_jpeg_and_old_url_retained"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "AGENT-AVATAR-E2E-001",
+      "feature": "Owned agent avatar lifecycle",
+      "layer": "remote_product_ui",
+      "preconditions": "Reviewed remote target running the new User Service avatar API with uploads enabled. AWIKI_E2E_AGENT_AVATAR_DID must identify an explicitly prepared fresh disposable Inventory agent owned by accounts.appUser (version 0, source default). Missing or non-fresh fixtures fail before writes. Only the native chooser is deterministic; production auth, Inventory adapter and storage remain real.",
+      "action": "Use the agents page avatar editor to cancel a preset selection, save a preset, upload the original animated GIF without crop, read anonymous GIF/PNG resources, and restore default.",
+      "exactOracles": [
+        "Cancel leaves the server record unchanged; a saved preset persists at the same immutable agentId with version 1.",
+        "The uploaded public GIF has multiple frames; GIF and PNG poster return their exact MIME types, bounded bytes and immutable cache headers.",
+        "The agent list uses the shared square avatar; reset preserves immutable agentId, restores the original default preset and advances the version."
+      ],
+      "negativeChecks": [
+        "Missing or non-owned/non-fresh fixtures, flattened GIFs, MIME errors, failed saves, stale list projections or a different default after reset fail."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/flows/agent_avatar_flow.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "AGENT-AVATAR-E2E-001:cancel_does_not_write_and_preset_persists",
+          "AGENT-AVATAR-E2E-001:gif_frames_and_public_poster_are_preserved",
+          "AGENT-AVATAR-E2E-001:shared_square_avatar_and_reset_keep_stable_id"
+        ],
+        "exactOracleAssertions": [
+          [
+            "AGENT-AVATAR-E2E-001:cancel_does_not_write_and_preset_persists"
+          ],
+          [
+            "AGENT-AVATAR-E2E-001:gif_frames_and_public_poster_are_preserved"
+          ],
+          [
+            "AGENT-AVATAR-E2E-001:shared_square_avatar_and_reset_keep_stable_id"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "AGENT-AVATAR-E2E-001:cancel_does_not_write_and_preset_persists",
+            "AGENT-AVATAR-E2E-001:gif_frames_and_public_poster_are_preserved",
+            "AGENT-AVATAR-E2E-001:shared_square_avatar_and_reset_keep_stable_id"
           ]
         ]
       }

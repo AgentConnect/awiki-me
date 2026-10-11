@@ -187,7 +187,13 @@ class AttachmentPreviewService {
       handle = AttachmentPreviewHandle._(
         snapshot: localPath == null
             ? const AttachmentPreviewSnapshot.idle()
-            : AttachmentPreviewSnapshot.ready(localPath),
+            : AttachmentPreviewSnapshot.ready(
+                localPath,
+                // A delivered message that shows the same file as its pending
+                // bubble keeps the measured size, so it never falls back to
+                // the placeholder envelope first.
+                dimensions: _knownDimensionsFor(localPath),
+              ),
         sourceLocalPath: localPath,
         sourceObjectUri: _normalized(attachment.objectUri),
         readyOrigin: localPath == null
@@ -930,6 +936,21 @@ class AttachmentPreviewService {
     if (!isActive()) {
       throw const AttachmentPreviewResolutionInvalidatedException();
     }
+  }
+
+  AttachmentImageDimensions? _knownDimensionsFor(String path) {
+    final identity = _resourceIdentity(path);
+    if (identity == null) {
+      return null;
+    }
+    for (final handle in _entries.values) {
+      final snapshot = handle.snapshot;
+      if (snapshot.dimensions != null &&
+          _resourceIdentity(snapshot.path) == identity) {
+        return snapshot.dimensions;
+      }
+    }
+    return null;
   }
 
   static String? _resourceIdentity(String? value) {

@@ -9,9 +9,9 @@ import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/compact_nested_navigator_back_scope.dart';
 import 'package:awiki_me/src/presentation/shared/identity_profile_surface.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart' show JSONMessageCodec;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
 
 import 'test_support.dart';
 
@@ -26,7 +26,7 @@ Future<void> _simulateSystemBack(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('窄屏我的页面使用暖灰内容底和白色顶栏', (tester) async {
+  testWidgets('窄屏我的页面使用玻璃画布且由身份卡领起', (tester) async {
     tester.view
       ..devicePixelRatio = 1
       ..physicalSize = const Size(390, 844);
@@ -54,33 +54,32 @@ void main() {
     final scaffold = tester.widget<CupertinoPageScaffold>(
       find.byType(CupertinoPageScaffold),
     );
-    final tabSurface = tester.widget<ColoredBox>(
+    final tabSurface = tester.widget<AwikiGlassBackdrop>(
       find.byKey(const Key('shell-tab-page-surface')),
     );
-    final compactHeader = tester.widget<DecoratedBox>(
-      find.byKey(const Key('profile-compact-header')),
-    );
-    final headerDecoration = compactHeader.decoration as BoxDecoration;
     expect(scaffold.backgroundColor, AwikiMeColors.surface);
-    expect(tabSurface.color, AwikiMeColors.background);
-    expect(headerDecoration.color, AwikiMeColors.surface);
-    expect(headerDecoration.border, isNull);
-    final compactTitle = tester.widget<Text>(find.text('我'));
-    expect(compactTitle.style?.fontSize, 16);
-    expect(compactTitle.style?.fontWeight, FontWeight.w400);
-    expect(compactTitle.style?.height, 1.25);
+    expect(tabSurface.color, AwikiMeColors.surface);
+    // The root Me tab has no title bar; the identity card leads the page.
+    expect(find.byKey(const Key('profile-compact-header')), findsNothing);
+    expect(find.text('我的'), findsNothing);
     expect(
-      tester.getRect(find.byKey(const Key('profile-compact-header'))),
-      const Rect.fromLTWH(0, 0, 390, 64),
-    );
-    expect(
-      tester.getRect(find.byKey(const Key('profile-compact-summary'))).top,
-      64,
+      tester.getRect(find.byKey(const Key('profile-compact-summary'))),
+      within<Rect>(
+        distance: 0.01,
+        from: Rect.fromLTWH(
+          16,
+          16,
+          358,
+          tester
+              .getSize(find.byKey(const Key('profile-compact-summary')))
+              .height,
+        ),
+      ),
     );
     expect(find.byKey(const Key('awiki-me-brand-mark')), findsNothing);
   });
 
-  testWidgets('窄屏我的页面使用横向昵称简介标签资料头且移除身份卡', (tester) async {
+  testWidgets('窄屏我的页面使用玻璃身份卡与设备管理、设置入口', (tester) async {
     tester.view
       ..devicePixelRatio = 1
       ..physicalSize = const Size(390, 844);
@@ -111,56 +110,34 @@ void main() {
       'New User',
     );
     expect(find.text('连接人与 Agent，保持简单而高效'), findsOneWidget);
-    expect(find.text('开发者'), findsOneWidget);
-    expect(find.text('AI 协作'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('profile-handle-value'))).data,
+      startsWith('@newhandle2'),
+    );
     expect(
       tester.getSize(find.byKey(const Key('profile-avatar'))),
-      const Size.square(72),
+      const Size.square(64),
     );
     expect(find.text('编辑个人资料'), findsNothing);
-    expect(
-      tester.getSize(find.byKey(const Key('profile-edit-button'))).height,
-      greaterThanOrEqualTo(72),
-    );
     expect(find.byKey(const Key('profile-edit-chevron')), findsOneWidget);
-    expect(find.byKey(const Key('profile-statistics-divider')), findsNothing);
     expect(
-      tester.getRect(find.byKey(const Key('profile-compact-summary'))).left,
-      0,
-    );
-    expect(
-      tester
-          .widget<Container>(find.byKey(const Key('profile-compact-summary')))
-          .decoration,
-      isNull,
-    );
-    expect(
-      tester
-          .widget<Container>(find.byKey(const Key('profile-compact-summary')))
-          .color,
-      AwikiMeColors.surface,
+      tester.widget(find.byKey(const Key('profile-compact-summary'))),
+      isA<AwikiGlassSurface>(),
     );
     expect(
       tester.getRect(find.byKey(const Key('profile-navigation-group'))).top -
           tester
               .getRect(find.byKey(const Key('profile-compact-summary')))
               .bottom,
-      8,
+      14,
     );
-    expect(find.byKey(const Key('profile-handle-value')), findsNothing);
     expect(find.text('身份卡'), findsNothing);
-    expect(
-      find.byKey(const Key('profile-identity-document-row')),
-      findsNothing,
-    );
-    expect(find.byKey(const Key('profile-did-row')), findsOneWidget);
+    // DID is no longer surfaced on the Me tab.
+    expect(find.byKey(const Key('profile-did-row')), findsNothing);
+    expect(find.byKey(const Key('profile-devices-row')), findsOneWidget);
+    expect(find.text('设备管理'), findsOneWidget);
     expect(find.byKey(const Key('profile-homepage-row')), findsOneWidget);
     expect(find.byKey(const Key('profile-settings-row')), findsOneWidget);
-    expect(
-      tester.getRect(find.byKey(const Key('profile-settings-row'))).top -
-          tester.getRect(find.byKey(const Key('profile-homepage-row'))).bottom,
-      8,
-    );
     expect(tester.takeException(), isNull);
   });
 
@@ -561,7 +538,7 @@ void main() {
     }
   });
 
-  testWidgets('窄屏长 handle 与展开 DID 不溢出并保留完整值', (tester) async {
+  testWidgets('窄屏长昵称与长 handle 单行省略且不溢出', (tester) async {
     const profile = UserProfile(
       did:
           'did:wba:very-long-tenant.example:user:alice:e1_abcdefghijklmnopqrstuvwxyz0123456789',
@@ -589,30 +566,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.byKey(const Key('profile-did-value')), findsNothing);
-
-    await tester.tap(find.byKey(const Key('profile-did-row')));
-    await tester.pump();
-
-    expect(tester.takeException(), isNull);
-    final didText = tester.widget<Text>(
-      find.byKey(const Key('profile-did-value')),
-    );
-    expect(didText.data, profile.did);
-    expect(didText.data, endsWith('yz0123456789'));
-    expect(didText.maxLines, 4);
-    expect(didText.softWrap, isTrue);
-    expect(didText.overflow, TextOverflow.ellipsis);
-    final didParagraph = tester.renderObject<RenderParagraph>(
-      find.byKey(const Key('profile-did-value')),
-    );
-    expect(didParagraph.didExceedMaxLines, isFalse);
     final displayNameText = tester.widget<Text>(
       find.byKey(const Key('profile-display-name')),
     );
     expect(displayNameText.maxLines, 1);
+    expect(displayNameText.overflow, TextOverflow.ellipsis);
     expect(displayNameText.data, 'Alice With A Secondary Display Name');
-    expect(find.byKey(const Key('profile-handle-value')), findsNothing);
-    expect(find.byKey(const Key('profile-copy-did-button')), findsOneWidget);
+    final handleText = tester.widget<Text>(
+      find.byKey(const Key('profile-handle-value')),
+    );
+    expect(handleText.maxLines, 1);
+    expect(handleText.overflow, TextOverflow.ellipsis);
+    expect(handleText.data, contains('alice'));
+    expect(find.byKey(const Key('profile-did-value')), findsNothing);
   });
 }

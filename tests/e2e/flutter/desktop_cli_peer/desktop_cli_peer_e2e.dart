@@ -10,6 +10,9 @@ import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
+import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/agent_avatar_editor.dart';
+import 'package:awiki_me/src/presentation/shared/agent_avatar_image.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/attachment_open_service.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
@@ -64,7 +67,11 @@ import 'package:awiki_me/src/presentation/profile/avatar_crop_editor.dart';
 import 'package:awiki_me/src/presentation/shared/profile_avatar.dart';
 import 'package:crop_your_image/crop_your_image.dart';
 import 'package:flutter/cupertino.dart'
-    show CupertinoActivityIndicator, CupertinoTextField, CupertinoButton;
+    show
+        CupertinoActivityIndicator,
+        CupertinoTextField,
+        CupertinoButton,
+        CupertinoIcons;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart'
     show
@@ -88,10 +95,12 @@ import 'support/ui_oracles.dart';
 
 part 'flows/attachment_flow.dart';
 part 'flows/avatar_flow.dart';
+part 'flows/agent_avatar_flow.dart';
 part 'flows/contact_flow.dart';
 part 'flows/conversation_correctness_flow.dart';
 part 'flows/direct_message_flow.dart';
 part 'flows/group_message_flow.dart';
+part 'flows/dsh_group_pair_flow.dart';
 part 'flows/inbound_first_flow.dart';
 part 'flows/identity_switch_flow.dart';
 part 'flows/performance_flow.dart';
@@ -118,6 +127,7 @@ enum DesktopCliPeerIntegrationCase {
   processRestart,
   displayNameFallback,
   avatars,
+  agentAvatars,
   performance;
 
   static DesktopCliPeerIntegrationCase parse(String value) {
@@ -158,6 +168,7 @@ enum DesktopCliPeerIntegrationCase {
       'cold-restart' ||
       'cold_restart' => DesktopCliPeerIntegrationCase.processRestart,
       'avatars' => DesktopCliPeerIntegrationCase.avatars,
+      'agent-avatars' => DesktopCliPeerIntegrationCase.agentAvatars,
       'display-name-fallback' ||
       'display_name_fallback' ||
       'handle-fallback' ||
@@ -211,7 +222,8 @@ enum DesktopCliPeerIntegrationCase {
       this != DesktopCliPeerIntegrationCase.contactFirst &&
       this != DesktopCliPeerIntegrationCase.inboundFirst &&
       this != DesktopCliPeerIntegrationCase.displayNameFallback &&
-      this != DesktopCliPeerIntegrationCase.avatars;
+      this != DesktopCliPeerIntegrationCase.avatars &&
+      this != DesktopCliPeerIntegrationCase.agentAvatars;
 }
 
 DesktopCliPeerIntegrationCase desktopCliPeerCaseFromRunConfig() =>
@@ -340,6 +352,10 @@ void runDesktopCliPeerE2e({
         await _verifyAvatarEditing(robot, tester, config);
         return;
       }
+      if (selectedCase == DesktopCliPeerIntegrationCase.agentAvatars) {
+        await _verifyAgentAvatarEditing(robot, tester, config, session);
+        return;
+      }
 
       final messaging = bootstrap.messagingService!;
       final messageNonce = _messageNonce();
@@ -423,6 +439,7 @@ void runDesktopCliPeerE2e({
               'lifecycle_and_widget_restart_exact_one_verified',
               'complete_direct_message_sequence_ordered_and_stable',
               'same_body_distinct_canonical_messages_preserved',
+              'mixed_encryption_draft_lock_and_restart_verified',
             ],
             'DISPLAY-NAME-REG-001': const <String>[
               'cached_nickname_first_nonempty_header_title',
@@ -523,6 +540,13 @@ void runDesktopCliPeerE2e({
           config: config,
           nonce: messageNonce,
         );
+        await _verifyDshGroupPair(
+          robot: robot,
+          group: groupResult,
+          config: config,
+          ownerDid: session.did,
+          attachmentOpenRecorder: attachmentOpenRecorder,
+        );
         if (!selectedCase.runsDisplayNameFallback) {
           await _attestPassedCases(<String, List<String>>{
             'GROUP-CANON-E2E-001': const <String>[
@@ -530,7 +554,9 @@ void runDesktopCliPeerE2e({
               'member_add_and_restart_preserved_exact_one_group',
               'duplicate_disappearing_or_changed_group_rejected',
             ],
-            'GROUP-E2E-001': const <String>[
+            'GROUP-E2E-001': <String>[
+              if (Platform.environment['AWIKI_E2E_ENCRYPTED_GROUP'] == '1')
+                'encrypted_group_text_and_structured_send_verified',
               'group_created_and_member_added_through_ui',
               'empty_group_survives_member_refresh_and_restart_exact_one',
               'member_added_system_event_uses_nickname_projection',
@@ -605,19 +631,22 @@ void runDesktopCliPeerE2e({
       }
 
       if (selectedCase.runsAttachment) {
-        await _verifyAttachmentRegression(
-          robot: robot,
-          messaging: faultMessaging!,
-          attachmentOpenRecorder: attachmentOpenRecorder,
-          bootstrap: bootstrap,
-          providerOverrides: appProviderOverrides,
-          session: session,
-          ownerDid: session.did,
-          thread: directThread,
-          canonicalCliDid: canonicalCliDid!,
-          config: config,
-          nonce: messageNonce,
-        );
+        for (final secure in [false, true]) {
+          await _verifyAttachmentRegression(
+            robot: robot,
+            messaging: faultMessaging!,
+            attachmentOpenRecorder: attachmentOpenRecorder,
+            bootstrap: bootstrap,
+            providerOverrides: appProviderOverrides,
+            session: session,
+            ownerDid: session.did,
+            thread: directThread,
+            canonicalCliDid: canonicalCliDid!,
+            config: config,
+            nonce: '$messageNonce-${secure ? "encrypted" : "plain"}',
+            secure: secure,
+          );
+        }
         await _attestPassedCases(<String, List<String>>{
           'ATTACH-E2E-001': const <String>[
             'app_attachment_staged_and_sent_through_drop_ui',

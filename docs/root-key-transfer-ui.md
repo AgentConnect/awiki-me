@@ -48,7 +48,9 @@ App 严格执行下面的单目标流程：
 
 如果已有 response-loss 后的 `pending_delivery`，`prepare` 只返回绑定原 message ID 和原 P5
 密文的短期 handle，不自动发网；没有 Join 自动授权的独立手动任务在 Realtime/App 启动时不自动重发。只有本次 user-presence
-确认后的 `confirmAndSend` 才续跑相同 bytes。取消确认会消费 handle，但不导出 root、不发网。
+确认后的 `confirmAndSend` 才续跑相同 bytes。独立手动确认框不允许点击遮罩、Esc 或返回键关闭，
+这些操作保持同一 preparation，不发送也不取消。只有明确点击“取消”才消费 handle；
+取消不导出 root、不发网。
 
 页面状态只包含：
 

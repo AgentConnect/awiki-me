@@ -1926,6 +1926,34 @@ void main() {
       expect(notificationFacade.lastInAppTitle, isNull);
     });
 
+    test('解密后的加密消息系统通知仍隐藏正文和附件信息', () async {
+      final ordinary = buildUpdate();
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: ordinary.ownerDid,
+        message: ChatMessage(
+          localId: 'encrypted-notification',
+          remoteId: 'encrypted-notification',
+          conversationId: ordinary.message!.conversationId,
+          threadId: ordinary.message!.threadId,
+          senderDid: ordinary.message!.senderDid,
+          senderName: ordinary.message!.senderName,
+          receiverDid: ordinary.message!.receiverDid,
+          createdAt: ordinary.message!.createdAt,
+          isMine: false,
+          isEncrypted: true,
+          sendState: MessageSendState.sent,
+          content: 'secret filename.pdf',
+        ),
+        conversationHint: ordinary.conversationHint,
+      );
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      await activate();
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+      expect(notificationFacade.lastSystemBody, '收到一条加密消息');
+    });
+
     test('后台系统通知标题使用发信人短昵称', () async {
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         ownerDid: 'did:test:me',

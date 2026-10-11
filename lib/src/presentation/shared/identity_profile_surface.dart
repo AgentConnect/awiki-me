@@ -255,8 +255,8 @@ class IdentityProfileBadge extends StatelessWidget {
         CupertinoColors.transparent,
       ),
       IdentityProfileBadgeTone.runtime => (
-        const Color(0xFFE4F3FA),
-        AwikiMePalette.badgeBlue,
+        theme.primarySoft,
+        theme.primaryDeep,
         CupertinoColors.transparent,
       ),
       IdentityProfileBadgeTone.status => (

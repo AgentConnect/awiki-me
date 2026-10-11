@@ -15,6 +15,7 @@ import 'dart:io';
 
 import '../../root_transfer_fixture_state.dart';
 import '../../root_transfer_registry_observer.dart';
+import '../../runtime_message_sync_readiness.dart';
 import '../support/confirm_local_credential_deletion.dart';
 import 'dart:math';
 import 'dart:typed_data';
@@ -138,7 +139,6 @@ const String _syncRecoveryEnableEnv = 'AWIKI_MESSAGE_SYNC_V2_RECOVERY_E2E';
 const String _syncRecoveryOperatorModeEnv =
     'AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE';
 const String _syncRecoveryTargetEnv = 'AWIKI_SYSTEM_TEST_TARGET';
-const String _syncRecoveryTarget = 'awiki-info-testing';
 const String _accountStateEnableEnv = 'AWIKI_ACCOUNT_STATE_V1_E2E';
 const String _accountStateOperatorModeEnv =
     'AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE';
@@ -1661,7 +1661,8 @@ class _AppPairRunConfig implements _CliEndpointConfig {
           : _requiredStringList(accountState, 'operatorCommand'),
     );
     final didWeb = _invocationExplicitlyExpects(_didWebAppCaseId);
-    if ((!didWeb && config.didDomain != 'awiki.info') ||
+    if ((!didWeb &&
+            !const {'awiki.info', 'anpclaw.com'}.contains(config.didDomain)) ||
         config.adminStateRoot == config.joinerStateRoot) {
       throw StateError('The App-pair target or state isolation is invalid.');
     }
@@ -1680,15 +1681,30 @@ class _AppPairRunConfig implements _CliEndpointConfig {
     ];
     if (didWeb) {
       validateConfiguredRemoteTarget(
-        didDomain: config.didDomain, serviceUrls: serviceUrls,
+        didDomain: config.didDomain,
+        serviceUrls: serviceUrls,
       );
     }
     for (final value in serviceUrls) {
       final uri = Uri.tryParse(value);
-      if (uri == null || uri.scheme != 'https' ||
-          (!didWeb && uri.host != 'awiki.info')) {
+      if (uri == null ||
+          uri.scheme != 'https' ||
+          (!didWeb && uri.host != config.didDomain)) {
         throw StateError('Remote multi-device service target is not audited.');
       }
+    }
+    if (config.functional ||
+        _invocationExplicitlyExpects('DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001')) {
+      validateReviewedOperatorServiceTarget(
+        mode: Platform.environment[_syncRecoveryOperatorModeEnv]?.trim() ?? '',
+        target: Platform.environment[_syncRecoveryTargetEnv]?.trim() ?? '',
+        didDomain: config.didDomain,
+        serviceUrls: [
+          config.baseUrl,
+          config.userServiceUrl,
+          config.messageServiceUrl,
+        ],
+      );
     }
     if (config.functional) {
       if (!config.automatedUserPresence ||
@@ -2003,7 +2019,9 @@ class _JoinCli {
     if (webPair is _AppPairRunConfig &&
         _invocationExplicitlyExpects(_didWebAppCaseId)) {
       await webPair.coordinator.publish(
-        'admin', 'web_peer_registration_intent', data: {'handle': handle},
+        'admin',
+        'web_peer_registration_intent',
+        data: {'handle': handle},
       );
     }
     final payload = await _run(
@@ -3332,8 +3350,9 @@ Future<ProviderContainer> _waitForAuthenticatedApp(
 }
 
 Future<void> _openDevicesPage(
-  WidgetTester tester, {bool expectNoRecovery = false}
-) async {
+  WidgetTester tester, {
+  bool expectNoRecovery = false,
+}) async {
   await _tapOne(
     tester,
     find.bySemanticsIdentifier('e2e-settings-tab'),
@@ -3344,8 +3363,11 @@ Future<void> _openDevicesPage(
     () => find.byType(SettingsPage).evaluate().length == 1,
     failure: 'The App settings surface did not open.',
   );
-  if (expectNoRecovery && find.byKey(
-      const Key('settings-recover-handle-did-row')).evaluate().isNotEmpty) {
+  if (expectNoRecovery &&
+      find
+          .byKey(const Key('settings-recover-handle-did-row'))
+          .evaluate()
+          .isNotEmpty) {
     fail('Web Settings exposed Handle Recovery.');
   }
   await _tapOne(
@@ -3792,12 +3814,10 @@ void _requireAccountStateOperatorEnvironment(List<String> configuredCommand) {
     environmentCommand = null;
   }
   if (Platform.environment[_accountStateEnableEnv]?.trim() != '1' ||
-      !const <String>{
-        'ali',
-        'local',
-      }.contains(Platform.environment[_accountStateOperatorModeEnv]?.trim()) ||
-      Platform.environment[_syncRecoveryTargetEnv]?.trim() !=
-          _syncRecoveryTarget ||
+      !reviewedOperatorMatchesTarget(
+        Platform.environment[_accountStateOperatorModeEnv]?.trim(),
+        Platform.environment[_syncRecoveryTargetEnv]?.trim(),
+      ) ||
       Platform.environment[_accountStateFailpointEnableEnv]?.trim() != '1' ||
       environmentCommand == null ||
       !_sameOrderedText(

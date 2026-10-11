@@ -3,6 +3,14 @@
   "sourceRevision": "2026-09-28.avatar-artifact-v1",
   "artifacts": [
     {
+      "name": "agent-avatars",
+      "target": "integration_test/desktop_agent_avatar_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.agentavatars",
+      "supportedPlatforms": ["macos", "linux"],
+      "dartDefines": [],
+      "consumerSuites": ["agent-avatars"]
+    },
+    {
       "name": "avatars",
       "target": "integration_test/desktop_avatar_test.dart",
       "bundleId": "ai.awiki.awikime.dev.e2e.avatars",
