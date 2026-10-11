@@ -1077,6 +1077,37 @@ class _MessageBubble extends StatelessWidget {
     required bool macStyle,
     required Widget child,
   }) {
+    final showLock =
+        !conversation.isGroup &&
+        (message.isEncrypted ||
+            (isMine &&
+                message.encryptionRequired &&
+                message.sendState != MessageSendState.sent));
+    if (showLock) {
+      final lock = Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+        child: Semantics(
+          label: '端到端加密',
+          child: Tooltip(
+            message: '端到端加密',
+            child: Icon(
+              CupertinoIcons.lock,
+              size: 12,
+              color: context.awikiTheme.secondaryText,
+            ),
+          ),
+        ),
+      );
+      child = Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (isMine) lock,
+          Flexible(child: child),
+          if (!isMine) lock,
+        ],
+      );
+    }
     if (!isMine) {
       return child;
     }

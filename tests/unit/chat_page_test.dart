@@ -1860,12 +1860,31 @@ void main() {
     );
     expect(find.text('身份卡'), findsNothing);
 
+    await tester.pumpAndSettle();
+    expect(find.byIcon(CupertinoIcons.lock_open), findsOneWidget);
+    // No typing or unrelated rebuild may be needed to update the lock.
+    await tester.tap(find.byKey(const Key('chat-message-security')));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(CupertinoIcons.lock), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chat-message-security')));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(CupertinoTextField), 'hello mac');
+    await tester.tap(find.byKey(const Key('chat-message-security')));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(CupertinoIcons.lock), findsOneWidget);
+    expect(
+      tester
+          .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+          .controller!
+          .text,
+      'hello mac',
+    );
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pumpAndSettle();
 
     expect(gateway.lastSentThreadId, 'dm:did:test:peer');
     expect(gateway.lastSentContent, 'hello mac');
+    expect(gateway.lastSentSecure, isTrue);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -3089,6 +3108,86 @@ void main() {
     expect(find.byKey(const Key('chat-attachment-button')), findsNothing);
   });
 
+  for (final ready in [false, true]) {
+    testWidgets('加密群在标题显示锁，准备完成前禁发 ready=$ready', (tester) async {
+      final gateway = FakeAwikiGateway();
+      const session = SessionIdentity(
+        did: 'did:test:me',
+        handle: 'me',
+        displayName: 'Me',
+        credentialName: 'default',
+      );
+      final conversation = ConversationSummary(
+        threadId: 'group:did:test:secure-group',
+        conversationId: 'group:did:test:secure-group',
+        displayName: '加密测试群',
+        lastMessagePreview: '',
+        lastMessageAt: DateTime(2026),
+        unreadCount: 0,
+        isGroup: true,
+        groupId: 'did:test:secure-group',
+      );
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: CupertinoPageScaffold(
+            child: ChatView(conversation: conversation, embedded: false),
+          ),
+          gateway: gateway,
+          session: session,
+          providerOverrides: [
+            groupProvider.overrideWith((ref) {
+              final controller = GroupController(ref);
+              controller.upsertGroup(
+                GroupSummary(
+                  groupId: conversation.groupId!,
+                  conversationId: conversation.conversationId,
+                  name: conversation.displayName,
+                  description: '',
+                  memberCount: 2,
+                  lastMessageAt: null,
+                  myRole: 'member',
+                  membershipStatus: 'active',
+                  encrypted: true,
+                  canSendSecure: ready,
+                ),
+              );
+              return controller;
+            }),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ChatView)),
+      );
+      container
+          .read(chatThreadsProvider.notifier)
+          .debugSeedMessageForTesting(
+            ChatMessage(
+              localId: 'encrypted-group-message',
+              conversationId: conversation.conversationId,
+              threadId: conversation.conversationId,
+              groupId: conversation.groupId,
+              senderDid: 'did:test:peer',
+              content: '群内加密内容',
+              createdAt: DateTime(2026),
+              isMine: false,
+              isEncrypted: true,
+              sendState: MessageSendState.sent,
+            ),
+            threadId: conversation.conversationId,
+          );
+      await tester.pump();
+      expect(find.byIcon(CupertinoIcons.lock), findsOneWidget);
+      expect(find.byKey(const Key('chat-message-security')), findsNothing);
+      expect(
+        find.byType(CupertinoTextField),
+        ready ? findsOneWidget : findsNothing,
+      );
+      if (!ready) expect(find.text('等待群主设备完成加密准备'), findsOneWidget);
+    });
+  }
+
   testWidgets('打开空历史直聊时显示可发送的空会话', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
@@ -3132,8 +3231,9 @@ void main() {
     expect(find.textContaining('发送失败'), findsNothing);
   });
 
-  for (final isGroup in [false, true]) {
-    testWidgets('发送首帧显示气泡且清空输入框 group=$isGroup', (tester) async {
+  for (final scenario in [(false, false), (false, true), (true, false)]) {
+    final (isGroup, secure) = scenario;
+    testWidgets('发送首帧显示气泡且清空输入框 group=$isGroup secure=$secure', (tester) async {
       final gate = Completer<void>();
       final gateway = FakeAwikiGateway()..sendTextMessageCompleter = gate;
       const session = SessionIdentity(
@@ -3163,6 +3263,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      if (secure) {
+        await tester.tap(find.byKey(const Key('chat-message-security')));
+        await tester.pumpAndSettle();
+      }
       final field = find.byType(CupertinoTextField);
       await tester.enterText(field, '立即可见');
       await tester.testTextInput.receiveAction(TextInputAction.send);
@@ -3174,6 +3278,16 @@ void main() {
       expect(find.text('立即可见'), findsOneWidget);
       // Still waiting on the service: the first frame must not depend on it.
       expect(gate.isCompleted, isFalse);
+      if (secure) {
+        expect(gateway.lastSentSecure, isTrue);
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is Semantics && widget.properties.label == '端到端加密',
+          ),
+          findsOneWidget,
+        );
+      }
       gate.complete();
       await tester.pumpAndSettle();
       expect(find.text('立即可见'), findsOneWidget);
@@ -8040,13 +8154,27 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pumpAndSettle();
 
-    expect(find.text('hello'), findsOneWidget);
+    expect(find.text('hello'), findsNWidgets(2));
+    expect(
+      tester
+          .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+          .controller!
+          .text,
+      'hello',
+    );
     expect(find.text('发送失败'), findsOneWidget);
     expect(find.text('重试'), findsOneWidget);
     expect(gateway.lastSentContent, 'hello');
     await tester.tap(find.text('重试'));
     await tester.pumpAndSettle();
-    expect(find.text('hello'), findsOneWidget);
+    expect(find.text('hello'), findsNWidgets(2));
+    expect(
+      tester
+          .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+          .controller!
+          .text,
+      'hello',
+    );
     expect(find.text('发送失败'), findsNothing);
     expect(find.text('重试'), findsNothing);
   });

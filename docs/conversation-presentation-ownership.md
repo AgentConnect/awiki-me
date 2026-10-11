@@ -192,7 +192,7 @@ Flutter SDK conversation DTO 必须保持 core-only。以下字段不得加入 S
 | attachment manifest | `ChatMessage.attachment`；caption 优先成为 `content` / preview 文本 |
 | `metadata.contentType` / `body.kind` | `ChatMessage.originalType` |
 | encrypted content type | `ChatMessage.isEncrypted` |
-| server sequence | `ChatMessage.serverSequence`，用于排序、thread-after 和 first-paint 判断；两条消息都具备 sequence 时它优先于 `createdAt`，混合/legacy row 才回退时间 |
+| server sequence | `ChatMessage.serverSequence`，用于所属序列的 thread-after 和 first-paint 判断；时间线先比较 Core 消息时间，不跨普通线程/P5 inbox/P6 群事件比较裸 sequence |
 
 `sendConversation*`、conversation timeline load/repair 和 timeline patch stream
 在 adapter 边界还会校验返回的每条消息与 patch 的 `conversationId` 必须非空且
@@ -814,3 +814,44 @@ Android 收到复用现有弹窗的新 Intent 时，必须整体替换该弹窗�
 本人个人卡片的头像是独立编辑入口，与文字资料编辑分离。桌面 hover/键盘 focus 提示更换，移动端显示相机标记；资料表单不重复提供入口。裁剪固定图片，移动/缩放正方形选框，禁用图片拖动和滚轮缩放。选框以归一化图片像素保存，窗口变化保留区域，圆形预览与导出共用区域。方向键移动、Shift+方向键缩放。编辑器并列显示当前头像和新预览，保存/幂等/取消规则不变。
 
 他人资料卡的头像通过 `ProfileAvatar` 打开基础主图预览；无图片无入口，关闭/Esc/返回和失败重试复用现有对话框。`avatarReferenceProvider` 统一本人、peer 投影和显式输入：权威 null 不得回退到旧页面快照。预览和小图使用同一匿名缓存，账号/租户 epoch 切换关闭预览并拒绝旧下载结果。打开预览按 Core 规则刷新资料；图片不参与资料版本判断。
+
+
+## 智能体统一头像目录（2026-10-08）
+
+User Service 是预设目录与默认分配的唯一所有者，APP 不打包预设图片、不计算默认 ID、不按 URL 路径换本地资源。
+目录响应包含稳定 ID、名称、顺序、可选状态、完整 GIF/PNG 地址及 `default_avatar`；旧服务缺扩展字段时
+继续显示当前头像并支持其声明的上传，预设网格为空、恢复默认禁用，不猜测素材地址。
+编辑器显示当前头像、待保存预览、目录名称和选中状态；取消不写入，保存失败保留草稿与 UUID，
+版本冲突刷新权威版本但保留草稿并提示再确认；提交成功后辅助刷新失败独立提示，不再次提交变更。
+
+智能体单体头像保留原有动画范围，群拼图、减少动态效果和停用 TickerMode 使用静态封面；
+后台暂停动画。透明背景保留，动图失败回退封面再回退字符头像。
+静态与动画使用同一 URI 合并下载／磁盘缓存，最多 4 个下载、64 MiB 持久缓存、16 MiB 编码和
+16 MiB 静态图片内存预算（解码像素与保留的编码字节合计），图片对象按显示尺寸复用。GIF 受 5 MiB/120 帧/2400 万源像素限制。
+预设可见时按 5 分钟重验，打开放大预览和重新连接触发合并刷新；304 保留原字节/图片，
+刷新保留画面，过期缓存可离线读取，首次离线显示占位。缓存实例由 session epoch 隔离，切换拒绝旧结果。
+Web 仍沿用既有无原生缓存的占位实现；本轮不宣称 Web native Core 或完整 E2E 已可用。
+
+### 加密消息显示与发送意图（2026-10-09 候选）
+
+私聊模式按当前 storage scope、owner、canonical conversation 存入 ProductLocalStore；个人助理沿用原入口。每次发送捕获模式，ChatMessage.encryptionRequired 仅记录待发/失败重试意图，ChatMessage.isEncrypted 只来自 SDK 实际属性。加密消息在现有信息区域显示 12px 次要文字色小锁，提示和读屏为“端到端加密”。缺少成功解密证明的入站内容展示占位，不把密文当文本或附件。已解密加密消息的本地通知同样只显示“收到一条加密消息”。账号/会话变化取消旧的异步 composer 操作，失败恢复草稿不得覆盖新草稿。建群对话框保存未完成操作的名称、固定类型和 slug，重开后复用，成功后清除产品恢复记录。
+
+### 消息安全展示补充（2026-10-10）
+
+私聊模式选择为工具栏的开锁/闭锁图标，独立订阅本设备当前租户、账号及会话的偏好。
+消息锁位于气泡外侧底部：本机消息左侧、对方消息右侧。待发送/失败消息使用冻结的加密意图，已完成/收到消息使用 Core 实际安全属性；不新增加密专属发送状态。
+加密群只在标题显示锁，并消费权威群策略及 Core 就绪状态。头像编辑器取消草稿沿用通用蒙版/Esc关闭，提交保存期间禁止关闭。
+
+加密消息的可见已读锚点只传精确消息 ID 和消息时间，不把独立 inbox 序号传作普通线程水位。与普通消息合并短生命周期 intent 时，以可见锚点时间区分不同通道；持久提交及普通远端 ACK／加密本地 ID 的拆分由 Core `mark_conversation_read` 负责，不能用界面未读清零冒充持久成功。
+
+### 加密群准备与建群弹窗（2026-10-10）
+
+建群窗口只拥有本次草稿；取消、Esc、蒙版和关闭均重置为空白普通群。已提交操作由 Core 持久化并续接，旧 UI preference 仅保留原 slug 交给 Core，不能恢复冻结的新表单。异步结果必须同时匹配 mounted 与 session epoch。
+
+创建返回后进入既有群，按 Core `secureStatus` 自动刷新。输入区内部的紧凑状态卡展示准备、等待成员/原群主、可恢复失败；就绪移除卡片，正常过程不显示刷新按钮。成员变更使旧发送许可立即失效，即使随后列表只带新成员版本而未带 secureStatus，也不能沿用旧许可。邀请 `operationJson` 映射为脱敏 GroupOperationSummary，用于区分尚未加入与已加入仍在准备；UI 不处理 MLS。
+
+定向产品复验可设置 `AWIKI_E2E_ENCRYPTED_GROUP=1` 运行拥有方 `--case group`：真实 UI 选择加密群，复用群创建/邀请、文本与结构化 mention、重启用例，并断言实际加密属性及额外 attestation。默认 group 仍验证普通群，不混用两种通过记录。
+
+联合产品验收：在两端拥有方 runner 同时设置同一个新建目录 `AWIKI_E2E_PRODUCT_PAIR_DIR`，APP 另设 `AWIKI_E2E_ENCRYPTED_GROUP=1` 运行 group；DSH 运行 ENCRYPTED-001。桥接仅交换公开测试 DID/Handle、群 ID、固定消息标记及完成标志；账号凭据和数据库不共享。APP UI 建群邀请已有 DSH，双向文本/附件下载验证明文，CLI 作为第三成员作确定性脚本回复（不调用真实模型），DSH 重启并反向建群邀请 APP。桥接目录必须按运行新建，不能复用旧完成标志。联合结果仅在两端 runner、桥接完成和各自清理记录均核验后计为通过。
+
+群消息的原始 realtime arrival 若尚无 Core canonical `conversationId`，adapter 只产生 message-domain dirty hint，等待 committed sync 投影；不得按群 DID/thread 补造路由，亦不得创建空 conversation 的系统通知。合法 canonical arrival 的通知语义保持不变。

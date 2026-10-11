@@ -409,10 +409,12 @@
       "timeoutMinutes": 30,
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",
@@ -447,10 +449,12 @@
       "timeoutMinutes": 45,
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",
@@ -504,10 +508,12 @@
       "timeoutMinutes": 22,
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",
@@ -545,10 +551,12 @@
       "timeoutMinutes": 20,
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",

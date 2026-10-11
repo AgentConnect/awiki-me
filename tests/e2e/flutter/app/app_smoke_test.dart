@@ -145,6 +145,7 @@ class _RecoveringDirectMessagingService
 
   @override
   Future<ChatMessage> sendConversationText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String content,
     String? clientMessageId,

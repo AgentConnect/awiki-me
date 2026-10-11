@@ -77,8 +77,8 @@ To switch only ANP to source, copy `scripts/dependencies/local-anp.example.json`
 
 ### TUN/Fake-IP source validation
 
-The App source manifest pins Core `d9fb1f31` (including the DID retrieval fix
-`574a5a05`), ANP `1bc72aca` (Web DID host-network resolution), and the unchanged
+The App source manifest pins Core `867c1570` ([PR #57](https://github.com/AgentConnect/awiki-cli-rs2/pull/57), including the DID retrieval fix
+`574a5a05` plus avatar/encryption/lifecycle fixes), ANP `fb99a080` ([PR #67](https://github.com/agent-network-protocol/anp/pull/67), including Web DID host-network resolution and atomic Welcome receipts), and the unchanged
 Identity `794f914f`. Keep the sibling SDK source manifest aligned with these
 exact inputs and refresh its committed source Cargo lock before building native
 libraries. Select source mode explicitly for local Debug packages; changing only

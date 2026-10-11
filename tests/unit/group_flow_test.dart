@@ -331,6 +331,76 @@ void main() {
     );
   });
 
+  for (final close in ['cancel', 'escape', 'backdrop']) {
+    testWidgets('建群 $close 后新表单为空且旧请求不跳转', (tester) async {
+      final gateway = FakeAwikiGateway()..loginResult = session;
+      final groups = _DelayedCreateGroupService(gateway);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const GroupListPage(),
+          gateway: gateway,
+          session: session,
+          providerOverrides: [
+            groupApplicationServiceProvider.overrideWithValue(groups),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('group-list-create-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('create-group-name-input')),
+        'Old group',
+      );
+      await tester.tap(find.byKey(const Key('create-group-submit-button')));
+      await tester.pump();
+      if (close == 'cancel') {
+        await tester.tap(find.text('取消'));
+      } else if (close == 'escape') {
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      } else {
+        await tester.tapAt(const Offset(5, 5));
+      }
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('group-list-create-button')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<CupertinoTextField>(
+              find.byKey(const Key('create-group-name-input')),
+            )
+            .controller!
+            .text,
+        isEmpty,
+      );
+      await tester.enterText(
+        find.byKey(const Key('create-group-name-input')),
+        'New group',
+      );
+      groups.result.complete(
+        const GroupSummary(
+          conversationId: 'group:old',
+          groupId: 'did:example:old',
+          name: 'Old group',
+          description: '',
+          memberCount: 1,
+          lastMessageAt: null,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<CupertinoTextField>(
+              find.byKey(const Key('create-group-name-input')),
+            )
+            .controller!
+            .text,
+        'New group',
+      );
+      expect(find.byType(ChatView), findsNothing);
+    });
+  }
+
   testWidgets('macOS 创建群弹窗只填写名称并直接进入群聊', (tester) async {
     final gateway = FakeAwikiGateway()..loginResult = session;
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -714,6 +784,40 @@ void main() {
     expect(peerState.ownerDid, isNull);
     expect(peerState.profilesByPersonaId, isEmpty);
     expect(container.read(groupProvider).membersByGroup, isEmpty);
+  });
+
+  test('成员版本更新不能继承旧发送许可', () {
+    final gateway = FakeAwikiGateway();
+    final container = ProviderContainer(
+      overrides: fakeApplicationServiceOverrides(gateway),
+    );
+    addTearDown(container.dispose);
+    container.read(sessionProvider.notifier).setSession(session);
+    final controller = container.read(groupProvider.notifier);
+    const original = GroupSummary(
+      conversationId: 'g1',
+      groupId: 'did:example:g1',
+      description: '',
+      memberCount: 1,
+      lastMessageAt: null,
+      groupStateVersion: '1',
+      encrypted: true,
+      canSendSecure: true,
+    );
+    controller.upsertGroup(original);
+    controller.upsertGroup(
+      const GroupSummary(
+        conversationId: 'g1',
+        groupId: 'did:example:g1',
+        description: '',
+        memberCount: 2,
+        lastMessageAt: null,
+        groupStateVersion: '2',
+      ),
+    );
+    expect(container.read(groupProvider).groups.single.canSendSecure, isFalse);
+    controller.upsertGroup(original);
+    expect(container.read(groupProvider).groups.single.canSendSecure, isFalse);
   });
 
   test('旧身份建群结果不会写入新身份群列表', () async {

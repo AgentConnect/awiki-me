@@ -1,41 +1,3 @@
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
-
-const agentAvatarPresetIds = <String>[
-  'financing',
-  'schedule',
-  'bp',
-  'legal',
-  'research',
-  'coding',
-  'writing',
-  'design',
-  'data',
-  'finance',
-  'marketing',
-  'sales',
-  'support',
-  'operations',
-  'product',
-  'strategy',
-  'learning',
-  'translation',
-  'travel',
-  'health',
-  'security',
-  'testing',
-  'recruiting',
-  'news',
-  'music',
-  'science',
-  'food',
-  'shopping',
-  'planning',
-  'knowledge',
-  'creative',
-  'assistant',
-];
-
 class AgentAvatar {
   const AgentAvatar({
     required this.agentId,
@@ -81,13 +43,6 @@ class AgentAvatar {
     'updated_at': updatedAt?.toIso8601String(),
     'error_code': errorCode,
   };
-
-  static String defaultPreset(String stableId) {
-    final digest = sha256.convert(utf8.encode(stableId)).bytes;
-    final hash =
-        (digest[0] << 24) | (digest[1] << 16) | (digest[2] << 8) | digest[3];
-    return agentAvatarPresetIds[hash % agentAvatarPresetIds.length];
-  }
 }
 
 class AgentAvatarCapabilities {
@@ -95,8 +50,12 @@ class AgentAvatarCapabilities {
     required this.avatar,
     required this.uploadEnabled,
     required this.generationEnabled,
+    this.presetCatalog = const [],
+    this.defaultAvatar,
   });
   final AgentAvatar avatar;
+  final List<AgentAvatarPreset> presetCatalog;
+  final AgentAvatar? defaultAvatar;
   final bool uploadEnabled;
   final bool generationEnabled;
 }
@@ -108,4 +67,28 @@ class AgentAvatarMutation {
   });
   final AgentAvatar avatar;
   final String inventoryVersion;
+}
+
+class AgentAvatarPreset {
+  const AgentAvatarPreset({
+    required this.id,
+    required this.displayName,
+    required this.posterUri,
+    this.animatedUri,
+    this.sortOrder = 0,
+    this.selectable = true,
+  });
+  final String id, displayName, posterUri;
+  final String? animatedUri;
+  final int sortOrder;
+  final bool selectable;
+  factory AgentAvatarPreset.fromJson(Map<String, Object?> value) =>
+      AgentAvatarPreset(
+        id: value['id'] as String,
+        displayName: value['display_name'] as String,
+        posterUri: value['poster_uri'] as String,
+        animatedUri: value['animated_uri'] as String?,
+        sortOrder: value['sort_order'] as int? ?? 0,
+        selectable: value['selectable'] == true,
+      );
 }

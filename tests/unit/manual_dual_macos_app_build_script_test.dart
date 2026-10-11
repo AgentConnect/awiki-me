@@ -41,4 +41,54 @@ void main() {
     expect(script, contains('/usr/bin/lipo -archs'));
     expect(script, contains('/usr/bin/codesign --verify --deep --strict'));
   });
+  test(
+    'manual builder rejects IDs outside native development custody',
+    () async {
+      final result = await Process.run(
+        'bash',
+        ['scripts/build_manual_dual_macos_apps.sh'],
+        environment: {
+          'AWIKI_MANUAL_ADMIN_BUNDLE_ID': 'ai.awiki.awikime.e2ee-test',
+        },
+      );
+      expect(result.exitCode, 2);
+      expect(
+        result.stderr,
+        contains('must use the ai.awiki.awikime.dev namespace'),
+      );
+    },
+    skip: !Platform.isMacOS,
+  );
+
+  test(
+    'manual builder rejects duplicate tenant endpoints before compiling',
+    () async {
+      final temporary = Directory.systemTemp.createTempSync(
+        'manual-tenant-test-',
+      );
+      try {
+        final config = File('${temporary.path}/tenants.json')
+          ..writeAsStringSync(
+            '{"tenants":{"primary":{"backend_origin":"https://same.example","did_host":"same.example"},'
+            '"secondary":{"backend_origin":"https://same.example","did_host":"same.example"}}}',
+          );
+        final result = await Process.run(
+          'bash',
+          ['scripts/build_manual_dual_macos_apps.sh'],
+          environment: {
+            'AWIKI_TENANT_CONFIG_PATH': config.path,
+            'FLUTTER_BIN': '/usr/bin/true',
+          },
+        );
+        expect(result.exitCode, isNot(0));
+        expect(
+          result.stderr,
+          contains('manual tenant endpoints must be present and distinct'),
+        );
+      } finally {
+        temporary.deleteSync(recursive: true);
+      }
+    },
+    skip: !Platform.isMacOS,
+  );
 }

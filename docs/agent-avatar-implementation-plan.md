@@ -26,7 +26,7 @@ AWiki Me 使用 Flutter、Riverpod、既有 `AvatarBadge` 和 `ProfileAvatar`。
 
 ## 完成结果
 
-- 原设计四组 GIF/PNG 逐字节提取；另以内置 ImageGen 参考这四款的颜色、几何轮廓、眼睛与光泽，生成 28 个独立透明、仅头部的 3D 造型，再以 FFmpeg 编码为 32 帧、3.2 秒、256×256 循环 GIF，并保留 PNG 封面，合计 32 款动图。新素材不是运行时自动生成结果。所有 28 条实际生成提示词和输出来源见 [素材清单](agent-avatar-assets.json)，素材同时进入 App assets 和 User Service wheel。
+- 原设计四组 GIF/PNG 逐字节提取；另以内置 ImageGen 参考这四款的颜色、几何轮廓、眼睛与光泽，生成 28 个独立透明、仅头部的 3D 造型，再以 FFmpeg 编码为 32 帧、3.2 秒、256×256 循环 GIF，并保留 PNG 封面，合计 32 款动图。新素材不是运行时自动生成结果。所有 28 条实际生成提示词和输出来源见 [历史素材来源记录](../../user-service/docs/agent-avatar-provenance.json)，素材同时进入 App assets 和 User Service wheel。
 - 2026-10-05 按用户要求将新增的全身版本替换为头部版本。替换前的 App、User Service 全部 36 个素材文件及生成清单已备份到 `D:/awiki-backups/agent-avatars/20261005-092140-before-heads/`；四组原始 GIF/PNG 保持字节不变。仅本地修改，不提交、不推送。此次素材检查记录在 `D:/awiki-space/verification-runs/agent-avatar-heads-20261005/asset-audit.json`；动图复验记录在同目录 `animation-audit.json`。
 - 使用 Inventory 不可变行 ID、头像版本 CAS、既有账号状态事务/outbox 和公开 Profile 投影。所有者权限在读取、写入、幂等重放和任务提交时重新校验；普通资料更新不能覆盖保留头像字段，历史行也不能注入任意头像 URL。
 - 同一所有者设备走既有账号状态同步；其他用户通过公开 Profile 刷新收敛。当前机制不保证向每个聊天对端即时广播头像更新。
@@ -89,3 +89,11 @@ AWiki Me 使用 Flutter、Riverpod、既有 `AvatarBadge` 和 `ProfileAvatar`。
 - 从 Git 暂存区导出独立 App 源码，排除工作区其他任务的消息回复、删除和人工双窗口资料改动。头像 unit/widget、Inventory adapter、智能体 provider/layout、E2E catalog/artifact 契约共 **214 passed，失败 0**。命令：`flutter test --no-pub tests/unit/avatar tests/unit/data/agent/user_service_agent_inventory_adapter_test.dart tests/unit/agents/agents_provider_test.dart tests/unit/agents/agents_page_layout_test.dart tests/unit/e2e_harness/test_catalog_test.dart tests/unit/e2e_harness/app_artifact_spec_test.dart tests/e2e/test_catalog_contract_test.dart`。
 - User Service 的 88 个暂存文件与 System Test 的 11 个暂存文件，均与 2026-10-05 已验证的部署源码快照一致（文本统一换行后比较，PNG/GIF 比较原始字节）。未重跑远端测试；沿用上述绑定源码的真实后端证据。
 - 暂存区 diff 检查和新增源码凭据模式检查通过。验证记录位于 `verification-runs/agent-avatar-awiki-info-20261005/commit-review-20261008/`，未提交本地配置、构建产物或测试身份。
+
+
+## 2026-10-08 本地统一资源适配
+
+以上记录保留为历史事实。本轮 APP 已移除 64 份随包 GIF/PNG、内置 ID 列表、默认分配计算和 URL 路径替换。
+服务端 `preset_catalog` 提供名称、完整 URL、可选状态与顺序，`default_avatar` 提供恢复默认预览。
+现行展示与缓存合同见 [presentation ownership](conversation-presentation-ownership.md#智能体统一头像目录2026-10-08)。
+本轮未部署、未运行真实 E2E；后续验收见 [本轮计划](../../awiki-plan/20261008-智能体头像统一资源与DSH适配/plan.md)。

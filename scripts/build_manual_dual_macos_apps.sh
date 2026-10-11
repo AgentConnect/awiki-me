@@ -12,8 +12,8 @@ Usage:
   scripts/build_manual_dual_macos_apps.sh
 
 Environment:
-  AWIKI_MANUAL_ADMIN_BUNDLE_ID        Optional isolated admin bundle ID
-  AWIKI_MANUAL_JOINER_BUNDLE_ID       Optional isolated joiner bundle ID
+  AWIKI_MANUAL_ADMIN_BUNDLE_ID        Isolated ai.awiki.awikime.dev.* admin ID
+  AWIKI_MANUAL_JOINER_BUNDLE_ID       Isolated ai.awiki.awikime.dev.* joiner ID
   AWIKI_MANUAL_DEPLOYMENT_TARGET     Optional local Xcode deployment target
   FLUTTER_BIN                         Flutter executable (default: flutter)
   AWIKI_IM_CORE_REPO_DIR              awiki-cli-rs2 checkout
@@ -47,6 +47,11 @@ joiner_bundle_id="${AWIKI_MANUAL_JOINER_BUNDLE_ID:-ai.awiki.awikime.dev.manual.j
   exit 2
 }
 for bundle_id in "$admin_bundle_id" "$joiner_bundle_id"; do
+  # Match the native ScopeSecretKeychainPresentation development boundary.
+  [[ "$bundle_id" == "ai.awiki.awikime.dev" || "$bundle_id" == ai.awiki.awikime.dev.* ]] || {
+    echo "error: manual Debug bundle ID must use the ai.awiki.awikime.dev namespace" >&2
+    exit 2
+  }
   [[ "$bundle_id" =~ ^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+$ ]] || {
     echo "error: invalid manual App bundle ID" >&2
     exit 2
@@ -113,8 +118,15 @@ tenant_config_path="${AWIKI_TENANT_CONFIG_PATH:-$ROOT_DIR/assets/config/builtin-
   exit 2
 }
 tenant_config_metadata="$(python3 - "$tenant_config_path" <<'PY'
-import base64, hashlib, pathlib, sys
+import base64, hashlib, json, pathlib, sys
 raw = pathlib.Path(sys.argv[1]).read_bytes()
+config = json.loads(raw)
+tenants = config.get("tenants", {})
+primary, secondary = tenants.get("primary", {}), tenants.get("secondary", {})
+if (not primary.get("backend_origin") or not primary.get("did_host") or
+    primary.get("backend_origin") == secondary.get("backend_origin") or
+    primary.get("did_host") == secondary.get("did_host")):
+    raise SystemExit("error: manual tenant endpoints must be present and distinct")
 print(base64.b64encode(raw).decode("ascii"))
 print(hashlib.sha256(raw).hexdigest())
 PY

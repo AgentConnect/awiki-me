@@ -8,6 +8,56 @@ import 'package:http/http.dart' as http;
 
 void main() {
   test(
+    'avatar directory preserves server IDs, availability and cross-tenant URLs',
+    () async {
+      final avatar = {
+        'agent_id': 'id',
+        'poster_uri': 'https://foreign.test/default.png',
+        'version': '7',
+      };
+      final client = _CapturingHttpClient(
+        result: {
+          'avatar': avatar,
+          'default_avatar': avatar,
+          'preset_catalog': [
+            {
+              'id': 'new-from-server',
+              'display_name': 'New',
+              'sort_order': 3,
+              'selectable': false,
+              'poster_uri': 'https://foreign.test/p.png',
+              'animated_uri': 'https://foreign.test/a.gif',
+            },
+          ],
+          'presets': ['legacy'],
+          'upload_enabled': true,
+          'generation_enabled': false,
+        },
+      );
+      final adapter = UserServiceAgentInventoryAdapter(
+        userServiceUrl: 'https://example.test',
+        client: AwikiOnboardingUtilityHttpClient(
+          baseUrl: 'https://example.test',
+          httpClient: client,
+        ),
+        bearerTokenProvider: () => 'fake-token',
+      );
+      final result = await adapter.loadAgentAvatar('did:agent');
+      expect(result.presetCatalog.single.id, 'new-from-server');
+      expect(result.presetCatalog.single.selectable, isFalse);
+      expect(
+        result.presetCatalog.single.animatedUri,
+        'https://foreign.test/a.gif',
+      );
+      expect(
+        result.defaultAvatar?.posterUri,
+        'https://foreign.test/default.png',
+      );
+      expect(result.generationEnabled, isFalse);
+    },
+  );
+
+  test(
     'availability batches use authenticated facade and preserve large string versions',
     () async {
       final httpClient = _CapturingHttpClient(

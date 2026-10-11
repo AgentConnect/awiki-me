@@ -370,6 +370,7 @@ class _FakeMessages
 
   @override
   Future<ChatMessage> sendConversationPayload({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required Map<String, Object?> payload,
     String? clientMessageId,
@@ -380,6 +381,7 @@ class _FakeMessages
 
   @override
   Future<ChatMessage> sendConversationText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String content,
     String? clientMessageId,
@@ -390,6 +392,7 @@ class _FakeMessages
 
   @override
   Future<ChatMessage> sendAttachment({
+    bool secure = false,
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
@@ -401,6 +404,7 @@ class _FakeMessages
 
   @override
   Future<ChatMessage> sendConversationAttachment({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required AttachmentDraft attachment,
     String? caption,
@@ -423,6 +427,7 @@ class _FakeMessages
 
   @override
   Future<ChatMessage> sendText({
+    bool secure = false,
     required AppThreadRef thread,
     required String content,
   }) {

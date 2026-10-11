@@ -10,6 +10,7 @@ class _Composer extends ConsumerStatefulWidget {
     required this.focusRequestId,
     this.enabled = true,
     this.disabledReason,
+    this.disabledStatus,
     required this.onSend,
     required this.onAttach,
     required this.onScreenshot,
@@ -25,6 +26,7 @@ class _Composer extends ConsumerStatefulWidget {
   final int focusRequestId;
   final bool enabled;
   final String? disabledReason;
+  final Widget? disabledStatus;
   final Future<void> Function() onSend;
   final Future<void> Function() onAttach;
   final Future<void> Function({required bool hideApp}) onScreenshot;
@@ -101,6 +103,66 @@ class _ComposerState extends ConsumerState<_Composer> {
       FocusScope.of(context).requestFocus(_inputFocusNode);
     });
   }
+
+  bool get _showSecuritySelector =>
+      !widget.conversation.isGroup &&
+      !isPersonalAgentConversation(
+        widget.conversation,
+        ref.watch(agentsProvider).agents,
+      );
+
+  Widget _securitySelector() => Consumer(
+    builder: (context, ref, _) {
+      final provider = messageSecurityProvider(
+        widget.conversation.conversationId,
+      );
+      final mode = ref.watch(provider);
+      final encrypted = mode.valueOrNull ?? false;
+      final label = mode.isLoading
+          ? '正在读取消息模式'
+          : mode.hasError
+          ? '消息模式读取失败，点击重试'
+          : encrypted
+          ? '端到端加密，点击关闭'
+          : '普通消息，点击开启端到端加密';
+      return AppIconButton(
+        key: const Key('chat-message-security'),
+        semanticLabel: label,
+        tooltip: label,
+        size: context.awikiResponsive.displayScaled(30),
+        borderRadius: BorderRadius.circular(7),
+        isActive: encrypted,
+        onPressed: mode.isLoading
+            ? null
+            : () async {
+                if (mode.hasError) {
+                  ref.invalidate(provider);
+                  return;
+                }
+                try {
+                  await setMessageSecurity(
+                    ref,
+                    widget.conversation.conversationId,
+                    !encrypted,
+                  );
+                } catch (error) {
+                  if (mounted) {
+                    ref
+                        .read(uiFeedbackProvider.notifier)
+                        .showError(AppMessage.fromError(error));
+                  }
+                }
+              },
+        child: mode.isLoading
+            ? const CupertinoActivityIndicator(radius: 7)
+            : Icon(
+                encrypted ? CupertinoIcons.lock : CupertinoIcons.lock_open,
+                size: 17,
+                color: context.awikiTheme.secondaryText,
+              ),
+      );
+    },
+  );
 
   void _handleTextChanged() {
     if (mounted) {
@@ -558,6 +620,7 @@ class _ComposerState extends ConsumerState<_Composer> {
     });
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    final showSecuritySelector = _showSecuritySelector;
     final canSubmit = _canSubmit;
     final canUseSendButton = canSubmit && !_isSending && !_isComposingInput;
     final highlightSendButton = canSubmit && !_isSending;
@@ -610,10 +673,11 @@ class _ComposerState extends ConsumerState<_Composer> {
                       SizedBox(height: responsive.displayScaled(6)),
                     ],
                     if (!widget.enabled)
-                      _DisabledComposerNotice(
-                        message: disabledReason,
-                        macStyle: true,
-                      )
+                      widget.disabledStatus ??
+                          _DisabledComposerNotice(
+                            message: disabledReason,
+                            macStyle: true,
+                          )
                     else if (widget.pendingAttachment != null) ...<Widget>[
                       _PendingAttachmentPreview(
                         attachment: widget.pendingAttachment!,
@@ -703,6 +767,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                               ),
                             ],
                           ],
+                          if (showSecuritySelector) _securitySelector(),
                         ],
                       ),
                       ConstrainedBox(
@@ -831,7 +896,11 @@ class _ComposerState extends ConsumerState<_Composer> {
               SizedBox(height: responsive.spacing(8)),
             ],
             if (!widget.enabled)
-              _DisabledComposerNotice(message: disabledReason, macStyle: false)
+              widget.disabledStatus ??
+                  _DisabledComposerNotice(
+                    message: disabledReason,
+                    macStyle: false,
+                  )
             else ...<Widget>[
               if (widget.pendingAttachment != null) ...<Widget>[
                 _PendingAttachmentPreview(
@@ -887,7 +956,8 @@ class _ComposerState extends ConsumerState<_Composer> {
                         ),
                       ),
                     ),
-                    SizedBox(width: responsive.spacing(8)),
+                    if (showSecuritySelector) _securitySelector(),
+                    SizedBox(width: responsive.spacing(6)),
                     Expanded(
                       child: AwikiGlassSurface(
                         key: const Key('chat-compact-composer-input-shell'),

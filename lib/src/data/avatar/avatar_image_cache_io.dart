@@ -34,10 +34,11 @@ Future<void> clearAvatarImageCache(String owner, {Directory? directory}) async {
 }
 
 class _DecodedAvatar {
-  _DecodedAvatar(this.image, this.until);
+  _DecodedAvatar(this.image, this.until, this.data);
   final ui.Image image;
-  final DateTime until;
-  int get bytes => image.width * image.height * 4;
+  DateTime until;
+  final Uint8List data;
+  int get bytes => image.width * image.height * 4 + data.length;
 }
 
 /// Public-only, owner-fenced byte/decoded caches. No SDK credential client.
@@ -55,82 +56,17 @@ class PlatformAvatarImageCache implements AvatarImageCache, AvatarByteCache {
   }
   static const _diskLimit = 64 * 1024 * 1024;
   static const _memoryLimit = 16 * 1024 * 1024;
-  static const _downloadLimit = 1024 * 1024;
-  final _animationBytes = <String, (Uint8List, DateTime)>{};
-  final _animationPending = <String, Future<Uint8List?>>{};
+  static const _downloadLimit = 5 * 1024 * 1024;
+  final _encoded = <String, (Uint8List, DateTime, String?, bool)>{};
 
   @override
-  Future<Uint8List?> loadBytes(String raw) async {
+  Future<Uint8List?> loadBytes(String raw, {bool force = false}) async {
     final uri = safeAvatarUri(raw);
     if (uri == null || _inactive) return null;
-    final cached = _animationBytes[raw];
-    if (cached != null && DateTime.now().isBefore(cached.$2)) return cached.$1;
-    _animationBytes.remove(raw);
-    return _animationPending[raw] ??= _loadAnimation(uri, raw).whenComplete(() {
-      _animationPending.remove(raw);
-    });
-  }
-
-  Future<Uint8List?> _loadAnimation(Uri uri, String raw) async {
-    if (_running >= 4) {
-      final wait = Completer<void>();
-      _slots.add(wait);
-      await wait.future;
-    } else {
-      _running++;
-    }
     try {
-      if (_inactive) return null;
-      final result = await _download(
-        uri,
-        byteLimit: 5 * 1024 * 1024,
-        allowGif: true,
-      );
-      if (_inactive) return null;
-      final buffer = await ui.ImmutableBuffer.fromUint8List(result.$1);
-      ui.ImageDescriptor? descriptor;
-      ui.Codec? codec;
-      try {
-        descriptor = await ui.ImageDescriptor.encoded(buffer);
-        if (descriptor.width > 4096 ||
-            descriptor.height > 4096 ||
-            descriptor.width * descriptor.height > 16000000) {
-          return null;
-        }
-        codec = await descriptor.instantiateCodec(
-          targetWidth: 256,
-          targetHeight: 256,
-        );
-        if (codec.frameCount > 120 ||
-            descriptor.width * descriptor.height * codec.frameCount >
-                24000000) {
-          return null;
-        }
-      } finally {
-        codec?.dispose();
-        descriptor?.dispose();
-        buffer.dispose();
-      }
-      if (_inactive) return null;
-      if (result.$4) {
-        _animationBytes[raw] = (result.$1, result.$2);
-        while (_animationBytes.values.fold<int>(
-              0,
-              (sum, bytes) => sum + bytes.$1.length,
-            ) >
-            16 * 1024 * 1024) {
-          _animationBytes.remove(_animationBytes.keys.first);
-        }
-      }
-      return result.$1;
+      return (await _bytes(uri, force: force)).$1;
     } catch (_) {
       return null;
-    } finally {
-      if (_slots.isNotEmpty) {
-        _slots.removeFirst().complete();
-      } else {
-        _running--;
-      }
     }
   }
 
@@ -149,7 +85,7 @@ class PlatformAvatarImageCache implements AvatarImageCache, AvatarByteCache {
   Future<void> _diskWrites = Future.value();
   // Reserve a small write window so maintenance is amortized without crossing
   // the hard disk/count limits. Disk hits never rewrite or rescan the cache.
-  static const _writeWindow = 4 * 1024 * 1024;
+  static const _writeWindow = 6 * 1024 * 1024;
 
   Future<void> flush() => _diskWrites;
 
@@ -165,87 +101,43 @@ class PlatformAvatarImageCache implements AvatarImageCache, AvatarByteCache {
     if (_inactive || uri == null) return null;
     edge = edge <= 128 ? 128 : 512;
     final key = '$uri@$edge';
-    final cached = _memory.remove(key);
+    final cached = _memory[key];
     if (cached != null) {
-      if (cached.until.isAfter(DateTime.now())) {
+      if (!force && cached.until.isAfter(DateTime.now())) {
         _memory[key] = cached;
         return cached.image.clone();
       }
-      cached.image.dispose();
     }
     if (!force && _retryAfter[key]?.isAfter(DateTime.now()) == true) {
       return null;
     }
     // Callers receive independent handles to one shared decoded allocation.
-    final result = await (_pending[key] ??= _load(uri, edge, key).whenComplete(
-      () {
-        _pending.remove(key);
-      },
-    ));
+    final result = await (_pending[key] ??= _load(uri, edge, key, force)
+        .whenComplete(() {
+          _pending.remove(key);
+        }));
     return _inactive ? null : result?.clone();
   }
 
-  Future<ui.Image?> _load(Uri uri, int edge, String key) async {
-    if (_running >= 4) {
-      final slot = Completer<void>();
-      _slots.add(slot);
-      await slot.future;
-    } else {
-      _running++;
-    }
+  Future<ui.Image?> _load(Uri uri, int edge, String key, bool force) async {
     try {
+      final encoded = await _bytes(uri, force: force);
       if (_inactive) return null;
-      final root = await _directory();
-      final name = '$_owner-${sha256.convert(utf8.encode(uri.toString()))}';
-      final dataFile = File('${root.path}/$name.bin');
-      final metaFile = File('${root.path}/$name.json');
-      Uint8List? data;
-      DateTime until = DateTime.now();
-      String? etag;
-      var canStore = true;
-      var downloaded = false;
-      try {
-        final meta = jsonDecode(await metaFile.readAsString()) as Map;
-        until = DateTime.fromMillisecondsSinceEpoch(meta['expires'] as int);
-        etag = meta['etag'] as String?;
-        if (await dataFile.length() <= _downloadLimit) {
-          data = await dataFile.readAsBytes();
-          await dataFile.setLastModified(DateTime.now());
-        }
-      } catch (_) {
-        /* An interrupted cache write is a miss. */
+      final previous = _memory[key];
+      if (previous != null && identical(previous.data, encoded.$1)) {
+        previous.until = encoded.$2;
+        return previous.image;
       }
-      if (data == null || !until.isAfter(DateTime.now())) {
-        downloaded = true;
-        final byteKey = uri.toString();
-        final response = await (_bytePending[byteKey] ??=
-            _download(uri, previous: data, etag: etag).whenComplete(() {
-              _bytePending.remove(byteKey);
-            }));
-        data = response.$1;
-        until = response.$2;
-        etag = response.$3;
-        canStore = response.$4;
-      }
-      if (_inactive) return null;
-      final buffer = await ui.ImmutableBuffer.fromUint8List(data);
+      final buffer = await ui.ImmutableBuffer.fromUint8List(encoded.$1);
       ui.ImageDescriptor? descriptor;
       ui.Codec? codec;
       ui.Image image;
       try {
         descriptor = await ui.ImageDescriptor.encoded(buffer);
-        if (descriptor.width > 4096 ||
-            descriptor.height > 4096 ||
-            descriptor.width * descriptor.height > 16000000) {
-          throw const FormatException('avatar.decode_limit');
-        }
         codec = await descriptor.instantiateCodec(
           targetWidth: descriptor.width >= descriptor.height ? edge : null,
           targetHeight: descriptor.height > descriptor.width ? edge : null,
         );
-        if (codec.frameCount != 1) {
-          throw const FormatException('avatar.animation');
-        }
         image = (await codec.getNextFrame()).image;
       } finally {
         codec?.dispose();
@@ -256,53 +148,174 @@ class PlatformAvatarImageCache implements AvatarImageCache, AvatarByteCache {
         image.dispose();
         return null;
       }
-      _memory[key] = _DecodedAvatar(image, until);
+      _memory.remove(key)?.image.dispose();
+      _memory[key] = _DecodedAvatar(image, encoded.$2, encoded.$1);
       while (_memory.values.fold<int>(0, (sum, item) => sum + item.bytes) >
           _memoryLimit) {
         _memory.remove(_memory.keys.first)?.image.dispose();
       }
-      // Cache failures must never turn a successfully decoded avatar into an error.
-      if (!downloaded) return image;
-      final bytes = data;
-      _diskWrites = _diskOperations
-          .then((_) async {
-            if (_inactive) return;
-            if (!canStore) {
-              if (await dataFile.exists()) await dataFile.delete();
-              if (await metaFile.exists()) await metaFile.delete();
-              return;
-            }
-            final metadata = utf8.encode(
-              jsonEncode({
-                'expires': until.millisecondsSinceEpoch,
-                'etag': etag,
-              }),
-            );
-            final size = bytes.length + metadata.length;
-            var window = _diskWriteWindows[root.path] ?? (_writeWindow, 64);
-            if (window.$1 + size > _writeWindow || window.$2 >= 64) {
-              await _trim(root);
-              window = (0, 0);
-            }
-            final temporary = File('${dataFile.path}.part');
-            await temporary.writeAsBytes(bytes, flush: true);
-            await temporary.rename(dataFile.path);
-            await metaFile.writeAsBytes(metadata);
-            _diskWriteWindows[root.path] = (window.$1 + size, window.$2 + 1);
-            if (_diskWriteWindows.length > 8) {
-              _diskWriteWindows.remove(_diskWriteWindows.keys.first);
-            }
-          })
-          .catchError((Object _) {});
-      _diskOperations = _diskWrites;
-      // Keep pending encoded buffers inside the same four-slot budget. A slow
-      // disk must not turn fast downloads into an unbounded write queue.
-      await _diskWrites;
       return image;
     } catch (_) {
-      _retryAfter[key] = DateTime.now().add(const Duration(seconds: 30));
-      if (_retryAfter.length > 512) _retryAfter.remove(_retryAfter.keys.first);
       return null;
+    }
+  }
+
+  Future<(Uint8List, DateTime, String?, bool)> _bytes(
+    Uri uri, {
+    bool force = false,
+  }) {
+    final key = uri.toString();
+    if (!force && _retryAfter[key]?.isAfter(DateTime.now()) == true) {
+      return Future.error(const FormatException('avatar.backoff'));
+    }
+    final cached = _encoded[key];
+    if (!force && cached != null && cached.$2.isAfter(DateTime.now())) {
+      return Future.value(cached);
+    }
+    return _bytePending[key] ??= _readBytes(uri, force: force).whenComplete(() {
+      _bytePending.remove(key);
+    });
+  }
+
+  Future<(Uint8List, DateTime, String?, bool)> _readBytes(
+    Uri uri, {
+    required bool force,
+  }) async {
+    if (_running >= 4) {
+      final slot = Completer<void>();
+      _slots.add(slot);
+      await slot.future;
+    } else {
+      _running++;
+    }
+    try {
+      if (_inactive) throw StateError('avatar.disposed');
+      final root = await _directory();
+      final name = '$_owner-${sha256.convert(utf8.encode(uri.toString()))}';
+      final dataFile = File('${root.path}/$name.bin');
+      final metaFile = File('${root.path}/$name.json');
+      final cached = _encoded[uri.toString()];
+      Uint8List? data = cached?.$1;
+      DateTime until = cached?.$2 ?? DateTime.now();
+      String? etag = cached?.$3;
+      var canStore = true;
+      var downloaded = false;
+      if (data == null) {
+        try {
+          final meta = jsonDecode(await metaFile.readAsString()) as Map;
+          until = DateTime.fromMillisecondsSinceEpoch(meta['expires'] as int);
+          etag = meta['etag'] as String?;
+          if (await dataFile.length() <= _downloadLimit) {
+            data = await dataFile.readAsBytes();
+            await dataFile.setLastModified(DateTime.now());
+          }
+        } catch (_) {
+          /* Optional disk cache. */
+        }
+      }
+      if (force || data == null || !until.isAfter(DateTime.now())) {
+        try {
+          final response = await _download(
+            uri,
+            previous: data,
+            etag: etag,
+            allowGif: true,
+          );
+          data = response.$1;
+          until = response.$2;
+          etag = response.$3;
+          canStore = response.$4;
+          downloaded = true;
+        } catch (_) {
+          if (data == null) rethrow;
+          until = DateTime.now().add(const Duration(seconds: 30));
+        }
+      }
+      if (_inactive) throw StateError('avatar.disposed');
+      final buffer = await ui.ImmutableBuffer.fromUint8List(data);
+      ui.ImageDescriptor? descriptor;
+      ui.Codec? codec;
+      try {
+        descriptor = await ui.ImageDescriptor.encoded(buffer);
+        if (descriptor.width > 4096 ||
+            descriptor.height > 4096 ||
+            descriptor.width * descriptor.height > 16000000) {
+          throw const FormatException('avatar.dimensions');
+        }
+        codec = await descriptor.instantiateCodec(
+          targetWidth: descriptor.width >= descriptor.height ? 256 : null,
+          targetHeight: descriptor.height > descriptor.width ? 256 : null,
+        );
+        if (codec.frameCount > 120 ||
+            descriptor.width * descriptor.height * codec.frameCount >
+                24000000) {
+          throw const FormatException('avatar.frames');
+        }
+      } finally {
+        codec?.dispose();
+        descriptor?.dispose();
+        buffer.dispose();
+      }
+      if (_inactive) throw StateError('avatar.disposed');
+      final value = (data, until, etag, canStore);
+      if (canStore) {
+        _encoded.remove(uri.toString());
+        _encoded[uri.toString()] = value;
+        while (_encoded.values.fold<int>(
+              0,
+              (sum, item) => sum + item.$1.length,
+            ) >
+            _memoryLimit) {
+          _encoded.remove(_encoded.keys.first);
+        }
+      } else {
+        _encoded.remove(uri.toString());
+      }
+      if (downloaded) {
+        final bytes = data;
+        _diskWrites = _diskOperations
+            .then((_) async {
+              if (_inactive) return;
+              if (!canStore) {
+                if (await dataFile.exists()) await dataFile.delete();
+                if (await metaFile.exists()) await metaFile.delete();
+                return;
+              }
+              final metadata = utf8.encode(
+                jsonEncode({
+                  'expires': until.millisecondsSinceEpoch,
+                  'etag': etag,
+                }),
+              );
+              final size = bytes.length + metadata.length;
+              var window = _diskWriteWindows[root.path] ?? (_writeWindow, 64);
+              if (window.$1 + size > _writeWindow || window.$2 >= 64) {
+                await _trim(root);
+                window = (0, 0);
+              }
+              final temporary = File('${dataFile.path}.part');
+              await temporary.writeAsBytes(bytes, flush: true);
+              await temporary.rename(dataFile.path);
+              await metaFile.writeAsBytes(metadata);
+              _diskWriteWindows[root.path] = (window.$1 + size, window.$2 + 1);
+              if (_diskWriteWindows.length > 8) {
+                _diskWriteWindows.remove(_diskWriteWindows.keys.first);
+              }
+            })
+            .catchError((Object _) {});
+        _diskOperations = _diskWrites;
+        // Keep pending encoded buffers inside the same four-slot budget. A slow
+        // disk must not turn fast downloads into an unbounded write queue.
+        await _diskWrites;
+      }
+      if (_inactive) throw StateError('avatar.disposed');
+      return value;
+    } catch (_) {
+      _retryAfter[uri.toString()] = DateTime.now().add(
+        const Duration(seconds: 30),
+      );
+      if (_retryAfter.length > 512) _retryAfter.remove(_retryAfter.keys.first);
+      rethrow;
     } finally {
       if (_slots.isNotEmpty) {
         _slots.removeFirst().complete();
@@ -372,7 +385,9 @@ class PlatformAvatarImageCache implements AvatarImageCache, AvatarByteCache {
             ? 0
             : ((maxAge ?? 300) - age).clamp(0, 604800);
         final until = DateTime.now().add(Duration(seconds: ttl));
-        final nextEtag = response.headers.value(HttpHeaders.etagHeader) ?? etag;
+        final nextEtag =
+            response.headers.value(HttpHeaders.etagHeader) ??
+            (response.statusCode == 304 ? etag : null);
         if (response.statusCode == 304 && previous != null) {
           await response.drain<void>();
           return (previous, until, nextEtag, canStore);
@@ -451,7 +466,7 @@ class PlatformAvatarImageCache implements AvatarImageCache, AvatarByteCache {
       entry.image.dispose();
     }
     _memory.clear();
-    _animationBytes.clear();
+    _encoded.clear();
     _retryAfter.clear();
   }
 }

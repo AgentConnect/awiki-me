@@ -118,6 +118,7 @@ class AwikiImCoreMessageAdapter
 
   @override
   Future<ChatMessage> sendText({
+    bool secure = false,
     required AppThreadRef thread,
     required String content,
   }) async {
@@ -127,7 +128,10 @@ class AwikiImCoreMessageAdapter
         core.SendTextRequest(
           target: _mappers.messageTargetToCore(thread),
           text: content,
-          security: _securityMode(isDirect: thread is AppDirectThreadRef),
+          security: _securityMode(
+            isDirect: thread is AppDirectThreadRef,
+            secureRequested: secure,
+          ),
         ),
       );
       return _mappers.chatMessageFromCore(result.message, ownerDid: ownerDid);
@@ -136,6 +140,7 @@ class AwikiImCoreMessageAdapter
 
   @override
   Future<ChatMessage> sendAttachment({
+    bool secure = false,
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
@@ -154,6 +159,10 @@ class AwikiImCoreMessageAdapter
             );
       final result = await client.attachments.send(
         core.AttachmentSendRequest(
+          security: _securityMode(
+            isDirect: thread is AppDirectThreadRef,
+            secureRequested: secure,
+          ),
           target: _mappers.messageTargetToCore(thread),
           input: _attachmentInputToCore(attachment),
           caption: caption,
@@ -172,6 +181,7 @@ class AwikiImCoreMessageAdapter
 
   @override
   Future<ChatMessage> sendConversationAttachment({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required AttachmentDraft attachment,
     String? caption,
@@ -191,6 +201,10 @@ class AwikiImCoreMessageAdapter
             );
       final result = await client.attachments.sendConversation(
         core.SendConversationAttachmentRequest(
+          security: _securityMode(
+            isDirect: conversation.conversationId.startsWith('dm:'),
+            secureRequested: secure,
+          ),
           conversation: core.ConversationReadRef(
             conversationId: conversation.conversationId,
           ),
@@ -237,6 +251,7 @@ class AwikiImCoreMessageAdapter
 
   @override
   Future<ChatMessage> sendConversationText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String content,
     String? clientMessageId,
@@ -247,6 +262,7 @@ class AwikiImCoreMessageAdapter
       content: content,
       security: _securityMode(
         isDirect: conversation.conversationId.startsWith('dm:'),
+        secureRequested: secure,
       ),
       clientMessageId: clientMessageId,
       idempotencyKey: idempotencyKey,
@@ -306,6 +322,7 @@ class AwikiImCoreMessageAdapter
 
   @override
   Future<ChatMessage> sendConversationPayload({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required Map<String, Object?> payload,
     String? clientMessageId,
@@ -321,6 +338,7 @@ class AwikiImCoreMessageAdapter
           payloadJson: jsonEncode(payload),
           security: _securityMode(
             isDirect: conversation.conversationId.startsWith('dm:'),
+            secureRequested: secure,
           ),
           clientMessageId: clientMessageId,
           idempotencyKey: idempotencyKey,
@@ -338,8 +356,10 @@ class AwikiImCoreMessageAdapter
     required bool isDirect,
     bool secureRequested = defaultDirectMessageE2eeRequired,
   }) {
-    return isDirect && secureRequested && _runtime.multiDeviceDirectE2eeEnabled
-        ? core.MessageSecurityMode.secureDirect
+    return secureRequested
+        ? (isDirect
+              ? core.MessageSecurityMode.secureDirect
+              : core.MessageSecurityMode.e2eeRequired)
         : core.MessageSecurityMode.defaultPlain;
   }
 
@@ -686,13 +706,14 @@ class AwikiImCoreMessageAdapter
       return sendPayload(
         thread: _threadFromFailedMessage(failed),
         payload: decoded.cast<String, Object?>(),
-        secure: false,
+        secure: failed.encryptionRequired || failed.isEncrypted,
         idempotencyKey: failed.localId,
       );
     }
     return sendText(
       thread: _threadFromFailedMessage(failed),
       content: failed.content,
+      secure: failed.encryptionRequired || failed.isEncrypted,
     );
   }
 

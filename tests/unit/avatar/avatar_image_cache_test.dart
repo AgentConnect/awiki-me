@@ -108,7 +108,7 @@ void main() {
     (tester) async {
       await tester.runAsync(() async {
         final gif = File(
-          'assets/avatars/agents/financing.gif',
+          'tests/unit/avatar/fixtures/agent.gif',
         ).readAsBytesSync();
         final gates = <Completer<void>>[];
         var active = 0;
@@ -395,4 +395,117 @@ void main() {
       });
     },
   );
+  testWidgets(
+    'animated cache persists, revalidates 304, updates stable URI and works offline',
+    (tester) async {
+      await tester.runAsync(() async {
+        final gif = File(
+          'tests/unit/avatar/fixtures/agent.gif',
+        ).readAsBytesSync();
+        const uri = 'https://other.example/avatars/presets/custom.gif';
+        var count = 0;
+        final client = Client((_) async {
+          count++;
+          if (count == 2) {
+            return Response(Uint8List(0), statusCode: 304, cache: 'max-age=0');
+          }
+          return Response(
+            count == 3 ? jpeg : gif,
+            mime: count == 3 ? 'image/jpeg' : 'image/gif',
+            cache: 'max-age=0',
+          );
+        });
+        final cache = PlatformAvatarImageCache(
+          'alice',
+          client: client,
+          directory: root,
+        );
+        final first = await cache.loadBytes(uri);
+        expect(first, gif);
+        final second = await cache.loadBytes(uri, force: true);
+        expect(
+          identical(first, second),
+          isTrue,
+          reason: '304 retains the same byte/image identity',
+        );
+        expect(
+          client.requests[1].headers.value('if-none-match'),
+          '"version-1"',
+        );
+        expect(await cache.loadBytes(uri, force: true), jpeg);
+        await cache.flush();
+        cache.dispose();
+        final offline = Client((_) async => throw StateError('offline'));
+        final reopened = PlatformAvatarImageCache(
+          'alice',
+          client: offline,
+          directory: root,
+        );
+        expect(await reopened.loadBytes(uri), jpeg);
+        reopened.dispose();
+        final other = PlatformAvatarImageCache(
+          'bob',
+          client: offline,
+          directory: root,
+        );
+        expect(await other.loadBytes(uri), isNull);
+        other.dispose();
+      });
+    },
+  );
+  testWidgets('a new response without ETag clears the previous validator', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      var count = 0;
+      final client = Client((_) async {
+        final response = Response(jpeg, cache: 'max-age=0');
+        if (count++ > 0) (response.headers as Headers).values.remove('etag');
+        return response;
+      });
+      final cache = PlatformAvatarImageCache(
+        'etag-reset',
+        client: client,
+        directory: root,
+      );
+      for (var i = 0; i < 3; i++) {
+        expect(
+          await cache.loadBytes('https://example.com/change.jpg', force: true),
+          isNotNull,
+        );
+      }
+      expect(client.requests[1].headers.value('if-none-match'), '"version-1"');
+      expect(client.requests[2].headers.value('if-none-match'), isNull);
+      cache.dispose();
+    });
+  });
+
+  testWidgets('decoded-cache budget includes retained encoded bytes', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final padded = Uint8List(3 * 1024 * 1024)..setAll(0, jpeg);
+      final cache = PlatformAvatarImageCache(
+        'retained-bytes',
+        client: Client((_) async => Response(padded)),
+        directory: root,
+      );
+      final first = await cache.load('https://example.com/0.jpg');
+      expect(first, isNotNull);
+      for (var i = 1; i < 6; i++) {
+        (await cache.load('https://example.com/$i.jpg'))?.dispose();
+      }
+      final again = await cache.load('https://example.com/0.jpg');
+      expect(again, isNotNull);
+      expect(
+        again!.isCloneOf(first!),
+        isFalse,
+        reason:
+            'The old decode must be evicted once retained bytes exceed 16 MiB',
+      );
+      first.dispose();
+      again.dispose();
+      cache.dispose();
+    });
+  });
 }

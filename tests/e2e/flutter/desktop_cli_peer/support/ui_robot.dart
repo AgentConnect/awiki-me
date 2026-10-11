@@ -10,6 +10,21 @@ class _DesktopAppRobot {
   final WidgetTester tester;
   String? failureCaseId;
 
+  // A hidden native window stops Flutter frames. Report that boundary instead
+  // of letting an individual frame outlive the observation timeout. The owning
+  // process runner can explicitly keep this test window in the foreground.
+  Future<void> _pumpFrame([Duration? duration]) async {
+    try {
+      await tester.pump(duration).timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      fail(
+        'Desktop frame did not arrive; lifecycle='
+        '${tester.binding.lifecycleState?.name} '
+        'frames_enabled=${tester.binding.framesEnabled}.',
+      );
+    }
+  }
+
   ProviderContainer get container => ProviderScope.containerOf(
     tester.element(find.byType(AppShell, skipOffstage: false)),
   );
@@ -230,7 +245,10 @@ class _DesktopAppRobot {
     return selected;
   }
 
-  Future<void> sendText(String content) async {
+  Future<void> sendText(
+    String content, {
+    bool expectRetainedDraft = false,
+  }) async {
     final input = find.bySemanticsIdentifier('e2e-chat-input');
     await pumpUntilFinder(input, description: 'chat input');
     final inputField = find.descendant(
@@ -251,7 +269,19 @@ class _DesktopAppRobot {
       find.bySemanticsIdentifier('e2e-chat-send-button'),
       description: 'chat send button',
     );
-    await _waitForComposerClear(input, description: 'text send completion');
+    if (expectRetainedDraft) {
+      await pumpUntil(
+        description: 'failed send retains the exact draft',
+        condition: () {
+          final fields = inputField.evaluate().toList(growable: false);
+          if (fields.length != 1) return false;
+          final field = fields.single.widget as CupertinoTextField;
+          return field.enabled && field.controller?.text == content;
+        },
+      );
+    } else {
+      await _waitForComposerClear(input, description: 'text send completion');
+    }
   }
 
   Future<void> sendTextWithKeyboardAction(String content) async {
@@ -272,7 +302,7 @@ class _DesktopAppRobot {
       description: 'chat message input',
     );
     await tester.testTextInput.receiveAction(TextInputAction.send);
-    await tester.pump();
+    await _pumpFrame();
     await _waitForComposerClear(input, description: 'text send completion');
   }
 
@@ -397,7 +427,7 @@ class _DesktopAppRobot {
       description: 'group sender-label anchor ${anchor.localId}',
     );
     await tester.ensureVisible(anchorContent);
-    await tester.pump();
+    await _pumpFrame();
 
     E2eObservation observe() {
       final sender = find.byKey(Key('chat-message-sender:${anchor.localId}'));
@@ -640,7 +670,7 @@ class _DesktopAppRobot {
       );
     }
     tester.testTextInput.enterText('@$handle');
-    await tester.pump();
+    await _pumpFrame();
     final filteredPanel = find.byKey(const Key('chat-mention-candidate-panel'));
     final filteredField = tester.widget<CupertinoTextField>(inputField);
     final candidate = find.byKey(
@@ -677,7 +707,7 @@ class _DesktopAppRobot {
           '@$expectedFullHandle · ${_compactMentionDid(expectedDid)}',
     );
     await tester.tap(candidate.first);
-    await tester.pump();
+    await _pumpFrame();
     final field = tester.widget<CupertinoTextField>(
       find.byType(CupertinoTextField).last,
     );
@@ -691,7 +721,7 @@ class _DesktopAppRobot {
       description: 'mention message input',
     );
     await tester.testTextInput.receiveAction(TextInputAction.send);
-    await tester.pump();
+    await _pumpFrame();
     await _waitForComposerClear(input, description: 'mention send completion');
     return '$selectedSurface $suffix';
   }
@@ -730,16 +760,16 @@ class _DesktopAppRobot {
         enabled: true,
       );
       await tester.tap(field);
-      await tester.pump();
+      await _pumpFrame();
       await tester.showKeyboard(field);
       tester.testTextInput.enterText(value);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
+      await _pumpFrame();
+      await _pumpFrame(const Duration(milliseconds: 200));
       final widget = tester.widget<CupertinoTextField>(field);
       if (widget.controller?.text == value) {
         return;
       }
-      await tester.pump(Duration(milliseconds: 150 * (attempt + 1)));
+      await _pumpFrame(Duration(milliseconds: 150 * (attempt + 1)));
     }
     final widget = tester.widget<CupertinoTextField>(field);
     final observed = widget.controller?.value ?? const TextEditingValue();
@@ -1017,7 +1047,7 @@ class _DesktopAppRobot {
       enabled: true,
     );
     await tester.enterText(input, query);
-    await tester.pump();
+    await _pumpFrame();
     final row = find.byKey(Key('conversation-row:$conversationId'));
     await pumpUntilFinder(row, description: 'exact searched conversation row');
     expect(
@@ -1037,7 +1067,7 @@ class _DesktopAppRobot {
       fail('Local conversation search opened a different canonical row.');
     }
     await tester.enterText(input, '');
-    await tester.pump();
+    await _pumpFrame();
     return selected;
   }
 
@@ -1050,7 +1080,7 @@ class _DesktopAppRobot {
     final appContainer = container;
     await navigateToContacts();
     await appContainer.read(friendsProvider.notifier).refresh();
-    await tester.pump();
+    await _pumpFrame();
     final rowKey = Key('contact-row:${peerDid.trim()}');
     final friendsPage = find.byType(FriendsPage);
     await pumpUntilFinder(friendsPage, description: 'contacts sidebar page');
@@ -1332,7 +1362,10 @@ class _DesktopAppRobot {
     description: 'peer profile back button',
   );
 
-  Future<ConversationSummary> createGroup(String name) async {
+  Future<ConversationSummary> createGroup(
+    String name, {
+    bool encrypted = false,
+  }) async {
     final appContainer = container;
     await navigateToContacts();
     await pumpUntilFinder(
@@ -1359,6 +1392,9 @@ class _DesktopAppRobot {
       find.byKey(const Key('create-group-name-input')),
       name,
     );
+    if (encrypted) {
+      await tapOne(find.text('加密群'), description: 'encrypted group type');
+    }
     final feedbackBefore = appContainer.read(uiFeedbackProvider)?.id;
     await tapOne(
       find.byKey(const Key('create-group-submit-button')),
@@ -1428,7 +1464,7 @@ class _DesktopAppRobot {
 
   Future<void> addGroupMember(
     String handle, {
-    required String expectedDisplayName,
+    String? expectedDisplayName,
   }) async {
     final preflight = await container
         .read(directoryApplicationServiceProvider)
@@ -1540,7 +1576,16 @@ class _DesktopAppRobot {
     }
     _expectIdentityCandidatePresentation(
       candidate: candidateTile,
-      expectedDisplayName: expectedDisplayName,
+      expectedDisplayName:
+          expectedDisplayName ??
+          resolvePeerDisplayName(
+            container.read(peerDisplayProfileProvider),
+            PeerDisplayNameRequest(
+              did: preflight.did,
+              nickname: preflight.profile?.displayName,
+              fullHandle: preflight.handle ?? handle,
+            ),
+          ),
       expectedAvatarUri: container
           .read(peerDisplayProfileProvider)
           .forDid(preflight.did)
@@ -1703,9 +1748,23 @@ class _DesktopAppRobot {
 
   Future<void> sendStagedAttachment({String? caption}) async {
     if (caption != null && caption.isNotEmpty) {
-      await tester.enterText(
-        find.bySemanticsIdentifier('e2e-chat-input'),
+      // Use the same exact-input contract as text sends: the native desktop
+      // input connection can replace the first edit after a focus/drop change.
+      await _enterExactComposerText(
+        find.descendant(
+          of: find.bySemanticsIdentifier('e2e-chat-input'),
+          matching: find.byType(CupertinoTextField),
+        ),
         caption,
+        description: 'attachment caption',
+      );
+      expect(
+        container
+            .read(chatComposerDraftsProvider.notifier)
+            .draftFor(selectedConversation)
+            .text,
+        caption,
+        reason: 'persisted attachment caption before send',
       );
     }
     await tapOne(
@@ -1734,7 +1793,7 @@ class _DesktopAppRobot {
     ]) {
       tester.binding.handleAppLifecycleStateChanged(state);
     }
-    await tester.pump();
+    await _pumpFrame();
     await pumpUntilFinder(
       find.bySemanticsIdentifier('e2e-authenticated'),
       description: 'App shell after lifecycle reconnect',
@@ -1746,7 +1805,7 @@ class _DesktopAppRobot {
       transition: tester.binding.handleAppLifecycleStateChanged,
       action: action,
     );
-    await tester.pump();
+    await _pumpFrame();
     await pumpUntilFinder(
       find.bySemanticsIdentifier('e2e-authenticated'),
       description: 'App shell after hidden burst resume',
@@ -1761,7 +1820,7 @@ class _DesktopAppRobot {
     required AppSession session,
   }) async {
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
+    await _pumpFrame();
     await tester.pumpWidget(
       AwikiMeApp(bootstrap: bootstrap, providerOverrides: providerOverrides),
     );
@@ -1787,7 +1846,7 @@ class _DesktopAppRobot {
           ),
           (_) {},
         );
-    await tester.pump();
+    await _pumpFrame();
   }
 
   Future<void> tapOne(Finder finder, {required String description}) async {
@@ -1818,8 +1877,14 @@ class _DesktopAppRobot {
       );
     }
     final tapTarget = pressableCount == 1 ? pressableDescendant : finder;
+    // Navigation can build the destination before its transition accepts hits.
+    // Wait for the actual visible target instead of dropping the first tap.
+    await pumpUntilFinder(
+      tapTarget.hitTestable(),
+      description: '$description accepts pointer input',
+    );
     await tester.tap(tapTarget);
-    await tester.pump();
+    await _pumpFrame();
   }
 
   Future<void> pumpUntilFinder(
@@ -1872,7 +1937,7 @@ class _DesktopAppRobot {
     Object? lastError;
     while (DateTime.now().isBefore(deadline)) {
       try {
-        await tester.pump(const Duration(milliseconds: 200));
+        await _pumpFrame(const Duration(milliseconds: 200));
         if (condition()) {
           return;
         }
@@ -1895,7 +1960,7 @@ class _DesktopAppRobot {
     final deadline = DateTime.now().add(timeout);
     String? lastPendingCode;
     while (DateTime.now().isBefore(deadline)) {
-      await tester.pump(const Duration(milliseconds: 200));
+      await _pumpFrame(const Duration(milliseconds: 200));
       final observation = observe();
       switch (observation.status) {
         case E2eObservationStatus.pass:
@@ -1936,7 +2001,7 @@ class _DesktopAppRobot {
   }) async {
     final deadline = DateTime.now().add(duration);
     while (DateTime.now().isBefore(deadline)) {
-      await tester.pump(const Duration(milliseconds: 200));
+      await _pumpFrame(const Duration(milliseconds: 200));
       final observation = observe();
       if (observation.status != E2eObservationStatus.pass) {
         await E2eFailureObservationWriter.recordFirst(
@@ -1989,6 +2054,7 @@ class _FailOnceMessagingService
 
   @override
   Future<ChatMessage> sendConversationText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String content,
     String? clientMessageId,
@@ -2015,6 +2081,7 @@ class _FailOnceMessagingService
         createdAt: DateTime.now(),
         isMine: true,
         sendState: MessageSendState.failed,
+        encryptionRequired: secure,
       );
       _injectedFailedMessages.putIfAbsent(
         presentationConversationId,
@@ -2044,6 +2111,7 @@ class _FailOnceMessagingService
     lastConversationTextFailureDetail = null;
     try {
       final sent = await _delegate.sendConversationText(
+        secure: secure,
         conversation: conversation,
         content: content,
         clientMessageId: clientMessageId,
@@ -2183,18 +2251,21 @@ class _FailOnceMessagingService
 
   @override
   Future<ChatMessage> sendText({
+    bool secure = false,
     required AppThreadRef thread,
     required String content,
-  }) => _delegate.sendText(thread: thread, content: content);
+  }) => _delegate.sendText(thread: thread, content: content, secure: secure);
 
   @override
   Future<ChatMessage> sendAttachment({
+    bool secure = false,
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
     List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? idempotencyKey,
   }) => _delegate.sendAttachment(
+    secure: secure,
     thread: thread,
     attachment: attachment,
     caption: caption,
@@ -2204,6 +2275,7 @@ class _FailOnceMessagingService
 
   @override
   Future<ChatMessage> sendConversationAttachment({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required AttachmentDraft attachment,
     String? caption,
@@ -2211,6 +2283,7 @@ class _FailOnceMessagingService
     String? clientMessageId,
     String? idempotencyKey,
   }) => _delegate.sendConversationAttachment(
+    secure: secure,
     conversation: conversation,
     attachment: attachment,
     caption: caption,
@@ -2234,11 +2307,13 @@ class _FailOnceMessagingService
 
   @override
   Future<ChatMessage> sendMentionText({
+    bool secure = false,
     required AppThreadRef thread,
     required String text,
     required List<ChatMentionDraft> mentions,
     String? idempotencyKey,
   }) => _delegate.sendMentionText(
+    secure: secure,
     thread: thread,
     text: text,
     mentions: mentions,
@@ -2247,12 +2322,14 @@ class _FailOnceMessagingService
 
   @override
   Future<ChatMessage> sendConversationMentionText({
+    bool secure = false,
     required AppConversationReadRef conversation,
     required String text,
     required List<ChatMentionDraft> mentions,
     String? clientMessageId,
     String? idempotencyKey,
   }) => _delegate.sendConversationMentionText(
+    secure: secure,
     conversation: conversation,
     text: text,
     mentions: mentions,

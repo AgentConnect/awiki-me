@@ -293,6 +293,7 @@ class _AvatarPreviewDialogState extends ConsumerState<AvatarPreviewDialog> {
                       child: Center(
                         child: isAgent
                             ? AgentAvatarImage(
+                                refreshOnOpen: true,
                                 uri: reference.uri,
                                 posterUri: reference.thumbnail,
                                 size: side,

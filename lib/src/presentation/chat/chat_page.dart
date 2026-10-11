@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/material.dart' show Tooltip;
 import '../app_shell/providers/remote_push_coordinator_provider.dart';
 import 'dart:io';
 
@@ -118,6 +119,7 @@ import '../shared/widgets/app_widgets.dart';
 import '../shared/widgets/awiki_glass.dart';
 import 'chat_mention_presentation.dart';
 import 'chat_provider.dart';
+import 'message_security_provider.dart';
 import 'message_actions.dart';
 import '../shared/widgets/awiki_glass_controls.dart';
 
@@ -734,6 +736,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   bool _isDraggingExternalAttachment = false;
   bool _screenshotOperationInProgress = false;
   final Set<String> _requestedGroupRoleIds = <String>{};
+  bool _groupSecurityBusy = false;
   final Set<String> _downloadingAttachmentMessageIds = <String>{};
   final Set<String> _activeImageAttachmentActions = <String>{};
   static const double _nearBottomExtent = 96;
@@ -741,10 +744,16 @@ class _ChatViewState extends ConsumerState<ChatView> {
   @override
   void initState() {
     super.initState();
-    _groupDisplayRefreshTimer = Timer.periodic(
-      const Duration(seconds: 10),
-      (_) => _refreshVisibleGroupProfiles(),
-    );
+    _groupDisplayRefreshTimer = Timer.periodic(const Duration(seconds: 10), (
+      _,
+    ) {
+      _refreshVisibleGroupProfiles();
+      if (mounted &&
+          _messagesDestinationActive &&
+          widget.conversation.isGroup) {
+        unawaited(_refreshGroupSecurity(widget.conversation));
+      }
+    });
     _displayThreadId = _timelineDisplayThreadId(widget.conversation);
     scrollController = _ChatTimelineScrollController(
       onUserScrollStart: _handleUserScrollStart,
@@ -1208,6 +1217,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
           _ChatHeader(
             conversation: currentConversation,
             nickname: headerNickname,
+            encryptedGroup: ref
+                .watch(groupProvider)
+                .groups
+                .any(
+                  (g) =>
+                      g.groupId == currentConversation.groupId &&
+                      g.encrypted == true,
+                ),
             embedded: widget.embedded,
             macStyle: macStyle,
             classification: peerClassification,
@@ -1800,6 +1817,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
               ),
             ),
           _Composer(
+            disabledStatus:
+                currentConversation.isGroup && groupSendDisabledReason != null
+                ? _groupSecurityCard(
+                    currentConversation,
+                    groupSendDisabledReason,
+                  )
+                : null,
             conversation: currentConversation,
             embedded: widget.embedded,
             macStyle: macStyle,
@@ -2363,6 +2387,15 @@ class _ChatViewState extends ConsumerState<ChatView> {
         _groupSendDisabledReason(conversation) != null) {
       return;
     }
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    final visibilityToken = _conversationVisibilityToken;
+    bool stillCurrent() =>
+        mounted &&
+        epoch != null &&
+        epoch.matches(ref.read(sessionProvider)) &&
+        visibilityToken == _conversationVisibilityToken &&
+        _sameCanonicalConversation(conversation, widget.conversation);
+
     final attachment = _pendingAttachment;
     final rawContent = textController.text;
     final content = rawContent.trim();
@@ -2391,10 +2424,39 @@ class _ChatViewState extends ConsumerState<ChatView> {
       );
       return;
     }
+    bool security;
+    try {
+      security =
+          conversation.isGroup ||
+              isPersonalAgentConversation(
+                conversation,
+                ref.read(agentsProvider).agents,
+              )
+          ? false
+          : await ref.read(
+              messageSecurityProvider(conversation.conversationId).future,
+            );
+    } catch (error) {
+      if (stillCurrent()) {
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.fromError(error));
+      }
+      return;
+    }
+    if (!stillCurrent() ||
+        textController.text != rawContent ||
+        _pendingAttachment != attachment) {
+      return;
+    }
     final messageContent = validMentionDrafts.isEmpty ? content : rawContent;
-    // Called synchronously only after the controller has accepted this intent
-    // and published its bubble; rejected sends keep the original draft.
+    // Optimistic clear; failures restore this captured draft without overwriting new edits.
     void clearSubmittedDraft() {
+      if (!stillCurrent() ||
+          textController.text != rawContent ||
+          _pendingAttachment != attachment) {
+        return;
+      }
       textController.clear();
       ref.read(chatComposerDraftsProvider.notifier).clearDraft(conversation);
       if (attachment != null) {
@@ -2402,6 +2464,32 @@ class _ChatViewState extends ConsumerState<ChatView> {
           _pendingAttachment = null;
         });
       }
+    }
+
+    void restoreSubmittedDraft() {
+      if (stillCurrent() && conversation.isGroup) {
+        final group = ref
+            .read(groupProvider)
+            .groups
+            .where((g) => g.groupId == conversation.groupId)
+            .firstOrNull;
+        if (group?.encrypted == true) {
+          ref
+              .read(groupProvider.notifier)
+              .upsertGroup(group!.withSecurity(canSendSecure: false));
+          unawaited(_refreshGroupSecurity(conversation));
+        }
+      }
+      if (!stillCurrent() ||
+          textController.text.isNotEmpty ||
+          _pendingAttachment != null) {
+        return;
+      }
+      textController.text = rawContent;
+      ref
+          .read(chatComposerDraftsProvider.notifier)
+          .setDraft(conversation, draft);
+      if (attachment != null) setState(() => _pendingAttachment = attachment);
     }
 
     final expectedAgentReplyDid = _expectedAgentReplyDidForConversation(
@@ -2416,6 +2504,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       await ref
           .read(chatThreadsProvider.notifier)
           .sendAttachment(
+            secure: security,
             conversation: conversation,
             attachment: attachment,
             caption: messageContent.trim().isEmpty ? null : messageContent,
@@ -2423,18 +2512,21 @@ class _ChatViewState extends ConsumerState<ChatView> {
             expectedAgentReplyDid: expectedAgentReplyDid,
             displayThreadId: _displayThreadId,
             onSendStarted: clearSubmittedDraft,
+            onSendFailed: restoreSubmittedDraft,
           );
       return;
     }
     await ref
         .read(chatThreadsProvider.notifier)
         .sendMessage(
+          secure: security,
           conversation: conversation,
           content: messageContent,
           mentions: validMentionDrafts,
           expectedAgentReplyDid: expectedAgentReplyDid,
           displayThreadId: _displayThreadId,
           onSendStarted: clearSubmittedDraft,
+          onSendFailed: restoreSubmittedDraft,
         );
   }
 
@@ -3649,6 +3741,97 @@ class _ChatViewState extends ConsumerState<ChatView> {
     return null;
   }
 
+  Widget _groupSecurityCard(ConversationSummary conversation, String reason) {
+    final group = ref
+        .watch(groupProvider)
+        .groups
+        .where((g) => g.groupId == conversation.groupId)
+        .firstOrNull;
+    final theme = context.awikiTheme;
+    final retryable =
+        group?.myRole == 'owner' && group?.secureRetryable == true;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          if (_groupSecurityBusy)
+            const CupertinoActivityIndicator(radius: 8)
+          else
+            Icon(
+              CupertinoIcons.lock_shield,
+              size: 18,
+              color: theme.secondaryText,
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _groupSecurityBusy
+                  ? '正在准备加密聊天…'
+                  : (group?.secureProblem ?? reason),
+              style: TextStyle(fontSize: 13, color: theme.secondaryText),
+            ),
+          ),
+          if (retryable && !_groupSecurityBusy)
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              minimumSize: const Size(44, 32),
+              onPressed: () =>
+                  _refreshGroupSecurity(conversation, repair: true),
+              child: const Text('重试', style: TextStyle(fontSize: 13)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _refreshGroupSecurity(
+    ConversationSummary conversation, {
+    bool repair = false,
+  }) async {
+    final groupId = conversation.groupId;
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (groupId == null || epoch == null || _groupSecurityBusy) return;
+    setState(() => _groupSecurityBusy = true);
+    try {
+      if (repair) {
+        final previous = ref
+            .read(groupProvider)
+            .groups
+            .where((g) => g.groupId == groupId)
+            .firstOrNull;
+        if (previous != null) {
+          ref
+              .read(groupProvider.notifier)
+              .upsertGroup(previous.withSecurity(canSendSecure: false));
+        }
+        try {
+          await ref.read(groupEncryptionCorePortProvider).retry(groupId);
+        } finally {
+          if (mounted && epoch.matches(ref.read(sessionProvider))) {
+            await ref
+                .read(groupProvider.notifier)
+                .refreshGroup(groupId, refreshMembers: false);
+          }
+        }
+      }
+      if (!mounted || !epoch.matches(ref.read(sessionProvider))) return;
+      final group = await ref
+          .read(groupApplicationServiceProvider)
+          .getGroup(groupId);
+      if (mounted && epoch.matches(ref.read(sessionProvider))) {
+        ref.read(groupProvider.notifier).upsertGroup(group);
+      }
+    } catch (error) {
+      if (mounted && epoch.matches(ref.read(sessionProvider))) {
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.fromError(error));
+      }
+    } finally {
+      if (mounted) setState(() => _groupSecurityBusy = false);
+    }
+  }
+
   String? _groupSendDisabledReason(ConversationSummary conversation) {
     if (!conversation.isGroup) {
       return null;
@@ -3663,6 +3846,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
       }
       final status = group.membershipStatus?.trim();
       if (status == null || status.isEmpty || status == 'active') {
+        if (group.encrypted == true && group.canSendSecure != true) {
+          return group.myRole == 'owner'
+              ? (group.secureState == 'waitingForMembershipUpdate'
+                    ? '等待成员完成加密准备'
+                    : '正在准备加密聊天…')
+              : '等待群主设备完成加密准备';
+        }
         return null;
       }
       if (status == 'left' || status == 'removed') {
@@ -3706,7 +3896,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
     final groups = ref.read(groupProvider).groups;
     for (final group in groups) {
-      if (group.groupId == groupId && hasKnownGroupRole(group)) {
+      if (group.groupId == groupId &&
+          hasKnownGroupRole(group) &&
+          group.encrypted == false) {
         return;
       }
     }

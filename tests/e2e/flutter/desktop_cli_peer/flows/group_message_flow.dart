@@ -42,7 +42,8 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
   final cliFullHandle = config.cliPeerFullHandle;
   // Long suite run IDs can exceed the group-name input's 80-character limit.
   final groupName = 'AWiki E2E $nonce';
-  final conversation = await robot.createGroup(groupName);
+  final encrypted = Platform.environment['AWIKI_E2E_ENCRYPTED_GROUP'] == '1';
+  final conversation = await robot.createGroup(groupName, encrypted: encrypted);
   final groupDid = conversation.groupId!.trim();
   expect(groupDid, isNotEmpty);
   await _waitForUiConversationUnread(
@@ -62,7 +63,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
   final ownerMember = await _findGroupMember(
     groups: groups,
     groupDid: groupDid,
-    memberRef: appFullHandle,
+    memberRef: ownerDid,
   );
   expect(
     _normalizeIdentityRef(ownerMember.did),
@@ -88,7 +89,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
   final cliMember = await _findGroupMember(
     groups: groups,
     groupDid: groupDid,
-    memberRef: cliFullHandle,
+    memberRef: canonicalCliDid,
   );
   final cliMemberDid = requireMatchingCliPeerDid(
     canonicalCliDid: canonicalCliDid,
@@ -164,6 +165,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
   );
   final appGroupMessageId = appGroupMessage.remoteId!;
   expect(appGroupMessage.groupId, groupDid);
+  if (encrypted) expect(appGroupMessage.isEncrypted, isTrue);
   await robot.expectMessageContentVisible(appGroupMessage);
   await _waitForGroupMessages(
     groups: groups,
@@ -180,6 +182,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     expectedContentType: 'text/plain',
   );
 
+  await E2eScenarioProgressWriter.record('group_text_both_peers_confirmed');
   final appMentionText = await robot.sendMention(
     handle: config.cliHandle,
     expectedFullHandle: cliFullHandle,
@@ -187,6 +190,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     expectedDisplayName: expectedCliMemberName,
     suffix: 'e2e app group mention ${config.runId} $nonce',
   );
+  await E2eScenarioProgressWriter.record('group_mention_composer_cleared');
   final appMention = await _waitForUiMessage(
     robot: robot,
     conversationId: conversation.conversationId,
@@ -194,9 +198,12 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     senderDid: ownerDid,
     sendState: MessageSendState.sent,
   );
+  await E2eScenarioProgressWriter.record('group_mention_sent_projected');
   requireSingleMentionTarget(message: appMention, targetDid: cliMemberDid);
+  if (encrypted) expect(appMention.isEncrypted, isTrue);
   final appMentionId = appMention.remoteId!;
   await robot.expectMessageContentVisible(appMention);
+  await E2eScenarioProgressWriter.record('group_mention_visible');
   await _waitForCliGroupMessages(
     config: config,
     groupDid: groupDid,

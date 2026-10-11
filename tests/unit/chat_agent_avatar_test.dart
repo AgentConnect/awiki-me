@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:image/image.dart' as img;
 
 import 'package:awiki_me/src/domain/entities/agent/agent_avatar.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
@@ -18,6 +21,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 const _agentDid = 'did:agent:finance';
+final _presetBytes = <String, Uint8List>{
+  for (final (index, preset) in ['financing', 'legal', 'research'].indexed)
+    preset: Uint8List.fromList(
+      img.encodePng(
+        img.Image(width: 8, height: 8, numChannels: 4)
+          ..setPixelRgba(0, 0, index * 80, 100, 200, 255),
+      ),
+    ),
+};
 
 AgentSummary _agent(String did, String preset) => AgentSummary(
   agentDid: did,
@@ -30,8 +42,8 @@ AgentSummary _agent(String did, String preset) => AgentSummary(
     agentId: did,
     source: 'preset',
     presetId: preset,
-    animatedUri: '/avatars/presets/$preset.gif',
-    posterUri: '/avatars/presets/$preset.png',
+    animatedUri: 'https://avatars.example/presets/$preset.gif',
+    posterUri: 'https://avatars.example/presets/$preset.png',
     version: preset,
     status: 'ready',
   ),
@@ -78,13 +90,13 @@ void _expectPreset(WidgetTester tester, String id, String preset) {
   );
   expect(imageFinder, findsOneWidget);
   final avatar = tester.widget<AgentAvatarImage>(imageFinder);
-  expect(avatar.uri, '/avatars/presets/$preset.gif');
-  expect(avatar.posterUri, '/avatars/presets/$preset.png');
+  expect(avatar.uri, 'https://avatars.example/presets/$preset.gif');
+  expect(avatar.posterUri, 'https://avatars.example/presets/$preset.png');
   final image = tester.widget<Image>(
     find.descendant(of: imageFinder, matching: find.byType(Image)).first,
   );
-  final asset = (image.image as ResizeImage).imageProvider as AssetImage;
-  expect(asset.assetName, 'assets/avatars/agents/$preset.png');
+  final memory = (image.image as ResizeImage).imageProvider as MemoryImage;
+  expect(memory.bytes, _presetBytes[preset]);
 }
 
 void main() {
@@ -131,6 +143,12 @@ void main() {
                 ),
               ),
               providerOverrides: [
+                agentAvatarBytesProvider.overrideWith((ref, uri) async {
+                  final preset = Uri.parse(
+                    uri,
+                  ).pathSegments.last.split('.').first;
+                  return _presetBytes[preset];
+                }),
                 agentsProvider.overrideWith((ref) => _Inventory(ref)),
                 chatThreadsProvider.overrideWith(
                   (ref) => _Timeline(ref, messages),

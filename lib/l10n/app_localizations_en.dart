@@ -4247,6 +4247,20 @@ class AppLocalizationsEn extends AppLocalizations {
       'Choose a GIF animation, PNG, JPEG or static WebP up to 5 MB.';
 
   @override
+  String get agentAvatarSavedRefreshFailed =>
+      'Avatar saved. Refresh failed; close and check again later.';
+
+  @override
+  String get agentAvatarVersionConflict =>
+      'Avatar changed on another device. Your draft is kept; review and save again.';
+
+  @override
+  String get agentAvatarCurrent => 'Current avatar';
+
+  @override
+  String get agentAvatarDraft => 'Unsaved preview';
+
+  @override
   String profileDevicePendingCount(int count) {
     return '$count pending';
   }

@@ -13,6 +13,7 @@ class _ChatHeader extends StatelessWidget {
     this.onBack,
     this.onAddGroupMemberTap,
     this.isAddGroupMemberLoading = false,
+    this.encryptedGroup = false,
   });
 
   final ConversationSummary conversation;
@@ -26,6 +27,7 @@ class _ChatHeader extends StatelessWidget {
   final VoidCallback onChatInformationTap;
   final VoidCallback? onAddGroupMemberTap;
   final bool isAddGroupMemberLoading;
+  final bool encryptedGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +70,7 @@ class _ChatHeader extends StatelessWidget {
                 Flexible(
                   child: _MacHeaderIdentityText(
                     compactName: compactName,
+                    encryptedGroup: encryptedGroup,
                     agentBadgeLabel: agentBadgeLabel,
                     isDeletedAgentConversation: isDeletedAgentConversation,
                     showAgentBadge: constraints.maxWidth >= 320,
@@ -190,6 +193,15 @@ class _ChatHeader extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (encryptedGroup)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 6),
+                          child: Icon(
+                            CupertinoIcons.lock,
+                            size: 14,
+                            semanticLabel: '加密群',
+                          ),
+                        ),
                       if (phoneBadgeLabel != null) ...<Widget>[
                         const SizedBox(width: 6),
                         AwikiNameTag(
@@ -260,6 +272,7 @@ class _ChatHeaderIdentityTapTarget extends StatelessWidget {
 class _MacHeaderIdentityText extends StatelessWidget {
   const _MacHeaderIdentityText({
     required this.compactName,
+    this.encryptedGroup = false,
     required this.agentBadgeLabel,
     required this.isDeletedAgentConversation,
     required this.showAgentBadge,
@@ -268,6 +281,7 @@ class _MacHeaderIdentityText extends StatelessWidget {
   });
 
   final String compactName;
+  final bool encryptedGroup;
   final String? agentBadgeLabel;
   final bool isDeletedAgentConversation;
   final bool showAgentBadge;
@@ -314,6 +328,11 @@ class _MacHeaderIdentityText extends StatelessWidget {
               ),
             ),
           ),
+          if (encryptedGroup)
+            const Padding(
+              padding: EdgeInsets.only(left: 6),
+              child: Icon(CupertinoIcons.lock, size: 14, semanticLabel: '加密群'),
+            ),
           if (agentBadgeLabel != null && showAgentBadge) ...<Widget>[
             const SizedBox(width: 6),
             AwikiNameTag(

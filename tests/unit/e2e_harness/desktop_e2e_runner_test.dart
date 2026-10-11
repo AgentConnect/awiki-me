@@ -1402,6 +1402,34 @@ void main() {
     expect(daemonStateRootFitsUnixSocket(selected.path), isTrue);
   });
 
+  test(
+    'long explicit IPC roots support canonical run IDs without leaving the root',
+    () {
+      final base = '/${List.filled(73, 'x').join()}';
+      Directory select(String runId) => shortAppPairDaemonStateRoot(
+        runId,
+        environment: {'XDG_RUNTIME_DIR': base},
+        systemTemporaryDirectory: Directory('/tmp'),
+      );
+      final first = select('run-a-20261008-abcdef123456');
+      final second = select('run-b-20261008-abcdef123456');
+      expect(first.parent.path, base);
+      expect(daemonStateRootFitsUnixSocket(first.path), isTrue);
+      expect(second.path, isNot(first.path));
+      expect(select('run-a-20261008-abcdef123456').path, first.path);
+      expect(
+        () => shortAppPairDaemonStateRoot(
+          'valid-run-20261008',
+          environment: {'XDG_RUNTIME_DIR': '/${List.filled(110, 'x').join()}'},
+          systemTemporaryDirectory: Directory(
+            '/${List.filled(110, 'y').join()}',
+          ),
+        ),
+        throwsA(isA<E2eFailure>()),
+      );
+    },
+  );
+
   test('App-pair runtime reset refuses a symbolic-link state root', () {
     if (Platform.isWindows) return;
     final root = Directory.systemTemp.createTempSync('app_pair_symlink_');

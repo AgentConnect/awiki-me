@@ -67,7 +67,11 @@ import 'package:awiki_me/src/presentation/profile/avatar_crop_editor.dart';
 import 'package:awiki_me/src/presentation/shared/profile_avatar.dart';
 import 'package:crop_your_image/crop_your_image.dart';
 import 'package:flutter/cupertino.dart'
-    show CupertinoActivityIndicator, CupertinoTextField, CupertinoButton;
+    show
+        CupertinoActivityIndicator,
+        CupertinoTextField,
+        CupertinoButton,
+        CupertinoIcons;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart'
     show
@@ -96,6 +100,7 @@ part 'flows/contact_flow.dart';
 part 'flows/conversation_correctness_flow.dart';
 part 'flows/direct_message_flow.dart';
 part 'flows/group_message_flow.dart';
+part 'flows/dsh_group_pair_flow.dart';
 part 'flows/inbound_first_flow.dart';
 part 'flows/identity_switch_flow.dart';
 part 'flows/performance_flow.dart';
@@ -434,6 +439,7 @@ void runDesktopCliPeerE2e({
               'lifecycle_and_widget_restart_exact_one_verified',
               'complete_direct_message_sequence_ordered_and_stable',
               'same_body_distinct_canonical_messages_preserved',
+              'mixed_encryption_draft_lock_and_restart_verified',
             ],
             'DISPLAY-NAME-REG-001': const <String>[
               'cached_nickname_first_nonempty_header_title',
@@ -534,6 +540,13 @@ void runDesktopCliPeerE2e({
           config: config,
           nonce: messageNonce,
         );
+        await _verifyDshGroupPair(
+          robot: robot,
+          group: groupResult,
+          config: config,
+          ownerDid: session.did,
+          attachmentOpenRecorder: attachmentOpenRecorder,
+        );
         if (!selectedCase.runsDisplayNameFallback) {
           await _attestPassedCases(<String, List<String>>{
             'GROUP-CANON-E2E-001': const <String>[
@@ -541,7 +554,9 @@ void runDesktopCliPeerE2e({
               'member_add_and_restart_preserved_exact_one_group',
               'duplicate_disappearing_or_changed_group_rejected',
             ],
-            'GROUP-E2E-001': const <String>[
+            'GROUP-E2E-001': <String>[
+              if (Platform.environment['AWIKI_E2E_ENCRYPTED_GROUP'] == '1')
+                'encrypted_group_text_and_structured_send_verified',
               'group_created_and_member_added_through_ui',
               'empty_group_survives_member_refresh_and_restart_exact_one',
               'member_added_system_event_uses_nickname_projection',
@@ -616,19 +631,22 @@ void runDesktopCliPeerE2e({
       }
 
       if (selectedCase.runsAttachment) {
-        await _verifyAttachmentRegression(
-          robot: robot,
-          messaging: faultMessaging!,
-          attachmentOpenRecorder: attachmentOpenRecorder,
-          bootstrap: bootstrap,
-          providerOverrides: appProviderOverrides,
-          session: session,
-          ownerDid: session.did,
-          thread: directThread,
-          canonicalCliDid: canonicalCliDid!,
-          config: config,
-          nonce: messageNonce,
-        );
+        for (final secure in [false, true]) {
+          await _verifyAttachmentRegression(
+            robot: robot,
+            messaging: faultMessaging!,
+            attachmentOpenRecorder: attachmentOpenRecorder,
+            bootstrap: bootstrap,
+            providerOverrides: appProviderOverrides,
+            session: session,
+            ownerDid: session.did,
+            thread: directThread,
+            canonicalCliDid: canonicalCliDid!,
+            config: config,
+            nonce: '$messageNonce-${secure ? "encrypted" : "plain"}',
+            secure: secure,
+          );
+        }
         await _attestPassedCases(<String, List<String>>{
           'ATTACH-E2E-001': const <String>[
             'app_attachment_staged_and_sent_through_drop_ui',

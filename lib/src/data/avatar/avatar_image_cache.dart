@@ -12,7 +12,7 @@ abstract class AvatarImageCache {
 }
 
 abstract interface class AvatarByteCache {
-  Future<Uint8List?> loadBytes(String uri);
+  Future<Uint8List?> loadBytes(String uri, {bool force = false});
 }
 
 Uri? safeAvatarUri(String? value) {
