@@ -443,3 +443,11 @@ admin root 写入 `web-registration-diagnostic.json`，只含状态、枚举、�
 `/opt/awiki/test-fix-20261012` 和 `/etc/awiki/test-fix-20261012`。
 预检继续核对受管脚本、配置、解释器与 sudo 权限，不允许回退到共享环境。
 场景清单只增加这个精确测试域，不开放任意主机；具备目标声明不代表 UI 已通过。
+
+App 制品清单的 `targetTenantCatalogs` 为该目标选择 checked-in 公共租户 JSON。
+prepare 和 execute 均读取同一个 `AWIKI_SYSTEM_TEST_TARGET`，通过产品已有的
+`AWIKI_BUILTIN_TENANTS_BASE64`／`AWIKI_BUILTIN_TENANTS_SHA256` 注入；原始配置字节
+进入 compile key，配置不一致的旧制品会被拒绝。其他目标继续使用默认配置。
+此配置不含 OTP、账号或私钥；第二 Home 的声明不表示服务已部署，跨 Home 场景仍须先完成独立环境准备。
+
+注册域发现也使用同一 prepare/execute 制品流程；prepare 不读取运行 fixture，execute 通过受保护的运行时环境传入 fixture 路径，不把它固化进安装包。

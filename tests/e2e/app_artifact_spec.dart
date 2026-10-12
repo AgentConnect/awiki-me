@@ -5,6 +5,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
+
 final class E2eAppArtifactSpec {
   const E2eAppArtifactSpec({
     required this.name,
@@ -32,7 +34,7 @@ final class E2eAppArtifactSpecManifest {
   final String sourceRevision;
   final Map<String, E2eAppArtifactSpec> specs;
 
-  factory E2eAppArtifactSpecManifest.load(File file) {
+  factory E2eAppArtifactSpecManifest.load(File file, {String? target}) {
     final decoded = jsonDecode(file.readAsStringSync());
     if (decoded is! Map || decoded['schemaVersion'] != 1) {
       throw const FormatException(
@@ -47,6 +49,11 @@ final class E2eAppArtifactSpecManifest {
         entries.isEmpty) {
       throw const FormatException('App artifact spec manifest is incomplete.');
     }
+    final tenantDefines = _targetTenantDefines(
+      file,
+      decoded,
+      target ?? Platform.environment['AWIKI_SYSTEM_TEST_TARGET'] ?? '',
+    );
     final specs = <String, E2eAppArtifactSpec>{};
     for (final entry in entries) {
       if (entry is! Map) {
@@ -83,9 +90,10 @@ final class E2eAppArtifactSpecManifest {
         target: target,
         bundleId: bundleId,
         supportedPlatforms: platforms,
-        dartDefines: canonicalCompileTimeDartDefines(
-          _uniqueStrings(entry, 'dartDefines'),
-        ),
+        dartDefines: canonicalCompileTimeDartDefines([
+          ..._uniqueStrings(entry, 'dartDefines'),
+          ...tenantDefines,
+        ]),
         consumerSuites: consumers,
       );
     }
@@ -113,6 +121,40 @@ final class E2eAppArtifactSpecManifest {
           spec.supportedPlatforms.contains(platform),
     ),
   );
+}
+
+// Only checked-in product manifest paths can select a public tenant catalog.
+// Prepare and execute use the same definitions, so changing its bytes invalidates
+// the existing artifact compile key before an App can start.
+List<String> _targetTenantDefines(File manifest, Map payload, String target) {
+  final catalogs = payload['targetTenantCatalogs'];
+  if (catalogs == null) return const [];
+  if (catalogs is! Map ||
+      catalogs.entries.any(
+        (entry) =>
+            entry.key is! String ||
+            entry.value is! String ||
+            !RegExp(
+              r'^configs/[a-z0-9-]+\.json$',
+            ).hasMatch(entry.value as String),
+      )) {
+    throw const FormatException(
+      'App target tenant catalogs must use reviewed config paths.',
+    );
+  }
+  final path = catalogs[target];
+  if (path == null) return const [];
+  final raw = File('${manifest.parent.path}/$path').readAsStringSync();
+  if (jsonDecode(raw) is! Map) {
+    throw const FormatException(
+      'App target tenant catalog must be a JSON object.',
+    );
+  }
+  final bytes = utf8.encode(raw);
+  return [
+    'AWIKI_BUILTIN_TENANTS_BASE64=${base64Encode(bytes)}',
+    'AWIKI_BUILTIN_TENANTS_SHA256=${sha256.convert(bytes)}',
+  ];
 }
 
 List<String> canonicalCompileTimeDartDefines(Iterable<String> values) {

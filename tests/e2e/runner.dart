@@ -1087,7 +1087,7 @@ class DesktopE2eRunner {
     final fixturePath = Platform
         .environment['AWIKI_REGISTRATION_DISCOVERY_FIXTURE']
         ?.trim();
-    if (!options.dryRun && !commands.dryRun) {
+    if (!options.dryRun && !commands.dryRun && !options.prepareOnly) {
       if (fixturePath == null || fixturePath.isEmpty) {
         throw E2eFailure(
           'AWIKI_REGISTRATION_DISCOVERY_FIXTURE must name the reviewed remote fixture.',
@@ -1102,8 +1102,23 @@ class DesktopE2eRunner {
         );
       }
     }
-    if (options.prepareOnly) {
-      await commands.requireExecutable('flutter');
+    await commands.requireExecutable('flutter');
+    if (options.prepareOnly ||
+        (!options.dryRun &&
+            !commands.dryRun &&
+            Platform.environment['AWIKI_E2E_USE_FLUTTER_TEST']?.trim() !=
+                '1')) {
+      final artifact = await _prepareIntegrationExecutable(
+        name: 'registration-domain-discovery',
+        stateRoot: appStateRootDir,
+      );
+      if (options.prepareOnly) return;
+      await _executePreparedIntegration(
+        artifact: artifact,
+        caseIds: options.e2eCase.caseIds,
+        stateRoot: appStateRootDir,
+        environment: {'AWIKI_REGISTRATION_DISCOVERY_FIXTURE': fixturePath!},
+      );
       return;
     }
     await _runFlutterArgs(
