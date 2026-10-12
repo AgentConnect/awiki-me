@@ -947,6 +947,9 @@ Supported E2E cases:
 
 `group` / `messaging` case 会通过当前 tenant-scoped CLI workspace 建群和添加成员。Handle-backed recovery 的跨域 P4 continuity 由 `awiki-system-test/tests_v2/multi_tenant/test_cross_domain_message_flows.py` 负责；AWiki Me messaging case负责证明真实 App/CLI peer产品入口仍发送完整 Handle并完成后续群消息。
 
+重启和昵称刷新场景仍用完整 Handle 执行邀请；后续群成员观察使用已核验的 CLI DID，
+不依赖成员列表返回短号还是完整 Handle，且继续要求仅有一个匹配成员。
+
 ### UI-driven full acceptance
 
 The required `direct`, `group`, `attachment`, `contacts`, and `messaging` cases are

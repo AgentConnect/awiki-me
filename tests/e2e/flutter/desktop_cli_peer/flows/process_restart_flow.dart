@@ -80,7 +80,7 @@ void runDesktopCliPeerProcessRestartPhaseA() {
     final cliMember = await _findGroupMember(
       groups: bootstrap.groupApplicationService!,
       groupDid: groupDid,
-      memberRef: cliFullHandle,
+      memberRef: canonicalCliDid,
     );
     final cliMemberDid = requireMatchingCliPeerDid(
       canonicalCliDid: canonicalCliDid,
