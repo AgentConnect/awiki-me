@@ -891,6 +891,8 @@ jobs:
           # Android 11 Google APIs x86_64 images support ARM binary translation.
           # Assert the actual system ABI list before using this as arm64 APK evidence.
           # https://android-developers.googleblog.com/2020/03/run-arm-apps-on-android-emulator.html
+          sudo apt-get update -qq
+          sudo apt-get install -y libpulse0
           sudo chmod 666 /dev/kvm
           sdkmanager 'system-images;android-30;google_apis;x86_64' 'emulator'
           echo no | avdmanager create avd --force --name singapore-arm64-apk --package 'system-images;android-30;google_apis;x86_64'
