@@ -184,6 +184,10 @@ user-presence 以及服务端操作器的额外目标绑定继续生效；域名
 local inbox 和 opaque refs 完成 SAS + `APPROVE` member 审批，再以 `REVOKE` 撤销测试 App 并
 通过公开 Handle revoke 回收 quota。该 case 只在 Node v10 `0.1.8` 已发布、DSH 已构建且受保护
 revoke factor fixture 可用时执行；任何 `awiki.ai` 或混合 endpoint 在创建账号前失败。
+App 传给 DSH 驱动的 stdin 配置沿用当前已审查的 `awiki.info` 或
+`test-fix.anpclaw.com`，不再写死旧域；三个服务入口须为对应 HTTPS 根路径，
+service DID 必须精确匹配 `did:wba:<域名>`。DSH 自身的驱动目标门禁也必须支持该域，
+不能通过改写成旧域或跳过门禁继续运行。
 
 App↔App 验证使用独立的 `multi-device-app-pair` suite 和
 `DEVICE-JOIN-E2E-004`。它在同一台 macOS 上运行两个 bundle/build/state 均隔离的真实
