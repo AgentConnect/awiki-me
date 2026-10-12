@@ -894,10 +894,14 @@ jobs:
           sudo chmod 666 /dev/kvm
           sdkmanager 'system-images;android-30;google_apis;x86_64' 'emulator'
           echo no | avdmanager create avd --force --name singapore-arm64-apk --package 'system-images;android-30;google_apis;x86_64'
+          "$ANDROID_HOME/emulator/emulator" -version
+          "$ANDROID_HOME/emulator/emulator" -accel-check
           "$ANDROID_HOME/emulator/emulator" -avd singapore-arm64-apk -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -accel on > "$RUNNER_TEMP/emulator.log" 2>&1 &
           emulator_pid=$!
           trap 'adb emu kill || true; kill "$emulator_pid" 2>/dev/null || true' EXIT
-          timeout 180 adb wait-for-device
+          sleep 3
+          if ! kill -0 "$emulator_pid"; then cat "$RUNNER_TEMP/emulator.log"; exit 1; fi
+          timeout 180 adb wait-for-device || { cat "$RUNNER_TEMP/emulator.log"; exit 1; }
           booted=false
           for attempt in $(seq 1 180); do
             if [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == 1 ]]; then booted=true; break; fi
@@ -918,3 +922,15 @@ jobs:
           adb shell am force-stop ai.awiki.awikime
           adb uninstall ai.awiki.awikime
           echo 'Exact signed arm64 APK installed and started through Android ARM native bridge; physical-device acceptance remains manual.'
+
+      - name: Preserve Android startup diagnostics
+        if: failure() && matrix.target == 'android-arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: singapore-android-startup-diagnostics
+          path: |
+            ${{ runner.temp }}/emulator.log
+            ${{ runner.temp }}/app-startup.log
+            ${{ runner.temp }}/android-abis.txt
+          if-no-files-found: ignore
+          retention-days: 7
