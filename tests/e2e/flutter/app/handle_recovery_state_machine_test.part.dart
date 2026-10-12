@@ -152,6 +152,7 @@ void _registerStateMachineRecoveryE2e() {
       if (bCredentials.length != 1) {
         fail('The independent B login credential is missing.');
       }
+      await _smTap(tester, find.byKey(const Key('onboarding-identity-entry')));
       await _smTap(
         tester,
         find.byKey(
