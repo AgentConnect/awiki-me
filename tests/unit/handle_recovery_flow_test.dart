@@ -83,9 +83,9 @@ void main() {
         findsOneWidget,
       );
       await tester.ensureVisible(
-        find.byKey(const Key('handle-recovery-other-pending')),
+        find.byKey(const Key('handle-recovery-use-other-account')),
       );
-      await tester.tap(find.byKey(const Key('handle-recovery-other-pending')));
+      await tester.tap(find.byKey(const Key('handle-recovery-use-other-account')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('recovery-launcher')), findsOneWidget);
       expect(core.discardCalls, 0);

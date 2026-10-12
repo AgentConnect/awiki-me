@@ -3548,7 +3548,37 @@ class AppLocalizationsZh extends AppLocalizations {
   String get handleRecoveryRiskRequired => '请先确认你已了解恢复影响。';
 
   @override
-  String get handleRecoveryFailed => '恢复操作失败，请稍后重试。';
+  String get handleRecoveryFailed => '暂时未能完成本机设置。你可以重试，也可以返回使用其他账号。';
+
+  @override
+  String get handleRecoveryCheckRecords => '检查恢复记录';
+
+  @override
+  String get deviceCapabilityRetry => '群功能准备暂未完成，不影响登录。可以稍后重试。';
+
+  @override
+  String get deviceCapabilityApproval =>
+      '请在已升级的管理设备中打开设备管理，为此设备确认启用新版群功能，然后刷新。原有身份和数据会保留。';
+
+  @override
+  String get deviceCapabilityUnsupported =>
+      '此设备使用较早的群协议。原有数据会保留；不兼容的群请联系群管理者创建新群。';
+
+  @override
+  String get deviceCapabilityBlocked => '此设备还有待完成的身份设置，请先在设备管理中完成。';
+
+  @override
+  String get deviceCapabilityAvailable => '此设备可以启用新版群功能，身份和历史数据将保持不变。';
+
+  @override
+  String get deviceCapabilityApprove => '启用新版群功能';
+
+  @override
+  String get deviceCapabilityConfirm =>
+      '请确认这台设备已安装新版客户端。此次操作只更新该设备的能力声明，保留密钥、身份和历史数据。';
+
+  @override
+  String get handleRecoveryUseOtherAccount => '返回使用其他账号';
 
   @override
   String get handleRecoveryOtpRequested => '恢复操作已由 Core 保存。请输入短信验证码继续。';

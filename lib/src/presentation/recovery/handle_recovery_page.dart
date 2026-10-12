@@ -313,10 +313,13 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
                     Text(
-                      _phaseLabel(context, progress.phase),
+                      state.error == null
+                          ? _phaseLabel(context, progress.phase)
+                          : _errorLabel(context, state.error!, otpCooldown),
                       key: const Key('handle-recovery-progress'),
                     ),
-                    if (progress.isStillConfirming) ...<Widget>[
+                    if (progress.isStillConfirming &&
+                        state.error == null) ...<Widget>[
                       const SizedBox(height: 10),
                       Text(
                         context.l10n.handleRecoveryStillConfirming,
@@ -420,23 +423,21 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
                       localIdentityId: widget.localIdentityId,
                     ),
               ),
-            if (state.error != null) ...<Widget>[
+            if (state.error != null && progress == null) ...<Widget>[
               const SizedBox(height: 12),
               Text(
                 _errorLabel(context, state.error!, otpCooldown),
                 style: TextStyle(color: context.awikiTheme.danger),
               ),
-              if (state.error == HandleRecoveryUiError.localRegistryConflict &&
-                  Navigator.of(context).canPop()) ...<Widget>[
-                const SizedBox(height: 10),
-                AppSecondaryButton(
-                  key: const Key('handle-recovery-other-pending'),
-                  label: context.l10n.handleRecoveryOtherPending,
-                  onPressed: state.isBusy
-                      ? null
-                      : () => Navigator.of(context).pop(),
-                ),
-              ],
+            ],
+            if (Navigator.of(context).canPop()) ...<Widget>[
+              const SizedBox(height: 12),
+              AppPressableText(
+                key: const Key('handle-recovery-use-other-account'),
+                semanticLabel: context.l10n.handleRecoveryUseOtherAccount,
+                onTap: state.isBusy ? null : () => Navigator.of(context).pop(),
+                child: Text(context.l10n.handleRecoveryUseOtherAccount),
+              ),
             ],
           ],
         ),

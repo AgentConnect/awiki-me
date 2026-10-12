@@ -54,16 +54,16 @@ class PendingHandleRecoveryEntry extends ConsumerWidget {
   final TextEditingController phoneController;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      const _ScopePendingRecoveryEntry(),
-      _HandlePendingRecoveryEntry(
-        handleController: handleController,
-        phoneController: phoneController,
-      ),
-    ],
-  );
+  Widget build(BuildContext context, WidgetRef ref) =>
+      ValueListenableBuilder<TextEditingValue>(
+        valueListenable: handleController,
+        builder: (context, value, _) => value.text.trim().isEmpty
+            ? const _ScopePendingRecoveryEntry()
+            : _HandlePendingRecoveryEntry(
+                handleController: handleController,
+                phoneController: phoneController,
+              ),
+      );
 }
 
 final scopePendingRecoveryProvider =
@@ -81,17 +81,12 @@ class _ScopePendingRecoveryEntry extends ConsumerWidget {
       .when(
         loading: () => const SizedBox.shrink(),
         error: (_, _) => AppSecondaryButton(
-          label: context.l10n.handleRecoveryErrorLocalStateUnavailable,
+          label: context.l10n.handleRecoveryCheckRecords,
           onPressed: () => ref.invalidate(scopePendingRecoveryProvider),
         ),
         data: (operations) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (operations.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(context.l10n.registrationLocalStateNeedsAttention),
-              ),
             for (final operation in operations)
               AppSecondaryButton(
                 key: ValueKey('pending-recovery-${operation.operationId}'),
@@ -162,8 +157,7 @@ class _HandlePendingRecoveryEntry extends ConsumerWidget {
                   loading: () => const SizedBox.shrink(),
                   error: (_, _) => AppSecondaryButton(
                     key: const Key('onboarding-recovery-lookup-retry'),
-                    label:
-                        context.l10n.handleRecoveryErrorLocalStateUnavailable,
+                    label: context.l10n.handleRecoveryCheckRecords,
                     onPressed: () => ref.invalidate(provider),
                   ),
                   data: (progress) {

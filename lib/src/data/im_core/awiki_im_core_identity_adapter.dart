@@ -3,6 +3,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import '../../application/models/app_session.dart';
 import '../../application/models/daemon_subkey_authorization_revoke_result.dart';
 import '../../application/ports/identity_core_port.dart';
+import '../../application/ports/device_capability_upgrade_port.dart';
 import '../../application/ports/legacy_identity_upgrade_port.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/device_management.dart';
@@ -20,7 +21,8 @@ class AwikiImCoreIdentityAdapter
         DaemonSubkeyAuthorizationCorePort,
         LocalIdentityDataDeletionPort,
         ExistingHandleContinuationPort,
-        LegacyIdentityUpgradePort {
+        LegacyIdentityUpgradePort,
+        DeviceCapabilityUpgradePort {
   AwikiImCoreIdentityAdapter({
     required AwikiImCoreRuntime runtime,
     AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
@@ -41,6 +43,40 @@ class AwikiImCoreIdentityAdapter
   final Map<String, _PendingExistingHandleRegistration>
   _existingHandleContinuations = <String, _PendingExistingHandleRegistration>{};
   int _continuationSequence = 0;
+
+  @override
+  Future<DeviceCapabilityStatus> inspectDeviceCapabilities(
+    String identityId, {
+    String? targetDeviceId,
+  }) async {
+    final instance = await _coreInstance();
+    final status = await instance.identityDeviceCapabilityStatus(
+      _selectorFromString(identityId),
+      targetDeviceId: targetDeviceId,
+    );
+    return DeviceCapabilityStatus(
+      deviceId: status.deviceId,
+      state: DeviceCapabilityState.values.byName(status.state.name),
+    );
+  }
+
+  @override
+  Future<DeviceCapabilityStatus> upgradeDeviceCapabilities(
+    String identityId, {
+    String? targetDeviceId,
+    bool userPresenceConfirmed = false,
+  }) async {
+    final instance = await _coreInstance();
+    final status = await instance.upgradeDeviceCapabilities(
+      _selectorFromString(identityId),
+      targetDeviceId: targetDeviceId,
+      userPresenceConfirmed: userPresenceConfirmed,
+    );
+    return DeviceCapabilityStatus(
+      deviceId: status.deviceId,
+      state: DeviceCapabilityState.values.byName(status.state.name),
+    );
+  }
 
   @override
   Future<List<PendingIdentityRegistration>>

@@ -6655,8 +6655,62 @@ abstract class AppLocalizations {
   /// No description provided for @handleRecoveryFailed.
   ///
   /// In zh, this message translates to:
-  /// **'恢复操作失败，请稍后重试。'**
+  /// **'暂时未能完成本机设置。你可以重试，也可以返回使用其他账号。'**
   String get handleRecoveryFailed;
+
+  /// No description provided for @handleRecoveryCheckRecords.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查恢复记录'**
+  String get handleRecoveryCheckRecords;
+
+  /// No description provided for @deviceCapabilityRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'群功能准备暂未完成，不影响登录。可以稍后重试。'**
+  String get deviceCapabilityRetry;
+
+  /// No description provided for @deviceCapabilityApproval.
+  ///
+  /// In zh, this message translates to:
+  /// **'请在已升级的管理设备中打开设备管理，为此设备确认启用新版群功能，然后刷新。原有身份和数据会保留。'**
+  String get deviceCapabilityApproval;
+
+  /// No description provided for @deviceCapabilityUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'此设备使用较早的群协议。原有数据会保留；不兼容的群请联系群管理者创建新群。'**
+  String get deviceCapabilityUnsupported;
+
+  /// No description provided for @deviceCapabilityBlocked.
+  ///
+  /// In zh, this message translates to:
+  /// **'此设备还有待完成的身份设置，请先在设备管理中完成。'**
+  String get deviceCapabilityBlocked;
+
+  /// No description provided for @deviceCapabilityAvailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'此设备可以启用新版群功能，身份和历史数据将保持不变。'**
+  String get deviceCapabilityAvailable;
+
+  /// No description provided for @deviceCapabilityApprove.
+  ///
+  /// In zh, this message translates to:
+  /// **'启用新版群功能'**
+  String get deviceCapabilityApprove;
+
+  /// No description provided for @deviceCapabilityConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'请确认这台设备已安装新版客户端。此次操作只更新该设备的能力声明，保留密钥、身份和历史数据。'**
+  String get deviceCapabilityConfirm;
+
+  /// No description provided for @handleRecoveryUseOtherAccount.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回使用其他账号'**
+  String get handleRecoveryUseOtherAccount;
 
   /// No description provided for @handleRecoveryOtpRequested.
   ///
