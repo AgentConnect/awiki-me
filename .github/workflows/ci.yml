@@ -10,7 +10,7 @@ on:
         required: false
         default: all
         type: choice
-        options: [all, android-arm64]
+        options: [all, desktop, android-arm64]
       package_smoke_run:
         description: Passed Singapore package-app run to install and start without rebuilding
         required: false
@@ -796,7 +796,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        include: ${{ fromJSON(inputs.package_smoke_target == 'android-arm64' && '[{"target":"android-arm64","runner":"ubuntu-latest"}]' || '[{"target":"macos-arm64","runner":"macos-15"},{"target":"macos-x64","runner":"macos-15-intel"},{"target":"windows-x64","runner":"windows-2022"},{"target":"android-arm64","runner":"ubuntu-latest"}]') }}
+        include: ${{ fromJSON(inputs.package_smoke_target == 'android-arm64' && '[{"target":"android-arm64","runner":"ubuntu-latest"}]' || inputs.package_smoke_target == 'desktop' && '[{"target":"macos-arm64","runner":"macos-15"},{"target":"macos-x64","runner":"macos-15-intel"},{"target":"windows-x64","runner":"windows-2022"}]' || '[{"target":"macos-arm64","runner":"macos-15"},{"target":"macos-x64","runner":"macos-15-intel"},{"target":"windows-x64","runner":"windows-2022"},{"target":"android-arm64","runner":"ubuntu-latest"}]') }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -808,14 +808,14 @@ jobs:
           PACKAGE_RUN: ${{ inputs.package_smoke_run }}
         run: |
           test "$GITHUB_REF" = refs/heads/test/singapore-release-20261012
-          test "$PACKAGE_RUN" = 38204358270
+          test "$PACKAGE_RUN" = 38222912854
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PACKAGE_RUN" > package-run.json
-          node -e 'const p=require("./package-run.json"); if(p.conclusion!=="success" || p.head_sha!=="a6c73b0f0b29815d6d5613c9069aaa96a0d6f5fa") process.exit(1)'
+          node -e 'const p=require("./package-run.json"); if(p.conclusion!=="success" || p.head_sha!=="66b398f434ef1ab49911eeffb5c6e147020f3517") process.exit(1)'
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.package_smoke_run }}
-          name: awiki-me-packages-b9fcead3-c999-47c7-8244-52dc66725c13
+          name: awiki-me-packages-438a9573-ab70-43d5-acfa-95e872ab6425
           path: package-smoke-input
       - name: Verify exact packaged bytes
         shell: bash
