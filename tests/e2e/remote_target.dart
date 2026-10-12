@@ -39,6 +39,35 @@ void validateMultiDeviceRemoteTarget({
   }
 }
 
+/// The DSH stdin driver requires exact service origins and the matching DID.
+Map<String, String> dshDeviceJoinTargetConfig({
+  required String didDomain,
+  required String serviceDid,
+  required String userServiceUrl,
+  required String messageServiceUrl,
+  required String baseUrl,
+}) {
+  final urls = [userServiceUrl, messageServiceUrl, baseUrl];
+  validateMultiDeviceRemoteTarget(
+    didDomain: didDomain,
+    serviceUrls: urls,
+    appPair: false,
+  );
+  if (serviceDid != 'did:wba:$didDomain' ||
+      urls.any((value) => !['', '/'].contains(Uri.parse(value).path))) {
+    throw const FormatException(
+      'DSH Join needs exact origins and service DID.',
+    );
+  }
+  return {
+    'didDomain': didDomain,
+    'userServiceUrl': userServiceUrl,
+    'messageServiceUrl': messageServiceUrl,
+    'messageServicePublicUrl': messageServiceUrl,
+    'messageServiceDid': serviceDid,
+  };
+}
+
 /// Test target comes from the explicit host config, never from a case's domain.
 /// This checks transport/scope consistency; it does not grant operator access.
 void validateConfiguredRemoteTarget({
