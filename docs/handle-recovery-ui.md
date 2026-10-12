@@ -301,6 +301,10 @@ fixture 失败被误记为 passed。
 
 `dart run tests/e2e/runner.dart --case handle-recovery-state-machine --config <受保护配置>` 复用现有单 App runner，登记 TARGET/RESUME/REPEAT 三项独立 attestation。两个隔离测试 Handle 通过真实 Settings/统一登录入口验证迟到 error/finally、B 在途 busy 和会话/反馈/路由保持、Core 同 Scope 重开后精确续跑、UI 删除后同进程第二次完整 Recovery。故障 seam 仅在 `tests/e2e/`：为同一已经准备并确认的 operation 用公开 native Core+相同测试 Vault 打开一次 Commit-only loopback proxy；Commit 的成功响应来自真实服务，之后故意阻断 WNS 本地收尾前检查，不合成业务结果。测试认证使用已有 E2E `UserPresencePort`，不代表真实 OS 认证通过。失败时保留可能未决的隔离恢复材料，不自动删除。
 
+该 Commit-only 代理仅接受已审查的 `awiki.info` 或隔离域 `test-fix.anpclaw.com`
+HTTPS 标准端口，拒绝其他域、混入凭据或查询参数；仍只转发同一 operation 的 Commit，
+不放宽请求路径、操作绑定或 Commit 后的故障切断。
+
 页面 scoped provider 销毁后，旧 E2E 观察器只能保存 Core 实际返回的完成投影供后续会话/导航断言，不能从根容器读取已不存在的全局 Recovery UI 状态；仍可见的阶段必须检查当前页面的实际 scoped state。
 
 ## 显式本地删除与恢复（2026-09-08）

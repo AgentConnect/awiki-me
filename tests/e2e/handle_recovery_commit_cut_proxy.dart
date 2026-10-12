@@ -1,5 +1,5 @@
 // A test-only, exact-operation Commit proxy. It never emulates a backend result
-// or records a request body; successful Commit is forwarded from awiki.info.
+// or records a request body; Commit is forwarded to the selected audited origin.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -38,7 +38,8 @@ class HandleRecoveryCommitCutProxy {
     http.Client? client,
   }) async {
     if (upstream.scheme != 'https' ||
-        upstream.host != 'awiki.info' ||
+        !const {'awiki.info', 'test-fix.anpclaw.com'}.contains(upstream.host) ||
+        upstream.port != 443 ||
         upstream.userInfo.isNotEmpty ||
         upstream.hasQuery ||
         upstream.hasFragment ||
