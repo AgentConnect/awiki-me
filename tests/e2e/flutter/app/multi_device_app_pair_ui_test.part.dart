@@ -249,10 +249,11 @@ void appPairAdminMain() {
       );
       final startButton = find.ancestor(
         of: startVerification,
-        matching: find.byType(AppPrimaryButton),
+        matching: find.byType(AwikiPillButton),
       );
       if (startButton.evaluate().length != 1 ||
-          tester.widget<AppPrimaryButton>(startButton).onPressed == null) {
+          tester.widget<AwikiPillButton>(startButton).onPressed == null ||
+          tester.widget<AwikiPillButton>(startButton).busy) {
         fail('The App-pair verification action was not enabled.');
       }
       await _tapOne(

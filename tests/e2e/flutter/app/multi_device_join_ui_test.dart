@@ -77,6 +77,8 @@ import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass_controls.dart'
+    show AwikiPillButton;
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -881,7 +883,7 @@ void main() {
         }
         final finalizing = find.byKey(const Key('device-join-finalizing'));
         if (finalizing.evaluate().length != 1 ||
-            tester.widget<AppPrimaryButton>(finalizing).onPressed != null) {
+            tester.widget<AwikiPillButton>(finalizing).onPressed != null) {
           fail('Pending approval must show a disabled finalization action.');
         }
         await _tapOne(

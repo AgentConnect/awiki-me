@@ -2520,6 +2520,13 @@ void main() {
     expect(core.localVerificationCalls, 0);
     expect(find.byKey(const Key('device-approval-sas')), findsNothing);
 
+    final startButton = find.ancestor(
+      of: find.text('开始验证'),
+      matching: find.byType(AwikiPillButton),
+    );
+    expect(startButton, findsOneWidget);
+    expect(tester.widget<AwikiPillButton>(startButton).onPressed, isNotNull);
+    expect(tester.widget<AwikiPillButton>(startButton).busy, isFalse);
     await tester.tap(find.text('开始验证'));
     await tester.pumpAndSettle();
 
