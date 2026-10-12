@@ -26,12 +26,14 @@ class Response extends Stream<List<int>> implements HttpClientResponse {
     this.statusCode = 200,
     String cache = 'max-age=300',
     String mime = 'image/jpeg',
+    this.bodyDelay = Duration.zero,
   }) {
     headers.set('content-type', mime);
     headers.set('cache-control', cache);
     headers.set('etag', '"version-1"');
   }
   final Uint8List body;
+  final Duration bodyDelay;
   @override
   final int statusCode;
   @override
@@ -44,12 +46,18 @@ class Response extends Stream<List<int>> implements HttpClientResponse {
     Function? onError,
     void Function()? onDone,
     bool? cancelOnError,
-  }) => Stream<List<int>>.value(body).listen(
-    onData,
-    onError: onError,
-    onDone: onDone,
-    cancelOnError: cancelOnError,
-  );
+  }) =>
+      (bodyDelay == Duration.zero
+              ? Stream<List<int>>.value(body)
+              : Stream<List<int>>.fromFuture(
+                  Future<List<int>>.delayed(bodyDelay, () => body),
+                ))
+          .listen(
+            onData,
+            onError: onError,
+            onDone: onDone,
+            cancelOnError: cancelOnError,
+          );
   @override
   Future<Socket> detachSocket() async => SocketFake();
   @override
@@ -305,9 +313,13 @@ void main() {
     (tester) async {
       await tester.runAsync(() async {
         final pending = <Completer<HttpClientResponse>>[];
+        final firstWaveStarted = Completer<void>();
+        var released = false;
         final client = Client((_) {
+          if (released) return Future.value(Response(jpeg));
           final response = Completer<HttpClientResponse>();
           pending.add(response);
+          if (pending.length == 4) firstWaveStarted.complete();
           return response.future;
         });
         final cache = PlatformAvatarImageCache(
@@ -319,20 +331,33 @@ void main() {
           6,
           (index) => cache.load('https://example.com/$index.jpg'),
         );
-        await Future<void>.delayed(const Duration(milliseconds: 30));
-        expect(client.requests.length, 4);
-        for (final response in pending.toList()) {
-          response.complete(Response(jpeg));
+        try {
+          await firstWaveStarted.future.timeout(const Duration(seconds: 10));
+          expect(client.requests.length, 4);
+          // Queued requests must receive a response whenever they start. The
+          // deliberately slow bodies exceed the old 50 ms second-wave snapshot.
+          released = true;
+          for (final response in pending) {
+            response.complete(
+              Response(jpeg, bodyDelay: const Duration(milliseconds: 150)),
+            );
+          }
+          final images = await Future.wait(
+            loads,
+          ).timeout(const Duration(seconds: 10));
+          expect(client.requests.length, 6);
+          for (final image in images) {
+            expect(image, isNotNull);
+            image?.dispose();
+          }
+          await cache.flush();
+        } finally {
+          released = true;
+          for (final response in pending.where((item) => !item.isCompleted)) {
+            response.complete(Response(jpeg));
+          }
+          cache.dispose();
         }
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-        for (final response in pending.where((item) => !item.isCompleted)) {
-          response.complete(Response(jpeg));
-        }
-        for (final image in await Future.wait(loads)) {
-          image?.dispose();
-        }
-        await cache.flush();
-        cache.dispose();
         final invalid = Client(
           (_) async => Response(
             Uint8List.fromList('<svg/>'.codeUnits),
