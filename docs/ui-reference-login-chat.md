@@ -181,6 +181,11 @@ the title bar.
 
 ## Desktop (macOS) shell: flat
 
+Embedded Settings rows bound both the label and trailing value to the available
+sidebar width. Long localized update status or test version strings truncate
+visually with an ellipsis while retaining their full text for semantics; neither
+may overflow into the neighboring panel.
+
 The desktop layout follows the reference's flat window, not the phone glass.
 
 - **Rail:** the canvas tone with the brand glow fading in from the top and

@@ -1217,6 +1217,7 @@ class _DesktopSettingsRow extends StatelessWidget {
         child: Row(
           children: <Widget>[
             Expanded(
+              flex: 3,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -1235,11 +1236,16 @@ class _DesktopSettingsRow extends StatelessWidget {
             ),
             if (trailingText != null) ...<Widget>[
               SizedBox(width: responsive.displayScaled(8)),
-              Text(
-                trailingText!,
-                key: trailingTextKey,
-                maxLines: 1,
-                style: TextStyle(color: theme.secondaryText, fontSize: 12),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  trailingText!,
+                  key: trailingTextKey,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(color: theme.secondaryText, fontSize: 12),
+                ),
               ),
             ],
             if (onTap != null) ...<Widget>[
