@@ -179,6 +179,9 @@ split claim/admin poll、admin toggle 或旧 root-control 的场景不能作为�
 混用主环境、第二隔离域、凭据或重定向参数。受保护 OTP、独立状态目录、测试专用
 user-presence 以及服务端操作器的额外目标绑定继续生效；域名检查不授予操作器权限。
 
+所有 App／CLI／DSH 互操作测试均从当前 SAS 控件实际渲染的六个数字读取验证码，
+不把外层定位节点当作 `Text`，也不改为从内部状态直接取值；比较仍仅在内存中完成。
+
 `DEVICE-JOIN-E2E-006` 追加真实 DSH→AWiki Me 互操作：DSH 创建 Handle 并证明 bootstrap
 `admin_ready`，AWiki Me 通过可见 onboarding 发起 ordinary Join，DSH 只用 reliable sync/Core
 local inbox 和 opaque refs 完成 SAS + `APPROVE` member 审批，再以 `REVOKE` 撤销测试 App 并

@@ -872,18 +872,36 @@ Future<void> _appPairAdminRejoin(
           .joinRequests
           .where((request) => request.joinSessionId == sessionId)
           .toList();
-      return requests.length == 1 && requests.single.canStartVerification;
+      return requests.length == 1 &&
+          requests.single.protocolDeviceId == deviceId &&
+          requests.single.canStartVerification;
     },
     timeout: const Duration(minutes: 2),
     failure: 'The original admin did not receive the post-promotion Join.',
   );
-  final requestRow = find.text(deviceId);
-  await tester.ensureVisible(requestRow);
+  final requestEntry = find.bySemanticsIdentifier('device-join-request-entry');
+  await _pumpUntil(
+    tester,
+    () => requestEntry.hitTestable().evaluate().length == 1,
+    timeout: const Duration(seconds: 30),
+    failure: 'The post-promotion global Join review entry was unavailable.',
+  );
   await _tapOne(
     tester,
-    requestRow,
-    failure: 'The post-promotion Join review row was unavailable.',
+    requestEntry,
+    failure: 'The post-promotion global Join review entry was unavailable.',
   );
+  final approval = find.byType(DeviceJoinApprovalSheet);
+  await _pumpUntil(
+    tester,
+    () => approval.evaluate().length == 1,
+    failure: 'The post-promotion Join approval sheet did not open.',
+  );
+  final selected = tester.widget<DeviceJoinApprovalSheet>(approval).request;
+  if (selected.joinSessionId != sessionId ||
+      selected.protocolDeviceId != deviceId) {
+    fail('The post-promotion review selected a different Join request.');
+  }
   final verify = find.bySemanticsIdentifier('multi-device-start-verification');
   await _pumpUntil(
     tester,
@@ -5139,6 +5157,15 @@ Future<ChatMessage> _waitForAppPairMessage({
       .toList(growable: false);
   final exact = contentMatches.length == 1 ? contentMatches.single : null;
   final sync = container.read(messageSyncCoordinatorProvider);
+  final historyDiagnostic = await _appPairHistoryDiagnostic(
+    container: container,
+    conversationId: conversationId,
+    preview: content,
+  );
+  final syncDiagnostic = await _appPairUnreadDiagnostic(
+    container,
+    conversationId,
+  );
   fail(
     'The App-pair history did not converge the exact Direct message '
     '(messages=${lastMessages.length}, contentMatches=${contentMatches.length}, '
@@ -5149,7 +5176,8 @@ Future<ChatMessage> _waitForAppPairMessage({
     'mine=${exact?.isMine == isMine}, state=${exact?.sendState.name ?? 'none'}, '
     'lastSync=${sync.lastReason ?? 'none'}, '
     'syncError=${_appPairErrorDiagnostic(sync.lastError)}, '
-    'syncing=${sync.isSyncing}).',
+    'syncing=${sync.isSyncing}, '
+    '$historyDiagnostic, syncDiagnostic=$syncDiagnostic).',
   );
 }
 

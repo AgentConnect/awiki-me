@@ -38,6 +38,13 @@ converge to three ready-admin Registry rows. The coordinator clears the first
 SAS round before new submissions; opening the fresh form alone cannot pass this
 checkpoint regression.
 
+The original admin opens the subsequent request through the shell's global
+Join review entry, then verifies the approval dialog's exact session and device.
+It does not assume the device ID is visible in the current page. Message-wait
+failures retain the exact-message oracle and include secret-free timeline
+counts/timestamps and existing sync diagnostics to distinguish projection and
+transport failures.
+
 ## Isolation model
 
 The two roles are product processes, not two widget trees in one test process:

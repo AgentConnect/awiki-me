@@ -143,9 +143,10 @@ void _registerDshDeviceJoinInteropTest() {
         timeout: const Duration(seconds: 45),
         failure: 'The App did not derive its Join SAS.',
       );
-      final appSas =
-          tester.widget<Text>(find.byKey(const Key('device-join-sas'))).data ??
-          '';
+      final appSas = readRenderedSas(
+        tester,
+        find.byKey(const Key('device-join-sas')),
+      );
       if (!_validSas(appSas)) {
         fail('The App produced a malformed SAS.');
       }
