@@ -27,9 +27,11 @@ void main() {
     String id, {
     bool dryRun = false,
     bool prepareOnly = false,
+    bool macosForeground = false,
   }) => DesktopE2eOptions(
     dryRun: dryRun,
     prepareOnly: prepareOnly,
+    macosForeground: macosForeground,
     help: false,
     configPath: config.path,
     runId: id,
@@ -43,6 +45,52 @@ void main() {
             ).readAsStringSync(),
           )
           as Map<String, dynamic>;
+
+  for (final foreground in [false, true]) {
+    test('full forwards only explicit foreground mode: $foreground', () async {
+      config.writeAsStringSync('platform: macos\n');
+      await runDesktopFull(
+        root: root,
+        options: options(
+          'foreground',
+          dryRun: true,
+          macosForeground: foreground,
+        ),
+        commands: _LeafCommands(root),
+        environment: {'AWIKI_E2E_MACOS_FOREGROUND': '1'},
+      );
+      final result = report('foreground');
+      expect(result['macosForeground'], foreground);
+      final children = (result['children'] as List).where(
+        (child) => (child['command'] as String? ?? '').contains('runner.dart'),
+      );
+      expect(children, isNotEmpty);
+      for (final child in children) {
+        expect(
+          (child['command'] as String).contains('--macos-foreground'),
+          foreground,
+        );
+      }
+    });
+  }
+
+  test(
+    'full rejects foreground mode on Linux before starting children',
+    () async {
+      config.writeAsStringSync('platform: linux\n');
+      final commands = _LeafCommands(root);
+      await expectLater(
+        runDesktopFull(
+          root: root,
+          options: options('foreground', dryRun: true, macosForeground: true),
+          commands: commands,
+          environment: {},
+        ),
+        throwsA(isA<E2eFailure>()),
+      );
+      expect(commands.suites, isEmpty);
+    },
+  );
 
   test(
     'remote full includes reviewed registration acceptance exactly once',

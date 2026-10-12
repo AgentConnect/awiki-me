@@ -360,6 +360,14 @@ void main() {
   });
 
   group('DesktopE2eOptions', () {
+    test('foreground activation requires an explicit run option', () {
+      expect(DesktopE2eOptions.parse([]).macosForeground, isFalse);
+      expect(
+        DesktopE2eOptions.parse(['--macos-foreground']).macosForeground,
+        isTrue,
+      );
+    });
+
     test('parses run-control options only', () {
       final options = DesktopE2eOptions.parse(const <String>[
         '--dry-run',

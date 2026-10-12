@@ -9,6 +9,7 @@ class DesktopE2eOptions {
     required this.dryRun,
     required this.prepareOnly,
     required this.help,
+    this.macosForeground = false,
     this.configPath = _defaultDesktopE2eConfigPath,
     this.runId,
     this.e2eCase = DesktopE2eCase.smoke,
@@ -17,6 +18,7 @@ class DesktopE2eOptions {
   final bool dryRun;
   final bool prepareOnly;
   final bool help;
+  final bool macosForeground;
   final String configPath;
   final String? runId;
   final DesktopE2eCase e2eCase;
@@ -25,6 +27,7 @@ class DesktopE2eOptions {
     var dryRun = false;
     var prepareOnly = false;
     var help = false;
+    var macosForeground = false;
     var configPath = _defaultDesktopE2eConfigPath;
     String? runId;
     var e2eCase = DesktopE2eCase.smoke;
@@ -47,6 +50,9 @@ class DesktopE2eOptions {
         case '--prepare-only':
           prepareOnly = true;
           break;
+        case '--macos-foreground':
+          macosForeground = true;
+          break;
         case '-h':
         case '--help':
           help = true;
@@ -60,6 +66,7 @@ class DesktopE2eOptions {
       dryRun: dryRun,
       prepareOnly: prepareOnly,
       help: help,
+      macosForeground: macosForeground,
       configPath: configPath,
       runId: runId,
       e2eCase: e2eCase,
@@ -156,6 +163,8 @@ Options:
                                fake runtime. Model-backed Agent suites are not
                                part of the test runner.
   --prepare-only               Prepare selected leaf prerequisites; never attest a pass.
+  --macos-foreground           Debug only: repeatedly activate the owned macOS test App.
+                               Off by default; legacy foreground environment is ignored.
   --dry-run                    Print planned commands without side effects.
 ''');
   }

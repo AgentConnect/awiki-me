@@ -38,6 +38,8 @@ Future<PreparedIntegrationExecution> runPreparedIntegrationExecutable({
   required String expectedRunId,
   required List<String> expectedCaseIds,
   required Duration timeout,
+  bool macosForeground = false,
+  Future<Process> Function(int processId)? startForegroundKeeper,
   void Function(String line)? outputLine,
 }) async {
   if (!executable.existsSync()) {
@@ -48,6 +50,11 @@ Future<PreparedIntegrationExecution> runPreparedIntegrationExecutable({
   if (!const <String>{'linux', 'macos'}.contains(operatingSystem)) {
     throw const PreparedIntegrationProcessException(
       'Prepared integration execution requires Linux or macOS.',
+    );
+  }
+  if (macosForeground && operatingSystem != 'macos') {
+    throw const PreparedIntegrationProcessException(
+      'Foreground activation requires a macOS target.',
     );
   }
   if (completionFile.existsSync()) completionFile.deleteSync();
@@ -93,19 +100,15 @@ Future<PreparedIntegrationExecution> runPreparedIntegrationExecutable({
   final watch = Stopwatch()..start();
   final exitFuture = process.exitCode;
   try {
-    if (operatingSystem == 'macos' &&
-        Platform.environment['AWIKI_E2E_MACOS_FOREGROUND'] == '1') {
+    outputLine?.call('macOS foreground activation: $macosForeground');
+    if (macosForeground) {
       // This is a headed verification option, scoped to the child we own.
       // The runner owns activation so it cannot be stranded behind a pending
       // Flutter frame. It never changes application lifecycle facts in Dart.
-      foregroundKeeper = await Process.start('/usr/bin/swift', <String>[
-        '-e',
-        'import AppKit; import Darwin; '
-            'while kill(${process.pid}, 0) == 0 { '
-            'if let app = NSRunningApplication(processIdentifier: ${process.pid}) { '
-            '_ = app.unhide(); _ = app.activate(options: [.activateAllWindows]) }; '
-            'Thread.sleep(forTimeInterval: 1) }',
-      ], mode: ProcessStartMode.normal);
+      foregroundKeeper =
+          await (startForegroundKeeper ?? _startMacosForegroundKeeper)(
+            process.pid,
+          );
       unawaited(foregroundKeeper.stdout.drain<void>());
       unawaited(foregroundKeeper.stderr.drain<void>());
     }
@@ -192,6 +195,17 @@ Future<PreparedIntegrationExecution> runPreparedIntegrationExecutable({
       await subscription.cancel();
     }
   }
+}
+
+Future<Process> _startMacosForegroundKeeper(int processId) {
+  return Process.start('/usr/bin/swift', <String>[
+    '-e',
+    'import AppKit; import Darwin; '
+        'while kill($processId, 0) == 0 { '
+        'if let app = NSRunningApplication(processIdentifier: $processId) { '
+        '_ = app.unhide(); _ = app.activate(options: [.activateAllWindows]) }; '
+        'Thread.sleep(forTimeInterval: 1) }',
+  ], mode: ProcessStartMode.normal);
 }
 
 Future<int> _terminatePreparedIntegrationProcess(

@@ -16,6 +16,13 @@ to root shims.
 
 ## Choosing The Right Test
 
+Routine desktop UI runs should use Linux/Xvfb; macOS-specific checks belong in
+an isolated desktop session or CI. The macOS runner no longer enables repeated
+window activation through `AWIKI_E2E_MACOS_FOREGROUND`. Use the explicit
+`--macos-foreground` option only for foreground debugging; it is off by default,
+is forwarded by `full`, and is rejected for Linux targets. Disabling activation
+does not guarantee that an occluded macOS App continues rendering frames.
+
 Use the smallest deterministic test that answers the question:
 
 | Directory | Answers | Uses real backend/devices? | Put these tests here |

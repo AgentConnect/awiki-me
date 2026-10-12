@@ -496,6 +496,9 @@ class DesktopE2eRunner {
     _addRuntimeSecret(fileConfig.otpPhone ?? '');
     _addRuntimeSecret(fileConfig.otpCode ?? '');
     platform = fileConfig.platform ?? DesktopE2ePlatform.fromHost();
+    if (options.macosForeground && platform != DesktopE2ePlatform.macos) {
+      throw E2eFailure('--macos-foreground requires a macOS target.');
+    }
     hostPlatform = await E2eHostPlatform.detect();
     suiteDefinition.validatePlatform(platform.name);
     validatePreparedArtifactExecutionPolicy(Platform.environment);
@@ -1013,6 +1016,7 @@ class DesktopE2eRunner {
       execution = await runPreparedIntegrationExecutable(
         executable: artifact.executable,
         operatingSystem: platform.name,
+        macosForeground: options.macosForeground,
         environment: <String, String>{
           'AWIKI_E2E_APP_STATE_ROOT': stateRoot.path,
           e2eCaseAttestationPathDefine: caseAttestationFile.path,
