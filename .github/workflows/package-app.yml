@@ -313,7 +313,7 @@ jobs:
     environment: app-packaging
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 2
       matrix: ${{ fromJson(needs.validate.outputs.matrix) }}
     steps:
       - name: Checkout exact AWiki Me source
