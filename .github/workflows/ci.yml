@@ -845,7 +845,9 @@ jobs:
           ditto "$app" "$app_copy/AWikiMe.app"
           codesign --verify --deep --strict "$app_copy/AWikiMe.app"
           executable=$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app_copy/AWikiMe.app/Contents/Info.plist")
-          lipo -archs "$app_copy/AWikiMe.app/Contents/MacOS/$executable" | grep -w "$(uname -m)"
+          expected_arch="${{ matrix.target == 'macos-arm64' && 'arm64' || 'x86_64' }}"
+          test "$(uname -m)" = "$expected_arch"
+          lipo -archs "$app_copy/AWikiMe.app/Contents/MacOS/$executable" | grep -w "$expected_arch"
           "$app_copy/AWikiMe.app/Contents/MacOS/$executable" > "$RUNNER_TEMP/app-startup.log" 2>&1 &
           app_pid=$!
           trap 'kill "$app_pid" 2>/dev/null || true; hdiutil detach "$mount" -force || true' EXIT
@@ -874,6 +876,8 @@ jobs:
             }
           }
 
+      - uses: android-actions/setup-android@v3
+        if: matrix.target == 'android-arm64'
       - name: Install and start the arm64 APK through Android native bridge
         if: matrix.target == 'android-arm64'
         shell: bash
