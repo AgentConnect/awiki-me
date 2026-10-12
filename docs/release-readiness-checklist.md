@@ -63,3 +63,11 @@ Invite at least three to five people who do not know the current architecture an
 - [ ] After 60 seconds, they can decide whether they are a target user.
 - [ ] Within five minutes, they complete a meaningful first success.
 - [ ] They can accurately state the maturity, platform status, and security boundaries.
+
+## Singapore 20261012 source test batch
+
+The dedicated `test/singapore-release-20261012` controller retains the release actor
+checks and exact consumer/dependency SHA inputs. Its normal product packaging workers
+explicitly select source SDKs. The batch defaults to Singapore and reads only the batch
+App policy and Daemon installer paths under `/downloads/singapore-release-20261012/`.
+No public SDK or default download channel is published by this workflow.

@@ -90,18 +90,18 @@ class AwikiEnvironmentConfig {
     );
     this.daemonDownloadBaseUrl = _normalizeBaseUrl(
       daemonDownloadBaseUrl,
-      fallback: _joinUrl(normalizedBase, '/daemon'),
+      fallback: _joinUrl(normalizedBase, '/downloads/singapore-release-20261012/daemon'),
     );
     this.updateManifestUrl = _normalizeBaseUrl(
       updateManifestUrl,
       fallback: _joinUrl(
         normalizedBase,
-        '/user-service/v1/server-info?client_platform=app',
+        '/downloads/singapore-release-20261012/app-policy.json',
       ),
     );
     this.releasesUrl = _normalizeBaseUrl(
       releasesUrl,
-      fallback: _joinUrl(normalizedBase, '/#download'),
+      fallback: _joinUrl(normalizedBase, '/downloads/singapore-release-20261012/'),
     );
     this.agentImEnabled =
         agentImEnabled ??

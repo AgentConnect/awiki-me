@@ -62,6 +62,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  AWIKI_TEST_SOURCE_BUILD: singapore-release-20261012
+  AWIKI_RELEASE_REGISTRY: '0'
+  AWIKI_APPLE_SOURCE_INTEGRATION: '1'
+  AWIKI_SOURCE_INTEGRATION: '1'
   FLUTTER_VERSION: 3.44.0
   RUST_VERSION: 1.88.0
   PYTHON_VERSION: 3.13.7
@@ -86,7 +90,7 @@ jobs:
           CONTROL_BRANCH: ${{ github.ref_name }}
           CONTROL_REF: ${{ github.ref }}
           WORKFLOW_REF: ${{ github.workflow_ref }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DEFAULT_BRANCH: test/singapore-release-20261012
         run: |
           python3 - <<'PY'
           import json, os, re
@@ -131,8 +135,8 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' &&
-        github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-        endsWith(github.workflow_ref, format('@refs/heads/{0}', github.event.repository.default_branch)) &&
+        github.ref == format('refs/heads/{0}', 'test/singapore-release-20261012') &&
+        endsWith(github.workflow_ref, format('@refs/heads/{0}', 'test/singapore-release-20261012')) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.actor) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.triggering_actor)
       }}
@@ -299,8 +303,8 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' &&
-        github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-        endsWith(github.workflow_ref, format('@refs/heads/{0}', github.event.repository.default_branch)) &&
+        github.ref == format('refs/heads/{0}', 'test/singapore-release-20261012') &&
+        endsWith(github.workflow_ref, format('@refs/heads/{0}', 'test/singapore-release-20261012')) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.actor) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.triggering_actor)
       }}
@@ -309,6 +313,7 @@ jobs:
     environment: app-packaging
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix: ${{ fromJson(needs.validate.outputs.matrix) }}
     steps:
       - name: Checkout exact AWiki Me source
@@ -581,8 +586,8 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' &&
-        github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-        endsWith(github.workflow_ref, format('@refs/heads/{0}', github.event.repository.default_branch)) &&
+        github.ref == format('refs/heads/{0}', 'test/singapore-release-20261012') &&
+        endsWith(github.workflow_ref, format('@refs/heads/{0}', 'test/singapore-release-20261012')) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.actor) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.triggering_actor)
       }}
