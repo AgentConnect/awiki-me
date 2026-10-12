@@ -14,6 +14,31 @@ void validateRegistrationFixtureTarget({
   }
 }
 
+/// Keep native Join/App-pair validation aligned with the reviewed owner targets.
+/// App-pair historically also supports anpclaw.com; single-App Join does not.
+/// This does not grant access to any server-side operator.
+void validateMultiDeviceRemoteTarget({
+  required String didDomain,
+  required List<String> serviceUrls,
+  required bool appPair,
+}) {
+  final allowed = <String>{
+    'awiki.info',
+    'test-fix.anpclaw.com',
+    if (appPair) 'anpclaw.com',
+  };
+  if (!allowed.contains(didDomain)) {
+    throw const FormatException('Multi-device DID domain is not audited.');
+  }
+  validateConfiguredRemoteTarget(
+    didDomain: didDomain,
+    serviceUrls: serviceUrls,
+  );
+  if (serviceUrls.any((value) => Uri.parse(value).port != 443)) {
+    throw const FormatException('Multi-device service port is not audited.');
+  }
+}
+
 /// Test target comes from the explicit host config, never from a case's domain.
 /// This checks transport/scope consistency; it does not grant operator access.
 void validateConfiguredRemoteTarget({

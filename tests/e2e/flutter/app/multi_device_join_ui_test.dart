@@ -1,4 +1,4 @@
-// [INPUT]: Audited awiki.info endpoints and a protected fixed test OTP fixture,
+// [INPUT]: Explicitly configured audited endpoints and a protected test OTP fixture,
 //          production AppBootstrap/native Core, independent CLI/App or App/App
 //          roots, explicit E2E-only user-presence control, foreground CLI TTY
 //          where used, and loopback App-pair phases.
@@ -1661,9 +1661,7 @@ class _AppPairRunConfig implements _CliEndpointConfig {
           : _requiredStringList(accountState, 'operatorCommand'),
     );
     final didWeb = _invocationExplicitlyExpects(_didWebAppCaseId);
-    if ((!didWeb &&
-            !const {'awiki.info', 'anpclaw.com'}.contains(config.didDomain)) ||
-        config.adminStateRoot == config.joinerStateRoot) {
+    if (config.adminStateRoot == config.joinerStateRoot) {
       throw StateError('The App-pair target or state isolation is invalid.');
     }
     if (!config.automatedUserPresence) {
@@ -1684,14 +1682,12 @@ class _AppPairRunConfig implements _CliEndpointConfig {
         didDomain: config.didDomain,
         serviceUrls: serviceUrls,
       );
-    }
-    for (final value in serviceUrls) {
-      final uri = Uri.tryParse(value);
-      if (uri == null ||
-          uri.scheme != 'https' ||
-          (!didWeb && uri.host != config.didDomain)) {
-        throw StateError('Remote multi-device service target is not audited.');
-      }
+    } else {
+      validateMultiDeviceRemoteTarget(
+        didDomain: config.didDomain,
+        serviceUrls: serviceUrls,
+        appPair: true,
+      );
     }
     if (config.functional ||
         _invocationExplicitlyExpects('DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001')) {
@@ -1872,9 +1868,8 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
       appStateRoot: _required(app, 'stateRoot'),
       appJoiningStateRoot: _required(joiningApp, 'stateRoot'),
     );
-    if (config.didDomain != 'awiki.info' ||
-        config.otpMode != 'ignored_local_fixture') {
-      throw StateError('Remote multi-device Join DID domain is not audited.');
+    if (config.otpMode != 'ignored_local_fixture') {
+      throw StateError('Remote multi-device Join OTP mode is not audited.');
     }
     if (!config.automatedUserPresence) {
       throw StateError(
@@ -1882,18 +1877,17 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
         'user-presence port.',
       );
     }
-    for (final value in <String>[
-      config.baseUrl,
-      config.userServiceUrl,
-      config.messageServiceUrl,
-      config.mailServiceUrl,
-      config.anpServiceUrl,
-    ]) {
-      final uri = Uri.tryParse(value);
-      if (uri == null || uri.scheme != 'https' || uri.host != 'awiki.info') {
-        throw StateError('Remote multi-device service target is not audited.');
-      }
-    }
+    validateMultiDeviceRemoteTarget(
+      didDomain: config.didDomain,
+      serviceUrls: <String>[
+        config.baseUrl,
+        config.userServiceUrl,
+        config.messageServiceUrl,
+        config.mailServiceUrl,
+        config.anpServiceUrl,
+      ],
+      appPair: false,
+    );
     if (!RegExp(r'^[0-9a-f]{40}$').hasMatch(config.cliSourceRef) ||
         RegExp(r'^0{40}$').hasMatch(config.cliSourceRef) ||
         _required(adminCli, 'binary') != config.cliBin ||
