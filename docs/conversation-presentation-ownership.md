@@ -595,6 +595,10 @@ Peer 名称只由纯 `PeerDisplayNameResolver` 和 `peerDisplayNameProvider`
 由 Core 按该 DID 重新确定 canonical route，不能用展示 Profile 的 Handle 改换聊天对象。
 刷新后的资料必须仍属于同一 DID，且提交受 SessionEpoch 围栏保护。
 
+桌面身份查找采用分步操作：初始仅展示搜索和关闭入口，解析成功后才显示身份确认
+与提交操作；修改查询立即清除旧结果、canonical route 和旧错误，必须重新解析后
+才能提交。搜索期间禁止重复解析，关闭窗口后的完成不得恢复该窗口或触发导航。
+
 
 如果 DID-only profile 先于 verified Persona route 到达，后续 Core
 conversation/profile bundle 必须在发布会话行前把该投影迁入 Persona-keyed store。

@@ -69,10 +69,7 @@ void main() {
       expect(_contrast(fill, outside), greaterThan(1.2));
       expect(_contrast(border, fill), greaterThan(1.2));
       expect(find.text('发起聊天'), findsOneWidget);
-      expect(
-        find.byKey(const Key('identity-start-chat-button')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('identity-start-chat-button')), findsNothing);
       expect(tester.takeException(), isNull);
     });
 

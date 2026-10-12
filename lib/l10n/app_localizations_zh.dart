@@ -1483,15 +1483,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get followContactSucceeded => '已关注';
 
   @override
-  String get identityStartConversationSubtitle =>
-      '输入 handle、DID 或 Agent 地址，确认身份后开始可信会话。';
+  String get identityStartConversationSubtitle => '通过用户名或 DID，找到联系人或智能体。';
 
   @override
   String get identityStartConversationAction => '开始聊天';
 
   @override
-  String get identityStartConversationNotice =>
-      '消息将通过已验证 DID 连接发送；首次联系外部身份请谨慎确认。';
+  String get identityStartConversationNotice => '确认这是你想联系的人或智能体。';
 
   @override
   String get identityFollowContactTitle => '关注联系人 / Agent';
