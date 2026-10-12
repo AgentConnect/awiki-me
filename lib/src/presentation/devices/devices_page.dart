@@ -72,7 +72,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
     final refreshPending = _isRefreshing || state.isLoading;
     final phone = context.awikiResponsive.isPhone;
     final page = AwikiAdaptiveScaffold(
-      maxWidth: 820,
+      maxWidth: widget.embedded ? 560 : 820,
       includeBottomSafeArea: true,
       child: ListView(
         key: const Key('devices-page'),
@@ -81,7 +81,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
           AwikiMeTopBar(
             title: context.l10n.devicesTitle,
             padding: EdgeInsets.zero,
-            titleFontSize: phone ? 16 : null,
+            titleFontSize: widget.embedded ? 14 : (phone ? 16 : null),
             leading: widget.embedded
                 ? const SizedBox.shrink()
                 : AwikiBackButton(

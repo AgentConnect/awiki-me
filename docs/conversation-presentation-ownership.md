@@ -600,6 +600,7 @@ Peer 名称只由纯 `PeerDisplayNameResolver` 和 `peerDisplayNameProvider`
 才能提交。搜索期间禁止重复解析，关闭窗口后的完成不得恢复该窗口或触发导航。
 
 
+
 如果 DID-only profile 先于 verified Persona route 到达，后续 Core
 conversation/profile bundle 必须在发布会话行前把该投影迁入 Persona-keyed store。
 若 App 已记录的 DID→Persona route 与后到 route 冲突，App 不移动展示资料也不覆盖
@@ -879,3 +880,7 @@ Skill Agent 首次“生成安装指令”使用实心主按钮，已有指令�
 Handle Recovery 在同一右栏保留独立路由和返回入口，仍绑定当前 exact localIdentityId，
 打开时不自动请求 OTP；退出/删除确认、凭证导出、检查更新沿用既有行为。
 手机与紧凑布局继续使用原页面导航。侧栏长状态文本限宽省略，避免英文和缩放时溢出。
+
+桌面设置右侧的嵌入页面采用紧凑排版：显示与语言内容限宽 460，正文 13、页面标题
+14，操作行高 42、语言选项行高 44；缩放滑块使用较小的桌面滑块手柄。独立页面
+保留原尺寸；嵌入页面仍接受全局文字缩放，不使用整体缩放变换压缩点击区域。

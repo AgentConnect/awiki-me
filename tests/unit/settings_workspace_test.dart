@@ -12,7 +12,7 @@ import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Theme;
+import 'package:flutter/material.dart' show Theme, Slider;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -91,6 +91,37 @@ void main() {
             find.byKey(const Key('display-settings-back-button')),
             findsNothing,
           );
+          // Desktop controls use compact geometry while retaining real scale
+          // selection and the user's text scaling, rather than a transformed UI.
+          expect(
+            tester
+                .getSize(find.byKey(const Key('appearance-segmented-control')))
+                .height,
+            lessThanOrEqualTo(36),
+          );
+          expect(
+            tester
+                .getSize(find.byKey(const Key('display-scale-reset-row')))
+                .height,
+            lessThanOrEqualTo(44),
+          );
+          final slider = find.byKey(const Key('display-scale-slider'));
+          expect(tester.widget(slider), isA<Slider>());
+          final sliderRect = tester.getRect(slider);
+          await tester.tapAt(
+            Offset(sliderRect.right - 24, sliderRect.center.dy),
+          );
+          await tester.pumpAndSettle();
+          final settingsContainer = ProviderScope.containerOf(
+            tester.element(find.byType(SettingsPage)),
+          );
+          expect(settingsContainer.read(displayScaleProvider), 1.3);
+          expect(tester.takeException(), isNull);
+          await tester.tap(find.byKey(const Key('display-scale-reset-row')));
+          await tester.pumpAndSettle();
+          expect(settingsContainer.read(displayScaleProvider), 1.0);
+          settingsContainer.read(displayScaleProvider.notifier).setScale(scale);
+          await tester.pumpAndSettle();
           await tester.tap(find.byKey(const Key('settings-language-row')));
           await tester.pumpAndSettle();
           expectDetail(
@@ -100,6 +131,12 @@ void main() {
           expect(
             find.byKey(const Key('language-selection-back-button')),
             findsNothing,
+          );
+          expect(
+            tester
+                .getSize(find.byKey(const Key('language-option-english')))
+                .height,
+            lessThanOrEqualTo(50),
           );
           await tester.tap(find.byKey(const Key('language-option-english')));
           await tester.pumpAndSettle();

@@ -2,6 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart'
+    show
+        Material,
+        MaterialType,
+        Slider,
+        SliderInteraction,
+        SliderTheme,
+        SliderThemeData,
+        RoundSliderThumbShape,
+        RoundSliderOverlayShape;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
@@ -52,7 +62,9 @@ class DisplaySettingsPage extends ConsumerWidget {
                       ? l10n.settingsDisplayAndWindow
                       : l10n.settingsAppearance,
                   padding: const EdgeInsets.symmetric(vertical: 6),
-                  titleFontSize: awikiMeCompactTopBarTitleFontSize,
+                  titleFontSize: embedded
+                      ? 14
+                      : awikiMeCompactTopBarTitleFontSize,
                   titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
                   titleHeight: awikiMeCompactTopBarTitleHeight,
                   leading: embedded
@@ -68,23 +80,35 @@ class DisplaySettingsPage extends ConsumerWidget {
                 child: Align(
                   alignment: Alignment.topCenter,
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 560),
+                    constraints: BoxConstraints(maxWidth: embedded ? 460 : 560),
                     child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        embedded ? 14 : 24,
+                        16,
+                        24,
+                      ),
                       children: <Widget>[
                         Text(
                           l10n.settingsAppearance,
-                          style: theme.sectionTitle,
+                          style: embedded
+                              ? TextStyle(
+                                  color: theme.secondaryText,
+                                  fontSize: 13,
+                                )
+                              : theme.sectionTitle,
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: embedded ? 8 : 12),
                         // Flat glass segmented track; the chosen appearance is
                         // a lens tint, as in the reference settings.
                         Container(
                           key: const Key('appearance-segmented-control'),
-                          padding: const EdgeInsets.all(4),
+                          padding: EdgeInsets.all(embedded ? 3 : 4),
                           decoration: BoxDecoration(
                             color: theme.glass,
-                            borderRadius: BorderRadius.circular(22),
+                            borderRadius: BorderRadius.circular(
+                              embedded ? 10 : 22,
+                            ),
                             border: Border.all(
                               color: theme.glassEdge,
                               width: 0.5,
@@ -101,7 +125,9 @@ class DisplaySettingsPage extends ConsumerWidget {
                                       context,
                                       choice,
                                     ),
-                                    borderRadius: BorderRadius.circular(18),
+                                    borderRadius: BorderRadius.circular(
+                                      embedded ? 7 : 18,
+                                    ),
                                     onTap: () async {
                                       try {
                                         await ref
@@ -121,13 +147,15 @@ class DisplaySettingsPage extends ConsumerWidget {
                                       duration: const Duration(
                                         milliseconds: 150,
                                       ),
-                                      height: 38,
+                                      height: embedded ? 28 : 38,
                                       alignment: Alignment.center,
                                       decoration: BoxDecoration(
                                         color: appearance == choice
                                             ? theme.glassLens
                                             : null,
-                                        borderRadius: BorderRadius.circular(18),
+                                        borderRadius: BorderRadius.circular(
+                                          embedded ? 7 : 18,
+                                        ),
                                         border: appearance == choice
                                             ? Border.all(
                                                 color: theme.glassEdgeActive,
@@ -143,7 +171,7 @@ class DisplaySettingsPage extends ConsumerWidget {
                                           color: appearance == choice
                                               ? theme.title
                                               : theme.secondaryText,
-                                          fontSize: 14,
+                                          fontSize: embedded ? 12 : 14,
                                         ),
                                       ),
                                     ),
@@ -152,12 +180,14 @@ class DisplaySettingsPage extends ConsumerWidget {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: embedded ? 12 : 16),
                         DecoratedBox(
                           key: const Key('display-scale-control'),
                           decoration: awikiGroupDecoration(context),
                           child: Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                            padding: embedded
+                                ? const EdgeInsets.fromLTRB(14, 12, 14, 8)
+                                : const EdgeInsets.fromLTRB(20, 18, 20, 16),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: <Widget>[
@@ -168,7 +198,7 @@ class DisplaySettingsPage extends ConsumerWidget {
                                         l10n.settingsDisplayScale,
                                         style: TextStyle(
                                           color: theme.title,
-                                          fontSize: 16,
+                                          fontSize: embedded ? 13 : 16,
                                           fontWeight: FontWeight.w400,
                                         ),
                                       ),
@@ -178,20 +208,22 @@ class DisplaySettingsPage extends ConsumerWidget {
                                       key: const Key('display-scale-value'),
                                       style: TextStyle(
                                         color: theme.primary,
-                                        fontSize: 15,
+                                        fontSize: embedded ? 13 : 15,
                                         fontWeight: FontWeight.w400,
                                       ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 14),
+                                SizedBox(height: embedded ? 6 : 14),
                                 _DiscreteDisplayScaleSlider(
+                                  dense: embedded,
                                   levelIndex: levelIndex,
                                   onSelected: ref
                                       .read(displayScaleProvider.notifier)
                                       .setScale,
                                 ),
                                 _DisplayScaleTicks(
+                                  dense: embedded,
                                   selectedScale: scale,
                                   onSelected: ref
                                       .read(displayScaleProvider.notifier)
@@ -203,6 +235,7 @@ class DisplaySettingsPage extends ConsumerWidget {
                         ),
                         const SizedBox(height: 12),
                         _DisplayActionRow(
+                          dense: embedded,
                           key: const Key('display-scale-reset-row'),
                           icon: CupertinoIcons.arrow_counterclockwise,
                           title: l10n.settingsDisplayScaleReset,
@@ -212,6 +245,7 @@ class DisplaySettingsPage extends ConsumerWidget {
                         const SizedBox(height: 12),
                         if (isDesktopPlatform)
                           _DisplayActionRow(
+                            dense: embedded,
                             key: const Key('window-placement-reset-row'),
                             icon: CupertinoIcons.rectangle_expand_vertical,
                             title: l10n.settingsWindowPlacementReset,
@@ -252,11 +286,13 @@ String _appearanceLabel(BuildContext context, AppAppearance appearance) =>
 
 class _DiscreteDisplayScaleSlider extends StatelessWidget {
   const _DiscreteDisplayScaleSlider({
+    this.dense = false,
     required this.levelIndex,
     required this.onSelected,
   });
 
   final int levelIndex;
+  final bool dense;
   final ValueChanged<double> onSelected;
 
   void _selectNearest(double localX, double width) {
@@ -273,6 +309,46 @@ class _DiscreteDisplayScaleSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    if (dense) {
+      return Material(
+        type: MaterialType.transparency,
+        child: SliderTheme(
+          data: SliderThemeData(
+            trackHeight: 2,
+            activeTrackColor: theme.title,
+            inactiveTrackColor: theme.border,
+            thumbColor: theme.title,
+            overlayColor: theme.title.withValues(alpha: 0.08),
+            activeTickMarkColor: CupertinoColors.transparent,
+            inactiveTickMarkColor: CupertinoColors.transparent,
+            thumbShape: const RoundSliderThumbShape(
+              enabledThumbRadius: 6,
+              elevation: 0,
+            ),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+          ),
+          child: SizedBox(
+            height: 32,
+            child: Slider(
+              key: const Key('display-scale-slider'),
+              allowedInteraction: SliderInteraction.tapAndSlide,
+              padding: const EdgeInsets.symmetric(
+                horizontal: _displayScaleTickTouchWidth / 2,
+              ),
+              min: 0,
+              max: (AwikiDisplayScale.levels.length - 1).toDouble(),
+              divisions: AwikiDisplayScale.levels.length - 1,
+              value: levelIndex.toDouble(),
+              semanticFormatterCallback: (value) =>
+                  '${(AwikiDisplayScale.levels[value.round()] * 100).round()}%',
+              onChanged: (value) =>
+                  onSelected(AwikiDisplayScale.levels[value.round()]),
+            ),
+          ),
+        ),
+      );
+    }
     return LayoutBuilder(
       builder: (context, constraints) => GestureDetector(
         key: const Key('display-scale-slider-tap-target'),
@@ -297,11 +373,13 @@ const double _displayScaleTickTouchWidth = 44;
 
 class _DisplayScaleTicks extends StatelessWidget {
   const _DisplayScaleTicks({
+    this.dense = false,
     required this.selectedScale,
     required this.onSelected,
   });
 
   final double selectedScale;
+  final bool dense;
   final ValueChanged<double> onSelected;
 
   @override
@@ -315,6 +393,7 @@ class _DisplayScaleTicks extends StatelessWidget {
           SizedBox(
             width: _displayScaleTickTouchWidth,
             child: _DisplayScaleTick(
+              dense: dense,
               level: level,
               selected: AwikiDisplayScale.nearestLevel(selectedScale) == level,
               selectedColor: theme.primary,
@@ -329,6 +408,7 @@ class _DisplayScaleTicks extends StatelessWidget {
 
 class _DisplayScaleTick extends StatelessWidget {
   const _DisplayScaleTick({
+    this.dense = false,
     required this.level,
     required this.selected,
     required this.selectedColor,
@@ -337,6 +417,7 @@ class _DisplayScaleTick extends StatelessWidget {
   });
 
   final double level;
+  final bool dense;
   final bool selected;
   final Color selectedColor;
   final Color unselectedColor;
@@ -353,7 +434,7 @@ class _DisplayScaleTick extends StatelessWidget {
       selected: selected,
       borderRadius: BorderRadius.circular(8),
       child: SizedBox(
-        height: 44,
+        height: dense ? 30 : 44,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
           children: <Widget>[
@@ -369,9 +450,11 @@ class _DisplayScaleTick extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               '$percent%',
+              maxLines: 1,
               style: TextStyle(
                 color: color,
-                fontSize: 12,
+                fontSize: dense ? 11 : 12,
+                height: dense ? 1.2 : null,
                 fontWeight: FontWeight.w400,
               ),
             ),
@@ -385,12 +468,14 @@ class _DisplayScaleTick extends StatelessWidget {
 class _DisplayActionRow extends StatelessWidget {
   const _DisplayActionRow({
     super.key,
+    this.dense = false,
     required this.icon,
     required this.title,
     required this.onTap,
   });
 
   final IconData icon;
+  final bool dense;
   final String title;
   final FutureOr<void> Function() onTap;
 
@@ -408,13 +493,13 @@ class _DisplayActionRow extends StatelessWidget {
           semanticLabel: title,
           borderRadius: BorderRadius.zero,
           child: SizedBox(
-            height: 58,
+            height: dense ? 42 : 58,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: EdgeInsets.symmetric(horizontal: dense ? 14 : 20),
               child: Row(
                 children: <Widget>[
-                  Icon(icon, size: 22, color: theme.title),
-                  const SizedBox(width: 14),
+                  Icon(icon, size: dense ? 16 : 22, color: theme.title),
+                  SizedBox(width: dense ? 10 : 14),
                   Expanded(
                     child: Text(
                       title,
@@ -422,7 +507,7 @@ class _DisplayActionRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: theme.title,
-                        fontSize: 15,
+                        fontSize: dense ? 13 : 15,
                         fontWeight: FontWeight.w400,
                       ),
                     ),
