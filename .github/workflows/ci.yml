@@ -5,6 +5,11 @@ on:
     - cron: "40 18 * * *"
   workflow_dispatch:
     inputs:
+      package_smoke_run:
+        description: Passed Singapore package-app run to install and start without rebuilding
+        required: false
+        default: ''
+        type: string
       cli_ref:
         description: Exact 40-character awiki-cli-rs2 commit SHA
         required: true
@@ -39,6 +44,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: awiki-me-${{ github.workflow }}-${{ github.event_name == 'schedule' && 'nightly' || github.ref }}
@@ -54,6 +60,7 @@ env:
 # Manual source runs supply an exact cli_ref; scheduled runs retain registry defaults.
 jobs:
   validate:
+    if: ${{ !inputs.package_smoke_run }}
     runs-on: ubuntu-latest
     steps:
       - name: Require exact CLI / SDK source ref and private repository read token
@@ -227,6 +234,7 @@ jobs:
           retention-days: 14
 
   cross-repository-contracts:
+    if: ${{ !inputs.package_smoke_run }}
     name: Cross-repository System contracts
     runs-on: ubuntu-latest
     env:
@@ -406,7 +414,7 @@ jobs:
           retention-days: 14
 
   remote-product:
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.validation_only)
+    if: ${{ !inputs.package_smoke_run && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.validation_only)) }}
     needs: [validate, cross-repository-contracts]
     runs-on: ubuntu-latest
     timeout-minutes: 65
@@ -543,6 +551,7 @@ jobs:
           retention-days: 30
 
   windows-pr:
+    if: ${{ !inputs.package_smoke_run }}
     name: Windows x64 build and native smoke
     runs-on: windows-2022
     timeout-minutes: 75
@@ -771,3 +780,95 @@ jobs:
           path: test-awiki-me/build/windows/x64/runner/Release/
           if-no-files-found: error
           retention-days: 14
+
+  package-smoke:
+    if: ${{ inputs.package_smoke_run != '' }}
+    name: Installed package smoke (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - { target: macos-arm64, runner: macos-15 }
+          - { target: macos-x64, runner: macos-15-intel }
+          - { target: windows-x64, runner: windows-2022 }
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Require the frozen passed package run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_RUN: ${{ inputs.package_smoke_run }}
+        run: |
+          test "$GITHUB_REF" = refs/heads/test/singapore-release-20261012
+          test "$PACKAGE_RUN" = 38204358270
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PACKAGE_RUN" > package-run.json
+          node -e 'const p=require("./package-run.json"); if(p.conclusion!=="success" || p.head_sha!=="a6c73b0f0b29815d6d5613c9069aaa96a0d6f5fa") process.exit(1)'
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.package_smoke_run }}
+          name: awiki-me-packages-b9fcead3-c999-47c7-8244-52dc66725c13
+          path: package-smoke-input
+      - name: Verify exact packaged bytes
+        shell: bash
+        env:
+          PACKAGE_TARGET: ${{ matrix.target }}
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs'; import crypto from 'node:crypto';
+          const m=JSON.parse(fs.readFileSync('package-smoke-input/package-manifest.json'));
+          const a=m.artifacts[process.env.PACKAGE_TARGET];
+          const b=fs.readFileSync('package-smoke-input/'+a.filename);
+          if(b.length!==a.sizeBytes || crypto.createHash('sha256').update(b).digest('hex')!==a.sha256) throw Error('Package integrity mismatch');
+          console.log(JSON.stringify({target:process.env.PACKAGE_TARGET,sha256:a.sha256,sizeBytes:a.sizeBytes}));
+          JS
+      - name: Mount, install and start normal macOS App
+        if: startsWith(matrix.target, 'macos-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          mount="$RUNNER_TEMP/singapore-app-mount"
+          app_copy="$RUNNER_TEMP/singapore-app-installed"
+          mkdir -p "$mount" "$app_copy"
+          # The manifest owns the filename; do not infer product naming.
+          dmg="package-smoke-input/$(node -p 'require("./package-smoke-input/package-manifest.json").artifacts["${{ matrix.target }}"].filename')"
+          hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount"
+          trap 'hdiutil detach "$mount" -force || true' EXIT
+          app=$(find "$mount" -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$app"
+          ditto "$app" "$app_copy/AWikiMe.app"
+          codesign --verify --deep --strict "$app_copy/AWikiMe.app"
+          executable=$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app_copy/AWikiMe.app/Contents/Info.plist")
+          lipo -archs "$app_copy/AWikiMe.app/Contents/MacOS/$executable" | grep -w "$(uname -m)"
+          "$app_copy/AWikiMe.app/Contents/MacOS/$executable" > "$RUNNER_TEMP/app-startup.log" 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true; hdiutil detach "$mount" -force || true' EXIT
+          sleep 15
+          kill -0 "$app_pid"
+          kill "$app_pid"
+          wait "$app_pid" || true
+          echo 'Normal signed App installed, native architecture verified, startup remained live for 15 seconds.'
+      - name: Install and run existing Windows native smoke
+        if: matrix.target == 'windows-x64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifest = Get-Content package-smoke-input/package-manifest.json | ConvertFrom-Json
+          $installer = (Resolve-Path (Join-Path package-smoke-input $manifest.artifacts.'windows-x64'.filename)).Path
+          $installDir = Join-Path $env:RUNNER_TEMP 'singapore-normal-app'
+          try {
+            $p = Start-Process $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',('/DIR="' + $installDir + '"')) -PassThru -Wait
+            if ($p.ExitCode -ne 0) { throw "Installer failed: $($p.ExitCode)" }
+            ./scripts/windows/run_pr_smoke.ps1 -ReleaseDir $installDir
+          } finally {
+            $uninstaller = Join-Path $installDir 'unins000.exe'
+            if (Test-Path $uninstaller) {
+              $p = Start-Process $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -PassThru -Wait
+              if ($p.ExitCode -ne 0) { throw "Uninstaller failed: $($p.ExitCode)" }
+            }
+          }
