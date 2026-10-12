@@ -2,6 +2,8 @@ import 'package:awiki_me/src/app/app_appearance.dart';
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/device_management.dart';
+import 'package:awiki_me/src/presentation/devices/identity_services_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/settings/display_settings_page.dart';
@@ -26,6 +28,62 @@ void main() {
     displayName: 'Alice',
     handle: 'alice.awiki.info',
     localIdentityId: 'identity-alice',
+  );
+  testWidgets(
+    'embedded identity services stays in the detail pane without window chrome',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final core = FakeDeviceManagementCore()
+        ..registry = const DeviceRegistrySnapshot(
+          did: testDid,
+          methodCapabilities: webMethodCapabilities,
+          devices: [
+            DeviceSummary(
+              protocolDeviceId: 'admin',
+              signingKeyId: 'sign',
+              e2eeKeyId: 'e2ee',
+              status: DeviceStatus.active,
+              role: DeviceRole.admin,
+              managementReady: true,
+              isCurrent: true,
+            ),
+          ],
+        );
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          session: session,
+          home: const SettingsWorkspacePage(),
+          providerOverrides: [
+            deviceManagementCorePortProvider.overrideWithValue(core),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('settings-devices-row')));
+      await tester.pumpAndSettle();
+      final sidebar = find.byKey(const Key('mac-settings-list-pane'));
+      final root = Navigator.of(tester.element(find.byType(SettingsPage)));
+      final top = MediaQuery.paddingOf(
+        tester.element(find.byType(DevicesPage)),
+      ).top;
+      await tester.tap(find.byKey(const Key('identity-services-open')));
+      await tester.pumpAndSettle();
+      final services = find.byType(IdentityServicesPage);
+      expect(services, findsOneWidget);
+      expect(root.canPop(), isFalse);
+      expect(
+        tester.getRect(services).left,
+        greaterThanOrEqualTo(tester.getRect(sidebar).right),
+      );
+      expect(MediaQuery.paddingOf(tester.element(services)).top, top);
+      await tester.tap(find.byType(CupertinoNavigationBarBackButton));
+      await tester.pumpAndSettle();
+      expect(find.byType(DevicesPage), findsOneWidget);
+      expect(sidebar.hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
   );
   for (final (width, scale) in [(1280.0, 1.0), (960.0, 1.1)]) {
     for (final brightness in Brightness.values) {
@@ -161,16 +219,14 @@ void main() {
           await tester.tap(find.byKey(const Key('devices-refresh')));
           await tester.pumpAndSettle();
           expectDetail(find.byType(DevicesPage), 'settings-devices-row');
-          // The security flow remains on the right and retains its explicit back
-          // action and owner selector, without requesting an OTP just by opening.
+          // Recovery uses the root navigator so pausing/replacing the session
+          // cannot dispose its activation fence. Opening still sends no OTP.
           await tester.tap(
             find.byKey(const Key('settings-recover-handle-did-row')),
           );
           await tester.pumpAndSettle();
-          expectDetail(
-            find.byType(HandleRecoveryPage),
-            'settings-recover-handle-did-row',
-          );
+          expect(find.byType(HandleRecoveryPage), findsOneWidget);
+          expect(rootNavigator.canPop(), isTrue);
           final recovery = tester.widget<HandleRecoveryPage>(
             find.byType(HandleRecoveryPage),
           );
@@ -180,10 +236,7 @@ void main() {
             find.byKey(const Key('handle-recovery-back-button')),
           );
           await tester.pumpAndSettle();
-          expectDetail(
-            find.byType(DisplaySettingsPage),
-            'settings-display-row',
-          );
+          expectDetail(find.byType(DevicesPage), 'settings-devices-row');
           expect(find.byType(HandleRecoveryPage), findsNothing);
           await tester.pumpWidget(const SizedBox.shrink());
         },

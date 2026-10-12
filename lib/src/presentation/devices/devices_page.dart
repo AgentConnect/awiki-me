@@ -143,6 +143,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                 onPressed: () => AppNavigator.push<void>(
                   context,
                   (_) => IdentityServicesPage(selector: registry!.did),
+                  applyWindowChromeInset: !widget.embedded,
                 ),
                 child: Text(context.l10n.identityServicesTitle),
               ),

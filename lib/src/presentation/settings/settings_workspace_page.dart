@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app_shell/providers/session_provider.dart';
 import '../devices/devices_page.dart';
-import '../recovery/handle_recovery_page.dart';
 import '../shared/sidebar_workspace.dart';
 import 'display_settings_page.dart';
 import 'language_selection_page.dart';
@@ -24,15 +23,7 @@ class _SettingsWorkspacePageState extends ConsumerState<SettingsWorkspacePage> {
   @override
   Widget build(BuildContext context) {
     final sessionState = ref.watch(sessionProvider);
-    final identity = sessionState.session;
-    final recovering =
-        _selected == SettingsDetail.recovery &&
-        identity?.handle?.trim().isNotEmpty == true &&
-        identity?.localIdentityId?.trim().isNotEmpty == true;
-    final root = _selected == SettingsDetail.recovery
-        ? SettingsDetail.display
-        : _selected;
-    final content = switch (root) {
+    final content = switch (_selected) {
       SettingsDetail.devices => const DevicesPage(embedded: true),
       SettingsDetail.language => const LanguageSelectionPage(embedded: true),
       _ => const DisplaySettingsPage(embedded: true),
@@ -48,32 +39,14 @@ class _SettingsWorkspacePageState extends ConsumerState<SettingsWorkspacePage> {
       ),
       detailPane: SizedBox.expand(
         key: const Key('settings-detail-pane'),
-        // Dispose nested device routes and owner-bound recovery state when
-        // switching categories or identities; never push over the App shell.
+        // Dispose device subroutes when switching categories or identities.
+        // Recovery is hosted by the root navigator across session replacement.
         child: Navigator(
-          key: ValueKey((sessionState.activeEpoch, root)),
+          key: ValueKey((sessionState.activeEpoch, _selected)),
           pages: [
-            CupertinoPage<void>(key: ValueKey(root), child: content),
-            if (recovering)
-              CupertinoPage<void>(
-                key: const ValueKey(SettingsDetail.recovery),
-                child: HandleRecoveryPage(
-                  startNew: true,
-                  initialHandle: identity!.handle!.trim(),
-                  initialPhone: '',
-                  autoRequestOtp: false,
-                  localIdentityId: identity.localIdentityId!.trim(),
-                  allowPhoneInput: true,
-                ),
-              ),
+            CupertinoPage<void>(key: ValueKey(_selected), child: content),
           ],
-          onDidRemovePage: (page) {
-            if (page.key == const ValueKey(SettingsDetail.recovery) &&
-                _selected == SettingsDetail.recovery &&
-                mounted) {
-              setState(() => _selected = SettingsDetail.display);
-            }
-          },
+          onDidRemovePage: (_) {},
         ),
       ),
     );

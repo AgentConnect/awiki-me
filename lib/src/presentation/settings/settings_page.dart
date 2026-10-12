@@ -31,7 +31,7 @@ import 'display_settings_page.dart';
 import '../shared/display_scale.dart';
 import '../shared/local_credential_delete_dialog.dart';
 
-enum SettingsDetail { devices, language, display, recovery }
+enum SettingsDetail { devices, language, display }
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({
@@ -367,7 +367,6 @@ class SettingsPage extends ConsumerWidget {
           children: <Widget>[
             _DesktopSettingsRow(
               key: const Key('settings-recover-handle-did-row'),
-              selected: selectedDetail == SettingsDetail.recovery,
               title: l10n.settingsRecoverHandleDid,
               onTap: _canRecoverHandleDid(session)
                   ? () => _openHandleRecovery(context, session!)
@@ -776,10 +775,8 @@ class SettingsPage extends ConsumerWidget {
   }
 
   void _openHandleRecovery(BuildContext context, SessionIdentity identity) {
-    if (onDetailSelected != null) {
-      onDetailSelected!(SettingsDetail.recovery);
-      return;
-    }
+    // Recovery pauses/replaces the authenticated shell. Its controller and
+    // activation fence must survive that shell being disposed.
     AppNavigator.push<void>(
       context,
       (_) => HandleRecoveryPage(
@@ -790,6 +787,7 @@ class SettingsPage extends ConsumerWidget {
         localIdentityId: identity.localIdentityId!.trim(),
         allowPhoneInput: true,
       ),
+      rootNavigator: true,
     );
   }
 }
