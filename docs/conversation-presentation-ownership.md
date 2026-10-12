@@ -855,3 +855,14 @@ Web 仍沿用既有无原生缓存的占位实现；本轮不宣称 Web native C
 联合产品验收：在两端拥有方 runner 同时设置同一个新建目录 `AWIKI_E2E_PRODUCT_PAIR_DIR`，APP 另设 `AWIKI_E2E_ENCRYPTED_GROUP=1` 运行 group；DSH 运行 ENCRYPTED-001。桥接仅交换公开测试 DID/Handle、群 ID、固定消息标记及完成标志；账号凭据和数据库不共享。APP UI 建群邀请已有 DSH，双向文本/附件下载验证明文，CLI 作为第三成员作确定性脚本回复（不调用真实模型），DSH 重启并反向建群邀请 APP。桥接目录必须按运行新建，不能复用旧完成标志。联合结果仅在两端 runner、桥接完成和各自清理记录均核验后计为通过。
 
 群消息的原始 realtime arrival 若尚无 Core canonical `conversationId`，adapter 只产生 message-domain dirty hint，等待 committed sync 投影；不得按群 DID/thread 补造路由，亦不得创建空 conversation 的系统通知。合法 canonical arrival 的通知语义保持不变。
+
+### 弹窗与连接状态点的可见边界（2026-10-12）
+
+桌面和平板的 `AppDialogScaffold` 使用独立的 `dialogSurface` 和 `dialogBorder`；
+深色弹窗需与页面底色分离，浅色弹窗同样保留描边。手机继续使用既有磨砂面板。
+Skill Agent 首次“生成安装指令”使用实心主按钮，已有指令后的“重新生成”使用带边框的次按钮，
+保持复制操作为主要动作；加载期间沿用禁用语义。
+桌面本人头像的绿色圆点只表达当前 realtime 连接已建立，不代表对外在线状态；
+圆点必须完整绘制，外层点击控件不能按头像圆角裁剪它。
+`theme_surface_regression_test.dart` 对两种主题检查实际绘制的弹窗底色/边缘和圆点四象限，
+并验证断线隐藏、重连恢复及头像点击入口；Skill onboarding 的 owning widget 测试覆盖两种主题和生成/复制/重新生成流程。

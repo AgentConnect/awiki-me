@@ -1177,6 +1177,8 @@ class _DesktopRailAvatar extends StatelessWidget {
       onTap: onTap,
       semanticLabel: context.l10n.shellNavMe,
       semanticsIdentifier: 'e2e-profile-dialog-button',
+      // Keep the connection badge outside the avatar's circular clip.
+      clipBehavior: Clip.none,
       scaleOnPress: true,
       pressedScale: 0.96,
       borderRadius: BorderRadius.circular(responsive.displayScaled(19)),

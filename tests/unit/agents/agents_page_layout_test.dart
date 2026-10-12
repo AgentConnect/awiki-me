@@ -23,7 +23,8 @@ import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_me/src/presentation/agents/skill_onboarding_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
+import 'package:flutter/material.dart'
+    show SelectionArea, SelectionContainer, Theme;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/awiki_glass.dart';
@@ -3074,100 +3075,146 @@ void main() {
     expect(find.text('到宿主机安装代理'), findsNWidgets(2));
   });
 
-  testWidgets(
-    'skill onboarding copies a scoped prompt without managing inventory',
-    (tester) async {
-      final control = FakeAgentControlService();
-      final skillPort = _SkillOnboardingPortStub();
-      final gateway = FakeAwikiGateway()
-        ..serverInfo = skillOnboardingTestServerInfo();
-      String? clipboardText;
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        SystemChannels.platform,
-        (call) async {
-          if (call.method == 'Clipboard.setData') {
-            final data = call.arguments as Map<Object?, Object?>;
-            clipboardText = data['text'] as String?;
-          }
-          return null;
-        },
-      );
-      addTearDown(
-        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+  for (final brightness in Brightness.values) {
+    testWidgets(
+      'skill onboarding paints actions and copies a scoped prompt in $brightness',
+      (tester) async {
+        final theme = AwikiMeTheme.forPlatform(
+          TargetPlatform.macOS,
+          brightness: brightness,
+        );
+        final control = FakeAgentControlService();
+        final skillPort = _SkillOnboardingPortStub();
+        final gateway = FakeAwikiGateway()
+          ..serverInfo = skillOnboardingTestServerInfo();
+        String? clipboardText;
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
           SystemChannels.platform,
-          null,
-        ),
-      );
-
-      await tester.pumpWidget(
-        buildLocalizedTestApp(
-          home: const AgentsWorkspacePage(),
-          session: SessionIdentity(
-            did: 'did:wba:$primaryTenantDomain:user:alice',
-            credentialName: 'alice',
-            displayName: 'Alice',
-            handle: 'alice.$primaryTenantDomain',
+          (call) async {
+            if (call.method == 'Clipboard.setData') {
+              final data = call.arguments as Map<Object?, Object?>;
+              clipboardText = data['text'] as String?;
+            }
+            return null;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            SystemChannels.platform,
+            null,
           ),
-          providerOverrides: <Override>[
-            agentControlServiceProvider.overrideWithValue(control),
-            awikiEnvironmentConfigProvider.overrideWithValue(
-              AwikiEnvironmentConfig(
-                baseUrl: primaryTenantBaseUrl,
-                didDomain: primaryTenantDomain,
+        );
+
+        await tester.pumpWidget(
+          Theme(
+            data: theme.materialTheme,
+            child: buildLocalizedTestApp(
+              home: const AgentsWorkspacePage(),
+              session: SessionIdentity(
+                did: 'did:wba:$primaryTenantDomain:user:alice',
+                credentialName: 'alice',
+                displayName: 'Alice',
+                handle: 'alice.$primaryTenantDomain',
               ),
+              providerOverrides: <Override>[
+                agentControlServiceProvider.overrideWithValue(control),
+                awikiEnvironmentConfigProvider.overrideWithValue(
+                  AwikiEnvironmentConfig(
+                    baseUrl: primaryTenantBaseUrl,
+                    didDomain: primaryTenantDomain,
+                  ),
+                ),
+                onboardingSupportServiceProvider.overrideWithValue(
+                  FakeOnboardingSupportService(gateway),
+                ),
+                skillOnboardingPortProvider.overrideWithValue(skillPort),
+              ],
             ),
-            onboardingSupportServiceProvider.overrideWithValue(
-              FakeOnboardingSupportService(gateway),
-            ),
-            skillOnboardingPortProvider.overrideWithValue(skillPort),
-          ],
-        ),
-      );
-      await tester.pumpAndSettle();
+          ),
+        );
+        await tester.pumpAndSettle();
 
-      await _openExpandedAgentActions(tester);
-      await tester.tap(find.byKey(const Key('agent-skill-onboarding-button')));
-      await tester.pumpAndSettle();
+        await _openExpandedAgentActions(tester);
+        await tester.tap(
+          find.byKey(const Key('agent-skill-onboarding-button')),
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.text('连接 Skill Agent'), findsOneWidget);
-      final nameField = find.byKey(const Key('agent-skill-display-name-field'));
-      expect(nameField, findsOneWidget);
-      await tester.enterText(nameField, 'Research Copilot');
-      await tester.tap(find.byKey(const Key('agent-skill-regenerate-button')));
-      await tester.pumpAndSettle();
+        expect(find.text('连接 Skill Agent'), findsOneWidget);
+        final nameField = find.byKey(
+          const Key('agent-skill-display-name-field'),
+        );
+        expect(nameField, findsOneWidget);
+        await tester.enterText(nameField, 'Research Copilot');
+        final generate = find.byKey(const Key('agent-skill-regenerate-button'));
+        expect(tester.widget(generate), isA<AppPrimaryButton>());
+        final fill = tester.widget<Container>(
+          find
+              .descendant(
+                of: generate,
+                matching: find.byWidgetPredicate(
+                  (w) => w is Container && w.decoration is BoxDecoration,
+                ),
+              )
+              .first,
+        );
+        expect((fill.decoration! as BoxDecoration).color, theme.tokens.primary);
+        final label = tester.widget<Text>(find.text('生成安装指令'));
+        final luminances = [
+          label.style!.color!.computeLuminance(),
+          theme.tokens.primary.computeLuminance(),
+        ]..sort();
+        expect(
+          (luminances.last + 0.05) / (luminances.first + 0.05),
+          greaterThan(4.5),
+        );
+        await tester.tap(
+          find.byKey(const Key('agent-skill-regenerate-button')),
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.text('alice.$primaryTenantDomain'), findsOneWidget);
-      expect(find.text('skill-widget.$primaryTenantDomain'), findsOneWidget);
-      expect(find.byKey(const Key('agent-skill-copy-button')), findsOneWidget);
-      expect(
-        find.byKey(const Key('agent-skill-copy-button')).hitTestable(),
-        findsOneWidget,
-      );
-      final prompt = tester
-          .widget<Text>(find.byKey(const Key('agent-skill-instruction-text')))
-          .data!;
-      expect(prompt, contains('AWIKI_SKILL_ONBOARDING_V1'));
-      expect(prompt, contains('awsk1_widget_secret_value'));
-      expect(
-        prompt,
-        isNot(contains('did:wba:$primaryTenantDomain:user:alice')),
-      );
-      expect(control.lastInstallCommand, isNull);
-      expect(skillPort.displayNames, <String>['Research Copilot']);
+        expect(find.text('alice.$primaryTenantDomain'), findsOneWidget);
+        expect(find.text('skill-widget.$primaryTenantDomain'), findsOneWidget);
+        expect(
+          find.byKey(const Key('agent-skill-copy-button')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('agent-skill-copy-button')).hitTestable(),
+          findsOneWidget,
+        );
+        final prompt = tester
+            .widget<Text>(find.byKey(const Key('agent-skill-instruction-text')))
+            .data!;
+        expect(prompt, contains('AWIKI_SKILL_ONBOARDING_V1'));
+        expect(prompt, contains('awsk1_widget_secret_value'));
+        expect(
+          prompt,
+          isNot(contains('did:wba:$primaryTenantDomain:user:alice')),
+        );
+        expect(control.lastInstallCommand, isNull);
+        expect(skillPort.displayNames, <String>['Research Copilot']);
 
-      final copyButton = find.byKey(const Key('agent-skill-copy-button'));
-      await tester.tap(copyButton);
-      await tester.pump();
-      expect(clipboardText, prompt);
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
+        final copyButton = find.byKey(const Key('agent-skill-copy-button'));
+        await tester.tap(copyButton);
+        await tester.pump();
+        expect(clipboardText, prompt);
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('agent-skill-regenerate-button')));
-      await tester.pumpAndSettle();
-      expect(skillPort.calls, 2);
-      expect(control.lastInstallCommand, isNull);
-    },
-  );
+        await tester.tap(
+          find.byKey(const Key('agent-skill-regenerate-button')),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget(find.byKey(const Key('agent-skill-regenerate-button'))),
+          isA<AppSecondaryButton>(),
+        );
+        expect(skillPort.calls, 2);
+        expect(control.lastInstallCommand, isNull);
+      },
+    );
+  }
 
   testWidgets(
     'refresh status shows pending state then no-response after timeout',

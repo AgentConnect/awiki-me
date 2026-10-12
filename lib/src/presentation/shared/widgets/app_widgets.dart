@@ -47,6 +47,7 @@ class AppPressable extends StatefulWidget {
     this.enabled = true,
     this.behavior = HitTestBehavior.opaque,
     this.borderRadius,
+    this.clipBehavior = Clip.antiAlias,
     this.hoverColor,
     this.pressedColor,
     this.focusColor,
@@ -71,6 +72,9 @@ class AppPressable extends StatefulWidget {
   final bool enabled;
   final HitTestBehavior behavior;
   final BorderRadius? borderRadius;
+
+  /// Opt out for controls whose badges extend beyond their rounded body.
+  final Clip clipBehavior;
   final Color? hoverColor;
   final Color? pressedColor;
   final Color? focusColor;
@@ -138,6 +142,7 @@ class _AppPressableState extends State<AppPressable> {
         ? _AppPressableDefaultVisual(
             state: state,
             borderRadius: widget.borderRadius,
+            clipBehavior: widget.clipBehavior,
             hoverColor:
                 widget.hoverColor ??
                 theme.primary.withValues(alpha: state.selected ? 0.08 : 0.06),
@@ -223,6 +228,7 @@ class _AppPressableDefaultVisual extends StatelessWidget {
     required this.duration,
     required this.curve,
     this.borderRadius,
+    required this.clipBehavior,
   });
 
   final AppPressableState state;
@@ -233,6 +239,7 @@ class _AppPressableDefaultVisual extends StatelessWidget {
   final Duration duration;
   final Curve curve;
   final BorderRadius? borderRadius;
+  final Clip clipBehavior;
 
   @override
   Widget build(BuildContext context) {
@@ -243,6 +250,7 @@ class _AppPressableDefaultVisual extends StatelessWidget {
         : CupertinoColors.transparent;
     return ClipRRect(
       borderRadius: borderRadius ?? BorderRadius.zero,
+      clipBehavior: clipBehavior,
       child: Stack(
         fit: StackFit.passthrough,
         children: <Widget>[

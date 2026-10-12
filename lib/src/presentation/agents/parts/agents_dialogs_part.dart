@@ -1906,20 +1906,26 @@ class _SkillOnboardingDialogState
             ),
           ],
           SizedBox(height: responsive.spacing(14)),
-          CupertinoButton(
-            key: const Key('agent-skill-regenerate-button'),
-            onPressed: state.isLoading
-                ? null
-                : () => ref
-                      .read(skillOnboardingProvider.notifier)
-                      .generate(displayName: _displayNameController.text),
-            padding: EdgeInsets.symmetric(vertical: responsive.spacing(10)),
-            child: Text(
-              instruction == null
-                  ? context.l10n.agentSkillGenerate
-                  : context.l10n.agentSkillRegenerate,
+          if (instruction == null)
+            AppPrimaryButton(
+              key: const Key('agent-skill-regenerate-button'),
+              label: context.l10n.agentSkillGenerate,
+              onPressed: state.isLoading
+                  ? null
+                  : () => ref
+                        .read(skillOnboardingProvider.notifier)
+                        .generate(displayName: _displayNameController.text),
+            )
+          else
+            AppSecondaryButton(
+              key: const Key('agent-skill-regenerate-button'),
+              label: context.l10n.agentSkillRegenerate,
+              onPressed: state.isLoading
+                  ? null
+                  : () => ref
+                        .read(skillOnboardingProvider.notifier)
+                        .generate(displayName: _displayNameController.text),
             ),
-          ),
         ],
       ),
     );
