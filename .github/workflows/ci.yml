@@ -794,7 +794,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 3
       matrix:
         include: ${{ fromJSON(inputs.package_smoke_target == 'android-arm64' && '[{"target":"android-arm64","runner":"ubuntu-latest"}]' || inputs.package_smoke_target == 'desktop' && '[{"target":"macos-arm64","runner":"macos-15"},{"target":"macos-x64","runner":"macos-15-intel"},{"target":"windows-x64","runner":"windows-2022"}]' || '[{"target":"macos-arm64","runner":"macos-15"},{"target":"macos-x64","runner":"macos-15-intel"},{"target":"windows-x64","runner":"windows-2022"},{"target":"android-arm64","runner":"ubuntu-latest"}]') }}
     steps:
