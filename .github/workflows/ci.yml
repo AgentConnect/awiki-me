@@ -895,7 +895,10 @@ jobs:
           sudo apt-get install -y libpulse0
           sudo chmod 666 /dev/kvm
           sdkmanager 'system-images;android-30;google_apis;x86_64' 'emulator'
-          echo no | avdmanager create avd --force --name singapore-arm64-apk --package 'system-images;android-30;google_apis;x86_64'
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/singapore-avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | avdmanager create avd --force --name singapore-arm64-apk --package 'system-images;android-30;google_apis;x86_64' --path "$ANDROID_AVD_HOME/device.avd"
+          "$ANDROID_HOME/emulator/emulator" -list-avds | grep -Fx singapore-arm64-apk
           "$ANDROID_HOME/emulator/emulator" -version
           "$ANDROID_HOME/emulator/emulator" -accel-check
           "$ANDROID_HOME/emulator/emulator" -avd singapore-arm64-apk -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -accel on > "$RUNNER_TEMP/emulator.log" 2>&1 &
