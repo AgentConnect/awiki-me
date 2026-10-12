@@ -794,6 +794,7 @@ jobs:
           - { target: macos-arm64, runner: macos-15 }
           - { target: macos-x64, runner: macos-15-intel }
           - { target: windows-x64, runner: windows-2022 }
+          - { target: android-arm64, runner: ubuntu-latest }
     steps:
       - uses: actions/checkout@v6
         with:
@@ -872,3 +873,39 @@ jobs:
               if ($p.ExitCode -ne 0) { throw "Uninstaller failed: $($p.ExitCode)" }
             }
           }
+
+      - name: Install and start the arm64 APK through Android native bridge
+        if: matrix.target == 'android-arm64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Android 11 Google APIs x86_64 images support ARM binary translation.
+          # Assert the actual system ABI list before using this as arm64 APK evidence.
+          # https://android-developers.googleblog.com/2020/03/run-arm-apps-on-android-emulator.html
+          sudo chmod 666 /dev/kvm
+          sdkmanager 'system-images;android-30;google_apis;x86_64' 'emulator'
+          echo no | avdmanager create avd --force --name singapore-arm64-apk --package 'system-images;android-30;google_apis;x86_64'
+          "$ANDROID_HOME/emulator/emulator" -avd singapore-arm64-apk -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -accel on > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          emulator_pid=$!
+          trap 'adb emu kill || true; kill "$emulator_pid" 2>/dev/null || true' EXIT
+          timeout 180 adb wait-for-device
+          booted=false
+          for attempt in $(seq 1 180); do
+            if [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == 1 ]]; then booted=true; break; fi
+            sleep 2
+          done
+          test "$booted" = true
+          adb shell getprop ro.product.cpu.abilist | tee "$RUNNER_TEMP/android-abis.txt"
+          grep -q arm64-v8a "$RUNNER_TEMP/android-abis.txt"
+          apk="package-smoke-input/$(node -p 'require("./package-smoke-input/package-manifest.json").artifacts["android-arm64"].filename')"
+          adb install "$apk"
+          adb logcat -c
+          adb shell monkey -p ai.awiki.awikime -c android.intent.category.LAUNCHER 1
+          sleep 15
+          pid=$(adb shell pidof ai.awiki.awikime | tr -d '\r')
+          test -n "$pid"
+          adb logcat -d --pid="$pid" > "$RUNNER_TEMP/app-startup.log"
+          if grep -Ei 'FATAL EXCEPTION|Fatal signal|SIGSEGV|UnsatisfiedLink|dlopen failed|native crash' "$RUNNER_TEMP/app-startup.log"; then exit 1; fi
+          adb shell am force-stop ai.awiki.awikime
+          adb uninstall ai.awiki.awikime
+          echo 'Exact signed arm64 APK installed and started through Android ARM native bridge; physical-device acceptance remains manual.'
