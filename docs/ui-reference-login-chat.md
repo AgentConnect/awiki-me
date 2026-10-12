@@ -171,7 +171,9 @@ the title bar.
 - **Device management:** a full page with pending requests before authorized
   devices, glass cards on phones and theme surfaces elsewhere.
 - **Agents:** the Daemon tree sits in one glass card under a divider-free header
-  whose install action uses the circled "+".
+  whose install action uses the circled "+". Daemon and runtime nodes both use
+  the shared Agent `AvatarBadge`, including its generated fallback decoration;
+  the tree's geometry remains independent of the avatar's internal widgets.
 - **Desktop rail:** Messages, Agents, Contacts and Tasks, with Settings at the
   foot. The avatar shows a small dot while the realtime connection is up; it is
   not a presence claim to peers. The workbench destination remains routable but

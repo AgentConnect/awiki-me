@@ -28,6 +28,7 @@ import '../shared/widgets/awiki_desktop.dart';
 import '../shared/widgets/awiki_glass.dart';
 import 'language_selection_page.dart';
 import 'display_settings_page.dart';
+import 'notify_settings.dart';
 import '../shared/display_scale.dart';
 import '../shared/local_credential_delete_dialog.dart';
 
@@ -59,6 +60,10 @@ class SettingsPage extends ConsumerWidget {
     final activeTenant = ref.watch(activeAppTenantProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
     final displayScale = ref.watch(displayScaleProvider);
+    final supportsTaskNotifications =
+        session != null &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android;
     final isDesktopPlatform =
         defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.windows;
@@ -189,6 +194,18 @@ class SettingsPage extends ConsumerWidget {
               (_) => const LanguageSelectionPage(),
             ),
           ),
+          if (supportsTaskNotifications) ...<Widget>[
+            const AppSectionDivider(),
+            AppListTile(
+              key: const Key('settings-notify-row'),
+              title: '任务通知',
+              leading: leading(const _SettingsIcon(icon: CupertinoIcons.bell)),
+              onTap: () => AppNavigator.push<void>(
+                context,
+                (_) => const NotifySettingsPage(),
+              ),
+            ),
+          ],
           ...<Widget>[
             const AppSectionDivider(),
             AppListTile(
@@ -346,6 +363,15 @@ class SettingsPage extends ConsumerWidget {
                 (_) => const LanguageSelectionPage(),
               ),
             ),
+            if (supportsTaskNotifications)
+              _DesktopSettingsRow(
+                key: const Key('settings-notify-row'),
+                title: '任务通知',
+                onTap: () => AppNavigator.push<void>(
+                  context,
+                  (_) => const NotifySettingsPage(),
+                ),
+              ),
             _DesktopSettingsRow(
               key: const Key('settings-display-row'),
               title: isDesktopPlatform
@@ -535,6 +561,17 @@ class SettingsPage extends ConsumerWidget {
                 (_) => const LanguageSelectionPage(),
               ),
             ),
+            if (supportsTaskNotifications)
+              _QuietSettingsRow(
+                key: const Key('settings-notify-row'),
+                icon: CupertinoIcons.bell,
+                title: '任务通知',
+                height: optionRowHeight,
+                onTap: () => AppNavigator.push<void>(
+                  context,
+                  (_) => const NotifySettingsPage(),
+                ),
+              ),
             _QuietSettingsRow(
               key: const Key('settings-display-row'),
               icon: CupertinoIcons.textformat_size,
