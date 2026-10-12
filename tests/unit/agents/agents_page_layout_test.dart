@@ -3148,6 +3148,11 @@ void main() {
         await tester.enterText(nameField, 'Research Copilot');
         final generate = find.byKey(const Key('agent-skill-regenerate-button'));
         expect(tester.widget(generate), isA<AppPrimaryButton>());
+        final generateRect = tester.getRect(generate);
+        final fieldRect = tester.getRect(nameField);
+        expect(generateRect.width, lessThan(fieldRect.width / 2));
+        expect(generateRect.height, inInclusiveRange(32, 36));
+        expect(generateRect.right, closeTo(fieldRect.right, 1));
         final fill = tester.widget<Container>(
           find
               .descendant(
@@ -3196,6 +3201,12 @@ void main() {
         expect(skillPort.displayNames, <String>['Research Copilot']);
 
         final copyButton = find.byKey(const Key('agent-skill-copy-button'));
+        final copyRect = tester.getRect(copyButton);
+        final regenerateRect = tester.getRect(generate);
+        expect(copyRect.right, closeTo(fieldRect.right, 1));
+        expect(copyRect.height, inInclusiveRange(32, 36));
+        expect(regenerateRect.right, lessThan(copyRect.left));
+        expect(regenerateRect.center.dy, closeTo(copyRect.center.dy, 1));
         await tester.tap(copyButton);
         await tester.pump();
         expect(clipboardText, prompt);

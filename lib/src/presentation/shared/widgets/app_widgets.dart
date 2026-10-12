@@ -1308,11 +1308,13 @@ class AppPrimaryButton extends StatelessWidget {
     required this.label,
     this.onPressed,
     this.semanticsIdentifier,
+    this.compact = false,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final String? semanticsIdentifier;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1346,27 +1348,31 @@ class AppPrimaryButton extends StatelessWidget {
         );
       },
       child: Container(
-        constraints: BoxConstraints(minHeight: responsive.controlHeight),
+        constraints: BoxConstraints(
+          minHeight: compact ? 34 : responsive.controlHeight,
+        ),
         padding: EdgeInsets.symmetric(
-          horizontal: responsive.spacing(16),
-          vertical: responsive.spacing(10),
+          horizontal: compact ? 14 : responsive.spacing(16),
+          vertical: compact ? 8 : responsive.spacing(10),
         ),
         decoration: BoxDecoration(
           color: responsive.isPhone ? theme.primaryDark : theme.primary,
           borderRadius: radius,
         ),
         child: Center(
+          widthFactor: compact ? 1 : null,
+          heightFactor: compact ? 1 : null,
           child: Text(
             label,
             textAlign: TextAlign.center,
             strutStyle: StrutStyle(
-              fontSize: responsive.bodyMd,
+              fontSize: compact ? 13 : responsive.bodyMd,
               height: 1,
               forceStrutHeight: true,
             ),
             style: context.awikiTheme.buttonLabel.copyWith(
               color: theme.primaryForeground,
-              fontSize: responsive.bodyMd,
+              fontSize: compact ? 13 : responsive.bodyMd,
               height: 1,
             ),
           ),
@@ -1382,11 +1388,13 @@ class AppSecondaryButton extends StatelessWidget {
     required this.label,
     this.onPressed,
     this.semanticsIdentifier,
+    this.compact = false,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final String? semanticsIdentifier;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1420,10 +1428,12 @@ class AppSecondaryButton extends StatelessWidget {
         );
       },
       child: Container(
-        constraints: BoxConstraints(minHeight: responsive.controlHeight),
+        constraints: BoxConstraints(
+          minHeight: compact ? 34 : responsive.controlHeight,
+        ),
         padding: EdgeInsets.symmetric(
-          horizontal: responsive.spacing(16),
-          vertical: responsive.spacing(10),
+          horizontal: compact ? 14 : responsive.spacing(16),
+          vertical: compact ? 8 : responsive.spacing(10),
         ),
         decoration: responsive.isPhone
             ? BoxDecoration(
@@ -1439,17 +1449,19 @@ class AppSecondaryButton extends StatelessWidget {
                 border: Border.all(color: context.awikiTheme.border),
               ),
         child: Center(
+          widthFactor: compact ? 1 : null,
+          heightFactor: compact ? 1 : null,
           child: Text(
             label,
             textAlign: TextAlign.center,
             strutStyle: StrutStyle(
-              fontSize: responsive.bodyMd,
+              fontSize: compact ? 13 : responsive.bodyMd,
               height: 1,
               forceStrutHeight: true,
             ),
             style: context.awikiTheme.buttonLabel.copyWith(
               color: context.awikiTheme.title,
-              fontSize: responsive.bodyMd,
+              fontSize: compact ? 13 : responsive.bodyMd,
               height: 1,
             ),
           ),
