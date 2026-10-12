@@ -629,6 +629,22 @@ E2eObservation observeCliExactMessage({
   return const E2eObservation.pass();
 }
 
+/// Match the registered owner DID, independent of short or qualified Handles.
+/// Keep duplicates observable: only a count of one satisfies the list oracle.
+int cliRelationshipListExactDidCount(
+  String output, {
+  required String expectedDid,
+}) {
+  final expected = expectedDid.trim();
+  if (!expected.startsWith('did:')) return 0;
+  final items = _jsonValueAt(output, const <Object>['data', 'items']);
+  if (items is! List) return 0;
+  return items.whereType<Map>().where((item) {
+    final did = item['did'];
+    return did is String && did.trim() == expected;
+  }).length;
+}
+
 /// Returns the combined relationship state from the CLI's directional flags.
 ///
 /// `relationship` is the CLI identity's outbound local projection

@@ -977,6 +977,9 @@ The product oracle is fail-closed:
   follower -> none` state sequence; CLI status derives this combined state from
   all five directional booleans and separately validates that `relationship`
   remains the caller's outbound `following|none` projection; reused identities
+  are matched in CLI followers/following lists by the exact registered owner DID,
+  with exactly one row required, independent of short or domain-qualified Handle spelling;
+  they
   may enter the scenario only after both remote perspectives report `none` and
   the App `friendsProvider` projection has been refreshed to that baseline;
 - contact-message checks must click the exact DID-keyed visible contact row,

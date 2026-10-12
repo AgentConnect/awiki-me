@@ -9,6 +9,85 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/flutter/desktop_cli_peer/support/ui_oracles.dart';
 
 void main() {
+  test(
+    'CLI relationship lists match exact owner DID across Handle domains',
+    () {
+      const did = 'did:wba:test-fix.anpclaw.com:user:Alice';
+      for (final handle in [
+        'alice',
+        'alice.test-fix.anpclaw.com',
+        'alice.awiki.info',
+      ]) {
+        final output = jsonEncode({
+          'data': {
+            'items': [
+              {'did': did, 'handle': handle},
+              {'did': '$did-other', 'handle': handle},
+            ],
+          },
+        });
+        expect(cliRelationshipListExactDidCount(output, expectedDid: did), 1);
+        expect(
+          cliRelationshipListExactDidCount(output, expectedDid: handle),
+          0,
+        );
+        expect(
+          cliRelationshipListExactDidCount(
+            output,
+            expectedDid: did.toLowerCase(),
+          ),
+          0,
+        );
+      }
+    },
+  );
+  test('CLI relationship list rejects aliases, missing DID and duplicates', () {
+    const did = 'did:wba:test-fix.anpclaw.com:user:alice';
+    for (final items in [
+      [],
+      [
+        {'handle': did},
+      ],
+      [
+        {'did': '$did-other', 'handle': did},
+      ],
+      [
+        {
+          'profile': {'did': did},
+        },
+      ],
+      [
+        {'did': 42},
+      ],
+    ]) {
+      expect(
+        cliRelationshipListExactDidCount(
+          jsonEncode({
+            'data': {'items': items},
+          }),
+          expectedDid: did,
+        ),
+        0,
+      );
+    }
+    expect(
+      cliRelationshipListExactDidCount(
+        jsonEncode({
+          'data': {
+            'items': [
+              {'did': did},
+              {'did': did},
+            ],
+          },
+        }),
+        expectedDid: did,
+      ),
+      2,
+    );
+    for (final output in ['not-json', '{}', '{"data":{"items":{}}}']) {
+      expect(cliRelationshipListExactDidCount(output, expectedDid: did), 0);
+    }
+  });
   test('first visible title oracle rejects transient identity fallbacks', () {
     expect(
       observeFirstVisibleConversationTitle(
