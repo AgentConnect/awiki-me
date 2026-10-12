@@ -5,6 +5,12 @@ on:
     - cron: "40 18 * * *"
   workflow_dispatch:
     inputs:
+      package_smoke_target:
+        description: Select only an outstanding artifact smoke target
+        required: false
+        default: all
+        type: choice
+        options: [all, android-arm64]
       package_smoke_run:
         description: Passed Singapore package-app run to install and start without rebuilding
         required: false
@@ -790,11 +796,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        include:
-          - { target: macos-arm64, runner: macos-15 }
-          - { target: macos-x64, runner: macos-15-intel }
-          - { target: windows-x64, runner: windows-2022 }
-          - { target: android-arm64, runner: ubuntu-latest }
+        include: ${{ fromJSON(inputs.package_smoke_target == 'android-arm64' && '[{"target":"android-arm64","runner":"ubuntu-latest"}]' || '[{"target":"macos-arm64","runner":"macos-15"},{"target":"macos-x64","runner":"macos-15-intel"},{"target":"windows-x64","runner":"windows-2022"},{"target":"android-arm64","runner":"ubuntu-latest"}]') }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -878,6 +880,9 @@ jobs:
 
       - uses: android-actions/setup-android@v3
         if: matrix.target == 'android-arm64'
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - name: Install and start the arm64 APK through Android native bridge
         if: matrix.target == 'android-arm64'
         shell: bash
