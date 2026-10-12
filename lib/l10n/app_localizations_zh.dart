@@ -3572,6 +3572,10 @@ class AppLocalizationsZh extends AppLocalizations {
       '密钥不可用的操作已隔离，并由 Core 保留用于审计。现在可以开始新的恢复。';
 
   @override
+  String get handleRecoveryRestartWarning =>
+      '需要重新验证手机号。新的恢复会替换 DID，其他设备需重新加入；旧数据保留，但不保证自动迁移到新身份。确认开始新的恢复？';
+
+  @override
   String get handleRecoveryStartNew => '开始新的恢复';
 
   @override

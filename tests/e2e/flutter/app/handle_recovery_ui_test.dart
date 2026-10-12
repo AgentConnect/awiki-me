@@ -6243,7 +6243,18 @@ Future<void> _waitForCompletedRecovery(
     }
     final state = _recoveryUiContainer(tester).read(handleRecoveryProvider);
     final progress = state.progress;
-    if (progress?.isCompleted ?? false) return;
+    if (progress?.isCompleted ?? false) {
+      if (!const bool.fromEnvironment(
+        'AWIKI_E2E_HANDLE_RECOVERY_CRASH_BEFORE_PRODUCT_RESET',
+      )) {
+        await _tapOne(
+          tester,
+          find.byKey(const Key('handle-recovery-enter-messages')),
+          failure: 'Completed Recovery must wait for explicit session entry.',
+        );
+      }
+      return;
+    }
     final error = state.error;
     if (error != null &&
         !(error.action == HandleRecoveryUiAction.exactResume &&
@@ -6369,6 +6380,10 @@ String _safeCoreFailureDetail(String message) {
 }
 
 class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
+  @override
+  Future<List<HandleRecoveryProgress>> listPendingOperations() =>
+      _delegate.listPendingOperations();
+
   _RecordingHandleRecoveryCorePort(this._delegate);
 
   final HandleRecoveryCorePort _delegate;

@@ -402,11 +402,7 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
                           'handle-recovery-start-after-quarantine',
                         ),
                         label: context.l10n.handleRecoveryStartNew,
-                        onPressed: state.isBusy
-                            ? null
-                            : () => ref
-                                  .read(handleRecoveryProvider.notifier)
-                                  .startAfterQuarantine(),
+                        onPressed: state.isBusy ? null : _confirmStartNew,
                       ),
                     ],
                   ],
@@ -460,6 +456,32 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
     }
   }
 
+  Future<void> _confirmStartNew() async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text(context.l10n.handleRecoveryStartNew),
+        content: Text(context.l10n.handleRecoveryRestartWarning),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(context.l10n.commonCancel),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.l10n.handleRecoveryStartNew),
+          ),
+        ],
+      ),
+    );
+    if (mounted && confirmed == true) {
+      _otpController.clear();
+      _phoneController.clear();
+      ref.read(handleRecoveryProvider.notifier).startAfterQuarantine();
+    }
+  }
+
   Future<void> _requestOtp() {
     final phone = _phoneController.text.trim();
     if (phone.isEmpty) {
@@ -493,7 +515,7 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
     final epoch = controller.epoch;
     await activation;
     if (!mounted || !controller.isCurrent(epoch)) return;
-    await _activateRecoveredIdentityIfCompleted();
+    // Recovery completion is not login; the user chooses Enter Messages.
   }
 
   Future<void> _resume() async {
@@ -502,7 +524,7 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
     final epoch = controller.epoch;
     await resuming;
     if (!mounted || !controller.isCurrent(epoch)) return;
-    await _activateRecoveredIdentityIfCompleted();
+    // Recovery completion is not login; the user chooses Enter Messages.
   }
 
   Future<void> _activateRecoveredIdentityIfCompleted() async {

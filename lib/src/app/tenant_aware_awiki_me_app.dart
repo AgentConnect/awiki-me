@@ -213,6 +213,7 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
   Future<_TenantRuntime> _createRuntime(
     AppTenantRegistry registry, {
     required int generation,
+    bool signedOut = false,
   }) async {
     final tenant = registry.activeTenant;
     final notificationFacade = await _notificationFacadeReady;
@@ -231,6 +232,7 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
         setState(() => _bootstrapProgress = progress);
       },
     );
+    if (signedOut) await bootstrap.appSessionService?.logout();
     final appearance = await bootstrap.appearancePreferenceService.load();
     final localeMode = await bootstrap.localePreferenceService.loadMode();
     final displayScale = await bootstrap.displayScalePreferenceService
@@ -320,14 +322,22 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
   Future<void> _replaceRuntime(
     AppTenantRegistry registry, {
     Future<void> Function()? beforeActivate,
+    bool signedOut = false,
   }) async {
     final previous = _runtime;
     final generation = ++_runtimeGeneration;
     _bootstrapProgress = AppBootstrapProgress.preparing;
     final future = openTenantRuntimeAfterDispose<_TenantRuntime>(
       previous: previous,
-      disposePrevious: (runtime) => runtime.bootstrap.dispose(),
-      openNext: () => _createRuntime(registry, generation: generation),
+      disposePrevious: (runtime) async {
+        if (signedOut) await runtime.bootstrap.appSessionService?.logout();
+        await runtime.bootstrap.dispose();
+      },
+      openNext: () => _createRuntime(
+        registry,
+        generation: generation,
+        signedOut: signedOut,
+      ),
     );
     setState(() {
       _runtime = null;
@@ -400,9 +410,13 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
 
   @override
   Future<AppTenantRegistry> useTenant(String tenantId) async {
+    if (_runtime?.registry.activeTenant.id == tenantId) {
+      return _runtime!.registry;
+    }
     final registry = await _store.prepareUseTenant(tenantId);
     await _replaceRuntime(
       registry,
+      signedOut: true,
       beforeActivate: () => _store.saveRegistry(registry),
     );
     return registry;

@@ -2919,6 +2919,9 @@ class _RecordingUserPresence implements UserPresencePort {
 }
 
 class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
+  @override
+  Future<List<HandleRecoveryProgress>> listPendingOperations() async => [];
+
   String? handle;
   String? phone;
   String? localIdentityId;

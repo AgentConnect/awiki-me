@@ -127,6 +127,14 @@ class AwikiImCoreIdentityAdapter
     );
   }
 
+  Future<T> _mapIdentityErrors<T>(Future<T> Function() action) async {
+    try {
+      return await action();
+    } on core.AwikiImCoreException catch (error) {
+      throw const AwikiImCoreErrorMapper().appError(error);
+    }
+  }
+
   @override
   Future<void> resumeIdentityServicesUpdate(String selector) async {
     final instance = await _coreInstance();
@@ -134,25 +142,30 @@ class AwikiImCoreIdentityAdapter
   }
 
   @override
-  Future<List<AppSession>> listLocalIdentities() async {
-    final coreInstance = await _coreInstance();
-    final identities = await coreInstance.listIdentities();
-    return identities.map(_mappers.appSessionFromIdentity).toList();
-  }
+  Future<List<AppSession>> listLocalIdentities() =>
+      _mapIdentityErrors(() async {
+        final coreInstance = await _coreInstance();
+        final identities = await coreInstance.listIdentities();
+        return identities.map(_mappers.appSessionFromIdentity).toList();
+      });
 
   @override
-  Future<AppSession?> defaultIdentity() async {
+  Future<AppSession?> defaultIdentity() => _mapIdentityErrors(() async {
     final coreInstance = await _coreInstance();
     final identity = await coreInstance.defaultIdentity();
     return identity == null ? null : _mappers.appSessionFromIdentity(identity);
-  }
+  });
 
   @override
-  Future<AppSession> resolveIdentity(String identityIdOrAlias) async {
-    final coreInstance = await _coreInstance();
-    final identity = await _resolveIdentity(coreInstance, identityIdOrAlias);
-    return _mappers.appSessionFromIdentity(identity);
-  }
+  Future<AppSession> resolveIdentity(String identityIdOrAlias) =>
+      _mapIdentityErrors(() async {
+        final coreInstance = await _coreInstance();
+        final identity = await _resolveIdentity(
+          coreInstance,
+          identityIdOrAlias,
+        );
+        return _mappers.appSessionFromIdentity(identity);
+      });
 
   @override
   Future<AppSession> updateDisplayNameProjection({

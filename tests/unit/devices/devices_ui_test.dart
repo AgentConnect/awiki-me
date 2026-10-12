@@ -3013,6 +3013,9 @@ Widget _app(
 }
 
 class _OrdinaryJoinRecoveryCore implements HandleRecoveryCorePort {
+  @override
+  Future<List<HandleRecoveryProgress>> listPendingOperations() async => [];
+
   _OrdinaryJoinRecoveryCore(this._devices);
 
   final DeviceManagementCorePort _devices;

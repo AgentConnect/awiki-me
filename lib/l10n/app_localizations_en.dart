@@ -3802,6 +3802,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The unavailable operation is quarantined and retained in Core for audit. You may now start a new recovery.';
 
   @override
+  String get handleRecoveryRestartWarning =>
+      'Verify your phone again. A new recovery replaces the DID and other devices must rejoin. Old local data is retained, but automatic migration to the new identity is not guaranteed. Start a new recovery?';
+
+  @override
   String get handleRecoveryStartNew => 'Start a new recovery';
 
   @override

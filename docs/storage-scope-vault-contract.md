@@ -296,6 +296,8 @@ ActiveSyncAccountBinding.ownerIdentityId
 
 新设备和已有设备的恢复语义不同：
 
+- 登录页通过 Core 的 scope-wide pending operation 列表显示旧任务，不依赖输入 Handle，不自动续办或发送验证码。身份枚举冲突映射为明确的本地状态提示；用户可随时返回。恢复完成后显示显式进入消息按钮，不自动登录。Core 允许开始新恢复时另行确认手机号验证、设备重新加入和历史迁移限制；结果未知的任务仍续办原 operation。
+
 - Handle Recovery 已由服务端提交但本机仍在 `identity_switched` 时，App 从 Core
   的精确 operation 上下文显示“继续恢复”，不重新申请短信验证码。只有 Core 验证
   旧版重复 Handle 投影可安全收敛后才能退役旧活跃投影；App 不直接修改 Registry、
@@ -442,6 +444,8 @@ Store。schema 1 到 26 的归档是明确的预发布兼容退场策略，不�
 版本、无法读取 header 或 fingerprint/shape 校验失败的数据库。
 
 ## 8. Route、switch 与删除规则
+
+显式切换租户必须先持久化退出原会话，并在目标 runtime 启动前清除目标的 active identity 选择。切换成功、失败回滚以及随后重启都停留登录页；已有身份仅供用户主动选择，不自动进入。普通已登录会话的重启仍可恢复。切换不删除身份、密钥、历史或未完成的 Recovery。
 
 - display name可原位修改，不改变scope。
 - backend URL只有在server证明相同`remote_realm_id`/service identity时可原位修改。

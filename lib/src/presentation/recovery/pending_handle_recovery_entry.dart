@@ -54,6 +54,78 @@ class PendingHandleRecoveryEntry extends ConsumerWidget {
   final TextEditingController phoneController;
 
   @override
+  Widget build(BuildContext context, WidgetRef ref) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const _ScopePendingRecoveryEntry(),
+      _HandlePendingRecoveryEntry(
+        handleController: handleController,
+        phoneController: phoneController,
+      ),
+    ],
+  );
+}
+
+final scopePendingRecoveryProvider =
+    FutureProvider.autoDispose<List<HandleRecoveryProgress>>((ref) async {
+      ref.watch(activeAppTenantProvider);
+      return ref.watch(handleRecoveryServiceProvider).listPendingOperations();
+    });
+
+class _ScopePendingRecoveryEntry extends ConsumerWidget {
+  const _ScopePendingRecoveryEntry();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => ref
+      .watch(scopePendingRecoveryProvider)
+      .when(
+        loading: () => const SizedBox.shrink(),
+        error: (_, _) => AppSecondaryButton(
+          label: context.l10n.handleRecoveryErrorLocalStateUnavailable,
+          onPressed: () => ref.invalidate(scopePendingRecoveryProvider),
+        ),
+        data: (operations) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (operations.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(context.l10n.registrationLocalStateNeedsAttention),
+              ),
+            for (final operation in operations)
+              AppSecondaryButton(
+                key: ValueKey('pending-recovery-${operation.operationId}'),
+                label:
+                    '${context.l10n.handleRecoveryContinueExisting} · ${operation.handle}',
+                onPressed: () async {
+                  await AppNavigator.push<void>(
+                    context,
+                    (_) => HandleRecoveryPage(
+                      initialHandle: operation.handle,
+                      initialPhone: '',
+                      allowPhoneInput: true,
+                      autoRequestOtp: false,
+                    ),
+                  );
+                  if (context.mounted) {
+                    ref.invalidate(scopePendingRecoveryProvider);
+                  }
+                },
+              ),
+          ],
+        ),
+      );
+}
+
+class _HandlePendingRecoveryEntry extends ConsumerWidget {
+  const _HandlePendingRecoveryEntry({
+    required this.handleController,
+    required this.phoneController,
+  });
+  final TextEditingController handleController;
+  final TextEditingController phoneController;
+
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
     final supported = ref.watch(
       onboardingProvider.select(

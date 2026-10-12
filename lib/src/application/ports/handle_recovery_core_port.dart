@@ -15,6 +15,9 @@ class HandleRecoveryOtpRateLimited implements Exception {
 }
 
 abstract interface class HandleRecoveryCorePort {
+  /// Read-only, scope-wide discovery; does not require a valid identity index.
+  Future<List<HandleRecoveryProgress>> listPendingOperations();
+
   Future<HandleRecoveryContext> inspectContext({
     required String handle,
     String? localIdentityId,

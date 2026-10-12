@@ -23,6 +23,33 @@ final _continue = find.byKey(const Key('onboarding-continue-recovery'));
 final _retry = find.byKey(const Key('onboarding-recovery-lookup-retry'));
 
 void main() {
+  testWidgets(
+    'scope recovery is visible without input and never resumes automatically',
+    (tester) async {
+      final run = await _LookupRun.open(tester);
+      final operation = _operation(_alice, action: HandleRecoveryAction.resume);
+      run.core.pendingOperations = [operation];
+      run.core.results[_alice] = [operation];
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(PendingHandleRecoveryEntry)),
+      );
+      container.invalidate(scopePendingRecoveryProvider);
+      await tester.pumpAndSettle();
+      final entry = find.byKey(
+        ValueKey('pending-recovery-${operation.operationId}'),
+      );
+      expect(entry, findsOneWidget);
+      expect(run.core.mutations, 0);
+      await run.tap(entry);
+      await tester.pumpAndSettle();
+      expect(find.byType(HandleRecoveryPage), findsOneWidget);
+      expect(run.core.mutations, 0);
+      await tester.tap(find.byKey(const Key('handle-recovery-back-button')));
+      await tester.pumpAndSettle();
+      expect(entry, findsOneWidget);
+      expect(run.core.mutations, 0);
+    },
+  );
   for (final size in [const Size(390, 1000), const Size(1100, 900)]) {
     for (final action in [
       HandleRecoveryAction.resume,
@@ -466,6 +493,11 @@ class _LookupRun {
 }
 
 class _LookupCore implements HandleRecoveryCorePort {
+  @override
+  Future<List<HandleRecoveryProgress>> listPendingOperations() async =>
+      pendingOperations;
+  List<HandleRecoveryProgress> pendingOperations = [];
+
   final lookups = <String>[];
   final results = <String, List<HandleRecoveryProgress>>{};
   final pending = <String, Completer<List<HandleRecoveryProgress>>>{};

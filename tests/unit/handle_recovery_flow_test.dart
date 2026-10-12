@@ -969,6 +969,13 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('handle-recovery-activate')));
     await tester.pumpAndSettle();
+    expect(find.byType(HandleRecoveryPage), findsOneWidget);
+    expect(gateway.loginCalls, 0);
+    await tester.ensureVisible(
+      find.byKey(const Key('handle-recovery-enter-messages')),
+    );
+    await tester.tap(find.byKey(const Key('handle-recovery-enter-messages')));
+    await tester.pumpAndSettle();
 
     expect(find.byType(HandleRecoveryPage), findsNothing);
     expect(find.byType(ConversationWorkspacePage), findsOneWidget);
@@ -1064,6 +1071,13 @@ void main() {
         find.byKey(const Key('handle-recovery-activate')),
       );
       await tester.tap(find.byKey(const Key('handle-recovery-activate')));
+      await tester.pumpAndSettle();
+      expect(find.byType(HandleRecoveryPage), findsOneWidget);
+      expect(gateway.loginCalls, 0);
+      await tester.ensureVisible(
+        find.byKey(const Key('handle-recovery-enter-messages')),
+      );
+      await tester.tap(find.byKey(const Key('handle-recovery-enter-messages')));
       await tester.pumpAndSettle();
 
       expect(find.byType(HandleRecoveryPage), findsOneWidget);
@@ -1245,6 +1259,13 @@ void main() {
         find.byKey(const Key('handle-recovery-activate')),
       );
       await tester.tap(find.byKey(const Key('handle-recovery-activate')));
+      await tester.pumpAndSettle();
+      expect(find.byType(HandleRecoveryPage), findsOneWidget);
+      expect(gateway.loginCalls, 0);
+      await tester.ensureVisible(
+        find.byKey(const Key('handle-recovery-enter-messages')),
+      );
+      await tester.tap(find.byKey(const Key('handle-recovery-enter-messages')));
       await tester.pumpAndSettle();
 
       expect(find.byType(HandleRecoveryPage), findsNothing);
@@ -1619,6 +1640,9 @@ HandleRecoveryProgress _operation({
 );
 
 class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
+  @override
+  Future<List<HandleRecoveryProgress>> listPendingOperations() async => [];
+
   _FakeHandleRecoveryCore({
     HandleRecoveryProgress? operation,
     this.otpResponseOperation,

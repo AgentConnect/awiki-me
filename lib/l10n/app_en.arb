@@ -1596,6 +1596,7 @@
   "handleRecoveryQuarantine": "Quarantine unavailable operation",
   "handleRecoveryQuarantineReason": "Confirm that this recovery key is permanently unavailable",
   "handleRecoveryQuarantined": "The unavailable operation is quarantined and retained in Core for audit. You may now start a new recovery.",
+  "handleRecoveryRestartWarning": "Verify your phone again. A new recovery replaces the DID and other devices must rejoin. Old local data is retained, but automatic migration to the new identity is not guaranteed. Start a new recovery?",
   "handleRecoveryStartNew": "Start a new recovery",
   "handleRecoveryMigrationUnsupported": "The existing local identity cannot be continued safely. No remote commit was attempted. Keep the local data and resolve the identity state; do not replace it with a new local identity.",
   "handleRecoveryErrorNotPrepared": "Recovery was not prepared. This flow is terminated; start again.",
