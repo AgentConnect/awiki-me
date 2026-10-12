@@ -156,10 +156,12 @@
       "timeoutMinutes": 25,
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",
