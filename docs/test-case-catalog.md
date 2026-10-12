@@ -1,7 +1,7 @@
 # AWiki Me test case catalog
 
 > Generated from `tests/e2e/case_catalog.json`; do not edit by hand.
-> Catalog revision: `2026-09-18.model-free-agent-tests-v1`.
+> Catalog revision: `2026-10-12.singapore-isolated-test-fix`.
 
 Every row is reconciled with `tests/e2e/suite_manifest.json`. The checker requires a unique ID, complete ownership/environment/cleanup metadata, an existing implementation path containing the ID, and exact report IDs.
 
