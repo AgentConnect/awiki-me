@@ -28,13 +28,13 @@ import '../onboarding/onboarding_page.dart';
 import '../profile/profile_workspace_page.dart';
 import '../profile/profile_provider.dart';
 import '../settings/settings_page.dart';
+import '../settings/settings_workspace_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_semantic_icon.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/desktop_startup_ready_boundary.dart';
 import '../shared/responsive_layout.dart';
-import '../shared/sidebar_workspace.dart';
 import '../shared/startup_splash.dart';
 import '../shared/tenant_management_dialog.dart';
 import '../shared/widgets/app_widgets.dart';
@@ -513,7 +513,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       ),
       ShellDestination.settings =>
         expanded
-            ? const _DesktopEmbeddedSettingsPage()
+            ? const SettingsWorkspacePage()
             : SettingsPage(
                 onBack: navigationController.backFromSecondary,
                 onProfileTap: () => navigationController.selectCompact(
@@ -1014,24 +1014,6 @@ class _DesktopRail extends StatelessWidget {
       );
     }
     return (seed: 'Me', labelOverride: 'Me', avatarUri: null, userId: null);
-  }
-}
-
-class _DesktopEmbeddedSettingsPage extends StatelessWidget {
-  const _DesktopEmbeddedSettingsPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return AwikiSidebarWorkspace(
-      sidebar: const SizedBox.expand(
-        key: Key('mac-settings-list-pane'),
-        child: SettingsPage(embedded: true),
-      ),
-      detailPane: DecoratedBox(
-        decoration: BoxDecoration(color: context.awikiTheme.surface),
-        child: const AwikiWorkspaceEmptyDetail(),
-      ),
-    );
   }
 }
 

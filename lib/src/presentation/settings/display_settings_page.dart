@@ -17,7 +17,9 @@ import '../shared/widgets/app_widgets.dart';
 import '../shared/widgets/awiki_glass.dart';
 
 class DisplaySettingsPage extends ConsumerWidget {
-  const DisplaySettingsPage({super.key, this.onBack});
+  const DisplaySettingsPage({super.key, this.onBack, this.embedded = false});
+
+  final bool embedded;
 
   final VoidCallback? onBack;
 
@@ -53,11 +55,13 @@ class DisplaySettingsPage extends ConsumerWidget {
                   titleFontSize: awikiMeCompactTopBarTitleFontSize,
                   titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
                   titleHeight: awikiMeCompactTopBarTitleHeight,
-                  leading: AwikiBackButton(
-                    key: const Key('display-settings-back-button'),
-                    onTap: onBack ?? () => Navigator.of(context).pop(),
-                    semanticsLabel: l10n.commonBack,
-                  ),
+                  leading: embedded
+                      ? const SizedBox.shrink()
+                      : AwikiBackButton(
+                          key: const Key('display-settings-back-button'),
+                          onTap: onBack ?? () => Navigator.of(context).pop(),
+                          semanticsLabel: l10n.commonBack,
+                        ),
                 ),
               ),
               Expanded(

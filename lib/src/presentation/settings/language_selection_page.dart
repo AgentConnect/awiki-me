@@ -10,7 +10,9 @@ import '../shared/responsive_layout.dart';
 import '../shared/widgets/awiki_glass.dart';
 
 class LanguageSelectionPage extends ConsumerWidget {
-  const LanguageSelectionPage({super.key, this.onBack});
+  const LanguageSelectionPage({super.key, this.onBack, this.embedded = false});
+
+  final bool embedded;
 
   final VoidCallback? onBack;
 
@@ -37,11 +39,13 @@ class LanguageSelectionPage extends ConsumerWidget {
                   titleFontSize: awikiMeCompactTopBarTitleFontSize,
                   titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
                   titleHeight: awikiMeCompactTopBarTitleHeight,
-                  leading: AwikiBackButton(
-                    key: const Key('language-selection-back-button'),
-                    onTap: onBack ?? () => Navigator.of(context).pop(),
-                    semanticsLabel: l10n.commonBack,
-                  ),
+                  leading: embedded
+                      ? const SizedBox.shrink()
+                      : AwikiBackButton(
+                          key: const Key('language-selection-back-button'),
+                          onTap: onBack ?? () => Navigator.of(context).pop(),
+                          semanticsLabel: l10n.commonBack,
+                        ),
                 ),
               ),
               Expanded(

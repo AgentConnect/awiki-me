@@ -23,7 +23,9 @@ import 'devices_provider.dart';
 import 'identity_services_page.dart';
 
 class DevicesPage extends ConsumerStatefulWidget {
-  const DevicesPage({super.key});
+  const DevicesPage({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   ConsumerState<DevicesPage> createState() => _DevicesPageState();
@@ -80,11 +82,13 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
             title: context.l10n.devicesTitle,
             padding: EdgeInsets.zero,
             titleFontSize: phone ? 16 : null,
-            leading: AwikiBackButton(
-              key: const Key('devices-back-button'),
-              onTap: () => Navigator.of(context).maybePop(),
-              semanticsLabel: context.l10n.commonBack,
-            ),
+            leading: widget.embedded
+                ? const SizedBox.shrink()
+                : AwikiBackButton(
+                    key: const Key('devices-back-button'),
+                    onTap: () => Navigator.of(context).maybePop(),
+                    semanticsLabel: context.l10n.commonBack,
+                  ),
             trailing: TopBarActionButton(
               key: const Key('devices-refresh'),
               onTap: refreshPending ? null : _refresh,

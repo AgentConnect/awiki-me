@@ -31,14 +31,20 @@ import 'display_settings_page.dart';
 import '../shared/display_scale.dart';
 import '../shared/local_credential_delete_dialog.dart';
 
+enum SettingsDetail { devices, language, display, recovery }
+
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({
     super.key,
     this.embedded = false,
     this.onBack,
     this.onProfileTap,
+    this.selectedDetail,
+    this.onDetailSelected,
   });
 
+  final SettingsDetail? selectedDetail;
+  final ValueChanged<SettingsDetail>? onDetailSelected;
   final bool embedded;
   final VoidCallback? onBack;
   final VoidCallback? onProfileTap;
@@ -274,9 +280,11 @@ class SettingsPage extends ConsumerWidget {
               _DesktopSettingsProfileRow(session: session, onTap: onProfileTap),
               _DesktopSettingsRow(
                 key: const Key('settings-devices-row'),
+                selected: selectedDetail == SettingsDetail.devices,
                 title: l10n.settingsDevices,
-                onTap: () => AppNavigator.push<void>(
+                onTap: () => _openDetail(
                   context,
+                  SettingsDetail.devices,
                   (_) => const DevicesPage(),
                 ),
               ),
@@ -328,22 +336,26 @@ class SettingsPage extends ConsumerWidget {
             ],
             _DesktopSettingsRow(
               key: const Key('settings-language-row'),
+              selected: selectedDetail == SettingsDetail.language,
               title: l10n.settingsLanguage,
               trailingText: appLocaleModeLabel(context, localeMode),
-              onTap: () => AppNavigator.push<void>(
+              onTap: () => _openDetail(
                 context,
+                SettingsDetail.language,
                 (_) => const LanguageSelectionPage(),
               ),
             ),
             _DesktopSettingsRow(
               key: const Key('settings-display-row'),
+              selected: selectedDetail == SettingsDetail.display,
               title: isDesktopPlatform
                   ? l10n.settingsDisplayAndWindow
                   : l10n.settingsAppearance,
               trailingText: '${(displayScale * 100).round()}%',
               trailingTextKey: const Key('settings-display-value'),
-              onTap: () => AppNavigator.push<void>(
+              onTap: () => _openDetail(
                 context,
+                SettingsDetail.display,
                 (_) => const DisplaySettingsPage(),
               ),
             ),
@@ -355,6 +367,7 @@ class SettingsPage extends ConsumerWidget {
           children: <Widget>[
             _DesktopSettingsRow(
               key: const Key('settings-recover-handle-did-row'),
+              selected: selectedDetail == SettingsDetail.recovery,
               title: l10n.settingsRecoverHandleDid,
               onTap: _canRecoverHandleDid(session)
                   ? () => _openHandleRecovery(context, session!)
@@ -750,7 +763,23 @@ class SettingsPage extends ConsumerWidget {
         (identity.localIdentityId?.trim().isNotEmpty ?? false);
   }
 
+  void _openDetail(
+    BuildContext context,
+    SettingsDetail detail,
+    WidgetBuilder builder,
+  ) {
+    if (onDetailSelected != null) {
+      onDetailSelected!(detail);
+    } else {
+      AppNavigator.push<void>(context, builder);
+    }
+  }
+
   void _openHandleRecovery(BuildContext context, SessionIdentity identity) {
+    if (onDetailSelected != null) {
+      onDetailSelected!(SettingsDetail.recovery);
+      return;
+    }
     AppNavigator.push<void>(
       context,
       (_) => HandleRecoveryPage(
@@ -1131,8 +1160,10 @@ class _DesktopSettingsRow extends StatelessWidget {
     this.trailingTextKey,
     this.destructive = false,
     this.onTap,
+    this.selected = false,
   });
 
+  final bool selected;
   final String title;
   final String? trailingText;
   final Key? trailingTextKey;
@@ -1147,12 +1178,15 @@ class _DesktopSettingsRow extends StatelessWidget {
     return AppPressable(
       onTap: onTap,
       enabled: onTap != null,
+      selected: selected,
       semanticLabel: title,
       borderRadius: radius,
       builder: (context, state, child) => AnimatedContainer(
         duration: const Duration(milliseconds: 120),
         decoration: BoxDecoration(
-          color: onTap != null && (state.hovered || state.pressed)
+          color:
+              state.selected ||
+                  (onTap != null && (state.hovered || state.pressed))
               ? awikiDesktopHoverFill(context)
               : awikiDesktopHoverFill(context).withValues(alpha: 0),
           borderRadius: radius,
@@ -1185,11 +1219,15 @@ class _DesktopSettingsRow extends StatelessWidget {
             ),
             if (trailingText != null) ...<Widget>[
               SizedBox(width: responsive.displayScaled(8)),
-              Text(
-                trailingText!,
-                key: trailingTextKey,
-                maxLines: 1,
-                style: TextStyle(color: theme.secondaryText, fontSize: 12),
+              Flexible(
+                child: Text(
+                  trailingText!,
+                  key: trailingTextKey,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(color: theme.secondaryText, fontSize: 12),
+                ),
               ),
             ],
             if (onTap != null) ...<Widget>[
