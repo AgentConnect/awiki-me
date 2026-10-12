@@ -1480,7 +1480,8 @@
       ],
       "requiredTools": [
         "flutter",
-        "awiki-cli"
+        "awiki-cli",
+        "awiki-system-test-probe"
       ],
       "requiredFor": [
         "nightly",

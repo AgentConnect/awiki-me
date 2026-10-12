@@ -1644,3 +1644,8 @@ Host 不同。Linux 使用 runner 的 Xvfb 执行；结束删除本轮独立 App
 ### 头像与账号测试夹具
 
 头像展示通过 `avatarImageCacheProvider` 提供已解码图片，组件测试使用内存 fake，并断言安全 URI 与 `RawImage` 投影，不依赖网络、插件或磁盘完成时机。删除账号时的公开头像缓存清理由 composition 边界的 `avatarCacheCleanupProvider` 注入；测试需保留精确 owner 参数、清理失败不阻塞身份删除的断言。导航夹具必须同时提供受测 DID / Handle 的 Core canonical 会话映射，不能让 UI 猜测会话 ID。修改 case catalog 后运行 `dart run tool/validate_test_catalog.dart --write`，再运行不带 `--write` 的校验。
+
+头像 UI 的远程 peer 上传依赖 feature-gated `awiki-system-test-probe`。统一 prepare 按 App
+manifest 选择该工具并通过 `AWIKI_E2E_SYSTEM_TEST_PROBE_BINARY` 传入独立缓存路径；独立
+App runner 构建仍使用 CLI 同目录的 probe。执行前检查存在性，再准备远程身份；native 测试
+只使用 run config 的显式 `cliPeer.avatarProbeBinary`，不推测缓存目录布局。

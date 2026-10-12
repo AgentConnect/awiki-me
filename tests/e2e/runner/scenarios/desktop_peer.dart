@@ -189,6 +189,11 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
       await commands.requireExecutable('xvfb-run');
     }
     await commands.requireFile(peerConfig.cliBin);
+    if (peerConfig.e2eCase == DesktopE2eCase.avatars) {
+      await commands.requireFile(
+        desktopAvatarProbeBinary(peerConfig.cliBin, Platform.environment),
+      );
+    }
   }
 
   Future<void> _prepareCliWorkspace() async {
@@ -694,6 +699,11 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
       },
       'cliPeer': <String, Object?>{
         'binary': peerConfig.cliBin,
+        if (peerConfig.e2eCase == DesktopE2eCase.avatars)
+          'avatarProbeBinary': desktopAvatarProbeBinary(
+            peerConfig.cliBin,
+            Platform.environment,
+          ),
         'sourceRef': peerConfig.cliSourceRef,
         'workspace': cliWorkspaceDir.path,
         'home': cliHomeDir.path,

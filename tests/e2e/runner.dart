@@ -121,6 +121,7 @@ const String _requiredPreparedAppArtifactsEnv =
     'AWIKI_E2E_REQUIRED_PREPARED_APP_ARTIFACTS';
 const String _preparedArtifactsModeEnv = 'AWIKI_E2E_PREPARED_ARTIFACTS_MODE';
 const String _e2eCliBinaryEnv = 'AWIKI_E2E_CLI_BINARY';
+const String _e2eAvatarProbeBinaryEnv = 'AWIKI_E2E_SYSTEM_TEST_PROBE_BINARY';
 const String _e2eCliSourceRefEnv = 'AWIKI_E2E_CLI_SOURCE_REF';
 const String _e2eDaemonBinaryEnv = 'AWIKI_E2E_DAEMON_BINARY';
 const String _e2eDaemonStateRootEnv = 'AWIKI_E2E_DAEMON_STATE_ROOT';

@@ -9,6 +9,31 @@ import '../../e2e/performance_contract.dart';
 
 void main() {
   test(
+    'avatar probe uses its independent cache path or standalone sibling',
+    () {
+      final cli = '${Directory.systemTemp.path}/cli-cache/awiki-cli';
+      final probe =
+          '${Directory.systemTemp.path}/probe-cache/awiki-system-test-probe';
+      expect(
+        desktopAvatarProbeBinary(cli, {
+          'AWIKI_E2E_SYSTEM_TEST_PROBE_BINARY': ' $probe ',
+        }),
+        probe,
+      );
+      final suffix = Platform.isWindows ? '.exe' : '';
+      for (final environment in <Map<String, String>>[
+        {},
+        {'AWIKI_E2E_SYSTEM_TEST_PROBE_BINARY': ' '},
+      ]) {
+        expect(
+          desktopAvatarProbeBinary(cli, environment),
+          '${File(cli).parent.path}/awiki-system-test-probe$suffix',
+        );
+      }
+    },
+  );
+
+  test(
     'registration diagnostics redact phone and email matrix credentials',
     () {
       final fixture = <String, dynamic>{
