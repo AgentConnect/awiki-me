@@ -849,7 +849,13 @@ void main() {
         );
         if (retryDelay == null) break;
         await Future<void>.delayed(retryDelay!);
-        await _retryRecoveryOtpAfterRateLimit(tester, container);
+        // The successful request's boundary is retained above. The UI clears
+        // its expired cooldown while we wait for the factor-exchange window.
+        await _sendRecoveryOtpAfterBoundary(
+          tester,
+          container,
+          latestOtpRetryAt,
+        );
         await _pumpUntil(
           tester,
           () {
@@ -7091,6 +7097,14 @@ Future<void> _retryRecoveryOtpAfterRateLimit(
   if (retryAt == null) {
     fail('The Recovery OTP rate limit omitted its retry receipt.');
   }
+  await _sendRecoveryOtpAfterBoundary(tester, container, retryAt);
+}
+
+Future<void> _sendRecoveryOtpAfterBoundary(
+  WidgetTester tester,
+  ProviderContainer container,
+  DateTime retryAt,
+) async {
   final delay = remoteHandleRecoveryPhoneCooldownDelay(
     retryAt: retryAt,
     now: DateTime.now().toUtc(),
