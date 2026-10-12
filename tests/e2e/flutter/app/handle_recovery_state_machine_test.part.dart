@@ -138,7 +138,7 @@ void _registerStateMachineRecoveryE2e() {
           'The native local cut did not follow one confirmed real Commit (${proxy.safeDiagnostic},native=${held.lastSafeFailure}).',
         );
       }
-      await tester.pageBack();
+      await _smTap(tester, find.byKey(const Key('handle-recovery-back-button')));
       await _pumpUntil(
         tester,
         () => find.byType(OnboardingPage).evaluate().isNotEmpty,
@@ -152,6 +152,7 @@ void _registerStateMachineRecoveryE2e() {
       if (bCredentials.length != 1) {
         fail('The independent B login credential is missing.');
       }
+      await _smTap(tester, find.byKey(const Key('onboarding-identity-entry')));
       await _smTap(
         tester,
         find.byKey(
@@ -222,7 +223,7 @@ void _registerStateMachineRecoveryE2e() {
                 null,
         failure: 'B pre-attempt operation was not explicitly discarded.',
       );
-      await tester.pageBack();
+      await _smTap(tester, find.byKey(const Key('handle-recovery-back-button')));
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
       await bootstrap.dispose();
@@ -288,7 +289,7 @@ void _registerStateMachineRecoveryE2e() {
       );
       expect(find.byKey(const Key('handle-recovery-activate')), findsNothing);
       expect(find.byKey(const Key('handle-recovery-busy')), findsNothing);
-      await tester.pageBack();
+      await _smTap(tester, find.byKey(const Key('handle-recovery-back-button')));
       await _pumpUntil(
         tester,
         () => find.byType(OnboardingPage).evaluate().isNotEmpty,
